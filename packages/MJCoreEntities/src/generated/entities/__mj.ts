@@ -23881,6 +23881,22 @@ export const MJFeatureValueSchema = z.object({
         * * Display Name: Input As Of
         * * SQL Data Type: datetimeoffset
         * * Description: Instant of the input data the value was computed from (its provenance); never after EffectiveAsOf.`),
+    Role: z.union([z.literal('Challenger'), z.literal('Champion')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Champion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Challenger
+    *   * Champion
+        * * Description: Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -23905,6 +23921,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: AIModel
         * * Display Name: AI Model Details
         * * SQL Data Type: nvarchar(50)`),
+    MLModel: z.string().nullable().describe(`
+        * * Field Name: MLModel
+        * * Display Name: ML Model Name
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -26426,6 +26446,94 @@ export const MJKnowledgeHubSavedSearchSchema = z.object({
 export type MJKnowledgeHubSavedSearchEntityType = z.infer<typeof MJKnowledgeHubSavedSearchSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Latest Feature Values
+ */
+export const MJvwLatestFeatureValuesSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Unique identifier of the feature value record.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Unique identifier of the entity this feature was computed for.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(900)
+        * * Description: Serialized primary key of the record this feature was computed for.`),
+    FeatureName: z.string().describe(`
+        * * Field Name: FeatureName
+        * * Display Name: Feature Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the feature.`),
+    Source: z.string().describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Origin of the value: Pipeline or Human.`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Description: Role of the score/value, such as Champion.`),
+    EffectiveAsOf: z.date().nullable().describe(`
+        * * Field Name: EffectiveAsOf
+        * * Display Name: Effective As Of
+        * * SQL Data Type: datetimeoffset
+        * * Description: Effective instant from which this value applies to the record.`),
+    ComputedAt: z.date().describe(`
+        * * Field Name: ComputedAt
+        * * Display Name: Computed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this feature value was computed.`),
+    MLModelID: z.string().nullable().describe(`
+        * * Field Name: MLModelID
+        * * Display Name: ML Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Reference to the ML Model that produced or scored this feature value, if applicable.`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Reference to the Record Process (Feature Pipeline) that computed this feature value.`),
+    ValueText: z.string().nullable().describe(`
+        * * Field Name: ValueText
+        * * Display Name: Value (Text)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value formatted as text or categorical string.`),
+    ValueNumeric: z.number().nullable().describe(`
+        * * Field Name: ValueNumeric
+        * * Display Name: Value (Numeric)
+        * * SQL Data Type: float(53)
+        * * Description: Computed value formatted as a floating-point numeric value.`),
+    ValueDate: z.date().nullable().describe(`
+        * * Field Name: ValueDate
+        * * Display Name: Value (Date)
+        * * SQL Data Type: datetimeoffset
+        * * Description: Computed value formatted as a date/time offset.`),
+    ValueBoolean: z.boolean().nullable().describe(`
+        * * Field Name: ValueBoolean
+        * * Display Name: Value (Boolean)
+        * * SQL Data Type: bit
+        * * Description: Computed value formatted as a boolean flag.`),
+    ValueJSON: z.string().nullable().describe(`
+        * * Field Name: ValueJSON
+        * * Display Name: Value (JSON)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value formatted as a raw JSON string for complex objects.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: float(53)
+        * * Description: Confidence score associated with the computed feature value.`),
+});
+
+export type MJvwLatestFeatureValuesEntityType = z.infer<typeof MJvwLatestFeatureValuesSchema>;
+
+/**
  * zod schema definition for the entity MJ: Libraries
  */
 export const MJLibrarySchema = z.object({
@@ -27897,6 +28005,154 @@ export const MJMLEvaluationProtocolSchema = z.object({
 export type MJMLEvaluationProtocolEntityType = z.infer<typeof MJMLEvaluationProtocolSchema>;
 
 /**
+ * zod schema definition for the entity MJ: ML Model Publish Records
+ */
+export const MJMLModelPublishRecordSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().nullable().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The model the record is about. NULL only on a run-level refusal: a training run whose outcome produced no model row.`),
+    TrainingRunID: z.string().nullable().describe(`
+        * * Field Name: TrainingRunID
+        * * Display Name: Training Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+        * * Description: The training run the record is about; the idempotency key of a publish and of a run-level refusal.`),
+    Kind: z.union([z.literal('publish'), z.literal('refusal'), z.literal('sign-off')]).describe(`
+        * * Field Name: Kind
+        * * Display Name: Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * publish
+    *   * refusal
+    *   * sign-off
+        * * Description: sign-off (a person approved or rejected), publish (a status change was applied) or refusal (a publish attempt was refused).`),
+    Purpose: z.union([z.literal('adopt'), z.literal('evaluate'), z.literal('publish'), z.literal('rollback')]).describe(`
+        * * Field Name: Purpose
+        * * Display Name: Purpose
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adopt
+    *   * evaluate
+    *   * publish
+    *   * rollback
+        * * Description: publish, rollback (an archived model published again), evaluate (a run-level outcome only) or adopt (a pre-change Published model re-verified).`),
+    ApproverKind: z.string().describe(`
+        * * Field Name: ApproverKind
+        * * Display Name: Approver Kind
+        * * SQL Data Type: nvarchar(20)
+        * * Description: automated-gate when no person approved the publish; user when a person published or the publish consumed that person's approving sign-off.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The person who approved, when ApproverKind is user.`),
+    Initiator: z.any().describe(`
+        * * Field Name: Initiator
+        * * Display Name: Initiator
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelPublishRecordEntity_Actor
+        * * Description: JSON Actor: who started the attempt (a user, an agent run, a Record Process run or a scheduled job run).`),
+    RecordedAt: z.date().describe(`
+        * * Field Name: RecordedAt
+        * * Display Name: Recorded At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the record was written.`),
+    Decision: z.string().nullable().describe(`
+        * * Field Name: Decision
+        * * Display Name: Decision
+        * * SQL Data Type: nvarchar(10)
+        * * Description: Sign-off rows only: approve or reject.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The reason in plain words; required when the record overrides flags.`),
+    GateDecision: z.any().nullable().describe(`
+        * * Field Name: GateDecision
+        * * Display Name: Gate Decision
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelPublishRecordEntity_GateDecision
+        * * Description: JSON GateDecision as the gate re-derived it at the publish, kept as a copy for audit. Required on publish rows.`),
+    Evidence: z.any().nullable().describe(`
+        * * Field Name: Evidence
+        * * Display Name: Evidence
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelPublishRecordEntity_EvidenceSnapshot
+        * * Description: JSON EvidenceSnapshot built by the server from stored rows at the moment of the sign-off or publish.`),
+    EvidenceSha256: z.string().nullable().describe(`
+        * * Field Name: EvidenceSha256
+        * * Display Name: Evidence SHA-256
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 of the canonical Evidence JSON; a sign-off authorises a publish only while it equals a fresh recomputation.`),
+    OverridesFlags: z.string().describe(`
+        * * Field Name: OverridesFlags
+        * * Display Name: Overrides Flags
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array of the leakage flags a sign-off acknowledges by name; empty on every other row.`),
+    SignOffID: z.string().nullable().describe(`
+        * * Field Name: SignOffID
+        * * Display Name: Sign-Off
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
+        * * Description: Publish rows: the human sign-off this publish consumed, when one was required.`),
+    ReplacesModelID: z.string().nullable().describe(`
+        * * Field Name: ReplacesModelID
+        * * Display Name: Replaces Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: Publish rows: the model archived in the same transaction.`),
+    Refusal: z.any().nullable().describe(`
+        * * Field Name: Refusal
+        * * Display Name: Refusal
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelPublishRecordEntity_TransitionRefusal
+        * * Description: Refusal rows: JSON TransitionRefusal, the reason the attempt was refused.`),
+    Transient: z.boolean().describe(`
+        * * Field Name: Transient
+        * * Display Name: Transient
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Refusal rows: true when a retry may succeed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().nullable().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(500)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Info
+        * * SQL Data Type: nvarchar(100)`),
+    ReplacesModel: z.string().nullable().describe(`
+        * * Field Name: ReplacesModel
+        * * Display Name: Replaces Model
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJMLModelPublishRecordEntityType = z.infer<typeof MJMLModelPublishRecordSchema>;
+
+/**
  * zod schema definition for the entity MJ: ML Model Scoring Bindings
  */
 export const MJMLModelScoringBindingSchema = z.object({
@@ -27964,6 +28220,10 @@ export const MJMLModelScoringBindingSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    MLModel: z.string().nullable().describe(`
+        * * Field Name: MLModel
+        * * Display Name: ML Model
+        * * SQL Data Type: nvarchar(500)`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -28068,7 +28328,7 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Training Row Count
         * * SQL Data Type: int
         * * Description: Number of rows used to train the model`),
-    Status: z.union([z.literal('Archived'), z.literal('Draft'), z.literal('Published'), z.literal('Validated')]).describe(`
+    Status: z.union([z.literal('Archived'), z.literal('Draft'), z.literal('KeepBaseline'), z.literal('Published'), z.literal('Unevaluated'), z.literal('Validated')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -28077,7 +28337,9 @@ export const MJMLModelSchema = z.object({
     * * Possible Values 
     *   * Archived
     *   * Draft
+    *   * KeepBaseline
     *   * Published
+    *   * Unevaluated
     *   * Validated
         * * Description: Lifecycle status: Draft, Validated, Published, or Archived`),
     __mj_CreatedAt: z.date().describe(`
@@ -28090,6 +28352,92 @@ export const MJMLModelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    PredictionUnitID: z.string().nullable().describe(`
+        * * Field Name: PredictionUnitID
+        * * Display Name: Prediction Unit
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+        * * Description: The Prediction Unit version the model was trained under (the exact version row).`),
+    EvaluationProtocolID: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocolID
+        * * Display Name: Evaluation Protocol
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+        * * Description: The Evaluation Protocol version the model was graded under (the exact version row).`),
+    TrainingSnapshotID: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshotID
+        * * Display Name: Training Snapshot
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
+        * * Description: The Training Snapshot the model was trained on.`),
+    TrainingRunID: z.string().nullable().describe(`
+        * * Field Name: TrainingRunID
+        * * Display Name: Training Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+        * * Description: The training run that produced the model.`),
+    ArtifactSha256: z.string().nullable().describe(`
+        * * Field Name: ArtifactSha256
+        * * Display Name: Artifact SHA-256
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 of the shipped artifact's stored bytes; a load that hashes differently is refused.`),
+    SnapshotHash: z.string().nullable().describe(`
+        * * Field Name: SnapshotHash
+        * * Display Name: Snapshot Hash
+        * * SQL Data Type: char(64)
+        * * Description: Content hash of the training snapshot, copied at registration.`),
+    CodeVersion: z.any().nullable().describe(`
+        * * Field Name: CodeVersion
+        * * Display Name: Code Version
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelEntity_CodeVersion
+        * * Description: JSON CodeVersion of the training code: git commit, sidecar version, library versions, threads and seed.`),
+    FeatureSchemaHash: z.string().nullable().describe(`
+        * * Field Name: FeatureSchemaHash
+        * * Display Name: Feature Schema Hash
+        * * SQL Data Type: char(64)
+        * * Description: Hash of the feature schema the model scores; a scoring request whose features hash differently is refused.`),
+    OutputSemantics: z.any().nullable().describe(`
+        * * Field Name: OutputSemantics
+        * * Display Name: Output Semantics
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelEntity_OutputSemantics
+        * * Description: JSON {task}: what the model's output means (the task type and, for a classification, the adverse class).`),
+    Delivery: z.any().nullable().describe(`
+        * * Field Name: Delivery
+        * * Display Name: Delivery
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJMLModelEntity_RegisteredDeliveryView
+        * * Description: JSON RegisteredDelivery: what the training run shipped and the gate decision it shipped under.`),
+    StatusReason: z.string().nullable().describe(`
+        * * Field Name: StatusReason
+        * * Display Name: Status Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the model has its status, in plain words: a kept baseline, a demotion to Unevaluated, an archive or a withheld publish.`),
+    ArtifactStatus: z.union([z.literal('hash-mismatch'), z.literal('legacy-local'), z.literal('missing'), z.literal('unverified'), z.literal('verified')]).describe(`
+        * * Field Name: ArtifactStatus
+        * * Display Name: Artifact Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: unverified
+    * * Value List Type: List
+    * * Possible Values 
+    *   * hash-mismatch
+    *   * legacy-local
+    *   * missing
+    *   * unverified
+    *   * verified
+        * * Description: Health of the stored artifact as last checked: unverified, verified, missing, hash-mismatch or legacy-local.`),
+    ArtifactCheckedAt: z.date().nullable().describe(`
+        * * Field Name: ArtifactCheckedAt
+        * * Display Name: Artifact Checked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When ArtifactStatus was last checked.`),
+    ServingWhileUnevaluated: z.boolean().describe(`
+        * * Field Name: ServingWhileUnevaluated
+        * * Display Name: Serving While Unevaluated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True for a model that was Published before the lifecycle gate, demoted to Unevaluated and kept serving its pipeline until a model published through the gate replaces it. Never set by an entity save.`),
     Pipeline: z.string().nullable().describe(`
         * * Field Name: Pipeline
         * * Display Name: Pipeline
@@ -28102,9 +28450,249 @@ export const MJMLModelSchema = z.object({
         * * Field Name: ArtifactFile
         * * Display Name: Artifact File
         * * SQL Data Type: nvarchar(500)`),
+    PredictionUnit: z.string().nullable().describe(`
+        * * Field Name: PredictionUnit
+        * * Display Name: Prediction Unit Details
+        * * SQL Data Type: nvarchar(255)`),
+    EvaluationProtocol: z.string().nullable().describe(`
+        * * Field Name: EvaluationProtocol
+        * * Display Name: Evaluation Protocol Details
+        * * SQL Data Type: nvarchar(255)`),
+    TrainingSnapshot: z.string().nullable().describe(`
+        * * Field Name: TrainingSnapshot
+        * * Display Name: Training Snapshot Details
+        * * SQL Data Type: nvarchar(64)`),
 });
 
 export type MJMLModelEntityType = z.infer<typeof MJMLModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Monitoring Results
+ */
+export const MJMLMonitoringResultSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The model monitored.`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: The monitoring job run that wrote the row; NULL for a run started from the UI or a test.`),
+    Period: z.date().describe(`
+        * * Field Name: Period
+        * * Display Name: Period
+        * * SQL Data Type: date
+        * * Description: The first day of the period.`),
+    PeriodGrain: z.union([z.literal('month'), z.literal('quarter'), z.literal('week')]).describe(`
+        * * Field Name: PeriodGrain
+        * * Display Name: Period Grain
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * month
+    *   * quarter
+    *   * week
+        * * Description: week, month or quarter.`),
+    State: z.union([z.literal('evaluated'), z.literal('failed'), z.literal('window-open')]).describe(`
+        * * Field Name: State
+        * * Display Name: State
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * evaluated
+    *   * failed
+    *   * window-open
+        * * Description: window-open (outcomes not yet known), evaluated or failed.`),
+    ScoredRows: z.number().describe(`
+        * * Field Name: ScoredRows
+        * * Display Name: Scored Rows
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Predictions the model stored for the period.`),
+    JoinedRows: z.number().describe(`
+        * * Field Name: JoinedRows
+        * * Display Name: Joined Rows
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Predictions joined to a known outcome.`),
+    ExcludedInTrainingRows: z.number().describe(`
+        * * Field Name: ExcludedInTrainingRows
+        * * Display Name: Excluded In Training Rows
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Joined predictions left out because the record was in the model's training snapshot.`),
+    PrimaryScore: z.string().nullable().describe(`
+        * * Field Name: PrimaryScore
+        * * Display Name: Primary Score
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON MetricWithInterval: the protocol's primary metric over the joined rows.`),
+    PrimaryValue: z.number().nullable().describe(`
+        * * Field Name: PrimaryValue
+        * * Display Name: Primary Value
+        * * SQL Data Type: float(53)
+        * * Description: The primary metric's value, copied from PrimaryScore for queries and charts.`),
+    PrimaryLower: z.number().nullable().describe(`
+        * * Field Name: PrimaryLower
+        * * Display Name: Primary Lower Bound
+        * * SQL Data Type: float(53)
+        * * Description: The primary metric's interval lower bound, copied from PrimaryScore.`),
+    PrimaryUpper: z.number().nullable().describe(`
+        * * Field Name: PrimaryUpper
+        * * Display Name: Primary Upper Bound
+        * * SQL Data Type: float(53)
+        * * Description: The primary metric's interval upper bound, copied from PrimaryScore.`),
+    TrackedMetrics: z.string().nullable().describe(`
+        * * Field Name: TrackedMetrics
+        * * Display Name: Tracked Metrics
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of MetricWithInterval: the other tracked metrics (positive rate, log loss, RMSE and so on).`),
+    Calibration: z.string().nullable().describe(`
+        * * Field Name: Calibration
+        * * Display Name: Calibration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON CalibrationReport over the joined rows.`),
+    DriftLook: z.string().nullable().describe(`
+        * * Field Name: DriftLook
+        * * Display Name: Drift Look
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON per-input drift statistics of the period's look: z, empirical p, adjusted p, the look's threshold and index.`),
+    DriftAlarms: z.string().describe(`
+        * * Field Name: DriftAlarms
+        * * Display Name: Drift Alarms
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array of the inputs whose drift alarm fired.`),
+    Parity: z.string().nullable().describe(`
+        * * Field Name: Parity
+        * * Display Name: Parity
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON {sampled, maxAbsDifference, passed}: the period's scoring parity check.`),
+    TriggersFired: z.string().describe(`
+        * * Field Name: TriggersFired
+        * * Display Name: Triggers Fired
+        * * SQL Data Type: nvarchar(MAX)
+        * * Default Value: []
+        * * Description: JSON array of {kind, reason}: the retrain and rollback triggers that fired.`),
+    ChallengerRunID: z.string().nullable().describe(`
+        * * Field Name: ChallengerRunID
+        * * Display Name: Challenger Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+        * * Description: The challenger training run a fired trigger started.`),
+    ChallengerResult: z.string().nullable().describe(`
+        * * Field Name: ChallengerResult
+        * * Display Name: Challenger Result
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON {sharedRowIds, comparison, outcome, publishRecordId}: how the challenger compared and whether it was published or withheld.`),
+    RollbackCheck: z.string().nullable().describe(`
+        * * Field Name: RollbackCheck
+        * * Display Name: Rollback Check
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON {previousModelId, sharedRowIds, comparison, consecutive, fired or not-eligible with the reason}: the automated rollback check.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Why the period failed, when State is failed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().nullable().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(500)`),
+    ScheduledJobRun: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRun
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJMLMonitoringResultEntityType = z.infer<typeof MJMLMonitoringResultSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Output Bindings
+ */
+export const MJMLOutputBindingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The model whose output the surface shows.`),
+    Surface: z.union([z.literal('at-risk-list'), z.literal('predictions-grid'), z.literal('record-panel'), z.literal('why-badge')]).describe(`
+        * * Field Name: Surface
+        * * Display Name: Surface
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * at-risk-list
+    *   * predictions-grid
+    *   * record-panel
+    *   * why-badge
+        * * Description: at-risk-list, why-badge, predictions-grid or record-panel.`),
+    SortsBy: z.union([z.literal('adverse-probability-desc'), z.literal('none'), z.literal('score-asc'), z.literal('score-desc')]).describe(`
+        * * Field Name: SortsBy
+        * * Display Name: Sorts By
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-probability-desc
+    *   * none
+    *   * score-asc
+    *   * score-desc
+        * * Description: adverse-probability-desc, score-desc, score-asc or none.`),
+    DriverDirectionRelativeTo: z.union([z.literal('adverse-class'), z.literal('raw-contribution')]).describe(`
+        * * Field Name: DriverDirectionRelativeTo
+        * * Display Name: Driver Direction Relative To
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-class
+    *   * raw-contribution
+        * * Description: adverse-class (a driver that raises the adverse outcome points up) or raw-contribution.`),
+    Label: z.string().describe(`
+        * * Field Name: Label
+        * * Display Name: Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The label the surface shows, naming the scored class.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().nullable().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJMLOutputBindingEntityType = z.infer<typeof MJMLOutputBindingSchema>;
 
 /**
  * zod schema definition for the entity MJ: ML Prediction Units
@@ -28219,6 +28807,210 @@ export const MJMLPredictionUnitSchema = z.object({
 });
 
 export type MJMLPredictionUnitEntityType = z.infer<typeof MJMLPredictionUnitSchema>;
+
+/**
+ * zod schema definition for the entity MJ: ML Scoring Runs
+ */
+export const MJMLScoringRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().nullable().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+        * * Description: The exact model version that scored. NULL only on a refused run whose binding's pipeline has no Published model.`),
+    ModelVersion: z.number().nullable().describe(`
+        * * Field Name: ModelVersion
+        * * Display Name: Model Version
+        * * SQL Data Type: int
+        * * Description: The model's Version, copied at the run.`),
+    MLModelScoringBindingID: z.string().nullable().describe(`
+        * * Field Name: MLModelScoringBindingID
+        * * Display Name: ML Model Scoring Binding
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+        * * Description: The scoring binding a writing run scored for; NULL for a call that returns its scores and writes no Feature Value.`),
+    ArtifactSha256: z.string().nullable().describe(`
+        * * Field Name: ArtifactSha256
+        * * Display Name: Artifact SHA-256
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 of the artifact bytes that scored; NULL only when the run was refused before the artifact verified.`),
+    FeatureSchemaHash: z.string().nullable().describe(`
+        * * Field Name: FeatureSchemaHash
+        * * Display Name: Feature Schema Hash
+        * * SQL Data Type: char(64)
+        * * Description: Hash of the model's feature schema the run scored with.`),
+    Path: z.union([z.literal('monitoring'), z.literal('parity'), z.literal('predict'), z.literal('record-process'), z.literal('score-record-set')]).describe(`
+        * * Field Name: Path
+        * * Display Name: Path
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * monitoring
+    *   * parity
+    *   * predict
+    *   * record-process
+    *   * score-record-set
+        * * Description: Which caller ran it: score-record-set, record-process, monitoring, parity or predict.`),
+    ScopeKind: z.union([z.literal('filter'), z.literal('record-ids'), z.literal('view')]).describe(`
+        * * Field Name: ScopeKind
+        * * Display Name: Scope Kind
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * filter
+    *   * record-ids
+    *   * view
+        * * Description: How the scope names its records: record-ids, view or filter.`),
+    ScopeEntityID: z.string().describe(`
+        * * Field Name: ScopeEntityID
+        * * Display Name: Scope Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity whose records the scope names.`),
+    Scope: z.string().describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ScoringScope: the records the call asked to score.`),
+    EntityMapping: z.string().nullable().describe(`
+        * * Field Name: EntityMapping
+        * * Display Name: Entity Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON EntityRef mapping the scope entity onto the model's grain, when they differ.`),
+    AsOfDate: z.date().describe(`
+        * * Field Name: AsOfDate
+        * * Display Name: As Of Date
+        * * SQL Data Type: datetimeoffset
+        * * Description: The as-of instant the features were read at.`),
+    ReadPolicy: z.string().describe(`
+        * * Field Name: ReadPolicy
+        * * Display Name: Read Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ReadPolicy the features were read under.`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the call scored without writing anything.`),
+    RequestedBy: z.string().describe(`
+        * * Field Name: RequestedBy
+        * * Display Name: Requested By
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Actor: who asked for the run.`),
+    RequestedByUserID: z.string().nullable().describe(`
+        * * Field Name: RequestedByUserID
+        * * Display Name: Requested By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The requesting user, when a person asked; a joinable copy of RequestedBy.`),
+    ProcessRunID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: The Process Run, when the Record Process path ran it.`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: The Scheduled Job Run, when monitoring or parity ran it.`),
+    Status: z.union([z.literal('completed'), z.literal('failed'), z.literal('refused'), z.literal('running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * completed
+    *   * failed
+    *   * refused
+    *   * running
+        * * Description: running, refused, failed or completed. A failed run keeps the batches it wrote before the failing one.`),
+    Refusal: z.string().nullable().describe(`
+        * * Field Name: Refusal
+        * * Display Name: Refusal
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON ScoringRefusal when the run was refused.`),
+    Total: z.number().describe(`
+        * * Field Name: Total
+        * * Display Name: Total Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Records in scope.`),
+    Written: z.number().describe(`
+        * * Field Name: Written
+        * * Display Name: Written Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Records whose prediction was written.`),
+    Failed: z.number().describe(`
+        * * Field Name: Failed
+        * * Display Name: Failed Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Records that failed to score.`),
+    Skipped: z.number().describe(`
+        * * Field Name: Skipped
+        * * Display Name: Skipped Records
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Records skipped (for example, a person's value the run must not overwrite).`),
+    FirstErrors: z.string().nullable().describe(`
+        * * Field Name: FirstErrors
+        * * Display Name: First Errors
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the first errors, at most 20, each {recordId, message}.`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the run started.`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the run ended; NULL while it runs.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().nullable().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(500)`),
+    MLModelScoringBinding: z.string().nullable().describe(`
+        * * Field Name: MLModelScoringBinding
+        * * Display Name: ML Model Scoring Binding Details
+        * * SQL Data Type: nvarchar(255)`),
+    ScopeEntity: z.string().nullable().describe(`
+        * * Field Name: ScopeEntity
+        * * Display Name: Scope Entity Details
+        * * SQL Data Type: nvarchar(255)`),
+    RequestedByUser: z.string().nullable().describe(`
+        * * Field Name: RequestedByUser
+        * * Display Name: Requested By User Details
+        * * SQL Data Type: nvarchar(100)`),
+    ScheduledJobRun: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRun
+        * * Display Name: Scheduled Job Run Details
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJMLScoringRunEntityType = z.infer<typeof MJMLScoringRunSchema>;
 
 /**
  * zod schema definition for the entity MJ: ML Training Pipelines
@@ -28476,6 +29268,10 @@ export const MJMLTrainingRunSchema = z.object({
         * * Field Name: Pipeline
         * * Display Name: Pipeline
         * * SQL Data Type: nvarchar(255)`),
+    ResultingModel: z.string().nullable().describe(`
+        * * Field Name: ResultingModel
+        * * Display Name: Resulting Model
+        * * SQL Data Type: nvarchar(500)`),
     ExperimentSessionIteration: z.string().nullable().describe(`
         * * Field Name: ExperimentSessionIteration
         * * Display Name: Experiment Session Iteration
@@ -111006,6 +111802,38 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Champion
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Challenger
+    *   * Champion
+    * * Description: Champion for the production value of the record process; Challenger for a shadow score from its challenger, kept for comparison only.
+    */
+    get Role(): 'Challenger' | 'Champion' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Challenger' | 'Champion') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The MJ: ML Models record that scored this value, for values written by an ML Model record process (the champion's audit row or a shadow challenger's row). NULL for values from AI prompts, which record their model in AIModelID.
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -111057,6 +111885,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get AIModel(): string | null {
         return this.Get('AIModel');
+    }
+
+    /**
+    * * Field Name: MLModel
+    * * Display Name: ML Model Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get MLModel(): string | null {
+        return this.Get('MLModel');
     }
 }
 
@@ -117449,6 +118286,270 @@ export class MJKnowledgeHubSavedSearchEntity extends BaseEntity<MJKnowledgeHubSa
 
 
 /**
+ * MJ: Latest Feature Values - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: vwLatestFeatureValues
+ * * Base View: vwLatestFeatureValues
+ * * @description The latest value of each record's feature: one row per entity, record and feature name, the newest Champion Feature Value by effective date, then computation time. Read-only.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Latest Feature Values')
+export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureValuesEntityType> {
+    /**
+    * Loads the MJ: Latest Feature Values record from the database
+    * @param ID: string - primary key value to load the MJ: Latest Feature Values record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Latest Feature Values - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @throws {Error} - Save is not allowed for MJ: Latest Feature Values, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Latest Feature Values, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Latest Feature Values - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJvwLatestFeatureValuesEntity
+    * @throws {Error} - Delete is not allowed for MJ: Latest Feature Values, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Latest Feature Values, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Unique identifier of the feature value record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Unique identifier of the entity this feature was computed for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(900)
+    * * Description: Serialized primary key of the record this feature was computed for.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the feature.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Origin of the value: Pipeline or Human.
+    */
+    get Source(): string {
+        return this.Get('Source');
+    }
+    set Source(value: string) {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Description: Role of the score/value, such as Champion.
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+    set Role(value: string) {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: EffectiveAsOf
+    * * Display Name: Effective As Of
+    * * SQL Data Type: datetimeoffset
+    * * Description: Effective instant from which this value applies to the record.
+    */
+    get EffectiveAsOf(): Date | null {
+        return this.Get('EffectiveAsOf');
+    }
+    set EffectiveAsOf(value: Date | null) {
+        this.Set('EffectiveAsOf', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this feature value was computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: MLModelID
+    * * Display Name: ML Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Reference to the ML Model that produced or scored this feature value, if applicable.
+    */
+    get MLModelID(): string | null {
+        return this.Get('MLModelID');
+    }
+    set MLModelID(value: string | null) {
+        this.Set('MLModelID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Reference to the Record Process (Feature Pipeline) that computed this feature value.
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: ValueText
+    * * Display Name: Value (Text)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value formatted as text or categorical string.
+    */
+    get ValueText(): string | null {
+        return this.Get('ValueText');
+    }
+    set ValueText(value: string | null) {
+        this.Set('ValueText', value);
+    }
+
+    /**
+    * * Field Name: ValueNumeric
+    * * Display Name: Value (Numeric)
+    * * SQL Data Type: float(53)
+    * * Description: Computed value formatted as a floating-point numeric value.
+    */
+    get ValueNumeric(): number | null {
+        return this.Get('ValueNumeric');
+    }
+    set ValueNumeric(value: number | null) {
+        this.Set('ValueNumeric', value);
+    }
+
+    /**
+    * * Field Name: ValueDate
+    * * Display Name: Value (Date)
+    * * SQL Data Type: datetimeoffset
+    * * Description: Computed value formatted as a date/time offset.
+    */
+    get ValueDate(): Date | null {
+        return this.Get('ValueDate');
+    }
+    set ValueDate(value: Date | null) {
+        this.Set('ValueDate', value);
+    }
+
+    /**
+    * * Field Name: ValueBoolean
+    * * Display Name: Value (Boolean)
+    * * SQL Data Type: bit
+    * * Description: Computed value formatted as a boolean flag.
+    */
+    get ValueBoolean(): boolean | null {
+        return this.Get('ValueBoolean');
+    }
+    set ValueBoolean(value: boolean | null) {
+        this.Set('ValueBoolean', value);
+    }
+
+    /**
+    * * Field Name: ValueJSON
+    * * Display Name: Value (JSON)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value formatted as a raw JSON string for complex objects.
+    */
+    get ValueJSON(): string | null {
+        return this.Get('ValueJSON');
+    }
+    set ValueJSON(value: string | null) {
+        this.Set('ValueJSON', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: float(53)
+    * * Description: Confidence score associated with the computed feature value.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+}
+
+
+/**
  * MJ: Libraries - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Library
@@ -121218,6 +122319,566 @@ export class MJMLEvaluationProtocolEntity extends BaseEntity<MJMLEvaluationProto
 
 
 /**
+ * JSON shapes for the `MJ: ML Model Publish Records` columns that store Predictive Studio contract values: `Initiator`
+ * (`MJMLModelPublishRecordEntity_Actor`), `MJMLModelPublishRecordEntity_GateDecision` (`MJMLModelPublishRecordEntity_GateDecision`), `Evidence` (`MJMLModelPublishRecordEntity_EvidenceSnapshot`) and `Refusal` (`MJMLModelPublishRecordEntity_TransitionRefusal`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `InitiatorObject`, `GateDecisionObject`, `EvidenceObject` and `RefusalObject` accessors on
+ * `MJMLModelPublishRecordEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLModelPublishRecordEntity_Actor` in `prediction-unit.ts`;
+ * `MJMLModelPublishRecordEntity_GateDecision` and `MJMLModelPublishRecordEntity_PairedComparison` in `gate.ts`; `MJMLModelPublishRecordEntity_EvidenceSnapshot` in `governance-contracts.ts`;
+ * `MJMLModelPublishRecordEntity_TransitionRefusal`, `MJMLModelPublishRecordEntity_LifecycleState` and `MJMLModelPublishRecordEntity_StatusGuardDecision` in `registry-contracts.ts`; `MJMLModelPublishRecordEntity_Interval`,
+ * `MJMLModelPublishRecordEntity_MetricWithInterval`, `MJMLModelPublishRecordEntity_ProperScore`, `MJMLModelPublishRecordEntity_SecondaryMetric` and `MJMLModelPublishRecordEntity_MetricKey` in `evaluation-protocol.ts`; `MJMLModelPublishRecordEntity_LeakageFlag` in
+ * `trainer-contract.ts`. Runtime code reads the columns through those Core types, so a member added there must be added
+ * here. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ * The keys are camelCase because they are stored JSON and trainer wire names.
+ */
+
+/**
+ * Who authored a version or started an action — data, never a permission by itself. `human` is a user; `agent`,
+ * `scheduled-job` and `system` are the automated authors. A `system` actor started by a Record Process run
+ * (auto-train) names that run in `processRunId`.
+ */
+export type MJMLModelPublishRecordEntity_Actor =
+  | { readonly kind: 'human'; readonly userId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'agent'; readonly agentRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  // case-violation-ok-legacy-back-compat: stored Prediction Unit and publish-record Initiator JSON field names
+  | { readonly kind: 'system'; readonly component: string; readonly processRunId?: string };
+
+/** The gate's decision: what ships (a model, the best simple baseline, or nothing) and the branch that decided it. */
+export type MJMLModelPublishRecordEntity_GateDecision =
+  | {
+      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    };
+
+/** What the approver (or the automated gate) was shown, built server-side from stored rows at signing or publish. */
+export interface MJMLModelPublishRecordEntity_EvidenceSnapshot {
+  readonly holdoutPrimary: MJMLModelPublishRecordEntity_MetricWithInterval;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly comparisons: Readonly<Record<string, MJMLModelPublishRecordEntity_PairedComparison>>;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly gate: MJMLModelPublishRecordEntity_GateDecision;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly leakageFlags: readonly MJMLModelPublishRecordEntity_LeakageFlag[];  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  /** The training data window, as ISO dates (yyyy-mm-dd). */
+  readonly dataWindow: { readonly from: string; readonly to: string };  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+  readonly snapshotHash: string;  // case-violation-ok-legacy-back-compat: stored publish-record Evidence JSON key
+}
+
+/** A confidence interval at `level` around an estimate. */
+export interface MJMLModelPublishRecordEntity_Interval { readonly level: number; readonly lower: number; readonly upper: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** One metric's value on `n` rows, with its interval. */
+export interface MJMLModelPublishRecordEntity_MetricWithInterval { readonly metric: MJMLModelPublishRecordEntity_MetricKey; readonly value: number; readonly interval: MJMLModelPublishRecordEntity_Interval; readonly n: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+
+/** The proper scoring rule a protocol ranks candidates by, per target family. */
+export type MJMLModelPublishRecordEntity_ProperScore =
+  | { readonly family: 'binary'; readonly metric: 'log-loss' | 'brier' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'multiclass'; readonly metric: 'multiclass-log-loss' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'continuous'; readonly metric: 'rmse' | 'mae' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'count'; readonly metric: 'poisson-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'non-negative'; readonly metric: 'tweedie-deviance' }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  | { readonly family: 'forecast'; readonly metric: 'mase' | 'rmse' };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** The metrics reported beside the primary score; never used to rank. */
+export type MJMLModelPublishRecordEntity_SecondaryMetric = 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+/** Every metric a run may report: the proper scores and the secondary metrics. */
+export type MJMLModelPublishRecordEntity_MetricKey = MJMLModelPublishRecordEntity_ProperScore['metric'] | MJMLModelPublishRecordEntity_SecondaryMetric;
+
+/** A paired comparison of two scorers' losses on the same holdout rows. */
+export interface MJMLModelPublishRecordEntity_PairedComparison {
+  /** Mean of (base loss − candidate loss); positive favours the candidate. */
+  readonly value: number;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+  /** The interval on `value` at the protocol's lower-bound level. */
+  readonly ci: readonly [number, number];  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+  /** True when ci[0] > the protocol's margin. */
+  readonly beats: boolean;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+}
+
+/** One leakage-audit finding. */
+export type MJMLModelPublishRecordEntity_LeakageFlag =
+  | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number };  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+
+/** Why a lifecycle transition was refused; stored as `MJ: ML Model Publish Records.Refusal` JSON. */
+export type MJMLModelPublishRecordEntity_TransitionRefusal =
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'illegal-transition'; readonly from: MJMLModelPublishRecordEntity_LifecycleState; readonly to: MJMLModelPublishRecordEntity_LifecycleState }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'no-sign-off' }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'gate-no-signal'; readonly reason: string }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'unacknowledged-leakage-flags'; readonly flags: readonly MJMLModelPublishRecordEntity_LeakageFlag['kind'][] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'semantics-check-failed'; readonly mismatches: readonly string[] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'actor-not-permitted'; readonly actor: MJMLModelPublishRecordEntity_Actor['kind'] }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'does-not-beat-incumbent'; readonly incumbentModelId: string; readonly comparison: MJMLModelPublishRecordEntity_PairedComparison }
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'status-written-outside-gate'; readonly guard: Extract<MJMLModelPublishRecordEntity_StatusGuardDecision, { readonly Allow: false }> }
+  /** Storage unreachable while verifying the artifact; transient (D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'artifact-unverifiable'; readonly detail: string }
+  /** The publish lock timed out; transient (D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'publish-in-progress' }
+  /** A keep-simple-baseline outcome without `autoPublishKeepBaseline` or a human request; final (D-031, D4-16). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'keep-baseline-not-auto-published' }
+  /** The registry job closed a sign-off wait: a newer run was evaluated, or `signOffExpiryDays` passed (D4-19). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
+  /** A run whose decision kept the incumbent heuristic: no model row (PR 3 Q3-5; D4-56). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'kept-existing-rule'; readonly rule: string };
+
+/** A lifecycle state of the contract. */
+export type MJMLModelPublishRecordEntity_LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
+
+/** The Status guard's decision for one save of `MJ: ML Models`. */
+export type MJMLModelPublishRecordEntity_StatusGuardDecision =
+  | { readonly Allow: true; readonly Reason: 'create-as-draft' | 'status-unchanged' | 'gate-authorised' }
+  | {
+      readonly Allow: false;
+      readonly Reason:
+        | 'create-not-draft'
+        | 'stored-row-unreadable'
+        | 'deferred-in-transaction-group'
+        | 'status-changed-outside-gate'
+        | 'gate-transition-mismatch';
+    };
+
+/**
+ * MJ: ML Model Publish Records - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLModelPublishRecord
+ * * Base View: vwMLModelPublishRecords
+ * * @description The publish ledger of ML models: every human sign-off, every applied publish or rollback (automatic or by a person) and every refused publish attempt. An audit trail only: the lifecycle gate re-derives each decision from the stored evaluation and the model's Delivery. Rows are never updated, except that spDeleteEntityWithCoreDependencies clears SignOffID, ReplacesModelID and TrainingRunID on surviving rows when the referenced row is deleted with its entity.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Model Publish Records')
+export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRecordEntityType> {
+    /**
+    * Loads the MJ: ML Model Publish Records record from the database
+    * @param ID: string - primary key value to load the MJ: ML Model Publish Records record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLModelPublishRecordEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model the record is about. NULL only on a run-level refusal: a training run whose outcome produced no model row.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: TrainingRunID
+    * * Display Name: Training Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The training run the record is about; the idempotency key of a publish and of a run-level refusal.
+    */
+    get TrainingRunID(): string | null {
+        return this.Get('TrainingRunID');
+    }
+    set TrainingRunID(value: string | null) {
+        this.Set('TrainingRunID', value);
+    }
+
+    /**
+    * * Field Name: Kind
+    * * Display Name: Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * publish
+    *   * refusal
+    *   * sign-off
+    * * Description: sign-off (a person approved or rejected), publish (a status change was applied) or refusal (a publish attempt was refused).
+    */
+    get Kind(): 'publish' | 'refusal' | 'sign-off' {
+        return this.Get('Kind');
+    }
+    set Kind(value: 'publish' | 'refusal' | 'sign-off') {
+        this.Set('Kind', value);
+    }
+
+    /**
+    * * Field Name: Purpose
+    * * Display Name: Purpose
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adopt
+    *   * evaluate
+    *   * publish
+    *   * rollback
+    * * Description: publish, rollback (an archived model published again), evaluate (a run-level outcome only) or adopt (a pre-change Published model re-verified).
+    */
+    get Purpose(): 'adopt' | 'evaluate' | 'publish' | 'rollback' {
+        return this.Get('Purpose');
+    }
+    set Purpose(value: 'adopt' | 'evaluate' | 'publish' | 'rollback') {
+        this.Set('Purpose', value);
+    }
+
+    /**
+    * * Field Name: ApproverKind
+    * * Display Name: Approver Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Description: automated-gate when no person approved the publish; user when a person published or the publish consumed that person's approving sign-off.
+    */
+    get ApproverKind(): string {
+        return this.Get('ApproverKind');
+    }
+    set ApproverKind(value: string) {
+        this.Set('ApproverKind', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The person who approved, when ApproverKind is user.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Initiator
+    * * Display Name: Initiator
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_Actor
+    * * Description: JSON Actor: who started the attempt (a user, an agent run, a Record Process run or a scheduled job run).
+    */
+    get Initiator(): string {
+        return this.Get('Initiator');
+    }
+    set Initiator(value: string) {
+        this.Set('Initiator', value);
+    }
+
+    /**
+    * Typed accessor for Initiator — a live view of the parsed JSON as MJMLModelPublishRecordEntity_Actor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Initiator field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get InitiatorObject(): MJMLModelPublishRecordEntity_Actor {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_Actor>('Initiator')!;
+    }
+    set InitiatorObject(value: MJMLModelPublishRecordEntity_Actor) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_Actor>('Initiator', value);
+    }
+
+    /**
+    * * Field Name: RecordedAt
+    * * Display Name: Recorded At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the record was written.
+    */
+    get RecordedAt(): Date {
+        return this.Get('RecordedAt');
+    }
+    set RecordedAt(value: Date) {
+        this.Set('RecordedAt', value);
+    }
+
+    /**
+    * * Field Name: Decision
+    * * Display Name: Decision
+    * * SQL Data Type: nvarchar(10)
+    * * Description: Sign-off rows only: approve or reject.
+    */
+    get Decision(): string | null {
+        return this.Get('Decision');
+    }
+    set Decision(value: string | null) {
+        this.Set('Decision', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The reason in plain words; required when the record overrides flags.
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: GateDecision
+    * * Display Name: Gate Decision
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_GateDecision
+    * * Description: JSON GateDecision as the gate re-derived it at the publish, kept as a copy for audit. Required on publish rows.
+    */
+    get GateDecision(): string | null {
+        return this.Get('GateDecision');
+    }
+    set GateDecision(value: string | null) {
+        this.Set('GateDecision', value);
+    }
+
+    /**
+    * Typed accessor for GateDecision — a live view of the parsed JSON as MJMLModelPublishRecordEntity_GateDecision.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying GateDecision field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GateDecisionObject(): MJMLModelPublishRecordEntity_GateDecision | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_GateDecision>('GateDecision');
+    }
+    set GateDecisionObject(value: MJMLModelPublishRecordEntity_GateDecision | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_GateDecision>('GateDecision', value);
+    }
+
+    /**
+    * * Field Name: Evidence
+    * * Display Name: Evidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_EvidenceSnapshot
+    * * Description: JSON EvidenceSnapshot built by the server from stored rows at the moment of the sign-off or publish.
+    */
+    get Evidence(): string | null {
+        return this.Get('Evidence');
+    }
+    set Evidence(value: string | null) {
+        this.Set('Evidence', value);
+    }
+
+    /**
+    * Typed accessor for Evidence — a live view of the parsed JSON as MJMLModelPublishRecordEntity_EvidenceSnapshot.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Evidence field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get EvidenceObject(): MJMLModelPublishRecordEntity_EvidenceSnapshot | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_EvidenceSnapshot>('Evidence');
+    }
+    set EvidenceObject(value: MJMLModelPublishRecordEntity_EvidenceSnapshot | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_EvidenceSnapshot>('Evidence', value);
+    }
+
+    /**
+    * * Field Name: EvidenceSha256
+    * * Display Name: Evidence SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the canonical Evidence JSON; a sign-off authorises a publish only while it equals a fresh recomputation.
+    */
+    get EvidenceSha256(): string | null {
+        return this.Get('EvidenceSha256');
+    }
+    set EvidenceSha256(value: string | null) {
+        this.Set('EvidenceSha256', value);
+    }
+
+    /**
+    * * Field Name: OverridesFlags
+    * * Display Name: Overrides Flags
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of the leakage flags a sign-off acknowledges by name; empty on every other row.
+    */
+    get OverridesFlags(): string {
+        return this.Get('OverridesFlags');
+    }
+    set OverridesFlags(value: string) {
+        this.Set('OverridesFlags', value);
+    }
+
+    /**
+    * * Field Name: SignOffID
+    * * Display Name: Sign-Off
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Publish Records (vwMLModelPublishRecords.ID)
+    * * Description: Publish rows: the human sign-off this publish consumed, when one was required.
+    */
+    get SignOffID(): string | null {
+        return this.Get('SignOffID');
+    }
+    set SignOffID(value: string | null) {
+        this.Set('SignOffID', value);
+    }
+
+    /**
+    * * Field Name: ReplacesModelID
+    * * Display Name: Replaces Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: Publish rows: the model archived in the same transaction.
+    */
+    get ReplacesModelID(): string | null {
+        return this.Get('ReplacesModelID');
+    }
+    set ReplacesModelID(value: string | null) {
+        this.Set('ReplacesModelID', value);
+    }
+
+    /**
+    * * Field Name: Refusal
+    * * Display Name: Refusal
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelPublishRecordEntity_TransitionRefusal
+    * * Description: Refusal rows: JSON TransitionRefusal, the reason the attempt was refused.
+    */
+    get Refusal(): string | null {
+        return this.Get('Refusal');
+    }
+    set Refusal(value: string | null) {
+        this.Set('Refusal', value);
+    }
+
+    /**
+    * Typed accessor for Refusal — a live view of the parsed JSON as MJMLModelPublishRecordEntity_TransitionRefusal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Refusal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get RefusalObject(): MJMLModelPublishRecordEntity_TransitionRefusal | null {
+        return this.GetJSONFieldObject<MJMLModelPublishRecordEntity_TransitionRefusal>('Refusal');
+    }
+    set RefusalObject(value: MJMLModelPublishRecordEntity_TransitionRefusal | null) {
+        this.SetJSONFieldObject<MJMLModelPublishRecordEntity_TransitionRefusal>('Refusal', value);
+    }
+
+    /**
+    * * Field Name: Transient
+    * * Display Name: Transient
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Refusal rows: true when a retry may succeed.
+    */
+    get Transient(): boolean {
+        return this.Get('Transient');
+    }
+    set Transient(value: boolean) {
+        this.Set('Transient', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Info
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: ReplacesModel
+    * * Display Name: Replaces Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ReplacesModel(): string | null {
+        return this.Get('ReplacesModel');
+    }
+}
+
+
+/**
  * MJ: ML Model Scoring Bindings - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: MLModelScoringBinding
@@ -121394,6 +123055,15 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
+    * * Field Name: MLModel
+    * * Display Name: ML Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get MLModel(): string | null {
+        return this.Get('MLModel');
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -121412,6 +123082,107 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 }
 
+
+/**
+ * JSON shapes for the `MJ: ML Models` columns that store Predictive Studio contract values: `MJMLModelEntity_CodeVersion`
+ * (`MJMLModelEntity_CodeVersion`), `MJMLModelEntity_OutputSemantics` (`MJMLModelEntity_OutputSemantics`) and `Delivery` (`MJMLModelEntity_RegisteredDeliveryView`).
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it verbatim, and CodeGen emits it inline
+ * (once per entity, however many fields bind it), so it cannot import another file. CodeGen emits typed
+ * `CodeVersionObject`, `OutputSemanticsObject` and `DeliveryObject` accessors on `MJMLModelEntity`.
+ *
+ * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
+ * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `MJMLModelEntity_CodeVersion` in
+ * `trainer-contract.ts`; `MJMLModelEntity_OutputSemantics`, `MJMLModelEntity_RegisteredDeliveryView` and `MJMLModelEntity_StoredFile` in `registry-contracts.ts`;
+ * `MJMLModelEntity_TaskType` in `task-type.ts`; `MJMLModelEntity_GateDecision` in `gate.ts`. Runtime code reads the columns through those Core types,
+ * so a member added there must be added here. Edit both in the same commit; Core's
+ * `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ * The keys are camelCase because they are stored JSON and trainer wire names.
+ */
+
+/** The code a run executed: the repository commit, the sidecar version, the library versions, threads and seed. */
+export interface MJMLModelEntity_CodeVersion {
+  readonly psGitSha: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly sidecarVersion: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly libraryVersions: Readonly<Record<string, string>>;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly threads: number;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+  readonly seed: number;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
+}
+
+/**
+ * Which class a score is for and which direction is adverse (S9.5). Only the task type is stored; the scored class and
+ * adverse direction are derived by `TaskTypeRules.ScoreSemantics`, so there is one source of truth.
+ */
+export interface MJMLModelEntity_OutputSemantics {
+  readonly task: MJMLModelEntity_TaskType;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.MJMLModelEntity_OutputSemantics JSON key
+}
+
+/** The declared task type of a Prediction Unit. */
+export type MJMLModelEntity_TaskType =
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'binary'; readonly classOrder: readonly [string, string]; readonly adverseIndex: 0 | 1 }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'multiclass'; readonly classOrder: readonly string[]; readonly adverseIndices: readonly number[] }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'continuous' }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'count' }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'non-negative'; readonly tweediePower: number }
+  // case-violation-ok-legacy-back-compat: stored task type JSON field name
+  | { readonly kind: 'forecast'; readonly valueKind: 'continuous' | 'count' | 'non-negative' };
+
+/** The registry's view of a delivery, persisted as `MJ: ML Models.Delivery` JSON: the stored file with the gate inside. */
+export type MJMLModelEntity_RegisteredDeliveryView =
+  | {
+      readonly kind: 'delivered';  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly gate: Exclude<MJMLModelEntity_GateDecision, { readonly outcome: 'no-signal' }>;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly shippedRole: 'model' | 'simpleBaseline';  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+      readonly artifact: MJMLModelEntity_StoredFile;  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON key
+    }
+  // case-violation-ok-legacy-back-compat: stored MJ: ML Models.Delivery JSON keys
+  | { readonly kind: 'no-signal'; readonly gate: Extract<MJMLModelEntity_GateDecision, { readonly outcome: 'no-signal' }>; readonly artifact: null };
+
+/** A file held through MJ's file-storage provider (`MJ: Files` row + `FileStorageBase` driver), stored write-once. */
+export interface MJMLModelEntity_StoredFile {
+  /** `MJ: Files`.ID */
+  readonly fileId: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** `MJ: File Storage Providers`.ID; never the OS temp directory. */
+  readonly storageProviderId: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Object name passed to `FileStorageBase.PutObject` / `GetObject`. */
+  readonly providerKey: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Lower-case hex SHA-256 of the stored bytes. */
+  readonly sha256: string;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Size of the stored bytes. */
+  readonly sizeBytes: number;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+  /** Write-once: a second PutObject to this key is refused by the registry. */
+  readonly writeOnce: true;  // case-violation-ok-legacy-back-compat: stored Delivery JSON key
+}
+
+/** The gate's decision: what ships (a model, the best simple baseline, or nothing) and the branch that decided it. */
+export type MJMLModelEntity_GateDecision =
+  | {
+      readonly outcome: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'model';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: 'no simple baseline carries demonstrable signal' | null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'b:keep-simple-baseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: string;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: 'simpleBaseline';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    }
+  | {
+      readonly outcome: 'no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly branch: 'c:no-signal';  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shipped: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly shippedRole: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+      readonly note: null;  // case-violation-ok-legacy-back-compat: trainer wire and stored gate record field name
+    };
 
 /**
  * MJ: ML Models - strongly typed entity sub-class
@@ -121668,14 +123439,16 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     * * Possible Values 
     *   * Archived
     *   * Draft
+    *   * KeepBaseline
     *   * Published
+    *   * Unevaluated
     *   * Validated
     * * Description: Lifecycle status: Draft, Validated, Published, or Archived
     */
-    get Status(): 'Archived' | 'Draft' | 'Published' | 'Validated' {
+    get Status(): 'Archived' | 'Draft' | 'KeepBaseline' | 'Published' | 'Unevaluated' | 'Validated' {
         return this.Get('Status');
     }
-    set Status(value: 'Archived' | 'Draft' | 'Published' | 'Validated') {
+    set Status(value: 'Archived' | 'Draft' | 'KeepBaseline' | 'Published' | 'Unevaluated' | 'Validated') {
         this.Set('Status', value);
     }
 
@@ -121697,6 +123470,249 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: PredictionUnitID
+    * * Display Name: Prediction Unit
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Prediction Units (vwMLPredictionUnits.ID)
+    * * Description: The Prediction Unit version the model was trained under (the exact version row).
+    */
+    get PredictionUnitID(): string | null {
+        return this.Get('PredictionUnitID');
+    }
+    set PredictionUnitID(value: string | null) {
+        this.Set('PredictionUnitID', value);
+    }
+
+    /**
+    * * Field Name: EvaluationProtocolID
+    * * Display Name: Evaluation Protocol
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Evaluation Protocols (vwMLEvaluationProtocols.ID)
+    * * Description: The Evaluation Protocol version the model was graded under (the exact version row).
+    */
+    get EvaluationProtocolID(): string | null {
+        return this.Get('EvaluationProtocolID');
+    }
+    set EvaluationProtocolID(value: string | null) {
+        this.Set('EvaluationProtocolID', value);
+    }
+
+    /**
+    * * Field Name: TrainingSnapshotID
+    * * Display Name: Training Snapshot
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Snapshots (vwMLTrainingSnapshots.ID)
+    * * Description: The Training Snapshot the model was trained on.
+    */
+    get TrainingSnapshotID(): string | null {
+        return this.Get('TrainingSnapshotID');
+    }
+    set TrainingSnapshotID(value: string | null) {
+        this.Set('TrainingSnapshotID', value);
+    }
+
+    /**
+    * * Field Name: TrainingRunID
+    * * Display Name: Training Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The training run that produced the model.
+    */
+    get TrainingRunID(): string | null {
+        return this.Get('TrainingRunID');
+    }
+    set TrainingRunID(value: string | null) {
+        this.Set('TrainingRunID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactSha256
+    * * Display Name: Artifact SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the shipped artifact's stored bytes; a load that hashes differently is refused.
+    */
+    get ArtifactSha256(): string | null {
+        return this.Get('ArtifactSha256');
+    }
+    set ArtifactSha256(value: string | null) {
+        this.Set('ArtifactSha256', value);
+    }
+
+    /**
+    * * Field Name: SnapshotHash
+    * * Display Name: Snapshot Hash
+    * * SQL Data Type: char(64)
+    * * Description: Content hash of the training snapshot, copied at registration.
+    */
+    get SnapshotHash(): string | null {
+        return this.Get('SnapshotHash');
+    }
+    set SnapshotHash(value: string | null) {
+        this.Set('SnapshotHash', value);
+    }
+
+    /**
+    * * Field Name: CodeVersion
+    * * Display Name: Code Version
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_CodeVersion
+    * * Description: JSON CodeVersion of the training code: git commit, sidecar version, library versions, threads and seed.
+    */
+    get CodeVersion(): string | null {
+        return this.Get('CodeVersion');
+    }
+    set CodeVersion(value: string | null) {
+        this.Set('CodeVersion', value);
+    }
+
+    /**
+    * Typed accessor for CodeVersion — a live view of the parsed JSON as MJMLModelEntity_CodeVersion.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying CodeVersion field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CodeVersionObject(): MJMLModelEntity_CodeVersion | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_CodeVersion>('CodeVersion');
+    }
+    set CodeVersionObject(value: MJMLModelEntity_CodeVersion | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_CodeVersion>('CodeVersion', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: char(64)
+    * * Description: Hash of the feature schema the model scores; a scoring request whose features hash differently is refused.
+    */
+    get FeatureSchemaHash(): string | null {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string | null) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: OutputSemantics
+    * * Display Name: Output Semantics
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_OutputSemantics
+    * * Description: JSON {task}: what the model's output means (the task type and, for a classification, the adverse class).
+    */
+    get OutputSemantics(): string | null {
+        return this.Get('OutputSemantics');
+    }
+    set OutputSemantics(value: string | null) {
+        this.Set('OutputSemantics', value);
+    }
+
+    /**
+    * Typed accessor for OutputSemantics — a live view of the parsed JSON as MJMLModelEntity_OutputSemantics.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying OutputSemantics field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get OutputSemanticsObject(): MJMLModelEntity_OutputSemantics | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_OutputSemantics>('OutputSemantics');
+    }
+    set OutputSemanticsObject(value: MJMLModelEntity_OutputSemantics | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_OutputSemantics>('OutputSemantics', value);
+    }
+
+    /**
+    * * Field Name: Delivery
+    * * Display Name: Delivery
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJMLModelEntity_RegisteredDeliveryView
+    * * Description: JSON RegisteredDelivery: what the training run shipped and the gate decision it shipped under.
+    */
+    get Delivery(): string | null {
+        return this.Get('Delivery');
+    }
+    set Delivery(value: string | null) {
+        this.Set('Delivery', value);
+    }
+
+    /**
+    * Typed accessor for Delivery — a live view of the parsed JSON as MJMLModelEntity_RegisteredDeliveryView.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Delivery field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DeliveryObject(): MJMLModelEntity_RegisteredDeliveryView | null {
+        return this.GetJSONFieldObject<MJMLModelEntity_RegisteredDeliveryView>('Delivery');
+    }
+    set DeliveryObject(value: MJMLModelEntity_RegisteredDeliveryView | null) {
+        this.SetJSONFieldObject<MJMLModelEntity_RegisteredDeliveryView>('Delivery', value);
+    }
+
+    /**
+    * * Field Name: StatusReason
+    * * Display Name: Status Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the model has its status, in plain words: a kept baseline, a demotion to Unevaluated, an archive or a withheld publish.
+    */
+    get StatusReason(): string | null {
+        return this.Get('StatusReason');
+    }
+    set StatusReason(value: string | null) {
+        this.Set('StatusReason', value);
+    }
+
+    /**
+    * * Field Name: ArtifactStatus
+    * * Display Name: Artifact Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: unverified
+    * * Value List Type: List
+    * * Possible Values 
+    *   * hash-mismatch
+    *   * legacy-local
+    *   * missing
+    *   * unverified
+    *   * verified
+    * * Description: Health of the stored artifact as last checked: unverified, verified, missing, hash-mismatch or legacy-local.
+    */
+    get ArtifactStatus(): 'hash-mismatch' | 'legacy-local' | 'missing' | 'unverified' | 'verified' {
+        return this.Get('ArtifactStatus');
+    }
+    set ArtifactStatus(value: 'hash-mismatch' | 'legacy-local' | 'missing' | 'unverified' | 'verified') {
+        this.Set('ArtifactStatus', value);
+    }
+
+    /**
+    * * Field Name: ArtifactCheckedAt
+    * * Display Name: Artifact Checked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When ArtifactStatus was last checked.
+    */
+    get ArtifactCheckedAt(): Date | null {
+        return this.Get('ArtifactCheckedAt');
+    }
+    set ArtifactCheckedAt(value: Date | null) {
+        this.Set('ArtifactCheckedAt', value);
+    }
+
+    /**
+    * * Field Name: ServingWhileUnevaluated
+    * * Display Name: Serving While Unevaluated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True for a model that was Published before the lifecycle gate, demoted to Unevaluated and kept serving its pipeline until a model published through the gate replaces it. Never set by an entity save.
+    */
+    get ServingWhileUnevaluated(): boolean {
+        return this.Get('ServingWhileUnevaluated');
+    }
+    set ServingWhileUnevaluated(value: boolean) {
+        this.Set('ServingWhileUnevaluated', value);
     }
 
     /**
@@ -121724,6 +123740,576 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
     */
     get ArtifactFile(): string | null {
         return this.Get('ArtifactFile');
+    }
+
+    /**
+    * * Field Name: PredictionUnit
+    * * Display Name: Prediction Unit Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PredictionUnit(): string | null {
+        return this.Get('PredictionUnit');
+    }
+
+    /**
+    * * Field Name: EvaluationProtocol
+    * * Display Name: Evaluation Protocol Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EvaluationProtocol(): string | null {
+        return this.Get('EvaluationProtocol');
+    }
+
+    /**
+    * * Field Name: TrainingSnapshot
+    * * Display Name: Training Snapshot Details
+    * * SQL Data Type: nvarchar(64)
+    */
+    get TrainingSnapshot(): string | null {
+        return this.Get('TrainingSnapshot');
+    }
+}
+
+
+/**
+ * MJ: ML Monitoring Results - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLMonitoringResult
+ * * Base View: vwMLMonitoringResults
+ * * @description One row per Published model per monitoring period: the outcome join, the tracked metrics, drift, parity, the triggers that fired and the challenger and rollback checks.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Monitoring Results')
+export class MJMLMonitoringResultEntity extends BaseEntity<MJMLMonitoringResultEntityType> {
+    /**
+    * Loads the MJ: ML Monitoring Results record from the database
+    * @param ID: string - primary key value to load the MJ: ML Monitoring Results record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLMonitoringResultEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model monitored.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: The monitoring job run that wrote the row; NULL for a run started from the UI or a test.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Period
+    * * Display Name: Period
+    * * SQL Data Type: date
+    * * Description: The first day of the period.
+    */
+    get Period(): Date {
+        return this.Get('Period');
+    }
+    set Period(value: Date) {
+        this.Set('Period', value);
+    }
+
+    /**
+    * * Field Name: PeriodGrain
+    * * Display Name: Period Grain
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * month
+    *   * quarter
+    *   * week
+    * * Description: week, month or quarter.
+    */
+    get PeriodGrain(): 'month' | 'quarter' | 'week' {
+        return this.Get('PeriodGrain');
+    }
+    set PeriodGrain(value: 'month' | 'quarter' | 'week') {
+        this.Set('PeriodGrain', value);
+    }
+
+    /**
+    * * Field Name: State
+    * * Display Name: State
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * evaluated
+    *   * failed
+    *   * window-open
+    * * Description: window-open (outcomes not yet known), evaluated or failed.
+    */
+    get State(): 'evaluated' | 'failed' | 'window-open' {
+        return this.Get('State');
+    }
+    set State(value: 'evaluated' | 'failed' | 'window-open') {
+        this.Set('State', value);
+    }
+
+    /**
+    * * Field Name: ScoredRows
+    * * Display Name: Scored Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Predictions the model stored for the period.
+    */
+    get ScoredRows(): number {
+        return this.Get('ScoredRows');
+    }
+    set ScoredRows(value: number) {
+        this.Set('ScoredRows', value);
+    }
+
+    /**
+    * * Field Name: JoinedRows
+    * * Display Name: Joined Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Predictions joined to a known outcome.
+    */
+    get JoinedRows(): number {
+        return this.Get('JoinedRows');
+    }
+    set JoinedRows(value: number) {
+        this.Set('JoinedRows', value);
+    }
+
+    /**
+    * * Field Name: ExcludedInTrainingRows
+    * * Display Name: Excluded In Training Rows
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Joined predictions left out because the record was in the model's training snapshot.
+    */
+    get ExcludedInTrainingRows(): number {
+        return this.Get('ExcludedInTrainingRows');
+    }
+    set ExcludedInTrainingRows(value: number) {
+        this.Set('ExcludedInTrainingRows', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScore
+    * * Display Name: Primary Score
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON MetricWithInterval: the protocol's primary metric over the joined rows.
+    */
+    get PrimaryScore(): string | null {
+        return this.Get('PrimaryScore');
+    }
+    set PrimaryScore(value: string | null) {
+        this.Set('PrimaryScore', value);
+    }
+
+    /**
+    * * Field Name: PrimaryValue
+    * * Display Name: Primary Value
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's value, copied from PrimaryScore for queries and charts.
+    */
+    get PrimaryValue(): number | null {
+        return this.Get('PrimaryValue');
+    }
+    set PrimaryValue(value: number | null) {
+        this.Set('PrimaryValue', value);
+    }
+
+    /**
+    * * Field Name: PrimaryLower
+    * * Display Name: Primary Lower Bound
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's interval lower bound, copied from PrimaryScore.
+    */
+    get PrimaryLower(): number | null {
+        return this.Get('PrimaryLower');
+    }
+    set PrimaryLower(value: number | null) {
+        this.Set('PrimaryLower', value);
+    }
+
+    /**
+    * * Field Name: PrimaryUpper
+    * * Display Name: Primary Upper Bound
+    * * SQL Data Type: float(53)
+    * * Description: The primary metric's interval upper bound, copied from PrimaryScore.
+    */
+    get PrimaryUpper(): number | null {
+        return this.Get('PrimaryUpper');
+    }
+    set PrimaryUpper(value: number | null) {
+        this.Set('PrimaryUpper', value);
+    }
+
+    /**
+    * * Field Name: TrackedMetrics
+    * * Display Name: Tracked Metrics
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of MetricWithInterval: the other tracked metrics (positive rate, log loss, RMSE and so on).
+    */
+    get TrackedMetrics(): string | null {
+        return this.Get('TrackedMetrics');
+    }
+    set TrackedMetrics(value: string | null) {
+        this.Set('TrackedMetrics', value);
+    }
+
+    /**
+    * * Field Name: Calibration
+    * * Display Name: Calibration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON CalibrationReport over the joined rows.
+    */
+    get Calibration(): string | null {
+        return this.Get('Calibration');
+    }
+    set Calibration(value: string | null) {
+        this.Set('Calibration', value);
+    }
+
+    /**
+    * * Field Name: DriftLook
+    * * Display Name: Drift Look
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON per-input drift statistics of the period's look: z, empirical p, adjusted p, the look's threshold and index.
+    */
+    get DriftLook(): string | null {
+        return this.Get('DriftLook');
+    }
+    set DriftLook(value: string | null) {
+        this.Set('DriftLook', value);
+    }
+
+    /**
+    * * Field Name: DriftAlarms
+    * * Display Name: Drift Alarms
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of the inputs whose drift alarm fired.
+    */
+    get DriftAlarms(): string {
+        return this.Get('DriftAlarms');
+    }
+    set DriftAlarms(value: string) {
+        this.Set('DriftAlarms', value);
+    }
+
+    /**
+    * * Field Name: Parity
+    * * Display Name: Parity
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON {sampled, maxAbsDifference, passed}: the period's scoring parity check.
+    */
+    get Parity(): string | null {
+        return this.Get('Parity');
+    }
+    set Parity(value: string | null) {
+        this.Set('Parity', value);
+    }
+
+    /**
+    * * Field Name: TriggersFired
+    * * Display Name: Triggers Fired
+    * * SQL Data Type: nvarchar(MAX)
+    * * Default Value: []
+    * * Description: JSON array of {kind, reason}: the retrain and rollback triggers that fired.
+    */
+    get TriggersFired(): string {
+        return this.Get('TriggersFired');
+    }
+    set TriggersFired(value: string) {
+        this.Set('TriggersFired', value);
+    }
+
+    /**
+    * * Field Name: ChallengerRunID
+    * * Display Name: Challenger Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Runs (vwMLTrainingRuns.ID)
+    * * Description: The challenger training run a fired trigger started.
+    */
+    get ChallengerRunID(): string | null {
+        return this.Get('ChallengerRunID');
+    }
+    set ChallengerRunID(value: string | null) {
+        this.Set('ChallengerRunID', value);
+    }
+
+    /**
+    * * Field Name: ChallengerResult
+    * * Display Name: Challenger Result
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON {sharedRowIds, comparison, outcome, publishRecordId}: how the challenger compared and whether it was published or withheld.
+    */
+    get ChallengerResult(): string | null {
+        return this.Get('ChallengerResult');
+    }
+    set ChallengerResult(value: string | null) {
+        this.Set('ChallengerResult', value);
+    }
+
+    /**
+    * * Field Name: RollbackCheck
+    * * Display Name: Rollback Check
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON {previousModelId, sharedRowIds, comparison, consecutive, fired or not-eligible with the reason}: the automated rollback check.
+    */
+    get RollbackCheck(): string | null {
+        return this.Get('RollbackCheck');
+    }
+    set RollbackCheck(value: string | null) {
+        this.Set('RollbackCheck', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Why the period failed, when State is failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
+    }
+}
+
+
+/**
+ * MJ: ML Output Bindings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLOutputBinding
+ * * Base View: vwMLOutputBindings
+ * * @description How one surface shows a model's output: what it sorts by, which way driver directions point and the label. Created from the model's OutputSemantics when the model is evaluated; a save that contradicts those semantics is refused.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Output Bindings')
+export class MJMLOutputBindingEntity extends BaseEntity<MJMLOutputBindingEntityType> {
+    /**
+    * Loads the MJ: ML Output Bindings record from the database
+    * @param ID: string - primary key value to load the MJ: ML Output Bindings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLOutputBindingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The model whose output the surface shows.
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * at-risk-list
+    *   * predictions-grid
+    *   * record-panel
+    *   * why-badge
+    * * Description: at-risk-list, why-badge, predictions-grid or record-panel.
+    */
+    get Surface(): 'at-risk-list' | 'predictions-grid' | 'record-panel' | 'why-badge' {
+        return this.Get('Surface');
+    }
+    set Surface(value: 'at-risk-list' | 'predictions-grid' | 'record-panel' | 'why-badge') {
+        this.Set('Surface', value);
+    }
+
+    /**
+    * * Field Name: SortsBy
+    * * Display Name: Sorts By
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-probability-desc
+    *   * none
+    *   * score-asc
+    *   * score-desc
+    * * Description: adverse-probability-desc, score-desc, score-asc or none.
+    */
+    get SortsBy(): 'adverse-probability-desc' | 'none' | 'score-asc' | 'score-desc' {
+        return this.Get('SortsBy');
+    }
+    set SortsBy(value: 'adverse-probability-desc' | 'none' | 'score-asc' | 'score-desc') {
+        this.Set('SortsBy', value);
+    }
+
+    /**
+    * * Field Name: DriverDirectionRelativeTo
+    * * Display Name: Driver Direction Relative To
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * adverse-class
+    *   * raw-contribution
+    * * Description: adverse-class (a driver that raises the adverse outcome points up) or raw-contribution.
+    */
+    get DriverDirectionRelativeTo(): 'adverse-class' | 'raw-contribution' {
+        return this.Get('DriverDirectionRelativeTo');
+    }
+    set DriverDirectionRelativeTo(value: 'adverse-class' | 'raw-contribution') {
+        this.Set('DriverDirectionRelativeTo', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The label the surface shows, naming the scored class.
+    */
+    get Label(): string {
+        return this.Get('Label');
+    }
+    set Label(value: string) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
     }
 }
 
@@ -122021,6 +124607,485 @@ export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntit
     */
     get LineageRoot(): string | null {
         return this.Get('LineageRoot');
+    }
+}
+
+
+/**
+ * MJ: ML Scoring Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLScoringRun
+ * * Base View: vwMLScoringRuns
+ * * @description One row per scoring call, dry runs and refusals included, written by the scoring service only. A running row exists before the first record is scored, so a crash leaves a visible row.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Scoring Runs')
+export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
+    /**
+    * Loads the MJ: ML Scoring Runs record from the database
+    * @param ID: string - primary key value to load the MJ: ML Scoring Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLScoringRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
+    * * Description: The exact model version that scored. NULL only on a refused run whose binding's pipeline has no Published model.
+    */
+    get ModelID(): string | null {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string | null) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: ModelVersion
+    * * Display Name: Model Version
+    * * SQL Data Type: int
+    * * Description: The model's Version, copied at the run.
+    */
+    get ModelVersion(): number | null {
+        return this.Get('ModelVersion');
+    }
+    set ModelVersion(value: number | null) {
+        this.Set('ModelVersion', value);
+    }
+
+    /**
+    * * Field Name: MLModelScoringBindingID
+    * * Display Name: ML Model Scoring Binding
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Model Scoring Bindings (vwMLModelScoringBindings.ID)
+    * * Description: The scoring binding a writing run scored for; NULL for a call that returns its scores and writes no Feature Value.
+    */
+    get MLModelScoringBindingID(): string | null {
+        return this.Get('MLModelScoringBindingID');
+    }
+    set MLModelScoringBindingID(value: string | null) {
+        this.Set('MLModelScoringBindingID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactSha256
+    * * Display Name: Artifact SHA-256
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 of the artifact bytes that scored; NULL only when the run was refused before the artifact verified.
+    */
+    get ArtifactSha256(): string | null {
+        return this.Get('ArtifactSha256');
+    }
+    set ArtifactSha256(value: string | null) {
+        this.Set('ArtifactSha256', value);
+    }
+
+    /**
+    * * Field Name: FeatureSchemaHash
+    * * Display Name: Feature Schema Hash
+    * * SQL Data Type: char(64)
+    * * Description: Hash of the model's feature schema the run scored with.
+    */
+    get FeatureSchemaHash(): string | null {
+        return this.Get('FeatureSchemaHash');
+    }
+    set FeatureSchemaHash(value: string | null) {
+        this.Set('FeatureSchemaHash', value);
+    }
+
+    /**
+    * * Field Name: Path
+    * * Display Name: Path
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * monitoring
+    *   * parity
+    *   * predict
+    *   * record-process
+    *   * score-record-set
+    * * Description: Which caller ran it: score-record-set, record-process, monitoring, parity or predict.
+    */
+    get Path(): 'monitoring' | 'parity' | 'predict' | 'record-process' | 'score-record-set' {
+        return this.Get('Path');
+    }
+    set Path(value: 'monitoring' | 'parity' | 'predict' | 'record-process' | 'score-record-set') {
+        this.Set('Path', value);
+    }
+
+    /**
+    * * Field Name: ScopeKind
+    * * Display Name: Scope Kind
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * filter
+    *   * record-ids
+    *   * view
+    * * Description: How the scope names its records: record-ids, view or filter.
+    */
+    get ScopeKind(): 'filter' | 'record-ids' | 'view' {
+        return this.Get('ScopeKind');
+    }
+    set ScopeKind(value: 'filter' | 'record-ids' | 'view') {
+        this.Set('ScopeKind', value);
+    }
+
+    /**
+    * * Field Name: ScopeEntityID
+    * * Display Name: Scope Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity whose records the scope names.
+    */
+    get ScopeEntityID(): string {
+        return this.Get('ScopeEntityID');
+    }
+    set ScopeEntityID(value: string) {
+        this.Set('ScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ScoringScope: the records the call asked to score.
+    */
+    get Scope(): string {
+        return this.Get('Scope');
+    }
+    set Scope(value: string) {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: EntityMapping
+    * * Display Name: Entity Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON EntityRef mapping the scope entity onto the model's grain, when they differ.
+    */
+    get EntityMapping(): string | null {
+        return this.Get('EntityMapping');
+    }
+    set EntityMapping(value: string | null) {
+        this.Set('EntityMapping', value);
+    }
+
+    /**
+    * * Field Name: AsOfDate
+    * * Display Name: As Of Date
+    * * SQL Data Type: datetimeoffset
+    * * Description: The as-of instant the features were read at.
+    */
+    get AsOfDate(): Date {
+        return this.Get('AsOfDate');
+    }
+    set AsOfDate(value: Date) {
+        this.Set('AsOfDate', value);
+    }
+
+    /**
+    * * Field Name: ReadPolicy
+    * * Display Name: Read Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ReadPolicy the features were read under.
+    */
+    get ReadPolicy(): string {
+        return this.Get('ReadPolicy');
+    }
+    set ReadPolicy(value: string) {
+        this.Set('ReadPolicy', value);
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the call scored without writing anything.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: RequestedBy
+    * * Display Name: Requested By
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Actor: who asked for the run.
+    */
+    get RequestedBy(): string {
+        return this.Get('RequestedBy');
+    }
+    set RequestedBy(value: string) {
+        this.Set('RequestedBy', value);
+    }
+
+    /**
+    * * Field Name: RequestedByUserID
+    * * Display Name: Requested By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The requesting user, when a person asked; a joinable copy of RequestedBy.
+    */
+    get RequestedByUserID(): string | null {
+        return this.Get('RequestedByUserID');
+    }
+    set RequestedByUserID(value: string | null) {
+        this.Set('RequestedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: The Process Run, when the Record Process path ran it.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: The Scheduled Job Run, when monitoring or parity ran it.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * completed
+    *   * failed
+    *   * refused
+    *   * running
+    * * Description: running, refused, failed or completed. A failed run keeps the batches it wrote before the failing one.
+    */
+    get Status(): 'completed' | 'failed' | 'refused' | 'running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'completed' | 'failed' | 'refused' | 'running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Refusal
+    * * Display Name: Refusal
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON ScoringRefusal when the run was refused.
+    */
+    get Refusal(): string | null {
+        return this.Get('Refusal');
+    }
+    set Refusal(value: string | null) {
+        this.Set('Refusal', value);
+    }
+
+    /**
+    * * Field Name: Total
+    * * Display Name: Total Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records in scope.
+    */
+    get Total(): number {
+        return this.Get('Total');
+    }
+    set Total(value: number) {
+        this.Set('Total', value);
+    }
+
+    /**
+    * * Field Name: Written
+    * * Display Name: Written Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records whose prediction was written.
+    */
+    get Written(): number {
+        return this.Get('Written');
+    }
+    set Written(value: number) {
+        this.Set('Written', value);
+    }
+
+    /**
+    * * Field Name: Failed
+    * * Display Name: Failed Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records that failed to score.
+    */
+    get Failed(): number {
+        return this.Get('Failed');
+    }
+    set Failed(value: number) {
+        this.Set('Failed', value);
+    }
+
+    /**
+    * * Field Name: Skipped
+    * * Display Name: Skipped Records
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Records skipped (for example, a person's value the run must not overwrite).
+    */
+    get Skipped(): number {
+        return this.Get('Skipped');
+    }
+    set Skipped(value: number) {
+        this.Set('Skipped', value);
+    }
+
+    /**
+    * * Field Name: FirstErrors
+    * * Display Name: First Errors
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the first errors, at most 20, each {recordId, message}.
+    */
+    get FirstErrors(): string | null {
+        return this.Get('FirstErrors');
+    }
+    set FirstErrors(value: string | null) {
+        this.Set('FirstErrors', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the run started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run ended; NULL while it runs.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Model(): string | null {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: MLModelScoringBinding
+    * * Display Name: ML Model Scoring Binding Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLModelScoringBinding(): string | null {
+        return this.Get('MLModelScoringBinding');
+    }
+
+    /**
+    * * Field Name: ScopeEntity
+    * * Display Name: Scope Entity Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopeEntity(): string | null {
+        return this.Get('ScopeEntity');
+    }
+
+    /**
+    * * Field Name: RequestedByUser
+    * * Display Name: Requested By User Details
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RequestedByUser(): string | null {
+        return this.Get('RequestedByUser');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run Details
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
     }
 }
 
@@ -122654,6 +125719,15 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     */
     get Pipeline(): string | null {
         return this.Get('Pipeline');
+    }
+
+    /**
+    * * Field Name: ResultingModel
+    * * Display Name: Resulting Model
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ResultingModel(): string | null {
+        return this.Get('ResultingModel');
     }
 
     /**

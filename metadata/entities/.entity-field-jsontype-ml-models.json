@@ -1,0 +1,73 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on the CodeVersion, OutputSemantics and Delivery columns of MJ: ML Models so CodeGen emits",
+      "typed CodeVersionObject / OutputSemanticsObject / DeliveryObject accessors on MJMLModelEntity returning",
+      "MJMLModelEntity_CodeVersion, MJMLModelEntity_OutputSemantics and MJMLModelEntity_RegisteredDeliveryView.",
+      "Every type in the shared JSONType-interfaces/IMLModelJsonTypes.ts mirrors its @memberjunction/predictive-studio-core type field for field (PR 4 Task M1.5).",
+      "The EntityField rows must exist (created by a CodeGen pass over the new columns) before these @lookups resolve on push.",
+      "All fields bind the one combined file, so CodeGen emits its declarations once (CollectJSONTypeBlock dedupes by text)."
+    ],
+    "fields": {
+      "Name": "MJ: ML Models"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "CodeVersion",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelJsonTypes.ts"
+          },
+          "_comments": [
+            "CodeVersion field — the code a run executed (repository commit, sidecar and library versions, threads, seed)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=CodeVersion"
+          },
+          "sync": {
+            "lastModified": "2026-11-11T00:24:47.269Z",
+            "checksum": "794d3985d7ca5c286f072365a9fb2127ace7b51524a2b0fc3f19b8ac4f44f7f9"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "OutputSemantics",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelJsonTypes.ts"
+          },
+          "_comments": [
+            "OutputSemantics field — the model's declared task type (scored class and adverse direction are derived)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=OutputSemantics"
+          },
+          "sync": {
+            "lastModified": "2026-11-11T00:24:47.279Z",
+            "checksum": "64a3782134973359f6a521a5e6696fe87b6badfa677567c18a5d59e7a36d2ab5"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "RegisteredDeliveryView",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IMLModelJsonTypes.ts"
+          },
+          "_comments": [
+            "Delivery field — the registry's view of the gate's delivery: the stored file with the gate decision inside"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Models&Name=Delivery"
+          },
+          "sync": {
+            "lastModified": "2026-11-11T00:24:47.289Z",
+            "checksum": "6f1e729fe16fcba9a34fd329d6ea4eb766bf2c4ab40d5da44f4bef924667f56f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: ML Models"
+    }
+  }
+]

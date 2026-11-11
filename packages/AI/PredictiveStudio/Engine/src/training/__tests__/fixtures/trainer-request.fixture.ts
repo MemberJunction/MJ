@@ -36,6 +36,7 @@ export class TrainerRequestFixture {
         promotion: {
           comparators: [], incumbent: 'none', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95,
           pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15',
+          ...EvaluationProtocol.DefaultPromotionAdditions(EvaluationProtocol.ToNonNegative(0)),
         },
         allowedOutcomes: ['model', 'keep-simple-baseline', 'no-signal'],
         leakageAudit: { singleFeatureHeldOutAucMax: 0.9, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true },

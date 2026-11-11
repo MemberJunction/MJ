@@ -21,7 +21,13 @@ export class MJMLModelFormComponent extends BaseFormComponent {
             { sectionKey: 'trainingPerformance', sectionName: 'Training & Performance', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
-            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false }
+            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false },
+            { sectionKey: 'mJMLOutputBindings', sectionName: 'ML Output Bindings', isExpanded: false },
+            { sectionKey: 'mJMLMonitoringResults', sectionName: 'ML Monitoring Results', isExpanded: false },
+            { sectionKey: 'mJMLModelPublishRecordsModelID', sectionName: 'ML Model Publish Records (Model)', isExpanded: false },
+            { sectionKey: 'mJMLModelPublishRecordsReplacesModelID', sectionName: 'ML Model Publish Records (Replaces Model)', isExpanded: false }
         ]);
     }
 }

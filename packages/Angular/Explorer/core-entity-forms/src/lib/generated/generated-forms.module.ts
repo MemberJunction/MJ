@@ -306,8 +306,12 @@ import { MJMLAlgorithmUseCaseFormComponent } from "./Entities/MJMLAlgorithmUseCa
 import { MJMLAlgorithmUseCaseRankingFormComponent } from "./Entities/MJMLAlgorithmUseCaseRanking/mjmlalgorithmusecaseranking.form.component";
 import { MJMLEvaluationProtocolFormComponent } from "./Entities/MJMLEvaluationProtocol/mjmlevaluationprotocol.form.component";
 import { MJMLModelFormComponent } from "./Entities/MJMLModel/mjmlmodel.form.component";
+import { MJMLModelPublishRecordFormComponent } from "./Entities/MJMLModelPublishRecord/mjmlmodelpublishrecord.form.component";
 import { MJMLModelScoringBindingFormComponent } from "./Entities/MJMLModelScoringBinding/mjmlmodelscoringbinding.form.component";
+import { MJMLMonitoringResultFormComponent } from "./Entities/MJMLMonitoringResult/mjmlmonitoringresult.form.component";
+import { MJMLOutputBindingFormComponent } from "./Entities/MJMLOutputBinding/mjmloutputbinding.form.component";
 import { MJMLPredictionUnitFormComponent } from "./Entities/MJMLPredictionUnit/mjmlpredictionunit.form.component";
+import { MJMLScoringRunFormComponent } from "./Entities/MJMLScoringRun/mjmlscoringrun.form.component";
 import { MJMLTrainingPipelineFormComponent } from "./Entities/MJMLTrainingPipeline/mjmltrainingpipeline.form.component";
 import { MJMLTrainingRunFormComponent } from "./Entities/MJMLTrainingRun/mjmltrainingrun.form.component";
 import { MJMLTrainingSnapshotFormComponent } from "./Entities/MJMLTrainingSnapshot/mjmltrainingsnapshot.form.component";
@@ -466,6 +470,7 @@ import { MJWorkQueueTopicFormComponent } from "./Entities/MJWorkQueueTopic/mjwor
 import { MJWorkQueueTransportFormComponent } from "./Entities/MJWorkQueueTransport/mjworkqueuetransport.form.component";
 import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
+import { MJvwLatestFeatureValuesFormComponent } from "./Entities/MJvwLatestFeatureValues/mjvwlatestfeaturevalues.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
 
 @NgModule({
@@ -721,6 +726,7 @@ declarations: [
     MJCredentialCategoryFormComponent,
     MJDashboardPartTypeFormComponent,
     MJEntityFieldFormComponent,
+    MJMLOutputBindingFormComponent,
     MJOAuthClientRegistrationFormComponent,
     MJOutputDeliveryTypeFormComponent,
     MJProjectFormComponent
@@ -905,6 +911,7 @@ declarations: [
     MJFeatureValueCacheFormComponent,
     MJLibraryFormComponent,
     MJMCPServerConnectionFormComponent,
+    MJMLScoringRunFormComponent,
     MJQueryEntityFormComponent,
     MJRemoteOperationCategoryFormComponent,
     MJSchemaInfoFormComponent,
@@ -1119,6 +1126,7 @@ declarations: [
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,
     MJMCPToolFavoriteFormComponent,
+    MJMLMonitoringResultFormComponent,
     MJMLPredictionUnitFormComponent,
     MJMaterializedResultQueryFormComponent,
     MJOutputFormatTypeFormComponent,
@@ -1192,6 +1200,7 @@ declarations: [
     MJGraphFormComponent,
     MJGraphTypeFormComponent,
     MJInteractionFormComponent,
+    MJMLModelPublishRecordFormComponent,
     MJMLModelScoringBindingFormComponent,
     MJRoleFormComponent,
     MJScopedPromptConfigFormComponent,
@@ -1199,7 +1208,8 @@ declarations: [
     MJSearchScopeTestQueryFormComponent,
     MJTaskDependencyFormComponent,
     MJTestFormComponent,
-    MJTestTypeFormComponent
+    MJTestTypeFormComponent,
+    MJvwLatestFeatureValuesFormComponent
 ],
 imports: [
     CommonModule,

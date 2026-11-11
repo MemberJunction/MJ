@@ -409,6 +409,13 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "MLScoringRun",
+      "column": "ScopeEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
       "table": "MLTrainingPipeline",
       "column": "TargetEntityID",
       "nullable": false,
@@ -951,6 +958,102 @@
       "nullable": true,
       "action": "null",
       "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "SignOffID",
+      "references": "MLModelPublishRecord",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModelPublishRecord row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "ReplacesModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModel row this proc deletes; deleted first, not cleared: a publish record is ledger evidence about its model, and nulling ModelID would turn a sign-off or publish into a row CK_MLModelPublishRecord_RunLevel refuses."
+    },
+    {
+      "table": "MLModelPublishRecord",
+      "column": "TrainingRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared on a record that has a ModelID, which keeps CK_MLModelPublishRecord_Subject satisfied (R2, D4-73). A run-level refusal (ModelID NULL) is deleted first instead, since clearing its run would break that CHECK."
+    },
+    {
+      "table": "MLModel",
+      "column": "TrainingRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared."
+    },
+    {
+      "table": "MLModel",
+      "column": "TrainingSnapshotID",
+      "references": "MLTrainingSnapshot",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
+    },
+    {
+      "table": "FeatureValue",
+      "column": "MLModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModel row this proc deletes; cleared, after the model's own Source = 'Model' rows are deleted (D4-32)."
+    },
+    {
+      "table": "MLOutputBinding",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLScoringRun",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to a MLModel row this proc deletes; deleted first, not cleared: CK_MLScoringRun_Model forbids a null model on a run that is not refused."
+    },
+    {
+      "table": "MLScoringRun",
+      "column": "MLModelScoringBindingID",
+      "references": "MLModelScoringBinding",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLModelScoringBinding row this proc deletes; cleared."
+    },
+    {
+      "table": "MLMonitoringResult",
+      "column": "ModelID",
+      "references": "MLModel",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLModel row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLMonitoringResult",
+      "column": "ChallengerRunID",
+      "references": "MLTrainingRun",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingRun row this proc deletes; cleared."
     },
     {
       "table": "FeatureValue",

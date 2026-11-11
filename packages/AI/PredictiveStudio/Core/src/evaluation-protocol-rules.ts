@@ -217,6 +217,7 @@ export class EvaluationProtocolRules {
     const task = args.Unit.label.outcome;
     const baselines = EvaluationProtocolRules.defaultBaselines(args.Unit);
     const candidates = Math.max(args.Candidates, 1);
+    const margin = EvaluationProtocol.ToNonNegative(0);
     return {
       name: args.Name,
       holdout: args.Holdout,
@@ -229,7 +230,10 @@ export class EvaluationProtocolRules {
       calibration: EvaluationProtocolRules.defaultCalibration(task),
       resampling: { kind: 'none' },
       intervals: EvaluationProtocolRules.defaultIntervals(args.Unit),
-      promotion: { comparators: baselines, incumbent: 'current-published', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' },
+      promotion: {
+        comparators: baselines, incumbent: 'current-published', margin, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15',
+        ...EvaluationProtocol.DefaultPromotionAdditions(margin),
+      },
       allowedOutcomes: ALLOWED_OUTCOMES,
       leakageAudit: { singleFeatureHeldOutAucMax: 0.95, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true },
       exclusions: { denyFields: [], denySources: [] },

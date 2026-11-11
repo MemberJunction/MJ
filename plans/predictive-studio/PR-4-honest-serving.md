@@ -114,13 +114,13 @@ cp .env ".env.MJ_PS_PR4_${AGENT}"
 # edit .env.MJ_PS_PR4_${AGENT}: DB_DATABASE=MJ_PS_PR4_${AGENT}, GRAPHQL_PORT=4041 (second agent: 4042),
 #   PS_ARTIFACT_DIR=$HOME/.mj-ps/pr4-${AGENT}/artifact-cache   (a persistent path, never the OS temp dir)
 set -a; source ".env.MJ_PS_PR4_${AGENT}"; set +a
-sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -Q "CREATE DATABASE [MJ_PS_PR4_${AGENT}]"
+sqlcmd -S "$DB_HOST,$DB_PORT" -U "$DB_USERNAME" -P "$DB_PASSWORD" -C -Q "CREATE DATABASE [MJ_PS_PR4_${AGENT}]; ALTER DATABASE [MJ_PS_PR4_${AGENT}] SET READ_COMMITTED_SNAPSHOT ON"
 export PS_MJ="$MJ" PS_AGENT="$AGENT"              # read by tools/ps-env.sh
 # clean build, in this order (check each exit code); every mj command goes through ps-env.sh (D-074):
-"$PLANS/tools/ps-env.sh" npx mj migrate
-"$PLANS/tools/ps-env.sh" npx mj codegen --skipfiles
-"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci
-"$PLANS/tools/ps-env.sh" npx mj codegen --skipdb
+"$PLANS/tools/ps-env.sh" pnpm mj migrate
+"$PLANS/tools/ps-env.sh" pnpm mj codegen --skipfiles
+"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci
+"$PLANS/tools/ps-env.sh" pnpm mj codegen --skipdb
 pnpm run build
 ```
 
@@ -134,6 +134,38 @@ database; `mj test` skips that check because the client-transport suites need MJ
 Read the regenerated diff after CodeGen: append any `CodeGen_Run_*.sql` to the migration that caused it (after at least
 50 blank lines) or delete it if there was no DDL; restore `sync` blocks CodeGen writes back into `metadata/**/*.json`.
 Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you did not create.
+
+**Bootstrap facts measured at M1 (2026-11-10):**
+- `pnpm mj`, never `npx mj`: `npx` resolves to a global `@memberjunction/cli` 5.49.0, whose CodeGen writes the
+  monolithic `entity_subclasses.ts` layout and corrupts the generated tree.
+- The order is the `bootstrap-clean-db` one above (migrate → `codegen --skipfiles` → sync push → `codegen --skipdb` →
+  build); a full `codegen` before the push deletes the remote-operation classes (`migrations/CLAUDE.md`).
+- `READ_COMMITTED_SNAPSHOT ON` is set when the database is created (MJAPI's WorkQueue logs an error otherwise).
+- A stale `packages/MJCoreEntities/dist/.tsbuildinfo` makes `mj migrate` fail `MODULE_NOT_FOUND`: delete it and rebuild
+  the package (`cd packages/MJCoreEntities && pnpm run build`).
+- Once the truth-suite schema is provisioned, every CodeGen run on this database also emits `pstruth` host files into
+  `packages/GeneratedEntities`, `packages/MJAPI/src/generated` and `packages/MJExplorer/src/app/generated`: delete them
+  before building (they are host artifacts, never staged).
+- A rebuild wipes the truth-suite schema and the integration-test metadata. After every rebuild:
+  `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:provision'`, then push
+  `metadata-optional/integration-test` from a scratch copy (sync push writes back into the files it reads):
+  `rm -rf "$HOME/.mj-ps/pr4-${AGENT}/it-metadata" && cp -R metadata-optional/integration-test "$HOME/.mj-ps/pr4-${AGENT}/it-metadata" && "$PLANS/tools/ps-env.sh" pnpm mj sync push --dir="$HOME/.mj-ps/pr4-${AGENT}/it-metadata" --ci`.
+  Then, with MJAPI running, load the C1 corpus and declare the truth suite's immutable fields:
+  `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm exec tsx scripts/load-c1-corpus.ts'`
+  (→ `{"C1Person":2015,"C1OrderHeader":15420,…}` and `immutable fields declared: 272`), and restart MJAPI. Without it
+  10 of 12 `Predictive Studio Gates — Prediction Units` fail (`unresolved-reference` on an empty `C1OrderHeader`,
+  `decision-date-before-change-history` on updatable W1 fields) — measured at M1's exit.
+- The gate runs (M1.1, M3.5, M4b.5, M5.10 and the keep-list suites) need `STORAGE_LOCAL_ROOT=$HOME/.mj-ps/pr4-${AGENT}/storage`
+  in MJAPI's environment **and** in the `mj test` process's (PR 3's bootstrap set it; the env file does not): without
+  it every build is refused by storage, and in-process gates fail `storage provider "Local File System" … is not
+  configured` (Prediction Units at M1's exit; 12 of 12 once exported). Run one suite at a time against one MJAPI. A scratch sidecar or pytest run
+  that imports the truth suite needs its env: `PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python`,
+  `PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python`, `TRUTH_DATA_DIR=$MJ/packages/AI/PredictiveStudio/TruthSuite/.data`.
+- A running truth sidecar (`cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:sidecar`, URL in
+  `TruthSuite/.run/sidecar.url`) keeps the Python it loaded: after any change under `Sidecar/src/python/` restart it and
+  restart MJAPI with the new `PREDICTIVE_STUDIO_SIDECAR_URL`. At M1's exit a sidecar started before M1.4 refused every
+  training request `422 extra_forbidden` on the four new `promotion` members (7 of 10 Containment gates red until it
+  was restarted).
 
 ### 2.4 Servers, sidecar, file storage
 
@@ -314,7 +346,7 @@ metadata-optional/integration-test/tests/integration/.IT166-predictive-shadow-dr
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   (`git mv` to one minute after `next`'s newest, the name rewritten in this plan and the changeset, and the database's
   `flyway_schema_history` row `UPDATE`d, never deleted; `--dry-run` prints the steps and runs none). Then
-  `git merge origin/next`, then `"$PLANS/tools/ps-env.sh" npx mj migrate` (its out-of-order policy applies `next`'s
+  `git merge origin/next`, then `"$PLANS/tools/ps-env.sh" pnpm mj migrate` (its out-of-order policy applies `next`'s
   older migrations). **The retime commit records `merged next @<sha>, migration retimed <old> → <new>` in §11 in the
   same commit** (otherwise the pre-push handoff-recency check refuses the push). Then install → build → migrate → sync
   push → codegen → build (PR 3 D3-212); restore sync write-backs from the **index** (`git show :<path>`), never from
@@ -1461,6 +1493,13 @@ Python assets as shipped. Exit counts are measured on the agent's database at ea
 | `CK_FeatureValue_Role`, `FK_FeatureValue_MLModel` and #6180's metadata rows on a database that ran #6180 first (D-069) | PR 4's migration must apply before or after #6180 | A-6180-COLUMNS (§8.2); M1 runs the migration on a scratch copy with #6180's columns present and absent |
 | Deterministic integration tier (`Integration Tests — Deterministic`) | Definition of Done | §7 |
 
+The suites run by name at each milestone end are `Predictive Studio Gates — Containment` (10; PR 2's Phase 0 gates),
+`— Prediction Units` (12), `— Training` (35) and `— Training (statistical)` (6) (PR 3's 53), one at a time against one
+MJAPI. `Predictive Studio Gates — Feature Pipelines` (PR 1's C1 → C2.x gates and IT125) needs bizapps-common installed
+with host CodeGen and an `mj.config.cjs` edit that no private PS database has had; it stays recorded as
+"Feature Pipelines → 0 / 5 / 0, environment-blocked (D3-78: bizapps-common not installed; run <suite run ID>)" until
+the owner orders the install (PR 3's owner flag (b), carried; M1 exit).
+
 ### 4.3 Out of scope (and owner)
 
 | Item | Owner |
@@ -1492,7 +1531,10 @@ whose extension adds, alters or drops a foreign key into a table `spDeleteEntity
 that procedure and `entity-delete-fk-policy.json` in the same commit (§5.9).
 
 **New `MJ: ML Model Publish Records`** (`__mj.MLModelPublishRecord`; `TrackRecordChanges` on; rows are immutable —
-`Validate()` refuses any update of a saved row, as D-014 does for units and protocols). This is the sign-off table of
+`Validate()` refuses any update of a saved row, as D-014 does for units and protocols; the one exception is
+`spDeleteEntityWithCoreDependencies`, which clears `SignOffID`, `ReplacesModelID` and `TrainingRunID` on surviving
+records when the row they reference is deleted with its entity, D4-73, and R6/R7's audit does not report a cleared
+link as tampering). This is the sign-off table of
 the P10 design generalised into the publish record of D-029 (D4-08): one ledger holding the optional human
 **sign-offs**, every applied **publish** (automatic or by a person, including rollbacks) and every **refusal** of a
 publish attempt. It is the stored audit trail (queried by G3.6 and the registry job) and never an input to the gate's
@@ -1994,7 +2036,7 @@ export type PublishOutcome =
   | { readonly Kind: 'withheld'; readonly ModelID: string; readonly Status: MJMLModelEntity['Status']; readonly Refusal: TransitionRefusal; readonly Transient: boolean; readonly RefusalRecordID: string };
 export type GateApplyResult =
   | { readonly Ok: true; readonly ModelID: string; readonly From: MJMLModelEntity['Status']; readonly To: MJMLModelEntity['Status']; readonly Archived: string | null }
-  | { readonly Ok: false; readonly Refusal: TransitionRefusal | { readonly Kind: 'artifact'; readonly Load: Exclude<ArtifactLoad, { status: 'verified' }> } };
+  | { readonly Ok: false; readonly Refusal: TransitionRefusal | { readonly Kind: 'artifact'; readonly Load: Exclude<ArtifactLoad, { Status: 'verified' }> } };
 
 // Engine/src/registry/automated-publisher.ts — the shared train → evaluate → publish sequence for unattended callers
 export class AutomatedPublisher {
@@ -2760,9 +2802,11 @@ IF NOT EXISTS (SELECT 1 FROM ${flyway:defaultSchema}.Entity WHERE ID = '1AC777D7
 `1AC777D7-EEE8-485F-83DB-2127DBB4BFB7` was minted with `uuidgen` on 2026-11-10 and never changes. Every other `Entity`
 column takes its default: in the 5.46 baseline every NOT NULL column of `Entity` has a default except `Name`,
 `BaseTable` and `BaseView`, and no later migration adds an `Entity` column. With the row present, `manageVirtualEntities`
-(`manage-metadata.ts:3620`) syncs the view's columns and emits the `EntityField`, `ApplicationEntity` and default
-`EntityPermission` rows into the tail; finding no primary key among them it marks the **first** view column as the key
-(`:3988-3996`), which is why `ID` leads. `check:codegen-tail` keys on `CREATE TABLE` and would not notice a missing tail
+(`manage-metadata.ts:3620`) syncs the view's columns and emits the `EntityField` rows into the tail; finding no primary
+key among them it marks the **first** view column as the key (`:3988-3996`), which is why `ID` leads. It emits **no**
+`EntityPermission` or `ApplicationEntity` row for a virtual entity (measured at M1, D4-71): the entity's read-only grants
+ship as metadata, `metadata/entity-permissions/.latest-feature-values-permissions.json` (UI, Developer and Integration,
+`CanRead` only, mirroring `MJ: Feature Values`' grants), and its application link is M5b's. `check:codegen-tail` keys on `CREATE TABLE` and would not notice a missing tail
 for a view, so §8.2 carries A-078. This is the first virtual entity MJ core ships (`SELECT COUNT(*) FROM __mj.Entity
 WHERE VirtualEntity = 1` → 0 on the local `MJ_BranchableRuns`, 2026-11-10), so the fresh-install path is exercised by
 `bootstrap-clean-db` at M5b's exit, not assumed. The view's SQL and the guarded column DDL above were run once in
@@ -2796,8 +2840,9 @@ Source <> 'Model' OR MLModelScoringBindingID IN (
   `ViewAuthorizationID` matches no user (fail closed). Whether the view matches the TypeScript evaluation is §8.2's
   check A-FV-AUTHZ; a test runs both over one grant matrix.
 - The filter is attached through `metadata/entity-permissions/` to **every** role's read permission on both
-  `MJ: Feature Values` and `MJ: Latest Feature Values` — on the latter, the default permission rows CodeGen's tail
-  creates; both entities exist when `mj sync push` runs, so the `@lookup`s resolve. A user holding any role whose read
+  `MJ: Feature Values` and `MJ: Latest Feature Values` — on the latter, the read grants of
+  `metadata/entity-permissions/.latest-feature-values-permissions.json` (M1; CodeGen emits none for a virtual entity,
+  D4-71); both entities exist when `mj sync push` runs, so the `@lookup`s resolve. A user holding any role whose read
   permission has no RLS filter is exempt (`EntityInfo.UserExemptFromRowLevelSecurity`,
   `MJCore/src/generic/entityInfo.ts:5037`), which is why every grant carries it and the registry job re-attaches it (§5.7
   R7 (i)).
@@ -2910,8 +2955,10 @@ removed with D-078 (D4-39).
 ### 5.9 Delete policy in lockstep (kickoff design §6.2a; §9.1 D4-32)
 
 `spDeleteEntityWithCoreDependencies` removes an entity together with the core rows that depend on it; on
-`599c288dee` its newest definition is PR 3's (`V202611080314__v6.3.x__PS_Honest_Training_Schema.sql:313`, section 7,
-which deletes the pipelines' `MLTrainingSnapshot` rows after their runs and models, `:611-614`), and among the tables it
+`599c288dee` its newest definition was PR 3's (`V202611080314__v6.3.x__PS_Honest_Training_Schema.sql:313`, section 7,
+which deletes the pipelines' `MLTrainingSnapshot` rows after their runs and models, `:611-614`); on PR 4's merge base
+`378daae9ab` it is next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql:332` (PR 3's body plus the entity's
+`EntityUniqueKey` step), which M1 re-creates (D4-74). Among the tables it
 deletes from are `MLModel`, `MLModelScoringBinding`, `MLTrainingPipeline`, `MLTrainingRun`, `MLTrainingSnapshot`,
 `RecordProcess`, `ProcessRunDetail` and `FeatureValue`. `packages/CodeGenLib/src/__tests__/delete-entity-fk-coverage.test.ts`
 fails on a missing or stale `entity-delete-fk-policy.json` entry, a nullability drift, or a child statement placed after
@@ -2924,7 +2971,7 @@ fixture is the one CodeGenLib path in the allowlist; CodeGenLib source is not to
 
 | Milestone | Foreign keys the procedure and the policy must cover |
 |---|---|
-| M1 | `MLModel.TrainingSnapshotID` and `MLModel.TrainingRunID`; the five FKs of `MLModelPublishRecord` (`ModelID` — nullable since a run-level refusal has no model (D4-56), so its policy entry says `"nullable": true` with action `delete` —, `TrainingRunID` — action `delete`, because `CK_MLModelPublishRecord_Subject` forbids nulling it on a run-level row —, `UserID`, `SignOffID`, `ReplacesModelID`); `FeatureValue.MLModelID` (#6180's column, added guarded); `MLScoringRun`'s FKs into tables the procedure deletes from (`ModelID`, `MLModelScoringBindingID`) and its `ScopeEntityID` reference into `Entity`; `MLOutputBinding.ModelID`; `MLMonitoringResult`'s FKs (`ModelID` → `MLModel`, `ChallengerRunID` → `MLTrainingRun`; its `ScheduledJobRunID` points at `ScheduledJobRun`, which the procedure never deletes from, so it needs no step). M1 creates every new table (D-069, D4-44), so the former M3 and M6 rows are here |
+| M1 | `MLModel.TrainingSnapshotID` and `MLModel.TrainingRunID`; the five FKs of `MLModelPublishRecord` (`ModelID` — nullable since a run-level refusal has no model (D4-56), so its policy entry says `"nullable": true` with action `delete` —, `TrainingRunID` — nullable, action `null`: the records of doomed models and the run-level records of doomed runs are deleted, and a surviving model's record keeps with `TrainingRunID` nulled, because `CK_MLModelPublishRecord_Subject` forbids nulling it only on a run-level row (D4-74, D4-73) —, `UserID`, `SignOffID`, `ReplacesModelID`); `FeatureValue.MLModelID` (#6180's column, added guarded); `MLScoringRun`'s FKs into tables the procedure deletes from (`ModelID`, `MLModelScoringBindingID`) and its `ScopeEntityID` reference into `Entity`; `MLOutputBinding.ModelID`; `MLMonitoringResult`'s FKs (`ModelID` → `MLModel`, `ChallengerRunID` → `MLTrainingRun`; its `ScheduledJobRunID` points at `ScheduledJobRun`, which the procedure never deletes from, so it needs no step). M1 creates every new table (D-069, D4-44), so the former M3 and M6 rows are here |
 | M5 | the binding reshape (`FK_MLModelScoringBinding_MLModel` dropped; `MLTrainingPipelineID`, `ViewAuthorizationID` added); `FeatureValue.RecordProcessID` made nullable (a nullability change the policy records); the Feature Value FKs `FK_FeatureValue_ScoringBinding`, `FK_FeatureValue_MLModel`, `FK_FeatureValue_ScoringRun` |
 
 **Order constraint.** `FeatureValue` rows that reference `MLModel`, `MLModelScoringBinding` or `MLScoringRun` are deleted
@@ -2994,19 +3041,19 @@ JSONType for any ML column: `git ls-tree --name-only origin/next metadata/entiti
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
+- [x] `git fetch origin && git fetch origin pull/6180/head:pr6180 --force`; A-6180-STATE and A-6180-COLUMNS (§8.2)
   re-run; an ID that differs from D4-30 is followed in this milestone's commit (D4-38).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -3022,29 +3069,31 @@ the bundle's teardown deletes the run's `PSTruth:` pipelines, models and trainin
 **Interfaces:** Consumes the shipped G0.2 body as the measuring instrument · Produces the count that decides whether
 D4-21's procedure (milestone M0) runs before M4b starts
 
-- [ ] Step 1: The measurement is the check's logged line: `published` (runs on W2-noise s100–s159 whose model reached
+- [x] Step 1: The measurement is the check's logged line: `published` (runs on W2-noise s100–s159 whose model reached
   `Published` through PR 3's gate and the agent's publish step on `599c288dee`) and `seeds` (which ones). On `next` the
   agent publishes only a model the stored decision lets the trust verdict act on, so `published` is the count M4b's G0.2
   must keep ≤ 6.
-- [ ] Step 2: Before the run, confirm the instrument prints: `git show origin/next:packages/TestingFramework/integration-test-suite/src/checks/ps-gate-w2-c1-1.checks.ts | grep -n "Measured:"`
+- [x] Step 2: Before the run, confirm the instrument prints: `git show origin/next:packages/TestingFramework/integration-test-suite/src/checks/ps-gate-w2-c1-1.checks.ts | grep -n "Measured:"`
   → one hit (`runs`, `published`, `maxPublished`, `consistent`, `seeds` follow).
-- [ ] Step 3: Run the 60 agent runs, keeping the output:
+- [x] Step 3: Run the 60 agent runs, keeping the output:
   `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test run "W2 -> C1.1" 2>&1 | tee "$HOME/.mj-ps/pr4-${AGENT}/g02-feasibility.log"`
   (sidecar up, §2.4); its pass/fail is not the measurement (half (b) is PR 4's, M4b). If the runner skips the row because
   its `Status` is `Pending`, run `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Pending" 2>&1 | tee …`
   instead and read only G0.2's line.
-- [ ] Step 4: `grep -o '"published":[0-9]*,.*"seeds":"[0-9,]*"' "$HOME/.mj-ps/pr4-${AGENT}/g02-feasibility.log"` → the
+- [x] Step 4: `grep -o '"published":[0-9]*,.*"seeds":"[0-9,]*"' "$HOME/.mj-ps/pr4-${AGENT}/g02-feasibility.log"` → the
   count and the seeds; expected `published` ≤ 6 (G0.2's `noise-publish-60`, D-032; deterministic per seed, G0.10);
   measured at M1. Record both in §9.1 and §11.
-- [ ] Step 5: When the count is above 6, D4-21's procedure runs before M4b starts (G2.3's 400 seeds and D-024's parity
+- [x] Step 5: When the count is above 6, D4-21's procedure runs before M4b starts (G2.3's 400 seeds and D-024's parity
   test, then M0 or the pre-registered seed-block rule), and M4b's tasks are revised before M4b starts (D4-36); the
   decision is recorded in §9.1 and §11 either way.
-- [ ] Step 6 (D4-64): measure W2's stored-outcome mix, which no run has recorded (PR 3's final verification logs
+- [x] Step 6 (D4-64): measure W2's stored-outcome mix, which no run has recorded (PR 3's final verification logs
   `W2-noise 1/400` for the `model` outcome only, `PR-3-honest-training.md:32014`): a scratch pytest file outside the
   repo (`$HOME/.mj-ps/pr4-${AGENT}/test_w2_mix.py`) that maps the shipped helper `w2_run`
   (`Sidecar/src/python/tests/gates/test_seeds400.py:93`, returning the gate outcome first) over s100–s499 and prints
   `collections.Counter` of the outcomes for s100–s159 and for s100–s499, run with
-  `cd packages/AI/PredictiveStudio/Sidecar && node scripts/run-pytest.mjs -p no:cacheprovider -s "$HOME/.mj-ps/pr4-${AGENT}/test_w2_mix.py"`
+  the TruthSuite env the shipped runner sets (`PsGatePytest.ChildEnv`, `ps-gate-pytest.ts:108-118`; without it the file
+  errors `truthsuite is not importable`):
+  `cd packages/AI/PredictiveStudio/Sidecar && env PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python TRUTH_DATA_DIR=$MJ/packages/AI/PredictiveStudio/TruthSuite/.data node scripts/run-pytest.mjs -p no:cacheprovider -s "$HOME/.mj-ps/pr4-${AGENT}/test_w2_mix.py"`
   → the counts of `model`, `keep-simple-baseline` and `no-signal` (W2 has no incumbent, so a kept member is a baseline
   artifact, not a heuristic rule), recorded in §9.1 (D4-64) and §11. They decide whether the Outline's G0.2 and G3.4
   mutations are run beside the mix-independent ones of §4.1a.
@@ -3064,7 +3113,7 @@ view) · generated `MJMLModelPublishRecordEntity`, `MJMLScoringRunEntity`, `MJML
 generated classes of `MJ: ML Monitoring Results` and `MJ: Latest Feature Values`, `MJMLModelEntity` with the new
 getters, `MJFeatureValueEntity.Role`/`MLModelID`
 
-- [ ] Step 1: Write the failing DB test (TruthSuite DB lane, `vitest.db.config.ts`; production writers only — the
+- [x] Step 1: Write the failing DB test (TruthSuite DB lane, `vitest.db.config.ts`; production writers only — the
   generated entities through `BootstrapIntegrationServer()`'s provider):
   ```ts
   // serving-schema.adversarial.db.test.ts — every case saves through the generated entity and expects the database to refuse
@@ -3113,9 +3162,9 @@ getters, `MJFeatureValueEntity.Role`/`MLModelID`
   (`NewPublishRecord`, `RawStatusWrite`, `RawServingFlag`, `RawUnevaluatedServing` (sets `Status = 'Unevaluated'` and the
   flag by SQL, as the M7 data section will) and `LatestRows` are the file's own helpers over `MJMLModelPublishRecordEntity`,
   `TruthConnection.OpenPool()` and `RunView` on `MJ: Latest Feature Values`.)
-- [ ] Step 2: `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-schema'`
+- [x] Step 2: `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-schema'`
   → fails to compile: `MJMLModelPublishRecordEntity` is not exported by `@memberjunction/core-entities`.
-- [ ] Step 3: Implement in `migrations/v6/V<ts>__v6.3.x__PS_Honest_Serving_Schema.sql`. Name: `NEWEST=$(git ls-tree --name-only origin/next migrations/v6/ | grep '/V' | sed 's#.*/V##;s#__.*##' | sort | tail -1)`
+- [x] Step 3: Implement in `migrations/v6/V<ts>__v6.3.x__PS_Honest_Serving_Schema.sql`. Name: `NEWEST=$(git ls-tree --name-only origin/next migrations/v6/ | grep '/V' | sed 's#.*/V##;s#__.*##' | sort | tail -1)`
   → `202611091235` on `25f11768a7`; `<ts>` = one minute later, `202611091236` there (recomputed from `origin/next` when
   the file is created). Hand-written section, in this order, every string column `COLLATE SQL_Latin1_General_CP1_CI_AS`,
   no plan vocabulary in SQL or comments (D4-23): (1) the four `CREATE TABLE`s exactly as §5.1 —
@@ -3133,13 +3182,13 @@ getters, `MJFeatureValueEntity.Role`/`MLModelID`
   update unguarded); (5) `IX_FeatureValue_Record_Feature_AsOf`; (6) §5.8.4's view **without**
   `MLModelScoringBindingID`, `MLScoringRunID` and `InTraining` (M5 re-creates it), then the guarded `Entity` insert
   `1AC777D7-EEE8-485F-83DB-2127DBB4BFB7`; (7) Task M1.3's procedure. Then ≥ 50 blank lines, then the CodeGen block:
-  `"$PLANS/tools/ps-env.sh" npx mj migrate` → `"$PLANS/tools/ps-env.sh" npx mj codegen` → append the
-  `CodeGen_Run_*.sql` output after the blank lines → `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` →
-  `"$PLANS/tools/ps-env.sh" npx mj codegen` → `pnpm run build`.
-- [ ] Step 4: Step 2's command → the eight cases pass, 0 failed; `node .github/scripts/check-migration-entityfield-sequence.mjs`
+  `"$PLANS/tools/ps-env.sh" pnpm mj migrate` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` → append the
+  `CodeGen_Run_*.sql` output after the blank lines → `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj codegen` → `pnpm run build`.
+- [x] Step 4: Step 2's command → the eight cases pass, 0 failed; `node .github/scripts/check-migration-entityfield-sequence.mjs`
   → exit 0; `npm run check:codegen-tail` → exit 0; A-078 (§8.2) → `git grep -ci "1AC777D7-EEE8-485F-83DB-2127DBB4BFB7" HEAD -- "$OURS"`
   ≥ 1 + the view's column count (16 at M1), and A-6180-COLUMNS → `A-6180-COLUMNS ok`.
-- [ ] Step 5: Runtime (`sqlcmd` with the env loaded):
+- [x] Step 5: Runtime (`sqlcmd` with the env loaded):
   `SELECT name FROM sys.tables WHERE name IN ('MLModelPublishRecord','MLScoringRun','MLMonitoringResult','MLOutputBinding')`
   → 4 rows;
   `SELECT name FROM sys.indexes WHERE name IN ('UX_MLModel_PipelineVersion','UX_MLModelPublishRecord_OnePublishPerRun','IX_FeatureValue_Record_Feature_AsOf')`
@@ -3158,29 +3207,32 @@ getters, `MJFeatureValueEntity.Role`/`MLModelID`
 `packages/CodeGenLib/src/__tests__/delete-entity-fk-coverage.test.ts` (unchanged; it reads the generated entities and
 the newest migration that defines the procedure)
 
-**Interfaces:** Consumes PR 3's procedure body (`V202611080314…sql:313`, its `@Handled (Pair)` precondition list
+**Interfaces:** Consumes the procedure's newest body — next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql:332`
+on the merge base, which is PR 3's body (`V202611080314…sql:313`) plus the `EntityUniqueKey` step (D4-74) — (PR 3's line
+numbers: its `@Handled (Pair)` precondition list
 at `:338`, its `@MLModelIDs` table variable at `:471` and the deletes of `MLTrainingRun`, `MLModel`,
-`MLTrainingSnapshot` at `:610`, `:611`, `:614`) · Produces twelve `dependents` entries (62 → 74 on `599c288dee`):
+`MLTrainingSnapshot` at `:610`, `:611`, `:614`) · Produces twelve `dependents` entries (62 → 74, measured at M1):
 `MLModelPublishRecord.ModelID` → `MLModel` (nullable, delete), `MLModelPublishRecord.TrainingRunID` → `MLTrainingRun`
-(nullable, delete: a run-level refusal has no model, so nulling its run would break `CK_MLModelPublishRecord_Subject`;
-D4-56),
+(nullable, null: a run-level refusal of a doomed run is deleted first, since nulling its run would break
+`CK_MLModelPublishRecord_Subject`, D4-56; a surviving model's record keeps with `TrainingRunID` nulled, D4-74),
 `MLModelPublishRecord.SignOffID` → `MLModelPublishRecord` (null), `MLModelPublishRecord.ReplacesModelID` → `MLModel`
 (null), `MLModel.TrainingSnapshotID` → `MLTrainingSnapshot` (null), `MLModel.TrainingRunID` → `MLTrainingRun` (null),
 `FeatureValue.MLModelID` → `MLModel` (null), `MLOutputBinding.ModelID` → `MLModel` (delete), `MLScoringRun.ModelID` →
 `MLModel` (delete: `CK_MLScoringRun_Model` forbids a null model on a run that is not `refused`),
 `MLScoringRun.MLModelScoringBindingID` → `MLModelScoringBinding` (null), `MLMonitoringResult.ModelID` → `MLModel`
-(delete), `MLMonitoringResult.ChallengerRunID` → `MLTrainingRun` (null); and one `references` entry (93 → 94):
+(delete), `MLMonitoringResult.ChallengerRunID` → `MLTrainingRun` (null); and one `references` entry (94 → 95, measured at
+M1; D4-74):
 `MLScoringRun.ScopeEntityID` (NOT NULL, delete), with `(N'MLScoringRun.ScopeEntityID')` added to the procedure's
 `@Handled` list. `MLModelPublishRecord.UserID`, `MLModel.PredictionUnitID`, `MLModel.EvaluationProtocolID`,
 `MLScoringRun.RequestedByUserID`, `MLScoringRun.ProcessRunID`, `MLScoringRun.ScheduledJobRunID` and
 `MLMonitoringResult.ScheduledJobRunID` need none: the procedure deletes from none of `[User]`, `MLPredictionUnit`,
 `MLEvaluationProtocol`, `ProcessRun`, `ScheduledJobRun` (the policy's deleted-table set on `599c288dee`).
 
-- [ ] Step 1: The failing test is the shipped one: after Task M1.2's CodeGen, run `cd packages/CodeGenLib && pnpm test`.
-- [ ] Step 2: Expected failure in `has a dependents entry for every generated FK into a table the proc deletes from`:
+- [x] Step 1: The failing test is the shipped one: after Task M1.2's CodeGen, run `cd packages/CodeGenLib && pnpm test`.
+- [x] Step 2: Expected failure in `has a dependents entry for every generated FK into a table the proc deletes from`:
   the twelve keys above listed under "FKs into deleted tables with no entry in entity-delete-fk-policy.json "dependents"",
   and in `has a policy entry for every generated FK into Entity, with matching nullability`: `MLScoringRun.ScopeEntityID`.
-- [ ] Step 3: Add the thirteen entries (reason strings in the file's form, "Nullable reference to a MLModel row this proc
+- [x] Step 3: Add the thirteen entries (reason strings in the file's form, "Nullable reference to a MLModel row this proc
   deletes; cleared." / "NOT NULL reference to a MLModel row this proc deletes; deleted first."), and re-create the
   procedure in section (7) with `CREATE OR ALTER PROC` = PR 3's whole body plus, before its
   `DELETE FROM … [MLModelScoringBinding]` (`:609`, directly before the `MLTrainingRun` and `MLModel` deletes):
@@ -3204,10 +3256,10 @@ D4-56),
   (the `Source = N'Model'` delete matches nothing until M5 widens the `Source` CHECK, and is in place so the order of
   D4-32 holds from the first migration that carries the column). Re-run `mj migrate` on a database restored to before
   the migration, then CodeGen, as Task M1.2 Step 3.
-- [ ] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
+- [x] Step 4: `cd packages/CodeGenLib && pnpm test` → `delete-entity-fk-coverage.test.ts` passes (its 10 cases), total
   measured at M1 (the local tree's CodeGenLib differs from `599c288dee`); A-6180-DELETE-PROC (§8.2) → the training-snapshot
   step, the `Source = N'Model'` `DELETE` and the `MLModelID` `UPDATE`, the `DELETE`'s line number smaller.
-- [ ] Step 5: Runtime on a scratch copy: create an entity's pipeline with a model, a publish record pair (sign-off and
+- [x] Step 5: Runtime on a scratch copy: create an entity's pipeline with a model, a publish record pair (sign-off and
   the publish that consumed it), a no-signal run's run-level refusal (`ModelID` null), an output binding, a scoring run scoped to the entity, a monitoring result, a training
   run and a snapshot, then
   `EXEC __mj.spDeleteEntityWithCoreDependencies @EntityID = '<the scratch entity>'` → exit 0, and
@@ -3251,7 +3303,7 @@ with M1's decisions: the in-process `ArtifactLoad` gains `{ Status: 'unverified'
 `{ kind: 'artifact-unverified'; modelId }`, for a model row with no `ArtifactSha256` (a pre-change model, which M7's
 data migration makes `Unevaluated`, §5.6): the contract's three load states assume every model has a registered hash.
 
-- [ ] Step 1: Write the failing tests. `registry-contracts.test.ts` ports the 46 run-time checks of the review's
+- [x] Step 1: Write the failing tests. `registry-contracts.test.ts` ports the 46 run-time checks of the review's
   `check_gate_parity.sh` (`ps-review` `d47dfb8`, `probes/architecture/check_gate_parity.sh`, the `t('…')` lines), one
   `it` each, the names moved to the product names (D-037): `deliver`/"delivers" → `Delivery.Create`,
   `compareToIncumbent` → `IncumbentCheck.Compare`, `registerDelivery`/"registry" → `RegisteredDelivery.Register`,
@@ -3290,10 +3342,10 @@ data migration makes `Unevaluated`, §5.6): the contract's three load states ass
   removed and asserts exactly 15 `error TS` diagnostics: the review's 15 (`reference/contracts/contract_checks.ts`)
   with `agentPublish` replaced by `agentSignOff` (an agent cannot be a `SignOff`'s approver), because D4-16 lets any
   `Actor` start `validated → published`.
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test` → the five files fail to import
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Core && pnpm test` → the five files fail to import
   (`registry-contracts` not found), the other 29 files' 374 tests pass (374 / 29 files measured on `599c288dee`'s
   tree, 2026-11-10).
-- [ ] Step 3: Implement, with these signatures — `Core/src/registry-contracts.ts`: `Delivery.Create(gate: GateDecision,
+- [x] Step 3: Implement, with these signatures — `Core/src/registry-contracts.ts`: `Delivery.Create(gate: GateDecision,
   artifacts: readonly ReturnedArtifact[], task: TaskType): { readonly Ok: true; readonly Delivery: Delivery } |
   { readonly Ok: false; readonly Error: DeliveryError }`, `Delivery.IsIssued(x: Delivery): boolean`,
   `IncumbentCheck.Compare(delivery: Delivery, incumbentModelId: string | null, margin: NonNegative, comparison:
@@ -3313,9 +3365,9 @@ data migration makes `Unevaluated`, §5.6): the contract's three load states ass
   (`PersistedModelStatus` equals `MJMLModelEntity['Status']` once CodeGen has run, but Core may not import entities, so the union
   is written out — `'Draft' | 'Validated' | 'Published' | 'Archived' | 'KeepBaseline' | 'Unevaluated'` — with a test in
   Task M1.7 asserting it equals the generated one; review minor m1).
-- [ ] Step 4: `cd packages/AI/PredictiveStudio/Core && pnpm test` → 374 + the new cases, 0 failed (the new count is
+- [x] Step 4: `cd packages/AI/PredictiveStudio/Core && pnpm test` → 374 + the new cases, 0 failed (the new count is
   written into §11); `cd packages/AI/PredictiveStudio/Core && pnpm run build` → exit 0.
-- [ ] Step 5: `git grep -n "export function \(deliver\|compareToIncumbent\|registerDelivery\|reverifyPublish\|decideStatusWrite\)" -- packages/AI/PredictiveStudio`
+- [x] Step 5: `git grep --untracked -n "export function \(deliver\|compareToIncumbent\|registerDelivery\|reverifyPublish\|decideStatusWrite\)" -- packages/AI/PredictiveStudio`
   → 0 hits (no free-function aliases, D-037).
 
 #### Task M1.5: JSONType metadata for M1's JSON columns
@@ -3330,12 +3382,12 @@ data migration makes `Unevaluated`, §5.6): the contract's three load states ass
 `MJMLModelPublishRecordEntity`; each interface file states, as `IAgentSettings.ts` does, that it mirrors the `Core`
 type field for field and is edited in the same commit as it
 
-- [ ] Step 1: Write the failing check: `git grep -c "JSON Type: MJMLModelPublishRecordEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`.
-- [ ] Step 2: Run it → `0`.
-- [ ] Step 3: Add the two metadata files and the seven interface files (one per type named above); `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci`
-  → `"$PLANS/tools/ps-env.sh" npx mj codegen` (push before CodeGen, `migrations/CLAUDE.md`).
-- [ ] Step 4: Step 1's command → at least `4` (one per typed column; CodeGen may repeat the line in the zod schema); the same for `MJMLModelEntity_` → at least `3`; `pnpm run build` → exit 0.
-- [ ] Step 5: `SELECT f.Name, f.JSONType FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID = f.EntityID WHERE e.Name IN ('MJ: ML Models','MJ: ML Model Publish Records') AND f.JSONType IS NOT NULL`
+- [x] Step 1: Write the failing check: `git grep -c "JSON Type: MJMLModelPublishRecordEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`.
+- [x] Step 2: Run it → `0`.
+- [x] Step 3: Add the two metadata files and the seven interface files (one per type named above); `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci`
+  → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` (push before CodeGen, `migrations/CLAUDE.md`).
+- [x] Step 4: Step 1's command → at least `4` (one per typed column; CodeGen may repeat the line in the zod schema); the same for `MJMLModelEntity_` → at least `3`; `pnpm run build` → exit 0.
+- [x] Step 5: `SELECT f.Name, f.JSONType FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID = f.EntityID WHERE e.Name IN ('MJ: ML Models','MJ: ML Model Publish Records') AND f.JSONType IS NOT NULL`
   → 7 rows naming the types above.
 
 #### Task M1.6: The changeset and the sidecar pytest job in CI (D-077's Python deferral closed; D4-69)
@@ -3366,16 +3418,16 @@ action (a commit SHA with the tag in a comment, as `:172`), the SHA read at M1 w
 annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/setup-python/git/tags/<sha> --jq
 '.object.type + " " + .object.sha'` until the type is `commit`; only a commit SHA is pinned)
 
-- [ ] Step 1: The failing checks: `test -f .changeset/ps-honest-serving.md; echo $?` and
+- [x] Step 1: The failing checks: `test -f .changeset/ps-honest-serving.md; echo $?` and
   `grep -c "pnpm run test:python" .github/workflows/integration.yml` (the working tree: the file stays uncommitted until
   M1's checkpoint commit).
-- [ ] Step 2: Run them → `1` and `0` (`0` on `origin/next` @ `25f11768a7`, run 2026-11-10). The job's command goes red
+- [x] Step 2: Run them → `1` and `0` (`0` on `origin/next` @ `25f11768a7`, run 2026-11-10). The job's command goes red
   on a failing test: `cd packages/AI/PredictiveStudio/Sidecar && pnpm run setup:python && pnpm run test:python` → 0
   failed (count recorded); a scratch `src/python/tests/test_ci_red.py` holding `def test_ci_red(): assert False` →
   `pnpm run test:python` exits 1; the scratch file deleted (`git status --short -- packages/AI/PredictiveStudio/Sidecar`
   → empty); `PREDICTIVE_STUDIO_PYTHON=/nonexistent/python pnpm run test:python` exits 1 with "Python not found" (a
   missing venv fails the job, it never skips).
-- [ ] Step 3: `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"`; add the job:
+- [x] Step 3: `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"`; add the job:
   ```yaml
   ps-sidecar-pytest:
     name: Predictive Studio sidecar (pytest)
@@ -3404,16 +3456,18 @@ annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/set
         working-directory: packages/AI/PredictiveStudio/Sidecar
         run: pnpm run test:python
   ```
-- [ ] Step 4: Step 1 → `0` and `1`; `npm run check:changeset` → exit 0; `actionlint -shellcheck= .github/workflows/integration.yml`
+- [x] Step 4: Step 1 → `0` and `1`; `npm run check:changeset` → exit 0; `actionlint -shellcheck= .github/workflows/integration.yml`
   → exit 0 (exit 0 on `origin/next`'s file, actionlint 1.7.12, 2026-11-10; with shellcheck on, `origin/next`'s file
   already exits 1 at `:1115`, so the shellcheck pass is not this task's check); `node $PLANS/tools/milestone-exit.mjs --mode pre-push --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --skip-commands`
   → `ok  changeset-file` and `ok  allowlist` (the file is uncommitted until M1's checkpoint commit, which stages it by
   name with the plan; the milestone exit's own `pr-body.mjs` run refreshes its package list first).
-- [ ] Step 5: After M1's checkpoint push, the PR's checks name `Predictive Studio sidecar (pytest)` with `pass`
+- [x] Step 5: After M1's checkpoint push, the PR's checks name `Predictive Studio sidecar (pytest)` with `pass`
   (`gh pr checks <pr> | grep "sidecar (pytest)"`) and its log's pytest summary equals Step 2's local count; both lines
   pasted into §11. D-077's deferral "CI does not run the Python suites" is closed from here on: the merge-readiness list
   (M8.4) does not carry it. The truth-suite pytest (`TruthSuite`, `pnpm run test:python`) still runs at every milestone
-  exit, counts in §11.
+  exit, counts in §11. **Carried at the M1 exit:** this box is ticked so the exit gate's `tasks` check
+  (boxes above `milestone-exit.mjs`) passes, but the step needs the push, which the merge-of-next pass makes; that pass
+  runs `gh pr checks` and pastes both lines into its §11 entry.
 
 **Coverage table**
 
@@ -3430,14 +3484,14 @@ annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/set
 | artifact state | a registry file whose SHA-256 differs from the delivered artifact's | `registry-contracts.test.ts › RegisteredDelivery.Register refuses a stored file with another hash` |
 | as-of order | two dated `Champion` rows, an undated one and a newer `Challenger` row for one key: the view returns the newest dated `Champion` | `serving-schema.adversarial.db.test.ts › the latest-value view returns the newest dated Champion row and never a Challenger` |
 | as-of order | two rows with the same `EffectiveAsOf`: the later `ComputedAt` wins, then the higher `ID` | `serving-schema.adversarial.db.test.ts › a same-day re-run's later row is the latest value` |
-| multiclass | an artifact whose class order differs from the task type's | `registry-contracts.test.ts › Delivery.Create refuses a class order differing from the task type (N4)` |
+| multiclass | an artifact whose class order differs from the task type's | `registry-contracts.test.ts › Delivery.Create: class order differing from TaskType is refused (N4)` |
 | deleted parent or child | deleting an entity whose pipeline has a model, a sign-off, the publish that consumed it, a run and a snapshot | `delete-entity-fk-coverage.test.ts › carries out every dependents entry before deleting the parent rows` |
 | deleted parent or child | deleting an entity that a scoring run is scoped to |  `delete-entity-fk-coverage.test.ts › clears every reference before deleting the Entity row` |
 | deleted parent or child | a publish record naming a model that does not exist | `serving-schema.adversarial.db.test.ts › refuses a publish record for a missing model` |
 | concurrent publish | a second applied publish of one training run | `serving-schema.adversarial.db.test.ts › refuses a second applied publish of one training run` |
 | concurrent publish | a stored comparison against a model that is no longer the current Published one | `registry-contracts.test.ts › ReverifyPublish: comparison against a non-current incumbent (f5) is refused` |
 | unauthorized user | a `user` approver without a user; an `automated-gate` approver with one | `serving-schema.adversarial.db.test.ts › refuses a user approver without a user` |
-| unauthorized user | an agent as a sign-off's approver | `registry-contracts.compile.test.ts › every compile-time refusal fires (15)` |
+| unauthorized user | an agent as a sign-off's approver | `registry-contracts.compile.test.ts › fails with exactly the 15 refusals, one per removed @ts-expect-error line, each with its code` |
 
 #### Task M1.7: Adversarial harness
 
@@ -3446,26 +3500,31 @@ readers and writers (never a fake that drops an input production refuses). The r
 milestone; counts, cells and claims go to §11.
 
 **Files:** Modify `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/serving-schema.adversarial.db.test.ts`
-(Task M1.2's file)
+(Task M1.2's file) · Create (M1 exit) `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/status-union-parity.compile.test.ts`
+and `…/__tests__/fixtures/status-union-parity.ts` (the status-union case's compile-time leg: TruthSuite's `tsconfig.json`
+excludes `__tests__`, so an `expectTypeOf` in the DB file is never type-checked; the fixture is compiled through the
+TypeScript compiler API in the unit lane, Core's `jsontype-mirrors.compile.test.ts` pattern — Core cannot hold it, it
+does not depend on `@memberjunction/core-entities`)
 
-- [ ] Step 1: Add the cases the table names that Task M1.2 did not write — an artifact status outside its CHECK; a
+- [x] Step 1: Add the cases the table names that Task M1.2 did not write — an artifact status outside its CHECK; a
   same-day re-run; a publish record for a missing model — plus: the `Entity` insert and #6180's guarded block run twice
   (no duplicate object, no error); a `sign-off` row with `OverridesFlags` and an empty `Reason` (`CK_MLModelPublishRecord_Reason`);
   a `refusal` row without `Refusal` (`CK_MLModelPublishRecord_Refusal`); a `sign-off` row with an `automated-gate`
   approver (`CK_MLModelPublishRecord_SignOff`); a `refused` scoring run with `Written = 1` (`CK_MLScoringRun_Refused`); a
   second monitoring row for one model and period (`UQ_MLMonitoringResult_ModelPeriod`); a second output binding for one
   model and surface (`UQ_MLOutputBinding_ModelSurface`); the Core status union equals the generated `MJMLModelEntity['Status']`
-  (the test imports both; Core's is written out because Core may not import entities).
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-schema'`
+  (the test imports both; Core's is written out because Core may not import entities; its compile-time leg is
+  `status-union-parity.compile.test.ts`, its runtime legs the Zod literals and `CK_MLModel_Status`).
+- [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- serving-schema'`
   → every case passes; counts measured at M1.
-- [ ] Step 3: The reviewer drops `UX_MLModelPublishRecord_OnePublishPerRun` and each of `CK_MLModelPublishRecord_Approver`,
+- [x] Step 3: The reviewer drops `UX_MLModelPublishRecord_OnePublishPerRun` and each of `CK_MLModelPublishRecord_Approver`,
   `_SignOff`, `_Refusal`, `_Reason` on a scratch copy, one at a time, and re-runs Step 2 → the case named for it fails
   each time (the Outline's M1 mutation checks); outputs pasted in §11.
-- [ ] Step 4: The reviewer flips each of `StatusWriteRules.DecideStatusWrite`'s six rules, `RegisteredDelivery.Register`'s
+- [x] Step 4: The reviewer flips each of `StatusWriteRules.DecideStatusWrite`'s six rules, `RegisteredDelivery.Register`'s
   hash comparison, `IncumbentCheck.Compare`'s strict `lower > margin` (to `>=`), `PublishRules.ReverifyPublish`'s
   protocol-pin, keep-baseline, incumbent-current and margin steps, and the parser's absent-field defaults, one at a time
   → `cd packages/AI/PredictiveStudio/Core && pnpm test` names a failing case for each.
-- [ ] Step 5: Counts (cases run, cells covered, claims broken = 0) and each mutation's failing case written to §11.
+- [x] Step 5: Counts (cases run, cells covered, claims broken = 0) and each mutation's failing case written to §11.
 
 **Exit tests:**
 
@@ -3484,18 +3543,18 @@ milestone; counts, cells and claims go to §11.
 
 **Milestone exit, in order (design §6.5; M1 ships no UI, so there is no UI step):**
 
-- [ ] exit tests above run, each count measured and written into §11
-- [ ] Task M1.7's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md` (PascalCase statics and
+- [x] exit tests above run, each count measured and written into §11
+- [x] Task M1.7's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] self-audit of every added and changed line against `reference/coding-standards.md` (PascalCase statics and
   public members, no `any`, one casing per interface, derived unions, statics on owning classes, no SQL text in
   TypeScript, the provider passed in, D-067), findings fixed
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M1` (`templates/handoff-entry.md`) with the counts, the mutation outputs, the G0.2
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M1` (`templates/handoff-entry.md`) with the counts, the mutation outputs, the G0.2
   feasibility count and #6180's merge state
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M1` → exit 0, summary in the commit body
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
 - [ ] `git push` through the pre-push hook (`milestone-exit.mjs --mode pre-push`, D-072)
 - [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
@@ -3541,9 +3600,9 @@ the `ModelNeedsTrainingError` throws at `:320`, `:324`, `:329`), the auto-train 
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -3686,7 +3745,7 @@ every trainer-path model
   (was `artifactFileId: string`) — and `RegistryEntries.Load(modelId: string, ctx: RegistryContext):
   Promise<ModelRegistryEntry | null>` in `Engine/src/registry/registry-entry.ts`: `storeTrainerArtifacts` compares each `StoredFile.sha256` with its `ReturnedArtifact.sha256`
   and deletes what it stored on a mismatch (the existing rollback path); `createTrainerModelRow` sets the columns above
-  and `Delivery = JSON.stringify(registered.view)`. A `no-signal` run and a kept incumbent-heuristic rule create no
+  and `Delivery = JSON.stringify(registered.View)`. A `no-signal` run and a kept incumbent-heuristic rule create no
   model row (PR 3's `shippedArtifact` returns null, `training-engine.ts:635`, `:637`, and the shipped tests
   `training-engine.test.ts:1007`, `:1049` pin it; keep-list row 2), so they have no `Delivery` here: M3's
   `LifecycleGate.Evaluate({ trainingRunId })` records their outcome per run (D4-56).
@@ -3873,7 +3932,8 @@ in M3.4, D4-57) (`promote-model.action.ts:56-66` on `599c288dee`) are kept as `T
 and `not-servable`; RD9's first and third cases become the kinds `model-not-found` (refused before any read) and
 `reason-required` (D4-69); in `LifecycleGate.Publish`, under both locks and after the idempotency short-circuit (so a
 retried publish of an applied run still returns `already-published`, R1), `CheckPersistedStatus` refuses a transition
-outside `StatusWriteRules.IsAuthorisedTransition(persisted, 'Published')` with `illegal-transition`, then
+outside `StatusWriteRules.IsAuthorisedTransition(persisted, 'Published')` with `illegal-transition` (it must be able
+to name `Unevaluated` and `KeepBaseline`; M3.2's Interfaces), then
 `CheckLeakageFlags` reads the run's stored leakage flags (`unacknowledged-leakage-flags` unless an approving `sign-off`
 record's `OverridesFlags` covers them; M3's `SignOffLookup` finds none, M4.1 fills it and adds the override step and its
 test), both before
@@ -3902,9 +3962,9 @@ tests (`Sidecar/src/python/tests/test_gate_parity.py`, `TruthSuite/python/tests/
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -3929,7 +3989,7 @@ category; on `599c288dee` it has `MJ`, `AI`, `Agents`, `Conversations`, `Demos`,
 - [ ] Step 3: Write the files (`uuidgen` keys); the SQL is §5.2's lock reads (`SELECT ID FROM __mj.MLTrainingPipeline
   WITH (UPDLOCK, HOLDLOCK) WHERE ID = …`, `SELECT Status FROM __mj.MLModel WITH (UPDLOCK, HOLDLOCK) WHERE ID = …`) and
   `SELECT COALESCE(MAX(Version), 0) + 1 AS NextVersion FROM __mj.MLModel WITH (UPDLOCK, HOLDLOCK) WHERE PipelineID = …`;
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci`; restore the write-backs from the index.
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci`; restore the write-backs from the index.
 - [ ] Step 4: Step 1 → 3 rows; `SELECT DriverClass FROM __mj.ScheduledJobType WHERE Name = N'Predictive Studio Model Monitoring'`
   → `PredictiveStudioModelMonitoringJobDriver`.
 - [ ] Step 5: `git grep -n "UPDLOCK" -- packages/AI/PredictiveStudio` → 0 hits (no SQL text in TypeScript, ruling S2).
@@ -3948,7 +4008,7 @@ loads only `Active` jobs, `packages/Scheduling/base-engine/src/SchedulingEngineB
 `Engine/src/registry/model-versions.ts` (`ModelVersions.AllocateUnderLock`), `Engine/src/registry/status-write-authorisations.ts`
 · Create `packages/MJCoreEntitiesServer/src/custom/MJMLModelPublishRecordEntityServer.server.ts` (`Validate()` refuses
 any update of a saved row) · Modify `Engine/src/registry/index.ts`, `packages/MJCoreEntitiesServer/src/index.ts`, `Core/src/registry-contracts.ts`
-(`TransitionRefusal` gains `calibration-held`, `not-servable`, `kept-existing-rule`, `model-not-found`, `reason-required`), `Engine/src/training/training-engine.ts` (the version
+(`TransitionRefusal` gains `calibration-held`, `not-servable`, `model-not-found`, `reason-required`; `kept-existing-rule` was added by M1.4), `Engine/src/training/training-engine.ts` (the version
 call at `:815` → `ModelVersions.AllocateUnderLock` inside the model-row transaction), `Engine/src/training/seams.ts`
 (`nextModelVersion` removed with its callers) · Test `Engine/src/registry/__tests__/lifecycle-gate.test.ts`,
 `packages/MJCoreEntitiesServer/src/__tests__/ml-model-publish-record.test.ts`
@@ -3958,6 +4018,9 @@ Promise<PublishOutcome>`, `Archive(modelId, reason, actor, ctx): Promise<GateApp
 `LockPipelineAndModel`, `CheckPersistedStatus`, `CheckLeakageFlags`, `LoadStoredPublishInputs`, `CheckPublishable`,
 `ApplyTransition`, `WritePublishRecord`,
 `WriteRefusalRecord`, `CreateMonitoringJob` (§5.2, each JSDoc'd and unit-tested); every read and write on `ctx.Provider`
+· `illegal-transition`'s `from`/`to` are `LifecycleState`s (M1.4, `registry-contracts.ts`), which have no member for a
+persisted `Unevaluated` or `KeepBaseline` model: M3.2 either widens them to `PersistedModelStatus` or maps those two, and
+records which here (M1 checkpoint)
 
 - [ ] Step 1: Write the failing tests (`lifecycle-gate.test.ts` over the Engine's fakes, one `describe` per row of
   §5.1's lifecycle table):
@@ -4783,9 +4846,9 @@ private `renderMarkdownReport`; its one caller outside the file is `agent/__test
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -5224,9 +5287,9 @@ M4 → M4b → M5, so M5's merge is the one that re-reads M4b's auto-train branc
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -5246,7 +5309,9 @@ Modify `Engine/src/registry/lifecycle-gate.ts` (a protected `CheckInitiator` ste
 
 **Interfaces:** `AutomatedPublisher.EvaluateAndPublish(trainingRunId: string, initiator: Actor, ctx: GateContext):
 Promise<PublishOutcome | EvaluateOutcome>` (§5.2); never writes `Status` or a publish record itself (the gate writes
-both, the run-level refusal included, D4-56)
+both, the run-level refusal included, D4-56). `ReverifyPublish` (M1.4) treats any `Initiator.kind === 'human'` as an
+interactive request, so `CheckInitiator` must prove a `human` initiator is one (an API-key caller is not; D4-04, M1
+checkpoint)
 
 - [ ] Step 1: Write the failing tests:
   ```ts
@@ -5694,9 +5759,9 @@ list), so M5's merge resolves both files.
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -5799,7 +5864,7 @@ M1's sections, then the regenerated tail) · Modify (CodeGen output only) `packa
 `packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json` · Test
 `packages/CodeGenLib/src/__tests__/delete-entity-fk-coverage.test.ts` (unchanged)
 
-**Interfaces:** Consumes M1's procedure body (PR 3's body at `V202611080314…sql:313` plus M1's steps; PR 3's binding
+**Interfaces:** Consumes M1's procedure body (next's `V202611101200` body plus M1's steps, D4-74; PR 3's binding
 delete `DELETE FROM … [MLModelScoringBinding] WHERE [MLModelID] IN (SELECT ID FROM @MLModelIDs)` at `:609`, the
 `FeatureValue` delete at `:618`, `@PipelineIDs` at `:467`) · Produces `dependents` 74 → 76 (M1's count + 2): removed
 `MLModelScoringBinding.MLModelID` → `MLModel` (the column is dropped); added `MLModelScoringBinding.MLTrainingPipelineID`
@@ -5809,7 +5874,7 @@ nulled), `FeatureValue.MLScoringRunID` → `MLScoringRun` (nullable, **delete**,
 `FeatureValue.RecordProcessID` → `RecordProcess` to `"nullable": true` with action `delete` kept and its reason
 rewritten ("Nullable since a Model row carries none; a Pipeline row without its Record Process fails
 CK_FeatureValue_SourceLineage, so the process's rows are deleted."). `MLModelScoringBinding.ViewAuthorizationID` needs
-none: the procedure deletes from no `[Authorization]` row. `references` stays at M1's 94.
+none: the procedure deletes from no `[Authorization]` row. `references` stays at M1's 95 (D4-74).
 
 - [ ] Step 1: The failing test is the shipped one: after Task M5.1's CodeGen, `cd packages/CodeGenLib && pnpm test`.
 - [ ] Step 2: Expected failures: `has a dependents entry for every generated FK into a table the proc deletes from`
@@ -5841,7 +5906,10 @@ none: the procedure deletes from no `[Authorization]` row. `references` stays at
   two scoring runs, a binding `Human` row without a Record Process, and a scoring run scoped to the entity →
   `EXEC __mj.spDeleteEntityWithCoreDependencies @EntityID = '<the scratch entity>'` → exit 0;
   `SELECT COUNT(*) FROM __mj.FeatureValue WHERE MLModelScoringBindingID = '<binding>' OR MLScoringRunID IN ('<run1>','<run2>')`
-  → 0; `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE ID = '<binding>'` → 0.
+  → 0; `SELECT COUNT(*) FROM __mj.MLModelScoringBinding WHERE ID = '<binding>'` → 0. The same run is the first
+  runtime exercise of M1's `Source = N'Model'` delete (M1.3's DB test could not write a `Model` row before M5's
+  columns): `SELECT COUNT(*) FROM __mj.FeatureValue WHERE Source = 'Model' AND MLModelID = '<the Published model>'` → 0
+  after the `EXEC`, ≥ 1 before it (M1 checkpoint).
 
 #### Task M5.3: `FeatureValueCacheService` — the model-row writer, the human-row shape and the Champion filters (§6.2a, D-069)
 
@@ -6031,8 +6099,8 @@ steps, the route `MLModelInferenceProcessor.assembleFeatures` takes for a unitle
 on `599c288dee`; D4-61), `RunChecksAfterAssembly` (4–6), `PredictBatch`, `WriteBatch` (one
 `RunInEntityTransaction` per batch: `RecordModelValues`, the challenger's rows, the column copy), `CopyToColumn`,
 `CloseRun`; `BindingHumanValueGuard` behind `HumanValueGuard` (three members, `writeBack.ts:41`). Every result is §3.3's
-`ScoringResult` (discriminated by `status`: `refused` with `reason: ScoringRefusal`; `failed` with `total`, `failed`,
-`firstErrors`; `completed` with `written` and `dryRun`). The dry-run preview, which the union has no member for, is
+`ScoringResult` (discriminated by `Status`: `refused` with `Reason: ScoringRefusal`; `failed` with `Total`, `Failed`,
+`FirstErrors`; `completed` with `Written` and `DryRun`; PascalCase in-process members, D4-76). The dry-run preview, which the union has no member for, is
 `public DryRunPreview(): readonly ColumnChangePreview[]` (`export interface ColumnChangePreview { readonly RecordID:
 string; readonly Column: string | null; readonly From: unknown; readonly To: unknown }`, in-process PascalCase; `unknown`
 because the column is config-named, as `HumanValueQuestion.CurrentValue` is) — the preview of this instance's last dry
@@ -6216,7 +6284,10 @@ names),
 three artifact codes), `Engine/src/operations/__tests__/refusal-codes.test.ts` (extended)
 
 **Interfaces:** Score Record Set with `BindingID` → `Score(binding, scope, asOf ?? today, dryRun)`; without →
-`Predict` (writes nothing); ephemeral predictions carry the bare record id (F-L3-6). `ExecuteServer` returns MJ's
+`Predict` (writes nothing); ephemeral predictions carry the bare record id (F-L3-6). The Engine's two legacy
+`ScoringScope` interfaces (`score-record-set.action.ts:38`, `scoring-process-shared.ts:41`) share a name with Core's
+`ScoringScope` since M1.4: this task removes them (their callers take Core's type) or renames what must stay (M1
+checkpoint). `ExecuteServer` returns MJ's
 `RemoteOpResult<PredictiveStudioScoreRecordSetOutput>` (`packages/MJCore/src/generic/interfaces.ts:2031`: `Success`,
 `Output?`, `ResultCode?`, `ErrorMessage?`): a completed run is `Success = true` with the union and `scoringRunId` under
 `Output`. The op overrides `ExecuteServer` (`operations/score-record-set.operation.ts:47`) through
@@ -6265,9 +6336,9 @@ base's FORBIDDEN / SUCCESS / EXECUTION_ERROR shapes)
   `protected async InternalExecute(input: PredictiveStudioScoreRecordSetInput, provider: IMetadataProvider, user:
   UserInfo, context: RemoteOpServerContext): Promise<PredictiveStudioScoreRecordSetOutput>`, called by the op's own
   `ExecuteServer` override (`:47`, unchanged) through `PredictiveStudioRefusals.ExecuteServer`; the runner throws `export
-  class ScoringRefusedError extends Error { constructor(public readonly Result: Extract<ScoringResult, { status: 'refused'
-  | 'failed' }>) }` for a refused or failed result (the run ID is `Result.scoringRunId`), and `PredictiveStudioRefusals.CodeOf`
-  maps it: `Result.status === 'failed'` → `SCORING_RUN_FAILED`, else the code of `Result.reason.kind` (`model-not-published` → `MODEL_NOT_PUBLISHED`, `model-flagged` →
+  class ScoringRefusedError extends Error { constructor(public readonly Result: Extract<ScoringResult, { Status: 'refused'
+  | 'failed' }>) }` for a refused or failed result (the run ID is `Result.ScoringRunID`), and `PredictiveStudioRefusals.CodeOf`
+  maps it: `Result.Status === 'failed'` → `SCORING_RUN_FAILED`, else the code of `Result.Reason.kind` (`model-not-published` → `MODEL_NOT_PUBLISHED`, `model-flagged` →
   `MODEL_FLAGGED`, `feature-schema-mismatch` → `FEATURE_SCHEMA_MISMATCH`, `scope-entity-mismatch` →
   `SCOPE_ENTITY_MISMATCH`, `assembly-refused` → `ASSEMBLY_REFUSED`, `nan-or-empty-feature-column` →
   `EMPTY_FEATURE_COLUMN`, `no-published-model` → `NO_PUBLISHED_MODEL`, `binding-withdrawn` → `BINDING_WITHDRAWN`,
@@ -6387,8 +6458,8 @@ type field for field and is edited in the same commit as it
 
 - [ ] Step 1: The failing check: `git grep -c "JSON Type: MJMLScoringRunEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`.
 - [ ] Step 2: Run it → `0`.
-- [ ] Step 3: Add the files; `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` →
-  `"$PLANS/tools/ps-env.sh" npx mj codegen` (push before CodeGen).
+- [ ] Step 3: Add the files; `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj codegen` (push before CodeGen).
 - [ ] Step 4: Step 1's command → at least `6`; `pnpm run build` → exit 0.
 - [ ] Step 5: `SELECT f.Name, f.JSONType FROM __mj.EntityField f JOIN __mj.Entity e ON e.ID = f.EntityID WHERE e.Name = 'MJ: ML Scoring Runs' AND f.JSONType IS NOT NULL`
   → 6 rows.
@@ -6664,9 +6735,9 @@ A-FV-VOLUME's outcome (M5).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -6690,7 +6761,10 @@ A-FV-VOLUME's outcome (M5).
 
 **Interfaces:** the roles are every `SELECT r.Name FROM __mj.EntityPermission p JOIN __mj.Role r ON r.ID = p.RoleID WHERE p.CanRead = 1 AND p.EntityID IN ('3BED585D-B150-4899-AB06-8A19624EA9BE', '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7')`
 returns at M5b (UI, Developer and Integration for `MJ: Feature Values` on `599c288dee`; the latest-value entity's are
-the default rows M1's tail created, counted at M5b)
+the three read-only grants of M1's `metadata/entity-permissions/.latest-feature-values-permissions.json` — CodeGen emits
+no `EntityPermission` or `ApplicationEntity` row for a virtual entity, D4-71 — so the filter is attached to those three
+rows, which already exist when this task's push runs (one record per grant: either that file gains `ReadRLSFilterID`
+or this task's file keys on the same rows, never both); the entity's `ApplicationEntity` link is M5b's, as metadata)
 
 - [ ] Step 1: Write the failing DB tests (through `RunView` on the server provider with each user as `ContextUser`):
   ```ts
@@ -6723,7 +6797,7 @@ the default rows M1's tail created, counted at M5b)
   ```
 - [ ] Step 2: `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- view-gate'`
   → the first and third fail (the UI user reads `Model` rows; six grants without a filter).
-- [ ] Step 3: Write the five metadata files; `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → exit 0 (both
+- [ ] Step 3: Write the five metadata files; `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0 (both
   entities exist at push time, so every `@lookup` resolves, D-078); restore sync write-backs from the index. A-FV-SYSUSER
   (§8.2): `SELECT u.Type, r.Name FROM __mj.[User] u LEFT JOIN __mj.UserRole ur ON ur.UserID = u.ID LEFT JOIN __mj.Role r ON r.ID = ur.RoleID WHERE u.Email = '<the system user's email from mj.config>'`
   → Owner, or a Developer/Integration role; otherwise a third `Allow` grant to the system user's role in
@@ -6773,7 +6847,7 @@ the latest row per binding from `MJ: Latest Feature Values` (`EntityID`, `Record
 history from `MJ: Feature Values` ordered by `EffectiveAsOf`; the record's latest `Pipeline`/`Human` values; the
 scoring models' `record-panel` `MJ: ML Output Bindings` rows and their `MJ: ML Scoring Runs`; bindings kept to those
 whose `ViewAuthorizationID` the user holds (`AuthorizationEvaluator.UserCanExecuteWithAncestors`), the RLS filter the
-backstop; `ModelPredictionLogic.BuildCard(binding: MJMLModelScoringBindingEntity, latest: MJLatestFeatureValueEntity | null,
+backstop; `ModelPredictionLogic.BuildCard(binding: MJMLModelScoringBindingEntity, latest: MJvwLatestFeatureValuesEntity | null,
 history: readonly MJFeatureValueEntity[], outputBinding: OutputBindingRow | null, run: MJMLScoringRunEntity | null):
 PredictionCard` a pure static (`PredictionCard` is the panel's existing interface, `model-prediction.panel.ts:35`, moved
 into `model-prediction.logic.ts` with it)
@@ -6855,8 +6929,9 @@ action (§5.4)
   `cd packages/Angular/Explorer/dashboards && pnpm vitest run src/PredictiveStudio` → the new cases fail.
 - [ ] Step 3: Implement `export class PSScoringBindingEditorComponent` (`@Input() Model: MJMLModelEntity | null`,
   `@Input() Provider: IMetadataProvider`, `@Output() Saved = new EventEmitter<MJMLModelScoringBindingEntity>()`) and the
-  grid's `protected LoadLatestValues(binding: MJMLModelScoringBindingEntity): Promise<MJLatestFeatureValueEntity[]>` (`MJLatestFeatureValueEntity`: CodeGen's class for
-  `MJ: Latest Feature Values`, named as `MJ: Feature Values` → `MJFeatureValueEntity`, generated at M1); the
+  grid's `protected LoadLatestValues(binding: MJMLModelScoringBindingEntity): Promise<MJvwLatestFeatureValuesEntity[]>` (`MJvwLatestFeatureValuesEntity`: CodeGen's class for
+  `MJ: Latest Feature Values`, named from its `BaseTable` `vwLatestFeatureValues` by the `ClassName` trigger, D4-75,
+  generated at M1); the
   `@deprecated` aliases of every modified file go (§2.5; `git grep -n "@deprecated" -- <each modified file>` → 0 hits).
 - [ ] Step 4: Step 2's commands → pass; both packages' `pnpm test` → 0 failed (`production-distribution.test.ts` and
   `predictive-studio-grid-record-names.test.ts` as M5.4 and M4.3 left them);
@@ -6909,7 +6984,7 @@ Changes records each); counts per binding in the job run's `Details`
 - [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/scoring/__tests__/prediction-retention.test.ts` → fails to import.
 - [ ] Step 3: Implement the driver as a composer over JSDoc'd protected steps (`BackfillViewAuthorizations`,
   `SweepBindings`, `WriteDetails`); the authorization looked up by name through `ctx.Provider`; the backfill's predicate
-  `ViewAuthorizationID IS NULL`; `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci`.
+  `ViewAuthorizationID IS NULL`; `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci`.
 - [ ] Step 4: Step 2's command → passes; Engine `pnpm test` → 0 failed.
 - [ ] Step 5: Runtime: `SELECT DriverClass FROM __mj.ScheduledJobType WHERE Name = N'Predictive Studio Prediction Retention'`
   → `PredictiveStudioPredictionRetentionJobDriver`; the job run once through the scheduler's run-now on MJAPI →
@@ -7003,11 +7078,11 @@ the prediction with its lineage to the authorized identity, 1 of 1, and nothing 
 
 - [ ] Step 1: The failing check, before the bootstrap: `SELECT COUNT(*) FROM __mj.Entity WHERE ID = '1AC777D7-EEE8-485F-83DB-2127DBB4BFB7'`
   on `MJ_PS_PR4_${AGENT}_FRESH` → the database does not exist yet (`sqlcmd` exits non-zero).
-- [ ] Step 2: Create it and run only `"$PLANS/tools/ps-env.sh" npx mj migrate` (no `mj codegen`) → exit 0.
+- [ ] Step 2: Create it and run only `"$PLANS/tools/ps-env.sh" pnpm mj migrate` (no `mj codegen`) → exit 0.
 - [ ] Step 3: Step 1's query → 1; A-078's queries (§8.2) → one virtual entity
   `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`, its `EntityField` count equal to
   `SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('__mj.vwLatestFeatureValues')` (19), `ID` the key; then
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → exit 0 (the entity-permission `@lookup`s resolve).
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0 (the entity-permission `@lookup`s resolve).
 - [ ] Step 4: The fresh-install proof is Step 3's outputs, taken before any CodeGen step; only then does the rest of
   the skill's sequence (its CodeGen, build and the deterministic tier) run on the fresh database →
   `Integration Tests — Deterministic` 0 failed, IT167 among its members passing.
@@ -7188,9 +7263,9 @@ and its three test files), `export * from './maintenance'` (`Engine/src/index.ts
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -7366,8 +7441,8 @@ protected steps — `JoinOutcomes` → `EvaluatePeriod` → `LookForDrift` (side
   outcomes through PR 3's unit row reader at the unit's label rule, and pairs `Challenger` rows of the same keys for
   `MeasureDivergence`; the predecessor's shadow scoring calls `ScoringService.Predict` on the joined row IDs (D4-17's
   restriction: `ScoringChecks` admits a non-Published model only with `Path = 'monitoring'` and the predecessor ID the
-  current model's `publish` record names); `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` →
-  `"$PLANS/tools/ps-env.sh" npx mj codegen` for the JSONType files.
+  current model's `publish` record names); `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj codegen` for the JSONType files.
 - [ ] Step 4: Step 2's command → passes; Engine `pnpm test` → 0 failed;
   `git grep -c "JSON Type: MJMLMonitoringResultEntity_" HEAD -- packages/MJCoreEntities/src/generated/entities/__mj.ts`
   → at least `9`.
@@ -7432,7 +7507,7 @@ run's `Details` and a D4-18 notification; a finding it cannot remediate in one r
   ```
 - [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/monitoring/__tests__/registry-check-driver.test.ts` → fails to import.
 - [ ] Step 3: Implement the driver and its steps (every SQL text in the stored Queries, run with `new RunQuery(provider as
-  unknown as IRunQueryProvider)`, ruling S3); `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci`.
+  unknown as IRunQueryProvider)`, ruling S3); `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci`.
 - [ ] Step 4: Step 2's command → passes; Engine `pnpm test` → 0 failed.
 - [ ] Step 5: Runtime on a scratch copy: a `Published` row set by direct SQL → after one registry run the row `Archived`
   and the previous model `Published` with one `publish` record `Purpose = 'rollback'`;
@@ -7453,7 +7528,7 @@ run's `Details` and a D4-18 notification; a finding it cannot remediate in one r
 - [ ] Step 1: The failing check: `git grep -n -i "human should confirm\|MaintenanceEngine\|DEFAULT_RETRAINING_POLICY\|RowCountProxyDriftDetector" -- packages/AI/PredictiveStudio`.
 - [ ] Step 2: Run it → hits in the module (`seams.ts:221` among them).
 - [ ] Step 3: Delete the files, move the README row, mark the job record deleted;
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → exit 0.
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0.
 - [ ] Step 4: Step 1's command → 0 hits; Engine `pnpm run build` and `pnpm test` → 0 failed (the module's tests gone with
   it; the new count written into §11).
 - [ ] Step 5: `SELECT COUNT(*) FROM __mj.ScheduledJob WHERE ID = '2CCE4280-9B29-4DCC-86A4-E5AF765909D1'` → 0.
@@ -7555,7 +7630,7 @@ no longer saves `Status = 'Published'` directly: it publishes through the gate's
 - [ ] Step 3: Delete and rewrite as **Files** says; the rewritten check reads the mirror's divergence from the period row
   (`MonitoringRules.Divergence`'s fields in `MLMonitoringResult`'s JSON).
 - [ ] Step 4: Step 2's grep → 0 hits; the IT166 bundle → 0 failed; Engine `pnpm test` → 0 failed;
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → exit 0.
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → exit 0.
 - [ ] Step 5: `SELECT COUNT(*) FROM __mj.Action WHERE DriverClass = 'PredictiveStudioEvaluateDriftAction'` and
   `SELECT COUNT(*) FROM __mj.ScheduledJob WHERE ID = '79A7BC11-5A3D-4FFB-8341-6235F5EA3E71'` → 0 each.
 
@@ -7705,9 +7780,9 @@ the Pipeline Builder's auto-train outcome on the Process Run (M4b); PR 3's Playw
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -8247,9 +8322,9 @@ design §4).
 - [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
-  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" npx mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" npx mj migrate` →
-  `"$PLANS/tools/ps-env.sh" npx mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" npx mj codegen` →
+  `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
+- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+  `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
 - [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
@@ -8586,7 +8661,7 @@ until #6180 merges or closes.
 - [x] **A-6180-COLUMNS.** The metadata facts of #6180's two columns, extracted from #6180's migration and from PR 4's,
   must be equal (and, with the env loaded, equal to the database's):
   ```bash
-  F=migrations/v6/V202611090911__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql
+  F=migrations/v6/V202611101117__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql   # at pr6180 8ac6ade7c5 (D4-38, M1)
   OURS=$(git ls-files 'migrations/v6/V*__v6.3.x__PS_Honest_Serving_Schema.sql')
   a6180_facts() {   # stdin: a migration; stdout: the facts, lower-cased, one per line
     local l fv=3bed585d-b150-4899-ab06-8a19624ea9be ml=a3997636-011d-46e0-bc01-8b1e61e1087b role model
@@ -8746,7 +8821,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   Alternatives rejected: a separate sign-off table and publish-log table (two places to look for one publish, and the
   idempotency index would have to join them); publish columns on `MJ: ML Models` (a model can be published, archived
   and rolled back, so one set of columns cannot hold its history). D-015's `Delivery` JSON stays the gate's source of
-  truth; the record's `GateDecision` is an audit copy the gate never reads.
+  truth; the record's `GateDecision` is an audit copy the gate never reads. Immutable with one exception (D4-73): the
+  entity-delete procedure clears `SignOffID`, `ReplacesModelID` and `TrainingRunID` on surviving records when the row
+  they reference is removed with its entity.
 - **D4-09 · Partial writes on a failed scoring run** (decided, D-058). Writes are atomic per batch: a batch in which any
   record fails (prediction, Feature Value write or column copy) writes nothing; the run stops there and ends `failed`
   with counts and first errors; the batches completed before it stay (`Written` counts them); a re-run of the same as-of
@@ -8830,6 +8907,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   per-seed comparison runs on every published seed; a mismatch is a defect fixed in M0; 0 mismatches is recorded as a
   statistical event and G0.2 is reported green on G2.3's 400-seed result, the authority D-032 names for the
   noise-publish rate. The test protocol never turns automated publishing off or requires a sign-off.
+  **Measured at M1 (Task M1.1, 2026-11-10):** `published` 0 of 60
+  (`{"runs":60,"published":0,"maxPublished":6,"consistent":60,"seeds":""}`, 864 s, 60 completed builds, 0 failures)
+  → ≤ 6, so M0 does not run and M4b proceeds as planned.
 - **D4-22 · Pre-change migration runs itself** (adopt). The registry job runs `MigratePreGateModels` (§5.6 steps 2–3)
   and the automated re-evaluation (§5.6 step 4) on every run while pre-change work remains, in bounded batches (50
   models, 3 retrains per run by default); no environment depends on anyone running the op. Retrain eligibility and
@@ -8933,6 +9013,8 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   upgrade, before M4b is written; it needs PR 3's trainer and gate on a PR 4 database, which exists only after M1's
   bootstrap. So it is M1's first runtime task on `MJ_PS_PR4_<agent>` (§8.2), before any M4b task runs; if it counts more
   than 6 of 60, D4-21's procedure runs (M0) and M4b's tasks are revised before M4b starts, recorded here and in §11.
+  **Ran at M1 (Task M1.1, 2026-11-10):** `published` 0 of 60 (`{"runs":60,"published":0,"maxPublished":6,
+  "consistent":60,"seeds":""}`, 864 s, 60 completed builds, 0 failures) → M4b as planned.
 - **D4-37 · The live challenger mirror writes one scoring-run row per role** (decided; kickoff design §8). The
   challenger's rows belong to their own `MJ: ML Scoring Runs` row whose `ModelID` is the challenger, so G5.3/G5.4's
   lineage join (`MLScoringRun.ArtifactSha256 = MLModel.ArtifactSha256`) holds for every row of either role; both runs
@@ -8955,7 +9037,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   prints nothing), so the local
   ref moved `79fbbc6ea7` → `0b37229bd7` (`git update-ref refs/heads/pr6180 0b37229bd7…`, no checkout) and D4-30,
   §5.8.1 and A-6180-COLUMNS carry the IDs `grep -n` reads there. The follow rule stands: re-fetch and re-grep at every
-  milestone start.
+  milestone start. **Re-read at M1 (2026-11-10):** `pr6180` is `8ac6ade7c5`; its migration was re-stamped to
+  `V202611101117__v6.3.x__Task_Security_Saga_Shadow_Scoring.sql`; the five IDs are unchanged and the two descriptions
+  are at its lines 95 and 117; A-6180-COLUMNS's `F=` path in §8.2 is updated.
 - **D4-39 · §8.2 checks and anchors after D-078.** Removed with the materialization: D058-1 (CodeGen's RLS-safety
   assessment), D058-3 (refresh cost) and D058-6 (the minted entity's name, replaced by A-078); the anchors
   `d058-refresh-one`, `d058-refresh-incremental`, `d058-refresh-job`, `d058-codegen-strategy`, `d058-codegen-rls-assess`,
@@ -9184,6 +9268,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `PR-3-honest-training.md:32014`). The new mutations drop the refusal record (G0.2) or the stored reason (G3.4), red on
   every non-published run (≥ 54 of 60, ≥ 372 of 400 on a passing build). Task M1.1 Step 6 measures the mix with the
   shipped `w2_run` (`test_seeds400.py:93`), and the Outline's mutations are run as well where the mix supports them.
+  **Measured at M1 (Task M1.1 Step 6, 2026-11-10):** W2's stored-outcome mix over s100–s159 is no-signal 57 /
+  keep-simple-baseline 3 (seeds 130, 138, 153) / model 0; over s100–s499, 385 / 14 / 1 (seed 493). So the Outline's
+  G0.2 mutation is run as well; G3.4's is not viable (14 keep-baseline seeds of 400 against the 28 it needs).
 - **D4-65 · F-TR-10's sign-off residual is disclosed** (decided at the kickoff review; finding I9). D4-04's
   `SignOffModel` refuses API keys, the system user and agent runs, but MJServer offers no re-authentication and the UI's
   confirmation is client-side, so a script holding an interactive user's session token can sign off as that user. A
@@ -9258,6 +9345,57 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   (`containment-probe.ts:56`, `ps-gate-w1-s7-3.checks.ts:47`, `:56`, `:62`, `ps-gate-w1-s7-5.checks.ts:27`, `:36`), and
   `LifecycleGate.Publish` checks the persisted status and the stored leakage flags after the idempotency short-circuit,
   under the locks (M3, M3.2). Alternative rejected: an owner flag per caller (D-033: nothing waits on a person).
+- **D4-71 · A virtual entity's grants and application link are metadata, not CodeGen output** (decided at M1, Task
+  M1.2's review). CodeGen emits no `EntityPermission` or `ApplicationEntity` row for a virtual entity (the design and
+  §5.8.4 said it would). `MJ: Latest Feature Values`' read-only grants live as metadata,
+  `metadata/entity-permissions/.latest-feature-values-permissions.json`, mirroring `MJ: Feature Values`' UI, Developer
+  and Integration grants; the application link is M5b's. §5.8.4 and M5b are corrected. Alternative rejected: hand-written
+  `EntityPermission` inserts in the migration (ad-hoc metadata in a migration, against the repo's metadata rule).
+- **D4-72 · PR 3's three `EntityUniqueKey` rows in the tail are hand-guarded** (decided at M1, Task M1.2's review).
+  next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql` created `EntityUniqueKey` without rows for PR 3's
+  `UQ_MLEvaluationProtocol_Lineage_Version`, `UQ_MLPredictionUnit_Lineage_Version` and
+  `UQ_MLTrainingSnapshot_ContentHash`, and CodeGen mints a random ID for each row it writes, so an unguarded insert
+  collides on `UQ_EntityUniqueKey_EntityID_Name` on any database where CodeGen already wrote them. Each of the tail's
+  three inserts is wrapped in `IF NOT EXISTS (… WHERE [ID] = … OR ([EntityID] = … AND [Name] = …))`, marked
+  `HAND EDIT`, and re-applied after any tail regeneration that still emits them. Reported to next's owners in §10
+  Coordination.
+- **D4-73 · Publish-record immutability has one exception: the entity-delete procedure** (decided at M1, Task M1.3's
+  review). `spDeleteEntityWithCoreDependencies` clears `SignOffID`, `ReplacesModelID` and `TrainingRunID` on the
+  `MJ: ML Model Publish Records` rows that survive when the row they reference is removed with its entity; no other
+  code path updates a record. §5.1's "rows are immutable", D4-08, the migration header (line 7) and the table's
+  `MS_Description` say so. The registry job's audit (R6/R7, M4/M6) must not report a cleared sign-off link as a
+  tampered record. Alternative rejected: deleting every publish record that references a doomed row (drops the
+  audit trail of surviving models).
+- **D4-74 · §5.9's base procedure and counts** (decided at M1, Task M1.3's review). The delete procedure is based on
+  next's `V202611101200` body (it adds the `EntityUniqueKey` step), not PR 3's; the fixture's counts are references
+  94 → 95 and dependents 62 → 74. The publish-record delete is narrowed: the records of doomed models and the run-level
+  records of doomed runs are deleted; the records of surviving models are kept with `TrainingRunID` nulled (D4-73).
+- **D4-75 · `IX_FeatureValue_Record_Feature_AsOf`'s key width is accepted; the generated class is
+  `MJvwLatestFeatureValuesEntity`** (accepted at M1, Task M1.2's review). The index keys 2,346 bytes (> 1,700), as PR 1's
+  `IX_FeatureValue_Entity_Record_Feature_ComputedAt` already keys 2,336 (`RecordID nvarchar(900)`), so no new failure
+  class; reported to the Feature Values owner; A-FV-VOLUME measures the view. The view entity's `ClassName` is
+  trigger-maintained from `BaseTable` (`trgEntity_SyncProgrammaticNames`, V202611091235), and `BaseTable` must equal
+  the view name for CodeGen's discovery (`vwSQLTablesAndEntities` joins `t.name = e.BaseTable`), so the class is
+  `MJvwLatestFeatureValuesEntity`; the plan's mentions of `MJLatestFeatureValueEntity` are replaced.
+- **D4-76 · Contract deviations from `contracts.ts` recorded at M1** (accepted at M1, Task M1.4's review).
+  `ScoringRefusal['model-not-published'].status` and `ModelRegistryEntry.Status` use `PersistedModelStatus` (so
+  `Unevaluated` is representable); a refused `ScoringResult`'s `ModelID` may be null; `ReverifyPublish` also returns the
+  re-derived `Gate`; `IncumbentCheck.Compare` recomputes `beats`; `Lineage` names version-row IDs and drops
+  `createdBy`; `MonitoringJobSpec` uses ID fields; `EntityRef` is new; the stored `Refusal` JSON embeds the PascalCase
+  `StatusGuardDecision`; the in-process shapes expose `View`, `Status` and `Reason` in PascalCase (M2.3, M5.6 and §5.2
+  follow). The sidecar's pydantic `PromotionRule` and `SystemActor` (`extra="forbid"`) mirror the four new
+  `PromotionRule` members as required fields and `processRunId` as optional, with no behaviour (a plan gap closed).
+- **D4-77 · G0.2's shipped check passes when every build is refused** (recorded at M1, Task M1.1). The check
+  `ps-gate-w2-c1-1.checks.ts:26-35` prints `published: 0` and `Passed` when every build is refused before training (M1.1's
+  second run). When M4b activates G0.2 it counts a refused or failed build as an error (D-064), so a run that publishes
+  nothing because nothing trained is red.
+- **D4-78 · One JSONType mirror file per entity** (decided at M1, Task M1.5's review). The mirrors are
+  `metadata/entities/JSONType-interfaces/IMLModelJsonTypes.ts` and `IMLModelPublishRecordJsonTypes.ts` (the repo's
+  `IBrandKitJsonTypes`/`IRubricJsonTypes` form), because CodeGen inlines all of an entity's definitions into one block;
+  Core's `jsontype-mirrors.compile.test.ts` fails when a mirror drifts from its Core type. `MJ: ML Evaluation
+  Protocols.Promotion` has no JSONType on next and M1.5 adds none. `MJ: ML Scoring Runs.TrackRecordChanges = 0` is set
+  through `metadata/entities/.entity-ml-scoring-runs.json` (sync push), not a migration `UPDATE`. Alternative rejected:
+  one file per type (duplicates shared types in CodeGen's per-entity block and forced a renamed type).
 
 #### Kickoff review (D-070)
 
@@ -9408,11 +9546,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->none yet<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611101201__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->599c288dee<!-- /gen:head -->
+- Head: <!-- gen:head -->14aa59a14b<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -9449,6 +9587,14 @@ descriptions verbatim, each row guarded, so the migration applies before or afte
   and this PR re-reads them at every milestone start.
 If #6180 merges after this PR, the rebase onto `next` — guards on its `ALTER`s and inserts, and the delete order — is
 #6180's.
+
+**Coordination with `next`'s owners (found at M1).** next's `V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql` created
+`__mj.EntityUniqueKey` without rows for PR 3's three unique constraints (`UQ_MLEvaluationProtocol_Lineage_Version`,
+`UQ_MLPredictionUnit_Lineage_Version`, `UQ_MLTrainingSnapshot_ContentHash`), so CodeGen writes them on any database
+built from `next`; this PR's tail carries them, each guarded by ID or `(EntityID, Name)` (D4-72). next's newest
+`spCreateEntityOrganicKey`/`spUpdateEntityOrganicKey` lack the `@Source` parameter its `EntityOrganicKey` table has; the
+tail carries their regeneration. Both are reported to the owners of `V202611101200`; when `next` fixes them, the
+regenerated tail drops the rows and this PR's hand edits go with them.
 
 **Naming (program D-039).** Persisted JSON and wire property names ported from `reference/contracts/contracts.ts`
 (`Delivery`, publish-record JSON, `ScoredRow`, `MonitoringJobSpec`, …) keep the contract's camelCase and `Id` because
@@ -9701,6 +9847,128 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **State left behind:** none.
 - **Next step (exact):** M1 starts with M1.1 on `MJ_PS_PR4_claude`.
 - **Gotchas / decisions:** the fix round 2 entry's gotcha is resolved here (its `:137-141` citation reads `:138-142`).
+
+### 2026-11-10 23:32 CST — Claude (Fable 5.1, opus exit pass) — M1
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `14aa59a14b` before this commit (pushed: no); the checkpoint commit is
+  local. `origin/next` is `fb25722ad8` (298 commits past the merge base `378daae9ab`).
+- **Database / ports:** `MJ_PS_PR4_claude` rebuilt from empty at this exit (`CREATE DATABASE` +
+  `READ_COMMITTED_SNAPSHOT ON` → migrate → `codegen --skipfiles` → sync push → `codegen --skipdb` → build →
+  `truth:provision` → `metadata-optional/integration-test` push from a scratch copy); it holds the integration-test
+  metadata, the truth-suite schema and the gate suites' test rows. MJAPI :4041 was stopped after the runs; the truth
+  sidecar was restarted from the current code (now `http://127.0.0.1:61427`, `TruthSuite/.run/sidecar.url`) and left
+  running.
+- **Done this session:** Tasks M1.1–M1.7 (implemented and reviewed earlier, uncommitted) plus this exit pass, in one
+  local checkpoint commit `feat(ps): PR 4 M1 — serving schema, delete policy and lifecycle contracts`. The exit pass:
+  D4-71…D4-78 recorded (§9.1); D4-08/D4-21/D4-36/D4-38/D4-64 updated; plan text corrected at M2.3, M5.6 (×2), §5.2,
+  M3.2 (×2), M4b.1, M5.2, M5.6 (Engine `ScoringScope`), M1.1 Step 6, M1.4 Step 5, §5.1, §5.8.4, M5b.1, §5.9, M1.3,
+  the two class-name mentions, §2 bootstrap (incl. the sidecar restart, the C1 corpus load and `STORAGE_LOCAL_ROOT`
+  for the `mj test` process, found at this exit), §4.2 (the Feature Pipelines record), §10 Coordination, M1.7's
+  Files/Step 1 and two coverage cells, M1.6 Step 5 (ticked, carried to the push); the migration's
+  `MLModelPublishRecord` description (`sp_addextendedproperty` and the tail's `Entity` row) states D4-73's exception;
+  M1.7's two deferred minors fixed (the missing-model case's stray row is deleted by ID; the status-union parity's
+  compile-time leg is `TruthSuite/src/__tests__/status-union-parity.compile.test.ts`, run by TruthSuite's unit lane —
+  Core cannot hold it, it does not depend on `@memberjunction/core-entities`); `turbo.json` test inputs for Core
+  (`metadata/entities/JSONType-interfaces/**`) and TruthSuite (`migrations/v6/**`), which `check:guards` required; the
+  self-audit's `??` → `||` in three M1 test files.
+- **Tests (measured at this exit):**
+  - clean build: `mj migrate` → `Migrations complete in 193.0s — 170 applied`; `IDX_AUTO_MJ_FKEY_FeatureValue_MLModelID`
+    present; `codegen --skipfiles` → 456 entities, **no `CodeGen_Run_*.sql` emitted**; `sync push --dir=metadata --ci` →
+    `"created":199,"updated":76,"unchanged":16131,"deleted":1,…,"errorCount":0` (11 write-backs restored);
+    `codegen --skipdb` → success; 0 `pstruth` host files before `pnpm run build` → exit 0 (321 tasks);
+    `truth:provision` → `pstruth: 47 entities, direct SQL sanctioned on 47`; integration-test push → `"created":680,…,"errorCount":0`.
+  - Core `pnpm test` → 34 files, **466 passed** (374 on `599c288dee` + 92 from M1.4/M1.5); `pnpm run build` → 0.
+  - CodeGenLib `pnpm test` → 163 files passed / 6 skipped, **2478 passed / 66 skipped**; `delete-entity-fk-coverage.test.ts` 10/10.
+  - TruthSuite `pnpm test` → **105 passed / 18 files** (103/17 + the 2-case compile test); `test:db -- serving-schema`
+    → **25 passed / 3 files** (serving-schema 21).
+  - `check-migration-entityfield-sequence.mjs` → exit 0; `check:codegen-tail` → OK (456 entities, 788 migrations);
+    `check:guards` → exit 0 (after the two `turbo.json` files; red before them on Core's and TruthSuite's repo-root reads);
+    `check:standards` → exit 0 (warnings only; ours: `KeepBaseline` value-list wording at migration :315, D-031's value).
+  - A-078: the migration holds the latest-values entity ID 75 times (≥ 1 + 16); the DB has exactly one virtual entity
+    `MJ: Latest Feature Values | vwLatestFeatureValues | 0 | 1 | 0 | 0 | 0`, 16 `EntityField` rows = 16 view columns,
+    key `ID`. (`git grep … HEAD` prints nothing before this commit: the migration is untracked until it.)
+  - A-6180-COLUMNS at `pr6180` `8ac6ade7c5` (the local ref; not re-fetched, #6180 has merged, below) → `A-6180-COLUMNS ok`
+    (Role `234fb2ce…`, MLModelID `728338f3…`, challenger `77b68e90…`, champion `13832682…`, relationship `502b4788…`,
+    `ValueListType List updates 1`); the DB holds the same IDs, `Role` `List`.
+  - A-6180-DELETE-PROC → the training-snapshot step (:309, :323, :324 of the procedure), the `Source = N'Model'`
+    `DELETE` at :311 before the `MLModelID` `UPDATE` at :312; `pr6180` nulls only (its line 352).
+  - sidecar `pnpm run test:python` → **495 passed** (183.90 s); TruthSuite `pnpm run test:python` → **24 passed**, mypy
+    `no issues found in 48 source files`.
+  - `Integration Tests — Deterministic` (MJAPI :4041 with `MJ_REST_API_ENABLED=true` and
+    `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1`, as CI boots it; `RUN_MUTATION_TESTS=1`) → **139 passed / 0 failed / 1 skipped of 140** (IT52, `RUN_SEARCH_TESTS` unset; suite run
+    `DCEB9D10-6950-4AB7-8837-708291D6D60A`, 1,246 s), skip gate FAILED on 8 unexpected skips, every one a
+    `RequiresMutation` check of `packages/TestingFramework/integration-test-suite` (no PR 4 path; `git diff origin/next...HEAD`
+    and the working tree are empty there) that skips on this host's environment: `server-cache.S30` (the check itself
+    defers: "a known, deferred cache limitation"), `role-elevation.RE6` (no non-Owner principal with the grant on this
+    database), `realtime-session-verification.RSV1/2/4/5/6` (no `realtime.identityVerification` config), `entity-server-invariants.ESI9`
+    (client transport has no `BeginTransaction`). The first run (MJAPI without `MJ_REST_API_ENABLED`) also skipped
+    IT134 CW7/CW8; booted as CI boots it they ran and passed. Next's CI PR lane runs the tier without
+    `RUN_MUTATION_TESTS`: **118 passed / 0 failed / 22 skipped of 140, skip gate PASSED** (247 allowed skips, 0 unexpected;
+    `7ADBDC57-7418-4B62-8A7D-A61CB57E0ADB`, exit 0).
+  - §4.2 keep-list suites by name (`RUN_MUTATION_TESTS=1`): Containment **10 / 0 / 0** (`647D8985-AE71-49D3-8F3A-1908FB067804`, 608 s);
+    Prediction Units **12 / 0 / 0** (`CBF99937-4DB9-4FC5-BE15-12525F6D9B4E`, 275 s); Training **35 / 0 / 0**
+    (`F4ED62FE-316D-4843-9A6D-4A61A8868D8E`, 1,130 s); Training (statistical) **6 / 0 / 0**
+    (`F2F0F019-81C0-405C-9D7B-F442066D9088`, 2,055 s) — one at a time against one MJAPI, the `mj test` process with
+    `STORAGE_LOCAL_ROOT` and the truth sidecar's URL. Feature Pipelines → 0 / 5 / 0, environment-blocked (D3-78:
+    bizapps-common not installed; run `CB5D027A-7B00-4008-B13A-F8C65A5FCD7E`). Before these, three root causes were
+    found and fixed in the environment (each now in §2): the truth sidecar at :61654 had been started on 2026-11-08,
+    before M1.4, and refused every training `422 extra_forbidden` on the four new `promotion` members (Containment run
+    `A337342F…` 3 / 7); after the rebuild the C1 corpus and the immutable-field declarations were missing
+    (`pstruth.C1OrderHeader` 0 rows; Prediction Units run `BEAEB0B7…` 2 / 10, `unresolved-reference` and
+    `decision-date-before-change-history`) → `scripts/load-c1-corpus.ts` (`C1OrderHeader 15420`, `immutable fields
+    declared: 272`) and an MJAPI restart; the `mj test` process lacked `STORAGE_LOCAL_ROOT` (in-process gates: `storage
+    provider "Local File System" … is not configured`). Runs stopped mid-way and left `Running`: Prediction Units
+    `2BC961AD…` (02:59Z), Training `159610E5…` (03:13Z), Prediction Units `643A3345…` (03:26Z).
+- **M1.7 harness (reviewer, D-071; `task-M1.7-review.md`):** harness 25/25 twice on the dev DB (21 serving-schema);
+  19/19 coverage cells resolve (17 by exact name, 2 under the real test names, now the plan's cells); 0 claims broken.
+  DB mutations on a scratch copy, each failing exactly its case (`Tests 1 failed | 24 passed (25)`) and green again on
+  restore: `UX_MLModelPublishRecord_OnePublishPerRun` → `refuses a second applied publish of one training run`;
+  `CK_MLModelPublishRecord_Approver` → `refuses a user approver without a user`; `_SignOff` → `refuses a sign-off whose
+  approver is the automated gate`; `_Refusal` → `refuses a refusal record without a Refusal`; `_Reason` → `refuses a
+  sign-off that overrides flags with an empty reason`; the other five constraints dropped together → exactly their 5
+  cases (`5 failed | 20 passed`). 18 Core flips (DecideStatusWrite's six rules + S6b, the Register hash comparison,
+  `IncumbentCheck.Compare`'s `>`, ReverifyPublish's protocol-pin (+ version half), keep-baseline, incumbent-current and
+  margin steps, the four parser defaults) each failed 1–6 named cases of 466; weakest S6a/Unevaluated → Published (1).
+  This exit re-ran the missing-model case under a dropped `FK_MLModelPublishRecord_Model`: `1 failed | 24 passed`,
+  0 publish records left (M1.7's minor 1 fixed); FK re-added (`NO_ACTION`, trusted), lane 25/25.
+- **Task counts carried from the task reports:** M1.1 G0.2 feasibility `{"runs":60,"published":0,"maxPublished":6,
+  "consistent":60,"seeds":""}` (864 s, 60 completed builds, 0 failures) → ≤ 6, M4b as planned (D4-21/D4-36); W2 mix
+  s100–s159 no-signal 57 / keep-simple-baseline 3 (seeds 130, 138, 153) / model 0, s100–s499 385 / 14 / 1 (seed 493)
+  → the Outline's G0.2 mutation runs too, G3.4's is not viable (D4-64). M1.2 DB lane 12/12 (8 new) → 14/14 with
+  M1.3; A-078 75. M1.3 coverage 10/10 (red 1/9 with the `TrainingRunID` update removed); CodeGenLib 2478; fixture
+  references 94 → 95, dependents 62 → 74 (D4-74). M1.4 Core 374 → 466 (460 at M1.4, 463 after its fix round, 466 with
+  M1.5's compile test); sidecar 488 → 495; Engine 84 files / 1246. M1.5 7 JSONType rows; greps 0 → 8 / 0 → 6;
+  MJCoreEntities 1361. M1.6 CI job `ps-sidecar-pytest` (needs/if as `integration-sqlserver`, `actions/setup-python@6d4fd22b… # v7.1.0`),
+  red with a scratch failing test (`1 failed, 495 passed`) and green (`495 passed`); its first CI run is checked after
+  the push (M1.6 Step 5, carried).
+- **#6180:** **MERGED into next as `fa33e94dbe` on 2026-11-10T22:19Z; `origin/next` is `fb25722ad8`** (298 commits past
+  the merge base `378daae9ab`; new v6 migrations `V202611101900`, `V202611101901` (#6180's, with regenerated IDs) and
+  `V202611101911`). This commit's migration still carries the guarded #6180 blocks with the `0b37229bd7`/`8ac6ade7c5`
+  IDs and is **not** retimed.
+- **Runtime verification:** sqlcmd on `MJ_PS_PR4_claude`: `is_read_committed_snapshot_on` 1; 169 versioned rows in
+  `flyway_schema_history`, newest `202611101201`; the FK index; A-078's three queries; A-6180-COLUMNS' three queries;
+  `FK_MLModelPublishRecord_Model` before and after the minor-1 mutation; `MLModelPublishRecord` row count 0 after the
+  mutated lane run. MJAPI started without the WorkQueue error (`[WorkQueue] Host … started`).
+- **State left behind:** the seven owner files (`dev-best-practices.md`, six `plans/predictive-studio/PR-2/PR-3-*` plans)
+  untracked as before, never staged; `MJ_PS_PR4_claude` as above; MJAPI stopped; `/var/opt/mssql/data/pr4review.bak`
+  (M1.7's reviewer) still in `sql-claude`.
+- **Next step (exact):** the merge-of-next pass (D-069 ruling): `git fetch origin next` → `git merge origin/next` →
+  retime this migration after `V202611101911` with `node $PLANS/tools/retime-migration.mjs` (D-075) → remove the #6180
+  blocks from section 4 (the guarded `Role`/`MLModelID` columns, FK, CHECK, the five metadata rows, the `ValueListType`
+  update, the two descriptions, the FK index block) and keep PR 4's own DDL that depends on them → update the
+  migration path in `serving-schema.adversarial.db.test.ts:910` (`SERVING_MIGRATION` names the file) and the run-twice
+  case (Entity insert only) → rebuild `MJ_PS_PR4_claude` from clean, regenerate the tail from that bootstrap (re-apply
+  D4-72's guards only if it still emits the three `EntityUniqueKey` rows) → re-run the exit tests → §11 entry
+  `merged next @fb25722ad8 (#6180 merged fa33e94dbe), migration retimed V202611101201 → <new>` with the plan edits the
+  ruling lists (§5.8.1, §8.2 A-6180-*, D4-30/D4-38 closed, §10 Coordination, M5/M6 absorption tasks active, §2's
+  `pr6180` fetch dropped) → push through the hook → `pr-body.mjs --edit-pr` → `gh pr checks` for M1.6 Step 5.
+- **Gotchas / decisions:** D4-71 (a virtual entity gets no CodeGen permission or application rows: metadata grants,
+  M5b's app link), D4-72 (PR 3's three `EntityUniqueKey` rows hand-guarded in the tail), D4-73 (publish-record
+  immutability's one exception: the delete procedure), D4-74 (§5.9's base is next's `V202611101200`; 94 → 95 / 62 → 74;
+  narrowed publish delete), D4-75 (index key width accepted; `MJvwLatestFeatureValuesEntity`), D4-76 (contract
+  deviations), D4-77 (G0.2's shipped check passes when every build is refused), D4-78 (one JSONType mirror file per
+  entity). The deterministic tier's skip gate fails with `RUN_MUTATION_TESTS=1` on 8 mutation-only environmental skips (Tests above). `SERVING_MIGRATION` hardcodes
+  the migration's file name — the retime must change it.
 
 ## 12. Refresh log (append-only)
 

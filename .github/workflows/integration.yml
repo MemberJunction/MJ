@@ -180,6 +180,43 @@ jobs:
       - name: Resolve against the committed lockfile
         run: pnpm install --frozen-lockfile --lockfile-only
 
+  # Predictive Studio sidecar's pytest suite (D-077's Python deferral closed, D4-69). The sidecar's
+  # setup:python / test:python scripts import only node: modules, so no pnpm install is needed: pnpm
+  # only runs the package scripts. setup:python builds .venv on CPython 3.11 from the pinned
+  # src/python/requirements.txt; test:python exits 1 on a failing test and on a missing venv (it
+  # never skips). Same trigger rule as integration-sqlserver: the weekly live-model cron skips it.
+  ps-sidecar-pytest:
+    name: Predictive Studio sidecar (pytest)
+    needs: [preflight]
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Create the sidecar venv
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run setup:python   # probes python3.11 first (scripts/python-probe.mjs:12)
+
+      - name: Run the sidecar pytest suite
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run test:python
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
     needs: [preflight]

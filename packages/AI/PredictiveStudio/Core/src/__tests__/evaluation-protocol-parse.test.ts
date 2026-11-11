@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { EvaluationProtocol, ALLOWED_OUTCOMES, type EvaluationProtocolColumns } from '../evaluation-protocol';
+import { EvaluationProtocol, ALLOWED_OUTCOMES, type EvaluationProtocolColumns, type PromotionRule } from '../evaluation-protocol';
+import type { JsonObject } from '../json-value';
 
 function protocolRow(overrides: Partial<EvaluationProtocolColumns> = {}): EvaluationProtocolColumns {
   return {
@@ -96,5 +97,47 @@ describe('ParseEvaluationProtocolRow', () => {
     const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ GuardFieldsEditableBy: 'anyone' }));
     expect(r.Ok).toBe(false);
     if (r.Ok === false) expect(r.Errors.filter((e) => e.startsWith('GuardFieldsEditableBy'))).toEqual(['GuardFieldsEditableBy must be non-agent or human-only']);
+  });
+});
+
+/** The parsed `promotion` of a protocol row whose `Promotion` JSON is `promotion`; throws when the row does not parse. */
+function ParsedPromotion(promotion: JsonObject): PromotionRule {
+  const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Promotion: JSON.stringify(promotion) }));
+  if (r.Ok === false) throw new Error(r.Errors.join('; '));
+  return r.Value.promotion;
+}
+
+/** The parse errors of a protocol row whose `Promotion` JSON is `promotion`. */
+function promotionErrors(promotion: JsonObject): readonly string[] {
+  const r = EvaluationProtocol.ParseEvaluationProtocolRow(protocolRow({ Promotion: JSON.stringify(promotion) }));
+  return r.Ok ? [] : r.Errors;
+}
+
+const PROMOTION = { comparators: [], incumbent: 'none', margin: 0.01, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' };
+
+describe('ParseEvaluationProtocolRow — the four PromotionRule additions (D-029, D-031, D4-16, D4-17, D4-19)', () => {
+  it('parses a stored Promotion without the four new fields as their defaults', () => {
+    const p = ParsedPromotion({ comparators: [], incumbent: 'none', margin: 0.01, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' });
+    expect([p.requiresHumanSignOff, p.signOffExpiryDays, p.autoPublishKeepBaseline, p.rollbackOn])
+      .toEqual([false, 30, false, { kind: 'previous-beats-current', margin: 0.01, consecutivePeriods: 2 }]);
+  });
+  it('keeps every field a stored Promotion sets', () => {
+    const p = ParsedPromotion({ ...PROMOTION, requiresHumanSignOff: true, signOffExpiryDays: 7, autoPublishKeepBaseline: true, rollbackOn: { kind: 'previous-beats-current', margin: 0.02, consecutivePeriods: 3 } });
+    expect([p.requiresHumanSignOff, p.signOffExpiryDays, p.autoPublishKeepBaseline, p.rollbackOn])
+      .toEqual([true, 7, true, { kind: 'previous-beats-current', margin: 0.02, consecutivePeriods: 3 }]);
+  });
+  it('keeps an explicit null rollbackOn (automated rollback off for that protocol version)', () => {
+    expect(ParsedPromotion({ ...PROMOTION, rollbackOn: null }).rollbackOn).toBeNull();
+  });
+  it('refuses a present but invalid value of each new field', () => {
+    expect(promotionErrors({ ...PROMOTION, requiresHumanSignOff: 'yes' })).toContain('Promotion.requiresHumanSignOff must be a boolean');
+    expect(promotionErrors({ ...PROMOTION, signOffExpiryDays: 0 })).toContain('Promotion.signOffExpiryDays must be an integer >= 1');
+    expect(promotionErrors({ ...PROMOTION, autoPublishKeepBaseline: 1 })).toContain('Promotion.autoPublishKeepBaseline must be a boolean');
+    expect(promotionErrors({ ...PROMOTION, rollbackOn: { kind: 'previous-beats-current', margin: -1, consecutivePeriods: 2 } }))
+      .toContain('Promotion.rollbackOn must be null or {kind: previous-beats-current, margin>=0, consecutivePeriods>=1}');
+  });
+  it('the default protocol draft carries the four defaults at its margin', () => {
+    expect(EvaluationProtocol.DefaultPromotionAdditions(EvaluationProtocol.ToNonNegative(0)))
+      .toEqual({ requiresHumanSignOff: false, signOffExpiryDays: 30, autoPublishKeepBaseline: false, rollbackOn: { kind: 'previous-beats-current', margin: 0, consecutivePeriods: 2 } });
   });
 });

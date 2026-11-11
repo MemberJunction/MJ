@@ -110,7 +110,23 @@ export interface PromotionRule {
   readonly lowerBoundLevel: 0.95;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   readonly pairedOn: 'same-holdout-rows';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   readonly decisionTable: 'Q13+Q14+Q15';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  /**
+   * Optional (D-029): a publish needs an approving human sign-off. Absent in the stored JSON reads as `false`; nothing
+   * in the automated path sets it or depends on it.
+   */
+  readonly requiresHumanSignOff: boolean;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  /** Days a sign-off wait stays open before the registry job closes it (D4-19); read only when `requiresHumanSignOff`. Absent reads as 30. */
+  readonly signOffExpiryDays: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  /** A keep-simple-baseline outcome publishes automatically (D-031). Absent reads as `false`. */
+  readonly autoPublishKeepBaseline: boolean;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+  /**
+   * When monitoring rolls back to the predecessor (D4-17). Absent reads as `previous-beats-current` at this rule's margin
+   * over 2 consecutive periods; an explicit `null` turns automated rollback off for this protocol version.
+   */
+  readonly rollbackOn: RollbackTrigger | null;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
+/** The four {@link PromotionRule} members a stored `Promotion` may omit, each read as its default when absent. */
+export type PromotionRuleAdditions = Pick<PromotionRule, 'requiresHumanSignOff' | 'signOffExpiryDays' | 'autoPublishKeepBaseline' | 'rollbackOn'>;
 /** What the gate may ship: the model, a simple baseline, or nothing. */
 export type GateOutcome = 'model' | 'keep-simple-baseline' | 'no-signal';
 /** The gate outcomes every protocol allows; no-signal can never be omitted. */
@@ -136,6 +152,14 @@ export interface ResidualDiagnosticsSpec { readonly acfLags: number; readonly lj
 export type RetrainTrigger =
   | { readonly kind: 'outcome-degradation'; readonly margin: NonNegative; readonly consecutivePeriods: number }  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   | { readonly kind: 'calibration-drift'; readonly slopeOutside: readonly [number, number]; readonly consecutivePeriods: number };  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
+/** When monitoring rolls back to the predecessor (D4-17): the predecessor beats the current model for N periods. */
+export interface RollbackTrigger {
+  readonly kind: 'previous-beats-current';  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol Promotion JSON key
+  /** Fires when the lower bound of the paired (current − predecessor) loss interval is strictly above `margin`. */
+  readonly margin: NonNegative;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol Promotion JSON key
+  /** Evaluated periods in a row the predecessor must win before the rollback. */
+  readonly consecutivePeriods: number;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol Promotion JSON key
+}
 
 /** The typed Evaluation Protocol version a run is graded under (no pipeline or unit reference: the pipeline binds both). */
 export interface EvaluationProtocolSpec {
@@ -191,6 +215,34 @@ export interface EvaluationProtocolColumns {
  * behaviour rules live in EvaluationProtocolRules (evaluation-protocol-rules.ts).
  */
 export class EvaluationProtocol {
+  /**
+   * The defaults of the four optional {@link PromotionRule} members (D-029, D-031, D4-16, D4-17, D4-19): no sign-off
+   * required, a 30-day sign-off wait, no automatic keep-simple-baseline publish, and rollback when the predecessor beats
+   * the current model by `margin` in 2 consecutive periods. The parser fills each absent member from here, and the
+   * default protocol draft writes them out.
+   */
+  public static DefaultPromotionAdditions(margin: NonNegative): PromotionRuleAdditions {
+    return {
+      requiresHumanSignOff: false,
+      signOffExpiryDays: 30,
+      autoPublishKeepBaseline: false,
+      rollbackOn: { kind: 'previous-beats-current', margin, consecutivePeriods: 2 },
+    };
+  }
+
+  /**
+   * `rule` with its margin changed. A `rollbackOn` equal to the default the old margin implies (the parser's fill for an
+   * absent member, §5.1) follows the new margin, so the stored rule does not pin a stale default; an explicitly authored
+   * trigger, or `null`, is kept as is.
+   */
+  public static WithPromotionMargin(rule: PromotionRule, margin: NonNegative): PromotionRule {
+    const oldDefault = EvaluationProtocol.DefaultPromotionAdditions(rule.margin).rollbackOn;
+    const followsMargin = rule.rollbackOn !== null && oldDefault !== null && rule.rollbackOn.kind === oldDefault.kind &&
+      rule.rollbackOn.margin === oldDefault.margin && rule.rollbackOn.consecutivePeriods === oldDefault.consecutivePeriods;
+    const rollbackOn = followsMargin ? EvaluationProtocol.DefaultPromotionAdditions(margin).rollbackOn : rule.rollbackOn;
+    return { ...rule, margin, rollbackOn };
+  }
+
   /** The only producer of a {@link NonNegative} (a margin or a budget). */
   public static ToNonNegative(x: number): NonNegative {
     if (!Number.isFinite(x) || x < 0) {
@@ -670,7 +722,57 @@ export class EvaluationProtocol {
       }
       return null;
     }
-    return { comparators, incumbent, margin: EvaluationProtocol.ToNonNegative(margin), lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' };
+    const nonNegativeMargin = EvaluationProtocol.ToNonNegative(margin);
+    const additions = EvaluationProtocol.parsePromotionAdditions(v, nonNegativeMargin, errors);
+    if (additions === null) return null;
+    return { comparators, incumbent, margin: nonNegativeMargin, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15', ...additions };
+  }
+
+  /** The four optional Promotion members: each absent one is its default, each present one must be valid. */
+  private static parsePromotionAdditions(v: JsonObject, margin: NonNegative, errors: string[]): PromotionRuleAdditions | null {
+    const defaults = EvaluationProtocol.DefaultPromotionAdditions(margin);
+    const before = errors.length;
+    const requiresHumanSignOff = EvaluationProtocol.optionalBoolean(v, 'requiresHumanSignOff', defaults.requiresHumanSignOff, errors);
+    const autoPublishKeepBaseline = EvaluationProtocol.optionalBoolean(v, 'autoPublishKeepBaseline', defaults.autoPublishKeepBaseline, errors);
+    let signOffExpiryDays = defaults.signOffExpiryDays;
+    if (EvaluationProtocol.hasKey(v, 'signOffExpiryDays')) {
+      const days = EvaluationProtocol.intAtLeast(v, 'signOffExpiryDays', 1);
+      if (days === null) errors.push('Promotion.signOffExpiryDays must be an integer >= 1');
+      else signOffExpiryDays = days;
+    }
+    const rollbackOn = EvaluationProtocol.hasKey(v, 'rollbackOn') ? EvaluationProtocol.parseRollbackOn(v['rollbackOn'], errors) : defaults.rollbackOn;
+    if (errors.length > before || rollbackOn === undefined) return null;
+    return { requiresHumanSignOff, signOffExpiryDays, autoPublishKeepBaseline, rollbackOn };
+  }
+
+  /** A present `rollbackOn`: `null` (rollback off) or a `previous-beats-current` trigger; `undefined` when invalid (reported). */
+  private static parseRollbackOn(raw: JsonValue | undefined, errors: string[]): RollbackTrigger | null | undefined {
+    if (raw === null) return null;
+    if (JsonParse.IsJsonObject(raw) && JsonParse.JsonString(raw, 'kind') === 'previous-beats-current') {
+      const margin = JsonParse.JsonNumber(raw, 'margin');
+      const consecutivePeriods = EvaluationProtocol.intAtLeast(raw, 'consecutivePeriods', 1);
+      if (margin !== null && margin >= 0 && consecutivePeriods !== null) {
+        return { kind: 'previous-beats-current', margin: EvaluationProtocol.ToNonNegative(margin), consecutivePeriods };
+      }
+    }
+    errors.push('Promotion.rollbackOn must be null or {kind: previous-beats-current, margin>=0, consecutivePeriods>=1}');
+    return undefined;
+  }
+
+  /** A boolean member that may be absent (then `fallback`); a present non-boolean is reported. */
+  private static optionalBoolean(v: JsonObject, key: string, fallback: boolean, errors: string[]): boolean {
+    if (!EvaluationProtocol.hasKey(v, key)) return fallback;
+    const value = JsonParse.JsonBoolean(v, key);
+    if (value === null) {
+      errors.push(`Promotion.${key} must be a boolean`);
+      return fallback;
+    }
+    return value;
+  }
+
+  /** True when the stored object names `key` (an explicit `null` counts as present). */
+  private static hasKey(v: JsonObject, key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(v, key);
   }
 
   private static parseLeakageAudit(v: JsonObject | null, errors: string[]): LeakageAuditSpec | null {

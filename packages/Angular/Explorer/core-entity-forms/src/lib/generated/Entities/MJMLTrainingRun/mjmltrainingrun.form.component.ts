@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: ML Training Runs') // Tell MemberJunction about this class
 @Component({
@@ -20,7 +21,10 @@ export class MJMLTrainingRunFormComponent extends BaseFormComponent {
             { sectionKey: 'modelConfiguration', sectionName: 'Model Configuration', isExpanded: true },
             { sectionKey: 'executionTimeline', sectionName: 'Execution Timeline', isExpanded: true },
             { sectionKey: 'resourceUsage', sectionName: 'Resource Usage', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
+            { sectionKey: 'mJMLMonitoringResults', sectionName: 'ML Monitoring Results', isExpanded: false },
+            { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false }
         ]);
     }
 }

@@ -106,7 +106,7 @@ export class ProtocolEdits {
       innerValidation: ProtocolEdits.editedInnerValidation(base.innerValidation, form),
       primaryScore: primary,
       seed: form.Seed,
-      promotion: { ...base.promotion, margin: EvaluationProtocol.ToNonNegative(form.Margin) },
+      promotion: EvaluationProtocol.WithPromotionMargin(base.promotion, EvaluationProtocol.ToNonNegative(form.Margin)),
       budgets: { ...base.budgets, maxComputeSeconds: form.MaxComputeSeconds, maxCandidates: form.MaxCandidates },
       guardFieldsEditableBy: form.GuardFieldsEditableBy,
     };

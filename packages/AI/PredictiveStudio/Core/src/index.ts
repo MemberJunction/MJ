@@ -49,3 +49,7 @@ export * from './protocol-rows';
 export * from './protocol-edit';
 export * from './unit-edit';
 export * from './legacy-pipeline';
+export * from './registry-contracts';
+export * from './governance-contracts';
+export * from './scoring-contracts';
+export * from './monitoring-contracts';
