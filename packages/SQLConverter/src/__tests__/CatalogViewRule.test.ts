@@ -127,6 +127,14 @@ describe('CatalogViewRule', () => {
       expect(result).not.toContain('sys.');
     });
 
+    it('reports no DefaultValue for a generated column in vwSQLColumnsAndEntityFields (#6511)', () => {
+      const sql = `CREATE VIEW [__mj].[vwSQLColumnsAndEntityFields] AS WITH FilteredColumns AS (SELECT * FROM sys.all_columns)`;
+      const result = convert(sql);
+      const defaultLine = result.slice(result.indexOf("CASE WHEN COALESCE(bt_a.attgenerated, '')"), result.indexOf('AS "DefaultValue"'));
+      expect(defaultLine).toContain("CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL");
+      expect(defaultLine).toContain('ELSE pg_get_expr(ad.adbin, ad.adrelid) END');
+    });
+
     it('should recognize and convert vwEntityFieldsWithCheckConstraints', () => {
       const sql = `CREATE VIEW [__mj].[vwEntityFieldsWithCheckConstraints] AS SELECT e.ID as EntityID FROM sys.check_constraints cc`;
       const result = convert(sql);
