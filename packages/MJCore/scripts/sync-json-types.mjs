@@ -23,15 +23,38 @@ const allowedFiles = new Set([
 
 const allowedStems = new Set([...allowedFiles].map(f => f.replace(/\.ts$/, '')));
 
-if (fs.existsSync(srcDir)) {
+function readTextIfExists(filePath) {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+      return null;
+    }
+    throw err;
+  }
+}
+
+function readDirIfExists(dirPath) {
+  try {
+    return fs.readdirSync(dirPath);
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+      return null;
+    }
+    throw err;
+  }
+}
+
+const srcEntries = readDirIfExists(srcDir);
+if (srcEntries !== null) {
   fs.mkdirSync(destDir, { recursive: true });
 
   let invalidateBuildInfo = false;
 
   // Clean up any files in destDir that are not in allowedFiles
-  if (fs.existsSync(destDir)) {
-    const existing = fs.readdirSync(destDir);
-    for (const f of existing) {
+  const destEntries = readDirIfExists(destDir);
+  if (destEntries !== null) {
+    for (const f of destEntries) {
       if (!allowedFiles.has(f)) {
         fs.rmSync(path.join(destDir, f), { force: true });
         invalidateBuildInfo = true;
@@ -40,48 +63,43 @@ if (fs.existsSync(srcDir)) {
   }
 
   // Clean up stale interface artifacts in compiled dist directory without blowing away valid emit
-  if (fs.existsSync(distDir)) {
-    const existingDist = fs.readdirSync(distDir);
-    for (const f of existingDist) {
+  const survivingDistFiles = new Set();
+  const distEntries = readDirIfExists(distDir);
+  if (distEntries !== null) {
+    for (const f of distEntries) {
       const stem = f.replace(/\.(d\.ts\.map|d\.ts|js\.map|js)$/, '');
       if (!allowedStems.has(stem)) {
         fs.rmSync(path.join(distDir, f), { force: true });
         invalidateBuildInfo = true;
+      } else {
+        survivingDistFiles.add(f);
       }
     }
-  }
-
-  // Self-healing check: if tsbuildinfo exists, make sure every allowed file that exists in src has its .js and .d.ts emitted in dist.
-  // If anything is missing in dist, invalidate tsbuildinfo so tsc --incremental re-emits them.
-  if (fs.existsSync(tsBuildInfoPath)) {
-    for (const file of allowedFiles) {
-      if (fs.existsSync(path.join(srcDir, file))) {
-        const stem = file.replace(/\.ts$/, '');
-        if (!fs.existsSync(path.join(distDir, `${stem}.js`)) || !fs.existsSync(path.join(distDir, `${stem}.d.ts`))) {
-          invalidateBuildInfo = true;
-          break;
-        }
-      }
-    }
-  }
-
-  if (invalidateBuildInfo && fs.existsSync(tsBuildInfoPath)) {
-    fs.rmSync(tsBuildInfoPath, { force: true });
   }
 
   let count = 0;
   for (const file of allowedFiles) {
     const srcFile = path.join(srcDir, file);
-    if (fs.existsSync(srcFile)) {
+    const content = readTextIfExists(srcFile);
+    if (content !== null) {
+      const stem = file.replace(/\.ts$/, '');
       const destFile = path.join(destDir, file);
-      const content = fs.readFileSync(srcFile, 'utf8');
       const header = '/**\n * AUTO-COPIED FROM metadata/entities/JSONType-interfaces/' + file + '\n * DO NOT EDIT DIRECTLY. Run `pnpm run build` in MJCore to refresh.\n */\n\n';
       const nextContent = header + content;
-      if (!fs.existsSync(destFile) || fs.readFileSync(destFile, 'utf8') !== nextContent) {
+      const existingDest = readTextIfExists(destFile);
+      if (existingDest !== nextContent) {
         fs.writeFileSync(destFile, nextContent);
+      }
+      if (!survivingDistFiles.has(`${stem}.js`) || !survivingDistFiles.has(`${stem}.d.ts`)) {
+        invalidateBuildInfo = true;
       }
       count++;
     }
   }
+
+  if (invalidateBuildInfo) {
+    fs.rmSync(tsBuildInfoPath, { force: true });
+  }
+
   console.log(`[MJCore:prebuild] Synchronized ${count} JSONType interface files for EntityInfo/EntityFieldInfo/EntityRelationshipInfo`);
 }
