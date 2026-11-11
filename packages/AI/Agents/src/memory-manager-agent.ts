@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON, IsPlainObject } from '@memberjunction/global';
-import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, LogError, LogStatus, LogStatusEx, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
+import { BuildHighValueAgentRunsFilter, MemoryFilterQuoting } from './memory-high-value-runs-filter';
 import {
     MJConversationDetailEntity,
     MJAIAgentNoteEntity,
@@ -827,35 +828,19 @@ export class MemoryManagerAgent extends BaseAgent {
     private async loadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<Array<{ ID: string }>> {
         const rv = new RunView();
 
-        // Use subquery to find agent runs with high-usage artifacts
-        const sinceFilter = since ? `AND au.__mj_CreatedAt >= '${since.toISOString()}'` : '';
-
-        const filter = `
-            ID IN (
-                SELECT DISTINCT ar.ID
-                FROM __mj.vwAIAgentRuns ar
-                INNER JOIN __mj.vwConversations c ON ar.ConversationID = c.ID
-                INNER JOIN __mj.vwConversationDetails cd ON cd.ConversationID = c.ID
-                INNER JOIN __mj.vwConversationDetailArtifacts cda ON cda.ConversationDetailID = cd.ID
-                INNER JOIN __mj.vwArtifactVersions av ON av.ID = cda.ArtifactVersionID
-                WHERE EXISTS (
-                    SELECT 1
-                    FROM __mj.vwArtifactUses au
-                    WHERE au.ArtifactVersionID = av.ID
-                    ${sinceFilter}
-                    GROUP BY au.ArtifactVersionID
-                    HAVING (
-                        SUM(CASE WHEN au.UsageType = 'Shared' THEN 1 ELSE 0 END) >= 2
-                        OR COUNT(*) >= 5
-                    )
-                )
-            )
-        `.trim().replace(/\s+/g, ' ');
+        // Quote for the provider's dialect so the filter does not depend on the PostgreSQL
+        // auto-quote shim (#4435). A provider without a dialect keeps the bare text.
+        const provider = this.ProviderToUse;
+        const dialect: MemoryFilterQuoting = provider instanceof DatabaseProviderBase
+            ? provider.Dialect
+            : { QuoteIdentifier: (name: string) => name, QuoteSchema: (schema: string, object: string) => `${schema}.${object}` };
+        const coreSchema = provider instanceof DatabaseProviderBase ? provider.MJCoreSchemaName : '__mj';
+        const filter = BuildHighValueAgentRunsFilter(dialect, coreSchema, since);
 
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: filter,
-            OrderBy: '__mj_CreatedAt DESC',
+            OrderBy: `${dialect.QuoteIdentifier('__mj_CreatedAt')} DESC`,
             MaxRows: 50, // Limit to most recent 50 high-value runs
             Fields: ['ID'],
             ResultType: 'simple'

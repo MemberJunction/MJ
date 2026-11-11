@@ -65,6 +65,18 @@ export {
     PostgreSQLContextualStructuralKeywords,
 } from './postgresqlAutoQuote.js';
 export {
+    PostgreSQLAutoQuoteAuditor,
+    AutoQuotePostgreSQLIdentifiersAudited,
+    DefaultPostgreSQLAutoQuoteAuditEnabled,
+    ChangedIdentifiers,
+    FirstCallerFrame,
+} from './postgresqlAutoQuoteAudit.js';
+export type {
+    PostgreSQLAutoQuoteSite,
+    PostgreSQLAutoQuoteAuditLogger,
+    PostgreSQLAutoQuoteAuditSettings,
+} from './postgresqlAutoQuoteAudit.js';
+export {
     IsBooleanSQLType,
     IsStringSQLType,
     IsFixedWidthStringSQLType,
