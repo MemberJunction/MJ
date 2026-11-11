@@ -1021,6 +1021,21 @@ export abstract class SQLDialect extends QueryDialect implements SQLParserDialec
     }
 
     /**
+     * A full CREATE INDEX that runs only if the index (or an index over the same key-column tuple)
+     * is absent, as a SINGLE statement safe for `;`-splitting batch chunkers.
+     */
+    CreateIndexIfAbsent(options: IndexOptions): string {
+        return this.DDL.CreateIndexIfAbsent(options);
+    }
+
+    /**
+     * A DROP INDEX statement that runs only if the index exists, as a SINGLE statement.
+     */
+    DropIndexIfExists(schema: string, tableName: string, indexName: string): string {
+        return this.DDL.DropIndexIfExists(schema, tableName, indexName);
+    }
+
+    /**
      * CommentOnObject that is safe to re-run (no error if the description already exists).
      * Default returns the standard statement terminated with ';' — adequate where the
      * comment statement is inherently idempotent (PostgreSQL COMMENT ON replaces in place).

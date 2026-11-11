@@ -8,7 +8,10 @@
       "CategoryID": "@lookup:MJ: Action Categories.Name=System",
       "CodeApprovalStatus": "Approved",
       "Status": "Active",
-      "IconClass": "fa-solid fa-bolt"
+      "IconClass": "fa-solid fa-bolt",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

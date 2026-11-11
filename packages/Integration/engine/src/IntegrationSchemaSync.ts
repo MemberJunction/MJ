@@ -611,7 +611,7 @@ export function decideNullabilityOverlay(
  * Maps generic source types (from connectors) to MJ EntityField-compatible type strings.
  */
 function MapSourceType(sourceType: string): string {
-  const t = (sourceType ?? '').toLowerCase();
+  const t = (sourceType ?? '').trim().toLowerCase();
   // LARGE-text modalities → NVARCHAR(MAX). A serialized json/array/object value (and free-form
   // text) routinely exceeds the unsized-string floor (255); mapping these to a bounded `nvarchar`
   // makes the schema builder size them at 255, and the skip-on-overflow policy then DROPS every
@@ -619,18 +619,20 @@ function MapSourceType(sourceType: string): string {
   // class of bug — a nested array's JSON is ~287 chars). 'nvarchar(MAX)' is a valid IOF.Type and is
   // self-describing (no separate Length needed). Bounded scalar `string` keeps the 255 floor.
   if (t === 'text' || t === 'richtext' || t === 'json' || t === 'object' || t === 'array') return 'nvarchar(MAX)';
-  if (t === 'nvarchar(max)' || t === 'ntext') return 'nvarchar(MAX)'; // already-MAX → preserve on re-discovery
-  if (t === 'string') return 'nvarchar';
-  // #3527: a declared numeric type is kept, so consumers stop casting strings and a value that fails to
-  // convert is a per-record error rather than a silent string. 'number' gives no width, so it stays text.
+  if (t === 'nvarchar(max)' || t === 'varchar(max)' || t === 'ntext') return 'nvarchar(MAX)'; // already-MAX → preserve on re-discovery
+  if (t === 'string' || t === 'nvarchar' || t === 'varchar' || t === 'nchar' || t === 'char') return 'nvarchar';
   if (t === 'integer' || t === 'int') return 'int';
   if (t === 'bigint' || t === 'long') return 'bigint';
-  if (t === 'decimal' || t === 'currency' || t === 'numeric') return 'decimal';
-  if (t === 'float' || t === 'double') return 'float';
-  if (t === 'number') return 'nvarchar';
-  if (t === 'boolean' || t === 'bool') return 'bit';
-  if (t === 'datetime' || t === 'date' || t === 'timestamp') return 'datetimeoffset';
-  if (t === 'enum' || t === 'enumeration' || t === 'picklist') return 'nvarchar';
+  if (t === 'smallint') return 'smallint';
+  if (t === 'tinyint') return 'tinyint';
+  if (t === 'decimal' || t === 'currency' || t === 'money' || t === 'number' || t === 'numeric' || t === 'percent') return 'decimal';
+  if (t === 'float' || t === 'double' || t === 'real') return 'float';
+  if (t === 'boolean' || t === 'bool' || t === 'bit') return 'bit';
+  if (t === 'date') return 'date';
+  if (t === 'datetime' || t === 'datetimeoffset' || t === 'datetime2' || t === 'timestamp' || t === 'timestamptz') return 'datetimeoffset';
+  if (t === 'time') return 'time';
+  if (t === 'uuid' || t === 'uniqueidentifier') return 'uniqueidentifier';
+  if (t === 'enum' || t === 'enumeration' || t === 'picklist' || t === 'multipicklist') return 'nvarchar';
   return 'nvarchar';
 }
 
@@ -1265,6 +1267,14 @@ export class IntegrationSchemaSync {
         existing.Length = lengthOverlay.Length;
         dirty = true;
       }
+      if (srcField.Precision != null && existing.Precision !== srcField.Precision) {
+        existing.Precision = srcField.Precision;
+        dirty = true;
+      }
+      if (srcField.Scale != null && existing.Scale !== srcField.Scale) {
+        existing.Scale = srcField.Scale;
+        dirty = true;
+      }
       if (existing.AllowsNull !== describedAllowsNull) {
         existing.AllowsNull = describedAllowsNull;
         dirty = true;
@@ -1374,6 +1384,8 @@ export class IntegrationSchemaSync {
       // (nvarchar(N)). Large-text types carry their MAX in the Type ('nvarchar(MAX)') via
       // MapSourceType, so no length is set for them here.
       if (srcField.MaxLength != null) field.Length = srcField.MaxLength;
+      if (srcField.Precision != null) field.Precision = srcField.Precision;
+      if (srcField.Scale != null) field.Scale = srcField.Scale;
       field.AllowsNull = srcField.AllowsNull ?? !srcField.IsRequired;
       // New row: there is no declared value to wipe, so the NOT-NULL column takes the safe
       // default when the source had no opinion (undefined). The overlay path above is where

@@ -7,7 +7,10 @@
       "DriverClass": "CreateUserAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-graduate"
+      "IconClass": "fa-solid fa-user-graduate",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -360,7 +363,10 @@
       "DriverClass": "CreateJournalEntryAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-file-invoice"
+      "IconClass": "fa-solid fa-file-invoice",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -604,7 +610,10 @@
       "DriverClass": "AssociateContactToCompanyAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-link"
+      "IconClass": "fa-solid fa-link",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -792,7 +801,10 @@
       "DriverClass": "MergeContactsAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-code-merge"
+      "IconClass": "fa-solid fa-code-merge",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -981,7 +993,10 @@
       "DriverClass": "LogActivityAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-clipboard-list"
+      "IconClass": "fa-solid fa-clipboard-list",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1403,7 +1418,10 @@
       "DriverClass": "EnrollUserAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-plus"
+      "IconClass": "fa-solid fa-user-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2849,7 +2867,10 @@
       "DriverClass": "UpdateUserProgressAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-circle-check"
+      "IconClass": "fa-solid fa-circle-check",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4215,7 +4236,10 @@
       "DriverClass": "AttachTagsAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-tags"
+      "IconClass": "fa-solid fa-tags",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4357,7 +4381,10 @@
       "DriverClass": "DetachTagsAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-tag"
+      "IconClass": "fa-solid fa-tag",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4924,7 +4951,10 @@
       "DriverClass": "OnboardLearnerAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-graduate"
+      "IconClass": "fa-solid fa-user-graduate",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -5453,7 +5483,10 @@
       "DriverClass": "UpdateUserAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-user-pen"
+      "IconClass": "fa-solid fa-user-pen",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -7342,7 +7375,10 @@
       "DriverClass": "CreateJournalEntry",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-file-invoice"
+      "IconClass": "fa-solid fa-file-invoice",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

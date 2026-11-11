@@ -26,32 +26,23 @@ const TYPE_MAP: TypeMappingEntry[] = [
 ];
 
 /**
- * MJ sized-string field types ('nvarchar', 'varchar', …) map back onto the generic 'string' sizing
- * path. A column that was discovered, persisted as its MJ field TYPE, then re-read for DDL arrives
- * here as 'nvarchar' rather than the original source 'string'; without this it would miss the string
- * sizing path and the column's Length would be SILENTLY DROPPED (the bounded-types bug). 'text' is
- * deliberately NOT included — a genuine text field stays unbounded by design.
+ * MJ catalog field types ('nvarchar', 'nvarchar(MAX)', 'int', 'bit', 'datetimeoffset',
+ * 'uniqueidentifier', etc.) and connector aliases ('number', 'currency', 'double', 'bool',
+ * 'timestamp', 'picklist', etc.) map back onto TYPE_MAP's canonical SourceType vocabulary.
+ * Without this, persisted IntegrationObjectField.Type values ('bit', 'datetimeoffset', 'int')
+ * miss TYPE_MAP and fall through to the unknown-type TEXT/NVARCHAR(MAX) fallback.
  */
-function normalizeSizedStringType(t: string): string {
-  return t === 'nvarchar' || t === 'varchar' || t === 'nchar' || t === 'char' ? 'string' : t;
-}
-
-/**
- * MJ field types (what the catalog persists as `IntegrationObjectField.Type`) mapped back to the source
- * vocabulary of {@link TYPE_MAP} (#3527). Without these, a column persisted as `int`, `bit` or `datetimeoffset`
- * found no entry and fell to the text fallback, so a declared integer, boolean or date became a string column.
- */
-const MJ_FIELD_TYPE_ALIASES: Readonly<Record<string, string>> = {
-  int: 'integer',
-  bit: 'boolean',
-  datetimeoffset: 'datetime',
-  datetime2: 'datetime',
-  numeric: 'decimal',
-  uniqueidentifier: 'uuid',
-};
-
-function normalizeMJFieldType(t: string): string {
-  return MJ_FIELD_TYPE_ALIASES[t] ?? t;
+function normalizeSourceType(raw: string): string {
+  const t = (raw ?? '').toLowerCase().trim();
+  if (t === 'nvarchar' || t === 'varchar' || t === 'nchar' || t === 'char' || t === 'enum' || t === 'enumeration' || t === 'picklist' || t === 'multipicklist') return 'string';
+  if (t === 'nvarchar(max)' || t === 'varchar(max)' || t === 'ntext' || t === 'richtext') return 'text';
+  if (t === 'int' || t === 'smallint' || t === 'tinyint') return 'integer';
+  if (t === 'number' || t === 'numeric' || t === 'currency' || t === 'money' || t === 'smallmoney' || t === 'percent') return 'decimal';
+  if (t === 'double' || t === 'real') return 'float';
+  if (t === 'bit' || t === 'bool') return 'boolean';
+  if (t === 'datetimeoffset' || t === 'datetime2' || t === 'smalldatetime' || t === 'timestamp' || t === 'timestamptz') return 'datetime';
+  if (t === 'uniqueidentifier') return 'uuid';
+  return t;
 }
 
 /**
@@ -62,13 +53,15 @@ export class TypeMapper {
    * Convert a source field's type to the appropriate SQL type for the given platform.
    */
   MapSourceType(sourceType: string, platform: DatabasePlatform, field: SourceFieldInfo): string {
-    const normalized = normalizeMJFieldType(normalizeSizedStringType(sourceType.toLowerCase().trim()));
+    const normalized = normalizeSourceType(sourceType);
     const dialect = GetDialect(platform);
     const entry = TYPE_MAP.find((t) => t.SourceType === normalized);
+    const isIndexedKey = Boolean(field.IsPrimaryKey || field.IsForeignKey || field.IsUniqueKey);
 
     // Unknown source type → the dialect's own text fallback (NVARCHAR(MAX) / TEXT), never a guess.
     if (!entry) {
-      return dialect.ResolveAbstractType({ type: 'text' });
+      const fallback = dialect.ResolveAbstractType({ type: 'text' });
+      return isIndexedKey ? dialect.CapIndexableType(fallback) : fallback;
     }
 
     // The integration supplies its dialect-AGNOSTIC sizing policy; the dialect builds the concrete
@@ -86,23 +79,28 @@ export class TypeMapper {
       // a surfaced warning (see IntegrationEngine string-overflow handling). Small columns + skip-and-
       // surface beats a table of unbounded MAX columns for a rare oversized value.
       let maxLength = this.boundedStringLength(field);
-      // A primary-key string column must fit the dialect's INDEX KEY size limit — cap it there. The
-      // dialect reports its OWN ceiling (SQL Server 450 chars; PostgreSQL effectively none), so there is
-      // no platform branch here. A too-wide PK would otherwise fail unique-constraint / index creation.
+      // An indexed key string column (Soft PK, Soft FK, or Organic Key) must fit the dialect's INDEX KEY
+      // size limit — cap it there. The dialect reports its OWN ceiling (SQL Server 450 chars; PostgreSQL
+      // effectively none), so there is no platform branch here. A too-wide key would otherwise fail
+      // index creation.
       //
       // An UNBOUNDED width (-1) is the `text` modality in this vocabulary, and the dialect already
       // resolves that to its own unbounded type. Routing it through `string` instead would hit
       // resolveStringType's `> 0` test and silently yield NVARCHAR(255) — the NARROWEST column for a
-      // field explicitly asked to be the widest. A primary key can never be unbounded (MAX is not
+      // field explicitly asked to be the widest. An indexed key can never be unbounded (MAX is not
       // indexable), so it is clamped to the key ceiling instead; note Math.min would return -1 here,
       // which is why this is a special case rather than a comparison. Where the key ceiling is
       // effectively none (PostgreSQL), the dialect renders that width as its own unbounded type.
       if (maxLength === -1) {
-        if (!field.IsPrimaryKey) return dialect.ResolveAbstractType({ type: 'text' });
+        if (!isIndexedKey) return dialect.ResolveAbstractType({ type: 'text' });
         maxLength = dialect.MaxKeyStringLength;
       }
-      if (field.IsPrimaryKey) maxLength = Math.min(maxLength, dialect.MaxKeyStringLength);
+      if (isIndexedKey) maxLength = Math.min(maxLength, dialect.MaxKeyStringLength);
       return dialect.ResolveAbstractType({ type: 'string', maxLength });
+    }
+    if (abstractType === 'text') {
+      const resolved = dialect.ResolveAbstractType({ type: 'text' });
+      return isIndexedKey ? dialect.CapIndexableType(resolved) : resolved;
     }
     if (abstractType === 'decimal') {
       const { precision, scale } = this.boundedDecimalPrecision(field);
@@ -119,7 +117,7 @@ export class TypeMapper {
    * Get the MJ EntityField.Type value for a source type (informational only).
    */
   GetMJFieldType(sourceType: string): string {
-    const normalized = sourceType.toLowerCase().trim();
+    const normalized = normalizeSourceType(sourceType);
     const entry = TYPE_MAP.find((t) => t.SourceType === normalized);
     return entry ? entry.MJFieldType : 'nvarchar';
   }

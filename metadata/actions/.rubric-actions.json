@@ -994,7 +994,10 @@
       "DriverClass": "Submit Human Rubric",
       "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
       "Status": "Active",
-      "CodeApprovalStatus": "Approved"
+      "CodeApprovalStatus": "Approved",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "260B8927-0B3D-4879-BC29-6480DE46F2C9"

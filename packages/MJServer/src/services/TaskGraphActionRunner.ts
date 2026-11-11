@@ -10,13 +10,23 @@
  * @module @memberjunction/server
  */
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam } from '@memberjunction/actions-base';
-import { BuildActionOutputObject } from '@memberjunction/ai-core-plus';
-import { LogError } from '@memberjunction/core';
+import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
+import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, TAINTED_EGRESS_BLOCKED, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
+import { MatchAudienceUsers } from '@memberjunction/ai-agents';
+import { DatabaseProviderBase, LogError, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
+/**
+ * Runs a task-graph action node under the node's security envelope, as `BaseAgent` runs an action
+ * inside a turn: the run's scope as `RunScope` (so a Scoped Search node searches the run's tenant
+ * and host-assigned search scopes, not every tenant), the audience, the bound parameters, the taint
+ * gate, and the action's output trust level reported back as taint.
+ */
 export class TaskGraphActionRunner implements TaskActionRunner {
+    public readonly EnforcesSecurityEnvelope = true;
+
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
@@ -24,6 +34,21 @@ export class TaskGraphActionRunner implements TaskActionRunner {
             if (!action) {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }
+
+            const envelope = params.SecurityEnvelope;
+            const taintRefusal = this.taintGateRefusal(action, envelope);
+            if (taintRefusal) {
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${taintRefusal}`);
+                return { Success: false, ErrorMessage: taintRefusal, ResultCode: TAINTED_EGRESS_BLOCKED, IsOutputTainted: true };
+            }
+
+            const readerIds = envelope?.Audience?.ReaderUserIDs ?? [];
+            const readers = readerIds.length > 0 ? await this.resolveAudienceReaders(readerIds, params.Provider) : { Readers: [] };
+            if ('Refusal' in readers) {
+                LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${readers.Refusal}`);
+                return { Success: false, ErrorMessage: readers.Refusal };
+            }
+            const audience: ActionRunAudience | undefined = readers.Readers.length > 0 ? { Readers: readers.Readers } : undefined;
 
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
@@ -34,7 +59,10 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 // the time the dispatcher picks the task up. Re-evaluating here would ask a
                 // transition question with nothing to answer it, and fail closed on every retry.
                 Filters: [],
+                ...(audience ? { Audience: audience } : {}),
+                ...(envelope?.RunScope ? { RunScope: ToActionRunScope(envelope.RunScope) } : {}),
             });
+            const isOutputTainted = this.outputIsUntrusted(action);
 
             const output = this.buildOutput(result.Params, result.Message);
             const unstorable = this.findUnstorableOutput(output);
@@ -43,7 +71,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                     `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
                     `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
                 LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
-                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID };
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID, ResultCode: result.ResultCode, IsOutputTainted: isOutputTainted };
             }
 
             return {
@@ -54,6 +82,8 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 // carrying it out, a workflow's action step has no path back to its own execution
                 // record — the one thing anyone wants when an action misbehaves.
                 ActionLogID: result.LogEntry?.ID,
+                ResultCode: result.ResultCode,
+                IsOutputTainted: isOutputTainted,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -119,9 +149,67 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * by a GUID and holding that task's whole output.
      */
     private buildParams(params: TaskActionRunParams): ActionParam[] {
-        if (!params.InputPayload || typeof params.InputPayload !== 'object') {
-            return [];
-        }
-        return Object.entries(params.InputPayload as Record<string, unknown>).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+        const base = params.InputPayload && typeof params.InputPayload === 'object' && !Array.isArray(params.InputPayload)
+            ? (params.InputPayload as Record<string, unknown>)
+            : {};
+        const enforced = ApplyTaskSecurityEnvelopeToParams(base, params.SecurityEnvelope, params.ActionID).Params;
+        return Object.entries(enforced).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
     }
+
+    /**
+     * Why a tainted node may not run this action, or null when it may. A node is tainted when its input
+     * derives from untrusted content no completed Human step has reviewed (the dispatcher works that out
+     * and sets `IsRunTainted`); an action that sends data out or cannot be undone says so with
+     * `disallowWhenTainted`, and is refused.
+     */
+    private taintGateRefusal(action: MJActionEntityExtended, envelope: TaskSecurityEnvelope | undefined): string | null {
+        if (envelope?.IsRunTainted !== true || action.Config_Object?.disallowWhenTainted !== true) {
+            return null;
+        }
+        return `Action "${action.Name}" was not run (${TAINTED_EGRESS_BLOCKED}): the step's input came from untrusted content ` +
+            'that no completed Human step has approved, and this action sends data out or cannot be undone.';
+    }
+
+    /** True when the action's output is not trusted — the same metadata setting `BaseAgent` reads. */
+    private outputIsUntrusted(action: MJActionEntityExtended): boolean {
+        const level = action.Config_Object?.outputTrustLevel;
+        return level === 'SemiTrusted' || level === 'Untrusted';
+    }
+
+    /**
+     * The hydrated user (with roles) for each reader the envelope's audience names, resolved as `BaseAgent`
+     * resolves a run's audience: from the `UserCache`, refreshed once when an ID is missing. An ID no user has
+     * refuses the node. A stand-in `UserInfo` with only an ID has no roles, so every permission check it took
+     * part in measured nothing, and the action ran as though the reader were not there.
+     */
+    private async resolveAudienceReaders(
+        readerIds: ReadonlyArray<string>,
+        provider: IMetadataProvider,
+    ): Promise<{ Readers: UserInfo[] } | { Refusal: string }> {
+        const ids = [...readerIds];
+        let match = MatchAudienceUsers(ids, UserCache.Instance.Users);
+        if (match.MissingIDs.length > 0 && provider instanceof DatabaseProviderBase) {
+            await UserCache.Instance.Refresh(provider);
+            match = MatchAudienceUsers(ids, UserCache.Instance.Users);
+        }
+        if (match.MissingIDs.length > 0) {
+            return {
+                Refusal: `The workflow's audience names ${match.MissingIDs.length} user ID(s) that match no user, so the step was ` +
+                    'refused rather than run without them.',
+            };
+        }
+        return { Readers: match.Readers };
+    }
+}
+
+/** The envelope's run scope as the action engine takes it (`RunActionParams.RunScope`), copied. */
+export function ToActionRunScope(scope: TaskRunScope): ActionRunScope {
+    return {
+        PrimaryScopeEntityName: scope.PrimaryScopeEntityName,
+        PrimaryScopeRecordID: scope.PrimaryScopeRecordID,
+        SecondaryScopes: scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([k, v]) => [k, Array.isArray(v) ? [...v] : v]))
+            : null,
+        ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+    };
 }

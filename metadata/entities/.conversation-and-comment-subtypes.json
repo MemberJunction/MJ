@@ -1,0 +1,57 @@
+[
+  {
+    "_comments": [
+      "Declares SubtypeSelector on MJ: Conversations so TypeID.ExtensionEntity (e.g. MJ: Comments)",
+      "and TypeID.DriverClass (ConversationTypeDriver) are resolved and auto-ensured on save."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    },
+    "fields": {
+      "SubtypeSelector": {
+        "Path": "TypeID.ExtensionEntity",
+        "UseForLoadedRecords": true,
+        "AutoEnsureOnSave": true,
+        "Driver": {
+          "Path": "TypeID.DriverClass",
+          "BaseClass": "ConversationTypeDriver"
+        }
+      }
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Comments IS-A MJ: Conversations and declares SubtypeSelector on CommentTypeID",
+      "(ExtensionEntity, DriverClass -> CommentTypeDriver, UIDriverClass)."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Comments"
+    },
+    "fields": {
+      "ParentID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+      "SubtypeSelector": {
+        "Path": "CommentTypeID.ExtensionEntity",
+        "UseForLoadedRecords": true,
+        "AutoEnsureOnSave": true,
+        "Driver": {
+          "Path": "CommentTypeID.DriverClass",
+          "BaseClass": "CommentTypeDriver"
+        },
+        "UIDriver": {
+          "Path": "CommentTypeID.UIDriverClass"
+        }
+      }
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Field Suggestions IS-A MJ: Comments (2-level IS-A chain under MJ: Conversations)."
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Field Suggestions"
+    },
+    "fields": {
+      "ParentID": "@lookup:MJ: Entities.Name=MJ: Comments"
+    }
+  }
+]
