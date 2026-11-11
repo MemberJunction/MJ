@@ -194,7 +194,10 @@ const PLATFORM_SNAPSHOT_KINDS: Record<RecordChangeSnapshotPlatform, ReadonlyMap<
  * `EntityField.Type`, in either SQL Server or PostgreSQL vocabulary, with or without a length).
  */
 export function RecordChangeSnapshotColumnKindOf(sqlType: string, platform: RecordChangeSnapshotPlatform): RecordChangeSnapshotColumnKind {
-    const name = sqlType.trim().toLowerCase().replace(/\s*\(.*\)\s*$/, '');
+    // Drop a length/precision suffix such as `(7)` or `(18,4)`.
+    const lower = sqlType.toLowerCase();
+    const paren = lower.indexOf('(');
+    const name = (paren >= 0 ? lower.slice(0, paren) : lower).trim();
     const kind = PLATFORM_SNAPSHOT_KINDS[platform].get(name) ?? SHARED_SNAPSHOT_KINDS.get(name);
     if (kind) {
         return kind;
