@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/search-engine",
   "type": "module",
-  "version": "6.2.0-edge.8",
+  "version": "6.2.0",
   "description": "MemberJunction: Reusable server-side search engine - vector + full-text + entity search with RRF fusion",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,18 +16,19 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/ai": "6.2.0-edge.8",
-    "@memberjunction/ai-prompts": "6.2.0-edge.8",
-    "@memberjunction/ai-vectordb": "6.2.0-edge.8",
-    "@memberjunction/aiengine": "6.2.0-edge.8",
-    "@memberjunction/core": "6.2.0-edge.8",
-    "@memberjunction/core-entities": "6.2.0-edge.8",
-    "@memberjunction/global": "6.2.0-edge.8",
-    "@memberjunction/storage": "6.2.0-edge.8",
-    "@memberjunction/tag-engine-base": "6.2.0-edge.8",
+    "@memberjunction/ai": "6.2.0",
+    "@memberjunction/ai-prompts": "6.2.0",
+    "@memberjunction/ai-vectordb": "6.2.0",
+    "@memberjunction/aiengine": "6.2.0",
+    "@memberjunction/core": "6.2.0",
+    "@memberjunction/core-entities": "6.2.0",
+    "@memberjunction/global": "6.2.0",
+    "@memberjunction/storage": "6.2.0",
+    "@memberjunction/tag-engine-base": "6.2.0",
     "nunjucks": "^3.2.4"
   },
   "optionalDependencies": {
+    "@elastic/elasticsearch": "^8.19.2",
     "@huggingface/transformers": "^4.3.1"
   },
   "devDependencies": {

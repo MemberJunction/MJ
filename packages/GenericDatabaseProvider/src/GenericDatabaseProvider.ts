@@ -18,6 +18,8 @@
 
 import {
     BaseEntity,
+    BaseEntityResult,
+    ConcurrencyCheckMode,
     SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
@@ -37,6 +39,9 @@ import {
     Metadata,
     RunView,
     RunViewParams,
+    RunViewParameters,
+    RunViewParameterScalar,
+    RunViewParameterValue,
     IsMaterializedDataSource,
     GetEffectiveAlternateBaseViewName,
     GetPinnedAlternateBaseViewFromViewEntity,
@@ -73,6 +78,7 @@ import {
     CachedRunViewResult,
     FieldSecurityViolation,
     LogError,
+    LogErrorEx,
     LogStatus,
     LogStatusEx,
     DiagnosticContext,
@@ -98,9 +104,12 @@ import {
     ValidateUserViewProperties,
     ResolveViewPropertyValues,
     BuildViewPropertyFilter,
+    ServerOperationScopeManager,
+    NormalizeRunViewParameters,
+    CompositeFilterSQLCompiler,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -108,7 +117,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
 import { DatabasePoolStats, SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
-import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
+import { SQLParser, SqlDocument, EditSet, SqlTokens, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
 import { NamedQueryParameter, TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
 import type { TypedQueryParameterValue } from './typedQueryParameter.js';
@@ -119,6 +128,13 @@ import { UndescribedColumnNames, WithheldColumnNames, WithholdColumns } from './
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
+import {
+    AreEntityFieldValuesDifferent,
+    ClientOldValueToFieldValue,
+    DetectFieldConcurrencyConflicts,
+    FindEntityFieldByCodeNameOrName,
+    IsFieldOpaqueToClient,
+} from './concurrency/fieldConflictDetector.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -144,6 +160,11 @@ import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from '
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { IsSystemUser } from './systemUser.js';
 import { CreateSnapshots, FieldsLackingStoredValue, RecordChangeSnapshots, WidenDeleteSnapshot, WidenUpdateSnapshots } from './recordChangeSnapshot.js';
+import { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
+
+// Install Node AsyncLocalStorage-backed authority scope tracker on server startup so concurrent
+// in-flight requests / remote operations maintain isolated ServerOperationScopeFrame stacks.
+ServerOperationScopeManager.Instance.SetTracker(new NodeAsyncServerOperationScopeTracker());
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -524,6 +545,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
+     * Defaults to `'off'` so direct server-side background saves pay zero extra lock-read or
+     * transaction round-trips unless opted in via provider configuration or per-save
+     * `EntitySaveOptions.ConcurrencyCheck` (GraphQL mutations with `OldValues___` always pass `'enforce'`).
+     */
+    public ConcurrencyCheck: ConcurrencyCheckMode = 'off';
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true`. Set to `false`
+     * (or configure `databaseSettings.deltaUpdates: false`) as an operational kill-switch to restore
+     * legacy full-row parameter binding across all saves.
+     */
+    public DeltaUpdates: boolean = true;
+
+    /**
      * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
      * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
      * store this way so the metadata load and the engines loaded at startup use it from the first
@@ -533,6 +570,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         if (data?.LocalStorageProvider) {
             this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        if (data?.ConcurrencyCheck) {
+            this.ConcurrencyCheck = data.ConcurrencyCheck;
+        }
+        if (data?.DeltaUpdates !== undefined) {
+            this.DeltaUpdates = data.DeltaUpdates;
         }
         return super.Config(data, providerToUse);
     }
@@ -1084,6 +1127,184 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return activeActions.some((a) => a.RunMode === 'Durable' && !originatingSet?.Has(a.ID));
     }
 
+    /**
+     * Dialect hook for reading a row under an exclusive/update row lock inside the save transaction
+     * immediately before `spUpdate*` executes.
+     *
+     * - SQL Server overrides to emit `SELECT [col1], ... FROM [schema].[BaseTable] WITH (UPDLOCK, ROWLOCK) WHERE ...`
+     * - PostgreSQL overrides to emit `SELECT "col1", ... FROM "schema"."BaseTable" WHERE ... FOR UPDATE`
+     */
+    protected RenderLockedRowReadSQL(
+        _entityInfo: EntityInfo,
+        _pkWhereClause: string,
+        _columns: string[],
+    ): string | null {
+        return null;
+    }
+
+    protected getEffectiveConcurrencyCheckMode(options?: EntitySaveOptions): ConcurrencyCheckMode {
+        return options?.ConcurrencyCheck ?? this.ConcurrencyCheck;
+    }
+
+    protected override ShouldCheckUpdateConcurrency(
+        entity: BaseEntity,
+        options: EntitySaveOptions,
+    ): boolean {
+        if (this.getEffectiveConcurrencyCheckMode(options) === 'off') {
+            return false;
+        }
+        if (options?.SkipOldValuesCheck || options?.IgnoreDirtyState || options?.ReplayOnly) {
+            return false;
+        }
+        if (!entity.PrimaryKey || entity.PrimaryKey.KeyValuePairs.length === 0) {
+            return false;
+        }
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const currentVal = entity.GetFieldByName(f.Name)?.Value;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    return true;
+                }
+            }
+        }
+        return entity.Fields.some(
+            (f) =>
+                f.Dirty &&
+                !f.EntityFieldInfo.ReadOnly &&
+                !f.EntityFieldInfo.IsVirtual &&
+                !f.EntityFieldInfo.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f.EntityFieldInfo),
+        );
+    }
+
+    protected override async CheckUpdateConcurrency(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return true;
+        }
+
+        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+        const baselineValues: Record<string, unknown> = {};
+        const newValues: Record<string, unknown> = {};
+
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const entityField = entity.GetFieldByName(f.Name);
+                const currentVal = entityField ? entityField.Value : undefined;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    baselineValues[f.Name] = coercedBaseline;
+                    newValues[f.Name] = currentVal;
+                }
+            }
+        }
+
+        for (const entityField of entity.Fields) {
+            const f = entityField.EntityFieldInfo;
+            if (
+                entityField.Dirty &&
+                !f.ReadOnly &&
+                !f.IsVirtual &&
+                !f.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f) &&
+                !(f.Name in baselineValues)
+            ) {
+                baselineValues[f.Name] = entityField.OldValue;
+                newValues[f.Name] = entityField.Value;
+            }
+        }
+
+        const columnsToRead = Object.keys(baselineValues);
+        if (columnsToRead.length === 0) {
+            return true;
+        }
+
+        const pkWhereClause = this.BuildPrimaryKeyWhereClause(entity.EntityInfo, entity.PrimaryKey);
+        if (!pkWhereClause) {
+            return true;
+        }
+
+        const sql = this.RenderLockedRowReadSQL(entity.EntityInfo, pkWhereClause, columnsToRead);
+        if (!sql) {
+            return true;
+        }
+
+        const rawRows = await this.ExecuteSQL<Record<string, unknown>>(
+            sql,
+            undefined,
+            {
+                description: `Concurrency check lock read for ${entity.EntityInfo.Name}`,
+                ignoreLogging: true,
+            },
+            user,
+        );
+        if (!rawRows || rawRows.length === 0) {
+            return true;
+        }
+
+        const processedRows = await this.PostProcessRows(rawRows, entity.EntityInfo, user);
+        const storedRow = processedRows[0] ?? rawRows[0];
+        this.TrimFixedWidthValues(entity.EntityInfo, storedRow);
+
+        const checkResult = DetectFieldConcurrencyConflicts(
+            entity.EntityInfo,
+            baselineValues,
+            newValues,
+            storedRow,
+        );
+
+        if (checkResult.ConflictingFields.length === 0) {
+            return true;
+        }
+
+        const msg = {
+            Message:
+                'Concurrent modification conflict: one or more fields modified by the caller were updated in the database since the record was loaded.',
+            ClientDifferences: checkResult.ClientDifferences,
+            DBDifferences: checkResult.DBDifferences,
+            Overlap: checkResult.Overlap,
+        };
+
+        LogErrorEx({
+            message: `Entity save concurrency conflict detected on ${entity.EntityInfo.Name}: ${JSON.stringify(msg)}`,
+            severity: 'warning',
+            category: 'GenericDatabaseProvider.CheckUpdateConcurrency',
+            metadata: {
+                entityName: entity.EntityInfo.Name,
+                mode: effectiveMode,
+                conflictingFields: checkResult.ConflictingFields,
+                clientDifferences: checkResult.ClientDifferences,
+                dbDifferences: checkResult.DBDifferences,
+                overlap: checkResult.Overlap,
+            },
+        });
+
+        if (effectiveMode === 'enforce') {
+            entityResult.Success = false;
+            entityResult.EndedAt = new Date();
+            entityResult.ConcurrencyConflict = {
+                ConflictingFields: checkResult.ConflictingFields,
+            };
+            entityResult.Message = `Concurrent modification conflict on ${entity.EntityInfo.Name} for field(s): ${checkResult.ConflictingFields.join(', ')}. Reload the record and retry your changes.`;
+            return false;
+        }
+
+        return true;
+    }
+
     protected override async OnDurableAfterSaveExecute(
         entity: BaseEntity,
         user: UserInfo,
@@ -1330,6 +1551,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         // fault: one warning per key, and the value stays encrypted.
                         if (IsEncryptionKeyUnavailable(decryptError)) {
                             ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
+                        // Inactive rows (e.g., disabled template credentials seeded before activation)
+                        // may hold placeholder ciphertext from another environment; preserve ciphertext without spamming error logs.
+                        if (processedRow['IsActive'] === false || processedRow['IsActive'] === 0) {
                             continue;
                         }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
@@ -2024,11 +2250,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        // 2. Encrypt — between coercion and rendering, mutates the map in place.
-        await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
+        // 2. On normal UPDATEs where DeltaUpdates is enabled, the entity's spUpdate is CodeGen-generated,
+        //    and at least one field is dirty, pass ONLY the dirty fields (plus the PK appended by
+        //    RenderSaveCallBinding) to the stored procedure / function so untouched columns default to NULL
+        //    and retain their stored database values via ISNULL(@Param, [Col]) / COALESCE(p_param, "Col").
+        //    Provider-wide DeltaUpdates=false, forced saves (IgnoreDirtyState), ReplayOnly saves, and
+        //    entities with custom spUpdate implementations keep the full-row parameter map.
+        const useDeltaUpdate =
+            this.DeltaUpdates &&
+            isUpdate &&
+            !options?.IgnoreDirtyState &&
+            !options?.ReplayOnly &&
+            entity.EntityInfo.spUpdateGenerated &&
+            (dirtyFields?.size ?? 0) > 0;
+        const effectiveFieldValueMap = useDeltaUpdate
+            ? this.changedFieldValues(entity, fieldValueMap, dirtyFields)
+            : fieldValueMap;
 
-        // 3. Render the provider-specific binding.
-        const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+        // 3. Encrypt — between coercion and rendering, mutates the map in place.
+        await this.EncryptFieldValuesForSave(entity, effectiveFieldValueMap, user);
+
+        // 4. Render the provider-specific binding.
+        const binding = this.RenderSaveCallBinding(entity, effectiveFieldValueMap, isUpdate, spName);
 
         // 4. Resolve SaveReturnContext and wrap with result capture.
         //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
@@ -2058,10 +2301,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const computeSimpleSQL = (): string => {
             if (cachedSimpleSQL === undefined) {
                 const replaySQL = isNew
-                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    ? this.RenderReplaySaveSQL(binding, entity, effectiveFieldValueMap)
                     : options?.IgnoreDirtyState
                       ? undefined
-                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                      : this.RenderReplayUpdateSQL(
+                            binding,
+                            entity,
+                            useDeltaUpdate
+                                ? effectiveFieldValueMap
+                                : this.changedFieldValues(entity, effectiveFieldValueMap, dirtyFields),
+                        );
                 // A statement that runs with parameters is logged in its literal form, which replays alone.
                 cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
             }
@@ -2704,28 +2953,202 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * Applies {@link TransformExternalSQLClause} to a caller's ExtraFilter and checks the result with
-     * {@link AssertClauseBalanced}. When the transform changes the text and the filter is a chain of
-     * top-level AND terms, each term is transformed, checked and parenthesized on its own. A
-     * PreRunView hook that ANDs a server predicate (such as tenant scope) onto the caller's filter
-     * runs before this transform, so a rewrite that changes the caller's term cannot reach the
-     * hook's term.
+     * Rewrites `@paramName` placeholders in `extraFilter` into dialect-specific bound parameter
+     * placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) using token-level lexing (`SqlTokens.Lex`)
+     * and non-overlapping span edits (`EditSet`), and appends the corresponding {@link NamedQueryParameter}
+     * entries to `queryParameters`.
+     *
+     * Token-level lexing ensures `@foo` inside string literals (`'...@foo...'`), SQL comments (`/* @foo *\/`,
+     * `-- @foo`), quoted identifiers (`[@foo]`, `"@foo"`), and system variables (`@@ROWCOUNT`) are never
+     * mistaken for parameter references.
      */
-    protected PrepareExtraFilterSQL(extraFilter: string, entityInfo: EntityInfo): string {
-        if (!extraFilter) return '';
-        const transformed = this.TransformExternalSQLClause(extraFilter, entityInfo);
-        const terms = transformed === extraFilter ? null : SplitTopLevelAndTerms(extraFilter, this.Dialect);
+    protected BindExtraFilterParameters(
+        extraFilter: string,
+        parameters: RunViewParameters | undefined,
+        queryParameters?: NamedQueryParameter[],
+    ): string {
+        const normalizedParams = NormalizeRunViewParameters(parameters);
+
+        if (!extraFilter) {
+            return '';
+        }
+
+        const lexed = SqlTokens.Lex(extraFilter, this.Dialect);
+        const tokens = lexed.Tokens;
+        let edits = EditSet.For(extraFilter);
+        const boundPlaceholdersByParam = new Map<string, string>();
+        const targetParams = queryParameters ?? [];
+
+        const bindScalar = (paramName: string, scalar: RunViewParameterScalar): string => {
+            if (scalar === null || typeof scalar === 'string') {
+                const index = targetParams.length;
+                const placeholder = this.Dialect.Binding.ParameterPlaceholder(index);
+                const driverName = placeholder.startsWith('@') ? placeholder.slice(1) : placeholder;
+                targetParams.push(new NamedQueryParameter(driverName, scalar));
+                return placeholder;
+            }
+            if (typeof scalar === 'boolean') {
+                const index = targetParams.length;
+                const placeholder = this.Dialect.Binding.ParameterPlaceholder(index);
+                const driverName = placeholder.startsWith('@') ? placeholder.slice(1) : placeholder;
+                const boundBool = this.Dialect.Binding.BooleanParameterValue(scalar);
+                targetParams.push(new NamedQueryParameter(driverName, boundBool));
+                return placeholder;
+            }
+            if (typeof scalar === 'number') {
+                if (!Number.isFinite(scalar)) {
+                    throw new Error(`Invalid RunView parameter '@${paramName}': numeric parameter values must be finite numbers.`);
+                }
+                const index = targetParams.length;
+                const placeholder = this.Dialect.Binding.ParameterPlaceholder(index);
+                const driverName = placeholder.startsWith('@') ? placeholder.slice(1) : placeholder;
+                targetParams.push(new NamedQueryParameter(driverName, scalar));
+                return placeholder;
+            }
+            if (scalar instanceof Date) {
+                if (Number.isNaN(scalar.getTime())) {
+                    throw new Error(`Invalid RunView parameter '@${paramName}': Date parameter value is invalid.`);
+                }
+                const index = targetParams.length;
+                const placeholder = this.Dialect.Binding.ParameterPlaceholder(index);
+                const driverName = placeholder.startsWith('@') ? placeholder.slice(1) : placeholder;
+                targetParams.push(new NamedQueryParameter(driverName, scalar));
+                return placeholder;
+            }
+            throw new Error(`Invalid RunView parameter '@${paramName}': unsupported value type '${typeof scalar}'.`);
+        };
+
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i];
+            if (token.Kind !== 'Word') continue;
+            // On dialects that don't natively quote with `[...]` (e.g. PostgreSQL before TransformExternalSQLClause
+            // rewrites `[col]` to `"col"`), `[@col]` is lexed as `[` + Word(`@col`) + `]`. Skip bracketed identifiers.
+            const prev = tokens[i - 1];
+            const next = tokens[i + 1];
+            if (prev?.Text === '[' && prev.Span.End === token.Span.Start && next?.Text === ']' && next.Span.Start === token.Span.End) {
+                continue;
+            }
+            const match = /^@([A-Za-z_][A-Za-z0-9_]*)$/.exec(token.Text);
+            if (!match) continue;
+            const paramName = match[1];
+            if (!normalizedParams.has(paramName)) {
+                throw new Error(`RunView ExtraFilter references parameter '@${paramName}', but no value was provided in RunViewParams.Parameters.`);
+            }
+
+            let replacement = boundPlaceholdersByParam.get(paramName);
+            if (replacement === undefined) {
+                const rawValue = normalizedParams.get(paramName)!;
+                if (Array.isArray(rawValue)) {
+                    if (rawValue.length === 0) {
+                        throw new Error(`RunView parameter '@${paramName}' cannot be an empty array.`);
+                    }
+                    const itemPlaceholders = rawValue.map((item: RunViewParameterScalar) => bindScalar(paramName, item));
+                    replacement = itemPlaceholders.join(', ');
+                } else {
+                    replacement = bindScalar(paramName, rawValue as RunViewParameterScalar);
+                }
+                boundPlaceholdersByParam.set(paramName, replacement);
+            }
+            edits = edits.Replace(token.Span, replacement);
+        }
+
+        return edits.IsEmpty ? extraFilter : edits.Apply().Text;
+    }
+
+    /**
+     * Rewrites `@paramName` word tokens to `@replacementName` using dialect-aware token lexing
+     * (`SqlTokens.Lex`) and non-overlapping span edits (`EditSet`), so `@paramName` inside string
+     * literals, quoted/bracketed identifiers, line/nested block comments, and `@@system` variables
+     * is never modified.
+     */
+    protected static RewriteSqlParameterReferences(
+        sqlText: string,
+        paramName: string,
+        replacementName: string,
+        dialect: SQLDialect,
+    ): string {
+        if (!sqlText) {
+            return sqlText;
+        }
+        const targetToken = `@${paramName}`;
+        const replacementToken = `@${replacementName}`;
+        const lexed = SqlTokens.Lex(sqlText, dialect);
+        let edits = EditSet.For(sqlText);
+        for (const token of lexed.Tokens) {
+            if (token.Kind === 'Word' && token.Text === targetToken) {
+                edits = edits.Replace(token.Span, replacementToken);
+            }
+        }
+        return edits.IsEmpty ? sqlText : edits.Apply().Text;
+    }
+
+    /**
+     * Applies {@link BindExtraFilterParameters} and {@link TransformExternalSQLClause} to a caller's
+     * ExtraFilter and checks the result with {@link AssertClauseBalanced}. When the transform changes
+     * the text and the filter is a chain of top-level AND terms, each term is transformed, checked
+     * and parenthesized on its own. A PreRunView hook that ANDs a server predicate (such as tenant
+     * scope) onto the caller's filter runs before this transform, so a rewrite that changes the
+     * caller's term cannot reach the hook's term.
+     */
+    protected PrepareExtraFilterSQL(
+        extraFilter: string,
+        entityInfo: EntityInfo,
+        parameters?: RunViewParameters,
+        queryParameters?: NamedQueryParameter[],
+    ): string {
+        const targetParams = queryParameters ?? [];
+        if (!extraFilter) {
+            this.BindExtraFilterParameters(extraFilter, parameters, targetParams);
+            return '';
+        }
+        this.AssertClauseBalanced(extraFilter, 'ExtraFilter');
+        const priorParamCount = targetParams.length;
+        const boundFilter = this.BindExtraFilterParameters(extraFilter, parameters, targetParams);
+        if (!boundFilter) return '';
+        const allowedPlaceholders = new Set<string>();
+        for (let i = priorParamCount; i < targetParams.length; i++) {
+            allowedPlaceholders.add(this.Dialect.Binding.ParameterPlaceholder(i));
+        }
+        const balanceOptions: BalancedFragmentOptions | undefined =
+            allowedPlaceholders.size > 0 ? { AllowedParameterPlaceholders: allowedPlaceholders } : undefined;
+        const transformed = this.TransformExternalSQLClause(boundFilter, entityInfo);
+        const terms = transformed === boundFilter ? null : SplitTopLevelAndTerms(boundFilter, this.Dialect);
         if (!terms || terms.length < 2) {
-            this.AssertClauseBalanced(transformed, 'ExtraFilter');
+            this.AssertClauseBalanced(transformed, 'ExtraFilter', balanceOptions);
             return transformed;
         }
         return terms
             .map((term) => {
                 const termSQL = this.TransformExternalSQLClause(term.trim(), entityInfo);
-                this.AssertClauseBalanced(termSQL, 'ExtraFilter');
+                this.AssertClauseBalanced(termSQL, 'ExtraFilter', balanceOptions);
                 return `(${termSQL})`;
             })
             .join(' AND ');
+    }
+
+    /**
+     * Compiles `params.Filter` (a structured `CompositeFilter` / `CompositeFilterDescriptor`) into a
+     * parameterized SQL WHERE fragment for `entityInfo` using {@link CompositeFilterSQLCompiler.Compile}
+     * and binds its parameters onto `queryParameters` via {@link BindExtraFilterParameters}.
+     */
+    protected CompileStructuredRunViewFilter(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        user: UserInfo,
+        queryParameters?: NamedQueryParameter[],
+    ): string {
+        if (!params.Filter) {
+            return '';
+        }
+        const compiled = CompositeFilterSQLCompiler.Compile(params.Filter, entityInfo, {
+            platform: this.PlatformKey,
+            user,
+            parameterPrefix: '_cf_',
+        });
+        if (!compiled.whereClause) {
+            return '';
+        }
+        return this.BindExtraFilterParameters(compiled.whereClause, compiled.parameters, queryParameters);
     }
 
     /**
@@ -2741,6 +3164,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         _orderBySQL: string,
         _user: UserInfo,
         _schemaNameOverride?: string,
+        _queryParameters?: NamedQueryParameter[],
     ): Promise<{ executeViewSQL: string; runID: string } | null> {
         return null;
     }
@@ -3008,7 +3432,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
-                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user, entityInfo);
                 this.assertExternalClausesRespectFieldSecurity(entityInfo, externalParams, user);
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
@@ -3027,7 +3451,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
-            const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
+            const queryParameters: NamedQueryParameter[] = [];
+            const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo, params.Parameters, queryParameters);
+            const structuredFilter: string = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
@@ -3142,6 +3568,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
+                bHasWhere = true;
+            }
+
+            // 2a. Structured Filter (CompositeFilter / CompositeFilterDescriptor)
+            if (structuredFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
                 bHasWhere = true;
             }
 
@@ -3288,7 +3720,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // (reads the snapshot). effectiveBaseView === entityInfo.BaseView on the default live path,
                 // so non-materialized reads are unchanged.
                 const logResult = await this.executeSQLForUserViewRunLogging(
-                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName,
+                    Number(viewEntity.ID), entityInfo, effectiveBaseView, whereSQL, orderBy, user, effectiveSchemaName, queryParameters,
                 );
                 if (logResult) {
                     viewSQL = logResult.executeViewSQL;
@@ -3350,7 +3782,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const skipCount = params.SkipTotalRowCount === true && params.ResultType !== 'count_only';
             const willNeedCount = countSQL && ((usingPagination && !skipCount) || params.ResultType === 'count_only');
             if (willNeedCount) {
-                if (countExecutor && params.ResultType === 'count_only') {
+                if (countExecutor && params.ResultType === 'count_only' && queryParameters.length === 0) {
                     countExecutorPromise = countExecutor(countSQL!);
                 } else {
                     sqlQueries.push(countSQL!);
@@ -3364,20 +3796,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 sqlQueryKeys.push('aggregate');
             }
 
+            const boundParams = queryParameters.length > 0 ? queryParameters : undefined;
+            const boundBatchParams = queryParameters.length > 0 ? sqlQueries.map(() => queryParameters) : undefined;
             const resultMap: Record<string, unknown> = {};
             if (sqlQueries.length === 1 && !countExecutorPromise) {
-                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], boundParams, undefined, contextUser);
             } else if (sqlQueries.length > 0 && countExecutorPromise) {
                 const [batchResults, countRes] = await Promise.all([
                     sqlQueries.length === 1
-                        ? this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser).then(r => [r])
-                        : this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser),
+                        ? this.ExecuteSQL(sqlQueries[0], boundParams, undefined, contextUser).then(r => [r])
+                        : this.ExecuteSQLBatch(sqlQueries, boundBatchParams, undefined, contextUser),
                     countExecutorPromise,
                 ]);
                 sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
                 resultMap['count'] = countRes;
             } else if (sqlQueries.length > 1) {
-                const batchResults = await this.ExecuteSQLBatch(sqlQueries, undefined, undefined, contextUser);
+                const batchResults = await this.ExecuteSQLBatch(sqlQueries, boundBatchParams, undefined, contextUser);
                 sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
             } else if (countExecutorPromise) {
                 resultMap['count'] = await countExecutorPromise;
@@ -3408,7 +3842,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // time in the window, with nothing reading a single result. Callers that only read
                 // `Results` opt out explicitly with RunViewParams.SkipTotalRowCount; the provider
                 // never infers that from the value of MaxRows.
-                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
+                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, boundParams, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
 
@@ -3950,11 +4384,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     `tokens, such as an unbalanced quote or bracket.`,
                 );
             }
-            const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
+            // The built-in predicates have no phrase syntax, so they search a quoted phrase without its
+            // quotes (UnwrapPhraseQuotes). A custom format is SQL, screened above as typed, so it gets
+            // the term as typed.
+            const phraseTerm = UnwrapPhraseQuotes(safeUserSearchString);
+            const escapedTerm = this.escapeLikeTerm(phraseTerm);
             for (const field of entityInfo.Fields) {
                 if (!field.IncludeInUserSearchAPI) continue;
                 if (deniedSearchFields.has(field.Name.trim().toLowerCase())) continue; // field security: not searchable
-                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
+                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, field.UserSearchParamFormatAPI ? safeUserSearchString : phraseTerm);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
                 sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
@@ -4024,6 +4462,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Build the SQL fragment that compares one EntityField against a user search term.
+     *
+     * `createViewUserSearchSQL` passes the term without wrapping phrase quotes (`UnwrapPhraseQuotes`)
+     * as `escapedTerm`, and as `rawSafeTerm` for a field without a custom format; a custom format
+     * receives the term as typed. An override receives the same values.
      *
      * Resolution order:
      *   1. UserSearchParamFormatAPI (custom override) wins if set, with `{0}` replaced
@@ -4311,8 +4753,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams[],
         user: UserInfo,
         statuses: RunViewDatabaseStatus[],
-    ): Promise<Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>> {
-        const items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }> = [];
+    ): Promise<Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }>> {
+        const items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }> = [];
         for (let index = 0; index < params.length; index++) {
             try {
                 const viewParams: RunViewParams = { ...params[index] };
@@ -4323,8 +4765,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     statuses[index] = { Success: false, ErrorMessage: `Entity ${hooked.EntityName ?? '(none)'} not found` };
                     continue;
                 }
-                const whereSQL = await this.buildWhereClauseForCacheCheck(hooked, entityInfo, user);
-                items.push({ index, item: { params: hooked }, entityInfo, whereSQL });
+                const queryParameters: NamedQueryParameter[] = [];
+                const whereSQL = await this.buildWhereClauseForCacheCheck(hooked, entityInfo, user, queryParameters);
+                items.push({
+                    index,
+                    item: { params: hooked },
+                    entityInfo,
+                    whereSQL,
+                    queryParameters: queryParameters.length > 0 ? queryParameters : undefined,
+                });
             } catch (e) {
                 statuses[index] = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
             }
@@ -4548,6 +4997,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // Phase 2: For server cache misses and TTL-expired server slots, validate against DB
             const differentialItems: Array<{
                 index: number; params: RunViewParams; entityInfo: EntityInfo; whereSQL: string;
+                queryParameters?: NamedQueryParameter[];
                 clientMaxUpdatedAt: string; clientRowCount: number;
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number };
             }> = [];
@@ -4559,10 +5009,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entityInfo: EntityInfo,
                 whereSQL: string,
                 serverStatus: { maxUpdatedAt?: string; rowCount?: number },
+                queryParameters?: NamedQueryParameter[],
             ): void => {
                 LogStatusEx({ message: `    🔄 [SmartCache DIFFERENTIAL] "${item.params.EntityName || 'unknown'}" — sending only changed rows (from DB)`, verboseOnly: true });
                 differentialItems.push({
-                    index, params: item.params, entityInfo, whereSQL,
+                    index, params: item.params, entityInfo, whereSQL, queryParameters,
                     clientMaxUpdatedAt: item.cacheStatus!.maxUpdatedAt,
                     clientRowCount: item.cacheStatus!.rowCount,
                     serverStatus,
@@ -4576,13 +5027,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     item: RunViewWithCacheCheckParams;
                     entityInfo: EntityInfo;
                     whereSQL: string;
+                    queryParameters?: NamedQueryParameter[];
                     serverCached?: CachedRunViewResult;
                     fingerprint?: string;
                 }> = [];
                 for (const { index, item, entityInfo, serverCached, fingerprint } of serverCacheMissItems) {
                     try {
-                        const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user);
-                        itemsForDBCheck.push({ index, item, entityInfo, whereSQL, serverCached, fingerprint });
+                        const queryParameters: NamedQueryParameter[] = [];
+                        const whereSQL = await this.buildWhereClauseForCacheCheck(item.params, entityInfo, user, queryParameters);
+                        itemsForDBCheck.push({
+                            index,
+                            item,
+                            entityInfo,
+                            whereSQL,
+                            queryParameters: queryParameters.length > 0 ? queryParameters : undefined,
+                            serverCached,
+                            fingerprint,
+                        });
                     } catch (e) {
                         errorResults.push({ viewIndex: index, status: 'error', errorMessage: e instanceof Error ? e.message : String(e) });
                     }
@@ -4590,7 +5051,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                 const cacheStatusResults = await this.getBatchedServerCacheStatus(itemsForDBCheck, contextUser);
 
-                for (const { index, item, entityInfo, whereSQL, serverCached, fingerprint } of itemsForDBCheck) {
+                for (const { index, item, entityInfo, whereSQL, queryParameters, serverCached, fingerprint } of itemsForDBCheck) {
                     const serverStatus = cacheStatusResults.get(index);
                     if (!serverStatus || !serverStatus.success) {
                         const statusError = serverStatus?.errorMessage || 'Failed to get cache status';
@@ -4612,7 +5073,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                                 LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — server cache verified against DB and matches client cache`, verboseOnly: true });
                                 currentResults.push({ viewIndex: index, status: 'current' });
                             } else if (entityInfo.TrackRecordChanges) {
-                                queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
+                                queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                             } else {
                                 LogStatusEx({ message: `    📦 [SmartCache SERVE-FROM-VERIFIED-CACHE] "${entityLabel}" — server cache verified against DB, serving ${serverCached.rowCount} rows without full SQL query`, verboseOnly: true });
                                 serverCacheStaleItems.push({ index, item, entityInfo, serverCached });
@@ -4636,7 +5097,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         LogStatusEx({ message: `    ✅ [SmartCache CURRENT] "${entityLabel}" — client cache matches DB (server cache miss)`, verboseOnly: true });
                         currentResults.push({ viewIndex: index, status: 'current' });
                     } else if (entityInfo.TrackRecordChanges) {
-                        queueDifferential(index, item, entityInfo, whereSQL, serverStatus);
+                        queueDifferential(index, item, entityInfo, whereSQL, serverStatus, queryParameters);
                     } else {
                         LogStatusEx({ message: `    🔍 [SmartCache STALE] "${entityLabel}" — full refresh from DB (no change tracking)`, verboseOnly: true });
                         staleItemsNoTracking.push({ index, params: item.params });
@@ -4699,8 +5160,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     this.runFullQueryAndCacheResult<T>(viewParams, index, contextUser, callerFieldsByIndex.get(index) ?? null),
                 ),
                 // DB-validated differential items
-                ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
-                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser, callerFieldsByIndex.get(index) ?? null),
+                ...differentialItems.map(({ index, params: viewParams, entityInfo, whereSQL, queryParameters, clientMaxUpdatedAt, clientRowCount, serverStatus }) =>
+                    this.runDifferentialQueryAndReturn<T>(viewParams, entityInfo, clientMaxUpdatedAt, clientRowCount, serverStatus, whereSQL, index, contextUser, callerFieldsByIndex.get(index) ?? null, queryParameters),
                 ),
             ];
 
@@ -4803,18 +5264,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams,
         entityInfo: EntityInfo,
         user: UserInfo,
+        queryParameters?: NamedQueryParameter[],
     ): Promise<string> {
         let whereSQL = '';
         let bHasWhere = false;
 
         // PrepareExtraFilterSQL transforms and balance-checks the filter; the single-statement
-        // check then runs on the result, as on the main view path.
-        const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo);
+        // check and post-bind field-security gate then run on the result, as on the main view path.
+        const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo, params.Parameters, queryParameters);
         this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+        this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [extraFilter], user);
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
             whereSQL = `(${extraFilter})`;
+            bHasWhere = true;
+        }
+
+        const structuredFilter = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
+        if (structuredFilter.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
             bHasWhere = true;
         }
 
@@ -4864,13 +5333,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * SQL Server overrides to use ExecuteSQLBatch for multi-result-set efficiency.
      */
     protected async getBatchedServerCacheStatus(
-        items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+        items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }>,
         contextUser?: UserInfo,
     ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
         const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
         if (items.length === 0) return results;
 
-        const promises = items.map(async ({ index, item, entityInfo, whereSQL }) => {
+        const promises = items.map(async ({ index, item, entityInfo, whereSQL, queryParameters }) => {
             try {
                 // Probe the SAME physical view the read targets — for a DataSource:'Materialized' read that's
                 // the materialized_vw<CodeName> snapshot (a full SELECT * of the base view, so it carries
@@ -4880,7 +5349,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // matches the SQL Server override and is defense-in-depth on the PG/default path.)
                 const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
                 const statusSQL = this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName);
-                const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, undefined, undefined, contextUser);
+                const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
+                const rows = await this.ExecuteSQL<Record<string, unknown>>(statusSQL, boundParams, undefined, contextUser);
                 if (rows && rows.length > 0) {
                     const row = rows[0];
                     results.set(index, {
@@ -5061,6 +5531,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (typeof params.UserSearchString === 'string' && params.UserSearchString.trim().length > 0) {
             throw new Error(`UserSearchString is not supported for external-data-source entity '${entityName}'. Use ExtraFilter instead.`);
         }
+        if (params.Parameters && Object.keys(params.Parameters).some((k) => params.Parameters![k] !== undefined)) {
+            throw new Error(`Parameterized ExtraFilter (Parameters) is not supported for external-data-source entity '${entityName}'.`);
+        }
         // Apply the same forbidden-keyword screen the MJ-DB path runs on caller-supplied SQL
         // clauses before they're passed to the remote driver. The driver still parameterizes
         // values, but this blocks obvious injection of statement-terminating / DDL keywords.
@@ -5127,10 +5600,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams,
         viewEntity: MJUserViewEntityExtended | null,
         user: UserInfo,
+        entityInfo?: EntityInfo,
     ): Promise<RunViewParams> {
-        if (!viewEntity) return params;
+        if (!viewEntity && !params.Filter) return params;
         const merged: RunViewParams = { ...params };
-        const callerFilter = (params.ExtraFilter as string) || '';
+        let callerFilter = (params.ExtraFilter as string) || '';
+        if (params.Filter && entityInfo) {
+            const literalStructured = CompositeFilterSQLCompiler.CompileLiteral(params.Filter, entityInfo, {
+                platform: this.PlatformKey,
+                user,
+            }).trim();
+            if (literalStructured) {
+                callerFilter = callerFilter ? `(${callerFilter}) AND (${literalStructured})` : literalStructured;
+                merged.ExtraFilter = callerFilter;
+            }
+            delete merged.Filter;
+        }
+        if (!viewEntity) return merged;
         if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
             const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
             if (renderedWhere) {
@@ -5294,6 +5780,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         viewIndex: number,
         contextUser?: UserInfo,
         callerFields: string[] | null = null,
+        queryParameters?: NamedQueryParameter[],
     ): Promise<RunViewWithCacheCheckResult<T>> {
         try {
             const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
@@ -5303,7 +5790,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 return this.runFullQueryAndCacheResult<T>(params, viewIndex, contextUser, callerFields);
             }
             const since = clientMaxUpdatedDate.toISOString();
-            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, since, whereSQL, contextUser);
+            const updatedRows = await this.getUpdatedRowsSince<T>(params, entityInfo, since, whereSQL, contextUser, queryParameters);
             const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, since, contextUser);
 
             // Validation: detect hidden deletes not tracked in RecordChanges
@@ -5420,6 +5907,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         sinceTimestamp: string,
         whereSQL: string,
         contextUser?: UserInfo,
+        queryParameters?: NamedQueryParameter[],
     ): Promise<T[]> {
         try {
             const timestampFilter = `(${this.QuoteIdentifier('__mj_UpdatedAt')} > '${this.toSQLTimestamp(sinceTimestamp)}')`;
@@ -5442,7 +5930,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 sql += ` ORDER BY ${orderBy}`;
             }
 
-            const rawRows = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
+            const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
+            const rawRows = await this.ExecuteSQL<Record<string, unknown>>(sql, boundParams, undefined, contextUser);
             const processed = await this.PostProcessRows(
                 rawRows,
                 entityInfo,
@@ -7724,6 +8213,70 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Evaluates an arbitrary SQL `whereClause` against an entity's pending in-memory field values
+     * using the same typed synthetic-row subquery (`SELECT CASE WHEN (...) THEN 1 ELSE 0 END`)
+     * used by Create/Update RLS post-image enforcement, without taking or blocking on table locks.
+     *
+     * When `dirtyOnlyOptimization` is `true` and `whereClause` decomposes cleanly into simple
+     * column comparisons whose referenced columns are all clean on `entity`, returns `true`
+     * without a database round-trip (safe only when the pre-image was already verified).
+     */
+    public async EvaluateSyntheticRowWhereClause(
+        entity: BaseEntity,
+        whereClause: string,
+        user: UserInfo,
+        dirtyOnlyOptimization: boolean = false
+    ): Promise<boolean> {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) {
+            return true;
+        }
+        const parentFieldNames = entity.EntityInfo?.ParentEntityFieldNames;
+        const nonIsaVirtualNames = new Set(
+            (entity.EntityInfo?.Fields ?? [])
+                .filter(f => f.IsVirtual && !parentFieldNames?.has(f.Name))
+                .map(f => f.Name.trim().toLowerCase())
+        );
+        if (nonIsaVirtualNames.size > 0) {
+            const matchedVirtual = ClientClauseScreen.ExtractStatementIdentifierTokens(trimmed, this.Dialect).filter(
+                tok => nonIsaVirtualNames.has(tok.trim().toLowerCase())
+            );
+            if (matchedVirtual.length > 0) {
+                LogError(
+                    `EvaluateSyntheticRowWhereClause refused for entity '${entity.EntityInfo?.Name}': write-side whereClause references non-IS-A virtual view column(s) [${matchedVirtual.join(', ')}]`
+                );
+                return false;
+            }
+        }
+        if (dirtyOnlyOptimization) {
+            const referencedColumns = this.TryExtractSimpleFilterColumns(trimmed);
+            if (referencedColumns) {
+                const dirtyNames = new Set(
+                    entity.Fields.filter(f => f.Dirty).map(f => f.Name.trim().toLowerCase())
+                );
+                const touchesFilterColumn = referencedColumns.some(c => dirtyNames.has(c));
+                if (!touchesFilterColumn) {
+                    return true;
+                }
+            }
+        }
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo, true);
+        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        try {
+            const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
+                sql,
+                undefined,
+                undefined,
+                user
+            );
+            return Boolean(result && result.length > 0 && Number(result[0]['pass']) === 1);
+        } catch (err) {
+            LogError(`EvaluateSyntheticRowWhereClause failed for entity '${entity.EntityInfo?.Name}': ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    /**
      * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
      * references. Returns the columns ONLY when the whole clause is a conjunction of simple
      * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,
@@ -7762,10 +8315,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
      * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected BuildRLSSyntheticRowProjections(
+        entity: BaseEntity,
+        entityInfo: EntityInfo,
+        includeISAParentFields: boolean = false
+    ): string {
         const parts: string[] = [];
+        const parentFieldNames = includeISAParentFields ? entityInfo.ParentEntityFieldNames : undefined;
         for (const field of entityInfo.Fields) {
-            if (field.IsVirtual) continue;
+            if (field.IsVirtual && !parentFieldNames?.has(field.Name)) continue;
             const val = entity.Get(field.Name);
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
@@ -7865,6 +8423,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
+    }
+
+    /** An ItemFilter that is exactly `1=0` (spacing aside): the caller wants no rows from the item. */
+    private static readonly _noRowItemFilter = /^\s*1\s*=\s*0\s*$/;
+
+    /** Whether a dataset ItemFilter asks for no rows at all, so the item needs no read. */
+    private static isNoRowItemFilter(filter: string | undefined): boolean {
+        return !!filter && GenericDatabaseProvider._noRowItemFilter.test(filter);
     }
 
     /**
@@ -7993,7 +8559,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
      * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
-     * item runs no SQL and fails the dataset.
+     * item runs no SQL and fails the dataset. An item whose ItemFilter is exactly `1=0` runs no SQL
+     * either: it returns an empty, successful result.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -8039,6 +8606,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const errorResults: DatasetItemResultType[] = [];
         const cachedResults: DatasetItemResultType[] = [];
+        // Items the caller asked for with a no-row ItemFilter: answered without a read.
+        const noRowResults: DatasetItemResultType[] = [];
         const uncachedQueries: string[] = [];
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
@@ -8102,6 +8671,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     LatestUpdateDate: undefined,
                     Status: scope.Refusal,
                     Success: false,
+                });
+                continue;
+            }
+            // An ItemFilter of exactly `1=0` asks for no rows, whatever the stored WhereClause or the
+            // caller's row filter add to it, so the item is answered without a read. The scoped
+            // metadata reload (ProviderBase.TryPartialMetadataReload) sends it for every item it does
+            // not reload; each used to run its own empty SELECT, one pool connection apiece.
+            if (GenericDatabaseProvider.isNoRowItemFilter(itemFilters?.find(f => f?.ItemCode === code)?.Filter)) {
+                noRowResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: this.computeLatestUpdateDate([], String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt'), item),
+                    Success: true,
                 });
                 continue;
             }
@@ -8374,11 +8958,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             });
         }
 
-        // Merge results: errors + cached + SQL (maintain original item order via code matching)
+        // Merge results: errors + no-row + cached + SQL (maintain original item order via code matching)
         const results: DatasetItemResultType[] = [];
         for (const item of items) {
             const code = String(item['Code']);
             const found = errorResults.find(r => r.Code === code)
+                ?? noRowResults.find(r => r.Code === code)
                 ?? cachedResults.find(r => r.Code === code)
                 ?? sqlResults.find(r => r.Code === code);
             if (found) results.push(found);
@@ -8909,8 +9494,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
      * "is a handle open" — before routing a statement to the transaction handle.
      */
-    protected IsCallerInAmbientTransaction(): boolean {
+    protected override IsCallerInAmbientTransaction(): boolean {
         return this._affinity.IsCallerMember;
+    }
+
+    /** See {@link IEntityDataProvider.RunOutsideAmbientTransaction}: `fn` runs with no membership in this provider's transaction. */
+    public RunOutsideAmbientTransaction<T>(fn: () => Promise<T>): Promise<T> {
+        return this._affinity.RunDetached(fn);
     }
 
     /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
@@ -9223,6 +9813,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         await this.endBatchLevelIfOpen(true);
         if (committedTasks) {
+            this.BumpTransactionEpoch();
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
@@ -9232,6 +9823,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             await this.WithTransactionLock(() => this.rollbackTransactionCore());
         } finally {
+            if (this._transactionDepth === 0) {
+                this.BumpTransactionEpoch();
+            }
             await this.endBatchLevelIfOpen(false);
         }
     }

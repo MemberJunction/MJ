@@ -41,6 +41,7 @@ const CONTAINER_WORKSPACE = '/workspace';
  * enforced has a false sense of containment, which is worse than knowing the boundary is soft.
  */
 export class DockerSandboxProvider implements ISandboxProvider {
+    public readonly Name = 'docker' as const;
     private readonly hostRootPath: string;
     private readonly defaultImage: string;
     private readonly dockerRunner?: (args: string[]) => Promise<string>;
@@ -78,7 +79,7 @@ export class DockerSandboxProvider implements ISandboxProvider {
             `${hostPath}:${CONTAINER_WORKSPACE}`,
             '--workdir',
             CONTAINER_WORKSPACE,
-            ...this.buildNetworkArgs(config.NetworkPolicy),
+            ...this.buildNetworkArgs(config.NetworkPolicy ?? 'mcp-only'),
             ...this.buildContainerConstraintArgs(config),
             image,
             // Keep the container alive so turns can exec into it; the harness itself is never this

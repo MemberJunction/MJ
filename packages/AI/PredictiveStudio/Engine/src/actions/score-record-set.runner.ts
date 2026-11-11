@@ -10,7 +10,7 @@
  *
  * Keeping this OUT of the action keeps the action thin (validate → delegate → map)
  * and keeps this resolver independently testable. The production wiring (model
- * loader, sidecar and the `LocalArtifactLoader`) comes from
+ * loader, sidecar and the `StorageProviderArtifactLoader`) comes from
  * `BuildScoreRecordSetRunner()` in `operations/delegation`, which both the Score
  * action and the Score Record Set operation use. A runner constructed without `deps`
  * has no artifact loader and fails with a clear, actionable message rather than
@@ -353,14 +353,14 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
    * A placeholder {@link IArtifactLoader} that fails loudly, used only when the
    * runner is constructed without `deps`. Production callers (the Score action and
    * the Score Record Set operation) build the runner with
-   * `BuildScoreRecordSetRunner()`, which wires the real `LocalArtifactLoader`.
+   * `BuildScoreRecordSetRunner()`, which wires the real `StorageProviderArtifactLoader`.
    */
   protected missingArtifactLoader(): IArtifactLoader {
     return {
       async load(): Promise<Uint8Array | null> {
         throw new Error(
           'Score Record Set: no artifact loader is configured. Supply MLInferenceDeps with a production ' +
-            'IArtifactLoader (the MJStorage binding) when constructing ProductionScoreRecordSetRunner.',
+            'IArtifactLoader (StorageProviderArtifactLoader) when constructing ProductionScoreRecordSetRunner.',
         );
       },
     };

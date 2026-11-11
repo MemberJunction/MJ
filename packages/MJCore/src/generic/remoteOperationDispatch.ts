@@ -8,6 +8,7 @@
 
 import { MJGlobal } from "@memberjunction/global";
 import { BaseRemotableOperation, RemoteOpServerContext } from "./baseRemotableOperation";
+import { ServerOperationScopeManager } from "./entityLifecyclePolicy";
 import { IMetadataProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { UserInfo } from "./securityInfo";
 
@@ -72,7 +73,23 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         sessionId: options.sessionId,
         apiKeyHash: options.apiKeyHash,
     };
-    return op.ExecuteServer(input, context);
+    if (op.GrantsServerWriteAuthority) {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            {
+                operationKey: op.OperationKey || operationKey,
+                source: 'RemotableOperation',
+                allowedEntities: op.AuthorizedWriteEntities,
+                userId: user.ID,
+            },
+            () => op.ExecuteServer(input, context),
+        );
+    }
+    // A client's own request: what it saves reads as the caller's own act (`ServerOperationScopeManager.IsInDirectClientCrud`),
+    // which decides, for one, who reviewed a task-graph Human step. Correct for the client dispatchers that call this; server
+    // code must not call it to act on a person's behalf, or the person would be credited with what the code did.
+    return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
+        op.ExecuteServer(input, context),
+    );
 }
 
 /** @deprecated Use {@link DispatchRemoteOperationInProcess}. */

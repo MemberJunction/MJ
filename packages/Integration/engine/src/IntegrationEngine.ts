@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { RefreshCatalogScope, RunInWarmedCatalogScope, UnpinCatalogObjects, WarmCatalogObject } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
-import { BaseSingleton, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJCompanyIntegrationEntity,
@@ -63,6 +63,11 @@ import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import type { BaseIntegrationConnector, FetchContext, FetchBatchResult } from './BaseIntegrationConnector.js';
 import { CollapseDuplicateIdentities } from './BatchIdentity.js';
+import { ApplyRecordFilter, ParseRecordFilter, type RecordFilterCondition } from './RecordFilter.js';
+import {
+    ApplyResolvedReferences, DescribeUnresolvedReference, LoadReferenceLookups, ParseReferenceFields,
+    type ReferenceField,
+} from './ReferenceResolver.js';
 import { WriteSerializer } from './WriteSerializer.js';
 import { ResumeConcurrency, RunResumesBounded } from './ResumeConcurrency.js';
 
@@ -2806,6 +2811,43 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
+     * The result for a pull map that has no active field maps, returned BEFORE anything is fetched.
+     *
+     * Such a map cannot write a single column, so everything fetched for it is wasted: a soft-key
+     * table refuses every record (`KEYLESS_RECORD_REFUSED`, because the key is the first field the
+     * engine finds unmapped) and any other table gets rows with nothing in them. Observed on a
+     * per-connection NetForum catalog: 292 maps were created with no field maps, and the first sync
+     * that reached them fetched and refused 307,843 records until the refusals ran the API out of heap.
+     *
+     * The skip is reported where the run keeps its history, not only on the event stream: one
+     * Critical `CONFIGURATION_ERROR` (the run's ErrorLog is written from `Errors`) and the object on
+     * the incomplete list. No record is counted, because none was read.
+     */
+    private skipMapWithoutFieldMaps(entityMap: ICompanyIntegrationEntityMap, logger?: SyncLogger): SyncResult {
+        const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        const message =
+            `'${objectName}' has no active field maps, so nothing fetched for it could be written. It was ` +
+            `skipped without fetching. Apply this object again for the connection to create its field maps.`;
+        logger?.Emit('sync.entity-map.skipped', {
+            externalObjectName: entityMap.ExternalObjectName,
+            skippedReason: 'ENTITY_MAP_HAS_NO_FIELD_MAPS',
+            message,
+        });
+        logger?.Warning(objectName, 'ENTITY_MAP_HAS_NO_FIELD_MAPS', message, { entityMapID: entityMap.ID });
+        console.error(`[IntegrationEngine] ENTITY_MAP_HAS_NO_FIELD_MAPS: ${message}`);
+        const result = this.emptyResult();
+        result.Errors.push({
+            ExternalID: '',
+            ChangeType: 'Skip',
+            ErrorMessage: message,
+            ErrorCode: 'CONFIGURATION_ERROR',
+            Severity: 'Critical',
+        });
+        this.markIncomplete(result, objectName);
+        return result;
+    }
+
+    /**
      * Pull sync: fetch from external → map → match → validate → apply to MJ.
      */
     private async processPullSync(
@@ -2825,6 +2867,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // we spend nothing on it; once it ages out the next attempt IS the recheck, so an object
         // the account later enables heals itself with no operator action.
         const fieldMaps = await this.loadFieldMaps(entityMapID, contextUser);
+        if (fieldMaps.length === 0) return this.skipMapWithoutFieldMaps(entityMap, logger);
         // Field-level exclusions declared by the connector (SourceFieldInfo.SyncDirective
         // -> IntegrationObjectField.Configuration). Resolved once per map, applied to every
         // batch below. Empty set on any lookup miss - exclusion can only ever narrow.
@@ -2852,6 +2895,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             fullSync: config.fullSync,
         });
         this.warnOnUnbindableFieldMaps(entityMap, fieldMaps, logger);
+        // Record filter and reference resolution are read once per map; a malformed declaration
+        // throws here and fails this map only, before anything is fetched or written.
+        const recordFilter = this.resolveRecordFilter(entityMap);
+        const references = this.resolveReferenceFields(entityMap);
 
         // A6: Validate watermark before using it — skip entirely when FullSync requested
         let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
@@ -3395,8 +3442,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 );
             }
 
-            const mapped = this.fieldMappingEngine.Apply(
-                identity.Records, fieldMaps, entityMap.Entity, excludedSourceNames
+            const kept = this.applyRecordFilter(identity.Records, recordFilter, entityMap, result, logger);
+            const mapped = await this.resolveReferences(
+                this.fieldMappingEngine.Apply(kept, fieldMaps, entityMap.Entity, excludedSourceNames),
+                references, config, entityMap, result, contextUser, logger
             );
             // Custom-key stats: aggregate unmapped keys for EVERY mapped record here —
             // before any skip decision — so candidates + sizing stats exist even when the
@@ -4660,6 +4709,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Loads active field maps for a given entity map.
+     *
+     * @throws FIELD_MAPS_UNREADABLE when the read fails. An empty answer would read as a map that
+     *   HAS no field maps, which the pull path skips as a configuration error and the push path
+     *   skips as having nothing to push: a transient read failure must not be reported as either.
      */
     private async loadFieldMaps(
         entityMapID: string,
@@ -4668,20 +4721,118 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const rv = new RunView();
         const result = await rv.RunView<ICompanyIntegrationFieldMap>({
             EntityName: 'MJ: Company Integration Field Maps',
-            ExtraFilter: `EntityMapID='${entityMapID}' AND Status='Active'`,
+            ExtraFilter: `EntityMapID='${EscapeSQLString(entityMapID)}' AND Status='Active'`,
             OrderBy: 'Priority ASC',
             ResultType: 'entity_object',
             BypassCache: true, // field maps drive value mapping; a sync must see freshly-applied maps
         }, contextUser);
 
-        return result.Success ? result.Results : [];
+        if (!result.Success) {
+            throw new Error(
+                `FIELD_MAPS_UNREADABLE: could not read the field maps of entity map ${entityMapID}: ` +
+                `${result.ErrorMessage ?? 'unknown error'}`
+            );
+        }
+        return result.Results;
     }
 
     /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
-    private parseEntityMapConfig(entityMap: ICompanyIntegrationEntityMap): { partitionReconcile?: boolean; partitionCount?: number } | null {
+    private parseEntityMapConfig(entityMap: ICompanyIntegrationEntityMap): EntityMapConfig | null {
         const raw = entityMap.Configuration;
         if (!raw) return null;
-        try { return JSON.parse(raw) as { partitionReconcile?: boolean; partitionCount?: number }; } catch { return null; }
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as EntityMapConfig : null;
+        } catch { return null; }
+    }
+
+    /** The entity map's record filter (`Configuration.recordFilter`); throws when it is malformed. */
+    private resolveRecordFilter(entityMap: ICompanyIntegrationEntityMap): RecordFilterCondition[] {
+        const parsed = ParseRecordFilter(this.parseEntityMapConfig(entityMap));
+        if (parsed.Problems.length > 0) {
+            throw new Error(`Entity map ${entityMap.ExternalObjectName} → ${entityMap.Entity}: ${parsed.Problems.join(' ')}`);
+        }
+        return parsed.Conditions;
+    }
+
+    /**
+     * The destination fields to resolve from external to MJ ids (`Configuration.resolveReferences`),
+     * each with the entity it points at (ID for the record-map read, name for error messages, both
+     * looked up here once per map rather than per unresolved row). Throws when a field is not a foreign key on the target entity:
+     * without a related entity there is no record map to resolve through.
+     */
+    private resolveReferenceFields(entityMap: ICompanyIntegrationEntityMap): ReferenceField[] {
+        const fields = ParseReferenceFields(this.parseEntityMapConfig(entityMap));
+        if (fields.length === 0) return [];
+        const entityInfo = this.ProviderToUse.EntityByName(entityMap.Entity);
+        if (!entityInfo) throw new Error(`Entity map ${entityMap.ExternalObjectName}: entity ${entityMap.Entity} not found in metadata.`);
+        return fields.map(name => {
+            const field = entityInfo.Fields.find(f => f.Name.toLowerCase() === name.toLowerCase());
+            if (!field?.RelatedEntityID) {
+                throw new Error(`Entity map ${entityMap.ExternalObjectName}: resolveReferences names ${name}, which is not a foreign key on ${entityMap.Entity}.`);
+            }
+            const relatedEntityName = field.RelatedEntity || this.ProviderToUse.EntityByID(field.RelatedEntityID)?.Name || 'parent';
+            return { Field: field.Name, RelatedEntityID: field.RelatedEntityID, RelatedEntityName: relatedEntityName };
+        });
+    }
+
+    /** Drops the source records the map's filter excludes; each one counts as skipped. */
+    private applyRecordFilter(
+        records: ExternalRecord[],
+        conditions: readonly RecordFilterCondition[],
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        logger?: SyncLogger,
+    ): ExternalRecord[] {
+        const filtered = ApplyRecordFilter(records, conditions);
+        if (filtered.Excluded > 0) {
+            result.RecordsSkipped += filtered.Excluded;
+            logger?.emit('sync.entity-map.filtered', {
+                externalObjectName: entityMap.ExternalObjectName,
+                excluded: filtered.Excluded,
+                kept: filtered.Kept.length,
+            });
+        }
+        return filtered.Kept;
+    }
+
+    /**
+     * Swaps each configured reference's external id for the parent's MJ id, through this connection's
+     * record maps. A record whose parent has no record map is reported as an error and not written.
+     */
+    private async resolveReferences(
+        mapped: MappedRecord[],
+        references: readonly ReferenceField[],
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        result: SyncResult,
+        contextUser: UserInfo,
+        logger?: SyncLogger,
+    ): Promise<MappedRecord[]> {
+        if (references.length === 0 || mapped.length === 0) return mapped;
+        const lookups = await this.runWriteForMap(entityMap.ID, () =>
+            LoadReferenceLookups(this.ProviderToUse, config.companyIntegration.ID, references, mapped, contextUser));
+        const resolution = ApplyResolvedReferences(mapped, references.map(r => r.Field), lookups);
+        for (const miss of resolution.Unresolved) {
+            const parentName = references.find(r => r.Field === miss.Field)?.RelatedEntityName ?? 'parent';
+            const message = DescribeUnresolvedReference(miss, parentName);
+            result.RecordsErrored++;
+            result.Errors.push({
+                ExternalID: miss.Record.ExternalRecord.ExternalID,
+                ChangeType: miss.Record.ChangeType,
+                ErrorMessage: message,
+                ErrorCode: 'MATCH_RESOLUTION_ERROR',
+                Severity: 'Warning',
+                ExternalRecord: miss.Record.ExternalRecord,
+            });
+            logger?.emit('sync.record.error', {
+                phase: 'resolve-references',
+                externalObjectName: entityMap.ExternalObjectName,
+                externalID: miss.Record.ExternalRecord.ExternalID,
+                error: message,
+            });
+        }
+        return resolution.Resolved;
     }
 
     /** Opt-in partition (Merkle) reconcile flag from the entity map Configuration (GQL-managed). */
@@ -6122,8 +6273,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             if (this.isBooleanSqlType(targetType)) {
                 const lower = trimmed.toLowerCase();
-                if (lower === 'true' || lower === '1' || lower === 'yes') return true;
-                if (lower === 'false' || lower === '0' || lower === 'no') return false;
+                if (lower === 'true' || lower === '1' || lower === 'yes' || lower === 't') return true;
+                if (lower === 'false' || lower === '0' || lower === 'no' || lower === 'f') return false;
                 return null;
             }
             if (this.isDateSqlType(targetType)) {
@@ -7124,6 +7275,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return IntegrationEngine.getInstance<IntegrationEngine>();
     }
 }
+
+/**
+ * An entity map's `Configuration` JSON. The engine reads the keys it knows; the rest belong to
+ * connectors and to the record filter / reference resolution parsers, which validate their own.
+ */
+type EntityMapConfig = Record<string, unknown> & { partitionReconcile?: boolean; partitionCount?: number };
 
 /**
  * The message a finished sync run is finalized with.

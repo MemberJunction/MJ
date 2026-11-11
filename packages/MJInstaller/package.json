@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/installer",
-  "version": "6.2.0-edge.8",
+  "version": "6.2.0",
   "description": "Headless, event-driven installer engine for MemberJunction",
   "type": "module",
   "main": "dist/index.js",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
+    "cross-spawn": "^7.0.6",
     "minimatch": "^9.0.5",
     "mssql": "^12.2.0",
     "pg": "^8.13.3",
@@ -22,10 +23,11 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "@types/cross-spawn": "^6.0.6",
     "@types/mssql": "^9.1.9",
     "@types/pg": "^8.16.0",
-    "typescript": "^5.9.3",
-    "tsc-alias": "^1.8.15"
+    "tsc-alias": "^1.8.15",
+    "typescript": "^5.9.3"
   },
   "repository": {
     "type": "git",

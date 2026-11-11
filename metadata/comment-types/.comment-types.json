@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Comment",
+      "Code": "COMMENT",
+      "Description": "Plain discussion note or comment thread anchored to a record, field, section, group, contribution, or artifact."
+    },
+    "primaryKey": {
+      "ID": "4B3A3797-EFA5-419F-80FF-F9515E5F4AA8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Field Suggestion",
+      "Code": "FIELD_SUGGESTION",
+      "Description": "Proposed value for a specific field on a record, with source provenance, confidence, and Accept / Reject / Discuss workflow.",
+      "ExtensionEntity": "MJ: Field Suggestions",
+      "DriverClass": "FieldSuggestionCommentDriver",
+      "UIDriverClass": "FieldSuggestionCardComponent",
+      "AllowedAnchorTypes": "[\"Field\"]"
+    },
+    "primaryKey": {
+      "ID": "8918DBA5-EDDD-4AF4-A518-FEB387ED02F9"
+    }
+  }
+]

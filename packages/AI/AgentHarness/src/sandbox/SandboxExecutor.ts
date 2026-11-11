@@ -48,3 +48,11 @@ export interface HarnessProcess {
 export interface SandboxExecutor {
     Run(spec: HarnessProcessSpec): HarnessProcess;
 }
+
+/**
+ * Extended process-executor contract supporting explicit `Spawn` semantics (for example,
+ * fail-closed cloud executors that forbid host process creation when `sandbox.provider === 'cloud'`).
+ */
+export interface ISandboxProcessExecutor extends SandboxExecutor {
+    Spawn(spec: HarnessProcessSpec): HarnessProcess;
+}

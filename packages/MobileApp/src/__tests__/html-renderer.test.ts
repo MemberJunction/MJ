@@ -109,6 +109,17 @@ describe('HtmlRenderer', () => {
         expect(text).toContain('—');
     });
 
+    it('decodes each entity once, so &amp;lt; stays &lt;', () => {
+        const text = collectText(renderHtml('<p>&amp;lt;b&amp;gt; &#X41;</p>'));
+        expect(text).toContain('&lt;b&gt;');
+        expect(text).toContain('A');
+    });
+
+    it('drops an out-of-range numeric entity instead of throwing', () => {
+        const text = collectText(renderHtml('<p>a&#1114112;b&#x110000;c</p>'));
+        expect(text).toContain('abc');
+    });
+
     it('renders tables including header and body cells', () => {
         const tree = renderHtml(
             '<table><thead><tr><th>Name</th><th>Age</th></tr></thead>' +

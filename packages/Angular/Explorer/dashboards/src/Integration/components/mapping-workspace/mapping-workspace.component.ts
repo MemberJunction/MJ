@@ -209,7 +209,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
     const realItems: MapListItem[] = this.EntityMaps.map(em => ({
       ID: em.ID,
       SourceName: em.ExternalObjectName,
-      TargetName: em.Entity,
+      TargetName: em.Entity ?? em.EntityID,
       SyncDirection: em.SyncDirection,
       SyncEnabled: em.SyncEnabled,
       IsPending: false,

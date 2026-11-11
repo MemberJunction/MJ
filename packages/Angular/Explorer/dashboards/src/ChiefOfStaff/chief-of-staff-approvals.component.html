@@ -1,7 +1,7 @@
 <mj-page-layout>
     <mj-page-header
         Title="Approvals &amp; Wakes"
-        Subtitle="Decide on your Chief of Staff's requests and manage its wake routines"
+        [Subtitle]="'Decide on ' + SelectedAgentDisplayName + '\'s requests and manage its wake routines'"
         Icon="fa-solid fa-bell-concierge">
 
         <ng-container meta>
@@ -29,6 +29,21 @@
         </ng-container>
 
         <ng-container toolbar>
+            @if (AvailableAgents.length > 0) {
+                <div class="cos-agent-picker">
+                    <span class="cos-agent-picker__label">
+                        <i class="fa-solid fa-robot"></i> Agent
+                    </span>
+                    <mj-dropdown
+                        [Data]="AvailableAgents"
+                        TextField="Name"
+                        ValueField="ID"
+                        [ValuePrimitive]="true"
+                        [(ngModel)]="SelectedAgentID"
+                        (ValueChange)="OnSelectedAgentSelectionChanged()">
+                    </mj-dropdown>
+                </div>
+            }
             <mj-page-search
                 Placeholder="Filter requests or routines..."
                 [Value]="SearchText"
@@ -74,7 +89,7 @@
                                 <i class="fa-solid fa-bell-concierge"></i> Pending Agent Approvals ({{ PendingRequests.length }})
                             </h3>
                             <p class="cos-panel__subtitle">
-                                Approve or reject escalations from your Chief of Staff
+                                Approve or reject escalations from {{ SelectedAgentDisplayName }}
                             </p>
                         </div>
                     </div>
@@ -200,7 +215,7 @@
                     }
 
                     @if (FilteredRoutines.length === 0) {
-                        <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No AgentWake routines found for your Chief of Staff." />
+                        <mj-empty-state Size="compact" Icon="fa-regular fa-clock" [Message]="'No AgentWake routines found for ' + SelectedAgentDisplayName + '.'" />
                     } @else {
                         <div class="cos-stack">
                             @for (routine of FilteredRoutines; track routine.ID) {

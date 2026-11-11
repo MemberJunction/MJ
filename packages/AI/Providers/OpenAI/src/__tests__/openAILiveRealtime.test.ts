@@ -15,6 +15,7 @@ import {
     OpenAILiveRealtime,
     OpenAILiveSession,
     ILiveWebSocketLike,
+    DescribeOpenAILiveTurnDetection,
 } from '../models/openAILiveRealtime';
 import { OpenAIRealtime } from '../models/openAIRealtime';
 
@@ -1140,3 +1141,110 @@ describe('OpenAILiveRealtime SDP broker URL', () => {
         expect((minted.SessionConfig as { audio?: { output?: { voice?: string } } }).audio?.output?.voice).toBe('marin');
     });
 });
+
+describe('OpenAILiveRealtime turn detection', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+        warnSpy.mockRestore();
+    });
+
+    const turnDetection = { Mode: 'serverVad', Eagerness: 'low', Threshold: 0.55, SilenceDurationMs: 800 };
+
+    it('names every requested setting, since session.start has no turn-detection block', () => {
+        const line = DescribeOpenAILiveTurnDetection({ turnDetection });
+        expect(line).toContain('[OpenAILiveRealtime]');
+        expect(line).toContain('Mode="serverVad"');
+        expect(line).toContain('Eagerness="low"');
+        expect(line).toContain('Threshold=0.55');
+        expect(line).toContain('SilenceDurationMs=800');
+    });
+
+    it('says nothing when no turn detection was requested', () => {
+        expect(DescribeOpenAILiveTurnDetection(undefined)).toBeUndefined();
+        expect(DescribeOpenAILiveTurnDetection({ turnDetection: { Mode: 'default' } })).toBeUndefined();
+    });
+
+    it('warns once at session.start and sends no turn-detection field', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Hi', Config: { turnDetection } });
+        const socket = driver.lastMockSocket!;
+        socket.triggerOpen();
+        const startFrame = JSON.parse(socket.sentFrames[0]);
+        expect(JSON.stringify(startFrame)).not.toContain('turn');
+        socket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-td' }));
+        await sessionPromise;
+        const turnWarnings = warnSpy.mock.calls.filter((c) => String(c[0]).includes('Turn-detection'));
+        expect(turnWarnings).toHaveLength(1);
+    });
+
+    it('warns when minting a client-direct session and keeps turnDetection out of the session config', async () => {
+        const driver = new OpenAILiveRealtime('test-key');
+        const clientConfig = await driver.CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hi', Config: { turnDetection } });
+        expect(clientConfig.SessionConfig).not.toHaveProperty('turnDetection');
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Turn-detection setting(s) not applied'));
+    });
+
+    it('reconnects in place with a fresh WebSocket and seeds memory via session.thinking.append (#21)', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Live base prompt.' });
+        const socket1 = driver.lastMockSocket!;
+        socket1.triggerOpen();
+        socket1.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+        const session = (await sessionPromise) as OpenAILiveSession;
+
+        socket1.triggerMessage(JSON.stringify({
+            type: 'session.input_transcript.delta',
+            delta: 'Remember this detail',
+        }));
+        socket1.triggerMessage(JSON.stringify({
+            type: 'response.event',
+            event: { type: 'response.completed' },
+        }));
+
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await new Promise((r) => setTimeout(r, 0));
+        const socket2 = driver.lastMockSocket!;
+        expect(socket2).not.toBe(socket1);
+        socket2.triggerOpen();
+        socket2.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-2' }));
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.isClosed).toBe(true);
+        const startFrame = JSON.parse(socket2.sentFrames[0]);
+        expect(startFrame.type).toBe('session.start');
+        expect(startFrame.session.instructions).toContain('Live base prompt.');
+        const thinkingFrame = socket2.sentFrames.map((f) => JSON.parse(f)).find((f) => f.type === 'session.thinking.append');
+        expect(thinkingFrame).toBeDefined();
+        expect(thinkingFrame.content).toContain('Remember this detail');
+    });
+
+    it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Live base prompt.' });
+        const socket1 = driver.lastMockSocket!;
+        socket1.triggerOpen();
+        socket1.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-1' }));
+        const session = (await sessionPromise) as OpenAILiveSession;
+        socket1.triggerMessage(JSON.stringify({ type: 'session.delegation.created', delegation_id: 'delegation-abc' }));
+
+        const reconnectPromise = session.TriggerReconnect('connection-lost');
+        await new Promise((r) => setTimeout(r, 0));
+        const socket2 = driver.lastMockSocket!;
+        socket1.sentFrames = [];
+        await session.SendToolResult('delegation-abc', '{"status":"shipped"}');
+        socket2.triggerOpen();
+        socket2.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-2' }));
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.sentFrames.filter((f) => f.includes('shipped'))).toEqual([]);
+        const carrying = socket2.sentFrames.map((f) => JSON.parse(f)).filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying).toHaveLength(1);
+        expect(carrying[0].type).toBe('session.commentary.append');
+        expect(carrying[0].delegation_id).toBeNull();
+        await session.Close();
+    });
+});
+

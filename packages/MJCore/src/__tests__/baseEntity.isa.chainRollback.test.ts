@@ -756,3 +756,211 @@ describe("an IS-A chain delete whose parent's companions delete records", () => 
         expect(item.IsSaved, 'reset once the chain committed').toBe(false);
     });
 });
+
+describe('an existing 3-level IS-A chain under server-side concurrency checking', () => {
+    interface ConcurrencyObservedCall {
+        Entity: string;
+        ConcurrencyCheck: EntitySaveOptions['ConcurrencyCheck'];
+        ConcurrencyBaseline: Record<string, unknown> | undefined;
+    }
+
+    function buildSavedThreeLevelWebinarChain(conflictOn?: { entityName: string; conflictingFields: string[] }) {
+        const observedOptions: ConcurrencyObservedCall[] = [];
+        let localDepth = 0;
+
+        const concurrencyProvider: Partial<IEntityDataProvider> & {
+            CurrentUser: UserInfo;
+            SupportsEntityTransactions: boolean;
+            BeginEntityTransaction: typeof beginEntityTransaction;
+        } = {
+            CurrentUser: MOCK_USER,
+            SupportsEntityTransactions: true,
+            async BeginEntityTransaction() {
+                localDepth++;
+                txnLog.push('begin');
+                let settled = false;
+                return {
+                    IsNested: localDepth > 1,
+                    async Commit() {
+                        if (settled) return;
+                        settled = true;
+                        localDepth--;
+                        txnLog.push('commit');
+                    },
+                    async Rollback() {
+                        if (settled) return;
+                        settled = true;
+                        localDepth--;
+                        txnLog.push('rollback');
+                    },
+                };
+            },
+            async Save(entity: BaseEntity, _user: UserInfo, options: EntitySaveOptions) {
+                const name = entity.EntityInfo.Name;
+                observedOptions.push({
+                    Entity: name,
+                    ConcurrencyCheck: options?.ConcurrencyCheck,
+                    ConcurrencyBaseline: options?.ConcurrencyBaseline ? { ...options.ConcurrencyBaseline } : undefined,
+                });
+                saveCalls.push({
+                    Entity: name,
+                    WasSaved: entity.IsSaved,
+                    Values: entity.GetAll(),
+                    IsParentEntitySave: !!options?.IsParentEntitySave,
+                });
+                if (conflictOn && conflictOn.entityName === name) {
+                    const conflictResult = new BaseEntityResult(
+                        false,
+                        `Concurrent modification conflict on ${name} for field(s): ${conflictOn.conflictingFields.join(', ')}.`,
+                        'update',
+                    );
+                    conflictResult.ConcurrencyConflict = {
+                        ConflictingFields: [...conflictOn.conflictingFields],
+                    };
+                    entity.RegisterResultHistoryEntry(conflictResult);
+                    return false as unknown as Record<string, unknown>;
+                }
+                return { ...entity.GetAll() };
+            },
+            SetCachedRecordName(): void {
+                /* no-op */
+            },
+            GetCachedRecordName(): string | undefined {
+                return undefined;
+            },
+        };
+
+        const p = concurrencyProvider as unknown as IEntityDataProvider;
+        const product = new ChainEntity(productInfo, p);
+        const meeting = new ChainEntity(meetingInfo, p);
+        const webinar = new ChainEntity(webinarInfo, p);
+        meeting.WireParent(product);
+        webinar.WireParent(meeting);
+        webinar.NewRecord();
+
+        // Initial baseline state as loaded from DB
+        webinar.Set('Name', 'Q1 Keynote');
+        webinar.Set('MaxAttendees', 100);
+        webinar.Set('PlatformURL', 'https://meet.example/v1');
+        product.MarkSaved();
+        meeting.MarkSaved();
+        webinar.MarkSaved();
+
+        // Caller edits all 3 levels
+        webinar.Set('Name', 'Q1 Keynote Updated');
+        webinar.Set('MaxAttendees', 250);
+        webinar.Set('PlatformURL', 'https://meet.example/v2');
+
+        return {
+            product,
+            meeting,
+            webinar,
+            observedOptions,
+            clearConflict() {
+                conflictOn = undefined;
+            },
+        };
+    }
+
+    it('root-level conflict aborts before child levels run, rolls back the scope, and surfaces ConcurrencyConflict on the leaf', async () => {
+        const { product, meeting, webinar, observedOptions } = buildSavedThreeLevelWebinarChain({
+            entityName: productInfo.Name,
+            conflictingFields: ['Name'],
+        });
+
+        const ok = await webinar.Save({
+            ConcurrencyCheck: 'enforce',
+            ConcurrencyBaseline: {
+                Name: 'Q1 Keynote',
+                MaxAttendees: 100,
+                PlatformURL: 'https://meet.example/v1',
+            },
+        });
+
+        expect(ok).toBe(false);
+        expect(saveCalls.map((c) => c.Entity)).toEqual([productInfo.Name]);
+        expect(txnLog).toEqual(['begin', 'rollback']);
+        expect(webinar.LatestResult?.ConcurrencyConflict).toEqual({
+            ConflictingFields: ['Name'],
+        });
+        expect(observedOptions).toEqual([
+            {
+                Entity: productInfo.Name,
+                ConcurrencyCheck: 'enforce',
+                ConcurrencyBaseline: { Name: 'Q1 Keynote' },
+            },
+        ]);
+        // All three levels remain dirty with original OldValues intact
+        expect(product.Dirty).toBe(true);
+        expect(product.GetFieldByName('Name')!.OldValue).toBe('Q1 Keynote');
+        expect(meeting.Dirty).toBe(true);
+        expect(meeting.GetFieldByName('MaxAttendees')!.OldValue).toBe(100);
+        expect(webinar.Dirty).toBe(true);
+        expect(webinar.GetFieldByName('PlatformURL')!.OldValue).toBe('https://meet.example/v1');
+    });
+
+    it('middle-level conflict rolls back the already-written root level in DB and memory and aborts before the leaf runs', async () => {
+        const { product, meeting, webinar, observedOptions } = buildSavedThreeLevelWebinarChain({
+            entityName: meetingInfo.Name,
+            conflictingFields: ['MaxAttendees'],
+        });
+
+        const ok = await webinar.Save({
+            ConcurrencyCheck: 'enforce',
+            ConcurrencyBaseline: {
+                Name: 'Q1 Keynote',
+                MaxAttendees: 100,
+                PlatformURL: 'https://meet.example/v1',
+            },
+        });
+
+        expect(ok).toBe(false);
+        expect(saveCalls.map((c) => c.Entity)).toEqual([productInfo.Name, meetingInfo.Name]);
+        expect(txnLog).toEqual(['begin', 'rollback']);
+        expect(webinar.LatestResult?.ConcurrencyConflict).toEqual({
+            ConflictingFields: ['MaxAttendees'],
+        });
+        expect(observedOptions.map((o) => ({ Entity: o.Entity, BaselineKeys: Object.keys(o.ConcurrencyBaseline ?? {}) }))).toEqual([
+            { Entity: productInfo.Name, BaselineKeys: ['Name'] },
+            { Entity: meetingInfo.Name, BaselineKeys: ['Name', 'MaxAttendees'] },
+        ]);
+        // Product had already finalized during its parent save, and UnitOfWork rollback restored its Dirty + OldValue!
+        expect(product.Dirty).toBe(true);
+        expect(product.GetFieldByName('Name')!.OldValue).toBe('Q1 Keynote');
+        expect(meeting.Dirty).toBe(true);
+        expect(webinar.Dirty).toBe(true);
+    });
+
+    it('leaf-level conflict rolls back both already-written ancestors and preserves ancestor edits for a clean retry', async () => {
+        const chain = buildSavedThreeLevelWebinarChain({
+            entityName: webinarInfo.Name,
+            conflictingFields: ['PlatformURL'],
+        });
+        const { product, meeting, webinar } = chain;
+
+        const firstAttempt = await webinar.Save({ ConcurrencyCheck: 'enforce' });
+        expect(firstAttempt).toBe(false);
+        expect(saveCalls.map((c) => c.Entity)).toEqual([productInfo.Name, meetingInfo.Name, webinarInfo.Name]);
+        expect(txnLog).toEqual(['begin', 'rollback']);
+        expect(webinar.LatestResult?.ConcurrencyConflict).toEqual({
+            ConflictingFields: ['PlatformURL'],
+        });
+        // Both ancestors were restored to Dirty=true with their pre-save OldValues
+        expect(product.Dirty).toBe(true);
+        expect(product.GetFieldByName('Name')!.OldValue).toBe('Q1 Keynote');
+        expect(meeting.Dirty).toBe(true);
+        expect(meeting.GetFieldByName('MaxAttendees')!.OldValue).toBe(100);
+        expect(webinar.Dirty).toBe(true);
+
+        // Resolve conflict and retry: all 3 levels write again so ancestor edits are not lost
+        chain.clearConflict();
+        saveCalls = [];
+        txnLog = [];
+        expect(await webinar.Save({ ConcurrencyCheck: 'enforce' })).toBe(true);
+        expect(saveCalls.map((c) => c.Entity)).toEqual([productInfo.Name, meetingInfo.Name, webinarInfo.Name]);
+        expect(txnLog).toEqual(['begin', 'commit']);
+        expect(product.Dirty).toBe(false);
+        expect(meeting.Dirty).toBe(false);
+        expect(webinar.Dirty).toBe(false);
+    });
+});

@@ -17,6 +17,7 @@ import {
     ResolveReplayHeal,
     ReadSuiteComputerUseConfig,
     ResolveConsoleLogLevel,
+    ResolveRunValidationCriteria,
     ShouldCaptureArtifact,
     ShouldLogToConsole,
     ShouldRetainArtifact,
@@ -505,5 +506,42 @@ describe('resolveReplayHeal', () => {
 
     it('is independent of the LLM fallback flag, which the framework owns', () => {
         expect(ResolveReplayHeal({ replayHeal: 'off', elementGrounding: true })).toBe('off');
+    });
+});
+
+describe('ResolveRunValidationCriteria', () => {
+    it('passes plain criteria through as texts', () => {
+        expect(ResolveRunValidationCriteria(['Shows the dashboard', 'Lists three items'])).toEqual(['Shows the dashboard', 'Lists three items']);
+    });
+
+    it('passes weighted criteria as their texts, in order, without the weights', () => {
+        expect(ResolveRunValidationCriteria([
+            { criterion: 'Shows the dashboard', weight: 3 },
+            'Lists three items',
+            { criterion: 'No error banner' },
+        ])).toEqual(['Shows the dashboard', 'Lists three items', 'No error banner']);
+    });
+
+    it('is undefined when the test sets no criteria', () => {
+        expect(ResolveRunValidationCriteria(undefined)).toBeUndefined();
+        expect(ResolveRunValidationCriteria([])).toBeUndefined();
+    });
+
+    it('leaves weight-0 criteria out, since they count for nothing in the score', () => {
+        expect(ResolveRunValidationCriteria([
+            { criterion: 'Shows the dashboard', weight: 2 },
+            { criterion: 'Nice to have', weight: 0 },
+            'Lists three items',
+        ])).toEqual(['Shows the dashboard', 'Lists three items']);
+    });
+
+    it('rejects an invalid weight with the judge oracles\' message', () => {
+        expect(() => ResolveRunValidationCriteria(['Fine', { criterion: 'Heavy', weight: -1 }]))
+            .toThrow(/^ExpectedOutcomes\.judgeValidationCriteria: Criterion 2 must be a non-empty string, or an object with a non-empty "criterion"/);
+    });
+
+    it('rejects a list whose weights are all 0', () => {
+        expect(() => ResolveRunValidationCriteria([{ criterion: 'A', weight: 0 }]))
+            .toThrow('ExpectedOutcomes.judgeValidationCriteria: Every criterion has weight 0, so none counts toward the score: give at least one a weight above 0');
     });
 });
