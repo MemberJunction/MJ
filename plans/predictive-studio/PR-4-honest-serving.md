@@ -151,6 +151,10 @@ Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you di
 - Once the truth-suite schema is provisioned, every CodeGen run on this database also emits `pstruth` host files into
   `packages/GeneratedEntities`, `packages/MJAPI/src/generated` and `packages/MJExplorer/src/app/generated`: delete them
   before building (they are host artifacts, never staged).
+- A full `mj codegen` on a database with the truth suite provisioned also writes a `migrations/v5/CodeGen_Run_*.sql`
+  holding pstruth objects — delete it; the "emits nothing" proof is only valid on a clean bootstrap before
+  provisioning (measured at M2's start: 5040 lines, 30 `PS Truth:` entities, 0 PR 4 objects; OF4-9 for its two
+  `__mj` lines).
 - A rebuild wipes the truth-suite schema and the integration-test metadata. After every rebuild:
   `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:provision'`, then push
   `metadata-optional/integration-test` from a scratch copy (sync push writes back into the files it reads):
@@ -3565,19 +3569,19 @@ the `ModelNeedsTrainingError` throws at `:320`, `:324`, `:329`), the auto-train 
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -9506,6 +9510,7 @@ reviewer's paste); none was rejected. No Critical finding is open.
 | #6180 regenerates its tail again, or merges first | Closed: #6180 merged first (`fa33e94dbe`); PR 4's migration follows it and carries none of its rows (D4-79); M5.11 and M6.8 active (D4-31) |
 | The deterministic tier under `RUN_MUTATION_TESTS=1` reports host-environment skips of mutation-only TestingFramework checks (`server-cache.S30`, `role-elevation.RE6`, `realtime-session-verification.RSV1/2/4/5/6`, `entity-server-invariants.ESI9`) and next's own failures | CI's PR lane form (no flag, skip gate PASSED) is the merging gate; in the flag form every failure is root-caused and named in §11 and none is attributable to PR 4 (D4-79); a TestingFramework or MJCore change is outside PR 4's allowlist (D-062), owner flags OF4-7, OF4-8 |
 | next #6316 metadata-reload race breaks IT01 S34 / IT132 ABV3 under the mutation flag — fix belongs in a next PR; PR 4 does not touch TestingFramework/MJCore | Owner flag OF4-8; recorded in D4-79 and §11 |
+| next's `SubtypeSelector` on `MJ: Conversations`/`MJ: Comments` flips on every `sync push` → full `codegen` cycle (two next-owned writers, two JSON formats), so a full CodeGen run is never empty — fix belongs in a next PR | Owner flag OF4-9; the run file is deleted (§2), never folded into PR 4's tail |
 | The view's population-wide read is slow at PS volumes (a top-1-per-group read over the live table) | A-FV-VOLUME times it at 1M rows; partition-column filters seek the as-of index; a DBA may later promote the query to a materialization under MJ's own process (D-078's residual) |
 | Feature Value growth (records × bindings × runs) | A-FV-VOLUME sizes the indexes at 1M rows and sets the default `RetentionDays`; the daily sweep (D4-28) |
 
@@ -9529,7 +9534,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Four flags remain, each decided out of scope with its default implemented:
+updated as caller maintenance (§2.6). Five flags remain, each decided out of scope with its default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
   (layering; D-062 (4): `ng-core-entity-forms` outside the `MLModels` and `model-predictions` folders is foundational,
@@ -9556,6 +9561,18 @@ updated as caller maintenance (§2.6). Four flags remain, each decided out of sc
 - **OF4-8 · next #6316 metadata-reload race breaks IT01 S34 / IT132 ABV3 under the mutation flag — fix belongs in a next
   PR; PR 4 does not touch TestingFramework/MJCore** (controller ruling at the M1 merge-of-next pass, D4-79). Evidence in
   §11's merge-of-next entry.
+- **OF4-9 · next's `SubtypeSelector` round-trip is unstable: two next-owned files write one column in two JSON formats —
+  fix belongs in a next PR; PR 4 adds no fix** (controller ruling at M2's start; outside the allowlist, D-062).
+  `metadata/entities/.conversation-and-comment-subtypes.json` declares `SubtypeSelector` on `MJ: Conversations` and
+  `MJ: Comments` as an object, which `mj sync push` writes pretty-printed; `metadata/integrations/additionalSchemaInfo.json`
+  declares the same values as compact strings, which CodeGen writes whenever the stored text differs
+  (`CodeGenLib/src/Database/manage-metadata.ts:2168–2210`, `Update attributes on "…" from additionalSchemaInfo`). Evidence
+  on `MJ_PS_PR4_claude`: `__mj.RecordChange` for `MJ: Conversations` (`13248F34-2837-EF11-86D4-6045BDEE16E6`) →
+  `2026-11-11 18:51:30 Update` "SubtypeSelector changed from {"Path": "TypeID.ExtensionEntity", … (compact) to {⏎  "Path":
+  …" (the fifth clean build's sync push); M2 start's full `mj codegen` at 19:57:27 wrote the compact strings back
+  (`__mj_UpdatedAt` 19:57:27.29 / 19:57:27.31 on both entities), two `UPDATE [${flyway:defaultSchema}].[Entity]` statements at the
+  head of `CodeGen_Run_2026-11-11_19-57-00.sql` (evidence copy in `.superpowers/sdd/PR-4-honest-serving/m2-start-evidence/`).
+  **Default, implemented:** the run file is deleted (§2); nothing folded into PR 4's tail.
 
 ## 10. PR description draft
 
@@ -9604,7 +9621,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->83cbdff672<!-- /gen:head -->
+- Head: <!-- gen:head -->c107293f26<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10211,6 +10228,48 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   IT metadata, C1 corpus); MJAPI stopped; truth sidecar on `:61968`; the seven owner files untracked.
 - **Next step (exact):** M2's Start list, first command: `export PS_MJ="$MJ" PS_AGENT="$AGENT"` with `tools/ps-env.sh`
   loaded, then `git fetch origin next`.
+
+### 2026-11-11 14:15 CST — Claude (Fable 5.1, M2 start) — M2
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `ec1d4cb56c` (merge of next) + this commit; pushed after this commit
+  (scheduled push point: a merge of next, D-072).
+- **Merge state:** `git fetch origin next` → `4da68c31de..7744b3eb1d`; `git rev-parse --short origin/next` → `7744b3eb1d`
+  (59 commits past `5fd5335a5f`). **merged next @7744b3eb1d (`ec1d4cb56c`); no new migration, no retime**:
+  `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/ metadata/` →
+  `.IT124-feature-pipeline-core.json` (FP8/FP9 in its description and summary only; bundle count unchanged) and
+  `metadata/actions/.bizapps-actions.json` (23 `CompanyIntegrationID` params). `grep -cE
+  'MLModel|FeatureValue|spDeleteEntityWithCoreDependencies|EntityUniqueKey'` over the 16093-line next diff → 0.
+  Conflicts: the four CodeGen-owned `mj-class-registrations.ts` manifests only, resolved to next's side and regenerated
+  by the build (PR 4's five classes kept; vs `c107293f26` only next's `MJScopedNotificationConfigEntityServer`,
+  `CLASS_REGISTRATIONS_COUNT` 1336 → 1337); the regenerated four ride this commit.
+- **Bootstrap:** `pnpm install` 0 (`Done in 4.5s`); `pnpm run build` 0 (`Tasks: 321 successful, 321 total`); `mj migrate`
+  0 (`Migrations complete in 35.5s — 1 applied`: `R__RefreshMetadata.sql`, rank 178, re-runs every migrate on its
+  `${flyway:timestamp}` line; last versioned script still 175 `V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql`);
+  `mj sync push --dir=metadata --ci` 0 (`"created":23,"updated":2,"unchanged":16772,"deleted":0,"errorCount":0`; 4
+  write-backs restored from the index); `mj codegen` 0 (`MJ CodeGen complete — 507 entities in 143.05s`) — it emitted
+  `CodeGen_Run_2026-11-11_19-57-00.sql` (5040 lines: 30 `PS Truth:` entities' objects + the two OF4-9 `__mj.Entity`
+  updates, 0 PR 4 objects); the stop rule fired, controller ruling: discarded (§2 note added, OF4-9), evidence copy in
+  `.superpowers/sdd/PR-4-honest-serving/m2-start-evidence/`; pstruth host files deleted and the three tracked host
+  artifacts restored from the index; second `pnpm run build` 0 (`Tasks: 321 successful, 321 total`, `FULL TURBO`).
+  `git status --porcelain` → the plan, the four manifests, the owner's 7 untracked files.
+- **Tests:** Core `pnpm test` → `Test Files 34 passed (34) / Tests 468 passed (468)`; TruthSuite `test:db --
+  serving-schema` → `Test Files 3 passed (3) / Tests 25 passed (25)`; `check:guards` exit 0; `check:standards` exit 0
+  (`✓ No errors. 14307 warning(s)`).
+- **Runtime verification:** `flyway_schema_history` `success = 1` 177 → 178 (the repeatable); `__mj.RecordChange` and
+  `__mj_UpdatedAt` reads for OF4-9; sync push's two "updated" emitted no SQL (`__mj_UpdatedAt` of ComponentLibrary
+  ApexCharts / Component DataGrid still 18:51:28–29Z).
+- **CI:** nothing ran on `c107293f26`: `gh pr checks 6517` → `no checks reported`; `gh api …/pulls/6517` →
+  `"mergeable":false,"mergeable_state":"dirty"` (next's manifest changes conflicted; no merge ref, no `pull_request`
+  run). `ec1d4cb56c` resolves it; this commit's push is read below.
+- **State left behind:** `MJ_PS_PR4_claude` bootstrapped (truth suite, IT metadata, C1 corpus from the fifth clean build;
+  next's 23 action params pushed); truth sidecar on `127.0.0.1:61968` (Python pid 59999 — `lsof … | grep node` misses
+  it); MJAPI stopped; the owner's 7 files untracked.
+- **Next step (exact):** M2, Task M2.1 Step 1 — write the failing test in
+  `Engine/src/training/__tests__/storage-provider-artifact-store.test.ts` (`refuses to overwrite an existing object and
+  writes nothing`).
+- **Gotchas / decisions:** OF4-9 (§9.4, §9.2). next's committed `sync.checksum` for ComponentLibrary ApexCharts
+  (`91E9DB43…`) and Component DataGrid (`DB1253D8…`, `data-grid.spec.json` changed in `bb14d1845b` without one) are
+  stale, so every `sync push` reports them "updated" and writes back — restore, no action.
 
 ## 12. Refresh log (append-only)
 
