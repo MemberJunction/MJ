@@ -148,6 +148,15 @@ export abstract class BaseAuthProvider implements IAuthProvider {
   }
 
   /**
+   * The standard OIDC `sub` claim: unique and never reassigned within one issuer. Providers whose
+   * `sub` is not stable for a person (see `MSALProvider`) or that mint tokens for a User record
+   * themselves override this.
+   */
+  ExtractSubject(payload: JwtPayload): string | undefined {
+    return typeof payload.sub === 'string' && payload.sub.length > 0 ? payload.sub : undefined;
+  }
+
+  /**
    * Abstract method for extracting user info - must be implemented by each provider
    */
   abstract extractUserInfo(payload: JwtPayload): AuthUserInfo;

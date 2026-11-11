@@ -146,6 +146,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
             { sectionKey: 'mJConversationsResolvedByUserID', sectionName: 'Conversations (Resolved By User)', isExpanded: false },
+            { sectionKey: 'mJUserExternalIdentities', sectionName: 'User External Identities', isExpanded: false },
             { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false },
             { sectionKey: 'mJDiagnosticSessions', sectionName: 'Diagnostic Sessions', isExpanded: false },
             { sectionKey: 'mJDiagnosticBundlesCreatedByUserID', sectionName: 'Diagnostic Bundles (Created By User ID)', isExpanded: false },

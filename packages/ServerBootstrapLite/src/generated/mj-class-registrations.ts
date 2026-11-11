@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (493 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -680,6 +680,7 @@ import {
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2074,6 +2075,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2154,11 +2156,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
-    GetBusinessCentralSalesInvoicesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
     GetCustomersAction,
     GetDimensionsAction,
@@ -2358,11 +2360,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
-    IdentityVerificationChannelServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
@@ -2562,11 +2564,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateSVGChartAction,
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
-    CreateSVGNetworkAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateSVGNetworkAction,
     CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
     CreateUserAction_core_actions,
@@ -2774,7 +2776,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1191;
+export const CLASS_REGISTRATIONS_COUNT = 1192;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

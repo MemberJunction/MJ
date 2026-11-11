@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (493 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -493,6 +493,7 @@ import {
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -1254,6 +1255,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -1385,11 +1387,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
-    AIPromptCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
@@ -1474,7 +1476,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 670;
+export const CLASS_REGISTRATIONS_COUNT = 671;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
