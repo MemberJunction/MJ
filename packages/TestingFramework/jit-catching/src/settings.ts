@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
         'claude-opus-5-5': { Input: 4, Output: 20, CachedInput: 0.2 }, 'claude-sonnet-5-5': { Input: 2, Output: 10, CachedInput: 0.2 },
         'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.01 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
         'gpt-4.1-mini': { Input: 0.4, Output: 1.6, CachedInput: 0.1 }, 'gpt-5.1': { Input: 1.25, Output: 10, CachedInput: 0.125 },
+        'gemini-3.8-flash': { Input: 0.75, Output: 3.75, CachedInput: 0.075 },
     },
     // BuildExclude: packages left out of the sandbox build closure. The CLI's build copies a folder with a recursive
     // fs.cpSync, which fails with EACCES on a Docker Desktop bind mount; a Linux host can set this to [].
