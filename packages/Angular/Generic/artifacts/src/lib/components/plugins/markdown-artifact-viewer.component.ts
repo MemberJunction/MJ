@@ -7581,11 +7581,10 @@ export class MarkdownArtifactViewerComponent
   }
 
   public RetryLiveCollaboration(): void {
-    const artifactId =
-      this.session?.ArtifactID ||
-      this.artifactVersion?.ArtifactID ||
-      this.artifactVersion?.ID ||
-      'local-doc';
+    const artifactId = this.session?.ArtifactID || this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
+      return;
+    }
     void this.collabService.Retry(artifactId);
   }
 
@@ -7630,15 +7629,7 @@ export class MarkdownArtifactViewerComponent
 
   private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
     this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
-    if (typeof this.collabService.NotifyMergeConflictToastOnce === 'function') {
-      this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
-    } else {
-      this.notificationService?.CreateSimpleNotification?.(
-        MERGE_CONFLICT_WARNING_MESSAGE,
-        'warning',
-        5000,
-      );
-    }
+    this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
     this.cdr.markForCheck();
   }
 
@@ -7796,16 +7787,14 @@ export class MarkdownArtifactViewerComponent
       }),
     );
 
-    if (this.session.MergeConflict$) {
-      this.sessionSubs.push(
-        this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
-          if (this.isComponentDestroyed) {
-            return;
-          }
-          this.handleCollaborationMergeConflict(conflictEvt);
-        }),
-      );
-    }
+    this.sessionSubs.push(
+      this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+    );
 
     if (hasRemoteBackend) {
       void this.session.Connect(this.CollaborationWsUrl, provider);

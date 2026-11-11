@@ -1972,7 +1972,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
    */
   private buildScopedArtifactVersionQueries(artifactIds: ReadonlyArray<string>): RunViewParams[] {
     const queries: RunViewParams[] = [];
-    const verEntity = this.ProviderToUse?.EntityByName?.('MJ: Artifact Versions');
+    const verEntity = this.ProviderToUse.EntityByName('MJ: Artifact Versions');
     const schemaName = verEntity?.SchemaName || '__mj';
     const baseView = verEntity?.BaseView || 'vwArtifactVersions';
 

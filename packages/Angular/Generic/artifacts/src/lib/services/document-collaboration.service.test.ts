@@ -1120,6 +1120,8 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
         Source: 'agent-commit',
         RoomEpoch: undefined,
         Timestamp: '2026-11-11T12:00:00.000Z',
+        ActorUserID: undefined,
+        LocalUserID: 'u1',
       });
       expect(createNotificationSpy).toHaveBeenCalledTimes(1);
       expect(createNotificationSpy).toHaveBeenCalledWith(
@@ -1157,5 +1159,68 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       conflictService.ngOnDestroy();
       Reflect.set(globalThis, 'WebSocket', prevWebSocket);
     }
+  });
+
+  it('R9-12: NotifyMergeConflictToastOnce suppresses toast for non-authors when actorUserId is another user, but shows it for matching actor or when absent', () => {
+    const createNotificationSpy = vi.fn();
+    const mockNotifier: CollaborationNotificationSink = {
+      CreateSimpleNotification: createNotificationSpy,
+    };
+
+    const conflictService = new DocumentCollaborationService();
+    conflictService.SetNotificationSink(mockNotifier);
+
+    const currentUser = '11111111-1111-4111-8111-111111111111';
+    const otherUser = '22222222-2222-4222-8222-222222222222';
+
+    // 1. Another collaborator's edit conflict: suppressed for current user
+    const otherConflict: CollaborationMergeConflictEvent = {
+      ArtifactID: 'art-1',
+      RejectedHunksCount: 1,
+      Timestamp: new Date().toISOString(),
+      ActorUserID: otherUser,
+      LocalUserID: currentUser,
+    };
+    const resultOther = conflictService.NotifyMergeConflictToastOnce(otherConflict, mockNotifier);
+    expect(resultOther).toBe(false);
+    expect(createNotificationSpy).not.toHaveBeenCalled();
+
+    // 2. Current user's own edit conflict: shown
+    const ownConflict: CollaborationMergeConflictEvent = {
+      ArtifactID: 'art-1',
+      RejectedHunksCount: 1,
+      Timestamp: new Date().toISOString(),
+      ActorUserID: currentUser,
+      LocalUserID: currentUser,
+    };
+    const resultOwn = conflictService.NotifyMergeConflictToastOnce(ownConflict, mockNotifier);
+    expect(resultOwn).toBe(true);
+    expect(createNotificationSpy).toHaveBeenCalledTimes(1);
+    expect(createNotificationSpy).toHaveBeenCalledWith(MERGE_CONFLICT_WARNING_MESSAGE, 'warning', 5000);
+
+    // 3. Absent actorUserId (broadcast / legacy / agent conflict without actorUserId): shown
+    const absentConflict: CollaborationMergeConflictEvent = {
+      ArtifactID: 'art-1',
+      RejectedHunksCount: 1,
+      Timestamp: new Date().toISOString(),
+      LocalUserID: currentUser,
+    };
+    const resultAbsent = conflictService.NotifyMergeConflictToastOnce(absentConflict, mockNotifier);
+    expect(resultAbsent).toBe(true);
+    expect(createNotificationSpy).toHaveBeenCalledTimes(2);
+
+    // 4. local-user fallback ID: shown even if actorUserId is set
+    const localUserFallbackConflict: CollaborationMergeConflictEvent = {
+      ArtifactID: 'art-1',
+      RejectedHunksCount: 1,
+      Timestamp: new Date().toISOString(),
+      ActorUserID: otherUser,
+      LocalUserID: 'local-user',
+    };
+    const resultLocal = conflictService.NotifyMergeConflictToastOnce(localUserFallbackConflict, mockNotifier);
+    expect(resultLocal).toBe(true);
+    expect(createNotificationSpy).toHaveBeenCalledTimes(3);
+
+    conflictService.ngOnDestroy();
   });
 });

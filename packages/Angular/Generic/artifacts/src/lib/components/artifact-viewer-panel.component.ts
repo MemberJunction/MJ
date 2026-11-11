@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef, HostListener, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, RunViewParams, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
@@ -12,6 +12,7 @@ import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer
 import { ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from './base-artifact-viewer.component';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactFileService } from '../services/artifact-file.service';
+import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 
 /** Fields of the version list query: version metadata without Content. */
@@ -680,6 +681,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   private recentAccessService: RecentAccessService;
+  private readonly collabService = inject(DocumentCollaborationService);
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -1920,6 +1922,60 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       }
 
       const md = this.ProviderToUse;
+      if (sourceVersion.ID && this.Artifact?.ID) {
+        const serverRestore = await this.collabService.RestoreArtifactVersion(
+          this.Artifact.ID,
+          sourceVersion.ID,
+          this.ProviderToUse,
+        );
+        if (serverRestore.Supported) {
+          if (serverRestore.Success && serverRestore.VersionID) {
+            const restoredVer = await md.GetEntityObject<MJArtifactVersionEntity>(
+              'MJ: Artifact Versions',
+              this.CurrentUser,
+            );
+            const loaded = await restoredVer.Load(serverRestore.VersionID);
+            const restoredVersionNum =
+              serverRestore.VersionNumber ??
+              (loaded && restoredVer.VersionNumber ? restoredVer.VersionNumber : versionNumber + 1);
+            if (!loaded) {
+              restoredVer.ArtifactID = this.Artifact.ID;
+              restoredVer.UserID = this.CurrentUser.ID;
+              restoredVer.VersionNumber = restoredVersionNum;
+              restoredVer.Name = sourceVersion.Name || this.Artifact.Name;
+              restoredVer.Description = `Restored from v${versionNumber}`;
+              restoredVer.Comments = `Restored from v${versionNumber}`;
+              restoredVer.Content = sourceVersion.Content;
+              if (sourceVersion.Configuration) {
+                restoredVer.Configuration = sourceVersion.Configuration;
+              }
+            }
+            if (serverRestore.VersionID) {
+              this.fullVersionCache.set(String(serverRestore.VersionID).toLowerCase(), restoredVer);
+            }
+            this.artifactVersion = restoredVer;
+            this.SelectedVersionNumber = restoredVersionNum;
+            this.AllVersions = [restoredVer, ...this.AllVersions];
+            this.applyVersionScope(this.activeScope);
+            this.JsonContent = this.formatJSON(restoredVer.Content || '{}');
+            this.IsCompareMode = false;
+            this.notificationService.CreateSimpleNotification(
+              `Restored v${versionNumber} as new version v${restoredVersionNum}`,
+              'success',
+              3500,
+            );
+            return;
+          } else {
+            this.notificationService.CreateSimpleNotification(
+              serverRestore.ErrorMessage || `Failed to restore v${versionNumber}`,
+              'error',
+              4000,
+            );
+            return;
+          }
+        }
+      }
+
       const rv = RunView.FromMetadataProvider(md);
       const maxRes = await rv.RunView<{ VersionNumber: number }>(
         {

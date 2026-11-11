@@ -49,6 +49,8 @@ export interface ArtifactLiveMutationEvent {
   agentRunId?: string;
   /** Display name of the agent performing the mutation (`D5`). */
   agentName?: string;
+  /** Whether room commit should be deferred until MJ: Artifact Versions persistence succeeds (`R9-5`). */
+  deferCommit?: boolean;
 }
 
 /**
@@ -64,6 +66,10 @@ export interface ArtifactLiveMutationHookResult {
     LiveLines: string[];
     RejectedAgentLines: string[];
   }>;
+  /** Optional commit callback executed after version persistence succeeds (`R9-5`). */
+  commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<void> | void;
+  /** Optional rollback callback executed if version persistence fails (`R9-5`). */
+  rollback?: () => Promise<void> | void;
 }
 
 /**
@@ -1015,6 +1021,7 @@ export class ArtifactToolManager {
               contextUser: this.contextUser,
               agentRunId: activeAgentRunId,
               agentName: activeAgentName,
+              deferCommit: willPersist,
             });
           } catch (hookErr) {
             LogError(
@@ -1036,8 +1043,12 @@ export class ArtifactToolManager {
             const mergedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(previousOriginalXlsxBytes, mergedWorkbook);
             targetEntry.originalXlsxBytes = mergedBytes;
             xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
-          } catch {
-            // Retain previously patched xlsx bytes if merged text cannot re-patch
+          } catch (repatchErr) {
+            LogError(
+              `ArtifactToolManager: failed re-patching xlsx bytes after live merge for artifact '${targetEntry.artifactId}': ${
+                repatchErr instanceof Error ? repatchErr.message : String(repatchErr)
+              }`,
+            );
           }
         }
 
@@ -1054,6 +1065,17 @@ export class ArtifactToolManager {
             call.tool,
           );
           if (!persistOutcome.persisted) {
+            if (hookResult && typeof hookResult === 'object') {
+              try {
+                await hookResult.rollback?.();
+              } catch (rbErr) {
+                LogError(
+                  `ArtifactToolManager: rollback hook failed for artifact '${targetEntry.artifactId}': ${
+                    rbErr instanceof Error ? rbErr.message : String(rbErr)
+                  }`,
+                );
+              }
+            }
             // Roll back in-memory session state on concurrency conflict or File-mode upload failure
             targetEntry.content = previousContent;
             targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
@@ -1073,6 +1095,20 @@ export class ArtifactToolManager {
             return failedStored;
           }
           persisted = true;
+          if (hookResult && typeof hookResult === 'object') {
+            try {
+              await hookResult.commit?.({
+                versionId: targetEntry.versionId,
+                versionNumber: targetEntry.versionNumber,
+              });
+            } catch (commitErr) {
+              LogError(
+                `ArtifactToolManager: commit hook failed for artifact '${targetEntry.artifactId}': ${
+                  commitErr instanceof Error ? commitErr.message : String(commitErr)
+                }`,
+              );
+            }
+          }
         }
 
         // 3b. For File-mode artifacts (where storage upload succeeded first), invoke hook after persist and reconcile if needed
@@ -1153,9 +1189,32 @@ export class ArtifactToolManager {
             ? (hookResult.rejectedHunksCount ?? hookResult.rejectedAgentHunks?.length ?? 0)
             : 0;
         if (rejectedCount > 0) {
-          const conflictWarning = `${rejectedCount} edit${rejectedCount === 1 ? '' : 's'} not applied because of concurrent edits`;
+          const rejectedLinesPreview: string[] = [];
+          if (hookResult && typeof hookResult === 'object' && Array.isArray(hookResult.rejectedAgentHunks)) {
+            for (const hunk of hookResult.rejectedAgentHunks) {
+              if (Array.isArray(hunk.RejectedAgentLines)) {
+                for (const line of hunk.RejectedAgentLines) {
+                  const trimmed = line.trim();
+                  if (trimmed.length > 0 && rejectedLinesPreview.length < 3) {
+                    rejectedLinesPreview.push(trimmed);
+                  }
+                }
+              }
+              if (rejectedLinesPreview.length >= 3) {
+                break;
+              }
+            }
+          }
+          const previewSuffix =
+            rejectedLinesPreview.length > 0
+              ? ` (rejected: ${rejectedLinesPreview.map((l) => `"${l}"`).join(', ')})`
+              : '';
+          const conflictWarning = `${rejectedCount} edit${rejectedCount === 1 ? '' : 's'} not applied because of concurrent edits${previewSuffix}`;
           sanitizedData.rejectedEditsCount = rejectedCount;
           sanitizedData.conflictWarning = conflictWarning;
+          if (rejectedLinesPreview.length > 0) {
+            sanitizedData.rejectedLinesPreview = rejectedLinesPreview;
+          }
           const existingWarnings = Array.isArray(sanitizedData.warnings)
             ? sanitizedData.warnings.filter((w): w is string => typeof w === 'string')
             : [];

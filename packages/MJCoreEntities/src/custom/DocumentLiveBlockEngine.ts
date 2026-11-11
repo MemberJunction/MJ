@@ -1785,7 +1785,10 @@ const NILADIC_SQL_PRINCIPAL_KEYWORDS: ReadonlySet<string> = new Set([
     'user',
     'current_user',
     'session_user',
-    'system_user'
+    'system_user',
+    'current_role',
+    'current_catalog',
+    'current_schema'
 ]);
 
 function validateEntityViewOrderBy(

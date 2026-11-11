@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import vm from 'node:vm';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -9,13 +8,9 @@ import {
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
-    GetSafeRegexBatchSandboxExecutor,
-    GetSafeRegexSandboxExecutor,
-    IsSafeUserRegex,
-    RegisterSafeRegexBatchSandboxExecutor,
-    RegisterSafeRegexSandboxExecutor,
-    SafeRegexSearchBatchDetailed
+    IsSafeUserRegex
 } from '@memberjunction/core-entities';
+import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 const TOOL_REGEX_BUDGET_MS = 150;
 const GREP_REGEX_BUDGET_MS = 150;
@@ -26,76 +21,6 @@ const MAX_REGEX_INPUT_BYTES = 65_536;
 const MAX_SAFE_UTF16_UNITS_FOR_64KB = 21_845;
 const MAX_REPORTED_UNSEARCHABLE_BLOCKS = 25;
 
-const VM_REGEX_STATE: { rx: RegExp; s: string } = { rx: /(?:)/, s: '' };
-const VM_REGEX_CONTEXT = vm.createContext(VM_REGEX_STATE);
-const VM_REGEX_SCRIPT = new vm.Script('rx.test(s)');
-
-const VM_BATCH_REGEX_STATE: { rx: RegExp; items: readonly string[] } = { rx: /(?:)/, items: [] };
-const VM_BATCH_REGEX_CONTEXT = vm.createContext(VM_BATCH_REGEX_STATE);
-const VM_BATCH_REGEX_SCRIPT = new vm.Script(
-    '{ const out = new Array(items.length); for (let i = 0; i < items.length; i++) { rx.lastIndex = 0; out[i] = rx.test(items[i]); } out; }'
-);
-
-function isVmTimeoutError(err: unknown): boolean {
-    const msg = err instanceof Error ? err.message : String(err);
-    const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
-    return errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out');
-}
-
-function ensureNodeVmSafeRegexExecutorRegistered(): void {
-    if (!GetSafeRegexSandboxExecutor()) {
-        RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
-            regex.lastIndex = 0;
-            VM_REGEX_STATE.rx = regex;
-            VM_REGEX_STATE.s = input;
-            try {
-                const matched = Boolean(
-                    VM_REGEX_SCRIPT.runInContext(VM_REGEX_CONTEXT, {
-                        timeout: Math.max(1, Math.ceil(maxDurationMs))
-                    })
-                );
-                return { Matched: matched, TimedOut: false };
-            } catch (err) {
-                if (isVmTimeoutError(err)) {
-                    return { Matched: false, TimedOut: true };
-                }
-                throw err;
-            } finally {
-                VM_REGEX_STATE.s = '';
-            }
-        });
-    }
-
-    if (!GetSafeRegexBatchSandboxExecutor()) {
-        RegisterSafeRegexBatchSandboxExecutor(
-            (regex: RegExp, inputs: readonly string[], maxDurationMs: number) => {
-                regex.lastIndex = 0;
-                VM_BATCH_REGEX_STATE.rx = regex;
-                VM_BATCH_REGEX_STATE.items = inputs;
-                try {
-                    const rawOut = VM_BATCH_REGEX_SCRIPT.runInContext(VM_BATCH_REGEX_CONTEXT, {
-                        timeout: Math.max(1, Math.ceil(maxDurationMs))
-                    });
-                    const matches = Array.isArray(rawOut)
-                        ? rawOut.map(Boolean)
-                        : new Array<boolean>(inputs.length).fill(false);
-                    return { Matches: matches, TimedOut: false };
-                } catch (err) {
-                    if (isVmTimeoutError(err)) {
-                        return {
-                            Matches: new Array<boolean>(inputs.length).fill(false),
-                            TimedOut: true
-                        };
-                    }
-                    throw err;
-                } finally {
-                    VM_BATCH_REGEX_STATE.items = [];
-                }
-            }
-        );
-    }
-}
-
 function exceedsRegexInputBytes(text: string): boolean {
     if (text.length <= MAX_SAFE_UTF16_UNITS_FOR_64KB) {
         return false;
@@ -103,7 +28,7 @@ function exceedsRegexInputBytes(text: string): boolean {
     return Buffer.byteLength(text, 'utf8') > MAX_REGEX_INPUT_BYTES;
 }
 
-ensureNodeVmSafeRegexExecutorRegistered();
+EnsureNodeVmSafeRegexExecutorRegistered();
 
 export interface UnsearchableDocumentBlock {
     blockId: string;
@@ -249,7 +174,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                         flags: { type: 'string', description: 'Optional regex flags when use_regex is true (e.g., "i" for case-insensitive).' },
                         case_sensitive: {
                             type: 'boolean',
-                            description: 'Optional (default false): set true for case-sensitive matching.'
+                            description:
+                                'Case-sensitive matching. Defaults to true for literal search; when use_regex is true, defaults to regex flags (case-sensitive unless flags includes "i", and explicit case_sensitive overrides flags).'
                         },
                         caseSensitive: {
                             type: 'boolean',
@@ -776,7 +702,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleSearchBlocks(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        ensureNodeVmSafeRegexExecutorRegistered();
+        EnsureNodeVmSafeRegexExecutorRegistered();
         const query = String(input.query ?? '').trim();
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
@@ -870,36 +796,24 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 pendingChars = 0;
                 return;
             }
-            const remainingMs = regexDeadline - performance.now();
-            if (remainingMs <= 0) {
-                budgetExpired = true;
-                for (const b of pendingBlocks) {
-                    recordUnsearchableBlock(b, 'regex_timeout');
-                }
-                pendingBlocks = [];
-                pendingTexts = [];
-                pendingChars = 0;
-                return;
-            }
 
-            const batchRes = SafeRegexSearchBatchDetailed(
+            const recRes = ExecuteSafeRegexBatchWithRecovery(
                 activeRegex,
                 pendingTexts,
-                Math.min(BATCH_REGEX_MAX_MS, remainingMs),
+                regexDeadline,
+                BATCH_REGEX_MAX_MS,
                 MAX_REGEX_INPUT_BYTES
             );
-            if (batchRes.TimedOut) {
+            if (recRes.BudgetExpired) {
                 budgetExpired = true;
-                for (const b of pendingBlocks) {
-                    recordUnsearchableBlock(b, 'regex_timeout');
-                }
-            } else {
-                for (let k = 0; k < pendingBlocks.length; k++) {
-                    if (batchRes.Matches[k]) {
-                        matches.push(pendingBlocks[k]);
-                    } else if (batchRes.InputTooLong[k]) {
-                        recordUnsearchableBlock(pendingBlocks[k], 'exceeds_64kb_regex_limit');
-                    }
+            }
+            for (let k = 0; k < pendingBlocks.length; k++) {
+                if (recRes.Matches[k]) {
+                    matches.push(pendingBlocks[k]);
+                } else if (recRes.TimedOut[k] || recRes.BudgetSkipped[k]) {
+                    recordUnsearchableBlock(pendingBlocks[k], 'regex_timeout');
+                } else if (recRes.InputTooLong[k]) {
+                    recordUnsearchableBlock(pendingBlocks[k], 'exceeds_64kb_regex_limit');
                 }
             }
             pendingBlocks = [];
@@ -960,7 +874,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleGrep(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        ensureNodeVmSafeRegexExecutorRegistered();
+        EnsureNodeVmSafeRegexExecutorRegistered();
         const patternStr = String(input.pattern ?? '');
         if (!patternStr) {
             return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
@@ -1049,31 +963,26 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 pendingChars = 0;
                 return;
             }
-            const remainingMs = regexDeadline - performance.now();
-            if (remainingMs <= 0) {
-                budgetExpired = true;
-                budgetSkippedCount += pendingLineNums.length;
-                pendingLineNums = [];
-                pendingTexts = [];
-                pendingChars = 0;
-                return;
-            }
-            const batchRes = SafeRegexSearchBatchDetailed(
+
+            const recRes = ExecuteSafeRegexBatchWithRecovery(
                 safeRegex,
                 pendingTexts,
-                Math.min(BATCH_REGEX_MAX_MS, remainingMs),
+                regexDeadline,
+                BATCH_REGEX_MAX_MS,
                 MAX_REGEX_INPUT_BYTES
             );
-            if (batchRes.TimedOut) {
+            if (recRes.BudgetExpired) {
                 budgetExpired = true;
-                timeoutCount += pendingLineNums.length;
-            } else {
-                for (let k = 0; k < pendingLineNums.length; k++) {
-                    if (batchRes.Matches[k]) {
-                        matches.push({ lineNumber: pendingLineNums[k], text: pendingTexts[k] });
-                    } else if (batchRes.InputTooLong[k]) {
-                        tooLongCount++;
-                    }
+            }
+            for (let k = 0; k < pendingLineNums.length; k++) {
+                if (recRes.Matches[k]) {
+                    matches.push({ lineNumber: pendingLineNums[k], text: pendingTexts[k] });
+                } else if (recRes.TimedOut[k]) {
+                    timeoutCount++;
+                } else if (recRes.BudgetSkipped[k]) {
+                    budgetSkippedCount++;
+                } else if (recRes.InputTooLong[k]) {
+                    tooLongCount++;
                 }
             }
             pendingLineNums = [];

@@ -17,6 +17,7 @@ import {
     MJConversationDetailEntity,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
+import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
 import { ApiRoute } from '../apiRoot.js';
 import { configInfo } from '../config.js';
 import {
@@ -855,9 +856,29 @@ export class DocumentCollaborationResolver extends ResolverBase {
             const rejectedCount = mutated.RejectedAgentHunks?.length ?? 0;
             let editReply: string;
             if (rejectedCount > 0) {
+                const rejectedLinesPreview: string[] = [];
+                if (Array.isArray(mutated.RejectedAgentHunks)) {
+                    for (const hunk of mutated.RejectedAgentHunks) {
+                        if (Array.isArray(hunk.RejectedAgentLines)) {
+                            for (const line of hunk.RejectedAgentLines) {
+                                const trimmed = line.trim();
+                                if (trimmed.length > 0 && rejectedLinesPreview.length < 3) {
+                                    rejectedLinesPreview.push(trimmed);
+                                }
+                            }
+                        }
+                        if (rejectedLinesPreview.length >= 3) {
+                            break;
+                        }
+                    }
+                }
+                const previewSnippet =
+                    rejectedLinesPreview.length > 0
+                        ? ` (rejected: ${rejectedLinesPreview.map((l) => `"${l}"`).join(', ')})`
+                        : '';
                 const conflictSummary = `${rejectedCount} edit${
                     rejectedCount === 1 ? '' : 's'
-                } not applied because of concurrent edits.`;
+                } not applied because of concurrent edits.${previewSnippet}`;
                 const allAgentEditsRejected =
                     resolvedMergedContent === currentContent ||
                     !resolvedMergedContent.includes(proposedReplacement);
@@ -1253,6 +1274,132 @@ export class DocumentCollaborationResolver extends ResolverBase {
             );
         }
     }
+
+    /**
+     * Authoritatively restores an artifact version by cloning its content/configuration into a new sequential
+     * version marked with `MarkTrustedServerRestoreSave` and applying the restore state across active collaboration
+     * rooms and peer replica nodes (`R9-2`).
+     */
+    @Mutation(() => RestoreArtifactVersionResultOutput)
+    public async RestoreArtifactVersion(
+        @Arg('artifactId', () => String) artifactId: string,
+        @Arg('sourceVersionId', () => String) sourceVersionId: string,
+        @Ctx() context: AppContext
+    ): Promise<RestoreArtifactVersionResultOutput> {
+        const user = this.GetUserFromPayload(context.userPayload) ?? context.userPayload?.userRecord;
+        const provider = this.resolveProvider(context);
+        const normalizedArtifactId = (artifactId ?? '').trim();
+        const normalizedSourceVersionId = (sourceVersionId ?? '').trim();
+
+        if (!user || !provider || !normalizedArtifactId || !normalizedSourceVersionId) {
+            return {
+                Success: false,
+                ErrorMessage: 'Authenticated user, artifactId, and sourceVersionId are required.'
+            };
+        }
+
+        await this.CheckAPIKeyScopeAuthorization('artifact:edit', normalizedArtifactId, context.userPayload);
+
+        const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            normalizedArtifactId,
+            user
+        );
+        if (!perms.CanEdit) {
+            return {
+                Success: false,
+                ErrorMessage: 'Permission denied: Edit permission is required to restore an artifact version.'
+            };
+        }
+
+        const sourceVersion = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+        const loaded = await sourceVersion.Load(normalizedSourceVersionId);
+        if (!loaded || !sourceVersion.IsSaved || !UUIDsEqual(sourceVersion.ArtifactID, normalizedArtifactId)) {
+            return {
+                Success: false,
+                ErrorMessage: 'Source artifact version not found or does not belong to the specified artifact.'
+            };
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const rvRes = await rv.RunView<{ VersionNumber: number }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${EscapeSQLString(normalizedArtifactId)}'`,
+                Fields: ['VersionNumber'],
+                OrderBy: 'VersionNumber DESC',
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            },
+            user
+        );
+        const maxVersion =
+            rvRes.Success && rvRes.Results && rvRes.Results.length > 0 && typeof rvRes.Results[0]?.VersionNumber === 'number'
+                ? rvRes.Results[0].VersionNumber
+                : sourceVersion.VersionNumber;
+        const nextVersionNumber = maxVersion + 1;
+
+        const restoredVer = await provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', user);
+        restoredVer.NewRecord();
+        restoredVer.ArtifactID = normalizedArtifactId;
+        restoredVer.UserID = user.ID;
+        restoredVer.VersionNumber = nextVersionNumber;
+        restoredVer.Name = sourceVersion.Name;
+        restoredVer.Description = `Restored from v${sourceVersion.VersionNumber}`;
+        restoredVer.Comments = `Restored from v${sourceVersion.VersionNumber}`;
+        restoredVer.ContentMode = sourceVersion.ContentMode;
+        restoredVer.FileID = sourceVersion.FileID;
+        restoredVer.MimeType = sourceVersion.MimeType;
+        restoredVer.FileName = sourceVersion.FileName;
+        restoredVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
+        restoredVer.ContentHash = sourceVersion.ContentHash;
+        restoredVer.Content = sourceVersion.Content;
+        if (sourceVersion.Configuration !== null && sourceVersion.Configuration !== undefined) {
+            restoredVer.Configuration = sourceVersion.Configuration;
+        }
+
+        MarkTrustedServerRestoreSave(restoredVer);
+        const saved = await restoredVer.Save();
+        if (!saved) {
+            return {
+                Success: false,
+                ErrorMessage: restoredVer.LatestResult?.CompleteMessage || 'Failed to save restored artifact version.'
+            };
+        }
+
+        await ArtifactCollaborationServer.Instance.RestoreToSavedVersion(
+            normalizedArtifactId,
+            {
+                ID: restoredVer.ID,
+                VersionNumber: nextVersionNumber,
+                Content: restoredVer.Content,
+                Configuration: restoredVer.Configuration
+            },
+            user
+        );
+
+        return {
+            Success: true,
+            VersionID: restoredVer.ID,
+            VersionNumber: nextVersionNumber
+        };
+    }
+}
+
+@ObjectType()
+export class RestoreArtifactVersionResultOutput {
+    @Field(() => Boolean)
+    public Success!: boolean;
+
+    @Field(() => String, { nullable: true })
+    public ErrorMessage?: string;
+
+    @Field(() => String, { nullable: true })
+    public VersionID?: string;
+
+    @Field(() => Int, { nullable: true })
+    public VersionNumber?: number;
 }
 
 @ObjectType()

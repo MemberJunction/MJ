@@ -56,25 +56,12 @@ export interface ArtifactVersionSavedEventPayload {
     SavedContentHash?: string;
 }
 
-const RESTORE_VERSION_PREFIX_RE = /^Restored from\b/i;
+const TRUSTED_SERVER_RESTORE_ENTITIES = new WeakSet<object>();
 
-function isRestoreVersionText(value: string | null | undefined): boolean {
-    return typeof value === 'string' && RESTORE_VERSION_PREFIX_RE.test(value.trim());
-}
-
-function readSafeOptionalVersionText(
-    entity: MJArtifactVersionEntity,
-    fieldName: 'Description' | 'Comments'
-): string | null {
-    const own = Object.getOwnPropertyDescriptor(entity, fieldName);
-    if (own && 'value' in own) {
-        return typeof own.value === 'string' ? own.value : null;
+export function MarkTrustedServerRestoreSave(entity: MJArtifactVersionEntity): void {
+    if (entity && typeof entity === 'object') {
+        TRUSTED_SERVER_RESTORE_ENTITIES.add(entity);
     }
-    const field = Array.isArray(entity.Fields) ? entity.Fields.find((f) => f?.Name === fieldName) : undefined;
-    if (field && 'TSType' in field) {
-        return entity[fieldName];
-    }
-    return typeof field?.Value === 'string' ? field.Value : null;
 }
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
@@ -589,26 +576,58 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         }
 
         // Save the main entity
-        const saveResult = await super.Save(options);
+        const isTrustedRestore = TRUSTED_SERVER_RESTORE_ENTITIES.has(this);
+        let saveResult: boolean;
+        try {
+            saveResult = await super.Save(options);
+        } finally {
+            TRUSTED_SERVER_RESTORE_ENTITIES.delete(this);
+        }
 
         // Notify ArtifactCollaborationServer when a version's content is saved so active Yjs rooms
         // or persisted working states reconcile out-of-band version writes (REST save, Restore, Library edit).
         if (saveResult && contentDirty && typeof this.Content === 'string' && this.ArtifactID) {
             try {
-                const descriptionValue = readSafeOptionalVersionText(this, 'Description');
-                const commentsValue = readSafeOptionalVersionText(this, 'Comments');
-                const isRestore =
-                    isRestoreVersionText(descriptionValue) || isRestoreVersionText(commentsValue);
+                let versionId = '';
+                try {
+                    versionId = typeof this.ID === 'string' ? this.ID : '';
+                } catch {
+                    versionId = '';
+                }
+                let versionNumber = 0;
+                try {
+                    versionNumber = typeof this.VersionNumber === 'number' ? this.VersionNumber : 0;
+                } catch {
+                    versionNumber = 0;
+                }
+                let descriptionValue: string | null = null;
+                try {
+                    descriptionValue = typeof this.Description === 'string' ? this.Description : null;
+                } catch {
+                    descriptionValue = null;
+                }
+                let commentsValue: string | null = null;
+                try {
+                    commentsValue = typeof this.Comments === 'string' ? this.Comments : null;
+                } catch {
+                    commentsValue = null;
+                }
+                let updatedByUserId: string | undefined;
+                try {
+                    updatedByUserId = this.UserID || this.ContextCurrentUser?.ID;
+                } catch {
+                    updatedByUserId = this.ContextCurrentUser?.ID;
+                }
                 const payload: ArtifactVersionSavedEventPayload = {
                     ArtifactID: this.ArtifactID,
-                    VersionID: this.ID,
-                    VersionNumber: this.VersionNumber,
+                    VersionID: versionId,
+                    VersionNumber: versionNumber,
                     Content: this.Content,
                     PreviousContent: previousContentValue,
                     Description: descriptionValue,
                     Comments: commentsValue,
-                    IsRestore: isRestore,
-                    UpdatedByUserID: this.UserID || this.ContextCurrentUser?.ID
+                    IsRestore: isTrustedRestore,
+                    UpdatedByUserID: updatedByUserId
                 };
                 MJGlobal.Instance.RaiseEvent({
                     component: this,

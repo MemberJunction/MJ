@@ -28,6 +28,7 @@ import {
     ArtifactVersionSavedEventPayload,
     CalculateContentSizeBytes,
     EnsureArtifactVersionReadHookRegistered,
+    MarkTrustedServerRestoreSave,
     MJArtifactVersionEntityServer
 } from '../custom/MJArtifactVersionEntityServer.server';
 
@@ -1460,7 +1461,7 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         expect(versionQueryCount).toBe(2);
     });
 
-    it('includes Description, Comments, and IsRestore on ARTIFACT_VERSION_SAVED_EVENT_CODE payload when saving a restored version (R8-2e)', async () => {
+    it('includes Description, Comments, and IsRestore on ARTIFACT_VERSION_SAVED_EVENT_CODE payload when saving a restored version (R8-2e, R9-2)', async () => {
         const provider = new TestServerVersionProvider(async () => ({
             Success: true,
             Results: [],
@@ -1493,7 +1494,7 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
             Object.defineProperty(entity, 'ContentHash', { value: '', writable: true });
             Object.defineProperty(entity, 'ContentSizeBytes', { value: 0, writable: true });
             Object.defineProperty(entity, 'Description', { value: 'Restored from v2', writable: true });
-            Object.defineProperty(entity, 'Comments', { value: null, writable: true });
+            Object.defineProperty(entity, 'Comments', { value: 'Restored from v2', writable: true });
             Object.defineProperty(entity, 'UserID', { value: sysUser.ID, writable: true });
             Object.defineProperty(entity, 'ContextCurrentUser', { value: sysUser, writable: true });
             Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
@@ -1502,12 +1503,27 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
                 configurable: true
             });
 
-            const saved = await entity.Save();
-            expect(saved).toBe(true);
+            // 1. Without MarkTrustedServerRestoreSave, saving with restore text emits IsRestore: false
+            const saved1 = await entity.Save();
+            expect(saved1).toBe(true);
             expect(capturedEvents).toHaveLength(1);
             expect(capturedEvents[0]?.Description).toBe('Restored from v2');
+            expect(capturedEvents[0]?.Comments).toBe('Restored from v2');
             expect(capturedEvents[0]?.PreviousContent).toBe('# Old\n');
-            expect(capturedEvents[0]?.IsRestore).toBe(true);
+            expect(capturedEvents[0]?.IsRestore).toBe(false);
+
+            // 2. Marking entity with MarkTrustedServerRestoreSave emits IsRestore: true once
+            MarkTrustedServerRestoreSave(entity);
+            const saved2 = await entity.Save();
+            expect(saved2).toBe(true);
+            expect(capturedEvents).toHaveLength(2);
+            expect(capturedEvents[1]?.IsRestore).toBe(true);
+
+            // 3. Subsequent Save() without re-marking emits IsRestore: false (one-shot cleanup)
+            const saved3 = await entity.Save();
+            expect(saved3).toBe(true);
+            expect(capturedEvents).toHaveLength(3);
+            expect(capturedEvents[2]?.IsRestore).toBe(false);
         } finally {
             sub.unsubscribe();
             superSaveSpy.mockRestore();

@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   MJArtifactEntity,
@@ -102,6 +102,19 @@ const ARTIFACT_TYPES: MJArtifactTypeEntity[] = [
   } as MJArtifactTypeEntity,
 ];
 
+const ARTIFACT_VERSIONS_ENTITY_INFO = {
+  Name: 'MJ: Artifact Versions',
+  SchemaName: '__mj',
+  BaseView: 'vwArtifactVersions',
+} as Partial<EntityInfo> as EntityInfo;
+
+function mockEntityByName(name: string): EntityInfo | undefined {
+  if (name === 'MJ: Artifact Versions') {
+    return ARTIFACT_VERSIONS_ENTITY_INFO;
+  }
+  return undefined;
+}
+
 function createMockProvider(options?: {
   failEntitySave?: string;
   collectionOwnerId?: string;
@@ -115,6 +128,7 @@ function createMockProvider(options?: {
   let seq = 1;
 
   const provider = {
+    EntityByName: vi.fn(mockEntityByName),
     GetEntityObject: vi.fn(async (entityName: string) => {
       requestedEntities.push(entityName);
       const id = `bbbb000${seq++}-0000-4000-8000-000000000000`;
@@ -924,6 +938,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     });
     const mockFailingProvider = Object.assign(Object.create(null) as IMetadataProvider, {
       CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
       GetEntityObject: vi.fn(async () => ({
         Load: vi.fn(async () => true),
         Delete: vi.fn(async () => false),
@@ -1192,7 +1207,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       notifications: { CreateSimpleNotification: vi.fn() },
       cdr: { detectChanges: vi.fn() },
     });
-    const mockDialogProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    const mockDialogProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
     Object.defineProperty(dialog, 'ProviderToUse', {
       configurable: true,
       get: () => mockDialogProvider as IMetadataProvider,
@@ -1369,7 +1387,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
     const loadCompleteSpy = vi.fn();
-    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    const mockProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
     Object.assign(component as object, {
       LoadComplete: { emit: loadCompleteSpy },
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
@@ -1555,7 +1576,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
-    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    const mockProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
     Object.assign(component as object, {
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
       collectionPermByColId: new Map(),
@@ -1660,7 +1684,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
     const detectChangesSpy = vi.fn();
-    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    const mockProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
     Object.assign(component as object, {
       cdr: { markForCheck: vi.fn(), detectChanges: detectChangesSpy },
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
@@ -1786,7 +1813,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
-    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    const mockProvider: Partial<IMetadataProvider> = {
+      CurrentUser: TEST_USER,
+      EntityByName: vi.fn(mockEntityByName),
+    };
     Object.assign(component as object, {
       LoadComplete: { emit: vi.fn() },
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },

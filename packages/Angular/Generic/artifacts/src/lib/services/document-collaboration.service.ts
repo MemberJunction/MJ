@@ -6,7 +6,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
-import { GetGlobalObjectStore, SafeJSONParse } from '@memberjunction/global';
+import { GetGlobalObjectStore, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
   ArtifactPermissionEngine,
@@ -103,6 +103,17 @@ const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
   }
 `;
 
+export const RESTORE_ARTIFACT_VERSION_MUTATION = `
+  mutation RestoreArtifactVersion($artifactId: String!, $sourceVersionId: String!) {
+    RestoreArtifactVersion(artifactId: $artifactId, sourceVersionId: $sourceVersionId) {
+      Success
+      ErrorMessage
+      VersionID
+      VersionNumber
+    }
+  }
+`;
+
 const EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION = `
   mutation ExecuteAnchoredCommentAgentMention(
     $artifactId: String!
@@ -188,6 +199,8 @@ export interface CollaborationMergeConflictEvent {
   Source?: string;
   RoomEpoch?: string;
   Timestamp: string;
+  ActorUserID?: string;
+  LocalUserID?: string;
 }
 
 /**
@@ -215,6 +228,7 @@ interface CollaborationControlFramePayload {
   source?: string;
   roomEpoch?: string;
   timestamp?: string;
+  actorUserId?: string;
 }
 
 /**
@@ -301,6 +315,13 @@ export interface ServerAnchoredCommentAgentMentionPayload {
   ErrorMessage?: string | null;
 }
 
+export interface ServerRestoreArtifactVersionPayload {
+  Success: boolean;
+  ErrorMessage?: string | null;
+  VersionID?: string | null;
+  VersionNumber?: number | null;
+}
+
 export interface CollaborationGraphQLResponseMap {
   MintArtifactCollaborationTicket?: CollaborationTicketPayload | null;
   ResolveArtifactPermissions?: ServerArtifactPermissionsPayload | null;
@@ -309,6 +330,7 @@ export interface CollaborationGraphQLResponseMap {
   VerifyFrozenBlockSnapshot?: ServerVerifyFrozenSnapshotPayload | null;
   CommitArtifactInlineEdit?: ServerCommitInlineEditPayload | null;
   ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
+  RestoreArtifactVersion?: ServerRestoreArtifactVersionPayload | null;
 }
 
 export type CollaborationGraphQLVariables = Record<
@@ -588,6 +610,7 @@ export class DocumentCollaborationSession {
   private connectGeneration = 0;
   private configuredWsUrlOverride: string | null = null;
   private configuredProvider: IMetadataProvider | null = null;
+  private readonly localUser: { id: string; name: string; email?: string; color?: string };
   private readonly endpointResolver?: (
     artifactId: string,
     wsUrlOverride?: string | null,
@@ -778,6 +801,7 @@ export class DocumentCollaborationSession {
     onMergeConflict?: (event: CollaborationMergeConflictEvent) => void,
     onDestroyed?: (session: DocumentCollaborationSession) => void,
   ) {
+    this.localUser = user;
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
     this.transport = deferInitialSeedForRemoteSync ? 'websocket' : 'local-only';
@@ -1682,6 +1706,11 @@ export class DocumentCollaborationSession {
         typeof parsed.timestamp === 'string' && parsed.timestamp.trim().length > 0
           ? parsed.timestamp
           : new Date().toISOString(),
+      ActorUserID:
+        typeof parsed.actorUserId === 'string' && parsed.actorUserId.trim().length > 0
+          ? parsed.actorUserId.trim()
+          : undefined,
+      LocalUserID: this.localUser?.id,
     };
     this.onMergeConflict?.(conflictEvent);
     if (!this.destroyed) {
@@ -2190,6 +2219,16 @@ export class DocumentCollaborationService implements OnDestroy {
     fallbackNotifier?: CollaborationNotificationSink | null,
   ): boolean {
     if (this.toastedMergeConflicts.has(event)) {
+      return false;
+    }
+    const actorId = typeof event.ActorUserID === 'string' ? event.ActorUserID.trim() : '';
+    const localId = typeof event.LocalUserID === 'string' ? event.LocalUserID.trim() : '';
+    if (
+      actorId.length > 0 &&
+      localId.length > 0 &&
+      localId !== 'local-user' &&
+      !UUIDsEqual(actorId, localId)
+    ) {
       return false;
     }
     const globalStore = GetGlobalObjectStore();
@@ -3074,6 +3113,55 @@ export class DocumentCollaborationService implements OnDestroy {
         HandledByServer: true,
         Success: false,
         ErrorMessage: err instanceof Error ? err.message : 'Failed to commit artifact edit on server.',
+      };
+    }
+  }
+
+  /**
+   * Restores a historical artifact version strictly via the server `RestoreArtifactVersion` GraphQL mutation
+   * so version restore uses an explicit authenticated server mutation.
+   */
+  public async RestoreArtifactVersion(
+    artifactId: string,
+    sourceVersionId: string,
+    providerOverride?: IMetadataProvider | null,
+  ): Promise<{
+    Success: boolean;
+    VersionID?: string;
+    VersionNumber?: number;
+    ErrorMessage?: string;
+    Supported: boolean;
+  }> {
+    const provider = resolveDefaultMetadataProvider(providerOverride);
+    if (!isGraphQLCollaborationProvider(provider)) {
+      return { Success: false, Supported: false };
+    }
+    try {
+      const gqlRes = await provider.ExecuteGQL(RESTORE_ARTIFACT_VERSION_MUTATION, {
+        artifactId,
+        sourceVersionId,
+      });
+      const payload = gqlRes?.RestoreArtifactVersion;
+      if (!payload) {
+        return {
+          Success: false,
+          Supported: true,
+          ErrorMessage: 'Server did not return RestoreArtifactVersion response.',
+        };
+      }
+      return {
+        Success: Boolean(payload.Success),
+        Supported: true,
+        VersionID: payload.VersionID ?? undefined,
+        VersionNumber: typeof payload.VersionNumber === 'number' ? payload.VersionNumber : undefined,
+        ErrorMessage: payload.ErrorMessage ?? undefined,
+      };
+    } catch (err) {
+      LogError(err);
+      return {
+        Success: false,
+        Supported: true,
+        ErrorMessage: err instanceof Error ? err.message : 'Failed to restore artifact version on server.',
       };
     }
   }

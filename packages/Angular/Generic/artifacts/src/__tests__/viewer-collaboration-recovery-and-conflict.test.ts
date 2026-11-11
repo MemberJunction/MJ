@@ -359,4 +359,81 @@ describe('Round 8 Viewer Collaboration Recovery (R8-10) & Merge Conflict Handlin
       vi.useRealTimers();
     }
   });
+
+  it('R9-11: RetryLiveCollaboration never falls back to artifactVersion.ID or dummy IDs when session is null', () => {
+    const collabService = new DocumentCollaborationService();
+    const retrySpy = vi.spyOn(collabService, 'Retry').mockResolvedValue(true);
+
+    const injector = Injector.create({
+      providers: [
+        {
+          provide: ChangeDetectorRef,
+          useValue: { markForCheck: vi.fn(), detectChanges: vi.fn() },
+        },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        { provide: SlideDeckExportService, useValue: new SlideDeckExportService() },
+        { provide: ArtifactFileService, useValue: null },
+        {
+          provide: MJNotificationService,
+          useValue: Object.assign(Object.create(MJNotificationService.prototype) as MJNotificationService, {
+            CreateSimpleNotification: vi.fn(),
+          }),
+        },
+      ],
+    });
+
+    // 1. MarkdownArtifactViewerComponent
+    const mdViewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    mdViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: 'art-real-123',
+    });
+    mdViewer.RetryLiveCollaboration();
+    expect(retrySpy).toHaveBeenCalledWith('art-real-123');
+    retrySpy.mockClear();
+
+    mdViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: '',
+    });
+    mdViewer.RetryLiveCollaboration();
+    expect(retrySpy).not.toHaveBeenCalled();
+
+    // 2. SlideDeckArtifactViewerComponent
+    const slideViewer = runInInjectionContext(injector, () => new SlideDeckArtifactViewerComponent());
+    slideViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: 'art-real-123',
+    });
+    slideViewer.RetryLiveCollaboration();
+    expect(retrySpy).toHaveBeenCalledWith('art-real-123');
+    retrySpy.mockClear();
+
+    slideViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: '',
+    });
+    slideViewer.RetryLiveCollaboration();
+    expect(retrySpy).not.toHaveBeenCalled();
+
+    // 3. SpreadsheetArtifactViewerComponent
+    const sheetViewer = runInInjectionContext(injector, () => new SpreadsheetArtifactViewerComponent());
+    sheetViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: 'art-real-123',
+    });
+    sheetViewer.RetryLiveCollaboration();
+    expect(retrySpy).toHaveBeenCalledWith('art-real-123');
+    retrySpy.mockClear();
+
+    sheetViewer.artifactVersion = Object.assign(Object.create(null) as MJArtifactVersionEntity, {
+      ID: 'ver-wrong-999',
+      ArtifactID: '',
+    });
+    sheetViewer.RetryLiveCollaboration();
+    expect(retrySpy).not.toHaveBeenCalled();
+
+    collabService.ngOnDestroy();
+  });
 });

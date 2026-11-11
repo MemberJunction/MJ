@@ -58,6 +58,12 @@ describe('server-cache.S25 entity-scoped RunViewCache accounting', () => {
         await s25!.Fn(ctx as IntegrationCheckContext);
         expect(fakeAuditEntity.AllowCaching).toBe(false);
         expect(storage.SetCount('RunViewCache')).toBeGreaterThan(0);
+        expect(Object.prototype.hasOwnProperty.call(storage, 'GetItem')).toBe(false);
+        expect(Object.prototype.hasOwnProperty.call(storage, 'GetItems')).toBe(false);
+
+        const protoSpy = vi.spyOn(InstrumentedLocalStorageProvider.prototype, 'GetItem');
+        await storage.GetItem('test-key', 'test-cat');
+        expect(protoSpy).toHaveBeenCalledWith('test-key', 'test-cat');
 
         // Case 2: If MJ: Audit Logs itself ever writes to RunViewCache, S25 MUST fail
         rvSpy.mockImplementation(async () => {

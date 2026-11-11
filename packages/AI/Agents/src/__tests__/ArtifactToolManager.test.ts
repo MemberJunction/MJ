@@ -1343,8 +1343,9 @@ describe('ArtifactToolManager', () => {
                 };
                 expect(mutData.persisted).toBe(true);
                 expect(mutData.rejectedEditsCount).toBe(1);
-                expect(mutData.conflictWarning).toBe('1 edit not applied because of concurrent edits');
-                expect(mutData.warnings).toContain('1 edit not applied because of concurrent edits');
+                expect(mutData.conflictWarning).toContain('1 edit not applied because of concurrent edits');
+                expect(mutData.rejectedLinesPreview).toEqual(['# Agent Proposed Heading']);
+                expect(mutData.warnings?.[0]).toContain('1 edit not applied because of concurrent edits');
 
                 // Hook received previousContent so 3-way merge has the exact base!
                 expect(observedHookEvents).toHaveLength(1);
@@ -1369,6 +1370,158 @@ describe('ArtifactToolManager', () => {
             } finally {
                 sub.unsubscribe();
             }
+        });
+
+        it('R9-5 (case retry9): defers live room mutation until Save() succeeds, rolling back on failure and committing once on retry', async () => {
+            const artifactUuid = '11111111-2222-3333-4444-555555555559';
+            const user = new UserInfo();
+            user.ID = '11111111-2222-3333-4444-555555555555';
+            user.Name = 'Retry User';
+            user.Email = 'retry-user@example.com';
+            user.IsActive = true;
+            const initialMarkdown = '# Line One\n\n# Line Two';
+            const manager = new ArtifactToolManager();
+
+            let saveAttempts = 0;
+            const persistedVersions: Array<{ ID: string; VersionNumber: number; Content: string }> = [];
+            const mockProvider = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: artifactUuid,
+                                    Name: 'LiveDoc.md',
+                                    UserID: user.ID,
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        const latest =
+                            persistedVersions.length > 0
+                                ? persistedVersions[persistedVersions.length - 1]
+                                : { ID: 'ver-1', VersionNumber: 1 };
+                        return {
+                            Success: true,
+                            Results: [{ ID: latest.ID, VersionNumber: latest.VersionNumber, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: async (entityName: string) => {
+                    if (entityName === 'MJ: Artifact Versions') {
+                        saveAttempts++;
+                        const record = {
+                            ID: `ver-${saveAttempts}`,
+                            ArtifactID: '',
+                            VersionNumber: 0,
+                            UserID: '',
+                            Name: '' as string | null,
+                            Comments: '' as string | null,
+                            ContentHash: '' as string | null,
+                            ContentMode: 'Text' as const,
+                            FileID: null as string | null,
+                            Content: null as string | null,
+                            Configuration: null as string | null,
+                            NewRecord: () => {},
+                            Load: async () => false,
+                            Save: async () => {
+                                if (saveAttempts === 1) {
+                                    return false; // First attempt fails
+                                }
+                                persistedVersions.push({
+                                    ID: record.ID,
+                                    VersionNumber: record.VersionNumber,
+                                    Content: record.Content ?? '',
+                                });
+                                return true; // Second attempt succeeds
+                            },
+                            LatestResult: { CompleteMessage: 'Simulated DB concurrency error' },
+                        };
+                        return record;
+                    }
+                    return null;
+                },
+            };
+
+            let liveRoomText = '# Line One (Human Edit)\n\n# Line Two';
+            let commitCallCount = 0;
+            let rollbackCallCount = 0;
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                expect(evt.deferCommit).toBe(true);
+                return {
+                    mergedContent: '# Line One (Human Edit)\n\n# Line Two (Agent Edit)',
+                    hadConflict: false,
+                    rejectedHunksCount: 0,
+                    commit: () => {
+                        commitCallCount++;
+                        liveRoomText = '# Line One (Human Edit)\n\n# Line Two (Agent Edit)';
+                    },
+                    rollback: () => {
+                        rollbackCallCount++;
+                    },
+                };
+            });
+
+            manager.Initialize(
+                [
+                    {
+                        name: 'LiveDoc.md',
+                        typeName: 'Markdown Document',
+                        toolLibraryClass: 'DocumentToolLibrary',
+                        artifactId: artifactUuid,
+                        versionId: 'ver-1',
+                        versionNumber: 1,
+                        content: initialMarkdown,
+                    },
+                ],
+                { contextUser: user, provider: mockProvider as IMetadataProvider },
+            );
+
+            const blocksCall = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_blocks',
+                input: {},
+            });
+            const blocksData = blocksCall.result.data as {
+                revisionHash: string;
+                blocks: Array<{ blockId: string }>;
+            };
+
+            // Attempt 1: Save() fails
+            const attempt1 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: blocksData.blocks[1].blockId,
+                    markdown: '# Line Two (Agent Edit)',
+                    expectedRevisionHash: blocksData.revisionHash,
+                },
+            });
+            expect(attempt1.result.success).toBe(false);
+            expect(rollbackCallCount).toBe(1);
+            expect(commitCallCount).toBe(0);
+            expect(liveRoomText).toBe('# Line One (Human Edit)\n\n# Line Two'); // Live room untouched!
+
+            // Attempt 2: Retry succeeds
+            const attempt2 = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'replace_block',
+                input: {
+                    blockId: blocksData.blocks[1].blockId,
+                    markdown: '# Line Two (Agent Edit)',
+                    expectedRevisionHash: blocksData.revisionHash,
+                },
+            });
+            expect(attempt2.result.success).toBe(true);
+            expect(commitCallCount).toBe(1);
+            expect(liveRoomText).toBe('# Line One (Human Edit)\n\n# Line Two (Agent Edit)'); // Human edit + Agent edit ONCE!
+            expect(persistedVersions).toHaveLength(1);
         });
     });
 });

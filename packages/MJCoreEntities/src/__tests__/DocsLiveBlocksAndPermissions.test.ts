@@ -849,6 +849,9 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
         new EntityFieldInfo({ ID: 'f4', Name: 'DB_NAME', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
         new EntityFieldInfo({ ID: 'f5', Name: 'Name', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
         new EntityFieldInfo({ ID: 'f6', Name: 'First Name', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f7', Name: 'Current_Role', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f8', Name: 'Current_Catalog', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f9', Name: 'Current_Schema', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
       ],
     });
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("User = 'bob'", r79Entity).Valid).toBe(false);
@@ -857,8 +860,18 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter('USER', r79Entity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("CURRENT_USER = 'dbo'", r79Entity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("SESSION_USER = 'dbo'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("CURRENT_ROLE = 'dbo'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("CURRENT_CATALOG = 'master'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("CURRENT_SCHEMA = 'public'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[Current_Role] = 'dbo'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[Current_Catalog] = 'master'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[Current_Schema] = 'public'", r79Entity).Valid).toBe(true);
     expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('User ASC', r79Entity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('[User] ASC', r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('CURRENT_ROLE ASC', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('CURRENT_CATALOG DESC', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('CURRENT_SCHEMA ASC', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('[Current_Role] ASC', r79Entity).Valid).toBe(true);
     // Bracketed [User] is rejected when the entity does NOT have a 'User' field
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[User] = 'bob'", mockEntity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('[User] ASC', mockEntity).Valid).toBe(false);

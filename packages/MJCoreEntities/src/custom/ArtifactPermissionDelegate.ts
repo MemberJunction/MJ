@@ -275,6 +275,10 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     }
 
     /**
+     * @internal
+     * Framework-internal recursion guard for trusted in-process permission `RunView` lookups.
+     * Must never be called on untrusted caller `RunViewParams`.
+     *
      * Marks a {@link RunViewParams} object as an internal permission-resolution lookup so
      * server-side `MJ: Artifact Versions` / `MJ: Artifact Working States` `RunView` hooks skip
      * recursive permission evaluation even when `ProviderBase.RunView` shallow-clones `params`
@@ -298,6 +302,10 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     }
 
     /**
+     * @internal
+     * Framework-internal recursion guard for trusted in-process permission `RunView` lookups.
+     * Must never be called on untrusted caller `RunViewParams`.
+     *
      * Returns `true` when `params` (or a shallow `{ ...params }` clone produced by `ProviderBase.RunView`)
      * was marked by {@link MarkInternalArtifactPermissionQuery}.
      */

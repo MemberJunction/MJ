@@ -2693,14 +2693,12 @@ export class SpreadsheetArtifactViewerComponent
       }),
     );
 
-    if (session.MergeConflict$) {
-      this.subs.push(
-        session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
-          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
-          this.handleCollaborationMergeConflict(conflictEvt);
-        }),
-      );
-    }
+    this.subs.push(
+      session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+    );
 
     if (hasRemoteBackend) {
       void session.Connect(this.CollaborationWsUrl, provider);
@@ -4171,25 +4169,16 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public RetryLiveCollaboration(): void {
-    const artifactId =
-      this.CollaborationSession?.ArtifactID ||
-      this.artifactVersion?.ArtifactID ||
-      this.artifactVersion?.ID ||
-      this.Workbook.WorkbookID;
+    const artifactId = this.CollaborationSession?.ArtifactID || this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
+      return;
+    }
     void this.collaborationService.Retry(artifactId);
   }
 
   private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
     this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
-    if (typeof this.collaborationService.NotifyMergeConflictToastOnce === 'function') {
-      this.collaborationService.NotifyMergeConflictToastOnce(event, this.notificationService);
-    } else {
-      this.notificationService?.CreateSimpleNotification?.(
-        MERGE_CONFLICT_WARNING_MESSAGE,
-        'warning',
-        5000,
-      );
-    }
+    this.collaborationService.NotifyMergeConflictToastOnce(event, this.notificationService);
     this.cdr.markForCheck();
   }
 }

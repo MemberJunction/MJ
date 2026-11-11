@@ -1,17 +1,11 @@
-import vm from 'node:vm';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
     CompileSafeUserRegex,
     FormatCellAddress,
-    GetSafeRegexBatchSandboxExecutor,
-    GetSafeRegexSandboxExecutor,
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
-    RegisterSafeRegexBatchSandboxExecutor,
-    RegisterSafeRegexSandboxExecutor,
-    SafeRegexSearchBatchDetailed,
     SafeRegexSearchDetailed,
     SpreadsheetCalculatedColumnSpec,
     SpreadsheetCellFormatType,
@@ -25,6 +19,7 @@ import {
     WorkbookSpec,
     WorksheetSpec
 } from '@memberjunction/core-entities';
+import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 
 const MAX_SHEET_ROW_COUNT = 10_000;
 const MAX_SHEET_COLUMN_COUNT = 256;
@@ -39,82 +34,14 @@ const MAX_REGEX_INPUT_BYTES = 65_536;
 const MAX_SAFE_UTF16_UNITS_FOR_64KB = 21_845;
 const MAX_REPORTED_UNSEARCHABLE_CELLS = 25;
 
-const VM_SHEET_REGEX_STATE: { rx: RegExp; s: string } = { rx: /(?:)/, s: '' };
-const VM_SHEET_REGEX_CONTEXT = vm.createContext(VM_SHEET_REGEX_STATE);
-const VM_SHEET_REGEX_SCRIPT = new vm.Script('rx.test(s)');
-
-const VM_SHEET_BATCH_REGEX_STATE: { rx: RegExp; items: readonly string[] } = { rx: /(?:)/, items: [] };
-const VM_SHEET_BATCH_REGEX_CONTEXT = vm.createContext(VM_SHEET_BATCH_REGEX_STATE);
-const VM_SHEET_BATCH_REGEX_SCRIPT = new vm.Script(
-    '{ const out = new Array(items.length); for (let i = 0; i < items.length; i++) { rx.lastIndex = 0; out[i] = rx.test(items[i]); } out; }'
-);
-
-function isVmTimeoutError(err: unknown): boolean {
-    const msg = err instanceof Error ? err.message : String(err);
-    const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
-    return errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out');
-}
-
-function ensureNodeVmSafeRegexExecutorRegistered(): void {
-    if (!GetSafeRegexSandboxExecutor()) {
-        RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
-            regex.lastIndex = 0;
-            VM_SHEET_REGEX_STATE.rx = regex;
-            VM_SHEET_REGEX_STATE.s = input;
-            try {
-                const matched = Boolean(
-                    VM_SHEET_REGEX_SCRIPT.runInContext(VM_SHEET_REGEX_CONTEXT, {
-                        timeout: Math.max(1, Math.ceil(maxDurationMs))
-                    })
-                );
-                return { Matched: matched, TimedOut: false };
-            } catch (err) {
-                if (isVmTimeoutError(err)) {
-                    return { Matched: false, TimedOut: true };
-                }
-                throw err;
-            } finally {
-                VM_SHEET_REGEX_STATE.s = '';
-            }
-        });
-    }
-
-    if (!GetSafeRegexBatchSandboxExecutor()) {
-        RegisterSafeRegexBatchSandboxExecutor(
-            (regex: RegExp, inputs: readonly string[], maxDurationMs: number) => {
-                regex.lastIndex = 0;
-                VM_SHEET_BATCH_REGEX_STATE.rx = regex;
-                VM_SHEET_BATCH_REGEX_STATE.items = inputs;
-                try {
-                    const rawOut = VM_SHEET_BATCH_REGEX_SCRIPT.runInContext(VM_SHEET_BATCH_REGEX_CONTEXT, {
-                        timeout: Math.max(1, Math.ceil(maxDurationMs))
-                    });
-                    const matches = Array.isArray(rawOut)
-                        ? rawOut.map(Boolean)
-                        : new Array<boolean>(inputs.length).fill(false);
-                    return { Matches: matches, TimedOut: false };
-                } catch (err) {
-                    if (isVmTimeoutError(err)) {
-                        return {
-                            Matches: new Array<boolean>(inputs.length).fill(false),
-                            TimedOut: true
-                        };
-                    }
-                    throw err;
-                } finally {
-                    VM_SHEET_BATCH_REGEX_STATE.items = [];
-                }
-            }
-        );
-    }
-}
-
 function exceedsSheetRegexInputBytes(text: string): boolean {
     if (text.length <= MAX_SAFE_UTF16_UNITS_FOR_64KB) {
         return false;
     }
     return Buffer.byteLength(text, 'utf8') > MAX_REGEX_INPUT_BYTES;
 }
+
+EnsureNodeVmSafeRegexExecutorRegistered();
 
 function computeFastCellSortKey(addr: string): number {
     let i = 0;
@@ -144,8 +71,6 @@ function computeFastCellSortKey(addr: string): number {
     }
     return row * 65_536 + col;
 }
-
-ensureNodeVmSafeRegexExecutorRegistered();
 
 export interface UnsearchableSpreadsheetCell {
     sheet: string;
@@ -589,6 +514,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             return engine.ParseWorkbook(artifactContent.toString('utf-8'));
         }
         return engine.ParseWorkbook(artifactContent);
+    }
+
+    /**
+     * Evaluates a workbook and computes its revision hash (`R9-9`).
+     */
+    public ComputeRevisionHash(content: string | Buffer): string {
+        const workbook = this.loadWorkbookFromContent(content);
+        SpreadsheetEngine.Instance.EvaluateWorkbook(workbook);
+        return SpreadsheetEngine.Instance.ComputeRevisionHash(workbook);
     }
 
     private resolveSheet(workbook: WorkbookSpec, sheetArg: unknown): WorksheetSpec | null {
@@ -1197,7 +1131,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: Record<string, unknown>
     ): ArtifactToolResult {
-        ensureNodeVmSafeRegexExecutorRegistered();
+        EnsureNodeVmSafeRegexExecutorRegistered();
         const engine = SpreadsheetEngine.Instance;
         const query = typeof input.query === 'string' ? input.query : '';
         if (!query) {
@@ -1289,33 +1223,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 pendingChars = 0;
                 return;
             }
-            const remainingMs = regexDeadline - performance.now();
-            if (remainingMs <= 0) {
-                budgetExpired = true;
-                for (const item of pendingBatch) {
-                    recordUnsearchableCell(item.sheetName, item.cellAddr, 'regex_timeout');
-                }
-                pendingBatch = [];
-                pendingTexts = [];
-                pendingChars = 0;
-                return;
-            }
-
-            const batchRes = SafeRegexSearchBatchDetailed(
+            const recRes = ExecuteSafeRegexBatchWithRecovery(
                 regex,
                 pendingTexts,
-                Math.min(BATCH_REGEX_MAX_MS, remainingMs),
+                regexDeadline,
+                BATCH_REGEX_MAX_MS,
                 MAX_REGEX_INPUT_BYTES
             );
-            if (batchRes.TimedOut) {
+            if (recRes.BudgetExpired) {
                 budgetExpired = true;
-                for (const item of pendingBatch) {
-                    recordUnsearchableCell(item.sheetName, item.cellAddr, 'regex_timeout');
-                }
-                pendingBatch = [];
-                pendingTexts = [];
-                pendingChars = 0;
-                return;
             }
 
             for (let k = 0; k < pendingBatch.length; k++) {
@@ -1323,7 +1239,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 if (matches.length >= SEARCH_MATCH_LIMIT) {
                     break;
                 }
-                if (batchRes.Matches[k]) {
+                if (recRes.Matches[k]) {
                     matches.push({
                         sheet: item.sheetName,
                         cell: item.cellAddr,
@@ -1331,7 +1247,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     });
                     continue;
                 }
-                if (batchRes.InputTooLong[k]) {
+                if (recRes.TimedOut[k] || recRes.BudgetSkipped[k]) {
+                    recordUnsearchableCell(item.sheetName, item.cellAddr, 'regex_timeout');
+                    continue;
+                }
+                if (recRes.InputTooLong[k]) {
                     recordUnsearchableCell(item.sheetName, item.cellAddr, 'exceeds_64kb_regex_limit');
                     continue;
                 }

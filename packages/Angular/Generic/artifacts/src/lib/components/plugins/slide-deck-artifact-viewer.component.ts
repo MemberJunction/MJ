@@ -3306,25 +3306,16 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public RetryLiveCollaboration(): void {
-    const artifactId =
-      this.session?.ArtifactID ||
-      this.artifactVersion?.ArtifactID ||
-      this.artifactVersion?.ID ||
-      'slide-deck-default';
+    const artifactId = this.session?.ArtifactID || this.artifactVersion?.ArtifactID;
+    if (!artifactId) {
+      return;
+    }
     void this.collabService.Retry(artifactId);
   }
 
   private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
     this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
-    if (typeof this.collabService.NotifyMergeConflictToastOnce === 'function') {
-      this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
-    } else {
-      this.notificationService?.CreateSimpleNotification?.(
-        MERGE_CONFLICT_WARNING_MESSAGE,
-        'warning',
-        5000,
-      );
-    }
+    this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
     this.cdr.markForCheck();
   }
 
@@ -3508,16 +3499,14 @@ export class SlideDeckArtifactViewerComponent
       }),
     );
 
-    if (this.session.MergeConflict$) {
-      this.subs.push(
-        this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
-          if (this.isComponentDestroyed) {
-            return;
-          }
-          this.handleCollaborationMergeConflict(conflictEvt);
-        }),
-      );
-    }
+    this.subs.push(
+      this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+    );
 
     if (hasRemoteBackend) {
       void this.session.Connect(this.CollaborationWsUrl, provider);

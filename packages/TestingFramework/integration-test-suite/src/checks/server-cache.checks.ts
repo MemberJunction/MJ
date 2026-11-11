@@ -653,6 +653,8 @@ export const ServerCacheChecks: NamedCheck[] = [
 
             const AUDIT_LOG_CACHE_KEY_PREFIX = 'MJ: Audit Logs|';
             let auditLogCacheReads = 0;
+            const hadOwnGetItem = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItem');
+            const hadOwnGetItems = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItems');
             const origGetItem = ctx.Storage.GetItem.bind(ctx.Storage);
             const origGetItems = ctx.Storage.GetItems.bind(ctx.Storage);
             ctx.Storage.GetItem = <T>(key: string, category?: string): Promise<T | null> => {
@@ -695,8 +697,16 @@ export const ServerCacheChecks: NamedCheck[] = [
                 AssertEqual(auditLogCacheWrites, 0, 'Trust=0 entity must never write the server cache');
                 AssertEqual(auditLogCacheReads, 0, 'Trust=0 entity must never read the server cache');
             } finally {
-                ctx.Storage.GetItem = origGetItem;
-                ctx.Storage.GetItems = origGetItems;
+                if (hadOwnGetItem) {
+                    ctx.Storage.GetItem = origGetItem;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItem');
+                }
+                if (hadOwnGetItems) {
+                    ctx.Storage.GetItems = origGetItems;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItems');
+                }
                 info!.AllowCaching = originalAllowCaching;
             }
         }
