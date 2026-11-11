@@ -1,5 +1,12 @@
 # @memberjunction/standards
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- f0c7dcd: Add `mj doctor value-lists`, which finds rows whose value-list field holds a value outside its list (they fail validation on their next save) and can set named fields to `ListOrUserEntry`. Add the `migration-string-collation` standard, which flags new string columns in migrations that do not declare a collation.
+
 ## 6.2.0
 
 ### Patch Changes

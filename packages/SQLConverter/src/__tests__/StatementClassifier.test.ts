@@ -766,3 +766,16 @@ END`;
     });
   });
 });
+
+describe('StatementClassifier — issue #5364', () => {
+  it('classifies IF COL_LENGTH(...) IS NULL column adds as CONDITIONAL_DDL (item 3)', () => {
+    expect(ClassifyBatch("IF COL_LENGTH('app.T', 'C') IS NULL\nBEGIN\n  ALTER TABLE app.T ADD C INT NULL;\nEND")).toBe('CONDITIONAL_DDL');
+  });
+
+  it('classifies CREATE OR ALTER routines by kind instead of UNKNOWN (item 7)', () => {
+    expect(ClassifyBatch('CREATE OR ALTER TRIGGER app.trg_X ON app.T AFTER INSERT AS BEGIN SELECT 1; END')).toBe('CREATE_TRIGGER');
+    expect(ClassifyBatch('CREATE OR ALTER PROCEDURE app.spX AS BEGIN SELECT 1; END')).toBe('CREATE_PROCEDURE');
+    expect(ClassifyBatch('CREATE OR ALTER FUNCTION app.fnX() RETURNS INT AS BEGIN RETURN 1; END')).toBe('CREATE_FUNCTION');
+    expect(ClassifyBatch('CREATE OR ALTER VIEW app.vwX AS SELECT 1 AS A')).toBe('CREATE_VIEW');
+  });
+});

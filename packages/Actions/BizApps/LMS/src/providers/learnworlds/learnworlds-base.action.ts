@@ -1,4 +1,4 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, IsEmailShaped } from '@memberjunction/global';
 import { BaseLMSAction } from '../../base/base-lms.action';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
@@ -400,8 +400,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
    * Validates that a string is a plausible email address.
    */
   protected validateEmail(email: string, paramName: string = 'Email'): string {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!IsEmailShaped(email)) {
       throw new Error(`Invalid ${paramName} format: '${email}'`);
     }
     return email;
