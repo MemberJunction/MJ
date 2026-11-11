@@ -7,6 +7,7 @@
  * share the same probe primitives.
  */
 
+const http = require('http');
 const net = require('net');
 
 /**
@@ -95,4 +96,48 @@ function probeTcp(label, host, port, opts = {}) {
     });
 }
 
-module.exports = { probeHttp, probeTcp };
+/**
+ * WebSocket upgrade probe. Sends a real HTTP upgrade request and reports
+ * `ok` only when the server switches protocols (101). `fetch` cannot do this:
+ * it rejects the `Connection`/`Upgrade` headers before sending anything.
+ */
+function probeWebSocket(label, url, opts = {}) {
+    const { protocol = 'graphql-transport-ws', timeoutMs = 5000, log = false } = opts;
+    return new Promise(resolve => {
+        const start = performance.now();
+        let settled = false;
+        const finish = (result, message) => {
+            if (settled) return;
+            settled = true;
+            const ms = Math.round(performance.now() - start);
+            if (log) console.log(`  ${result.ok ? '✓' : '✗'} [${label}] ${message} (${ms}ms)`);
+            resolve({ label, ms, ...result });
+        };
+
+        const req = http.request(url, {
+            headers: {
+                Connection: 'Upgrade',
+                Upgrade: 'websocket',
+                'Sec-WebSocket-Version': '13',
+                'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==',
+                'Sec-WebSocket-Protocol': protocol,
+            },
+        });
+        req.setTimeout(timeoutMs, () => {
+            req.destroy();
+            finish({ ok: false, status: 0, error: 'timeout' }, 'FAILED: timeout');
+        });
+        req.on('upgrade', (res, socket) => {
+            socket.destroy();
+            finish({ ok: true, status: res.statusCode }, `${res.statusCode} switched protocols`);
+        });
+        req.on('response', res => {
+            res.resume();
+            finish({ ok: false, status: res.statusCode, error: 'no upgrade' }, `${res.statusCode} (no upgrade)`);
+        });
+        req.on('error', err => finish({ ok: false, status: 0, error: err.message }, `FAILED: ${err.message}`));
+        req.end();
+    });
+}
+
+module.exports = { probeHttp, probeTcp, probeWebSocket };

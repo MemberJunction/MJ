@@ -182,6 +182,24 @@ Second line.
             expect(result).toContain('name: "Skill: With Colon"');
         });
 
+        it('round-trips quotes and backslashes in quoted scalars', () => {
+            const name = 'Path: C:\\temp\\ "x"';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
+        it('round-trips a backslash written directly before a quote or another backslash', () => {
+            const name = 'Escaped: a\\"b and c\\\\d';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
+        it('round-trips a value that starts and ends with a quote', () => {
+            const name = '"Quoted"';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
         it('round-trips through Parse after Serialize', () => {
             const original = {
                 name: 'Round Trip Skill',
@@ -201,6 +219,46 @@ Second line.
             expect(parsed.frontmatter.actions).toEqual(original.actionNames);
             expect(parsed.frontmatter.subAgents).toEqual(original.subAgentNames);
             expect(parsed.instructions).toBe(original.instructions);
+        });
+    });
+
+    describe('frontmatter line matching', () => {
+        const parse = (frontmatter: string) => SkillMarkdownConverter.Parse(`---\n${frontmatter}\n---\n\nBody.\n`).frontmatter;
+
+        it.each([
+            ['name: Plain', 'Plain'],
+            ['name:Tight', 'Tight'],
+            ['name \t:\t  Spaced out  ', 'Spaced out'],
+            ['name: Has: colons', 'Has: colons'],
+        ])('reads the scalar in %j', (line, expected) => {
+            expect(parse(line).name).toBe(expected);
+        });
+
+        it.each([
+            ['  - Run Query', ['Run Query']],
+            ['-\tTabbed', ['Tabbed']],
+            ['    -    Indented item', ['Indented item']],
+            ['  - Two - dashes', ['Two - dashes']],
+        ])('reads the list item in %j', (line, expected) => {
+            expect(parse(`name: S\nactions:\n${line}`).actions).toEqual(expected);
+        });
+
+        it('rejects a dash with no space after it', () => {
+            expect(() => parse('name: S\nactions:\n  -Run Query')).toThrow(/Invalid SKILL\.md frontmatter line/);
+        });
+
+        it('rejects a list line of 100k tabs before a carriage return in linear time', () => {
+            const line = '-' + '\t'.repeat(100_000) + 'x\ry';
+            const started = Date.now();
+            expect(() => parse(`name: S\nactions:\n${line}`)).toThrow(/Invalid SKILL\.md frontmatter line/);
+            expect(Date.now() - started).toBeLessThan(2500);
+        });
+
+        it('rejects a key line of 100k tabs before a carriage return in linear time', () => {
+            const line = 'A:' + '\t'.repeat(100_000) + 'x\ry';
+            const started = Date.now();
+            expect(() => parse(`name: S\n${line}`)).toThrow(/Invalid SKILL\.md frontmatter line/);
+            expect(Date.now() - started).toBeLessThan(2500);
         });
     });
 });

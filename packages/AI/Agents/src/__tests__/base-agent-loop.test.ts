@@ -49,8 +49,8 @@ import { FlowAgentType } from '../agent-types/flow-agent-type';
 import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage } from '@memberjunction/ai-core-plus';
-import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type MJAIAgentRunEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage, type AgentConfiguration, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIPromptRunEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { AgentToolDefinition } from '../native-tools/agent-tools';
@@ -65,6 +65,8 @@ import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
 import { AIAPIKeys, type ChatMessage, type ChatResult } from '@memberjunction/ai';
 import { UserInfo as CoreUserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import nunjucks from 'nunjucks';
+import { AGENT_SPECIALIZATION_TAG, RUNTIME_STATE_TAG } from '../constants';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -431,6 +433,13 @@ class LoopHarness {
             }
             throw new Error(`LoopHarness: unexpected GetEntityObject('${entityName}') — a DB boundary leaked into the loop test`);
         },
+        RunView: async (): Promise<Record<string, unknown>> => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 0,
+        }),
     };
 
     public get run(): FakeAgentRun {
@@ -3676,6 +3685,92 @@ describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a succ
         expect(runner.Calls).toHaveLength(1);
         expect((result.payload as DocPayload).doc).toBe('Hello');
     });
+
+    describe('the agent-tool circuit breaker', () => {
+        /** `edit_doc` that always fails and counts how often it really ran. */
+        function failingEdit(usesCircuitBreaker?: boolean): { tool: AgentToolDefinition; runs: () => number } {
+            let count = 0;
+            const tool: AgentToolDefinition = {
+                Name: 'edit_doc', Description: 'Call this to replace one passage.', InputSchema: { type: 'object', properties: {} },
+                Execute: async (args) => {
+                    count++;
+                    return { Content: `old_string not found: '${String(args.old_string)}'`, IsError: true };
+                },
+                UsesCircuitBreaker: usesCircuitBreaker
+            };
+            return { tool, runs: () => count };
+        }
+
+        function agentWith(tool: AgentToolDefinition, calls: Array<Record<string, unknown>>): { agent: HarnessAgent } {
+            class BreakerAgent extends HarnessAgent {
+                protected override GetAgentTools(): AgentToolDefinition[] {
+                    return [tool];
+                }
+            }
+            const agent = new BreakerAgent();
+            (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+                ...calls.map((args, i) => () => llmToolCall(`call_${i}`, 'edit_doc', args)),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+            return { agent };
+        }
+
+        it('refuses a third call with arguments that already failed twice, without running the tool', async () => {
+            const edit = failingEdit();
+            const same = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(edit.tool, [same, same, same]);
+            const params = makeParams();
+
+            await agent.Execute(params);
+
+            expect(edit.runs()).toBe(2);
+            const third = answerTo(params.conversationMessages as AgentChatMessage[], 'call_2');
+            expect(third[0].isError).toBe(true);
+            expect(third[0].content).toContain('already failed 2 times with these exact arguments');
+            expect(harness.steps.filter((s) => s.StepType === 'Tool').map((s) => s.Success)).toEqual([false, false, false]);
+        });
+
+        it('disables the tool for the run after five consecutive failures with different arguments', async () => {
+            const edit = failingEdit();
+            const calls = [1, 2, 3, 4, 5, 6].map((n) => ({ old_string: `miss ${n}`, new_string: 'x' }));
+            const { agent } = agentWith(edit.tool, calls);
+            const params = makeParams();
+
+            await agent.Execute(params);
+
+            expect(edit.runs()).toBe(5);
+            expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_5')[0].content).toContain('disabled for this run after 5 consecutive failures');
+        });
+
+        it('starts over after a success', async () => {
+            let count = 0;
+            const tool: AgentToolDefinition = {
+                Name: 'edit_doc', Description: 'Call this to replace one passage.', InputSchema: { type: 'object', properties: {} },
+                Execute: async (args) => {
+                    count++;
+                    return args.old_string === 'ok'
+                        ? { Content: 'Edit applied.', IsError: false }
+                        : { Content: 'old_string not found', IsError: true };
+                }
+            };
+            const bad = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(tool, [bad, bad, { old_string: 'ok', new_string: 'Hi' }, bad]);
+
+            await agent.Execute(makeParams());
+
+            expect(count).toBe(4);
+        });
+
+        it('leaves a tool alone when it opts out with UsesCircuitBreaker: false', async () => {
+            const edit = failingEdit(false);
+            const same = { old_string: 'Goodbye', new_string: 'Hi' };
+            const { agent } = agentWith(edit.tool, [same, same, same]);
+
+            await agent.Execute(makeParams());
+
+            expect(edit.runs()).toBe(3);
+        });
+    });
 });
 
 describe('BaseAgent.Execute — native-only control plane: framework capabilities as tools', () => {
@@ -4083,7 +4178,7 @@ describe('BaseAgent — a native complete_task refused by validation', () => {
     });
 });
 
-describe('BaseAgent.Execute — a payload change sent with a completion is applied only if the completion is accepted', () => {
+describe('BaseAgent.Execute — a payload change sent with a completion is committed only when a completion is accepted', () => {
     type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
 
     /** Refuses the first `refusals` completions for an unmet minimum-execution requirement. */
@@ -4121,7 +4216,7 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         return next.content as unknown as ToolBlock[];
     }
 
-    it('native: a complete_task refused for minimum executions leaves its change out of the next request and the final payload, and says so', async () => {
+    it('native: a refused complete_task holds its change — the next request sees it, the accepted completion commits it — and says so', async () => {
         const { agent, runner } = makeMinExecAgent([
             () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
             () => llmImplicitCalls([completeTask('call_done_2')]),
@@ -4131,37 +4226,39 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         const result = await agent.Execute(params);
 
         expect(runner.Calls).toHaveLength(2);
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        expect(result.payload).toEqual({ summary: 'draft' });
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
         const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
         expect(answer.isError).toBe(true);
         expect(answer.content).toMatch(/Minimum execution requirements not met/);
-        expect(answer.content).toMatch(/payloadChangeRequest sent with this complete_task call was NOT applied/);
+        expect(answer.content).toMatch(/complete_task call was not applied yet: it is held/);
+        expect(answer.content).toMatch(/send only the corrections/);
     });
 
-    it('envelope: a refused completion leaves its change out of the next request and the final payload, and the Retry says to send it again', async () => {
+    it('envelope: a refused completion holds its change, the next completion builds on it, and the Retry says to send only corrections', async () => {
         const { agent, runner } = makeMinExecAgent([
             () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
-            () => llmEnvelope(successEnvelope()),
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { reviewer: 'Ana' } } })),
         ]);
         const params = makeParams({ payload: { summary: 'draft' } });
 
         const result = await agent.Execute(params);
 
         expect(runner.Calls).toHaveLength(2);
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
-        expect(result.payload).toEqual({ summary: 'draft' });
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved', reviewer: 'Ana' });
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
         expect(retry?.content).toMatch(/Minimum execution requirements not met/);
-        expect(retry?.content).toMatch(/NOT applied\. Send it again with your next completion/);
+        expect(retry?.content).toMatch(/completion was not applied yet: it is held/);
     });
 
-    it('validates the draft against FinalPayloadValidation, and commits nothing when it fails', async () => {
+    it('validates the draft against FinalPayloadValidation, and a correction-only completion then passes', async () => {
         harness.agent = makeAgentRow({ FinalPayloadValidation: JSON.stringify({ 'summary:string': 'x', 'title:string': 'x', 'count:number': 1 }) });
         const { agent, runner } = makeAgent([
             // Adds the title but not the count: the draft fails on the count alone.
             () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report' } } })),
-            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report', count: 3 } } })),
+            // Sends only the correction; the held title is still there.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { count: 3 } } })),
         ]);
         const params = makeParams({ payload: { summary: 'draft' } });
 
@@ -4169,12 +4266,11 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
 
         expect(runner.Calls).toHaveLength(2);
         const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
-        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
         // The draft was what failed: the title it added is not reported missing, the count is.
-        expect(retry?.content).toMatch(/count/);
-        expect(retry?.content).not.toMatch(/title/i);
-        expect(retry?.content).toMatch(/NOT applied/);
-        // The accepted completion's change is applied.
+        const validationErrors = String(retry?.content).split('\n\nThe payloadChangeRequest')[0];
+        expect(validationErrors).toMatch(/count/);
+        expect(validationErrors).not.toMatch(/title/i);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', title: 'Q3 report' });
         expect(result.success).toBe(true);
         expect(result.payload).toEqual({ summary: 'draft', title: 'Q3 report', count: 3 });
     });
@@ -4191,6 +4287,66 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(result.success).toBe(true);
         expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
         expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_done')[0]).toMatchObject({ isError: false, content: 'Task complete.' });
+    });
+
+    it('does not apply a resent change twice when it is identical to the held one', async () => {
+        const { agent } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { items: ['a', 'b'], note: 'x' } } })),
+            // The model resends the whole refused change, keys in another order.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { note: 'x', items: ['a', 'b'] } } })),
+        ]);
+        const params = makeParams({ payload: { items: [] } });
+
+        const result = await agent.Execute(params);
+
+        expect(result.payload).toEqual({ items: ['a', 'b'], note: 'x' });
+    });
+
+    it('drops the held change when the run ends without an accepted completion', async () => {
+        harness.agent = makeAgentRow({ MaxIterationsPerRun: 2 });
+        const { agent, runner } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
+            () => llmEnvelope(actionsEnvelope()),
+        ]);
+        agent.Refusals = 99;
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(result.success).toBe(false);
+        expect(result.payload).toEqual({ summary: 'draft' });
+    });
+
+    it('does not report a Chat change as held when a subclass turns the Chat step into a Success in place', async () => {
+        /** Validates a Chat reply as a completion, changing the step in place. */
+        class ChatAsCompletionAgent extends MinExecAgent {
+            protected override async validateChatNextStep<P>(
+                params: ExecuteAgentParams, nextStep: BaseAgentNextStep<P>, currentPayload: P,
+                agentRun: MJAIAgentRunEntityExtended, currentStep: MJAIAgentRunStepEntityExtended
+            ): Promise<BaseAgentNextStep<P>> {
+                nextStep.step = 'Success';
+                return this.validateSuccessNextStep(params, nextStep, currentPayload, agentRun, currentStep);
+            }
+        }
+        const agent = new ChatAsCompletionAgent();
+        const runner = new ScriptedPromptRunner([
+            () => llmEnvelope({ taskComplete: false, message: 'Here is the plan.', nextStep: { type: 'Chat' }, payloadChangeRequest: { newElements: { verdict: 'approved' } } }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        // A Chat step's change is applied at once, so it is in the next request and the final payload...
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
+        // ...and the refusal must not tell the model to send it again.
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(retry?.content).toMatch(/Minimum execution requirements not met/);
+        expect(retry?.content).not.toMatch(/not applied|is held/i);
     });
 
     it('keeps a payload_change_request made on the same turn as a refused complete_task', async () => {
@@ -4213,3 +4369,81 @@ describe('BaseAgent.Execute — a payload change sent with a completion is appli
         expect(answers.find((b) => b.toolCallId === 'call_write')?.isError).toBe(false);
     });
 });
+
+describe('BaseAgent.Execute — template data a subclass adds after super.preparePromptParams()', () => {
+    /** Adds template data after the base preparation, and records what the trailing-message build saw. */
+    class DataAfterSuperAgent extends HarnessAgent {
+        public SeenByTrailingMessage: unknown[] = [];
+        protected override async preparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+            const promptParams = await super.preparePromptParams(config, payload, params);
+            promptParams.data = { ...promptParams.data, addedBySubclass: 'yes' };
+            return promptParams;
+        }
+        protected override async buildVolatileStateMessage<P>(
+            params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P,
+            childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended
+        ): Promise<AgentChatMessage | null> {
+            this.SeenByTrailingMessage.push(promptParams.data?.addedBySubclass);
+            return super.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        }
+    }
+
+    it('reaches the trailing-message build, which can render the child prompt, and the prompt runner', async () => {
+        const agent = new DataAfterSuperAgent();
+        const runner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+
+        expect(agent.SeenByTrailingMessage).toEqual(['yes']);
+        expect(runner.Calls[0].data?.addedBySubclass).toBe('yes');
+    });
+});
+
+describe('BaseAgent.Execute — a relocated specialization renders the template data a subclass adds after super', () => {
+    // The child prompt reads the payload (so MJ relocates it into the trailing runtime-state message and renders it
+    // there) and a key only the subclass provides. A regression here sends the model a specialization without the
+    // subclass's data, silently: MJ 6.2.1 pre-rendered the relocated child inside preparePromptParams, before the
+    // subclass added it.
+    const CHILD_TEMPLATE = '# Strategist\nKnown queries: {{ subclassNote }}\nCurrent payload: {{ _CURRENT_PAYLOAD | dump | safe }}';
+    const SYSTEM_TEMPLATE = `# Loop\n{{ _AGENT_PROMPT_ }}\n## Runtime State\nIt is delivered inside <${RUNTIME_STATE_TAG}> tags.`;
+
+    /** Serves the two templates through the agent's own lookup seam and adds data after the base preparation. */
+    class SubclassDataAgent extends HarnessAgent {
+        protected override async preparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+            const promptParams = await super.preparePromptParams(config, payload, params);
+            promptParams.data = { ...promptParams.data, subclassNote: 'NOTE-FROM-SUBCLASS' };
+            return promptParams;
+        }
+        protected override async loadPromptTemplateText(prompt: MJAIPromptEntityExtended | undefined): Promise<string | null> {
+            if (prompt?.ID === CHILD_PROMPT_ID) return CHILD_TEMPLATE;
+            if (prompt?.ID === SYS_PROMPT_ID) return SYSTEM_TEMPLATE;
+            return null;
+        }
+    }
+
+    /** A runner that renders the child prompt for real (Nunjucks) against the data it is given. */
+    class RenderingRunner extends ScriptedPromptRunner {
+        public async RenderChildPromptTemplates(children: Array<{ parentPlaceholder: string }>, params: AIPromptParams): Promise<{ renderedTemplates: Record<string, string> }> {
+            const env = new nunjucks.Environment(null, { autoescape: false });
+            return { renderedTemplates: { [children[0].parentPlaceholder]: env.renderString(CHILD_TEMPLATE, params.data ?? {}) } };
+        }
+    }
+
+    it('sends the model a specialization that contains the subclass data', async () => {
+        const agent = new SubclassDataAgent();
+        const runner = new RenderingRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams({ payload: { summary: 'draft' } }));
+
+        const sent = runner.Calls[0].conversationMessages ?? [];
+        const trailing = String(sent[sent.length - 1]?.content ?? '');
+        // The specialization was relocated (the scenario under test)...
+        expect(trailing).toContain(`<${AGENT_SPECIALIZATION_TAG}>`);
+        // ...and rendered with the data the subclass added after super.preparePromptParams().
+        expect(trailing).toContain('Known queries: NOTE-FROM-SUBCLASS');
+        expect(trailing).toContain('"summary":"draft"');
+    });
+});
+

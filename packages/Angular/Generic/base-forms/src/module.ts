@@ -25,7 +25,7 @@ import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent, MJBottomSheetComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent, MJBottomSheetComponent, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
@@ -39,6 +39,9 @@ import { MjRecordLinkDirective } from './lib/links/record-link.directive';
 import { MjRecordLinkComponent } from './lib/links/record-link.component';
 import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
 import { MjRecordCommentsComponent } from './lib/comments/record-comments.component';
+import { MjCommentCardDriverHostComponent } from './lib/comments/comment-card-driver-host.component';
+import { FieldSuggestionCardComponent } from './lib/comments/field-suggestion-card.component';
+import { MjFoldedSubtypeSectionComponent } from './lib/subtype-ui-driver/folded-subtype-section.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -86,7 +89,10 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     MjRecordLinkDirective,
     MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent,
-    MjRecordCommentsComponent
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ],
   imports: [
     CommonModule,
@@ -107,6 +113,7 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     MJButtonDirective,
     MjIconPickerComponent,
     MJBottomSheetComponent,
+    MJConfirmDialogComponent,
     RecordCloneSlideInComponent
   ],
   exports: [
@@ -135,7 +142,10 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     MjRecordLinkDirective,
     MjRecordLinkComponent,
     MjRecordPreviewPopoverComponent,
-    MjRecordCommentsComponent
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ]
 })
 export class BaseFormsModule { }

@@ -499,14 +499,20 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       // OR'd with the form's own extra state: a section that owns an editor (a flow canvas, a
       // designer) holds edits no entity field reflects, and reporting the record clean would let
       // the navigate-away guard discard them without asking.
-      return (this.Fc.record?.Dirty ?? false) || this.Fc.HasAdditionalUnsavedChanges;
+      return (
+        (this.Fc.record?.Dirty ?? false) ||
+        this.Fc.IsFoldedSubtypeDirty ||
+        this.Fc.HasAdditionalUnsavedChanges
+      );
     }
     return this.IsDirty;
   }
 
   get EffectiveDirtyFieldNames(): string[] {
     if (this.Fc?.record?.Fields) {
-      return this.Fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+      const ownDirty = this.Fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+      const foldedDirty = this.Fc.FoldedSubtypeDirtyFieldNames;
+      return foldedDirty.length > 0 ? [...ownDirty, ...foldedDirty] : ownDirty;
     }
     return this.DirtyFieldNames;
   }
@@ -719,6 +725,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.ChromeActiveGroup?.Title || 'Sections';
   }
 
+  /**
+   * The phone picker's accessible name. An aria-label replaces the button's content for screen
+   * readers, so the indicator spans inside it are never announced: the name carries the active
+   * section's status itself, in the order the indicators appear (unsaved, then error or warning).
+   */
+  get SectionPickerLabel(): string {
+    const parts = [this.ChromeActiveTitle];
+    const group = this.ChromeActiveGroup;
+    if (group) {
+      const { DirtyCount: dirty, ErrorCount: errors, WarningCount: warnings } = this.ChromeGroupIndicators(group);
+      if (dirty > 0) parts.push(`${dirty} unsaved ${dirty === 1 ? 'change' : 'changes'}`);
+      if (errors > 0) parts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+      else if (warnings > 0) parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+    }
+    return 'Change section — ' + parts.join(', ');
+  }
+
   get ChromeActiveIcon(): string {
     return this.ChromeActiveGroup?.Icon || 'fa-solid fa-list';
   }
@@ -898,6 +921,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.recordRefresh.SingleFieldRestoreRequested$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
       void this.onSingleFieldRestoreRequested(req);
     });
+    this.CommentsCoordinator.BindRefreshCoordinator(this.recordRefresh);
     this.CommentsCoordinator.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.ShowRecordComments = this.CommentsCoordinator.IsDrawerOpen;
       this.CommentCount = this.CommentsCoordinator.Rollup.TotalOpenCount;
@@ -927,6 +951,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // re-apply. Watching it here re-runs the chrome pass (setTimeout 0) once
     // those classes are current, so the Details card edges skip hidden panels.
     const searchFilter = this.EffectiveSearchFilter;
+    const currentDirty = this.EffectiveIsDirty;
+    if (currentDirty !== this.lastWatchedDirty) {
+      this.lastWatchedDirty = currentDirty;
+      this.cdr.markForCheck();
+    }
     if (
       editMode === this.lastRailEditMode
       && showEmptyFields === this.lastRailShowEmptyFields
@@ -2037,20 +2066,67 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     });
   }
 
+  private lastWatchedDirty: boolean | undefined = undefined;
+  private dirtyWatchInterval: ReturnType<typeof setInterval> | null = null;
+
   /**
    * Monitor record dirty state changes and trigger change detection.
-   * This ensures the edit banner updates when fields are modified.
+   * Uses event-driven hooks (field edits and BaseEntity events) for immediate zero-latency updates,
+   * with a lightweight fallback interval run strictly outside NgZone ONLY when active/editing,
+   * guaranteeing ZERO idle Angular change detection ticks per second across tabs.
    */
   private watchRecordChanges(): void {
-    // Poll for dirty state changes (BaseEntity doesn't expose observables)
-    const checkInterval = setInterval(() => {
-      if (this.EffectiveRecord?.Dirty !== undefined) {
-        this.cdr.markForCheck();
-      }
-    }, 200);
+    // 1. Event-driven: react to user field edits across the form immediately
+    this.fieldEdits.Edited$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+    });
+
+    // 2. Event-driven: react to BaseEntity lifecycle events on this record
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((e) => {
+        if (this.destroyed || e.eventCode !== BaseEntity.BaseEventCode) return;
+        const entityEvt = e.args as BaseEntityEvent | undefined;
+        if (!entityEvt) return;
+        const record = this.EffectiveRecord;
+        if (record) {
+          if (entityEvt.baseEntity === record) {
+            this.cdr.markForCheck();
+          } else if (entityEvt.baseEntity && entityEvt.entityName === record.EntityInfo?.Name) {
+            if (entityEvt.baseEntity.PrimaryKey?.HasValue && record.PrimaryKey?.HasValue && entityEvt.baseEntity.PrimaryKey.Equals(record.PrimaryKey)) {
+              this.cdr.markForCheck();
+            }
+          }
+        }
+      });
+
+    // 3. Fallback: run strictly outside NgZone ONLY while editing, never polling when idle
+    this.ngZone.runOutsideAngular(() => {
+      this.dirtyWatchInterval = setInterval(() => {
+        if (this.destroyed) {
+          if (this.dirtyWatchInterval) clearInterval(this.dirtyWatchInterval);
+          return;
+        }
+        // Only inspect while actively editing to ensure 0 idle ticks at rest
+        if (this.EffectiveEditMode) {
+          const currentDirty = this.EffectiveRecord?.Dirty;
+          if (currentDirty !== undefined && currentDirty !== this.lastWatchedDirty) {
+            this.lastWatchedDirty = currentDirty;
+            this.ngZone.run(() => {
+              this.cdr.markForCheck();
+            });
+          }
+        }
+      }, 500);
+    });
 
     // Cleanup on destroy
-    this.destroy$.subscribe(() => clearInterval(checkInterval));
+    this.destroy$.subscribe(() => {
+      if (this.dirtyWatchInterval) {
+        clearInterval(this.dirtyWatchInterval);
+        this.dirtyWatchInterval = null;
+      }
+    });
   }
 
   /** Forwards field edits to the form component, which runs the entry-time duplicate check for a new record. */
@@ -2669,6 +2745,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private refreshAfterSave(): void {
     const record = this.EffectiveRecord;
+    if (record?.IsSaved && this.CommentsCoordinator.IsLoaded) {
+      void this.CommentsCoordinator.LoadForRecord(record, this.ProviderToUse, true);
+    }
     if (!record?.EntityInfo?.TrackRecordChanges) return;
 
     // Refresh version count badge

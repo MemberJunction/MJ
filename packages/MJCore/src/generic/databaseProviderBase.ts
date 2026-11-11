@@ -8,9 +8,10 @@ import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
-import { LogError } from "./logging";
+import { LogError, LogWarning } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
+import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { CanonicalPrimaryKeyValue } from "./util";
@@ -1518,6 +1519,36 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * Returns true when an UPDATE on the direct `Save()` path should run {@link CheckUpdateConcurrency}
+     * inside an {@link EntityTransactionScope} before executing the update SQL.
+     *
+     * Default: `false`. Overridden by `GenericDatabaseProvider` when `ConcurrencyCheck` is `'log'` or `'enforce'`.
+     */
+    protected ShouldCheckUpdateConcurrency(
+        _entity: BaseEntity,
+        _options: EntitySaveOptions,
+    ): boolean {
+        return false;
+    }
+
+    /**
+     * Performs a locked row read and field-level concurrency check inside the save transaction scope
+     * before the UPDATE statement runs.
+     *
+     * Returns `true` when the save should proceed, or `false` when the save is rejected (in `'enforce'`
+     * mode, after populating `entityResult.Message`, `entityResult.ConcurrencyConflict`, and
+     * `entityResult.Success = false`).
+     */
+    protected async CheckUpdateConcurrency(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        return true;
+    }
+
+    /**
      * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
      * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
      * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
@@ -2304,29 +2335,41 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
 
-                // Step 4: Generate provider-specific SQL
-                let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
-                const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
-                // Snapshot the entity's in-memory field values at the exact point SQL parameters were bound
-                // (before awaiting ExecuteSQL). If the caller mutates the entity in memory while an async
-                // save is in flight (e.g. BaseEntitySaveQueue pipelining an INSERT + UPDATE), merging
-                // post-await entity.GetAll() would falsely mark those in-flight mutations as clean/saved.
-                const preSaveValues: Record<string, unknown> | undefined = effectiveReturnMode === 'datestamps_only'
-                    ? (entity.GetAll() as Record<string, unknown>)
-                    : undefined;
-                if (preSaveValues && bNewRecord) {
-                    // On a new record saved with 'datestamps_only', the SP does not query BaseView,
-                    // so virtual non-PK fields (e.g. joined name columns) that were never set stay
-                    // null. Omit them from preSaveValues so finalizeSave marks them NotLoaded=true.
-                    for (const f of entity.EntityInfo.Fields) {
-                        if (f.IsVirtual && !f.IsPrimaryKey && (preSaveValues[f.Name] === null || preSaveValues[f.Name] === undefined)) {
-                            delete preSaveValues[f.Name];
+                const capturePreSaveValues = (): Record<string, unknown> | undefined => {
+                    const effectiveReturnMode: EntitySaveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
+                    // Snapshot the entity's in-memory field values at the exact point SQL parameters were bound
+                    // (before awaiting ExecuteSQL). If the caller mutates the entity in memory while an async
+                    // save is in flight (e.g. BaseEntitySaveQueue pipelining an INSERT + UPDATE), merging
+                    // post-await entity.GetAll() would falsely mark those in-flight mutations as clean/saved.
+                    const snapshot: Record<string, unknown> | undefined = effectiveReturnMode === 'datestamps_only'
+                        ? (entity.GetAll() as Record<string, unknown>)
+                        : undefined;
+                    if (snapshot && bNewRecord) {
+                        // On a new record saved with 'datestamps_only', the SP does not query BaseView,
+                        // so virtual non-PK fields (e.g. joined name columns) that were never set stay
+                        // null. Omit them from preSaveValues so finalizeSave marks them NotLoaded=true.
+                        for (const f of entity.EntityInfo.Fields) {
+                            if (f.IsVirtual && !f.IsPrimaryKey && (snapshot[f.Name] === null || snapshot[f.Name] === undefined)) {
+                                delete snapshot[f.Name];
+                            }
                         }
                     }
-                }
+                    return snapshot;
+                };
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
+                    if (
+                        !bNewRecord &&
+                        !bReplay &&
+                        (options?.ConcurrencyBaseline !== undefined || options?.ConcurrencyCheck === 'enforce')
+                    ) {
+                        LogWarning(
+                            `DatabaseProviderBase.Save: entity "${entity.EntityInfo.Name}" is queued in a TransactionGroup; per-save concurrency checking (ConcurrencyBaseline / ConcurrencyCheck: 'enforce') is bypassed for TransactionGroup items.`,
+                        );
+                    }
+                    let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                    const preSaveValues = capturePreSaveValues();
                     entity.RaiseReadyForTransaction();
                     transactionReadyRaised = true;
                     suspendRefresh();
@@ -2397,8 +2440,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                             } else {
                                 entityResult.Success = false;
                                 if (!entityResult.Message) {
+                                    // The group's failure carries the database message of whichever
+                                    // item failed, so it gets the same redaction as a direct save.
                                     entityResult.Message =
-                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction Failed';
+                                        transactionResult instanceof Error
+                                            ? SaveErrorMessageForUser(transactionResult.message, entity.EntityInfo, user)
+                                            : 'Transaction Failed';
                                 }
                             }
                         },
@@ -2428,13 +2475,35 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 } else {
                     // ---- Direct execution path ----
                     const enlistInTx = !bReplay && await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord);
-                    const saveTxScope = enlistInTx && !autoNumberTxScope ? await this.BeginEntityTransaction() : null;
+                    const checkConcurrencyInTx = !bReplay && !bNewRecord && this.ShouldCheckUpdateConcurrency(entity, options);
+                    const saveTxScope = (enlistInTx || checkConcurrencyInTx) && !autoNumberTxScope ? await this.BeginEntityTransaction() : null;
                     let saveTxCommitted = false;
                     suspendRefresh();
 
                     type SaveRowList = Awaited<ReturnType<typeof this.PostProcessRows>>;
                     let result: SaveRowList;
+                    let sqlDetails: SaveSQLResult;
+                    let preSaveValues: Record<string, unknown> | undefined;
                     try {
+                        if (checkConcurrencyInTx) {
+                            const concurrencyPassed = await this.CheckUpdateConcurrency(entity, user, options, entityResult);
+                            if (!concurrencyPassed) {
+                                resumeRefresh();
+                                if (saveTxScope && !saveTxCommitted) {
+                                    await saveTxScope.Rollback();
+                                    saveTxCommitted = true;
+                                }
+                                if (autoNumberTxScope && !autoNumberTxCommitted) {
+                                    await autoNumberTxScope.Rollback();
+                                    autoNumberTxCommitted = true;
+                                }
+                                return false;
+                            }
+                        }
+
+                        sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
+                        preSaveValues = capturePreSaveValues();
+
                         if (bReplay) {
                             result = [entity.GetAll()];
                         } else {
@@ -2539,7 +2608,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }
             resumeRefresh();
             entityResult.EndedAt = new Date();
-            entityResult.Message = (e as Error).message;
+            // A constraint error can echo column values, including the stored value of a column
+            // this user may not read (a unique index spanning it). The caller gets the message
+            // without them; the server log keeps the original.
+            entityResult.Message = SaveErrorMessageForUser((e as Error).message, entity.EntityInfo, user);
             LogError(e);
             throw e;
         } finally {
@@ -2682,7 +2754,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 entityResult.Success = false;
                                 if (!entityResult.Message) {
                                     entityResult.Message =
-                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction failed to commit';
+                                        transactionResult instanceof Error
+                                            ? SaveErrorMessageForUser(transactionResult.message, entity.EntityInfo, user)
+                                            : 'Transaction failed to commit';
                                 }
                             }
                         },
@@ -2723,7 +2797,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }
         } catch (e) {
             LogError(e);
-            entityResult.Message = (e as Error).message;
+            // A delete's SQL writes the full record to the audit trail, and a constraint error can
+            // echo stored values, so the caller gets the same redaction as a failed save.
+            entityResult.Message = SaveErrorMessageForUser((e as Error).message, entity.EntityInfo, user);
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             return false;

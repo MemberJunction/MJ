@@ -86,6 +86,23 @@ describe('LoadScopedFieldsForBuild', () => {
         expect(loaded?.get('cio-2')?.map(r => r.Name)).toEqual(['id']);
     });
 
+    it('narrows the read to the named objects, matched in any case', async () => {
+        installEngine(['CIO-1', 'CIO-2', 'CIO-3']);
+        runView.mockResolvedValue({ Success: true, Results: [] } as unknown as RunViewResult);
+
+        await WithCatalogScope('CI-1', () => LoadScopedFieldsForBuild('INT-1', USER, ['OBJ-cio-2', 'obj-CIO-3', 'obj-absent']));
+
+        expect(runView).toHaveBeenCalledOnce();
+        expect((runView.mock.calls[0][0] as RunViewParams).ExtraFilter).toBe("CompanyIntegrationObjectID IN ('CIO-2','CIO-3')");
+    });
+
+    it('an empty name list reads nothing', async () => {
+        installEngine(['CIO-1']);
+        const loaded = await WithCatalogScope('CI-1', () => LoadScopedFieldsForBuild('INT-1', USER, []));
+        expect(loaded?.size).toBe(0);
+        expect(runView).not.toHaveBeenCalled();
+    });
+
     it(`reads ${SCOPED_FIELDS_CHUNK} objects per query`, async () => {
         installEngine(Array.from({ length: 2 * SCOPED_FIELDS_CHUNK + 50 }, (_, i) => `CIO-${i}`));
         runView.mockResolvedValue({ Success: true, Results: [] } as unknown as RunViewResult);

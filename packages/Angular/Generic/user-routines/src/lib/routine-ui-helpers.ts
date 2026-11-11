@@ -3,6 +3,7 @@
  * No Angular or MJ runtime dependencies — unit-testable in isolation.
  */
 import type { MJUserRoutineEntity } from '@memberjunction/core-entities';
+import { IsEmailShaped } from '@memberjunction/global';
 
 /** Chip variants aligned with the shared status-token vocabulary. */
 export type RoutineChipVariant = 'success' | 'warning' | 'error' | 'info' | 'muted';
@@ -136,7 +137,7 @@ export function ValidateOptionalJson(text: string | null | undefined): { Valid: 
 
 /** Very light email shape check for external recipients (not RFC-complete on purpose). */
 export function IsPlausibleEmail(email: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    return IsEmailShaped(email.trim());
 }
 
 /**

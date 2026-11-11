@@ -10,6 +10,13 @@ import type {
 } from '../facets/dialectSchemaDDL.js';
 
 /**
+ * The widest `VARCHAR(n)` PostgreSQL accepts. A wider string column is `TEXT`, the same way SQL Server
+ * falls back to `NVARCHAR(MAX)` above 4000. Rendering the width anyway fails the whole statement, and a
+ * width past 2^31 - 1 is a syntax error (`VARCHAR(2147483946)`: "syntax error at or near 2147483946").
+ */
+const MAX_VARCHAR_LENGTH = 10485760;
+
+/**
  * PostgreSQL data type mapping.
  * Maps SQL Server types to their PostgreSQL equivalents.
  */
@@ -103,14 +110,14 @@ class PostgreSQLDataTypeMap implements DataTypeMap {
     }
 
     private mapNVarchar(length?: number): MappedType {
-        if (length === -1 || length === undefined) {
+        if (length === -1 || length === undefined || length > MAX_VARCHAR_LENGTH) {
             return { typeName: 'TEXT', supportsLength: false, supportsPrecisionScale: false };
         }
         return { typeName: 'VARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
     }
 
     private mapVarchar(length?: number): MappedType {
-        if (length === -1 || length === undefined) {
+        if (length === -1 || length === undefined || length > MAX_VARCHAR_LENGTH) {
             return { typeName: 'TEXT', supportsLength: false, supportsPrecisionScale: false };
         }
         return { typeName: 'VARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
@@ -635,6 +642,7 @@ export class PostgreSQLSchemaDDL extends BaseSchemaDDL {
 
     private resolveStringType(maxLength?: number): string {
         if (maxLength != null && maxLength > 0) {
+            if (maxLength > MAX_VARCHAR_LENGTH) return 'TEXT';
             return `VARCHAR(${maxLength})`;
         }
         return 'VARCHAR(255)';

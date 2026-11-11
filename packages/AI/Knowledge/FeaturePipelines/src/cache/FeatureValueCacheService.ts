@@ -72,6 +72,8 @@ export interface FeatureValueOutputItem {
     constraintType?: ValueConstraint['Type'];
     reasoning?: string | null;
     confidence?: number | null;
+    /** Optional explicit text value; stored in ValueText alongside a numeric score for classification models (M3). */
+    valueText?: string | null;
 }
 
 /** Parameters for upserting a record's Feature Values, one row per Feature Value key; every key part is required. */
@@ -92,6 +94,8 @@ export interface RecordFeatureValuesParams {
     pipelineVersion: number | null;
     /** The pin's primary AI model; null when the prompt has no Active model, or for a human value. */
     aiModelID: string | null;
+    /** The ML Model that computed the values for an 'ML Model' process; null for prompt/human values (B1). */
+    mlModelID?: string | null;
     /** The pin's parameters hash; null for a human value. */
     parametersHash: string | null;
     /** SHA-256 of the record's normalised inputs (the cache key hash); null when there is none. */
@@ -387,6 +391,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
                 PipelineVersion: params.pipelineVersion, PromptVersionHash: params.promptVersionHash,
                 AIModelID: params.aiModelID, ParametersHash: params.parametersHash,
                 InputHash: params.inputHash, Source: params.source,
+                MLModelID: params.mlModelID ?? null,
             }),
         })));
         const previous = await this.LoadLatestPipelineValues(params, provider);
@@ -421,7 +426,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         row: MJFeatureValueEntity | undefined,
         supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
+        const typed = FeatureValueCacheService.StoredValueOf(out);
         const unchanged = !!row && this.IsUnchanged(row, typed, out);
         if (unchanged && !supersededByAnotherKey) {
             return 'Unchanged';
@@ -471,7 +476,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             && (row.Confidence ?? null) === (out.confidence ?? null);
     }
 
-    /** Sets a new row's key columns (record, feature, pin, input, source) and its key hash. */
+    /** Sets a new row's key columns (record, feature, pin, input, source, champion role) and its key hash. */
     protected AssignKeyColumns(fv: MJFeatureValueEntity, params: RecordFeatureValuesParams, out: FeatureValueOutputItem, keyHash: string): void {
         fv.RecordProcessID = params.recordProcessID;
         fv.EntityID = params.entityID;
@@ -482,10 +487,12 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         fv.PromptVersionHash = params.promptVersionHash;
         fv.ConstraintHash = params.constraintHash ?? null;
         fv.AIModelID = params.aiModelID;
+        fv.MLModelID = params.mlModelID ?? null;
         fv.ParametersHash = params.parametersHash;
         fv.InputHash = params.inputHash;
         fv.ValueKeyHash = keyHash;
         fv.Source = params.source;
+        fv.Role = 'Champion';
     }
 
     /** Sets a row's value, reasoning, confidence, run links and ComputedAt. */
@@ -521,9 +528,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * The newest `Source='Pipeline'` row of each named feature of a record, by lower-cased feature name (a feature with
-     * none is absent): one batched round trip, one view per feature bounded to its newest row. Shared by
-     * {@link LoadLatestPipelineValues} and {@link GetLatestPipelineValues}.
+     * The newest `Source='Pipeline'` and `Role='Champion'` row of each named feature of a record, by lower-cased feature
+     * name (a feature with none is absent): one batched round trip, one view per feature bounded to its newest row.
+     * Shared by {@link LoadLatestPipelineValues} and {@link GetLatestPipelineValues}.
      * @throws Error naming the feature whose read failed.
      */
     private async readLatestPipelineRows(p: Omit<FeatureValueRecordRef, 'FeatureName'> & { FeatureNames: string[]; ExcludeProcessRunID?: string | null }):
@@ -537,7 +544,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
             : '';
         const recordFilter = `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
-            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}${exclude}`;
+            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')} AND Role = 'Champion'${exclude}`;
         const shape = FeatureValueCacheService.LatestValueViewShape();
         const results = await RunView.FromMetadataProvider(p.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
             ...shape,
@@ -565,7 +572,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         }
         const res = await RunView.FromMetadataProvider(provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')})`,
+            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')}) AND Role = 'Champion'`,
             ResultType: 'entity_object',
             BypassCache: true,
         }, params.contextUser);
@@ -581,8 +588,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * The most recent Feature Value of a record and feature from one source, as its typed columns; null when there is
-     * none. Read fresh: the human-value guard decides from it whether a field may be overwritten.
+     * The most recent Champion Feature Value of a record and feature from one source, as its typed columns; null when
+     * there is none. Read fresh: the human-value guard decides from it whether a field may be overwritten.
      * @throws Error when the read fails (a guard that cannot read must not guess "pipeline-owned").
      */
     public async GetLatestValue(p: LatestFeatureValueParams): Promise<TypedFeatureValue | null> {
@@ -591,7 +598,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             : '';
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
             ...FeatureValueCacheService.LatestValueViewShape(),
-            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)}${exclude}`,
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)} AND Role = 'Champion'${exclude}`,
             MaxRows: 1,
             SkipTotalRowCount: true,
         }, p.ContextUser);
@@ -633,7 +640,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     public async RetireHumanValue(p: FeatureValueRecordRef): Promise<number> {
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human'`,
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human' AND Role = 'Champion'`,
             ResultType: 'entity_object',
             BypassCache: true,
         }, p.ContextUser);
@@ -735,6 +742,16 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return { ...empty, ValueDate: new Date(text) };
         }
         return undefined;
+    }
+
+    /**
+     * The typed value columns an output is stored with: its typed value, with an explicit `valueText` (an ML label
+     * stored beside its score) in `ValueText`. Unchanged and concurrent-insert checks compare against this, so an
+     * unchanged labelled score is Unchanged rather than rewritten.
+     */
+    protected static StoredValueOf(out: FeatureValueOutputItem): TypedFeatureValue {
+        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
+        return out.valueText !== undefined ? { ...typed, ValueText: out.valueText } : typed;
     }
 
     /** A copy of a row's typed value columns. */

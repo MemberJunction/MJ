@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S2.3",
+    "Description": "Gate G1.6 (phase 1, dataset C1, criterion S2.3): after a model is trained on version 1 of the C1 renewal unit, editing the label window creates version 2 with LabelVersion 2 in the same lineage, the model's lineage still references version 1, and saving the edit over version 1 in place is refused. It fails when the label-definition comparison reports no change, so the label edit creates no version 2.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.6\",\"owner:PR3\",\"phase:1\",\"dataset:C1\",\"criterion:S2.3\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Version 2 with LabelVersion 2 created; the model references unit version 1; the in-place edit is refused."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s2-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "9362C07E-EEC3-4AA4-B7A5-CD39E64E34A5"
+  }
+}

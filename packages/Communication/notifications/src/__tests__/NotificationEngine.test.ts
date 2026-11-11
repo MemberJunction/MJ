@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mocks
 // ---------------------------------------------------------------------------
 
+const { mockRunView } = vi.hoisted(() => ({ mockRunView: vi.fn() }));
+
 const { mockUserInfoEngineInstance } = vi.hoisted(() => ({
   mockUserInfoEngineInstance: {
     Config: vi.fn().mockResolvedValue(undefined),
@@ -47,7 +49,15 @@ vi.mock('@memberjunction/core', () => {
     ID: 'notif-1',
     Save: vi.fn().mockResolvedValue(true),
   });
+  mockProvider.EntityByName = (name: string) => (name === 'MJ: Roles' ? { ID: 'roles-entity-id' } : undefined);
+  class FakeRunView {
+    RunView = mockRunView;
+    static FromMetadataProvider() {
+      return new FakeRunView();
+    }
+  }
   return {
+    RunView: FakeRunView,
     BaseEngine: FakeBaseEngine,
     BaseEnginePropertyConfig: class {},
     IMetadataProvider: class {},
@@ -99,6 +109,7 @@ vi.mock('@memberjunction/communication-engine', () => ({
     Instance: {
       Config: vi.fn().mockResolvedValue(undefined),
       SendSingleMessage: vi.fn().mockResolvedValue({ Success: true }),
+      Providers: [{ Name: 'SendGrid' }, { Name: 'MSGraph' }, { Name: 'Twilio' }],
     },
   },
 }));
@@ -358,5 +369,111 @@ describe('NotificationEngine', () => {
       const result = await send(undefined);
       expect(result.deliveryChannels).toEqual({ inApp: true, email: true, sms: false });
     });
+  });
+});
+
+describe('NotificationEngine — provider choice (#5983)', () => {
+  const contextUser = { ID: 'user-1' } as InstanceType<typeof import('@memberjunction/core').UserInfo>;
+  const emailType = { ID: 'type-2', Name: 'System Alert', EmailTemplateID: 'tmpl-email-1' };
+  let engine: NotificationEngine;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    engine = new NotificationEngine();
+    NotificationEngine.EmailProviderName = undefined;
+    NotificationEngine.SMSProviderName = undefined;
+    delete process.env.NOTIFICATION_EMAIL_PROVIDER;
+    const { TemplateEngineServer } = await import('@memberjunction/templates');
+    (TemplateEngineServer.Instance as unknown as { Templates: Array<{ ID: string; Name: string }> }).Templates = [{ ID: 'tmpl-email-1', Name: 'Alert' }];
+  });
+
+  const sendEmail = () =>
+    (engine as unknown as { sendEmail(p: unknown, t: unknown, u: unknown): Promise<boolean> }).sendEmail(
+      { userId: 'user-1', typeNameOrId: 'System Alert', title: 't', message: 'm' }, emailType, contextUser);
+
+  const providerUsed = async (): Promise<string> => {
+    const { CommunicationEngine } = await import('@memberjunction/communication-engine');
+    const send = CommunicationEngine.Instance.SendSingleMessage as unknown as ReturnType<typeof vi.fn>;
+    return send.mock.calls[0][0] as string;
+  };
+
+  it('defaults to SendGrid', async () => {
+    await sendEmail();
+    expect(await providerUsed()).toBe('SendGrid');
+  });
+
+  it('uses NOTIFICATION_EMAIL_PROVIDER', async () => {
+    process.env.NOTIFICATION_EMAIL_PROVIDER = 'MSGraph';
+    await sendEmail();
+    expect(await providerUsed()).toBe('MSGraph');
+    delete process.env.NOTIFICATION_EMAIL_PROVIDER;
+  });
+
+  it('lets the host setting win over the environment', async () => {
+    process.env.NOTIFICATION_EMAIL_PROVIDER = 'SendGrid';
+    NotificationEngine.EmailProviderName = 'MSGraph';
+    await sendEmail();
+    expect(await providerUsed()).toBe('MSGraph');
+    delete process.env.NOTIFICATION_EMAIL_PROVIDER;
+  });
+
+  it('fails an unknown provider with a message naming the setting', async () => {
+    process.env.NOTIFICATION_EMAIL_PROVIDER = 'Postmark';
+    await expect(sendEmail()).rejects.toThrow("Notification provider 'Postmark' (from NOTIFICATION_EMAIL_PROVIDER) is not a configured Communication Provider.");
+    delete process.env.NOTIFICATION_EMAIL_PROVIDER;
+  });
+});
+
+describe('NotificationEngine — scoped configs for locked Denies and uncached recipients (#5492)', () => {
+  const contextUser = { ID: 'user-1' } as InstanceType<typeof import('@memberjunction/core').UserInfo>;
+  const ROLE = 'role-restricted';
+  let engine: NotificationEngine;
+
+  const lockedRoleDeny = {
+    ID: 'cfg-1', NotificationTypeID: 'type-1', PrimaryScopeEntityID: 'roles-entity-id', PrimaryScopeRecordID: ROLE,
+    SecondaryScopes: null, InApp: 'Deny', Email: null, SMS: null, IsLocked: true, Priority: 0, Status: 'Active',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    engine = new NotificationEngine();
+    (engine as unknown as Record<string, boolean>)['_loaded'] = true;
+    mockUserInfoEngineInstance.NotificationTypes = [
+      { ID: 'type-1', Name: 'Agent Completion', AllowUserPreference: true, DefaultInApp: true, DefaultEmail: false, DefaultSMS: false, EmailTemplateID: null, SMSTemplateID: null },
+    ];
+    (engine as unknown as { _scopedConfigs: unknown[] })._scopedConfigs = [lockedRoleDeny];
+  });
+
+  const send = (userId: string) => engine.SendNotification({ userId, typeNameOrId: 'Agent Completion', title: 't', message: 'm' }, contextUser);
+
+  it('a seeded locked Deny suppresses the channel, even against the recipient preference', async () => {
+    (engine as unknown as { _scopedConfigs: unknown[] })._scopedConfigs = [{ ...lockedRoleDeny, PrimaryScopeEntityID: null, PrimaryScopeRecordID: null }];
+    mockUserInfoEngineInstance.GetUserPreferenceForType.mockReturnValueOnce({ Enabled: true, InAppEnabled: true, EmailEnabled: null, SMSEnabled: null });
+    const result = await send('user-1');
+    expect(result.deliveryChannels.inApp).toBe(false);
+  });
+
+  it('reads an uncached recipient\'s roles, so their role-scoped locked Deny applies', async () => {
+    mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ RoleID: ROLE }] });
+    const result = await send('user-not-cached');
+    expect(mockRunView).toHaveBeenCalledWith(expect.objectContaining({ EntityName: 'MJ: User Roles', Fields: ['RoleID'], ResultType: 'simple' }), contextUser);
+    expect(result.deliveryChannels.inApp).toBe(false);
+  });
+
+  it('an uncached recipient without that role keeps the channel', async () => {
+    mockRunView.mockResolvedValueOnce({ Success: true, Results: [{ RoleID: 'some-other-role' }] });
+    const result = await send('user-not-cached');
+    expect(result.deliveryChannels.inApp).toBe(true);
+  });
+
+  it('fails closed when the role lookup fails: every role-scoped locked Deny applies', async () => {
+    mockRunView.mockResolvedValueOnce({ Success: false, Results: [], ErrorMessage: 'db down' });
+    const result = await send('user-not-cached');
+    expect(result.deliveryChannels.inApp).toBe(false);
+  });
+
+  it('does not query for a cached recipient', async () => {
+    await send('user-1');
+    expect(mockRunView).not.toHaveBeenCalled();
   });
 });

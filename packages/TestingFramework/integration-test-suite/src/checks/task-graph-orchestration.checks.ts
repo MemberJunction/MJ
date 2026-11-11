@@ -25,8 +25,8 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { BaseRemotableOperation, RunView } from '@memberjunction/core';
-import type { TaskGraphSpec, WorkflowSpec } from '@memberjunction/ai-core-plus';
+import { BaseRemotableOperation, RunView, ServerOperationScopeManager } from '@memberjunction/core';
+import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION, TASK_GRAPH_WORKFLOW_TYPE_NAME, type TaskGraphSpec, type WorkflowSpec } from '@memberjunction/ai-core-plus';
 import { MJScheduledJobEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { EXECUTE_AGENT_ACTION, LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService, WorkflowSpecSync, type WorkflowAgentWriter } from '@memberjunction/task-graph';
@@ -100,7 +100,8 @@ class IntegrationAgentWriter implements WorkflowAgentWriter {
 /** Resolves a TaskType, creating a disposable one if the install has none. */
 async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
     const existing = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
-        { EntityName: 'MJ: Task Types', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+        // Not the workflow type: a task filed under it is a workflow, which only the task-graph service creates.
+        { EntityName: 'MJ: Task Types', ExtraFilter: `Name <> '${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
     const found = existing.Results?.[0]?.ID;
     if (found) return found;
@@ -975,8 +976,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
                 const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                     { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
                 );
+                // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
                 for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await dep.Delete();
+                    await ServerOperationScopeManager.Instance.RunWithAuthority(
+                        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
+                        () => dep.Delete(),
+                    );
                 }
             }
             for (const child of children) await child.Delete();

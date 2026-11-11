@@ -9,7 +9,8 @@ vi.mock('@memberjunction/actions', () => ({
   },
 }));
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+  IsEmailShaped: (await importOriginal<typeof import('@memberjunction/global')>()).IsEmailShaped,
   RegisterClass: () => (target: unknown) => target,
 }));
 
