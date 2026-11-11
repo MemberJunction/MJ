@@ -773,6 +773,48 @@ export function SerializeCloneChangeContext(context: CloneContext): string {
 }
 
 /**
+ * Context captured when an entity is saved or deleted by MJ Peer Sync.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetSyncContext}, the subsequent
+ * `Save()` or `Delete()` call records `Source = 'Sync'`, populates `IntegrationID`
+ * (when provided), and writes structured `ChangeContext` JSON provenance (`IRecordChangeContext`,
+ * Kind `'Sync'`) on the resulting RecordChange row.
+ */
+export interface SyncContext {
+    /** `MJ_DEPLOYMENT_ID` of the origin deployment where the change originated. */
+    OriginDeploymentID: string;
+    /** Deterministic pairing ID between the local and peer deployments. */
+    PairingID: string;
+    /** `MJ: Company Integration Runs` ID that applied this sync change. */
+    RunID: string;
+    /** `MJ: Record Changes` IDs from the origin deployment that coalesced into this write. */
+    OriginChangeIDs: string[];
+    /** Email address of the user who authored the latest change on the origin deployment. */
+    OriginUserEmail: string;
+    /** Optional `MJ: Integrations` ID to record on `RecordChange.IntegrationID`. */
+    IntegrationID?: string | null;
+}
+
+/**
+ * The `ChangeContext` JSON a peer sync operation writes on its Record Change rows
+ * (`IRecordChangeContext`, Kind 'Sync'). The one serializer every provider path uses,
+ * so the shape can't drift.
+ */
+export function SerializeSyncChangeContext(context: SyncContext): string {
+    return JSON.stringify({
+        Version: 1,
+        Kind: 'Sync',
+        Sync: {
+            OriginDeploymentID: context.OriginDeploymentID,
+            PairingID: context.PairingID,
+            RunID: context.RunID,
+            OriginChangeIDs: [...context.OriginChangeIDs],
+            OriginUserEmail: context.OriginUserEmail,
+        },
+    });
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
@@ -782,8 +824,10 @@ export function SerializeCloneChangeContext(context: CloneContext): string {
  *   `RestoredFromID` and optional `RestoreReason` lineage columns
  * - `Clone`: produced by a record clone operation — paired with
  *   structured `ChangeContext` JSON provenance
+ * - `Sync`: produced by MJ Peer Sync — paired with structured
+ *   `ChangeContext` JSON provenance and optional `IntegrationID`
  */
-export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone';
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone' | 'Sync';
 
 /**
  * Dialect-agnostic payload for a RecordChange row.
@@ -842,10 +886,15 @@ export interface RecordChangePayload {
      */
     restoreReason: string | null;
     /**
-     * When `source === 'Clone'`, serialized JSON bag carrying structured provenance
-     * (shape = `IRecordChangeContext`). Null otherwise.
+     * When `source === 'Clone'` or `source === 'Sync'`, serialized JSON bag carrying
+     * structured provenance (shape = `IRecordChangeContext`). Null otherwise.
      */
     changeContext: string | null;
+    /**
+     * When `source === 'Sync'` and `SyncContext.IntegrationID` is supplied,
+     * persisted to `RecordChange.IntegrationID`. Null otherwise.
+     */
+    integrationID?: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -6039,6 +6088,51 @@ export abstract class BaseEntity<T = unknown> {
      */
     public ClearCloneContext(): void {
         this._cloneContext = null;
+    }
+
+    private _syncContext: SyncContext | null = null;
+
+    /**
+     * Returns the active sync context for the next save or delete, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Sync'`, `IntegrationID` (when provided), and `ChangeContext`
+     * populated with structured JSON provenance. Returns null for ordinary saves.
+     */
+    public get SyncContext(): SyncContext | null {
+        return this._syncContext;
+    }
+
+    /**
+     * Marks the next Save() or Delete() as part of an MJ Peer Sync operation.
+     *
+     * The provider will write a new RecordChange entry with `Source='Sync'`
+     * and `ChangeContext` populated with structured JSON provenance.
+     *
+     * @param context Structured sync context. Throws if missing required fields.
+     */
+    public SetSyncContext(context: SyncContext): void {
+        if (
+            !context ||
+            !context.OriginDeploymentID ||
+            !context.PairingID ||
+            !context.RunID ||
+            !Array.isArray(context.OriginChangeIDs) ||
+            !context.OriginUserEmail
+        ) {
+            throw new Error(
+                'BaseEntity.SetSyncContext: context is required with OriginDeploymentID, PairingID, RunID, OriginChangeIDs, and OriginUserEmail',
+            );
+        }
+        this._syncContext = context;
+    }
+
+    /**
+     * Clears any pending sync context. Safe to call when no context is set.
+     */
+    public ClearSyncContext(): void {
+        this._syncContext = null;
     }
 
 

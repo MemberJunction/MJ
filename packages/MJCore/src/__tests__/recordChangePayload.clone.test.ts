@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseProviderBase } from '../generic/databaseProviderBase';
-import { CloneContext, RestoreContext } from '../generic/baseEntity';
+import { CloneContext, RestoreContext, SyncContext, SerializeSyncChangeContext } from '../generic/baseEntity';
 import { EntityInfo, UserInfo } from '../index';
 
 class ConcreteTestProvider extends DatabaseProviderBase {
@@ -32,6 +32,7 @@ class ConcreteTestProvider extends DatabaseProviderBase {
         restoreContext?: RestoreContext | null,
         quoteToEscape: string = "'",
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ) {
         return this.BuildRecordChangePayload(
             newData,
@@ -43,11 +44,12 @@ class ConcreteTestProvider extends DatabaseProviderBase {
             restoreContext,
             quoteToEscape,
             cloneContext,
+            syncContext,
         );
     }
 }
 
-describe('BuildRecordChangePayload — CloneContext (§10.3)', () => {
+describe('BuildRecordChangePayload — CloneContext & SyncContext (§10.3)', () => {
     const provider = new ConcreteTestProvider();
     const mockEntityInfo = {
         ID: 'ENT-001',
@@ -80,6 +82,15 @@ describe('BuildRecordChangePayload — CloneContext (§10.3)', () => {
         Reason: 'Reverting accidental delete',
     };
 
+    const sampleSyncContext: SyncContext = {
+        OriginDeploymentID: 'DEPLOY-PEER-A',
+        PairingID: 'PAIR-001',
+        RunID: 'RUN-001',
+        OriginChangeIDs: ['CHG-101', 'CHG-102'],
+        OriginUserEmail: 'alice@example.com',
+        IntegrationID: 'INT-MJ-PEER',
+    };
+
     it('sets Source to "Clone" and serializes structured ChangeContext JSON', () => {
         const payload = provider.TestBuildRecordChangePayload(
             { ID: 'REC-002', Name: 'Cloned' },
@@ -105,7 +116,40 @@ describe('BuildRecordChangePayload — CloneContext (§10.3)', () => {
         });
     });
 
-    it('throws when both restoreContext and cloneContext are provided', () => {
+    it('sets Source to "Sync", populates integrationID, and serializes structured Sync ChangeContext JSON', () => {
+        const payload = provider.TestBuildRecordChangePayload(
+            { ID: 'REC-003', Name: 'Synced' },
+            null,
+            'REC-003',
+            mockEntityInfo,
+            'Create',
+            mockUser,
+            null,
+            "'",
+            null,
+            sampleSyncContext,
+        );
+
+        expect(payload).not.toBeNull();
+        expect(payload!.source).toBe('Sync');
+        expect(payload!.integrationID).toBe('INT-MJ-PEER');
+        expect(payload!.changeContext).toBe(SerializeSyncChangeContext(sampleSyncContext));
+
+        const parsed = JSON.parse(payload!.changeContext!);
+        expect(parsed).toEqual({
+            Version: 1,
+            Kind: 'Sync',
+            Sync: {
+                OriginDeploymentID: 'DEPLOY-PEER-A',
+                PairingID: 'PAIR-001',
+                RunID: 'RUN-001',
+                OriginChangeIDs: ['CHG-101', 'CHG-102'],
+                OriginUserEmail: 'alice@example.com',
+            },
+        });
+    });
+
+    it('throws when multiple contexts (restoreContext, cloneContext, syncContext) are provided', () => {
         expect(() => {
             provider.TestBuildRecordChangePayload(
                 { ID: 'REC-002' },
@@ -118,10 +162,25 @@ describe('BuildRecordChangePayload — CloneContext (§10.3)', () => {
                 "'",
                 sampleCloneContext,
             );
-        }).toThrow(/both restoreContext and cloneContext were provided/);
+        }).toThrow(/mutually exclusive/);
+
+        expect(() => {
+            provider.TestBuildRecordChangePayload(
+                { ID: 'REC-002' },
+                null,
+                'REC-002',
+                mockEntityInfo,
+                'Create',
+                mockUser,
+                null,
+                "'",
+                sampleCloneContext,
+                sampleSyncContext,
+            );
+        }).toThrow(/mutually exclusive/);
     });
 
-    it('defaults to Internal with null changeContext when neither is provided', () => {
+    it('defaults to Internal with null changeContext when none is provided', () => {
         const payload = provider.TestBuildRecordChangePayload(
             { ID: 'REC-002' },
             null,
@@ -137,5 +196,6 @@ describe('BuildRecordChangePayload — CloneContext (§10.3)', () => {
         expect(payload).not.toBeNull();
         expect(payload!.source).toBe('Internal');
         expect(payload!.changeContext).toBeNull();
+        expect(payload!.integrationID).toBeNull();
     });
 });

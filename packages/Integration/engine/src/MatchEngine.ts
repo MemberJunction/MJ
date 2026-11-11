@@ -6,6 +6,50 @@ import { QuoteTextLiteral } from './prefetchFilter.js';
 import { TrimTrailingChars } from '@memberjunction/global';
 
 /**
+ * Structured configuration stored as JSON in `CompanyIntegrationEntityMap.MatchStrategy`
+ * (spec §11 / §19.5).
+ */
+export interface MatchStrategyConfig {
+    /** Matching mode: deterministic key fields, vector duplicate detection, or hybrid cascade. */
+    Mode?: 'KeyFields' | 'DuplicateDetection' | 'Hybrid';
+    /** Policy when more than one existing MJ record matches a single incoming record. */
+    OnAmbiguousMatch?: 'SkipAndQuarantine' | 'FirstMatch' | 'PickHighestScore';
+    /** Minimum probability score (0..1) for auto-linking via duplicate detection (default 0.92). */
+    DuplicateThreshold?: number;
+    /** Minimum probability score (0..1) for staging as a potential match (default 0.75). */
+    PotentialMatchThreshold?: number;
+    /** Optional `MJ: Entity Documents` ID to use for vector duplicate detection. */
+    EntityDocumentID?: string | null;
+}
+
+/**
+ * Parses `CompanyIntegrationEntityMap.MatchStrategy` JSON with safe defaults.
+ * When `MatchStrategy` is explicit JSON and omits `OnAmbiguousMatch`, defaults to
+ * `'SkipAndQuarantine'` if `Mode` is `'Hybrid'` or `'DuplicateDetection'`, and `'FirstMatch'`
+ * when `MatchStrategy` is null/empty for backward compatibility.
+ */
+export function ParseMatchStrategy(
+    raw?: string | null,
+): Required<Pick<MatchStrategyConfig, 'Mode' | 'OnAmbiguousMatch'>> & MatchStrategyConfig {
+    if (!raw || raw.trim().length === 0) {
+        return { Mode: 'KeyFields', OnAmbiguousMatch: 'FirstMatch' };
+    }
+    try {
+        const parsed = JSON.parse(raw) as MatchStrategyConfig;
+        const mode = parsed.Mode ?? 'KeyFields';
+        const defaultAmbiguous =
+            mode === 'Hybrid' || mode === 'DuplicateDetection' ? 'SkipAndQuarantine' : 'FirstMatch';
+        return {
+            ...parsed,
+            Mode: mode,
+            OnAmbiguousMatch: parsed.OnAmbiguousMatch ?? defaultAmbiguous,
+        };
+    } catch {
+        return { Mode: 'KeyFields', OnAmbiguousMatch: 'FirstMatch' };
+    }
+}
+
+/**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
  * rendered as a SQL filter AND used as a local lookup key when a batch is resolved in one query.
  */
@@ -75,6 +119,8 @@ interface KeyMatchGroup {
 interface KeyMatchIndex {
     /** Criteria key → the matched row's PK values, '|'-joined. */
     Matched: Map<string, string>;
+    /** Criteria keys that matched multiple distinct rows → all candidate PKs. */
+    AmbiguousCandidates: Map<string, string[]>;
     /** Criteria keys PROVEN to have no matching row (never inferred). */
     Unmatched: Set<string>;
 }
@@ -164,7 +210,7 @@ export class MatchEngine {
         const keyGroups = this.buildKeyMatchGroups(records, keyFields);
 
         const emptyMapIndex: RecordMapIndex = { Exact: new Map(), Normalized: new Map(), Ambiguous: new Set() };
-        const emptyKeyIndex: KeyMatchIndex = { Matched: new Map(), Unmatched: new Set() };
+        const emptyKeyIndex: KeyMatchIndex = { Matched: new Map(), AmbiguousCandidates: new Map(), Unmatched: new Set() };
         if (!mapParams && keyGroups.length === 0) return { MapIndex: emptyMapIndex, KeyIndex: emptyKeyIndex };
 
         const params: RunViewParams[] = [];
@@ -299,12 +345,30 @@ export class MatchEngine {
             return this.resolveDeletedRecord(record, entityMap, contextUser, mapIndex);
         }
 
-        const existingID = await this.findExistingRecord(
+        const existingMatch = await this.findExistingRecordWithAmbiguity(
             record, entityMap, keyFields, contextUser, mapIndex, keyIndex
         );
 
-        if (existingID) {
-            return this.resolveExistingRecord(record, existingID, conflictResolution);
+        if (existingMatch.AmbiguousCandidateIDs && existingMatch.AmbiguousCandidateIDs.length > 1) {
+            const strategy = ParseMatchStrategy(entityMap.MatchStrategy);
+            if (strategy.OnAmbiguousMatch === 'SkipAndQuarantine') {
+                return {
+                    ...record,
+                    ChangeType: 'Skip',
+                    AmbiguousMatch: true,
+                    AmbiguousCandidateIDs: existingMatch.AmbiguousCandidateIDs,
+                };
+            }
+            const resolved = this.resolveExistingRecord(record, existingMatch.MatchedID!, conflictResolution);
+            return {
+                ...resolved,
+                AmbiguousMatch: true,
+                AmbiguousCandidateIDs: existingMatch.AmbiguousCandidateIDs,
+            };
+        }
+
+        if (existingMatch.MatchedID) {
+            return this.resolveExistingRecord(record, existingMatch.MatchedID, conflictResolution);
         }
 
         return { ...record, ChangeType: 'Create' };
@@ -363,26 +427,27 @@ export class MatchEngine {
      * see `LoadAllRecordMaps`) re-CREATED a row whose PK already existed. Integration shadow
      * tables are exactly this shape: a single soft PK holding the external ID.
      */
-    private async findExistingRecord(
+    private async findExistingRecordWithAmbiguity(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo,
         mapIndex?: RecordMapIndex | null,
         keyIndex?: KeyMatchIndex | null
-    ): Promise<string | null> {
+    ): Promise<{ MatchedID: string | null; AmbiguousCandidateIDs?: string[] }> {
         if (keyFields.length > 0 || this.hasCompleteMappedPrimaryKey(record)) {
-            const idByKeys = await this.lookupByKeyFields(record, keyFields, contextUser, keyIndex);
-            if (idByKeys) return idByKeys;
+            const keyLookup = await this.lookupByKeyFields(record, keyFields, contextUser, keyIndex);
+            if (keyLookup.MatchedID) return keyLookup;
         }
 
-        return this.findRecordMapEntry(
+        const mapMatch = await this.findRecordMapEntry(
             entityMap.CompanyIntegrationID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             contextUser,
             mapIndex
         );
+        return { MatchedID: mapMatch };
     }
 
     /**
@@ -394,14 +459,17 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo,
         keyIndex?: KeyMatchIndex | null
-    ): Promise<string | null> {
+    ): Promise<{ MatchedID: string | null; AmbiguousCandidateIDs?: string[] }> {
         if (keyIndex) {
             const criteria = this.buildMatchCriteria(record, keyFields);
             if (criteria) {
                 const key = this.criteriaKey(criteria.Fields, criteria.Values);
                 const matched = keyIndex.Matched.get(key);
-                if (matched) return matched;
-                if (keyIndex.Unmatched.has(key)) return null;
+                if (matched) {
+                    const candidates = keyIndex.AmbiguousCandidates.get(key);
+                    return { MatchedID: matched, AmbiguousCandidateIDs: candidates };
+                }
+                if (keyIndex.Unmatched.has(key)) return { MatchedID: null };
             }
         }
         return this.findByKeyFields(record, keyFields, contextUser);
@@ -448,28 +516,35 @@ export class MatchEngine {
         record: MappedRecord,
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
-    ): Promise<string | null> {
+    ): Promise<{ MatchedID: string | null; AmbiguousCandidateIDs?: string[] }> {
         const pkFields = this.primaryKeyFieldsFor(record.MJEntityName);
         const match = this.buildMatchCriteria(record, keyFields);
-        if (!match) return null;
+        if (!match) return { MatchedID: null };
 
         const rv = new RunView();
         const result = await rv.RunView<Record<string, string>>({
             EntityName: record.MJEntityName,
             ExtraFilter: this.criteriaToSQL(match),
             Fields: pkFields.map(f => f.Name),
-            MaxRows: 1,
+            MaxRows: 2,
             ResultType: 'simple',
-            // Per-record lookup that only reads Results — a hit fills the 1-row page, which would
+            // Per-record lookup that only reads Results — a hit fills the 2-row page, which would
             // otherwise trigger the provider's fallback COUNT as a second round trip per record.
             SkipTotalRowCount: true,
         }, contextUser);
 
-        if (!result.Success || result.Results.length === 0) return null;
+        if (!result.Success || result.Results.length === 0) return { MatchedID: null };
 
         // Return all PK values joined with '|' — matches the ExternalID format
         // written by BaseRESTIntegrationConnector.ToExternalRecord for composite PKs.
-        return pkFields.map(f => result.Results[0][f.Name] ?? '').join('|');
+        const candidateIDs = result.Results.map(row =>
+            pkFields.map(f => row[f.Name] ?? '').join('|')
+        );
+        const uniqueCandidates = Array.from(new Set(candidateIDs));
+        return {
+            MatchedID: uniqueCandidates[0],
+            AmbiguousCandidateIDs: uniqueCandidates.length > 1 ? uniqueCandidates : undefined,
+        };
     }
 
     /**
@@ -648,7 +723,7 @@ export class MatchEngine {
      * Returns null if any group read failed — callers then use the original per-record path.
      */
     private buildKeyMatchIndex(groups: KeyMatchGroup[], results: RunViewResult[]): KeyMatchIndex | null {
-        const index: KeyMatchIndex = { Matched: new Map(), Unmatched: new Set() };
+        const index: KeyMatchIndex = { Matched: new Map(), AmbiguousCandidates: new Map(), Unmatched: new Set() };
 
         for (let i = 0; i < groups.length; i++) {
             const group = groups[i];
@@ -661,11 +736,17 @@ export class MatchEngine {
                     group.LookupFields,
                     group.LookupFields.map(f => SerializeKeyValue(row[f]))
                 );
-                if (index.Matched.has(rowKey)) continue; // first row wins, as MaxRows:1 did
-                index.Matched.set(
-                    rowKey,
-                    group.PKFields.map(f => (row[f.Name] as string | null) ?? '').join('|')
-                );
+                const pkVal = group.PKFields.map(f => (row[f.Name] as string | null) ?? '').join('|');
+                const existingFirst = index.Matched.get(rowKey);
+                if (existingFirst === undefined) {
+                    index.Matched.set(rowKey, pkVal);
+                } else if (existingFirst !== pkVal) {
+                    const list = index.AmbiguousCandidates.get(rowKey) ?? [existingFirst];
+                    if (!list.includes(pkVal)) {
+                        list.push(pkVal);
+                    }
+                    index.AmbiguousCandidates.set(rowKey, list);
+                }
             }
 
             // Only a completely empty read proves absence for the whole group (see doc above).
