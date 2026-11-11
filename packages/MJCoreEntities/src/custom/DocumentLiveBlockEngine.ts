@@ -985,7 +985,8 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
      * {@link ComputeFrozenSnapshotHash}, and {@link ValidateFrozenBlockSnapshot} (`B7`).
      */
     public SetSigningSecret(secret: string | null): void {
-        this._signingSecret = secret && secret.trim().length > 0 ? secret.trim() : null;
+        const trimmed = secret?.trim() || '';
+        this._signingSecret = trimmed.length > 0 ? trimmed : null;
     }
 
     /**
@@ -993,6 +994,42 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
      */
     public GetSigningSecret(): string | null {
         return this._signingSecret;
+    }
+
+    /**
+     * Resolves the active `>= 32`-byte HMAC signing secret using consistent `.trim() || ...` fallback
+     * semantics across explicit secret, configured secret, `MJ_FROZEN_BLOCK_HMAC_SECRET`, and
+     * `MJ_FROZEN_SNAPSHOT_SECRET` (`R5-8`).
+     */
+    public ResolveSigningSecret(explicitSecret?: string): string | null {
+        return this.getSigningSecret(explicitSecret);
+    }
+
+    /**
+     * Checks whether a valid `>= 32`-byte frozen-block HMAC signing secret is configured at startup (`E1` / `R5-8`),
+     * using the exact same `.trim() || ...` resolution rules as runtime signing/verification so empty or
+     * whitespace-only environment variables are treated identically as unset.
+     */
+    public CheckStartupSecrets(): {
+        FrozenBlockSecretConfigured: boolean;
+        Warnings: string[];
+    } {
+        const warnings: string[] = [];
+        const secret = this.getSigningSecret();
+        const frozenBlockSecretConfigured = secret !== null;
+        if (!frozenBlockSecretConfigured) {
+            warnings.push(
+                '[DocumentLiveBlockEngine] Startup warning: MJ_FROZEN_BLOCK_HMAC_SECRET is unset or shorter than 32 UTF-8 bytes; frozen-snapshot signing is disabled until a >= 32-byte secret is configured.'
+            );
+        }
+        return {
+            FrozenBlockSecretConfigured: frozenBlockSecretConfigured,
+            Warnings: warnings
+        };
+    }
+
+    private getSigningSecret(explicitSecret?: string): string | null {
+        return resolveFrozenSnapshotSigningSecret(explicitSecret);
     }
 
     /**
@@ -1429,20 +1466,19 @@ const MIN_FROZEN_SNAPSHOT_SECRET_BYTES = 32;
 
 function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string | null {
     const enc = new TextEncoder();
-    if (explicitSecret && explicitSecret.trim().length > 0) {
-        const trimmed = explicitSecret.trim();
-        return enc.encode(trimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? trimmed : null;
+    const explicitTrimmed = explicitSecret?.trim() || '';
+    if (explicitTrimmed.length > 0) {
+        return enc.encode(explicitTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? explicitTrimmed : null;
     }
-    const configured = DocumentLiveBlockEngine.Instance.GetSigningSecret();
-    if (configured && configured.trim().length > 0) {
-        const trimmed = configured.trim();
-        return enc.encode(trimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? trimmed : null;
+    const configuredTrimmed = DocumentLiveBlockEngine.Instance.GetSigningSecret()?.trim() || '';
+    if (configuredTrimmed.length > 0) {
+        return enc.encode(configuredTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? configuredTrimmed : null;
     }
     const env =
         typeof globalThis !== 'undefined' && 'process' in globalThis
             ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
             : undefined;
-    const candidate = (env?.MJ_FROZEN_BLOCK_HMAC_SECRET || env?.MJ_FROZEN_SNAPSHOT_SECRET || '').trim();
+    const candidate = env?.MJ_FROZEN_BLOCK_HMAC_SECRET?.trim() || env?.MJ_FROZEN_SNAPSHOT_SECRET?.trim() || '';
     if (enc.encode(candidate).length < MIN_FROZEN_SNAPSHOT_SECRET_BYTES) {
         return null;
     }

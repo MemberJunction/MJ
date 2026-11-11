@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket as WsClient, WebSocketServer, type RawData } from 'ws';
@@ -16,6 +16,7 @@ import {
     EscapeSQLString,
     MJEventType,
     MJGlobal,
+    NormalizeUUID,
     ShutdownRegistry,
     UUIDsEqual,
     type IShutdownable
@@ -299,11 +300,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         maxPayload: MAX_COLLAB_FRAME_BYTES
     });
 
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
+    private static readonly _compactedStateVectors = new Map<
+        string,
+        { OriginServerID: string; SavedStateVectorB64: string }
+    >();
+
+    private readonly _serverInstanceId = `collab-${randomUUID()}`;
     private readonly _rooms = new Map<string, CollaborationRoom>();
     private readonly _roomInitPromises = new Map<string, Promise<CollaborationRoom>>();
     private readonly _tickets = new Map<string, StoredCollaborationTicket>();
     private readonly _consumedTickets = new Map<string, number>();
     private readonly _inFlightCompactionVersionIds = new Set<string>();
+    private readonly _inFlightCompactionArtifacts = new Set<string>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
     private _dataSources: DataSourceInfo[] = [];
@@ -1035,10 +1044,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 !UUIDsEqual(latest.ID, room.BaseVersionID) &&
                 latest.VersionNumber > room.BaseVersionNumber
             ) {
-                this.reconcileOutOfBandVersionIntoRoom(room, latest);
+                const tracked = this.lookupCompactedStateVector(
+                    room.ArtifactID,
+                    latest.ID,
+                    latest.VersionNumber
+                );
+                this.reconcileOutOfBandVersionIntoRoom(room, latest, {
+                    originServerId: tracked?.OriginServerID,
+                    savedStateVectorB64: tracked?.SavedStateVectorB64
+                });
             }
 
             const currentContent = this.extractRoomSerializedContent(room.Doc);
+            const savedStateVectorB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
             const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
 
             if (latest && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
@@ -1083,9 +1101,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const pendingVersionId = versionEntity.ID;
+            const normArtifactKey = NormalizeUUID(room.ArtifactID);
             if (pendingVersionId) {
                 this._inFlightCompactionVersionIds.add(pendingVersionId);
             }
+            this._inFlightCompactionArtifacts.add(normArtifactKey);
+            this.recordCompactedStateVector(
+                room.ArtifactID,
+                pendingVersionId,
+                nextVersionNumber,
+                savedStateVectorB64
+            );
             let saved = false;
             try {
                 saved = await versionEntity.Save();
@@ -1096,6 +1122,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 lastSaveError = err instanceof Error ? err.message : String(err);
                 saved = false;
             } finally {
+                this._inFlightCompactionArtifacts.delete(normArtifactKey);
                 if (pendingVersionId) {
                     this._inFlightCompactionVersionIds.delete(pendingVersionId);
                 }
@@ -1105,6 +1132,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             if (saved) {
+                this.recordCompactedStateVector(
+                    room.ArtifactID,
+                    versionEntity.ID,
+                    versionEntity.VersionNumber,
+                    savedStateVectorB64
+                );
                 room.DirtyVersion = false;
                 room.CompactionRetryCount = 0;
                 room.BaseVersionID = versionEntity.ID;
@@ -1131,7 +1164,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
                         MessageType: 'version-saved',
-                        PayloadBase64: '',
+                        PayloadBase64: savedStateVectorB64,
                         VersionID: versionEntity.ID,
                         VersionNumber: versionEntity.VersionNumber
                     });
@@ -1177,7 +1210,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         user: UserInfo,
         saveVersion: boolean = true,
         previousContent?: string
-    ): Promise<{ Success: boolean; VersionID?: string; VersionNumber?: number }> {
+    ): Promise<{ Success: boolean; VersionID?: string; VersionNumber?: number; MergedContent?: string }> {
         this.ensureShutdownRegistered();
         const provider = this.activeProvider();
         if (!provider || !user) {
@@ -1234,15 +1267,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.DirtyVersion = true;
         }
 
+        const mergedContent = this.extractRoomSerializedContent(room.Doc);
+
         if (saveVersion) {
             const compacted = await this.CompactRoomToArtifactVersion(artifactId, user);
+            const postCompactContent = this.extractRoomSerializedContent(room.Doc);
             if (room.Connections.size === 0 && !this._shuttingDown) {
                 this.scheduleIdleRoomDisposal(room);
             }
             return {
                 Success: compacted.Saved,
                 VersionID: compacted.VersionID,
-                VersionNumber: compacted.VersionNumber
+                VersionNumber: compacted.VersionNumber,
+                MergedContent: postCompactContent
             };
         }
 
@@ -1250,7 +1287,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (room.Connections.size === 0 && !this._shuttingDown) {
             this.scheduleIdleRoomDisposal(room);
         }
-        return { Success: true };
+        return { Success: true, MergedContent: mergedContent };
     }
 
     /**
@@ -1346,8 +1383,77 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._tickets.clear();
         this._consumedTickets.clear();
         this._inFlightCompactionVersionIds.clear();
+        this._inFlightCompactionArtifacts.clear();
         this._pendingUpgradesByArtifact.clear();
         await this._relay.Shutdown();
+    }
+
+    /**
+     * Returns `true` when `doc` already contains every CRDT operation present in `targetStateVectorBytes` (`R5-3`).
+     * Used during cross-node compaction and out-of-band version reconciliation so Yjs updates that have
+     * already arrived via live CRDT sync are never re-applied as synthetic text-diff insertions.
+     */
+    public DoesDocContainStateVector(doc: Y.Doc, targetStateVectorBytes: Uint8Array): boolean {
+        if (!targetStateVectorBytes || targetStateVectorBytes.byteLength === 0) {
+            return false;
+        }
+        try {
+            const targetMap = Y.decodeStateVector(targetStateVectorBytes);
+            if (targetMap.size === 0) {
+                return false;
+            }
+            const localMap = Y.decodeStateVector(Y.encodeStateVector(doc));
+            for (const [clientId, requiredClock] of targetMap.entries()) {
+                if (requiredClock > 0 && (localMap.get(clientId) ?? 0) < requiredClock) {
+                    return false;
+                }
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private recordCompactedStateVector(
+        artifactId: string,
+        versionId: string | undefined,
+        versionNumber: number,
+        savedStateVectorB64: string
+    ): void {
+        if (!savedStateVectorB64) {
+            return;
+        }
+        const entry = {
+            OriginServerID: this._serverInstanceId,
+            SavedStateVectorB64: savedStateVectorB64
+        };
+        const map = ArtifactCollaborationServer._compactedStateVectors;
+        if (versionId && versionId.trim().length > 0) {
+            map.set(`ver:${NormalizeUUID(versionId)}`, entry);
+        }
+        map.set(`art:${NormalizeUUID(artifactId)}:v:${versionNumber}`, entry);
+        while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
+            const oldestKey = map.keys().next().value;
+            if (oldestKey === undefined) {
+                break;
+            }
+            map.delete(oldestKey);
+        }
+    }
+
+    private lookupCompactedStateVector(
+        artifactId: string,
+        versionId: string | undefined,
+        versionNumber: number
+    ): { OriginServerID: string; SavedStateVectorB64: string } | undefined {
+        const map = ArtifactCollaborationServer._compactedStateVectors;
+        if (versionId && versionId.trim().length > 0) {
+            const byId = map.get(`ver:${NormalizeUUID(versionId)}`);
+            if (byId) {
+                return byId;
+            }
+        }
+        return map.get(`art:${NormalizeUUID(artifactId)}:v:${versionNumber}`);
     }
 
     private ensureShutdownRegistered(): void {
@@ -1397,21 +1503,36 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     VersionNumber?: number;
                     Content?: string | null;
                     Configuration?: string | null;
+                    OriginServerID?: string;
+                    SavedStateVectorB64?: string;
                 };
                 if (
                     payload.ArtifactID &&
                     payload.VersionID &&
                     typeof payload.VersionNumber === 'number' &&
-                    !this._inFlightCompactionVersionIds.has(payload.VersionID)
+                    !this._inFlightCompactionVersionIds.has(payload.VersionID) &&
+                    !this._inFlightCompactionArtifacts.has(NormalizeUUID(payload.ArtifactID))
                 ) {
                     const room = this._rooms.get(payload.ArtifactID.trim().toLowerCase());
                     if (room && !UUIDsEqual(room.BaseVersionID, payload.VersionID)) {
-                        this.reconcileOutOfBandVersionIntoRoom(room, {
-                            ID: payload.VersionID,
-                            VersionNumber: payload.VersionNumber,
-                            Content: payload.Content,
-                            Configuration: payload.Configuration
-                        });
+                        const tracked = this.lookupCompactedStateVector(
+                            payload.ArtifactID,
+                            payload.VersionID,
+                            payload.VersionNumber
+                        );
+                        this.reconcileOutOfBandVersionIntoRoom(
+                            room,
+                            {
+                                ID: payload.VersionID,
+                                VersionNumber: payload.VersionNumber,
+                                Content: payload.Content,
+                                Configuration: payload.Configuration
+                            },
+                            {
+                                originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
+                                savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64
+                            }
+                        );
                     }
                 }
             }
@@ -1428,9 +1549,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         },
         options?: {
             previousContent?: string;
+            originServerId?: string;
+            savedStateVectorB64?: string;
         }
     ): void {
         if (UUIDsEqual(room.BaseVersionID, version.ID)) {
+            return;
+        }
+        if (
+            options?.originServerId === this._serverInstanceId &&
+            room.BaseVersionNumber >= version.VersionNumber
+        ) {
             return;
         }
         const targetText = version.Content || version.Configuration || '';
@@ -1440,7 +1569,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const nextEpoch = `epoch-${version.ID}-${version.VersionNumber}`;
         room.RoomEpoch = nextEpoch;
 
-        if (liveText === targetText) {
+        const trackedVectorB64 =
+            options?.savedStateVectorB64 ??
+            this.lookupCompactedStateVector(room.ArtifactID, version.ID, version.VersionNumber)?.SavedStateVectorB64;
+        const alreadyContainsCompactedOps = Boolean(
+            trackedVectorB64 && this.DoesDocContainStateVector(room.Doc, Base64ToBytes(trackedVectorB64))
+        );
+
+        if (alreadyContainsCompactedOps) {
+            // Room CRDT state already includes every Yjs operation that went into `version` (e.g. synced
+            // across replicas before/during peer compaction). Advance base version metadata without
+            // mutating `Y.Text('content')` so concurrent live typing is never duplicated (`R5-3`).
+            room.Doc.transact(() => {
+                room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
+                room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
+                room.Doc.getMap('meta').set('versionId', version.ID);
+            }, 'server-oob-version');
+            room.DirtyVersion = liveText !== targetText;
+        } else if (liveText === targetText) {
             room.Doc.transact(() => {
                 room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
                 room.Doc.getMap('meta').set('versionNumber', version.VersionNumber);
@@ -1519,7 +1665,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private async checkAndReconcileLatestDatabaseVersion(
         room: CollaborationRoom,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: {
+            originServerId?: string;
+            savedStateVectorB64?: string;
+        }
     ): Promise<void> {
         const provider = this.activeProvider();
         if (!provider) {
@@ -1552,7 +1702,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 !UUIDsEqual(latest.ID, room.BaseVersionID) &&
                 latest.VersionNumber > room.BaseVersionNumber
             ) {
-                this.reconcileOutOfBandVersionIntoRoom(room, latest);
+                this.reconcileOutOfBandVersionIntoRoom(room, latest, options);
             }
         } catch (err) {
             LogError(
@@ -2134,23 +2284,86 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 seededOrUpdatedWorkingState = true;
             } else if (appliedWorkingState && versionNewerThanWorkingState && versionRow) {
                 const currentSerialized = this.extractRoomSerializedContent(room.Doc);
+                const trackedHydrate = this.lookupCompactedStateVector(
+                    room.ArtifactID,
+                    versionRow.ID,
+                    versionRow.VersionNumber
+                );
+                const alreadyContainsVersionOps = Boolean(
+                    trackedHydrate?.SavedStateVectorB64 &&
+                        this.DoesDocContainStateVector(room.Doc, Base64ToBytes(trackedHydrate.SavedStateVectorB64))
+                );
+
+                let baseVersionText: string | undefined;
+                if (
+                    !alreadyContainsVersionOps &&
+                    ((typeof workingVersionId === 'string' && workingVersionId.trim().length > 0) ||
+                        (typeof workingVersionNum === 'number' && workingVersionNum > 0))
+                ) {
+                    const baseFilter =
+                        typeof workingVersionId === 'string' && workingVersionId.trim().length > 0
+                            ? `ID='${EscapeSQLString(workingVersionId)}' AND ArtifactID='${EscapeSQLString(room.ArtifactID)}'`
+                            : `ArtifactID='${EscapeSQLString(room.ArtifactID)}' AND VersionNumber=${Math.floor(workingVersionNum!)}`;
+                    const baseRes = await rv.RunView<{
+                        ID: string;
+                        VersionNumber: number;
+                        Content?: string | null;
+                        Configuration?: string | null;
+                    }>(
+                        {
+                            EntityName: 'MJ: Artifact Versions',
+                            ExtraFilter: baseFilter,
+                            Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
+                            MaxRows: 1,
+                            SkipTotalRowCount: true,
+                            ResultType: 'simple'
+                        },
+                        queryUser
+                    );
+                    const baseRow = baseRes.Success ? baseRes.Results?.[0] : undefined;
+                    if (
+                        baseRow &&
+                        ((typeof workingVersionId === 'string' &&
+                            workingVersionId.trim().length > 0 &&
+                            UUIDsEqual(baseRow.ID, workingVersionId)) ||
+                            (typeof workingVersionNum === 'number' && baseRow.VersionNumber === workingVersionNum))
+                    ) {
+                        baseVersionText = baseRow.Content || baseRow.Configuration || '';
+                    }
+                }
+
                 room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
                 const nextEpoch = `epoch-${versionRow.ID}-${versionRow.VersionNumber}`;
                 room.RoomEpoch = nextEpoch;
                 room.Doc.transact(() => {
                     room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
-                    if (versionTargetText && currentSerialized !== versionTargetText) {
-                        this.applyMinimalTextDiff(yText, yText.toString(), versionTargetText);
-                        this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText);
+                    if (!alreadyContainsVersionOps && versionTargetText && currentSerialized !== versionTargetText) {
+                        this.applyMinimalTextDiff(yText, yText.toString(), versionTargetText, baseVersionText);
+                        const mergeOpts =
+                            baseVersionText !== undefined
+                                ? { preserveConcurrentAdditions: true, baselineContent: baseVersionText }
+                                : undefined;
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText, mergeOpts);
                         this.syncSpreadsheetStructuresIfPresent(
                             room.Doc,
                             versionRow.Content ?? '',
-                            versionRow.Configuration ?? null
+                            versionRow.Configuration ?? null,
+                            mergeOpts
                         );
+                        if (
+                            baseVersionText !== undefined &&
+                            (room.Doc.getMap('slidesById').size > 0 || room.Doc.getMap('worksheetsById').size > 0)
+                        ) {
+                            const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
+                            this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+                        }
                     }
                     room.Doc.getMap('meta').set('versionNumber', versionRow.VersionNumber);
                     room.Doc.getMap('meta').set('versionId', versionRow.ID);
                 }, 'hydrate');
+                if (this.extractRoomSerializedContent(room.Doc) !== versionTargetText) {
+                    room.DirtyVersion = true;
+                }
                 seededOrUpdatedWorkingState = true;
             } else if (versionRow) {
                 const existingEpoch = room.Doc.getMap('meta').get('roomEpoch') as string | undefined;
@@ -2597,9 +2810,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         } else if (msg.MessageType === 'permission-revoked') {
             await this.ReevaluateRoomPermissions(room.ArtifactID, msg.TargetUserID, false);
         } else if (msg.MessageType === 'version-saved' && typeof msg.VersionNumber === 'number') {
+            if (msg.PayloadBase64 && !this.DoesDocContainStateVector(room.Doc, Base64ToBytes(msg.PayloadBase64))) {
+                try {
+                    await this._relay.PublishToRoom({
+                        ArtifactID: room.ArtifactID,
+                        MessageType: 'sync-request',
+                        PayloadBase64: BytesToBase64(Y.encodeStateVector(room.Doc))
+                    });
+                } catch {
+                    // Best-effort CRDT catch-up before database version reconciliation
+                }
+            }
             const queryActor = room.LastModifiedByUser ?? UserCache.Instance.GetSystemUser();
             if (msg.VersionID && !UUIDsEqual(msg.VersionID, room.BaseVersionID) && queryActor) {
-                await this.checkAndReconcileLatestDatabaseVersion(room, queryActor);
+                await this.checkAndReconcileLatestDatabaseVersion(room, queryActor, {
+                    originServerId: msg.OriginInstanceID,
+                    savedStateVectorB64: msg.PayloadBase64
+                });
             } else {
                 room.DirtyVersion = false;
                 this.broadcastControlFrame(room, {
@@ -2817,6 +3044,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (
             typeof baselineText === 'string' &&
+            baselineText.length > 0 &&
             baselineText !== currentText &&
             baselineText !== targetText
         ) {
@@ -2825,6 +3053,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const agentLines = this.splitTextIntoLineTokens(targetText);
             const humanHunks = this.computeLineReplacementHunks(baseLines, liveLines);
             const agentHunks = this.computeLineReplacementHunks(baseLines, agentLines);
+
+            // When zero lines of `baselineText` survived in `targetText` (`keptFromBase === 0`),
+            // the out-of-band writer replaced the entire document (e.g. `write_document` or version restore).
+            // Apply `targetText` cleanly as the authoritative whole-document content without appending
+            // stale old middle lines at the bottom (`R5-3`; pre-rewrite Yjs state is already preserved
+            // in `room.PreOutOfBandDocState`).
+            if (
+                agentHunks.length === 1 &&
+                agentHunks[0].oldStart === 0 &&
+                agentHunks[0].oldEnd === baseLines.length
+            ) {
+                const wholeDocSplice = this.refineCharSplice(0, currentText, targetText);
+                if (wholeDocSplice.deleteCount > 0) {
+                    yText.delete(wholeDocSplice.start, wholeDocSplice.deleteCount);
+                }
+                if (wholeDocSplice.insertText.length > 0) {
+                    yText.insert(wholeDocSplice.start, wholeDocSplice.insertText);
+                }
+                return;
+            }
 
             const liveLineOffsets: number[] = new Array<number>(liveLines.length + 1);
             liveLineOffsets[0] = 0;
@@ -2882,38 +3130,42 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         overlappingHuman.oldStart === overlappingHuman.oldEnd &&
                         aHunk.oldStart === overlappingHuman.oldStart
                     ) {
-                        // Both human and agent inserted at the exact same baseline boundary:
-                        // place agent's insertion immediately after the human's insertion.
-                        const insertOffset = liveLineOffsets[overlappingHuman.newEnd];
-                        splices.push({
-                            start: insertOffset,
-                            deleteCount: 0,
-                            insertText: agentNewSlice
-                        });
-                        continue;
-                    }
-                    if (aHunk.oldStart === 0 && aHunk.oldEnd === baseLines.length && baseLines.length > 1) {
-                        const humanModifiedOldLines = humanHunks.reduce(
-                            (sum, h) => sum + (h.oldEnd - h.oldStart),
-                            0
+                        // Both sides inserted at the exact same baseline boundary: deduplicate any leading
+                        // or trailing lines already present in `humanLinesInserted` before inserting (`R5-3`).
+                        const humanLinesInserted = liveLines.slice(
+                            overlappingHuman.newStart,
+                            overlappingHuman.newEnd
                         );
-                        if (humanModifiedOldLines < baseLines.length) {
-                            // Whole-document out-of-band replacement where baseline shares zero lines with target:
-                            // apply the restored/replaced document while preserving all concurrent live human hunks.
-                            const preservedHumanText = humanHunks
-                                .map((h) => liveLines.slice(h.newStart, h.newEnd).join(''))
-                                .filter((s) => s.length > 0)
-                                .join('');
-                            const sep =
-                                agentNewSlice.length > 0 &&
-                                !agentNewSlice.endsWith('\n') &&
-                                preservedHumanText.length > 0
-                                    ? '\n'
-                                    : '';
-                            const mergedFullDoc = `${agentNewSlice}${sep}${preservedHumanText}`;
-                            splices.push(this.refineCharSplice(0, currentText, mergedFullDoc));
-                            continue;
+                        const agentLinesInserted = agentLines.slice(aHunk.newStart, aHunk.newEnd);
+                        let prefixMatch = 0;
+                        while (
+                            prefixMatch < agentLinesInserted.length &&
+                            prefixMatch < humanLinesInserted.length &&
+                            agentLinesInserted[prefixMatch] === humanLinesInserted[prefixMatch]
+                        ) {
+                            prefixMatch++;
                         }
+                        let suffixMatch = 0;
+                        while (
+                            suffixMatch < agentLinesInserted.length - prefixMatch &&
+                            suffixMatch < humanLinesInserted.length - prefixMatch &&
+                            agentLinesInserted[agentLinesInserted.length - 1 - suffixMatch] ===
+                                humanLinesInserted[humanLinesInserted.length - 1 - suffixMatch]
+                        ) {
+                            suffixMatch++;
+                        }
+                        const dedupedInsert = agentLinesInserted
+                            .slice(prefixMatch, agentLinesInserted.length - suffixMatch)
+                            .join('');
+                        if (dedupedInsert.length > 0) {
+                            const insertOffset = liveLineOffsets[overlappingHuman.newEnd];
+                            splices.push({
+                                start: insertOffset,
+                                deleteCount: 0,
+                                insertText: dedupedInsert
+                            });
+                        }
+                        continue;
                     }
                     // For overlapping replacements on the same baseline line(s), preserve the human's
                     // concurrent edit on that hunk while still applying all non-overlapping agent hunks.

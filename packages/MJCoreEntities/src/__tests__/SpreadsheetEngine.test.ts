@@ -13,6 +13,7 @@ import {
     SafeRegexTest,
     SpreadsheetEngine,
     SpreadsheetLiveTableSpec,
+    ValidateExtraFilter,
     XlsxOpenXmlAdapter
 } from '../custom/SpreadsheetEngine';
 import { SlideDeckEngine } from '../custom/SlideDeckEngine';
@@ -1215,15 +1216,17 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(xmlB).toContain('<f>G3*2</f><v>40</v>');
         expect(xmlB).toContain('<f>G4*2</f><v>60</v>');
         expect(xmlB).toContain('<f>G5*2</f><v>80</v>');
-        // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array"!
+        // Newly edited future functions get _xlfn. prefix in both PatchXlsxBytes and ExportToXlsxBytes, and A1 keeps cm="1" + t="array" while omitting <v>#NAME?</v>!
         expect(xmlB).toContain('cm="1"');
-        expect(xmlB).toContain('<f t="array" ref="A1:A3">_xlfn.SEQUENCE(5, 1, 10)</f><v>10</v>');
+        expect(xmlB).toContain('<f t="array" ref="A1:A3">_xlfn.SEQUENCE(5, 1, 10)</f></c>');
+        expect(xmlB).not.toContain('#NAME?');
         expect(xmlB).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f><v>40</v>');
 
         const freshExportBytes = engine.ExportToXlsxBytes(importedB, false);
         const freshEntries = engine.ExtractZipArchive(freshExportBytes);
         const freshXml = decoder.decode(freshEntries.get('xl/worksheets/sheet1.xml')!);
         expect(freshXml).toContain('<f>_xlfn.XLOOKUP(20, G2:G5, H2:H5)</f>');
+        expect(freshXml).not.toContain('#NAME?');
     });
 
     it('E6 & RenameWorksheet: supports whole-column/whole-row stable refs across rename & insert/delete, recalculates beyond row 25, rejects duplicate/empty names, and quotes boolean/R1C1 sheet names', () => {
@@ -1340,5 +1343,191 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(parsedWs.Cells['B1000']?.Style?.FormatType).toBe('currency');
         expect(parsed.NamedRanges).toEqual([{ Name: 'LedgerTotal', SheetID: ws.SheetID, Range: 'B1000' }]);
         expect(engine.ComputeRevisionHash(parsed)).toBe(revBefore);
+    });
+
+    it('R5-5 & OOXML Polish: dynamic-array spill functions return honest #NAME?, omit <v>#NAME?</v> on .xlsx export/patch, emit _xlfn._xlws.SORT/FILTER + _xlfn.IFNA/DAYS, and preserve CSE t="array"', () => {
+        const wb = engine.CreateEmptyWorkbook('R5 Array & OOXML', ['Sheet1'], 10, 8);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 30 }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'A3', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 1 }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 0 }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Value: 1 }, true);
+
+        // Unimplemented dynamic-array functions must return honest #NAME? (never silent wrong numbers!)
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEQUENCE(3)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(SEQUENCE(3))')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORT(A1:A3, 1, -1)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SORTBY(A1:A3, B1:B3)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=FILTER(A1:A3, B1:B3=1)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=UNIQUE(A1:A3)')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=RANDARRAY()')).toBe('#NAME?');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=LET(x, 5, x + 1)')).toBe('#NAME?');
+
+        // Accurate scalar future functions keep working and round-trip with _xlfn.IFNA and _xlfn.DAYS
+        engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)' }, false);
+        engine.SetCell(wb, s.SheetID, 'D2', { Formula: '=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))' }, false);
+        engine.SetCell(wb, s.SheetID, 'D3', { Formula: '=SORT(A1:A3, 1, -1)' }, false);
+        engine.SetCell(wb, s.SheetID, 'D4', { Formula: '=FILTER(A1:A3, B1:B3=1)' }, true);
+
+        expect(s.Cells['D1']?.ComputedValue).toBe(42);
+        expect(s.Cells['D2']?.ComputedValue).toBe(10);
+        expect(s.Cells['D3']?.ComputedValue).toBe('#NAME?');
+        expect(s.Cells['D4']?.ComputedValue).toBe('#NAME?');
+
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+        const exported = engine.ExportToXlsxBytes(wb, false);
+        const exportedFiles = engine.ExtractZipArchive(exported);
+        const sheetXml = decoder.decode(exportedFiles.get('xl/worksheets/sheet1.xml')!);
+
+        expect(sheetXml).toContain('<f>_xlfn.IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)</f><v>42</v>');
+        expect(sheetXml).toContain('<f>_xlfn.DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))</f><v>10</v>');
+        expect(sheetXml).toContain('<c r="D3" cm="1"><f t="array" ref="D3">_xlfn._xlws.SORT(A1:A3, 1, -1)</f></c>');
+        expect(sheetXml).toContain('<c r="D4" cm="1"><f t="array" ref="D4">_xlfn._xlws.FILTER(A1:A3, B1:B3=1)</f></c>');
+        expect(sheetXml).not.toContain('#NAME?');
+        expect(exportedFiles.has('xl/metadata.xml')).toBe(true);
+
+        // Re-import strips _xlfn._xlws. and _xlfn. cleanly
+        const reimported = engine.ImportFromXlsxBytes(exported);
+        const rs = reimported.Worksheets[0];
+        expect(rs.Cells['D1']?.Formula).toBe('=IFNA(VLOOKUP(999, A1:B3, 2, FALSE), 42)');
+        expect(rs.Cells['D1']?.ComputedValue).toBe(42);
+        expect(rs.Cells['D2']?.Formula).toBe('=DAYS(DATE(2026, 1, 15), DATE(2026, 1, 5))');
+        expect(rs.Cells['D2']?.ComputedValue).toBe(10);
+        expect(rs.Cells['D3']?.Formula).toBe('=SORT(A1:A3, 1, -1)');
+        expect(rs.Cells['D4']?.Formula).toBe('=FILTER(A1:A3, B1:B3=1)');
+
+        // Legacy CSE formula (<f t="array" ref="E1:E3">SUM(A1:A3)</f> without cm="1") preserves t="array" ref="E1:E3" on edit!
+        const cseSheetXml = sheetXml.replace(
+            '</sheetData>',
+            '<row r="9"><c r="E9" t="n"><f t="array" ref="E9:E10">SUM(A1:A2)</f><v>40</v></c></row></sheetData>'
+        );
+        exportedFiles.set('xl/worksheets/sheet1.xml', encoder.encode(cseSheetXml));
+        const cseSeedBytes = engine.BuildZipArchive(
+            Array.from(exportedFiles.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+        const cseWb = engine.ImportFromXlsxBytes(cseSeedBytes);
+        engine.SetCell(cseWb, 'Sheet1', 'E9', { Formula: '=SUM(A1:A3)' }, false);
+        engine.SetCell(cseWb, 'Sheet1', 'F9', { Formula: '=SEQUENCE(4)' }, true);
+        const csePatchedBytes = engine.PatchXlsxBytes(cseSeedBytes, cseWb);
+        const csePatchedXml = decoder.decode(engine.ExtractZipArchive(csePatchedBytes).get('xl/worksheets/sheet1.xml')!);
+        expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9:E10">SUM(A1:A3)</f><v>60</v></c>');
+        expect(csePatchedXml).toContain('<c r="F9" cm="1"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f></c>');
+        expect(csePatchedXml).not.toContain('#NAME?');
+    });
+
+    it('R5-8: CheckStartupSecrets and ResolveSigningSecret treat empty and whitespace-only env vars identically as unset', () => {
+        const liveBlockEngine = DocumentLiveBlockEngine.Instance;
+        const origSecret = liveBlockEngine.GetSigningSecret();
+        const origHmac = process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+        const origSnap = process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+        try {
+            liveBlockEngine.SetSigningSecret('   ');
+            expect(liveBlockEngine.GetSigningSecret()).toBeNull();
+
+            process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = '';
+            delete process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+            const emptyStatus = liveBlockEngine.CheckStartupSecrets();
+            expect(emptyStatus.FrozenBlockSecretConfigured).toBe(false);
+            expect(emptyStatus.Warnings.length).toBeGreaterThan(0);
+            expect(liveBlockEngine.ResolveSigningSecret()).toBeNull();
+
+            process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = '   \t  ';
+            const wsStatus = liveBlockEngine.CheckStartupSecrets();
+            expect(wsStatus.FrozenBlockSecretConfigured).toBe(false);
+            expect(wsStatus.Warnings.length).toBeGreaterThan(0);
+            expect(liveBlockEngine.ResolveSigningSecret()).toBeNull();
+
+            // Whitespace MJ_FROZEN_BLOCK_HMAC_SECRET falls through cleanly to valid 32+ byte MJ_FROZEN_SNAPSHOT_SECRET
+            const validFallback = '0123456789abcdef0123456789abcdef_valid_secret';
+            process.env.MJ_FROZEN_SNAPSHOT_SECRET = validFallback;
+            const fallbackStatus = liveBlockEngine.CheckStartupSecrets();
+            expect(fallbackStatus.FrozenBlockSecretConfigured).toBe(true);
+            expect(fallbackStatus.Warnings).toHaveLength(0);
+            expect(liveBlockEngine.ResolveSigningSecret()).toBe(validFallback);
+        } finally {
+            liveBlockEngine.SetSigningSecret(origSecret);
+            if (origHmac === undefined) delete process.env.MJ_FROZEN_BLOCK_HMAC_SECRET;
+            else process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = origHmac;
+            if (origSnap === undefined) delete process.env.MJ_FROZEN_SNAPSHOT_SECRET;
+            else process.env.MJ_FROZEN_SNAPSHOT_SECRET = origSnap;
+        }
+    });
+
+    it('R5 Regex & =SEARCH: allows pairwise-disjoint quantified alternations, preserves ^/$ anchors without window slicing, and evaluates adversarial =SEARCH in < 20ms', () => {
+        // Disjoint quantified alternations are safe O(N)
+        expect(IsSafeUserRegex('(a|b)*c')).toBe(true);
+        expect(IsSafeUserRegex('(foo|bar)+')).toBe(true);
+        expect(IsSafeUserRegex('^(cat|dog|fish)+$')).toBe(true);
+
+        // Overlapping / ambiguous quantified alternations are rejected
+        expect(IsSafeUserRegex('(a|a)*$')).toBe(false);
+        expect(IsSafeUserRegex('(a|aa)+$')).toBe(false);
+        expect(IsSafeUserRegex('(ab|a)*$')).toBe(false);
+        expect(IsSafeUserRegex('(\\d|[0-9])+$')).toBe(false);
+        expect(IsSafeUserRegex('(a|A)+$', 'i')).toBe(false);
+        expect(IsSafeUserRegex('(a|aa)'.repeat(12) + '$')).toBe(false);
+
+        // SafeRegexTest must NEVER slice windows and corrupt ^ / $ anchors!
+        const digitsOnlyRx = CompileSafeUserRegex('^\\d+$');
+        expect(digitsOnlyRx).not.toBeNull();
+        expect(SafeRegexTest(digitsOnlyRx!, '1'.repeat(2000) + 'x' + '1'.repeat(2000))).toBe(false);
+        expect(SafeRegexTest(digitsOnlyRx!, '1'.repeat(4000))).toBe(true);
+
+        // =SEARCH linear DP wildcard matcher handles * / ? / ~ escapes and runs in < 20ms on adversarial inputs
+        const wb = engine.CreateEmptyWorkbook('SearchDP', ['Sheet1'], 5, 3);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 'a'.repeat(4000) }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 'a'.repeat(1000) }, true);
+
+        const t0 = performance.now();
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEARCH("*?*x", A1)')).toBe('#VALUE!');
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEARCH("*?*?*x", A2)')).toBe('#VALUE!');
+        expect(performance.now() - t0).toBeLessThan(20);
+
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEARCH("a*b?c", "zzaxxxbyczz")')).toBe(3);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SEARCH("~*a~?", "foo*A?bar")')).toBe(4);
+    });
+
+    it('R5 Sparse Whole-Row, ValidateExtraFilter & ZIP DOS Date: =SUM(1:1048576) runs in < 20ms with compact JSON, identifier columns pass, and ZIP modDate is 0x0021', () => {
+        const wb = engine.CreateEmptyWorkbook('SparseWholeRow', ['Sheet1'], 25, 10);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 125 }, false);
+        engine.SetCell(wb, s.SheetID, 'F15', { Value: 375 }, false);
+
+        const t0 = performance.now();
+        engine.SetCell(wb, s.SheetID, 'A1', { Formula: '=SUM(2:1048576)' }, true);
+        expect(s.Cells['A1']?.ComputedValue).toBe(500);
+        expect(engine.EvaluateFormulaExpression(wb, s.SheetID, '=SUM(1:1048576)')).toBe(1000);
+        expect(performance.now() - t0).toBeLessThan(20);
+
+        // Dense sheet.Rows must NOT balloon to 1,048,576!
+        expect(s.Rows.length).toBeLessThanOrEqual(25);
+        const serialized = engine.SerializeWorkbook(wb);
+        expect(serialized.length).toBeLessThan(100_000);
+
+        // ValidateExtraFilter allows identifier column names APP_NAME / USER_NAME while blocking SQL functions & niladic tokens
+        expect(ValidateExtraFilter("APP_NAME = 'Portal'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "APP_NAME = 'Portal'"
+        });
+        expect(ValidateExtraFilter("USER_NAME = 'alice' AND APP_NAME = 'Admin'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "USER_NAME = 'alice' AND APP_NAME = 'Admin'"
+        });
+        expect(ValidateExtraFilter("USER_NAME() = 'dbo'").Valid).toBe(false);
+        expect(ValidateExtraFilter("USER_NAME() = 'dbo'").AccessDenied).toBe(true);
+        expect(ValidateExtraFilter('APP_NAME()').Valid).toBe(false);
+        expect(ValidateExtraFilter("@@VERSION = '1'").Valid).toBe(false);
+        expect(ValidateExtraFilter('Name = SYSTEM_USER').Valid).toBe(false);
+        expect(ValidateExtraFilter('SYSTEM_USER').Valid).toBe(false);
+
+        // ZIP local file header MS-DOS modDate at byte offset 12 must be valid 0x0021 (1980-01-01), NOT 0x2100
+        const xlsxBytes = engine.ExportToXlsxBytes(wb, false);
+        const dv = new DataView(xlsxBytes.buffer, xlsxBytes.byteOffset, xlsxBytes.byteLength);
+        expect(dv.getUint32(0, true)).toBe(0x04034b50);
+        expect(dv.getUint16(12, true)).toBe(0x0021);
     });
 });

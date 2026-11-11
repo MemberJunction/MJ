@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import {
@@ -1956,13 +1956,22 @@ export class AgentRunner {
                     isNewArtifact = true;
                     LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
                     if (forkedSourceArtifactId) {
-                        await this.grantForkedArtifactReadPermissions(
+                        const failedGrantRecipients = await this.grantForkedArtifactReadPermissions(
                             md,
                             artifactId,
                             forkedSourceArtifactId,
                             conversationDetailId,
                             contextUser
                         );
+                        if (failedGrantRecipients.length > 0) {
+                            const warningNote =
+                                `Warning: read access could not be automatically granted to conversation participant(s): ${failedGrantRecipients.join(', ')}.`;
+                            forkCommentNote = forkCommentNote
+                                ? `${forkCommentNote} ${warningNote}`
+                                : warningNote;
+                            artifact.Comments = forkCommentNote;
+                            await artifact.Save();
+                        }
                     }
                 }
             }
@@ -2256,51 +2265,7 @@ export class AgentRunner {
             return null;
         };
 
-        const checkRunViewsOnlyTestStub = async (): Promise<Extract<ArtifactTargetPlan, { kind: 'version' }> | null> => {
-            const rv = RunView.FromMetadataProvider(md);
-            const safeArtifactId = EscapeSQLString(artifactId);
-            const safeUserId = EscapeSQLString(contextUser.ID);
-            const [artRes, grantRes] = await rv.RunViews(
-                [
-                    {
-                        EntityName: 'MJ: Artifacts',
-                        ExtraFilter: `ID='${safeArtifactId}'`,
-                        Fields: ['ID', 'UserID'],
-                        MaxRows: 1,
-                        SkipTotalRowCount: true,
-                        ResultType: 'simple'
-                    },
-                    {
-                        EntityName: 'MJ: Artifact Permissions',
-                        ExtraFilter: `ArtifactID='${safeArtifactId}' AND UserID='${safeUserId}' AND CanEdit=1`,
-                        Fields: ['ID'],
-                        MaxRows: 1,
-                        SkipTotalRowCount: true,
-                        ResultType: 'simple'
-                    }
-                ],
-                contextUser
-            );
-            if (!artRes?.Success) {
-                return reject(`could not be verified (${artRes?.ErrorMessage || 'lookup failed'})`);
-            }
-            const artRows = (artRes.Results ?? []) as Array<{ ID: string; UserID?: string | null }>;
-            if (artRows.length === 0) {
-                return reject('does not exist');
-            }
-            const isOwner = Boolean(artRows[0].UserID && UUIDsEqual(artRows[0].UserID, contextUser.ID));
-            const hasDirectGrant = Boolean(grantRes?.Success && (grantRes.Results?.length ?? 0) > 0);
-            if (isOwner || hasDirectGrant) {
-                return { ...plan, artifactId };
-            }
-            return reject('user holds no CanEdit grant on it');
-        };
-
         try {
-            if (typeof Reflect.get(md, 'RunView') !== 'function' && typeof Reflect.get(md, 'RunViews') === 'function') {
-                return await checkRunViewsOnlyTestStub();
-            }
-
             const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                 md,
                 artifactId,
@@ -2308,13 +2273,6 @@ export class AgentRunner {
             );
             if (perms.CanEdit) {
                 return { ...plan, artifactId };
-            }
-            if (
-                !md.ProviderType &&
-                perms.Reason.includes('was not found') &&
-                typeof Reflect.get(md, 'RunViews') === 'function'
-            ) {
-                return await checkRunViewsOnlyTestStub();
             }
             const reasonDetail = perms.Reason
                 ? `user holds no CanEdit grant on it (${perms.Reason})`
@@ -2329,7 +2287,8 @@ export class AgentRunner {
     /**
      * When a shared-conversation turn falls back to `'create-new'` because `contextUser` lacks `CanEdit`
      * on a participant's artifact, grants `CanRead = true` on the newly forked artifact to the source
-     * artifact's owner and/or the conversation's owner (`D3`).
+     * artifact's owner, the conversation's owner, and every distinct conversation participant (`D3`).
+     * Returns the list of participant `UserID`s whose grant could not be persisted.
      */
     private async grantForkedArtifactReadPermissions(
         md: IMetadataProvider,
@@ -2337,18 +2296,19 @@ export class AgentRunner {
         sourceArtifactId: string,
         conversationDetailId: string | undefined,
         contextUser: UserInfo
-    ): Promise<void> {
+    ): Promise<string[]> {
+        const failedRecipients: string[] = [];
+        const recipientByNormId = new Map<string, string>();
         try {
             const rv = RunView.FromMetadataProvider(md);
-            const recipientByLowerId = new Map<string, string>();
             const addRecipient = (candidateUserId: string | null | undefined): void => {
                 const trimmed = (candidateUserId ?? '').trim();
                 if (!trimmed || UUIDsEqual(trimmed, contextUser.ID)) {
                     return;
                 }
-                const lower = trimmed.toLowerCase();
-                if (!recipientByLowerId.has(lower)) {
-                    recipientByLowerId.set(lower, trimmed);
+                const norm = NormalizeUUID(trimmed);
+                if (!recipientByNormId.has(norm)) {
+                    recipientByNormId.set(norm, trimmed);
                 }
             };
 
@@ -2381,40 +2341,70 @@ export class AgentRunner {
                 );
                 const convId = detailRes.Success ? detailRes.Results?.[0]?.ConversationID?.trim() : undefined;
                 if (convId && IsValidUUID(convId)) {
-                    const convRes = await rv.RunView<{ ID: string; UserID?: string | null }>(
-                        {
-                            EntityName: 'MJ: Conversations',
-                            ExtraFilter: `ID='${EscapeSQLString(convId)}'`,
-                            Fields: ['ID', 'UserID'],
-                            MaxRows: 1,
-                            SkipTotalRowCount: true,
-                            ResultType: 'simple'
-                        },
-                        contextUser
-                    );
+                    const safeConvId = EscapeSQLString(convId);
+                    const [convRes, participantsRes] = await Promise.all([
+                        rv.RunView<{ ID: string; UserID?: string | null }>(
+                            {
+                                EntityName: 'MJ: Conversations',
+                                ExtraFilter: `ID='${safeConvId}'`,
+                                Fields: ['ID', 'UserID'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            contextUser
+                        ),
+                        rv.RunView<{ UserID?: string | null }>(
+                            {
+                                EntityName: 'MJ: Conversation Details',
+                                ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
+                                Fields: ['UserID'],
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            contextUser
+                        )
+                    ]);
                     if (convRes.Success && convRes.Results?.length) {
                         addRecipient(convRes.Results[0].UserID);
+                    }
+                    if (participantsRes.Success && Array.isArray(participantsRes.Results)) {
+                        for (const row of participantsRes.Results) {
+                            addRecipient(row.UserID);
+                        }
                     }
                 }
             }
 
-            for (const recipientUserId of recipientByLowerId.values()) {
-                const perm = await md.GetEntityObject<MJArtifactPermissionEntity>(
-                    'MJ: Artifact Permissions',
-                    contextUser
-                );
-                perm.NewRecord();
-                perm.ArtifactID = newArtifactId;
-                perm.UserID = recipientUserId;
-                perm.CanRead = true;
-                perm.CanEdit = false;
-                perm.CanDelete = false;
-                perm.CanShare = false;
-                perm.SharedByUserID = contextUser.ID;
-                if (!(await perm.Save())) {
+            for (const recipientUserId of recipientByNormId.values()) {
+                try {
+                    const perm = await md.GetEntityObject<MJArtifactPermissionEntity>(
+                        'MJ: Artifact Permissions',
+                        contextUser
+                    );
+                    perm.NewRecord();
+                    perm.ArtifactID = newArtifactId;
+                    perm.UserID = recipientUserId;
+                    perm.CanRead = true;
+                    perm.CanEdit = false;
+                    perm.CanDelete = false;
+                    perm.CanShare = false;
+                    perm.SharedByUserID = contextUser.ID;
+                    if (!(await perm.Save())) {
+                        failedRecipients.push(recipientUserId);
+                        LogError(
+                            `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
+                                perm.LatestResult?.CompleteMessage ||
+                                perm.LatestResult?.Message ||
+                                'Save() returned false'
+                            }`
+                        );
+                    }
+                } catch (saveErr) {
+                    failedRecipients.push(recipientUserId);
                     LogError(
                         `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
-                            perm.LatestResult?.Message || 'Save() returned false'
+                            saveErr instanceof Error ? saveErr.message : String(saveErr)
                         }`
                     );
                 }
@@ -2426,6 +2416,7 @@ export class AgentRunner {
                 }`
             );
         }
+        return failedRecipients;
     }
 
     /**
@@ -3373,10 +3364,10 @@ export class AgentRunner {
                         if (!artId) {
                             continue;
                         }
-                        const lowerArtId = artId.toLowerCase();
-                        if (!canReadByArtifactId.has(lowerArtId)) {
+                        const normArtId = NormalizeUUID(artId);
+                        if (!canReadByArtifactId.has(normArtId)) {
                             if (!permissionProvider) {
-                                canReadByArtifactId.set(lowerArtId, false);
+                                canReadByArtifactId.set(normArtId, false);
                                 continue;
                             }
                             const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
@@ -3384,13 +3375,13 @@ export class AgentRunner {
                                 artId,
                                 contextUser
                             );
-                            canReadByArtifactId.set(lowerArtId, perms.CanRead === true);
+                            canReadByArtifactId.set(normArtId, perms.CanRead === true);
                         }
                     }
 
                     for (const row of rows) {
                         const rowArtifactId = (row.ArtifactID ?? '').trim();
-                        if (rowArtifactId && canReadByArtifactId.get(rowArtifactId.toLowerCase()) !== true) {
+                        if (!rowArtifactId || canReadByArtifactId.get(NormalizeUUID(rowArtifactId)) !== true) {
                             continue;
                         }
                         const artifactName = row.VersionName || row.ArtifactName || 'Untitled';

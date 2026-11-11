@@ -2112,6 +2112,7 @@ export class SlideDeckArtifactViewerComponent
   } | null = null;
 
   private session: DocumentCollaborationSession | null = null;
+  private liveSyncUnavailable = false;
   private permissionUnsub: (() => void) | null = null;
   private readonly subs: Subscription[] = [];
   private sessionInitGeneration = 0;
@@ -2139,11 +2140,11 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return Boolean(this.session?.LiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.session?.IsLiveSyncUnavailable);
   }
 
   public get IsEditable(): boolean {
-    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   public get CanComment(): boolean {
@@ -3374,6 +3375,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private setupCollaborationSession(artifactId: string, initialSerializedDeck: string): void {
+    this.liveSyncUnavailable = false;
     if (this.session) {
       for (const s of this.subs) {
         s.unsubscribe();
@@ -3394,8 +3396,21 @@ export class SlideDeckArtifactViewerComponent
       this.hasPermissionToEdit,
       hasRemoteBackend,
     );
+    this.liveSyncUnavailable = Boolean(this.session.IsLiveSyncUnavailable);
 
     this.subs.push(
+      this.session.OnLiveSyncUnavailable$.subscribe((unavailable) => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        const changed = this.liveSyncUnavailable !== unavailable;
+        this.liveSyncUnavailable = unavailable;
+        if (changed) {
+          this.cdr.detectChanges();
+        } else {
+          this.cdr.markForCheck();
+        }
+      }),
       this.session.ContentChanged$.subscribe((nextContent) => {
         if (!nextContent || !nextContent.trim()) {
           return;

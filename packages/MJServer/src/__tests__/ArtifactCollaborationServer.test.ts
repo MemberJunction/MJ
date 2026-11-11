@@ -14,7 +14,7 @@ import {
     MJAIAgentRunEntityExtended
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { Base64ToBytes, BytesToBase64, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -96,6 +96,7 @@ import {
     YjsRelayMessage
 } from '../collaboration/YjsRoomRelay.js';
 import { DocumentCollaborationResolver } from '../resolvers/DocumentCollaborationResolver.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { RunAIAgentResolver } from '../resolvers/RunAIAgentResolver.js';
 import { getUserPayload } from '../context.js';
 import type { AppContext, DataSourceInfo } from '../types.js';
@@ -242,11 +243,21 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     let versions: MockStoredVersion[];
     let permissionTable: Map<string, MockPermissionMapEntry>;
     let resolvePermissionsSpy: ReturnType<typeof vi.spyOn>;
+    let aiConfigSpy: ReturnType<typeof vi.spyOn>;
 
     function createMockProvider(): IMetadataProvider {
         const runViewFn = async (params: RunViewParams) => {
+            const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+            const artMatch = filter.match(/\bArtifactID='([^']+)'/);
             if (params.EntityName === 'MJ: Artifact Working States') {
-                const existing = workingStates.get(artifactId);
+                const targetArtId = artMatch ? artMatch[1] : artifactId;
+                let existing: MockStoredWorkingState | undefined;
+                for (const [key, val] of workingStates.entries()) {
+                    if (UUIDsEqual(key, targetArtId)) {
+                        existing = val;
+                        break;
+                    }
+                }
                 return {
                     Success: true,
                     Results: existing ? [existing] : [],
@@ -254,7 +265,20 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 };
             }
             if (params.EntityName === 'MJ: Artifact Versions') {
-                const sorted = [...versions].sort((a, b) => b.VersionNumber - a.VersionNumber);
+                let candidates = [...versions];
+                if (artMatch) {
+                    candidates = candidates.filter((v) => UUIDsEqual(v.ArtifactID, artMatch[1]));
+                }
+                const idMatch = filter.match(/\bID='([^']+)'/);
+                if (idMatch) {
+                    candidates = candidates.filter((v) => UUIDsEqual(v.ID, idMatch[1]));
+                }
+                const verNumMatch = filter.match(/\bVersionNumber=(\d+)/);
+                if (verNumMatch) {
+                    const targetVer = Number(verNumMatch[1]);
+                    candidates = candidates.filter((v) => v.VersionNumber === targetVer);
+                }
+                const sorted = candidates.sort((a, b) => b.VersionNumber - a.VersionNumber);
                 return {
                     Success: true,
                     Results: sorted.length > 0 ? [sorted[0]] : [],
@@ -392,6 +416,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 };
             });
 
+        aiConfigSpy = vi.spyOn(AIEngine.Instance, 'Config').mockResolvedValue(undefined);
+
         const server = ArtifactCollaborationServer.Instance;
         // Reset shutdown flag and rooms via Shutdown, then re-configure
         await server.Shutdown();
@@ -426,6 +452,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     });
 
     afterEach(async () => {
+        aiConfigSpy.mockRestore();
         resolvePermissionsSpy.mockRestore();
         await ArtifactCollaborationServer.Instance.Shutdown();
         ArtifactCollaborationServer.Instance.SetMetadataProviderOverride(null);
@@ -2753,5 +2780,570 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             if (prevPublicUrl === undefined) delete process.env.MJAPI_PUBLIC_URL;
             else process.env.MJAPI_PUBLIC_URL = prevPublicUrl;
         }
+    });
+
+    it('R5-3a & R5-3b: cross-node compaction state vector prevents duplicating synced edits ("Hello world" and "A line.\\nB line.\\n")', async () => {
+        class PeerServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const bus = new InMemoryYjsRelayBus();
+        const relayA = new InMemoryYjsRoomRelay(bus, 'r5-node-a');
+        const relayB = new InMemoryYjsRoomRelay(bus, 'r5-node-b');
+        const nodeA = new PeerServer();
+        const nodeB = new PeerServer();
+        nodeA.SetRoomRelay(relayA);
+        nodeB.SetRoomRelay(relayB);
+        nodeA.SetMetadataProviderOverride(createMockProvider());
+        nodeB.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            // Scenario A: empty initial content, Node A types "Hello", syncs to Node B, Node B appends " world", Node A compacts "Hello"
+            versions[0].Content = '';
+            const roomA = await nodeA.GetOrCreateRoom(artifactId, editorUser);
+            const roomB = await nodeB.GetOrCreateRoom(artifactId, secondEditorUser);
+            expect(roomA).not.toBeNull();
+            expect(roomB).not.toBeNull();
+
+            roomA!.Doc.transact(() => {
+                roomA!.Doc.getText('content').insert(0, 'Hello');
+            }, 'client-on-a');
+
+            await vi.waitFor(async () => {
+                expect(await nodeB.GetRoomContent(artifactId, secondEditorUser)).toBe('Hello');
+            });
+
+            // Apply a local-to-B client edit (" world") onto roomB without relaying it to Node A yet
+            const bLocalClientDoc = new Y.Doc();
+            Y.applyUpdate(bLocalClientDoc, Y.encodeStateAsUpdate(roomB!.Doc));
+            bLocalClientDoc.getText('content').insert(5, ' world');
+            Y.applyUpdate(roomB!.Doc, Y.encodeStateAsUpdate(bLocalClientDoc), 'remote-relay');
+            bLocalClientDoc.destroy();
+            expect(await nodeB.GetRoomContent(artifactId, secondEditorUser)).toBe('Hello world');
+
+            const compacted = await nodeA.CompactRoomToArtifactVersion(artifactId, editorUser);
+            expect(compacted.Saved).toBe(true);
+
+            // Node B already contains every Yjs op in Node A's compacted state vector -> MUST stay "Hello world", NEVER "Hello worldHello"
+            await new Promise((r) => setTimeout(r, 40));
+            expect(await nodeB.GetRoomContent(artifactId, secondEditorUser)).toBe('Hello world');
+
+            // Scenario B: "A line.\n" + "B line.\n" deduplication on positional 3-way merge when same anchor inserts "A line.\n"
+            const artifactId2 = '22222222-3333-4444-5555-666666666666';
+            versions = [
+                {
+                    ID: 'ver-lines-1',
+                    ArtifactID: artifactId2,
+                    VersionNumber: 1,
+                    Content: 'Header\n',
+                    ContentHash: 'hash-lines-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            const roomLines = await ArtifactCollaborationServer.Instance.GetOrCreateRoom(
+                artifactId2,
+                editorUser
+            );
+            expect(roomLines).not.toBeNull();
+            roomLines!.Doc.transact(() => {
+                const yText = roomLines!.Doc.getText('content');
+                yText.insert(yText.length, 'A line.\nB line.\n');
+            }, 'human-lines');
+
+            await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
+                artifactId2,
+                'Header\nA line.\n',
+                editorUser,
+                false,
+                'Header\n'
+            );
+            expect(await ArtifactCollaborationServer.Instance.GetRoomContent(artifactId2, editorUser)).toBe(
+                'Header\nA line.\nB line.\n'
+            );
+        } finally {
+            await nodeA.Shutdown();
+            await nodeB.Shutdown();
+            await relayA.Shutdown();
+            await relayB.Shutdown();
+        }
+    });
+
+    it('R5-3c, R5-3d & R5-3e: empty-base reconcile avoids duplication, full agent rewrite replaces authoritatively while preserving PreOutOfBandDocState, and newer-version hydrate performs 3-way merge', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // R5-3c: Empty base ("") reconcile never concatenates "Hello\nWorld\nHello\n"
+        versions[0].Content = '';
+        const emptyRoom = await server.GetOrCreateRoom(artifactId, editorUser);
+        expect(emptyRoom).not.toBeNull();
+        emptyRoom!.Doc.transact(() => {
+            emptyRoom!.Doc.getText('content').insert(0, 'Hello\nWorld\n');
+        }, 'human-on-empty');
+
+        await server.ApplyServerContentMutation(artifactId, 'Hello\n', editorUser, false, '');
+        const afterEmptyReconcile = await server.GetRoomContent(artifactId, editorUser);
+        expect(afterEmptyReconcile).not.toBe('Hello\nWorld\nHello\n');
+        expect(afterEmptyReconcile).toBe('Hello\n');
+
+        // R5-3d: Full agent rewrite ("Alpha.\nBeta.\nGamma.\n" -> "ALPHA formal.\nBETA formal.\nGAMMA formal.\n")
+        const rewriteArtId = '33333333-4444-5555-6666-777777777777';
+        const baseThreeLines = 'Alpha.\nBeta.\nGamma.\n';
+        versions = [
+            {
+                ID: 'ver-rw-1',
+                ArtifactID: rewriteArtId,
+                VersionNumber: 1,
+                Content: baseThreeLines,
+                ContentHash: 'rw-hash-1',
+                UserID: editorUser.ID
+            }
+        ];
+        const rwRoom = await server.GetOrCreateRoom(rewriteArtId, editorUser);
+        expect(rwRoom).not.toBeNull();
+        rwRoom!.Doc.transact(() => {
+            const yText = rwRoom!.Doc.getText('content');
+            const idx = yText.toString().indexOf('Beta.');
+            yText.delete(idx, 'Beta.'.length);
+            yText.insert(idx, 'Beta, edited.');
+        }, 'human-beta-edit');
+
+        const fullAgentRewrite = 'ALPHA formal.\nBETA formal.\nGAMMA formal.\n';
+        await server.ApplyServerContentMutation(
+            rewriteArtId,
+            fullAgentRewrite,
+            editorUser,
+            false,
+            baseThreeLines
+        );
+        expect(await server.GetRoomContent(rewriteArtId, editorUser)).toBe(fullAgentRewrite);
+        expect(rwRoom!.PreOutOfBandDocState).toBeInstanceOf(Uint8Array);
+        const recoveredPreDoc = new Y.Doc();
+        Y.applyUpdate(recoveredPreDoc, rwRoom!.PreOutOfBandDocState!);
+        expect(recoveredPreDoc.getText('content').toString()).toBe('Alpha.\nBeta, edited.\nGamma.\n');
+        recoveredPreDoc.destroy();
+
+        // R5-3e: Newer-version room hydration 3-way merges uncompacted workingState (at v1) with newer DB v2
+        class HydratePeerServer extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const hydratePeer = new HydratePeerServer();
+        hydratePeer.SetMetadataProviderOverride(createMockProvider());
+
+        try {
+            const v1Base = '# Spec\n\n## Intro\nOriginal intro.\n\n## Details\nOriginal details.\n';
+            const v2OutOfBand = '# Spec\n\n## Intro\nOriginal intro.\n\n## Details\nUpdated details in v2.\n';
+            versions = [
+                {
+                    ID: 'ver-hyd-1',
+                    ArtifactID: artifactId,
+                    VersionNumber: 1,
+                    Content: v1Base,
+                    ContentHash: 'hyd-1',
+                    UserID: editorUser.ID,
+                    __mj_CreatedAt: new Date(Date.now() - 10_000).toISOString(),
+                    __mj_UpdatedAt: new Date(Date.now() - 10_000).toISOString()
+                },
+                {
+                    ID: 'ver-hyd-2',
+                    ArtifactID: artifactId,
+                    VersionNumber: 2,
+                    Content: v2OutOfBand,
+                    ContentHash: 'hyd-2',
+                    UserID: editorUser.ID,
+                    __mj_CreatedAt: new Date(Date.now() + 10_000).toISOString(),
+                    __mj_UpdatedAt: new Date(Date.now() + 10_000).toISOString()
+                }
+            ];
+
+            const staleWorkingDoc = new Y.Doc();
+            staleWorkingDoc
+                .getText('content')
+                .insert(0, '# Spec\n\n## Intro\nUncompacted human intro.\n\n## Details\nOriginal details.\n');
+            staleWorkingDoc.getMap('meta').set('versionId', 'ver-hyd-1');
+            staleWorkingDoc.getMap('meta').set('versionNumber', 1);
+            workingStates.set(artifactId, {
+                ID: 'ws-hyd-1',
+                ArtifactID: artifactId,
+                YjsState: BytesToBase64(Y.encodeStateAsUpdate(staleWorkingDoc)),
+                LastModifiedByUserID: editorUser.ID,
+                __mj_UpdatedAt: new Date(Date.now() - 5_000).toISOString()
+            });
+            staleWorkingDoc.destroy();
+
+            const hydratedRoom = await hydratePeer.GetOrCreateRoom(artifactId, editorUser);
+            expect(hydratedRoom).not.toBeNull();
+            expect(hydratedRoom!.Doc.getText('content').toString()).toBe(
+                '# Spec\n\n## Intro\nUncompacted human intro.\n\n## Details\nUpdated details in v2.\n'
+            );
+        } finally {
+            await hydratePeer.Shutdown();
+        }
+    });
+
+    it('R5-4, R5-6 & R5-7: enforces agent:execute scope & fail-closed AIEngine checks, returns post-merge UpdatedContent, refuses unmatched conversationId/thread fallback, and handles missing ticket secret cleanly', async () => {
+        const resolver = new DocumentCollaborationResolver();
+        const savedReplies: Array<{ ConversationID: string; Message: string }> = [];
+        const baseProvider = createMockProvider();
+        const r5Provider: Partial<IMetadataProvider> = {
+            ...baseProvider,
+            RunView: (async (params: RunViewParams, user?: UserInfo) => {
+                if (params.EntityName === 'MJ: Conversations') {
+                    const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                    const unrelatedThread = {
+                        ID: 'cccccccc-1111-4222-8333-999999999999',
+                        AnchorMetadata: JSON.stringify({
+                            quote: 'Completely different quote.',
+                            status: 'Open'
+                        })
+                    };
+                    if (filter.includes("ID='")) {
+                        const match = filter.includes(unrelatedThread.ID);
+                        return {
+                            Success: true,
+                            Results: match ? [unrelatedThread] : [],
+                            TotalRowCount: match ? 1 : 0
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [unrelatedThread],
+                        TotalRowCount: 1
+                    };
+                }
+                return await baseProvider.RunView(params, user);
+            }) as IMetadataProvider['RunView'],
+            GetEntityObject: (async (entityName: string, user?: UserInfo) => {
+                if (entityName === 'MJ: Conversation Details') {
+                    return {
+                        ConversationID: '',
+                        UserID: '',
+                        Role: '',
+                        AgentID: null as string | null,
+                        Message: '',
+                        Status: '',
+                        NewRecord() {
+                            return undefined;
+                        },
+                        async Save() {
+                            savedReplies.push({
+                                ConversationID: this.ConversationID,
+                                Message: this.Message
+                            });
+                            return true;
+                        }
+                    };
+                }
+                return await baseProvider.GetEntityObject(entityName, user);
+            }) as IMetadataProvider['GetEntityObject']
+        };
+
+        const activeAgent: Partial<MJAIAgentEntityExtended> = {
+            ID: '99999999-1111-4222-8333-aaaaaaaaaaaa',
+            Name: 'Copy Editor',
+            Status: 'Active'
+        };
+        const fakeRun: Partial<MJAIAgentRunEntityExtended> = {
+            ID: '88888888-1111-4222-8333-bbbbbbbbbbbb',
+            AgentID: activeAgent.ID
+        };
+
+        const agentsSpy = vi
+            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+
+        const editorCtx: AppContext = {
+            dataSource: {} as AppContext['dataSource'],
+            dataSources: [],
+            providers: [{ provider: r5Provider as IMetadataProvider, type: 'Read-Write' }],
+            userPayload: {
+                userRecord: editorUser,
+                email: editorUser.Email,
+                sessionId: 'sess-r5'
+            }
+        };
+
+        try {
+            // R5-4a: API key with artifact:comment + artifact:edit but WITHOUT agent:execute is rejected before running AgentRunner
+            const sysUser = createTestUser('sys-r5-1', 'System', 'sys-r5@example.com');
+            const sysSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+            const apiKeyEngine = GetAPIKeyEngine();
+            const authorizeSpy = vi.spyOn(apiKeyEngine, 'Authorize').mockImplementation(
+                async (_hash: string, _app: string, scopePath: string) => ({
+                    Allowed: scopePath === 'artifact:comment' || scopePath === 'artifact:edit',
+                    Reason: scopePath === 'agent:execute' ? 'Missing agent:execute scope' : 'Allowed artifact scope',
+                    MatchedRule: null,
+                    EvaluatedRules: []
+                })
+            );
+            const runSpyBlocked = vi.spyOn(AgentRunner.prototype, 'RunAgent');
+            try {
+                await expect(
+                    resolver.ExecuteAnchoredCommentAgentMention(
+                        artifactId,
+                        'Copy Editor',
+                        'comment',
+                        '@copy-editor review this',
+                        'Baseline paragraph.',
+                        {
+                            ...editorCtx,
+                            userPayload: {
+                                ...editorCtx.userPayload,
+                                apiKeyId: 'key-no-agent-exec',
+                                apiKeyHash: 'hash-no-agent-exec'
+                            }
+                        }
+                    )
+                ).rejects.toThrow(/Access denied/i);
+                expect(runSpyBlocked).not.toHaveBeenCalled();
+            } finally {
+                runSpyBlocked.mockRestore();
+                authorizeSpy.mockRestore();
+                sysSpy.mockRestore();
+            }
+
+            // R5-4b: Fail CLOSED when AIEngine.Config throws or CanUserRunAgent throws (even when Agents list is populated)
+            const errLogSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            try {
+                aiConfigSpy.mockRejectedValueOnce(new Error('DB metadata offline'));
+                const cfgFailRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                    artifactId,
+                    'Copy Editor',
+                    'comment',
+                    '@copy-editor hello',
+                    'Baseline paragraph.',
+                    editorCtx
+                );
+                expect(cfgFailRes.Success).toBe(false);
+                expect(cfgFailRes.ErrorMessage).toContain('Unable to load AI agent catalog');
+
+                canRunSpy.mockImplementationOnce(() => {
+                    throw new Error('ACL subsystem failure');
+                });
+                const permThrowRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                    artifactId,
+                    'Copy Editor',
+                    'comment',
+                    '@copy-editor hello',
+                    'Baseline paragraph.',
+                    editorCtx
+                );
+                expect(permThrowRes.Success).toBe(false);
+                expect(permThrowRes.ErrorMessage).toContain('Unable to verify run permission');
+            } finally {
+                errLogSpy.mockRestore();
+            }
+
+            // R5-6a: Unmatched explicit conversationId returns { Success: false, ErrorMessage: 'Anchored comment thread not found.' }
+            const missingThreadRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                artifactId,
+                'Copy Editor',
+                'comment',
+                '@copy-editor check thread',
+                'Baseline paragraph.',
+                editorCtx,
+                'ffffffff-0000-4000-8000-000000000000'
+            );
+            expect(missingThreadRes.Success).toBe(false);
+            expect(missingThreadRes.ErrorMessage).toBe('Anchored comment thread not found.');
+            expect(savedReplies).toHaveLength(0);
+
+            // R5-6b: Edit mode returns post-merge UpdatedContent (including concurrent live room edits) AND does NOT post reply to unrelated thread
+            const mergeArtifactId = '44444444-5555-6666-7777-888888888888';
+            versions.push({
+                ID: 'ver-merge-r5-1',
+                ArtifactID: mergeArtifactId,
+                VersionNumber: 1,
+                Content: '# Strategy\n\nIntro line.\n\nTarget quote.\n',
+                ContentHash: 'hash-merge-r5-1',
+                UserID: editorUser.ID
+            });
+            const room = await ArtifactCollaborationServer.Instance.GetOrCreateRoom(
+                mergeArtifactId,
+                editorUser
+            );
+            expect(room).not.toBeNull();
+
+            const runMergeSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementationOnce(async () => {
+                // Simulate a concurrent co-author editing "Intro line." while the agent is thinking!
+                room!.Doc.transact(() => {
+                    const yText = room!.Doc.getText('content');
+                    const introIdx = yText.toString().indexOf('Intro line.');
+                    yText.delete(introIdx, 'Intro line.'.length);
+                    yText.insert(introIdx, 'Concurrent co-author intro.');
+                }, 'concurrent-coauthor');
+
+                return {
+                    success: true,
+                    payload: {
+                        reply: 'Polished target quote.',
+                        replacement: 'Polished quote.'
+                    },
+                    agentRun: fakeRun as MJAIAgentRunEntityExtended
+                };
+            });
+
+            const mergedEditRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                mergeArtifactId,
+                'Copy Editor',
+                'edit',
+                '@copy-editor polish',
+                'Target quote.',
+                editorCtx
+            );
+            runMergeSpy.mockRestore();
+
+            expect(mergedEditRes.Success).toBe(true);
+            expect(mergedEditRes.UpdatedContent).toBe(
+                '# Strategy\n\nConcurrent co-author intro.\n\nPolished quote.\n'
+            );
+            // Because r5Provider only had an unrelated anchored thread ("Completely different quote."), zero replies were posted to it!
+            expect(savedReplies).toHaveLength(0);
+
+            // R5-7: MintArtifactCollaborationTicket returns structured { Success: false } instead of throwing when HMAC secret is unset
+            const prevCollab = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            const prevTicket = process.env.MJ_COLLABORATION_TICKET_SECRET;
+            const ticketErrSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            try {
+                ArtifactCollaborationServer.Instance.SetTicketHmacSecret(null);
+                delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+                delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+
+                const noSecretRes = await resolver.MintArtifactCollaborationTicket(artifactId, editorCtx);
+                expect(noSecretRes.Success).toBe(false);
+                expect(noSecretRes.CanRead).toBe(true);
+                expect(noSecretRes.CanEdit).toBe(true);
+                expect(noSecretRes.ErrorMessage).toBeTruthy();
+            } finally {
+                ticketErrSpy.mockRestore();
+                if (prevCollab !== undefined) process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevCollab;
+                if (prevTicket !== undefined) process.env.MJ_COLLABORATION_TICKET_SECRET = prevTicket;
+                ArtifactCollaborationServer.Instance.SetTicketHmacSecret(
+                    'test-collab-ticket-hmac-secret-at-least-32-bytes!!'
+                );
+            }
+        } finally {
+            canRunSpy.mockRestore();
+            agentsSpy.mockRestore();
+        }
+    });
+
+    it('R5-1 GraphQL single-record ACL: ResolverBase.MapFieldNamesToCodeNames enforces CanRead on MJ: Artifact Versions and blocks MJ: Artifact Working States', async () => {
+        class TestableResolverBase extends ResolverBase {
+            public async MapSingleForTest(
+                entityName: string,
+                row: Record<string, string | number | null>,
+                user?: UserInfo,
+                provider?: IMetadataProvider
+            ): Promise<Record<string, string | number | null> | null> {
+                return await this.MapFieldNamesToCodeNames(entityName, row, user, provider);
+            }
+            public async MapArrayForTest(
+                entityName: string,
+                rows: Array<Record<string, string | number | null>>,
+                user?: UserInfo,
+                provider?: IMetadataProvider
+            ): Promise<Array<Record<string, string | number | null>>> {
+                return await this.ArrayMapFieldNamesToCodeNames(entityName, rows, user, provider);
+            }
+        }
+
+        const fakeEntityInfo = new EntityInfo({
+            ID: 'ei-artifact-versions-test',
+            Name: 'MJ: Artifact Versions',
+            EntityFields: [
+                { ID: 'ef-1', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier' },
+                { ID: 'ef-2', Name: 'ArtifactID', CodeName: 'ArtifactID', Type: 'uniqueidentifier' },
+                { ID: 'ef-3', Name: 'Content', CodeName: 'Content', Type: 'nvarchar' }
+            ]
+        });
+
+        const mappingProvider: Partial<IMetadataProvider> = {
+            ...createMockProvider(),
+            EntityByName: () => fakeEntityInfo
+        };
+
+        const resolverBase = new TestableResolverBase();
+        const strangerUser = createTestUser('user-stranger-99', 'Mallory', 'mallory@example.com');
+        const versionRow = {
+            ID: 'ver-secret-1',
+            ArtifactID: artifactId,
+            Content: 'Top-secret single-record payload'
+        };
+
+        // 1. Unauthorized user -> null
+        expect(
+            await resolverBase.MapSingleForTest(
+                'MJ: Artifact Versions',
+                versionRow,
+                strangerUser,
+                mappingProvider as IMetadataProvider
+            )
+        ).toBeNull();
+
+        // 2. Missing contextUser or missing ArtifactID -> null (fail closed)
+        expect(
+            await resolverBase.MapSingleForTest(
+                'MJ: Artifact Versions',
+                versionRow,
+                undefined,
+                mappingProvider as IMetadataProvider
+            )
+        ).toBeNull();
+        expect(
+            await resolverBase.MapSingleForTest(
+                'MJ: Artifact Versions',
+                { ID: 'ver-no-art', Content: 'Secret' },
+                viewerUser,
+                mappingProvider as IMetadataProvider
+            )
+        ).toBeNull();
+
+        // 3. Authorized viewer -> mapped row returned
+        const allowedMapped = await resolverBase.MapSingleForTest(
+            'MJ: Artifact Versions',
+            versionRow,
+            viewerUser,
+            mappingProvider as IMetadataProvider
+        );
+        expect(allowedMapped).not.toBeNull();
+        expect(allowedMapped?.Content).toBe('Top-secret single-record payload');
+
+        // 4. Elevated system user -> allowed without failing
+        const sysUser = createTestUser('sys-acl-1', 'System', 'sys@example.com');
+        const sysSpy = vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockImplementation(
+            (u?: UserInfo | null) => Boolean(u && UUIDsEqual(u.ID, sysUser.ID))
+        );
+        try {
+            const sysMapped = await resolverBase.MapSingleForTest(
+                'MJ: Artifact Versions',
+                versionRow,
+                sysUser,
+                mappingProvider as IMetadataProvider
+            );
+            expect(sysMapped?.Content).toBe('Top-secret single-record payload');
+        } finally {
+            sysSpy.mockRestore();
+        }
+
+        // 5. MJ: Artifact Working States -> unconditionally blocked (null / [])
+        expect(
+            await resolverBase.MapSingleForTest(
+                'MJ: Artifact Working States',
+                { ID: 'ws-1', ArtifactID: artifactId, YjsState: 'base64==' },
+                editorUser,
+                mappingProvider as IMetadataProvider
+            )
+        ).toBeNull();
+        expect(
+            await resolverBase.MapArrayForTest(
+                'MJ: Artifact Working States',
+                [{ ID: 'ws-1', ArtifactID: artifactId, YjsState: 'base64==' }],
+                editorUser,
+                mappingProvider as IMetadataProvider
+            )
+        ).toEqual([]);
     });
 });

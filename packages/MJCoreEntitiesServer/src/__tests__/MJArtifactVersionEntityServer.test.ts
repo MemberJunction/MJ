@@ -1,8 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+    ClearAllDataHooks,
     CompositeKey,
+    DatabaseProviderBase,
+    EntityInfo,
+    ExecuteSQLOptions,
     IMetadataProvider,
+    InMemoryLocalStorageProvider,
     IRunViewProvider,
+    LocalCacheManager,
+    ProviderBase,
+    ProviderConfigDataBase,
+    RoleInfo,
     RunViewParams,
     RunViewResult,
     UserInfo,
@@ -10,10 +19,12 @@ import {
 } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactVersionPostRunViewHook,
     ArtifactVersionPreRunViewHook,
     CalculateContentSizeBytes,
+    EnsureArtifactVersionReadHookRegistered,
     MJArtifactVersionEntityServer
 } from '../custom/MJArtifactVersionEntityServer.server';
 
@@ -155,6 +166,10 @@ describe('MJArtifactVersionEntityServer permission enforcement (Blocker 2)', () 
         const key = new CompositeKey([{ FieldName: 'ID', Value: 'ver-1' }]);
         expect(await entity.InnerLoad(key)).toBe(false);
         expect(newRecordSpy).toHaveBeenCalledTimes(1);
+
+        // Generated MJArtifactVersionEntity.Load(ID) must also route through InnerLoad and deny!
+        expect(await entity.Load('ver-1')).toBe(false);
+        expect(newRecordSpy).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -189,14 +204,16 @@ describe('ArtifactVersionPreRunViewHook & ArtifactVersionPostRunViewHook narrow 
             })
         );
 
+        const origFields = ['ID', 'VersionNumber'];
         const callerParams: RunViewParams = {
             EntityName: 'MJ: Artifact Versions',
-            Fields: ['ID', 'VersionNumber'],
+            Fields: origFields,
             ResultType: 'simple'
         };
         const hookedParams = await ArtifactVersionPreRunViewHook(callerParams, readerUser);
+        expect(hookedParams).toBe(callerParams);
         expect(hookedParams.Fields).toEqual(['ID', 'VersionNumber', 'ArtifactID']);
-        expect(callerParams.Fields).toEqual(['ID', 'VersionNumber']);
+        expect(origFields).toEqual(['ID', 'VersionNumber']);
 
         const projectedResults: RunViewResult = {
             Success: true,
@@ -419,5 +436,520 @@ describe('ArtifactVersionPreRunViewHook & ArtifactVersionPostRunViewHook narrow 
             collectionGrantee
         );
         expect(narrowRes.Results).toEqual([{ ID: allowedVersionId }]);
+    });
+});
+
+interface MockVersionRow {
+    ID: string;
+    ArtifactID: string;
+    VersionNumber: number;
+    Content: string;
+    __mj_UpdatedAt: string;
+}
+
+const CACHE_ROLE_ID = '77777777-7777-4777-8777-777777777777';
+const VERSION_ENTITY_ID = '55555555-5555-4555-8555-555555555555';
+
+class TestServerVersionProvider extends DatabaseProviderBase {
+    public internalRunViewCalls: Array<{ Fields?: string[]; ExtraFilter?: RunViewParams['ExtraFilter'] }> = [];
+    private readonly _entities: EntityInfo[];
+    private readonly _roles: RoleInfo[];
+    private readonly _handler: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult>;
+
+    public constructor(
+        handler: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult>
+    ) {
+        super();
+        this._handler = handler;
+        this._roles = [new RoleInfo({ ID: CACHE_ROLE_ID, Name: 'Developer' })];
+        this._entities = [
+            new EntityInfo({
+                ID: VERSION_ENTITY_ID,
+                Name: 'MJ: Artifact Versions',
+                SchemaName: '__mj',
+                BaseTable: 'ArtifactVersion',
+                BaseView: 'vwArtifactVersions',
+                AllowCaching: true,
+                TrustServerCacheCompletely: true,
+                IncludeInAPI: true,
+                Status: 'Active',
+                EntityFields: [
+                    {
+                        ID: 'f-id',
+                        EntityID: VERSION_ENTITY_ID,
+                        Name: 'ID',
+                        CodeName: 'ID',
+                        Type: 'uniqueidentifier',
+                        IsPrimaryKey: true,
+                        Sequence: 1,
+                        Status: 'Active'
+                    },
+                    {
+                        ID: 'f-art',
+                        EntityID: VERSION_ENTITY_ID,
+                        Name: 'ArtifactID',
+                        CodeName: 'ArtifactID',
+                        Type: 'uniqueidentifier',
+                        Sequence: 2,
+                        Status: 'Active'
+                    },
+                    {
+                        ID: 'f-ver',
+                        EntityID: VERSION_ENTITY_ID,
+                        Name: 'VersionNumber',
+                        CodeName: 'VersionNumber',
+                        Type: 'int',
+                        Sequence: 3,
+                        Status: 'Active'
+                    },
+                    {
+                        ID: 'f-content',
+                        EntityID: VERSION_ENTITY_ID,
+                        Name: 'Content',
+                        CodeName: 'Content',
+                        Type: 'nvarchar',
+                        Sequence: 4,
+                        Status: 'Active'
+                    },
+                    {
+                        ID: 'f-upd',
+                        EntityID: VERSION_ENTITY_ID,
+                        Name: '__mj_UpdatedAt',
+                        CodeName: '__mj_UpdatedAt',
+                        Type: 'datetimeoffset',
+                        Sequence: 5,
+                        Status: 'Active'
+                    }
+                ],
+                EntityPermissions: [
+                    {
+                        ID: 'p-dev',
+                        EntityID: VERSION_ENTITY_ID,
+                        RoleID: CACHE_ROLE_ID,
+                        CanRead: true,
+                        CanCreate: true,
+                        CanUpdate: true,
+                        CanDelete: true
+                    }
+                ]
+            })
+        ];
+    }
+
+    public override get ProviderType(): 'Database' {
+        return 'Database';
+    }
+
+    public override get Entities(): EntityInfo[] {
+        return this._entities;
+    }
+
+    public override get Roles(): RoleInfo[] {
+        return this._roles;
+    }
+
+    public override get ConfigData(): ProviderConfigDataBase {
+        return new ProviderConfigDataBase({}, '__mj', [], [], true);
+    }
+
+    protected override get UUIDFunctionPattern(): RegExp {
+        return /^newsequentialid\(\)$/i;
+    }
+
+    protected override get DBDefaultFunctionPattern(): RegExp {
+        return /^getutcdate\(\)$/i;
+    }
+
+    public override async BeginTransaction(): Promise<void> {}
+    public override async CommitTransaction(): Promise<void> {}
+    public override async RollbackTransaction(): Promise<void> {}
+
+    public override async ExecuteSQL<T>(
+        _sql: string,
+        _params?: unknown[],
+        _options?: ExecuteSQLOptions
+    ): Promise<Array<T>> {
+        return [];
+    }
+
+    protected override async InternalRunView<T>(
+        params: RunViewParams,
+        contextUser?: UserInfo
+    ): Promise<RunViewResult<T>> {
+        this.internalRunViewCalls.push({
+            Fields: Array.isArray(params.Fields) ? [...params.Fields] : undefined,
+            ExtraFilter: params.ExtraFilter
+        });
+        const res = await this._handler(params, contextUser);
+        return res as RunViewResult<T>;
+    }
+
+    protected override async InternalRunViews<T>(
+        paramsArray: RunViewParams[],
+        contextUser?: UserInfo
+    ): Promise<RunViewResult<T>[]> {
+        return Promise.all(paramsArray.map((p) => this.InternalRunView<T>(p, contextUser)));
+    }
+}
+
+function makeRoleUser(id: string, email: string, provider: IMetadataProvider): UserInfo {
+    return new UserInfo(provider, {
+        ID: id,
+        Name: email,
+        Email: email,
+        IsActive: true,
+        Type: 'User',
+        UserRoles: [{ UserID: id, RoleID: CACHE_ROLE_ID, Role: 'Developer' }]
+    });
+}
+
+function resetLocalCacheSingleton(): void {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        delete store['___SINGLETON__LocalCacheManager'];
+    }
+}
+
+describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocalCacheCompletely cache preservation', () => {
+    const systemUserId = '00000000-0000-4000-8000-000000000001';
+    const ownerUserId = '33333333-3333-4333-8333-333333333333';
+    const unauthorizedUserId = '99999999-9999-4999-8999-999999999999';
+    const targetArtifactId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const targetVersionId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    let savedDedupLingerMs = 0;
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        savedDedupLingerMs = ProviderBase.DedupLingerMs;
+        ProviderBase.DedupLingerMs = 0;
+        ClearAllDataHooks();
+        EnsureArtifactVersionReadHookRegistered();
+        resetLocalCacheSingleton();
+    });
+
+    afterEach(() => {
+        ProviderBase.DedupLingerMs = savedDedupLingerMs;
+        resetLocalCacheSingleton();
+        ClearAllDataHooks();
+        EnsureArtifactVersionReadHookRegistered();
+        vi.restoreAllMocks();
+    });
+
+    it('denies BOTH simultaneous RunView calls for the same unauthorized user + artifact with zero in-flight race bypass (R5-1)', async () => {
+        const storedRow: MockVersionRow = {
+            ID: targetVersionId,
+            ArtifactID: targetArtifactId,
+            VersionNumber: 1,
+            Content: 'TOP SECRET CONFIDENTIAL CONTENT',
+            __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+        };
+        const provider = new TestServerVersionProvider(async () => ({
+            Success: true,
+            Results: [{ ...storedRow }],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        }));
+        const systemUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const unauthorizedUser = makeRoleUser(unauthorizedUserId, 'intruder@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
+
+        let resolveCalls = 0;
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, artId) => {
+                resolveCalls++;
+                await new Promise<void>((r) => setTimeout(r, 25));
+                return {
+                    ArtifactID: artId,
+                    CanRead: false,
+                    CanEdit: false,
+                    CanDelete: false,
+                    CanShare: false,
+                    Source: 'Denied',
+                    Reason: 'Unauthorized'
+                };
+            }
+        );
+
+        const [res1, res2] = await Promise.all([
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                    MaxRows: 5,
+                    BypassCache: true,
+                    ResultType: 'simple'
+                },
+                unauthorizedUser
+            ),
+            new Promise<void>((r) => setTimeout(r, 5)).then(() =>
+                provider.RunView<MockVersionRow>(
+                    {
+                        EntityName: 'MJ: Artifact Versions',
+                        ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                        MaxRows: 10,
+                        BypassCache: true,
+                        ResultType: 'simple'
+                    },
+                    unauthorizedUser
+                )
+            )
+        ]);
+
+        expect(resolveCalls).toBe(2);
+        expect(res1.Results).toEqual([]);
+        expect(res2.Results).toEqual([]);
+        expect(res1.RowCount).toBe(0);
+        expect(res2.RowCount).toBe(0);
+    });
+
+    it('fails CLOSED when a row lacks ArtifactID/ID or when the system ID -> ArtifactID lookup fails or throws (R5-1)', async () => {
+        let lookupMode: 'fail-status' | 'throw' = 'fail-status';
+        const provider = new TestServerVersionProvider(async () => {
+            if (lookupMode === 'throw') {
+                throw new Error('Simulated DB error during system ArtifactID hydration');
+            }
+            return {
+                Success: false,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: 'Simulated system lookup failure'
+            };
+        });
+        const systemUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const unauthorizedUser = makeRoleUser(unauthorizedUserId, 'intruder@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
+
+        // 1. Unclassifiable row (neither ArtifactID, single-artifact ExtraFilter, nor ID) -> dropped
+        const unclassifiable = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: 'VersionNumber >= 1',
+                Fields: ['VersionNumber'],
+                ResultType: 'simple'
+            },
+            {
+                Success: true,
+                Results: [{ VersionNumber: 1 }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            unauthorizedUser
+        );
+        expect(unclassifiable.Results).toEqual([]);
+        expect(unclassifiable.RowCount).toBe(0);
+
+        // 2. System lookup returns Success: false -> dropped (fail closed)
+        const failedLookup = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: 'VersionNumber >= 1',
+                Fields: ['ID'],
+                ResultType: 'simple'
+            },
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            unauthorizedUser
+        );
+        expect(failedLookup.Results).toEqual([]);
+        expect(failedLookup.RowCount).toBe(0);
+
+        // 3. System lookup throws -> dropped (fail closed)
+        lookupMode = 'throw';
+        const thrownLookup = await ArtifactVersionPostRunViewHook(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: 'VersionNumber >= 1',
+                Fields: ['ID'],
+                ResultType: 'simple'
+            },
+            {
+                Success: true,
+                Results: [{ ID: targetVersionId }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            unauthorizedUser
+        );
+        expect(thrownLookup.Results).toEqual([]);
+        expect(thrownLookup.RowCount).toBe(0);
+    });
+
+    it('preserves full Content in LocalCacheManager after a narrow RunView when TrustLocalCacheCompletely is true (R5-2)', async () => {
+        await LocalCacheManager.Instance.Initialize(new InMemoryLocalStorageProvider(), {
+            enabled: true,
+            maxSizeBytes: 10 * 1024 * 1024,
+            defaultTTLMs: 60_000,
+            evictionPolicy: 'lru'
+        });
+
+        const fullDbRow: MockVersionRow = {
+            ID: targetVersionId,
+            ArtifactID: targetArtifactId,
+            VersionNumber: 4,
+            Content: '# Full Cached Markdown Body\n\nNever poisoned by narrow Fields.',
+            __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+        };
+
+        const provider = new TestServerVersionProvider(async (params) => {
+            // Simulate SQL projection: return ONLY the columns present in `params.Fields` (or all columns when omitted).
+            const requested = Array.isArray(params.Fields) && params.Fields.length > 0 ? params.Fields : null;
+            const projected: Record<string, string | number> = {};
+            const entries: Array<[keyof MockVersionRow, string | number]> = [
+                ['ID', fullDbRow.ID],
+                ['ArtifactID', fullDbRow.ArtifactID],
+                ['VersionNumber', fullDbRow.VersionNumber],
+                ['Content', fullDbRow.Content],
+                ['__mj_UpdatedAt', fullDbRow.__mj_UpdatedAt]
+            ];
+            for (const [col, val] of entries) {
+                if (!requested || requested.some((f) => f.toLowerCase() === col.toLowerCase())) {
+                    projected[col] = val;
+                }
+            }
+            return {
+                Success: true,
+                Results: [projected],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        });
+
+        const systemUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const ownerUser = makeRoleUser(ownerUserId, 'owner@example.com', provider);
+        const intruderUser = makeRoleUser(unauthorizedUserId, 'intruder@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, artId, user) => ({
+                ArtifactID: artId,
+                CanRead: UUIDsEqual(user.ID, ownerUser.ID),
+                CanEdit: UUIDsEqual(user.ID, ownerUser.ID),
+                CanDelete: UUIDsEqual(user.ID, ownerUser.ID),
+                CanShare: UUIDsEqual(user.ID, ownerUser.ID),
+                Source: UUIDsEqual(user.ID, ownerUser.ID) ? 'Owner' : 'Denied',
+                Reason: UUIDsEqual(user.ID, ownerUser.ID) ? 'Owner' : 'Denied'
+            })
+        );
+
+        // 1. Narrow read warms LocalCacheManager while returning ONLY { ID, VersionNumber } to caller
+        const narrowCallerFields = ['ID', 'VersionNumber'];
+        const narrowRes = await provider.RunView<{ ID: string; VersionNumber: number; Content?: string }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                Fields: narrowCallerFields,
+                ResultType: 'simple'
+            },
+            ownerUser
+        );
+        expect(narrowCallerFields).toEqual(['ID', 'VersionNumber']);
+        expect(narrowRes.Success).toBe(true);
+        expect(narrowRes.Results).toEqual([{ ID: targetVersionId, VersionNumber: 4 }]);
+        expect(Object.prototype.hasOwnProperty.call(narrowRes.Results[0], 'ArtifactID')).toBe(false);
+        expect(provider.internalRunViewCalls).toHaveLength(1);
+
+        // 2. Subsequent full read hits LocalCacheManager (no second InternalRunView!) and STILL returns full Content!
+        const fullRes = await provider.RunView<MockVersionRow>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                ResultType: 'simple'
+            },
+            ownerUser
+        );
+        expect(provider.internalRunViewCalls).toHaveLength(1);
+        expect(fullRes.Success).toBe(true);
+        expect(fullRes.Results).toHaveLength(1);
+        expect(fullRes.Results[0]?.Content).toBe(fullDbRow.Content);
+
+        // 3. Unauthorized user with the SAME role hitting the warm cache is still denied (0 rows)!
+        const deniedCacheHit = await provider.RunView<MockVersionRow>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                ResultType: 'simple'
+            },
+            intruderUser
+        );
+        expect(provider.internalRunViewCalls).toHaveLength(1);
+        expect(deniedCacheHit.Results).toEqual([]);
+        expect(deniedCacheHit.RowCount).toBe(0);
+    });
+
+    it('preserves server-vetted Results when client ProviderBase invokes PostRunView with contextUser === undefined (DSLC2)', async () => {
+        const serverVettedResults: RunViewResult<MockVersionRow> = {
+            Success: true,
+            Results: [
+                {
+                    ID: targetVersionId,
+                    ArtifactID: targetArtifactId,
+                    VersionNumber: 2,
+                    Content: 'Shared Read-Only child content'
+                }
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        };
+
+        const clientParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+            ResultType: 'simple'
+        };
+        const preParams = await ArtifactVersionPreRunViewHook(clientParams, undefined);
+        expect(preParams).toBe(clientParams);
+
+        const clientPostRes = await ArtifactVersionPostRunViewHook(
+            clientParams,
+            serverVettedResults,
+            undefined
+        );
+        expect(clientPostRes.Results).toHaveLength(1);
+        expect((clientPostRes.Results[0] as MockVersionRow).Content).toBe('Shared Read-Only child content');
+
+        // By contrast, a server call WITH contextUser on an unclassifiable row still fails closed
+        const provider = new TestServerVersionProvider(async () => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        }));
+        const serverUser = makeRoleUser(unauthorizedUserId, 'intruder@example.com', provider);
+        const serverUnclassifiableRes = await ArtifactVersionPostRunViewHook(
+            { EntityName: 'MJ: Artifact Versions', ResultType: 'simple' },
+            {
+                Success: true,
+                Results: [{ Content: 'Unclassifiable server row' }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            serverUser
+        );
+        expect(serverUnclassifiableRes.Results).toEqual([]);
+        expect(serverUnclassifiableRes.RowCount).toBe(0);
     });
 });

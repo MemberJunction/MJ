@@ -407,4 +407,134 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     await isolatedService.VerifyFrozenSnapshotOnServer(modifiedArtifactSnapshotBlock, gqlProvider);
     expect(executeSpy).toHaveBeenCalledTimes(2);
   });
+
+  it('R5-7: sets IsLiveSyncUnavailable and emits true on OnLiveSyncUnavailable$ when MintArtifactCollaborationTicket throws missing HMAC secret or returns Success=false', async () => {
+    const throwingSecretProvider = mockGqlProvider({
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => {
+        throw new Error('MJ_ARTIFACT_COLLAB_HMAC_SECRET is not configured');
+      },
+    });
+
+    const throwSession = service.CreateSession(
+      'art-missing-secret-throw',
+      '# Quarterly Plan',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    await throwSession.Connect(null, throwingSecretProvider);
+
+    expect(throwSession.IsLiveSyncUnavailable).toBe(true);
+    expect(throwSession.LiveSyncUnavailable).toBe(true);
+    expect(throwSession.LiveSyncErrorReason).toContain('MJ_ARTIFACT_COLLAB_HMAC_SECRET is not configured');
+    expect(throwSession.Status).toBe('readonly');
+    expect(throwSession.CanMutateDocument).toBe(false);
+
+    // Late subscriber after await Connect() must immediately receive `true` via BehaviorSubject
+    const lateEmissionsFromThrow: boolean[] = [];
+    const subThrow = throwSession.OnLiveSyncUnavailable$.subscribe((val) => lateEmissionsFromThrow.push(val));
+    expect(lateEmissionsFromThrow).toEqual([true]);
+    subThrow.unsubscribe();
+    throwSession.Destroy();
+
+    const unconfiguredPayloadProvider = mockGqlProvider({
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => ({
+        MintArtifactCollaborationTicket: {
+          Success: false,
+          CanRead: true,
+          CanEdit: true,
+          ErrorMessage: 'Live collaboration is unavailable',
+        },
+      }),
+    });
+
+    const payloadSession = service.CreateSession(
+      'art-missing-secret-payload',
+      '# Quarterly Plan',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    await payloadSession.Connect(null, unconfiguredPayloadProvider);
+
+    expect(payloadSession.IsLiveSyncUnavailable).toBe(true);
+    expect(payloadSession.LiveSyncUnavailable).toBe(true);
+    expect(payloadSession.LiveSyncErrorReason).toBe('Live collaboration is unavailable');
+    expect(payloadSession.Status).toBe('readonly');
+    expect(payloadSession.CanMutateDocument).toBe(false);
+
+    const lateEmissionsFromPayload: boolean[] = [];
+    const subPayload = payloadSession.OnLiveSyncUnavailable$.subscribe((val) =>
+      lateEmissionsFromPayload.push(val),
+    );
+    expect(lateEmissionsFromPayload).toEqual([true]);
+    subPayload.unsubscribe();
+    payloadSession.Destroy();
+
+    // Explicit CanRead: false still resolves to 'revoked' rather than LiveSyncUnavailable
+    const accessDeniedProvider = mockGqlProvider({
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => ({
+        MintArtifactCollaborationTicket: {
+          Success: false,
+          CanRead: false,
+          CanEdit: false,
+          ErrorMessage: 'Access denied',
+        },
+      }),
+    });
+    const deniedSession = service.CreateSession(
+      'art-denied-1',
+      '# Confidential',
+      { id: 'u2', name: 'Bob' },
+      true,
+      true,
+    );
+    await deniedSession.Connect(null, accessDeniedProvider);
+    expect(deniedSession.Status).toBe('revoked');
+    expect(deniedSession.IsLiveSyncUnavailable).toBe(false);
+    deniedSession.Destroy();
+  });
+
+  it('R5-6: DispatchAnchoredCommentAgentMention forwards optional conversationId to ExecuteAnchoredCommentAgentMention', async () => {
+    const executeSpy = vi.fn(
+      async (_doc: string, _vars?: Record<string, string | number | boolean | null>) => ({
+        ExecuteAnchoredCommentAgentMention: {
+          Success: true,
+          AgentHandle: 'Sage',
+          AgentMode: 'comment',
+          ReplyBody: 'Addressed on the target thread.',
+        },
+      }),
+    );
+    const gqlProvider = mockGqlProvider({
+      ExecuteGQL: executeSpy,
+    });
+
+    const res = await service.DispatchAnchoredCommentAgentMention(
+      'art-1',
+      'Sage',
+      'comment',
+      '@Sage please clarify this claim',
+      'target quote',
+      gqlProvider,
+      'conv-thread-42',
+    );
+
+    expect(res.Success).toBe(true);
+    expect(res.ReplyMessage).toBe('Addressed on the target thread.');
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    const [mutationDoc, variables] = executeSpy.mock.calls[0];
+    expect(mutationDoc).toContain('$conversationId: String');
+    expect(variables).toMatchObject({
+      artifactId: 'art-1',
+      agentHandle: 'Sage',
+      agentMode: 'comment',
+      commentBody: '@Sage please clarify this claim',
+      anchorQuote: 'target quote',
+      conversationId: 'conv-thread-42',
+    });
+  });
 });

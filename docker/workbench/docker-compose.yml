@@ -102,8 +102,6 @@ services:
       TEST_AUTH0_CLIENT_SECRET: "${TEST_AUTH0_CLIENT_SECRET}"
       TEST_UID: "${TEST_UID}"
       TEST_PWD: "${TEST_PWD}"
-      MJ_ARTIFACT_COLLAB_HMAC_SECRET: "${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-}"
-      MJ_FROZEN_BLOCK_HMAC_SECRET: "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}"
     ports:
       - "${MJAPI_HOST_PORT:-4000}:4000"       # MJAPI  (default 4000; set MJAPI_HOST_PORT=4100 to avoid conflicts)
       - "${EXPLORER_HOST_PORT:-4200}:4200"     # Explorer (default 4200; set EXPLORER_HOST_PORT=4300 to avoid conflicts)

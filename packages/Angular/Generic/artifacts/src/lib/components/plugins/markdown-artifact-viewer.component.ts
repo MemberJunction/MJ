@@ -40,6 +40,7 @@ import {
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
+import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 
@@ -3990,6 +3991,7 @@ export class MarkdownArtifactViewerComponent
 
   // Real-time Yjs session state
   private session: DocumentCollaborationSession | null = null;
+  private liveSyncUnavailable = false;
   private sessionSubs: Subscription[] = [];
   private permissionUnsub: (() => void) | null = null;
   private sessionInitGeneration = 0;
@@ -4091,6 +4093,10 @@ export class MarkdownArtifactViewerComponent
     return !this.readonly && this.HasEditPermission && this.CollaborationStatus !== 'revoked';
   }
 
+  public get CollaborationSession(): DocumentCollaborationSession | null {
+    return this.session;
+  }
+
   public get IsWaitingForInitialCollabSync(): boolean {
     return Boolean(
       this.session &&
@@ -4100,11 +4106,11 @@ export class MarkdownArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return Boolean(this.session?.LiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.session?.IsLiveSyncUnavailable);
   }
 
   public get CanUserEdit(): boolean {
-    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   /**
@@ -6732,6 +6738,9 @@ export class MarkdownArtifactViewerComponent
       proposedMarkdown?: string;
       rationale?: string;
       appliedOnServer?: boolean;
+      anchorQuote?: string;
+      markdownBeforeMention?: string;
+      versionNumber?: number;
     },
   ): void {
     const mode = thread.AgentMode ?? this.NewCommentAgentMode;
@@ -6758,15 +6767,44 @@ export class MarkdownArtifactViewerComponent
         Mentions: [],
       });
       this.StatusBannerMessage = `${normalizedAuthor} replied in comment thread.`;
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
       return;
     }
 
-    if (mode === 'edit' && this.CanUserEdit && targetSeg) {
+    const effectiveAnchorQuote = response.anchorQuote ?? thread.QuotedText;
+
+    if (mode === 'edit' && this.CanUserEdit && (targetSeg || response.appliedOnServer)) {
       if (response.appliedOnServer) {
-        this.OnMarkdownChanged(response.proposedMarkdown!, true);
-      } else {
-        this.ReplaceSegmentMarkdown(targetSeg, response.proposedMarkdown!);
+        if (this.session?.Transport === 'websocket') {
+          // Live WebSocket room: server (`ApplyServerContentMutation`) already merged and broadcast
+          // the agent's edit directly into the Yjs room. Do NOT call `OnMarkdownChanged(..., true)`
+          // or `session.SetContent(...)`, which would overwrite concurrent local typing with a 2-way snapshot.
+          if (typeof response.versionNumber === 'number') {
+            this.recordSavedVersionMetadata(response.versionNumber, response.proposedMarkdown!);
+          }
+        } else {
+          const baseBefore = response.markdownBeforeMention;
+          const nextMarkdown =
+            baseBefore !== undefined && this.MarkdownContent !== baseBefore
+              ? this.mergeConcurrentMentionEdit(
+                  baseBefore,
+                  this.MarkdownContent,
+                  response.proposedMarkdown!,
+                  effectiveAnchorQuote,
+                )
+              : response.proposedMarkdown!;
+          this.OnMarkdownChanged(nextMarkdown);
+          if (typeof response.versionNumber === 'number') {
+            this.recordSavedVersionMetadata(response.versionNumber, this.MarkdownContent);
+          }
+        }
+      } else if (targetSeg) {
+        const nextSegmentMarkdown = this.spliceQuoteReplacementInSegment(
+          targetSeg.RawMarkdown,
+          effectiveAnchorQuote,
+          response.proposedMarkdown!,
+        );
+        this.ReplaceSegmentMarkdown(targetSeg, nextSegmentMarkdown);
       }
       if (trimmedReply) {
         thread.Messages.push({
@@ -6779,15 +6817,20 @@ export class MarkdownArtifactViewerComponent
         });
       }
       this.StatusBannerMessage = `${normalizedAuthor} applied direct edit to ${thread.AnchorLabel}.`;
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
       return;
     }
 
     if (targetSeg) {
+      const fullSuggestedSegment = this.spliceQuoteReplacementInSegment(
+        targetSeg.RawMarkdown,
+        effectiveAnchorQuote,
+        response.proposedMarkdown!,
+      );
       this.CreateSuggestion(
         targetSeg.SegmentID,
         targetSeg.RawMarkdown,
-        response.proposedMarkdown!,
+        fullSuggestedSegment,
         response.rationale || trimmedReply || `Suggestion from ${normalizedAuthor}`,
         normalizedAuthor,
       );
@@ -6803,7 +6846,221 @@ export class MarkdownArtifactViewerComponent
       });
     }
     this.StatusBannerMessage = `${normalizedAuthor} proposed a tracked suggestion.`;
-    this.cdr.markForCheck();
+    this.cdr.detectChanges();
+  }
+
+  private recordSavedVersionMetadata(versionNumber: number, contentSnapshot: string): void {
+    const exists = this.SavedVersionSnapshots.some((s) => s.VersionNumber === versionNumber);
+    if (!exists) {
+      this.SavedVersionSnapshots.push({
+        VersionNumber: versionNumber,
+        Content: contentSnapshot,
+        Timestamp: new Date().toLocaleTimeString(),
+      });
+    }
+  }
+
+  private spliceQuoteReplacementInSegment(
+    segmentMarkdown: string,
+    anchorQuote: string | undefined,
+    replacement: string,
+  ): string {
+    const trimmedQuote = (anchorQuote ?? '').trim();
+    if (!trimmedQuote || trimmedQuote === segmentMarkdown) {
+      return replacement;
+    }
+    const idx = segmentMarkdown.indexOf(trimmedQuote);
+    if (idx < 0) {
+      return replacement;
+    }
+    const prefix = segmentMarkdown.slice(0, idx);
+    const suffix = segmentMarkdown.slice(idx + trimmedQuote.length);
+    const alreadyFullSegment =
+      (prefix.length > 0 || suffix.length > 0) &&
+      replacement.startsWith(prefix) &&
+      replacement.endsWith(suffix) &&
+      replacement.length >= prefix.length + suffix.length;
+    if (alreadyFullSegment) {
+      return replacement;
+    }
+    return `${prefix}${replacement}${suffix}`;
+  }
+
+  private mergeConcurrentMentionEdit(
+    baseMarkdown: string,
+    currentLocalMarkdown: string,
+    serverUpdatedMarkdown: string,
+    anchorQuote?: string,
+  ): string {
+    if (currentLocalMarkdown === baseMarkdown) {
+      return serverUpdatedMarkdown;
+    }
+    if (serverUpdatedMarkdown === baseMarkdown) {
+      return currentLocalMarkdown;
+    }
+
+    let prefixLen = 0;
+    const minLen = Math.min(baseMarkdown.length, serverUpdatedMarkdown.length);
+    while (prefixLen < minLen && baseMarkdown[prefixLen] === serverUpdatedMarkdown[prefixLen]) {
+      prefixLen++;
+    }
+
+    let baseEnd = baseMarkdown.length;
+    let serverEnd = serverUpdatedMarkdown.length;
+    while (
+      baseEnd > prefixLen &&
+      serverEnd > prefixLen &&
+      baseMarkdown[baseEnd - 1] === serverUpdatedMarkdown[serverEnd - 1]
+    ) {
+      baseEnd--;
+      serverEnd--;
+    }
+
+    const trimmedQuote = (anchorQuote ?? '').trim();
+    if (trimmedQuote.length > 0) {
+      const baseQuoteIdx = baseMarkdown.indexOf(trimmedQuote);
+      if (
+        baseQuoteIdx >= 0 &&
+        baseQuoteIdx <= prefixLen &&
+        baseQuoteIdx + trimmedQuote.length >= baseEnd
+      ) {
+        const trailingUnchangedLen = baseMarkdown.length - (baseQuoteIdx + trimmedQuote.length);
+        const quoteReplacement = serverUpdatedMarkdown.slice(
+          baseQuoteIdx,
+          serverUpdatedMarkdown.length - trailingUnchangedLen,
+        );
+        const localQuoteIdx = currentLocalMarkdown.indexOf(trimmedQuote);
+        if (localQuoteIdx >= 0 && currentLocalMarkdown.indexOf(trimmedQuote, localQuoteIdx + 1) === -1) {
+          return (
+            currentLocalMarkdown.slice(0, localQuoteIdx) +
+            quoteReplacement +
+            currentLocalMarkdown.slice(localQuoteIdx + trimmedQuote.length)
+          );
+        }
+      }
+    }
+
+    const oldSpan = baseMarkdown.slice(prefixLen, baseEnd);
+    const newSpan = serverUpdatedMarkdown.slice(prefixLen, serverEnd);
+    if (oldSpan.length > 0) {
+      const localSpanIdx = currentLocalMarkdown.indexOf(oldSpan);
+      if (localSpanIdx >= 0 && currentLocalMarkdown.indexOf(oldSpan, localSpanIdx + 1) === -1) {
+        return (
+          currentLocalMarkdown.slice(0, localSpanIdx) +
+          newSpan +
+          currentLocalMarkdown.slice(localSpanIdx + oldSpan.length)
+        );
+      }
+    }
+
+    return this.threeWayMergeLines(baseMarkdown, currentLocalMarkdown, serverUpdatedMarkdown);
+  }
+
+  private threeWayMergeLines(
+    baseMarkdown: string,
+    localMarkdown: string,
+    serverMarkdown: string,
+  ): string {
+    const baseLines = baseMarkdown.replace(/\r\n/g, '\n').split('\n');
+    const localLines = localMarkdown.replace(/\r\n/g, '\n').split('\n');
+    const serverLines = serverMarkdown.replace(/\r\n/g, '\n').split('\n');
+
+    const extractLineHunks = (
+      targetLines: readonly string[],
+    ): Array<{ baseStart: number; baseEnd: number; replacement: string[] }> => {
+      const ops = ComputeBoundedSequenceDiff(
+        baseLines,
+        targetLines,
+        (a, b) => a === b,
+        (s) => s,
+      );
+      const hunks: Array<{ baseStart: number; baseEnd: number; replacement: string[] }> = [];
+      let basePos = 0;
+      let active: { baseStart: number; baseEnd: number; replacement: string[] } | null = null;
+      for (const op of ops) {
+        if (op.Kind === 'equal') {
+          if (active) {
+            hunks.push(active);
+            active = null;
+          }
+          basePos = op.OldIndex + 1;
+        } else if (op.Kind === 'delete') {
+          if (!active) {
+            active = { baseStart: op.OldIndex, baseEnd: op.OldIndex + 1, replacement: [] };
+          } else {
+            active.baseEnd = op.OldIndex + 1;
+          }
+          basePos = op.OldIndex + 1;
+        } else {
+          if (!active) {
+            active = { baseStart: basePos, baseEnd: basePos, replacement: [targetLines[op.NewIndex]] };
+          } else {
+            active.replacement.push(targetLines[op.NewIndex]);
+          }
+        }
+      }
+      if (active) {
+        hunks.push(active);
+      }
+      return hunks;
+    };
+
+    const localHunks = extractLineHunks(localLines);
+    const serverHunks = extractLineHunks(serverLines);
+    const merged: string[] = [];
+    let baseCursor = 0;
+    let lIdx = 0;
+    let sIdx = 0;
+
+    while (lIdx < localHunks.length || sIdx < serverHunks.length) {
+      const lHunk = localHunks[lIdx];
+      const sHunk = serverHunks[sIdx];
+      const chooseLocalFirst =
+        lHunk !== undefined &&
+        (sHunk === undefined ||
+          lHunk.baseStart < sHunk.baseStart ||
+          (lHunk.baseStart === sHunk.baseStart && lHunk.baseEnd <= sHunk.baseStart));
+
+      if (chooseLocalFirst && lHunk) {
+        while (baseCursor < lHunk.baseStart) {
+          merged.push(baseLines[baseCursor++]);
+        }
+        merged.push(...lHunk.replacement);
+        baseCursor = Math.max(baseCursor, lHunk.baseEnd);
+        lIdx++;
+      } else if (sHunk) {
+        const overlapsLocal =
+          lHunk !== undefined &&
+          Math.max(lHunk.baseStart, sHunk.baseStart) < Math.max(lHunk.baseEnd, sHunk.baseEnd) &&
+          lHunk.baseStart <= sHunk.baseEnd &&
+          sHunk.baseStart <= lHunk.baseEnd;
+
+        if (overlapsLocal && lHunk) {
+          const regionStart = Math.min(lHunk.baseStart, sHunk.baseStart);
+          while (baseCursor < regionStart) {
+            merged.push(baseLines[baseCursor++]);
+          }
+          merged.push(...sHunk.replacement);
+          const extraLocal = lHunk.replacement.filter((line) => !sHunk.replacement.includes(line));
+          merged.push(...extraLocal);
+          baseCursor = Math.max(baseCursor, lHunk.baseEnd, sHunk.baseEnd);
+          lIdx++;
+          sIdx++;
+        } else {
+          while (baseCursor < sHunk.baseStart) {
+            merged.push(baseLines[baseCursor++]);
+          }
+          merged.push(...sHunk.replacement);
+          baseCursor = Math.max(baseCursor, sHunk.baseEnd);
+          sIdx++;
+        }
+      }
+    }
+
+    while (baseCursor < baseLines.length) {
+      merged.push(baseLines[baseCursor++]);
+    }
+    return merged.join('\n');
   }
 
   /**
@@ -6892,6 +7149,7 @@ export class MarkdownArtifactViewerComponent
     if (artifactId && mentions.length > 0) {
       const provider = this.getSafeProvider();
       const firstHandle = mentions[0];
+      const markdownBeforeMention = this.MarkdownContent;
       const serverMention = await this.collabService.DispatchAnchoredCommentAgentMention(
         artifactId,
         firstHandle,
@@ -6899,6 +7157,7 @@ export class MarkdownArtifactViewerComponent
         message,
         selectedQuote || undefined,
         provider,
+        newThread.ConversationID || undefined,
       );
       if (this.isComponentDestroyed) {
         return;
@@ -6920,7 +7179,7 @@ export class MarkdownArtifactViewerComponent
               : `@${firstHandle} did not return a reply.`);
         this.notifyError(errStatus);
         this.StatusBannerMessage = errStatus;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
         return;
       }
       // In 'edit' mode, NEVER mutate document markdown locally unless UpdatedContent was returned with Success === true from server
@@ -6934,13 +7193,16 @@ export class MarkdownArtifactViewerComponent
           Mentions: [],
         });
         this.StatusBannerMessage = `@${firstHandle} replied in comment thread.`;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
         return;
       }
       this.DispatchAgentCommentMention(newThread, firstHandle, {
         replyMessage,
         proposedMarkdown: updatedContent,
         appliedOnServer: newThread.AgentMode === 'edit' && Boolean(updatedContent),
+        anchorQuote: selectedQuote || undefined,
+        markdownBeforeMention,
+        versionNumber: serverMention.VersionNumber,
       });
     }
   }
@@ -7414,8 +7676,24 @@ export class MarkdownArtifactViewerComponent
       this.hasPermissionToEdit,
       hasRemoteBackend,
     );
+    this.liveSyncUnavailable = Boolean(this.session.IsLiveSyncUnavailable);
 
     this.sessionSubs.push(
+      this.session.OnLiveSyncUnavailable$.subscribe((unavailable) => {
+        if (this.isComponentDestroyed) {
+          return;
+        }
+        const changed = this.liveSyncUnavailable !== unavailable;
+        this.liveSyncUnavailable = unavailable;
+        if (unavailable && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
+          this.ViewMode = 'preview';
+        }
+        if (changed) {
+          this.cdr.detectChanges();
+        } else {
+          this.cdr.markForCheck();
+        }
+      }),
       this.session.ContentChanged$.subscribe((remoteContent) => {
         if (remoteContent !== this.MarkdownContent) {
           this.OnMarkdownChanged(remoteContent, true);
@@ -7469,6 +7747,7 @@ export class MarkdownArtifactViewerComponent
       this.session.Destroy();
       this.session = null;
     }
+    this.liveSyncUnavailable = false;
   }
 
   public RetryVerifyPermissions(): void {

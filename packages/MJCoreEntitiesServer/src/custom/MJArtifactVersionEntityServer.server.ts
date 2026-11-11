@@ -47,6 +47,8 @@ export interface ArtifactVersionSavedEventPayload {
     Content: string;
     PreviousContent?: string | null;
     UpdatedByUserID?: string;
+    OriginServerID?: string;
+    SavedStateVectorB64?: string;
 }
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
@@ -117,8 +119,7 @@ function readVersionRowId(row: unknown): string | null {
 }
 
 const INTERNAL_VERSION_SECURITY_QUERY_PARAMS = new WeakSet<object>();
-const SYNTHETIC_ARTIFACT_ID_PARAMS = new WeakSet<object>();
-const IN_FLIGHT_VERSION_PERMISSION_KEYS = new Set<string>();
+const ORIGINAL_CALLER_FIELDS_BY_PARAMS = new WeakMap<RunViewParams, string[]>();
 
 const SINGLE_ARTIFACT_EQ_FILTER_RE =
     /^\s*\[?ArtifactID\]?\s*=\s*N?'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'\s*$/i;
@@ -176,7 +177,15 @@ async function fetchVersionArtifactIdsByIds(
             lookupParams,
             systemUser
         );
-        if (res?.Success && Array.isArray(res.Results)) {
+        if (!res?.Success) {
+            LogError(
+                `ArtifactVersionPostRunViewHook failed hydrating ArtifactID for narrow Fields projection: ${
+                    res?.ErrorMessage || 'RunView returned Success=false'
+                }`
+            );
+            return map;
+        }
+        if (Array.isArray(res.Results)) {
             for (const item of res.Results) {
                 if (item.ID && item.ArtifactID) {
                     map.set(NormalizeUUID(item.ID), item.ArtifactID);
@@ -208,6 +217,8 @@ function stripSyntheticArtifactId(row: unknown): unknown {
 /**
  * Server-side `PreRunView` data hook ensuring `ArtifactID` is included prior to column projection
  * when a non-system caller queries `MJ: Artifact Versions` with a narrow `Fields` list (`B3`).
+ * Mutates `params` in place so `ProviderBase.RunView` (`TrustLocalCacheCompletely === true`) carries
+ * the widened `Fields` into `InternalRunView` and `PostRunView` without poisoning `LocalCacheManager`.
  * Any synthetically added `ArtifactID` is stripped in {@link ArtifactVersionPostRunViewHook}
  * before returning to the caller so the caller's projected shape is preserved.
  */
@@ -229,12 +240,8 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
         params.Fields.length > 0 &&
         !hasFieldIgnoreCase(params.Fields, 'ArtifactID')
     ) {
-        const augmented: RunViewParams = {
-            ...params,
-            Fields: [...params.Fields, 'ArtifactID']
-        };
-        SYNTHETIC_ARTIFACT_ID_PARAMS.add(augmented);
-        return augmented;
+        ORIGINAL_CALLER_FIELDS_BY_PARAMS.set(params, [...params.Fields]);
+        params.Fields = [...params.Fields, 'ArtifactID'];
     }
     return params;
 };
@@ -256,19 +263,24 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
-    const shouldStripSyntheticArtifactId = SYNTHETIC_ARTIFACT_ID_PARAMS.has(params);
+    const shouldStripSyntheticArtifactId = ORIGINAL_CALLER_FIELDS_BY_PARAMS.has(params);
 
     if (isServerSystemUser(contextUser)) {
         return results;
     }
 
     if (!contextUser) {
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
+        // Client-side providers (e.g. GraphQLDataProvider in hybrid Node processes) invoke
+        // PostRunView hooks with contextUser === undefined after MJServer has already enforced
+        // server-side CanRead (`DSLC2`).DatabaseProviderBase always rejects missing contextUser
+        // in CheckUserReadPermissions before PostRunView ever executes.
+        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: results.Results.map(stripSyntheticArtifactId)
+            };
+        }
+        return results;
     }
 
     const provider = resolveMetadataProvider(undefined, contextUser);
@@ -318,33 +330,28 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
             }
         }
         if (!artifactId) {
-            // Unclassifiable projection (no ArtifactID, no single-artifact filter, and no resolvable ID):
-            // keep rather than silently emptying narrow read projections (`B3`).
-            keptRows.push(shouldStripSyntheticArtifactId ? stripSyntheticArtifactId(row) : row);
+            // Fail CLOSED on unclassifiable rows (no ArtifactID, no single-artifact filter, and no resolvable ID).
             continue;
         }
         const normId = NormalizeUUID(artifactId);
         let allowed = readAllowedByArtifact.get(normId);
         if (allowed === undefined) {
-            const reentrancyKey = `${NormalizeUUID(contextUser.ID)}:${normId}`;
-            if (IN_FLIGHT_VERSION_PERMISSION_KEYS.has(reentrancyKey)) {
-                // Re-entrant lookup while `ResolvePermissions` is already evaluating this `(user, artifact)`:
-                // allow the internal membership probe without infinite recursion (`B3`).
-                allowed = true;
-            } else {
-                IN_FLIGHT_VERSION_PERMISSION_KEYS.add(reentrancyKey);
-                try {
-                    const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                        provider,
-                        artifactId,
-                        contextUser
-                    );
-                    allowed = perms.CanRead;
-                } finally {
-                    IN_FLIGHT_VERSION_PERMISSION_KEYS.delete(reentrancyKey);
-                }
-                readAllowedByArtifact.set(normId, allowed);
+            try {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    artifactId,
+                    contextUser
+                );
+                allowed = perms.CanRead;
+            } catch (error) {
+                LogError(
+                    `ArtifactVersionPostRunViewHook failed resolving CanRead for artifact ${artifactId}: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                );
+                allowed = false;
             }
+            readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
             keptRows.push(shouldStripSyntheticArtifactId ? stripSyntheticArtifactId(row) : row);
@@ -399,6 +406,18 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
      */
     public get Attributes(): MJArtifactVersionAttributeEntity[] {
         return this._loadedAttributes || [];
+    }
+
+    /**
+     * Overrides generated `MJArtifactVersionEntity.Load(ID)` (which calls `super.InnerLoad` directly)
+     * so single-record `entity.Load(ID)` routes through {@link InnerLoad} and enforces `CanRead`.
+     */
+    public override async Load(
+        ID: string,
+        EntityRelationshipsToLoad?: string[]
+    ): Promise<boolean> {
+        const key = CompositeKey.FromID(ID); // first-pk-ok: 'MJ: Artifact Versions' has the single key ID
+        return this.InnerLoad(key, EntityRelationshipsToLoad);
     }
 
     /**

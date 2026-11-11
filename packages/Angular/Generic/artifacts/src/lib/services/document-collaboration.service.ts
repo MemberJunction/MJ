@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Subject, Observable } from 'rxjs';
+import { BehaviorSubject, Subject, Observable } from 'rxjs';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
@@ -109,6 +109,7 @@ const EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION = `
     $agentMode: String!
     $commentBody: String!
     $anchorQuote: String
+    $conversationId: String
   ) {
     ExecuteAnchoredCommentAgentMention(
       artifactId: $artifactId
@@ -116,6 +117,7 @@ const EXECUTE_ANCHORED_COMMENT_AGENT_MENTION_MUTATION = `
       agentMode: $agentMode
       commentBody: $commentBody
       anchorQuote: $anchorQuote
+      conversationId: $conversationId
     ) {
       Success
       AgentHandle
@@ -251,6 +253,7 @@ export interface ResolvedCollaborationEndpoint {
   CanEdit?: boolean;
   HasBackend?: boolean;
   LiveSyncUnavailable?: boolean;
+  LiveSyncErrorReason?: string;
 }
 
 function isGraphQLCollaborationProvider(
@@ -484,6 +487,7 @@ export class DocumentCollaborationSession {
   private seededInDoc = false;
   private hasCompletedInitialSync = false;
   private liveSyncUnavailable = false;
+  private liveSyncErrorReason = '';
   private lastSyncedRemoteContent = '';
   private hasUnsentLocalEdits = false;
   private docUpdateHandler:
@@ -505,6 +509,7 @@ export class DocumentCollaborationSession {
   private readonly statusChanged$ = new Subject<CollaborationConnectionStatus>();
   private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
+  private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
 
   public get YDoc(): Y.Doc {
     return this.Doc;
@@ -522,12 +527,29 @@ export class DocumentCollaborationSession {
     return this.liveSyncUnavailable;
   }
 
+  public get IsLiveSyncUnavailable(): boolean {
+    return this.liveSyncUnavailable;
+  }
+
+  public get LiveSyncErrorReason(): string {
+    return this.liveSyncErrorReason;
+  }
+
+  public get OnLiveSyncUnavailable$(): Observable<boolean> {
+    return this.liveSyncUnavailable$.asObservable();
+  }
+
   /**
-   * True only when the user has edit permission AND (either the session is local-only
-   * or the initial `syncStep2` handshake from `/collaboration/yjs` has completed).
+   * True only when live sync is not degraded/unavailable, the user has edit permission,
+   * AND (either the session is local-only or the initial `syncStep2` handshake from
+   * `/collaboration/yjs` has completed).
    */
   public get CanMutateDocument(): boolean {
-    return this.canEdit && (this.transport === 'local-only' || this.hasCompletedInitialSync);
+    return (
+      !this.liveSyncUnavailable &&
+      this.canEdit &&
+      (this.transport === 'local-only' || this.hasCompletedInitialSync)
+    );
   }
 
   public get ContentChanged$(): Observable<string> {
@@ -680,7 +702,7 @@ export class DocumentCollaborationSession {
         ) {
           this.seededInDoc = true;
           this.hasCompletedInitialSync = true;
-          this.liveSyncUnavailable = false;
+          this.setLiveSyncUnavailable(false);
         }
       } else if (origin !== 'init') {
         const sent = this.sendYjsUpdate(update);
@@ -756,7 +778,10 @@ export class DocumentCollaborationSession {
     }
 
     this.hasCompletedInitialSync = true;
-    this.liveSyncUnavailable = false;
+    this.setLiveSyncUnavailable(false);
+    if (this.status === 'readonly' && this.canEdit) {
+      this.status = 'local';
+    }
     this.hasUnsentLocalEdits = false;
     const resetBaseline = this.GetContent();
     this.lastSyncedRemoteContent = resetBaseline;
@@ -875,8 +900,7 @@ export class DocumentCollaborationSession {
         }
         if (resolved.Mode === 'local' || !resolved.WsUrl) {
           if (resolved.LiveSyncUnavailable === true) {
-            this.liveSyncUnavailable = true;
-            this.canEdit = false;
+            this.setLiveSyncUnavailable(true, resolved.LiveSyncErrorReason ?? '');
             this.clearReconnectTimer();
             this.setStatus('readonly');
             return;
@@ -919,7 +943,7 @@ export class DocumentCollaborationSession {
           return;
         }
         this.reconnectAttempts = 0;
-        this.liveSyncUnavailable = false;
+        this.setLiveSyncUnavailable(false);
         this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
 
@@ -1340,6 +1364,7 @@ export class DocumentCollaborationSession {
     this.statusChanged$.complete();
     this.collaboratorsChanged$.complete();
     this.versionSaved$.complete();
+    this.liveSyncUnavailable$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
   }
@@ -1368,7 +1393,7 @@ export class DocumentCollaborationSession {
       }
       if (syncMsgType === syncProtocol.messageYjsSyncStep2) {
         this.hasCompletedInitialSync = true;
-        this.liveSyncUnavailable = false;
+        this.setLiveSyncUnavailable(false);
         this.overrideSeedContent = null;
         if (
           this.transport === 'local-only' &&
@@ -1455,7 +1480,7 @@ export class DocumentCollaborationSession {
     }
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       if (this.transport === 'websocket' && !this.hasCompletedInitialSync) {
-        this.liveSyncUnavailable = true;
+        this.setLiveSyncUnavailable(true, 'Maximum collaboration reconnect attempts reached.');
       }
       this.statusChanged$.next(this.status);
       return;
@@ -1477,6 +1502,14 @@ export class DocumentCollaborationSession {
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+  }
+
+  private setLiveSyncUnavailable(unavailable: boolean, reason = ''): void {
+    this.liveSyncUnavailable = unavailable;
+    this.liveSyncErrorReason = unavailable ? reason : '';
+    if (!this.destroyed && this.liveSyncUnavailable$.value !== unavailable) {
+      this.liveSyncUnavailable$.next(unavailable);
     }
   }
 
@@ -2028,7 +2061,13 @@ export class DocumentCollaborationService {
         });
         const ticketData = gqlRes?.MintArtifactCollaborationTicket;
         if (!ticketData) {
-          return { Mode: 'local', WsUrl: '', HasBackend: true };
+          return {
+            Mode: 'local',
+            WsUrl: '',
+            HasBackend: true,
+            LiveSyncUnavailable: true,
+            LiveSyncErrorReason: 'Collaboration ticket payload missing.',
+          };
         }
         if (ticketData.CanRead === false) {
           return { Mode: 'revoked', WsUrl: '', CanEdit: false, HasBackend: true };
@@ -2037,9 +2076,10 @@ export class DocumentCollaborationService {
           return {
             Mode: 'local',
             WsUrl: '',
-            CanEdit: false,
+            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
             HasBackend: true,
             LiveSyncUnavailable: true,
+            LiveSyncErrorReason: ticketData.ErrorMessage || 'Live collaboration is unavailable.',
           };
         }
         const explicitTicketWsUrl = (ticketData.wsUrl ?? ticketData.WsUrl ?? '').trim();
@@ -2057,9 +2097,10 @@ export class DocumentCollaborationService {
           return {
             Mode: 'local',
             WsUrl: '',
-            CanEdit: false,
+            CanEdit: typeof ticketData.CanEdit === 'boolean' ? ticketData.CanEdit : undefined,
             HasBackend: true,
             LiveSyncUnavailable: true,
+            LiveSyncErrorReason: 'Unable to resolve collaboration WebSocket URL.',
           };
         }
         return {
@@ -2070,7 +2111,14 @@ export class DocumentCollaborationService {
         };
       } catch (err) {
         LogError(err);
-        return { Mode: 'local', WsUrl: '', HasBackend: true };
+        const reason = err instanceof Error ? err.message : String(err);
+        return {
+          Mode: 'local',
+          WsUrl: '',
+          HasBackend: true,
+          LiveSyncUnavailable: true,
+          LiveSyncErrorReason: reason,
+        };
       }
     }
 
@@ -2595,6 +2643,7 @@ export class DocumentCollaborationService {
     commentBody: string,
     anchorQuote?: string,
     providerOverride?: IMetadataProvider | null,
+    conversationId?: string,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -2615,6 +2664,7 @@ export class DocumentCollaborationService {
         agentMode,
         commentBody,
         anchorQuote: anchorQuote ?? null,
+        conversationId: conversationId ?? null,
       });
       const payload = gqlRes?.ExecuteAnchoredCommentAgentMention;
       if (!payload) {
@@ -2654,6 +2704,7 @@ export class DocumentCollaborationService {
     commentBody: string,
     anchorQuote?: string,
     providerOverride?: IMetadataProvider | null,
+    conversationId?: string,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -2671,6 +2722,7 @@ export class DocumentCollaborationService {
       commentBody,
       anchorQuote,
       providerOverride,
+      conversationId,
     );
     return {
       ...res,

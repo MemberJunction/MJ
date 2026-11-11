@@ -2275,6 +2275,7 @@ export class SpreadsheetArtifactViewerComponent
 
   private readonly subs: Subscription[] = [];
   private permissionsUnsubscribe: (() => void) | null = null;
+  private liveSyncUnavailable = false;
 
   public get HasUnsavedChanges(): boolean {
     if (!this.lastSavedComparableJson) {
@@ -2353,11 +2354,11 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get LiveSyncUnavailable(): boolean {
-    return Boolean(this.CollaborationSession?.LiveSyncUnavailable);
+    return this.liveSyncUnavailable || Boolean(this.CollaborationSession?.IsLiveSyncUnavailable);
   }
 
   public get CanEdit(): boolean {
-    return this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
   }
 
   public get CanComment(): boolean {
@@ -2448,6 +2449,7 @@ export class SpreadsheetArtifactViewerComponent
       this.CollaborationSession.Destroy();
       this.CollaborationSession = null;
     }
+    this.liveSyncUnavailable = false;
   }
 
   private notifyError(message: string): void {
@@ -2614,12 +2616,23 @@ export class SpreadsheetArtifactViewerComponent
       hasRemoteBackend,
     );
     this.CollaborationSession = session;
+    this.liveSyncUnavailable = Boolean(session.IsLiveSyncUnavailable);
     if (this.ConnectionStatus !== 'revoked' && this.ConnectionStatus !== 'readonly') {
       this.ConnectionStatus = session.Status;
     }
     this.Collaborators = session.GetCollaborators();
 
     this.subs.push(
+      session.OnLiveSyncUnavailable$.subscribe((unavailable: boolean) => {
+        if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        const changed = this.liveSyncUnavailable !== unavailable;
+        this.liveSyncUnavailable = unavailable;
+        if (changed) {
+          this.cdr.detectChanges();
+        } else {
+          this.cdr.markForCheck();
+        }
+      }),
       session.ContentChanged$.subscribe((nextContent: string) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         if (!nextContent || !nextContent.trim().startsWith('{')) return;

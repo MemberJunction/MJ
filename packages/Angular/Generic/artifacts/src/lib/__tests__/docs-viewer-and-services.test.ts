@@ -19,6 +19,7 @@ import { DocumentCollaborationService } from '../services/document-collaboration
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import { SlideDeckExportService } from '../services/slide-deck-export.service';
 import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
+import { SlideDeckArtifactViewerComponent } from '../components/plugins/slide-deck-artifact-viewer.component';
 import { SpreadsheetArtifactViewerComponent } from '../components/plugins/spreadsheet-artifact-viewer.component';
 import type { MammothModuleShim } from '../components/previews/office-preview.logic';
 
@@ -665,6 +666,454 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
 
     engineFreezeSpy.mockRestore();
     sheetViewer.ngOnDestroy();
+  });
+
+  it('R5-6 (Suggest mode): splices ProposedReplacement in place of anchorQuote inside a multi-sentence paragraph and preserves surrounding sentences on AcceptSuggestion', async () => {
+    const collabService = new DocumentCollaborationService();
+    vi.spyOn(collabService, 'DispatchAnchoredCommentAgentMention').mockResolvedValue({
+      HandledByServer: true,
+      Success: true,
+      ReplyBody: 'Refined the middle phrase.',
+      UpdatedContent: 'Improved phrase.',
+    });
+
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+      ],
+    });
+
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.HasEditPermission = true;
+    const paragraph = 'First sentence. Target phrase here. Third sentence.';
+    viewer.OnMarkdownChanged(paragraph, true);
+
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: '11111111-1111-4111-8111-111111111112', enumerable: true },
+      ArtifactID: { value: '22222222-2222-4222-8222-222222222223', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      Content: { value: paragraph, enumerable: true },
+    });
+    viewer.artifactVersion = ver;
+    Reflect.set(viewer, 'persistAnchoredThreadToServer', async () => true);
+
+    const seg = viewer.DocumentSegments[0];
+    viewer.OpenAnchorCommentForSegment(seg, 'Target phrase here.');
+    expect(viewer.SelectedAnchorQuote).toBe('Target phrase here.');
+
+    viewer.NewCommentAgentMode = 'suggest';
+    viewer.NewCommentText = '@DocsAgent improve this phrase';
+    await viewer.PostAnchoredComment();
+
+    expect(viewer.Suggestions).toHaveLength(1);
+    expect(viewer.Suggestions[0].OriginalMarkdown).toBe(
+      'First sentence. Target phrase here. Third sentence.',
+    );
+    expect(viewer.Suggestions[0].ProposedMarkdown).toBe(
+      'First sentence. Improved phrase. Third sentence.',
+    );
+
+    viewer.AcceptSuggestion(viewer.Suggestions[0]);
+    expect(viewer.MarkdownContent).toBe('First sentence. Improved phrase. Third sentence.');
+    viewer.ngOnDestroy();
+  });
+
+  it('R5-6 (Edit mode): does not clobber concurrent local edits in Y.Text / MarkdownContent on live WebSocket sessions and merges concurrent edits on non-WS sessions', async () => {
+    const originalWebSocket = globalThis.WebSocket;
+    class LiveFakeWebSocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+      public static instances: LiveFakeWebSocket[] = [];
+
+      public url: string;
+      public readyState = LiveFakeWebSocket.CONNECTING;
+      public binaryType = 'blob';
+      public sentFrames: Uint8Array[] = [];
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        LiveFakeWebSocket.instances.push(this);
+      }
+
+      public send(data: Uint8Array): void {
+        this.sentFrames.push(data);
+      }
+
+      public close(): void {
+        this.readyState = LiveFakeWebSocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'WebSocket', LiveFakeWebSocket);
+    try {
+      const collabService = new DocumentCollaborationService();
+      let resolveMention:
+        | ((val: {
+            HandledByServer: boolean;
+            Success: boolean;
+            ReplyBody: string;
+            UpdatedContent: string;
+            VersionNumber: number;
+          }) => void)
+        | null = null;
+      vi.spyOn(collabService, 'DispatchAnchoredCommentAgentMention').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveMention = resolve;
+          }),
+      );
+
+      const injector = Injector.create({
+        providers: [
+          { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+          { provide: DocumentCollaborationService, useValue: collabService },
+          { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+          { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+        ],
+      });
+
+      const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+      const initialDoc = 'First sentence. Target phrase here. Third sentence.';
+      const mockUser = Object.create(null) as UserInfo;
+      Object.assign(mockUser, { ID: 'u-editor-1', Name: 'Alice Editor', Email: 'alice@example.com' });
+      const wsProvider = Object.create(null) as IMetadataProvider;
+      Object.assign(wsProvider, {
+        CurrentUser: mockUser,
+        ConfigData: { URL: 'http://localhost:4000/graphql' },
+        ExecuteGQL: async () => ({
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: 'tkt_live_edit_1',
+            WsPath: '/collaboration/yjs',
+            CanRead: true,
+            CanEdit: true,
+          },
+        }),
+      });
+      viewer.Provider = wsProvider;
+      viewer.readonly = false;
+      viewer.HasEditPermission = true;
+      viewer.ViewMode = 'edit';
+      viewer.OnMarkdownChanged(initialDoc, true);
+
+      const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+      Object.defineProperties(ver, {
+        ID: { value: '66666666-6666-4666-8666-666666666661', enumerable: true },
+        ArtifactID: { value: '77777777-7777-4777-8777-777777777771', enumerable: true },
+        VersionNumber: { value: 1, enumerable: true },
+        Content: { value: initialDoc, enumerable: true },
+      });
+      viewer.artifactVersion = ver;
+      Reflect.set(viewer, 'persistAnchoredThreadToServer', async () => true);
+      Reflect.apply(
+        Reflect.get(viewer, 'setupCollaborationSession') as () => void,
+        viewer,
+        [],
+      );
+
+      // Flush async ticket resolution so WebSocket opens and completes SyncStep2
+      await new Promise((r) => setTimeout(r, 0));
+      expect(viewer.CollaborationSession?.Transport).toBe('websocket');
+      expect(LiveFakeWebSocket.instances).toHaveLength(1);
+      const ws = LiveFakeWebSocket.instances[0];
+      ws.readyState = LiveFakeWebSocket.OPEN;
+      ws.onopen?.();
+
+      const serverDoc = new Y.Doc();
+      serverDoc.getText('content').insert(0, initialDoc);
+      const step2Enc = encoding.createEncoder();
+      encoding.writeVarUint(step2Enc, 0);
+      syncProtocol.writeSyncStep2(step2Enc, serverDoc);
+      ws.onmessage?.({ data: encoding.toUint8Array(step2Enc).buffer } as MessageEvent);
+      expect(viewer.CollaborationSession?.HasCompletedInitialSync).toBe(true);
+
+      // Start @mention in edit mode
+      viewer.OpenAnchorCommentForSegment(viewer.DocumentSegments[0], 'Target phrase here.');
+      viewer.NewCommentAgentMode = 'edit';
+      viewer.NewCommentText = '@DocsAgent improve phrase';
+      const mentionPromise = viewer.PostAnchoredComment();
+      await new Promise((r) => setTimeout(r, 0));
+
+      // User types a concurrent edit locally BEFORE the HTTP @mention resolves!
+      const withConcurrentUserTyping =
+        'First sentence. Target phrase here. Third sentence. User typed concurrently!';
+      viewer.OnMarkdownChanged(withConcurrentUserTyping, false);
+      expect(viewer.CollaborationSession?.YDoc.getText('content').toString()).toBe(
+        withConcurrentUserTyping,
+      );
+
+      // Propagate client's concurrent Yjs update to serverDoc (as happens over the live WS)
+      const clientFrame = ws.sentFrames[ws.sentFrames.length - 1];
+      const clientDec = decoding.createDecoder(clientFrame);
+      decoding.readVarUint(clientDec);
+      const replyEnc = encoding.createEncoder();
+      syncProtocol.readSyncMessage(clientDec, replyEnc, serverDoc, 'client');
+
+      const onMdSpy = vi.spyOn(viewer, 'OnMarkdownChanged');
+
+      // Now HTTP @mention resolves with server's snapshot (which did NOT yet contain or could differ from client snapshot)
+      resolveMention?.({
+        HandledByServer: true,
+        Success: true,
+        ReplyBody: 'Updated target phrase.',
+        UpdatedContent: 'First sentence. Improved phrase. Third sentence.',
+        VersionNumber: 2,
+      });
+      await mentionPromise;
+
+      // Crucial assertion: HTTP resolution MUST NOT call OnMarkdownChanged(..., true) to overwrite concurrent local typing!
+      expect(onMdSpy).not.toHaveBeenCalled();
+      expect(viewer.MarkdownContent).toBe(withConcurrentUserTyping);
+      expect(viewer.CollaborationSession?.YDoc.getText('content').toString()).toBe(
+        withConcurrentUserTyping,
+      );
+
+      // When server broadcasts its Yjs surgical delta (replacing 'Target phrase here.' -> 'Improved phrase.'),
+      // both edits merge cleanly without losing the user's concurrent typing!
+      let serverDelta = new Uint8Array(0);
+      serverDoc.on('update', (u: Uint8Array) => {
+        serverDelta = u;
+      });
+      const yText = serverDoc.getText('content');
+      const targetIdx = yText.toString().indexOf('Target phrase here.');
+      serverDoc.transact(() => {
+        yText.delete(targetIdx, 'Target phrase here.'.length);
+        yText.insert(targetIdx, 'Improved phrase.');
+      }, 'server-mention');
+
+      const updateFrameEnc = encoding.createEncoder();
+      encoding.writeVarUint(updateFrameEnc, 0);
+      syncProtocol.writeUpdate(updateFrameEnc, serverDelta);
+      ws.onmessage?.({ data: encoding.toUint8Array(updateFrameEnc).buffer } as MessageEvent);
+
+      expect(viewer.MarkdownContent).toBe(
+        'First sentence. Improved phrase. Third sentence. User typed concurrently!',
+      );
+      viewer.ngOnDestroy();
+
+      // Also verify non-WebSocket (local-only) concurrent edit merges instead of blindly overwriting
+      const localViewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+      let resolveLocalMention:
+        | ((val: {
+            HandledByServer: boolean;
+            Success: boolean;
+            ReplyBody: string;
+            UpdatedContent: string;
+          }) => void)
+        | null = null;
+      vi.spyOn(collabService, 'DispatchAnchoredCommentAgentMention').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLocalMention = resolve;
+          }),
+      );
+      localViewer.readonly = false;
+      localViewer.HasEditPermission = true;
+      localViewer.ViewMode = 'edit';
+      localViewer.OnMarkdownChanged(initialDoc, true);
+      localViewer.artifactVersion = ver;
+      Reflect.set(localViewer, 'persistAnchoredThreadToServer', async () => true);
+
+      localViewer.OpenAnchorCommentForSegment(localViewer.DocumentSegments[0], 'Target phrase here.');
+      localViewer.NewCommentAgentMode = 'edit';
+      localViewer.NewCommentText = '@DocsAgent improve phrase';
+      const localPromise = localViewer.PostAnchoredComment();
+      await new Promise((r) => setTimeout(r, 0));
+
+      // Concurrent edit while non-WS HTTP mention is in flight
+      localViewer.OnMarkdownChanged(
+        'First sentence. Target phrase here. Third sentence. Local note added.',
+        false,
+      );
+      resolveLocalMention?.({
+        HandledByServer: true,
+        Success: true,
+        ReplyBody: 'Applied replacement.',
+        UpdatedContent: 'First sentence. Improved phrase. Third sentence.',
+      });
+      await localPromise;
+
+      expect(localViewer.MarkdownContent).toBe(
+        'First sentence. Improved phrase. Third sentence. Local note added.',
+      );
+      localViewer.ngOnDestroy();
+    } finally {
+      Reflect.set(globalThis, 'WebSocket', originalWebSocket);
+    }
+  });
+
+  it('R5-7 (Viewers): sets LiveSyncUnavailable === true across Markdown, SlideDeck, and Spreadsheet viewers when MintArtifactCollaborationTicket throws or returns Success=false', async () => {
+    const scenarios: Array<{
+      name: string;
+      executeGql: (query: string) => Promise<Record<string, object>>;
+    }> = [
+      {
+        name: 'missing HMAC secret throw',
+        executeGql: async (query: string) => {
+          if (query.includes('ResolveArtifactPermissions')) {
+            return {
+              ResolveArtifactPermissions: {
+                ArtifactID: '88888888-8888-4888-8888-888888888888',
+                CanRead: true,
+                CanEdit: true,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Owner',
+              },
+            };
+          }
+          throw new Error('MJ_ARTIFACT_COLLAB_HMAC_SECRET is not configured');
+        },
+      },
+      {
+        name: 'Success=false with CanRead=true payload',
+        executeGql: async (query: string) => {
+          if (query.includes('ResolveArtifactPermissions')) {
+            return {
+              ResolveArtifactPermissions: {
+                ArtifactID: '88888888-8888-4888-8888-888888888888',
+                CanRead: true,
+                CanEdit: true,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'Owner',
+              },
+            };
+          }
+          return {
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              CanRead: true,
+              CanEdit: true,
+              ErrorMessage: 'Live collaboration is unavailable',
+            },
+          };
+        },
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const collabService = new DocumentCollaborationService();
+      const detectChangesSpy = vi.fn();
+      const injector = Injector.create({
+        providers: [
+          {
+            provide: ChangeDetectorRef,
+            useValue: { markForCheck: () => {}, detectChanges: detectChangesSpy },
+          },
+          { provide: DocumentCollaborationService, useValue: collabService },
+          { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+          { provide: SlideDeckExportService, useValue: new SlideDeckExportService() },
+          { provide: ArtifactFileService, useValue: null },
+          { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+        ],
+      });
+
+      const mockUser = Object.create(null) as UserInfo;
+      Object.assign(mockUser, {
+        ID: '99999999-9999-4999-8999-999999999999',
+        Name: 'Alice',
+        Email: 'alice@example.com',
+      });
+      const provider = Object.create(null) as IMetadataProvider;
+      Object.assign(provider, {
+        CurrentUser: mockUser,
+        Entities: [],
+        ConfigData: { URL: 'https://example.com/graphql' },
+        ExecuteGQL: scenario.executeGql,
+      });
+
+      // 1. MarkdownArtifactViewerComponent
+      const mdViewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+      mdViewer.Provider = provider;
+      mdViewer.readonly = false;
+      mdViewer.HasEditPermission = true;
+      const mdVer = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+      Object.defineProperties(mdVer, {
+        ID: { value: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', enumerable: true },
+        ArtifactID: { value: '88888888-8888-4888-8888-888888888888', enumerable: true },
+        VersionNumber: { value: 1, enumerable: true },
+        Content: { value: '# Live Sync Check', enumerable: true },
+      });
+      mdViewer.artifactVersion = mdVer;
+      Reflect.apply(
+        Reflect.get(mdViewer, 'setupCollaborationSession') as () => void,
+        mdViewer,
+        [],
+      );
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mdViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(mdViewer.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(mdViewer.CanUserEdit, scenario.name).toBe(false);
+      mdViewer.ngOnDestroy();
+
+      // 2. SlideDeckArtifactViewerComponent
+      const deckViewer = runInInjectionContext(
+        injector,
+        () => new SlideDeckArtifactViewerComponent(),
+      );
+      deckViewer.Provider = provider;
+      deckViewer.readonly = false;
+      const deckJson = SlideDeckEngine.Instance.SerializeDeckSpec(
+        SlideDeckEngine.Instance.CreateDefaultDeck('Sync Banner Deck'),
+      );
+      Reflect.apply(
+        Reflect.get(deckViewer, 'setupCollaborationSession') as (
+          id: string,
+          content: string,
+        ) => void,
+        deckViewer,
+        ['88888888-8888-4888-8888-888888888888', deckJson],
+      );
+      await new Promise((r) => setTimeout(r, 0));
+      expect(deckViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(deckViewer.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(deckViewer.IsEditable, scenario.name).toBe(false);
+      deckViewer.ngOnDestroy();
+
+      // 3. SpreadsheetArtifactViewerComponent
+      const sheetViewer = runInInjectionContext(
+        injector,
+        () => new SpreadsheetArtifactViewerComponent(),
+      );
+      sheetViewer.Provider = provider;
+      sheetViewer.readonly = false;
+      const wbVer = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+      Object.defineProperties(wbVer, {
+        ID: { value: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', enumerable: true },
+        ArtifactID: { value: '88888888-8888-4888-8888-888888888888', enumerable: true },
+        VersionNumber: { value: 1, enumerable: true },
+        Name: { value: 'Sync Banner Sheet', enumerable: true },
+        Configuration: { value: null, enumerable: true },
+        ContentMode: { value: 'Inline', enumerable: true },
+        Content: {
+          value: SpreadsheetEngine.Instance.SerializeWorkbook(
+            SpreadsheetEngine.Instance.CreateEmptyWorkbook('Sync Banner Sheet'),
+          ),
+          enumerable: true,
+        },
+      });
+      sheetViewer.artifactVersion = wbVer;
+      await (
+        Reflect.get(sheetViewer, 'initializeWorkbookSession') as () => Promise<void>
+      ).call(sheetViewer);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(sheetViewer.CollaborationSession?.IsLiveSyncUnavailable, scenario.name).toBe(true);
+      expect(sheetViewer.LiveSyncUnavailable, scenario.name).toBe(true);
+      expect(sheetViewer.CanEdit, scenario.name).toBe(false);
+      expect(detectChangesSpy).toHaveBeenCalled();
+      sheetViewer.ngOnDestroy();
+    }
   });
 });
 

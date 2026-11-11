@@ -117,7 +117,16 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
     AssertEqual(workingStatesEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States must have AllowDeleteAPI=false');
     AssertEqual(workingStatesEnt!.AllowAllRowsAPI, false, 'MJ: Artifact Working States must have AllowAllRowsAPI=false (B1)');
     AssertEqual(workingStatesEnt!.AllowUserSearchAPI, false, 'MJ: Artifact Working States must have AllowUserSearchAPI=false (B1)');
-    AssertEqual(workingStatesEnt!.Permissions.length, 0, 'MJ: Artifact Working States must have zero EntityPermission rows across all roles');
+    const wsUiPerm = workingStatesEnt!.Permissions.find((p) => p.Role === 'UI');
+    AssertEqual(wsUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
+    for (const perm of workingStatesEnt!.Permissions) {
+        if (perm.CanRead) {
+            Assert(
+                perm.Role === 'Developer' || perm.Role === 'Integration',
+                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${perm.Role}')`,
+            );
+        }
+    }
 
     const wsFields = new Set(workingStatesEnt!.Fields.map((f) => f.Name));
     for (const reqField of ['ID', 'ArtifactID', 'YjsState', 'LastModifiedByUserID', 'Artifact', 'LastModifiedByUser']) {
@@ -343,7 +352,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         // 1. Verify CK_Artifact_DelegateBinding rejects half-populated delegation
         const invalidDelegated = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         invalidDelegated.NewRecord();
-        invalidDelegated.Name = `__IT164_InvalidDelegate_${suffix}`;
+        invalidDelegated.Name = `__IT169_InvalidDelegate_${suffix}`;
         invalidDelegated.TypeID = docTypeId;
         invalidDelegated.UserID = ctx.User.ID;
         invalidDelegated.Visibility = 'Always';
@@ -355,7 +364,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         // 2. Create throwaway parent Document + Version 1
         parentDoc = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         parentDoc.NewRecord();
-        parentDoc.Name = `__IT164_ParentDoc_${suffix}`;
+        parentDoc.Name = `__IT169_ParentDoc_${suffix}`;
         parentDoc.Description = 'Integration test parent document for Yjs working state and OLE delegation';
         parentDoc.TypeID = docTypeId;
         parentDoc.UserID = ctx.User.ID;
@@ -465,7 +474,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
 
         childWhiteboard = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         childWhiteboard.NewRecord();
-        childWhiteboard.Name = `__IT164_ChildWhiteboard_${suffix}`;
+        childWhiteboard.Name = `__IT169_ChildWhiteboard_${suffix}`;
         childWhiteboard.TypeID = wbTypeId;
         childWhiteboard.UserID = ctx.User.ID;
         childWhiteboard.Visibility = 'Always';
@@ -639,7 +648,7 @@ async function checkDsl4DocumentLiveBlocksAndFreeze(ctx: IntegrationCheckContext
 
     // 1. Live EntityView execution against real database MJ: Artifact Types
     const liveSpec: DocumentBlockSpec = {
-        BlockID: 'blk-it164-artifact-types',
+        BlockID: 'blk-it169-artifact-types',
         Kind: 'EntityView',
         Mode: 'Live',
         Title: 'Governed Office Artifact Types',
@@ -693,7 +702,7 @@ async function checkDsl4DocumentLiveBlocksAndFreeze(ctx: IntegrationCheckContext
     const zeroRolesUser = new UserInfo(ctx.Provider, {
         ID: '00000000-0000-0000-0000-000000000098',
         Name: 'No Roles Viewer',
-        Email: 'noroles-it164@example.invalid',
+        Email: 'noroles-it169@example.invalid',
         IsActive: true,
         UserRoles: [],
     });
@@ -791,7 +800,7 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
     engine.ClearViewerFunctionCache();
 
     // 1. Stable-ID formula coordinate shifting & cycle detection
-    const wb = engine.CreateEmptyWorkbook('IT164 Financial Model', ['Model', 'Rates'], 20, 8);
+    const wb = engine.CreateEmptyWorkbook('IT169 Financial Model', ['Model', 'Rates'], 20, 8);
     const modelSheet = wb.Worksheets[0];
     const ratesSheet = wb.Worksheets[1];
 
@@ -839,7 +848,7 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
     const liveWb = engine.CreateEmptyWorkbook('Live Governance Workbook', ['ArtifactTypes'], 25, 10);
     const liveSheet = liveWb.Worksheets[0];
     liveSheet.LiveTables.push({
-        TableID: 'tbl-it164-types',
+        TableID: 'tbl-it169-types',
         Title: 'Office Artifact Types',
         SourceType: 'EntityView',
         EntityName: 'MJ: Artifact Types',
@@ -858,7 +867,7 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
     );
 
     const tableRes = await engine.RefreshLiveTables(liveWb, ctx.User, ctx.Provider);
-    Assert(tableRes['tbl-it164-types']?.Success === true, 'LiveTable against MJ: Artifact Types must succeed');
+    Assert(tableRes['tbl-it169-types']?.Success === true, 'LiveTable against MJ: Artifact Types must succeed');
     AssertEqual(liveSheet.Cells['A1']?.ComputedValue, 'Name', 'LiveTable header A1');
     Assert(liveSheet.Cells['A2']?.ComputedValue !== null, 'LiveTable first data row A2 must populate');
 
@@ -1288,7 +1297,16 @@ async function checkDslc1WorkingStateUnreachableOverGraphQL(ctx: IntegrationChec
     AssertEqual(wsEnt!.AllowCreateAPI, false, 'MJ: Artifact Working States AllowCreateAPI must be false');
     AssertEqual(wsEnt!.AllowUpdateAPI, false, 'MJ: Artifact Working States AllowUpdateAPI must be false');
     AssertEqual(wsEnt!.AllowDeleteAPI, false, 'MJ: Artifact Working States AllowDeleteAPI must be false');
-    AssertEqual(wsEnt!.Permissions.length, 0, 'MJ: Artifact Working States must have zero EntityPermission rows');
+    const wsClientUiPerm = wsEnt!.Permissions.find((p) => p.Role === 'UI');
+    AssertEqual(wsClientUiPerm?.CanRead ?? false, false, 'MJ: Artifact Working States must deny UI role CanRead');
+    for (const perm of wsEnt!.Permissions) {
+        if (perm.CanRead) {
+            Assert(
+                perm.Role === 'Developer' || perm.Role === 'Integration',
+                `Only Developer/Integration roles may hold server-internal permission on MJ: Artifact Working States (found '${perm.Role}')`,
+            );
+        }
+    }
 
     // 1. Create / Update / Delete mutations are omitted from the GraphQL schema entirely (AllowCreate/Update/DeleteAPI=false)
     const createMutationErr = await executeGqlExpectingError(

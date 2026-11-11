@@ -14,6 +14,7 @@ import {
     MJAIAgentRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactPermissionEngine,
     ConversationEngine,
@@ -49,7 +50,7 @@ interface MockArtifactPermissionDraft {
     CanDelete: boolean;
     CanShare: boolean;
     SharedByUserID: string | null;
-    LatestResult: { Message: string } | null;
+    LatestResult: { Message: string; CompleteMessage?: string } | null;
     NewRecord: () => void;
     Save: () => Promise<boolean>;
 }
@@ -101,10 +102,15 @@ interface SimpleMockRunViewProvider {
 
 function asMetadataProvider(mock: SimpleMockRunViewProvider): IMetadataProvider {
     const partial: Partial<IMetadataProvider> = {
+        ProviderType: 'Database',
         Entities: (mock.Entities ?? []) as IMetadataProvider['Entities'],
         GetEntityObject: mock.GetEntityObject as IMetadataProvider['GetEntityObject'],
     };
-    Object.assign(partial, { RunView: mock.RunView });
+    Object.assign(partial, {
+        RunView: mock.RunView,
+        RunViews: async (paramsArray: RunViewParams[]) =>
+            Promise.all(paramsArray.map((p) => mock.RunView(p))),
+    });
     return partial as IMetadataProvider;
 }
 
@@ -737,5 +743,259 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
         expect(gathered).toHaveLength(1);
         expect(gathered[0].name).toBe('Shared Strategy.md');
         expect(gathered[0].artifactId).toBe(READABLE_ARTIFACT_ID);
+    });
+
+    it('grants CanRead on forked artifacts to 3rd-party participants in MJ: Conversation Details and surfaces warning when a grant Save() fails (D3)', async () => {
+        const participantD = createUser('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'Participant Dan', 'dan@example.com');
+        const createdHeaders: MockArtifactHeaderDraft[] = [];
+        const savedVersions: MockArtifactVersionDraft[] = [];
+        const savedPermissions: MockArtifactPermissionDraft[] = [];
+
+        const provider = asMetadataProvider({
+            Entities: [],
+            RunView: async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: SOURCE_ARTIFACT_ID, UserID: userA.ID, DelegateEntityID: null, DelegateRecordID: null }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Conversation Details') {
+                    const filterStr = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                    if (filterStr.includes('ConversationID=')) {
+                        return {
+                            Success: true,
+                            Results: [
+                                { UserID: userA.ID },
+                                { UserID: userB.ID },
+                                { UserID: participantD.ID },
+                                { UserID: participantD.ID }, // duplicate message by Dan — deduplicated!
+                            ],
+                            RowCount: 4,
+                            TotalRowCount: 4,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [{ ID: CONVERSATION_DETAIL_ID, ConversationID: CONVERSATION_ID }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Conversations') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: CONVERSATION_ID, UserID: convOwnerC.ID }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            },
+            GetEntityObject: async (entityName: string) => {
+                if (entityName === 'MJ: Artifacts') {
+                    const hdr: MockArtifactHeaderDraft = {
+                        ID: 'aaaaaaaa-bbbb-4ccc-8ddd-ffffffffffff',
+                        Name: '',
+                        Description: null,
+                        Comments: null,
+                        TypeID: '',
+                        UserID: '',
+                        EnvironmentID: '',
+                        Visibility: 'Always',
+                        LatestResult: null,
+                        NewRecord: () => undefined,
+                        Load: async () => true,
+                        Save: async () => {
+                            if (!createdHeaders.includes(hdr)) {
+                                createdHeaders.push(hdr);
+                            }
+                            return true;
+                        },
+                    };
+                    return hdr;
+                }
+                if (entityName === 'MJ: Artifact Permissions') {
+                    const perm: MockArtifactPermissionDraft = {
+                        ID: `perm-d3-${savedPermissions.length + 1}`,
+                        ArtifactID: '',
+                        UserID: '',
+                        CanRead: false,
+                        CanEdit: false,
+                        CanDelete: false,
+                        CanShare: false,
+                        SharedByUserID: null,
+                        LatestResult: null,
+                        NewRecord: () => undefined,
+                        Save: async () => {
+                            if (UUIDsEqual(perm.UserID, participantD.ID)) {
+                                perm.LatestResult = {
+                                    Message: 'FK violation',
+                                    CompleteMessage: 'Simulated grant failure for participant Dan',
+                                };
+                                return false;
+                            }
+                            savedPermissions.push(perm);
+                            return true;
+                        },
+                    };
+                    return perm;
+                }
+                const ver: MockArtifactVersionDraft = {
+                    ID: 'ffffffff-1111-4222-8333-555555555555',
+                    ArtifactID: '',
+                    VersionNumber: 0,
+                    Content: null,
+                    Comments: null,
+                    Name: null,
+                    Description: null,
+                    UserID: '',
+                    LatestResult: null,
+                    NewRecord: () => undefined,
+                    Save: async () => {
+                        savedVersions.push(ver);
+                        return true;
+                    },
+                };
+                return ver;
+            },
+        });
+
+        const runner = new VettingTestableAgentRunner(provider);
+        await runner.ProcessAgentArtifacts(
+            makeExecuteResult(),
+            CONVERSATION_DETAIL_ID,
+            SOURCE_ARTIFACT_ID,
+            userB,
+            provider
+        );
+
+        // userA and convOwnerC succeeded; participantD failed and surfaced warning in Comments!
+        expect(savedPermissions.map((p) => p.UserID).sort()).toEqual([userA.ID, convOwnerC.ID].sort());
+        expect(savedVersions[0]?.Comments).toContain('Warning:');
+        expect(savedVersions[0]?.Comments).toContain(participantD.ID);
+        expect(createdHeaders[0]?.Comments).toContain(participantD.ID);
+    });
+
+    it('gatherConversationArtifacts skips rows with empty or missing ArtifactID rather than bypassing CanRead (D3)', async () => {
+        vi.spyOn(ConversationEngine, 'BranchPathFilterFresh').mockResolvedValue(`ConversationID='${CONVERSATION_ID}'`);
+        vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params: RunViewParams) => {
+            if (params.EntityName === 'MJ: Conversation Details') {
+                return {
+                    Success: true,
+                    Results: [{ ID: CONVERSATION_DETAIL_ID }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            }
+            if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: 'j-empty', ArtifactVersionID: 'ver-empty-art' },
+                        { ID: 'j-read', ArtifactVersionID: 'ver-readable' },
+                    ],
+                    RowCount: 2,
+                    TotalRowCount: 2,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            }
+            return {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            };
+        });
+
+        vi.spyOn(RunQuery.prototype, 'RunQuery').mockResolvedValue({
+            Success: true,
+            QueryID: 'q-1',
+            QueryName: 'GetArtifactVersionsByID',
+            RowCount: 2,
+            TotalRowCount: 2,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+            Results: [
+                {
+                    VersionID: 'ver-empty-art',
+                    ArtifactID: '   ',
+                    VersionNumber: 1,
+                    VersionName: 'Orphan Secret.md',
+                    ArtifactName: 'Orphan Secret.md',
+                    ContentMode: 'Text',
+                    FileID: null,
+                    Content: '# Must never leak',
+                    MimeType: 'text/markdown',
+                    TypeName: 'Markdown Document',
+                    ToolLibraryClass: 'DocumentToolLibrary',
+                    DefaultDeliveryMode: 'ToolsOnly',
+                    ForceToolsOnly: false,
+                },
+                {
+                    VersionID: 'ver-readable',
+                    ArtifactID: READABLE_ARTIFACT_ID,
+                    VersionNumber: 1,
+                    VersionName: 'Shared Strategy.md',
+                    ArtifactName: 'Shared Strategy.md',
+                    ContentMode: 'Text',
+                    FileID: null,
+                    Content: '# Readable content',
+                    MimeType: 'text/markdown',
+                    TypeName: 'Markdown Document',
+                    ToolLibraryClass: 'DocumentToolLibrary',
+                    DefaultDeliveryMode: 'ToolsOnly',
+                    ForceToolsOnly: false,
+                },
+            ],
+        } as RunQueryResult);
+
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_provider, artifactId) => ({
+                ArtifactID: artifactId,
+                CanRead: UUIDsEqual(artifactId, READABLE_ARTIFACT_ID),
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: 'direct',
+            })
+        );
+
+        const dummyPartial: Partial<IMetadataProvider> = { Entities: [] };
+        const runner = new VettingTestableAgentRunner(dummyPartial as IMetadataProvider);
+        const gathered = await runner.GatherArtifactsForTest(CONVERSATION_ID, userB);
+
+        expect(gathered).toHaveLength(1);
+        expect(gathered[0].name).toBe('Shared Strategy.md');
     });
 });

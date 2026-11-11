@@ -310,4 +310,84 @@ describe('BuildConversationTasksFilter', () => {
     await view.LoadTasks();
     expect(view.LoadError).toBe('Database connection timeout');
   });
+
+  it('uses the 30s per-user TTL cache by default in BuildConversationTasksFilter and caches authorization lookups across 4s polls', async () => {
+    vi.useFakeTimers();
+    try {
+      const queries: RunViewParams[] = [];
+      let authorizationsReadCount = 0;
+      const authSource = Object.create(null) as IMetadataProvider;
+      Object.defineProperties(authSource, {
+        EntityByName: {
+          value: (name: string) => (name === 'MJ: Tasks' ? TASKS : undefined),
+        },
+        RunView: {
+          value: async (params: RunViewParams): Promise<RunViewResult> => {
+            queries.push(params);
+            if (params.EntityName === 'MJ: Conversations') {
+              return makeRunViewResult([{ ID: 'c-poll-1' }]);
+            }
+            return makeRunViewResult([{ ID: 'd-poll-1' }]);
+          },
+        },
+        Authorizations: {
+          get: () => {
+            authorizationsReadCount += 1;
+            return [
+              {
+                ID: 'auth-poll-1',
+                Name: AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION,
+                IsActive: true,
+              },
+            ];
+          },
+        },
+        AuthorizationRoles: {
+          value: [{ AuthorizationID: 'auth-poll-1', RoleID: 'role-ui', Type: 'Allow' }],
+        },
+      });
+
+      const pollUser = Object.create(null) as UserInfo;
+      Object.assign(pollUser, {
+        ID: 'user-poll-1',
+        Type: 'User',
+        UserRoles: [{ Role: 'UI', RoleID: 'role-ui' }],
+      });
+
+      // Simulate 5 sequential 4-second polls (0s, 4s, 8s, 12s, 16s) calling BuildConversationTasksFilter & CanUserViewAllAgentTasks
+      for (let tick = 0; tick < 5; tick++) {
+        if (tick > 0) {
+          vi.advanceTimersByTime(4_000);
+        }
+        const filter = await BuildConversationTasksFilter(authSource, pollUser);
+        expect(filter).toBe(
+          "ParentID IS NULL AND (UserID = 'user-poll-1' OR ConversationDetailID IN ('d-poll-1'))",
+        );
+        expect(CanUserViewAllAgentTasks(pollUser, authSource)).toBe(true);
+      }
+
+      // Within the 30s TTL window, scope DB queries ran ONCE (2 RunViews) and authorization metadata was read ONCE
+      expect(queries.map((q) => q.EntityName)).toEqual([
+        'MJ: Conversations',
+        'MJ: Conversation Details',
+      ]);
+      expect(authorizationsReadCount).toBe(1);
+
+      // Advancing past 30s TTL expires both scope and authorization caches cleanly
+      vi.advanceTimersByTime(20_000);
+      await BuildConversationTasksFilter(authSource, pollUser);
+      expect(CanUserViewAllAgentTasks(pollUser, authSource)).toBe(true);
+      expect(queries).toHaveLength(4);
+      expect(authorizationsReadCount).toBe(2);
+
+      // Explicit InvalidateAgentActivityScopeCache also resets both immediately before TTL expiry
+      InvalidateAgentActivityScopeCache(pollUser.ID);
+      await BuildConversationTasksFilter(authSource, pollUser);
+      expect(CanUserViewAllAgentTasks(pollUser, authSource)).toBe(true);
+      expect(queries).toHaveLength(6);
+      expect(authorizationsReadCount).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

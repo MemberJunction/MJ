@@ -184,6 +184,8 @@ if [ -f "turbo.json" ]; then
 fi
 
 # Sync container environment variables (API keys, encryption key, DB_USER, local dev auth) into workspace .env files
+[ -z "${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-}" ] && unset MJ_ARTIFACT_COLLAB_HMAC_SECRET
+[ -z "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}" ] && unset MJ_FROZEN_BLOCK_HMAC_SECRET
 export MJ_DEV_AUTH_ENABLED="${MJ_DEV_AUTH_ENABLED:-true}"
 node -e "
   const fs = require('fs');

@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, OnDestroy, ViewChild } from '@angular/core';
+import { Component, ViewEncapsulation, ViewChild } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -55,7 +55,7 @@ import {
   `],
   encapsulation: ViewEncapsulation.None
 })
-export class ChatTasksResource extends BaseResourceComponent implements OnDestroy {
+export class ChatTasksResource extends BaseResourceComponent {
   @ViewChild('tasksView') TasksView?: TasksFullViewComponent;
 
   /** @deprecated Use {@link TasksView}. */
@@ -78,9 +78,6 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     this.CurrentUser = value;
   }
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
-  private isLoadingTasks = false;
-  private pendingReload = false;
-  private isDestroyed = false;
 
   /**
    * Default user-scoped `ExtraFilter` for `MJ: Tasks` in Agent Activity. Restricts to the
@@ -107,30 +104,6 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     });
   }
 
-  /**
-   * Coalesces overlapping reload triggers on the hosted Agent Activity view so concurrent timer
-   * ticks and task-graph events never cause overlapping `RunView` storms.
-   */
-  public async LoadTasks(): Promise<void> {
-    if (this.isLoadingTasks) {
-      this.pendingReload = true;
-      return;
-    }
-    if (!this.TasksView) {
-      return;
-    }
-    this.isLoadingTasks = true;
-    try {
-      await this.TasksView.LoadTasks();
-    } finally {
-      this.isLoadingTasks = false;
-      if (this.pendingReload && !this.isDestroyed) {
-        this.pendingReload = false;
-        void this.LoadTasks();
-      }
-    }
-  }
-
   ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
@@ -152,12 +125,6 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
     setTimeout(() => {
       this.NotifyLoadComplete();
     }, 100);
-  }
-
-  ngOnDestroy() {
-    this.isDestroyed = true;
-    this.pendingReload = false;
-    super.ngOnDestroy();
   }
 
   protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {

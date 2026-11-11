@@ -8,6 +8,7 @@ import {
     GetDataHooks,
     IEntityDataProvider,
     IMetadataProvider,
+    LogError,
     Metadata,
     PostRunViewHook,
     PreRunViewHook,
@@ -81,7 +82,7 @@ function readWorkingStateArtifactId(row: unknown): string | null {
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
 }
 
-const SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS = new WeakSet<object>();
+const ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS = new WeakMap<RunViewParams, string[]>();
 
 function stripSyntheticWorkingStateArtifactId(row: unknown): unknown {
     if (!row || typeof row !== 'object' || row instanceof BaseEntity) {
@@ -112,12 +113,8 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
         params.Fields.length > 0 &&
         !params.Fields.some((f) => typeof f === 'string' && f.trim().toLowerCase() === 'artifactid')
     ) {
-        const augmented: RunViewParams = {
-            ...params,
-            Fields: [...params.Fields, 'ArtifactID']
-        };
-        SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS.add(augmented);
-        return augmented;
+        ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS.set(params, [...params.Fields]);
+        params.Fields = [...params.Fields, 'ArtifactID'];
     }
     return params;
 };
@@ -140,19 +137,23 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
-    const shouldStripSyntheticArtifactId = SYNTHETIC_WORKING_STATE_ARTIFACT_ID_PARAMS.has(params);
+    const shouldStripSyntheticArtifactId = ORIGINAL_WORKING_STATE_FIELDS_BY_PARAMS.has(params);
 
     if (isServerSystemUser(contextUser)) {
         return results;
     }
 
     if (!contextUser) {
-        return {
-            ...results,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0
-        };
+        // Client-side providers (e.g. GraphQLDataProvider in hybrid Node processes) invoke
+        // PostRunView hooks with contextUser === undefined after MJServer has already enforced
+        // server-side CanRead (`DSLC2`).
+        if (shouldStripSyntheticArtifactId && Array.isArray(results.Results)) {
+            return {
+                ...results,
+                Results: results.Results.map(stripSyntheticWorkingStateArtifactId)
+            };
+        }
+        return results;
     }
 
     const provider = resolveProviderForUser(contextUser);
@@ -188,12 +189,21 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
         const normId = NormalizeUUID(artifactId);
         let allowed = readAllowedByArtifact.get(normId);
         if (allowed === undefined) {
-            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                provider,
-                artifactId,
-                contextUser
-            );
-            allowed = perms.CanRead;
+            try {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    artifactId,
+                    contextUser
+                );
+                allowed = perms.CanRead;
+            } catch (error) {
+                LogError(
+                    `ArtifactWorkingStatePostRunViewHook failed resolving CanRead for artifact ${artifactId}: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                );
+                allowed = false;
+            }
             readAllowedByArtifact.set(normId, allowed);
         }
         if (allowed) {
@@ -336,8 +346,11 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 throw new Error('ArtifactID is required to save MJ: Artifact Working States.');
             }
             const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
-            const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
-            const view = dbProvider.QuoteSchemaAndView(schema, 'vwArtifactWorkingStates');
+            const entityInfo = this.EntityInfo;
+            const baseTableName = entityInfo?.BaseTable || 'ArtifactWorkingState';
+            const baseViewName = entityInfo?.BaseView || 'vwArtifactWorkingStates';
+            const table = dbProvider.QuoteSchemaAndView(schema, baseTableName);
+            const view = dbProvider.QuoteSchemaAndView(schema, baseViewName);
             const colId = dbProvider.QuoteIdentifier('ID');
             const colArtifactId = dbProvider.QuoteIdentifier('ArtifactID');
             const colYjsState = dbProvider.QuoteIdentifier('YjsState');
@@ -350,7 +363,19 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                     ? this.LastModifiedByUserID
                     : null;
 
-            const probeSql = `SELECT ${colId} FROM ${table} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
+            const extractRowId = (row: Record<string, unknown> | undefined): string => {
+                if (typeof row?.['ID'] === 'string' && row['ID'].trim().length > 0) {
+                    return row['ID'].trim();
+                }
+                if (typeof row?.['id'] === 'string' && row['id'].trim().length > 0) {
+                    return row['id'].trim();
+                }
+                return '';
+            };
+
+            // Always read from BaseView (`vwArtifactWorkingStates`) because SQL Server `cdp_Integration`
+            // holds SELECT on views and EXECUTE on generated sprocs, never raw base-table permissions.
+            const probeSql = `SELECT ${colId} FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
             const existingRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
                 probeSql,
                 [this.ArtifactID],
@@ -358,80 +383,200 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 actor
             );
 
-            const executeUpdate = async (): Promise<void> => {
-                const updateParams: unknown[] = [];
-                const setClauses: string[] = [];
+            let sprocReturnedRows: Record<string, unknown>[] | undefined;
 
-                if (yjsBytes !== null) {
-                    setClauses.push(
-                        `${colYjsState} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
-                    );
-                    updateParams.push(yjsBytes);
-                } else {
-                    setClauses.push(`${colYjsState} = NULL`);
-                }
-
-                if (lastModUserId !== null) {
-                    setClauses.push(
-                        `${colLastModUserId} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
-                    );
-                    updateParams.push(lastModUserId);
-                } else {
-                    setClauses.push(`${colLastModUserId} = NULL`);
-                }
-
-                setClauses.push(
-                    `${colUpdatedAt} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+            if (dbProvider.PlatformKey === 'sqlserver') {
+                const spCreateRef = dbProvider.QuoteSchemaAndView(
+                    schema,
+                    entityInfo?.spCreate || 'spCreateArtifactWorkingState'
                 );
-                updateParams.push(new Date());
+                const spUpdateRef = dbProvider.QuoteSchemaAndView(
+                    schema,
+                    entityInfo?.spUpdate || 'spUpdateArtifactWorkingState'
+                );
 
-                const wherePlaceholder = dbProvider.BuildParameterPlaceholder(updateParams.length);
-                updateParams.push(this.ArtifactID);
+                const executeSqlServerUpdate = async (
+                    targetId: string
+                ): Promise<Record<string, unknown>[]> => {
+                    const updateParams: unknown[] = [targetId, this.ArtifactID];
+                    const argClauses: string[] = [
+                        `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
+                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`
+                    ];
 
-                const updateSql = `UPDATE ${table} SET ${setClauses.join(', ')} WHERE ${colArtifactId} = ${wherePlaceholder}`;
-                await dbProvider.ExecuteSQL(updateSql, updateParams, { isMutation: true }, actor);
-            };
+                    // Never pass JS `null` in positional parameter arrays on SQL Server because Tedious
+                    // binds untyped `null` as NVarChar, which fails conversion to varbinary(max).
+                    if (yjsBytes === null) {
+                        argClauses.push('@YjsState_Clear = 1');
+                    } else {
+                        argClauses.push(
+                            '@YjsState_Clear = 0',
+                            `@YjsState = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                        );
+                        updateParams.push(yjsBytes);
+                    }
 
-            if (existingRows && existingRows.length > 0) {
-                await executeUpdate();
-            } else {
-                const recordId =
-                    this.ID && this.ID.trim().length > 0 ? this.ID : randomUUID();
-                const insertParams: unknown[] = [recordId, this.ArtifactID];
-                const valExprs: string[] = [
-                    dbProvider.BuildParameterPlaceholder(0),
-                    dbProvider.BuildParameterPlaceholder(1)
-                ];
+                    if (lastModUserId === null) {
+                        argClauses.push('@LastModifiedByUserID_Clear = 1');
+                    } else {
+                        argClauses.push(
+                            '@LastModifiedByUserID_Clear = 0',
+                            `@LastModifiedByUserID = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                        );
+                        updateParams.push(lastModUserId);
+                    }
 
-                if (yjsBytes !== null) {
-                    valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
-                    insertParams.push(yjsBytes);
-                } else {
-                    valExprs.push('NULL');
-                }
-
-                if (lastModUserId !== null) {
-                    valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
-                    insertParams.push(lastModUserId);
-                } else {
-                    valExprs.push('NULL');
-                }
-
-                const insertSql = `INSERT INTO ${table} (${colId}, ${colArtifactId}, ${colYjsState}, ${colLastModUserId}) VALUES (${valExprs.join(', ')})`;
-                try {
-                    await dbProvider.ExecuteSQL(
-                        insertSql,
-                        insertParams,
+                    const updateSql = `EXEC ${spUpdateRef} ${argClauses.join(', ')}`;
+                    return dbProvider.ExecuteSQL<Record<string, unknown>>(
+                        updateSql,
+                        updateParams,
                         { isMutation: true },
                         actor
                     );
-                } catch (insertErr) {
-                    const msg =
-                        insertErr instanceof Error ? insertErr.message : String(insertErr);
-                    if (/unique|duplicate|2627|2601|23505|UQ_ArtifactWorkingState_ArtifactID/i.test(msg)) {
-                        await executeUpdate();
+                };
+
+                const executeSqlServerCreate = async (
+                    recordId: string
+                ): Promise<Record<string, unknown>[]> => {
+                    const createParams: unknown[] = [recordId, this.ArtifactID];
+                    const argClauses: string[] = [
+                        `@ID = ${dbProvider.BuildParameterPlaceholder(0)}`,
+                        `@ArtifactID = ${dbProvider.BuildParameterPlaceholder(1)}`
+                    ];
+
+                    if (yjsBytes !== null) {
+                        argClauses.push(
+                            `@YjsState = ${dbProvider.BuildParameterPlaceholder(createParams.length)}`
+                        );
+                        createParams.push(yjsBytes);
+                    }
+
+                    if (lastModUserId !== null) {
+                        argClauses.push(
+                            `@LastModifiedByUserID = ${dbProvider.BuildParameterPlaceholder(createParams.length)}`
+                        );
+                        createParams.push(lastModUserId);
+                    }
+
+                    const createSql = `EXEC ${spCreateRef} ${argClauses.join(', ')}`;
+                    return dbProvider.ExecuteSQL<Record<string, unknown>>(
+                        createSql,
+                        createParams,
+                        { isMutation: true },
+                        actor
+                    );
+                };
+
+                const existingId = extractRowId(existingRows?.[0]);
+                if (existingId) {
+                    sprocReturnedRows = await executeSqlServerUpdate(existingId);
+                } else {
+                    const recordId =
+                        this.ID && this.ID.trim().length > 0 ? this.ID : randomUUID();
+                    try {
+                        sprocReturnedRows = await executeSqlServerCreate(recordId);
+                    } catch (insertErr) {
+                        const msg =
+                            insertErr instanceof Error ? insertErr.message : String(insertErr);
+                        if (
+                            /unique|duplicate|2627|2601|23505|UQ_ArtifactWorkingState_ArtifactID/i.test(
+                                msg
+                            )
+                        ) {
+                            const racedRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                                probeSql,
+                                [this.ArtifactID],
+                                { isMutation: false },
+                                actor
+                            );
+                            const racedId =
+                                extractRowId(racedRows?.[0]) ||
+                                (this.ID && this.ID.trim().length > 0 ? this.ID.trim() : '');
+                            if (!racedId) {
+                                throw insertErr;
+                            }
+                            sprocReturnedRows = await executeSqlServerUpdate(racedId);
+                        } else {
+                            throw insertErr;
+                        }
+                    }
+                }
+            } else {
+                const executePgUpdate = async (): Promise<void> => {
+                    const updateParams: unknown[] = [];
+                    const setClauses: string[] = [];
+
+                    if (yjsBytes !== null) {
+                        setClauses.push(
+                            `${colYjsState} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                        );
+                        updateParams.push(yjsBytes);
                     } else {
-                        throw insertErr;
+                        setClauses.push(`${colYjsState} = NULL`);
+                    }
+
+                    if (lastModUserId !== null) {
+                        setClauses.push(
+                            `${colLastModUserId} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                        );
+                        updateParams.push(lastModUserId);
+                    } else {
+                        setClauses.push(`${colLastModUserId} = NULL`);
+                    }
+
+                    setClauses.push(
+                        `${colUpdatedAt} = ${dbProvider.BuildParameterPlaceholder(updateParams.length)}`
+                    );
+                    updateParams.push(new Date());
+
+                    const wherePlaceholder = dbProvider.BuildParameterPlaceholder(updateParams.length);
+                    updateParams.push(this.ArtifactID);
+
+                    const updateSql = `UPDATE ${table} SET ${setClauses.join(', ')} WHERE ${colArtifactId} = ${wherePlaceholder}`;
+                    await dbProvider.ExecuteSQL(updateSql, updateParams, { isMutation: true }, actor);
+                };
+
+                if (existingRows && existingRows.length > 0) {
+                    await executePgUpdate();
+                } else {
+                    const recordId =
+                        this.ID && this.ID.trim().length > 0 ? this.ID : randomUUID();
+                    const insertParams: unknown[] = [recordId, this.ArtifactID];
+                    const valExprs: string[] = [
+                        dbProvider.BuildParameterPlaceholder(0),
+                        dbProvider.BuildParameterPlaceholder(1)
+                    ];
+
+                    if (yjsBytes !== null) {
+                        valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
+                        insertParams.push(yjsBytes);
+                    } else {
+                        valExprs.push('NULL');
+                    }
+
+                    if (lastModUserId !== null) {
+                        valExprs.push(dbProvider.BuildParameterPlaceholder(insertParams.length));
+                        insertParams.push(lastModUserId);
+                    } else {
+                        valExprs.push('NULL');
+                    }
+
+                    const insertSql = `INSERT INTO ${table} (${colId}, ${colArtifactId}, ${colYjsState}, ${colLastModUserId}) VALUES (${valExprs.join(', ')})`;
+                    try {
+                        await dbProvider.ExecuteSQL(
+                            insertSql,
+                            insertParams,
+                            { isMutation: true },
+                            actor
+                        );
+                    } catch (insertErr) {
+                        const msg =
+                            insertErr instanceof Error ? insertErr.message : String(insertErr);
+                        if (/unique|duplicate|2627|2601|23505|UQ_ArtifactWorkingState_ArtifactID/i.test(msg)) {
+                            await executePgUpdate();
+                        } else {
+                            throw insertErr;
+                        }
                     }
                 }
             }
@@ -443,9 +588,10 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
                 { isMutation: false },
                 actor
             );
-            if (rows && rows.length > 0) {
+            const hydratedRow = rows?.[0] ?? sprocReturnedRows?.[0];
+            if (hydratedRow) {
                 const normalizedRow: Record<string, unknown> = {};
-                for (const [key, value] of Object.entries(rows[0])) {
+                for (const [key, value] of Object.entries(hydratedRow)) {
                     normalizedRow[key] = IsByteArray(value) ? BytesToBase64(value) : value;
                 }
                 await this.LoadFromData(normalizedRow);
@@ -472,30 +618,67 @@ export class MJArtifactWorkingStateEntityServer extends MJArtifactWorkingStateEn
         res.StartedAt = new Date();
         try {
             const schema = dbProvider.ConfigData.MJCoreSchemaName || '__mj';
-            const table = dbProvider.QuoteSchemaAndView(schema, 'ArtifactWorkingState');
+            const entityInfo = this.EntityInfo;
+            const baseTableName = entityInfo?.BaseTable || 'ArtifactWorkingState';
+            const baseViewName = entityInfo?.BaseView || 'vwArtifactWorkingStates';
+            const table = dbProvider.QuoteSchemaAndView(schema, baseTableName);
+            const view = dbProvider.QuoteSchemaAndView(schema, baseViewName);
             const colId = dbProvider.QuoteIdentifier('ID');
             const colArtifactId = dbProvider.QuoteIdentifier('ArtifactID');
-            const predicates: string[] = [];
-            const params: unknown[] = [];
 
-            if (this.ID && this.ID.trim().length > 0) {
-                predicates.push(
-                    `${colId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
+            if (dbProvider.PlatformKey === 'sqlserver') {
+                const spDeleteRef = dbProvider.QuoteSchemaAndView(
+                    schema,
+                    entityInfo?.spDelete || 'spDeleteArtifactWorkingState'
                 );
-                params.push(this.ID);
-            }
-            if (this.ArtifactID && this.ArtifactID.trim().length > 0) {
-                predicates.push(
-                    `${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
-                );
-                params.push(this.ArtifactID);
-            }
-            if (predicates.length === 0) {
-                throw new Error('ID or ArtifactID is required to delete MJ: Artifact Working States.');
+                let targetId = this.ID && this.ID.trim().length > 0 ? this.ID.trim() : '';
+                if (!targetId && this.ArtifactID && this.ArtifactID.trim().length > 0) {
+                    const probeSql = `SELECT ${colId} FROM ${view} WHERE ${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(0)}`;
+                    const probeRows = await dbProvider.ExecuteSQL<Record<string, unknown>>(
+                        probeSql,
+                        [this.ArtifactID],
+                        { isMutation: false },
+                        actor
+                    );
+                    const rawId = probeRows?.[0]?.['ID'] ?? probeRows?.[0]?.['id'];
+                    targetId = typeof rawId === 'string' ? rawId.trim() : '';
+                    if (!targetId) {
+                        this.NewRecord();
+                        res.Success = true;
+                        res.EndedAt = new Date();
+                        this.ResultHistory.push(res);
+                        return true;
+                    }
+                }
+                if (!targetId) {
+                    throw new Error('ID or ArtifactID is required to delete MJ: Artifact Working States.');
+                }
+                const deleteSql = `EXEC ${spDeleteRef} @ID = ${dbProvider.BuildParameterPlaceholder(0)}`;
+                await dbProvider.ExecuteSQL(deleteSql, [targetId], { isMutation: true }, actor);
+            } else {
+                const predicates: string[] = [];
+                const params: unknown[] = [];
+
+                if (this.ID && this.ID.trim().length > 0) {
+                    predicates.push(
+                        `${colId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
+                    );
+                    params.push(this.ID);
+                }
+                if (this.ArtifactID && this.ArtifactID.trim().length > 0) {
+                    predicates.push(
+                        `${colArtifactId} = ${dbProvider.BuildParameterPlaceholder(params.length)}`
+                    );
+                    params.push(this.ArtifactID);
+                }
+                if (predicates.length === 0) {
+                    throw new Error('ID or ArtifactID is required to delete MJ: Artifact Working States.');
+                }
+
+                const sql = `DELETE FROM ${table} WHERE ${predicates.join(' OR ')}`;
+                await dbProvider.ExecuteSQL(sql, params, { isMutation: true }, actor);
             }
 
-            const sql = `DELETE FROM ${table} WHERE ${predicates.join(' OR ')}`;
-            await dbProvider.ExecuteSQL(sql, params, { isMutation: true }, actor);
             this.NewRecord();
             res.Success = true;
             res.EndedAt = new Date();

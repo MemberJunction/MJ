@@ -579,15 +579,15 @@ GO
          [SchemaName],
          [IncludeInAPI],
          [AllowUserSearchAPI],
-         [AllowCaching]
-         , [TrackRecordChanges]
-         , [AuditRecordAccess]
-         , [AuditViewRuns]
-         , [AllowAllRowsAPI]
-         , [AllowCreateAPI]
-         , [AllowUpdateAPI]
-         , [AllowDeleteAPI]
-         , [UserViewMaxRows]
+         [AllowCaching],
+         [TrackRecordChanges],
+         [AuditRecordAccess],
+         [AuditViewRuns],
+         [AllowAllRowsAPI],
+         [AllowCreateAPI],
+         [AllowUpdateAPI],
+         [AllowDeleteAPI],
+         [UserViewMaxRows]
          , [__mj_CreatedAt]
          , [__mj_UpdatedAt]
       )
@@ -601,24 +601,51 @@ GO
          'vwArtifactWorkingStates',
          '${flyway:defaultSchema}',
          1,
+         1,
+         1,
+         1,
          0,
-         0
-         , 0
-         , 0
-         , 0
-         , 0
-         , 0
-         , 0
-         , 0
-         , 1000
+         0,
+         0,
+         1,
+         1,
+         1,
+         1000
          , GETUTCDATE()
          , GETUTCDATE()
       );
 
-/* SQL generated to add new entity MJ: Artifact Working States to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+/* SQL generated to add entity MJ: Artifact Working States to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0ba6990d-dc4f-408e-a748-8f64b3039533', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0ba6990d-dc4f-408e-a748-8f64b3039533', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
+/* SQL generated to add new permission for entity MJ: Artifact Working States for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Artifact Working States for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Artifact Working States for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('0ba6990d-dc4f-408e-a748-8f64b3039533' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ArtifactWorkingState */
 ALTER TABLE [${flyway:defaultSchema}].[ArtifactWorkingState] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -1637,6 +1664,165 @@ LEFT OUTER JOIN
   ON
     [a].[LastModifiedByUserID] = MJUser_LastModifiedByUserID.[ID]
 GO
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_Developer]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_Integration]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_UI]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Artifact Working States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Working States
+-- Item: Permissions for vwArtifactWorkingStates
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_Developer]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_Integration]
+REVOKE SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] FROM [cdp_UI]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifactWorkingStates] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Artifact Working States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Working States
+-- Item: spCreateArtifactWorkingState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ArtifactWorkingState
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateArtifactWorkingState]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateArtifactWorkingState];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateArtifactWorkingState]
+    @ID uniqueidentifier = NULL,
+    @ArtifactID uniqueidentifier,
+    @YjsState_Clear bit = 0,
+    @YjsState varbinary(MAX) = NULL,
+    @LastModifiedByUserID_Clear bit = 0,
+    @LastModifiedByUserID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ArtifactWorkingState]
+            (
+                [ID],
+                [ArtifactID],
+                [YjsState],
+                [LastModifiedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ArtifactID,
+                CASE WHEN @YjsState_Clear = 1 THEN NULL ELSE ISNULL(@YjsState, NULL) END,
+                CASE WHEN @LastModifiedByUserID_Clear = 1 THEN NULL ELSE ISNULL(@LastModifiedByUserID, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ArtifactWorkingState]
+            (
+                [ArtifactID],
+                [YjsState],
+                [LastModifiedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ArtifactID,
+                CASE WHEN @YjsState_Clear = 1 THEN NULL ELSE ISNULL(@YjsState, NULL) END,
+                CASE WHEN @LastModifiedByUserID_Clear = 1 THEN NULL ELSE ISNULL(@LastModifiedByUserID, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwArtifactWorkingStates] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Artifact Working States */
+
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Artifact Working States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Working States
+-- Item: spUpdateArtifactWorkingState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ArtifactWorkingState
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateArtifactWorkingState]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactWorkingState];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactWorkingState]
+    @ID uniqueidentifier,
+    @ArtifactID uniqueidentifier = NULL,
+    @YjsState_Clear bit = 0,
+    @YjsState varbinary(MAX) = NULL,
+    @LastModifiedByUserID_Clear bit = 0,
+    @LastModifiedByUserID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ArtifactWorkingState]
+    SET
+        [ArtifactID] = ISNULL(@ArtifactID, [ArtifactID]),
+        [YjsState] = CASE WHEN @YjsState_Clear = 1 THEN NULL ELSE ISNULL(@YjsState, [YjsState]) END,
+        [LastModifiedByUserID] = CASE WHEN @LastModifiedByUserID_Clear = 1 THEN NULL ELSE ISNULL(@LastModifiedByUserID, [LastModifiedByUserID]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwArtifactWorkingStates] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwArtifactWorkingStates]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] TO [cdp_Developer], [cdp_Integration]
+GO
+
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ArtifactWorkingState table
 ------------------------------------------------------------
@@ -1660,6 +1846,61 @@ BEGIN
         _organicTable.[ID] = I.[ID];
 END;
 GO
+
+/* spUpdate Permissions for MJ: Artifact Working States */
+
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Artifact Working States */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Working States
+-- Item: spDeleteArtifactWorkingState
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ArtifactWorkingState
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteArtifactWorkingState]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteArtifactWorkingState];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteArtifactWorkingState]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ArtifactWorkingState]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Artifact Working States */
+
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_Developer]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_Integration]
+REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] FROM [cdp_UI]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactWorkingState] TO [cdp_Developer], [cdp_Integration];
 
 /* SQL text to insert 3 new entity field(s) */
 
@@ -1853,10 +2094,7 @@ GO
       END;
 
 /* SQL text to sync entity unique keys (1 added, 0 updated, 0 removed) */
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityUniqueKey] WHERE [EntityID] = '0BA6990D-DC4F-408E-A748-8F64B3039533' AND [Name] = 'UQ_ArtifactWorkingState_ArtifactID')
-BEGIN
-   INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('f4b7e21a-89d4-4c61-b802-71c89d5e3a10', '0BA6990D-DC4F-408E-A748-8F64B3039533', 'UQ_ArtifactWorkingState_ArtifactID', 'ArtifactID', NULL);
-END;
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('f4b7e21a-89d4-4c61-b802-71c89d5e3a10', '0BA6990D-DC4F-408E-A748-8F64B3039533', 'UQ_ArtifactWorkingState_ArtifactID', 'ArtifactID', NULL);
 
 /* Set field properties for entity */
 

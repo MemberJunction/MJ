@@ -99,34 +99,44 @@ function makeProvider(factory: (entityName: string) => FakeEntity, w: ArtifactWo
 } {
     const requested: string[] = [];
     const runViewsCalls: RunViewParams[][] = [];
+    const answerView = (view: RunViewParams): RunViewResult => {
+        if (view.EntityName === 'MJ: Artifacts') {
+            const id = filterValue(view.ExtraFilter as string, 'ID');
+            const owner = w.owners.get(id.toLowerCase());
+            return {
+                Success: true,
+                Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
+            } as unknown as RunViewResult;
+        }
+        if (view.EntityName === 'MJ: Artifact Permissions') {
+            const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
+            return {
+                Success: true,
+                Results: w.grants.has(id.toLowerCase())
+                    ? [{ ID: 'perm-1', CanRead: true, CanEdit: true, CanDelete: false, CanShare: false }]
+                    : [],
+            } as unknown as RunViewResult;
+        }
+        return { Success: true, Results: [] } as unknown as RunViewResult;
+    };
     const provider = {
         GetEntityObject: vi.fn(async (entityName: string) => {
             requested.push(entityName);
             return factory(entityName);
+        }),
+        RunView: vi.fn(async (view: RunViewParams): Promise<RunViewResult> => {
+            runViewsCalls.push([view]);
+            if (w.throws) {
+                throw new Error(w.throws);
+            }
+            return answerView(view);
         }),
         RunViews: vi.fn(async (params: RunViewParams[]): Promise<RunViewResult[]> => {
             runViewsCalls.push(params);
             if (w.throws) {
                 throw new Error(w.throws);
             }
-            return params.map((view) => {
-                if (view.EntityName === 'MJ: Artifacts') {
-                    const id = filterValue(view.ExtraFilter as string, 'ID');
-                    const owner = w.owners.get(id.toLowerCase());
-                    return {
-                        Success: true,
-                        Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
-                    } as unknown as RunViewResult;
-                }
-                if (view.EntityName === 'MJ: Artifact Permissions') {
-                    const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
-                    return {
-                        Success: true,
-                        Results: w.grants.has(id.toLowerCase()) ? [{ ID: 'perm-1' }] : [],
-                    } as unknown as RunViewResult;
-                }
-                return { Success: false, Results: [] } as unknown as RunViewResult;
-            });
+            return params.map(answerView);
         }),
     } as unknown as IMetadataProvider;
     return { provider, requested, runViewsCalls };
@@ -381,6 +391,13 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
             }),
             RunView: vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
                 runViewCalls.push(params);
+                if (params.EntityName === 'MJ: Artifacts') {
+                    const id = filterValue(params.ExtraFilter as string, 'ID');
+                    return {
+                        Success: true,
+                        Results: [{ ID: id, UserID: 'user-1' }],
+                    } as unknown as RunViewResult;
+                }
                 if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
                     return { Success: true, Results: [] } as unknown as RunViewResult;
                 }
@@ -528,9 +545,9 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
         expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-9', versionNumber: 5 });
         expect(version.ArtifactID).toBe(TARGET_UUID);
-        // Existence and authorization in ONE round trip, not a full-entity Load.
+        // Existence and owner authorization resolved via ArtifactPermissionEngine in a single MJ: Artifacts query.
         expect(runViewsCalls).toHaveLength(1);
-        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts', 'MJ: Artifact Permissions']);
+        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts']);
         // Writable target -> versioned in place; no new artifact header was created.
         expect(requested).not.toContain('MJ: Artifacts');
     });
@@ -708,11 +725,15 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             );
 
             expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-20', versionNumber: 2 });
-            // The grant lookup is scoped to BOTH the artifact and this user.
-            const grantFilter = runViewsCalls[0][1].ExtraFilter as string;
+            // The grant lookup via ArtifactPermissionEngine is scoped to BOTH the artifact and this user.
+            const permQuery = runViewsCalls
+                .flat()
+                .find((v) => v.EntityName === 'MJ: Artifact Permissions');
+            expect(permQuery).toBeDefined();
+            const grantFilter = permQuery?.ExtraFilter as string;
             expect(grantFilter).toContain(`ArtifactID='${TARGET_UUID}'`);
             expect(grantFilter).toContain("UserID='user-1'");
-            expect(grantFilter).toContain('CanEdit=1');
+            expect(permQuery?.Fields).toContain('CanEdit');
         });
 
         it("REFUSES an artifact owned by another user with no grant, and falls back", async () => {
@@ -790,8 +811,14 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             const version = makeEntity('ver-user-b-1');
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
+            const permGrant = makeEntity('perm-user-a-read');
             const { provider } = makeProvider(
-                (name) => (name === 'MJ: Artifacts' ? artifact : version),
+                (name) =>
+                    name === 'MJ: Artifacts'
+                        ? artifact
+                        : name === 'MJ: Artifact Versions'
+                          ? version
+                          : permGrant,
                 world({
                     owners: new Map([
                         [SOURCE_UUID.toLowerCase(), 'user-owner-a'],

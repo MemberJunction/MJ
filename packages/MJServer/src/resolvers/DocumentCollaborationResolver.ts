@@ -6,7 +6,7 @@ import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunctio
 import { AIEngine } from '@memberjunction/aiengine';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
@@ -215,11 +215,25 @@ export class DocumentCollaborationResolver extends ResolverBase {
             }
         }
 
-        const issued = ArtifactCollaborationServer.Instance.IssueTicket({
-            ArtifactID: normalizedArtifactId,
-            User: user,
-            ApiKeyHash: context.userPayload.apiKeyHash
-        });
+        let issued: { Ticket: string; ExpiresAt: string };
+        try {
+            issued = ArtifactCollaborationServer.Instance.IssueTicket({
+                ArtifactID: normalizedArtifactId,
+                User: user,
+                ApiKeyHash: context.userPayload.apiKeyHash
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Live collaboration is unavailable on this server.';
+            LogError(
+                `DocumentCollaborationResolver.MintArtifactCollaborationTicket failed to issue ticket for artifact '${normalizedArtifactId}': ${message}`
+            );
+            return {
+                Success: false,
+                CanRead: true,
+                CanEdit: effectiveCanEdit,
+                ErrorMessage: message
+            };
+        }
 
         const wsPath = ApiRoute(ARTIFACT_COLLABORATION_WS_PATH);
         const configuredPublicUrl = (configInfo.publicUrl || process.env['MJAPI_PUBLIC_URL'] || '').trim();
@@ -617,12 +631,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('agentMode', () => String, { defaultValue: 'comment' }) agentMode: string,
         @Arg('commentBody', () => String) commentBody: string,
         @Arg('anchorQuote', () => String, { nullable: true }) anchorQuote: string | undefined,
-        @Ctx() context: AppContext
+        @Ctx() context: AppContext,
+        @Arg('conversationId', () => String, { nullable: true }) conversationId?: string
     ): Promise<ExecuteAnchoredCommentAgentMentionPayload> {
         const user = this.GetUserFromPayload(context.userPayload) ?? context.userPayload?.userRecord;
         const provider = this.resolveProvider(context);
         const normalizedArtifactId = (artifactId ?? '').trim();
         const normalizedHandle = (agentHandle ?? '').trim().replace(/^@+/, '').trim();
+        const normalizedConversationId = (conversationId ?? '').trim();
         const normalizedMode =
             agentMode === 'edit' ? 'edit' : agentMode === 'suggest' ? 'suggest' : 'comment';
 
@@ -693,6 +709,32 @@ export class DocumentCollaborationResolver extends ResolverBase {
             }
         }
 
+        if (normalizedConversationId.length > 0) {
+            const rv = RunView.FromMetadataProvider(provider);
+            const threadCheck = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: `ID='${EscapeSQLString(normalizedConversationId)}' AND LinkedRecordID='${EscapeSQLString(normalizedArtifactId)}' AND AnchorType IS NOT NULL`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const matchedThread = (threadCheck.Results ?? []).find((r) =>
+                UUIDsEqual(r.ID, normalizedConversationId)
+            );
+            if (!threadCheck.Success || !matchedThread) {
+                return {
+                    Success: false,
+                    AgentHandle: normalizedHandle,
+                    AgentMode: normalizedMode,
+                    ErrorMessage: 'Anchored comment thread not found.'
+                };
+            }
+        }
+
         const resolvedAgent = await this.resolveAgentByHandle(normalizedHandle, user);
         if (!resolvedAgent.Agent) {
             return {
@@ -704,6 +746,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
         const agent = resolvedAgent.Agent;
+
+        await this.CheckAPIKeyScopeAuthorization('agent:execute', agent.ID, context.userPayload);
 
         type MentionExecutionPayload =
             | {
@@ -806,14 +850,15 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 normalizedArtifactId,
                 trimmedQuote,
                 agent.ID,
-                editReply
+                editReply,
+                normalizedConversationId || undefined
             );
             return {
                 Success: true,
                 AgentHandle: normalizedHandle,
                 AgentMode: normalizedMode,
                 ReplyBody: editReply,
-                UpdatedContent: nextContent,
+                UpdatedContent: mutated.MergedContent ?? nextContent,
                 VersionID: mutated.VersionID,
                 VersionNumber: mutated.VersionNumber
             };
@@ -837,7 +882,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 normalizedArtifactId,
                 trimmedQuote,
                 agent.ID,
-                finalReply
+                finalReply,
+                normalizedConversationId || undefined
             );
             return {
                 Success: true,
@@ -863,7 +909,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
             normalizedArtifactId,
             trimmedQuote,
             agent.ID,
-            commentReply
+            commentReply,
+            normalizedConversationId || undefined
         );
         return {
             Success: true,
@@ -882,18 +929,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
             return { Agent: null, ErrorMessage: 'Agent handle is required.' };
         }
         try {
-            if (!AIEngine.Instance.Loaded) {
-                await AIEngine.Instance.Config(false, user);
-            }
+            await AIEngine.Instance.Config(false, user);
         } catch (cfgErr) {
-            if ((AIEngine.Instance.Agents?.length ?? 0) === 0) {
-                return {
-                    Agent: null,
-                    ErrorMessage: `Unable to load AI agent catalog for '@${stripped}': ${
-                        cfgErr instanceof Error ? cfgErr.message : String(cfgErr)
-                    }`
-                };
-            }
+            const msg = cfgErr instanceof Error ? cfgErr.message : String(cfgErr);
+            LogError(`DocumentCollaborationResolver.resolveAgentByHandle failed to configure AIEngine for '@${stripped}': ${msg}`);
+            return {
+                Agent: null,
+                ErrorMessage: `Unable to load AI agent catalog for '@${stripped}': ${msg}`
+            };
         }
 
         const agents = AIEngine.Instance.Agents ?? [];
@@ -924,22 +967,24 @@ export class DocumentCollaborationResolver extends ResolverBase {
         }
 
         if (typeof AIEngine.Instance.CanUserRunAgent === 'function') {
+            let canRun = false;
             try {
-                const canRun = await AIEngine.Instance.CanUserRunAgent(activeAgent.ID, user);
-                if (!canRun) {
-                    return {
-                        Agent: null,
-                        ErrorMessage: `User does not have permission to run AI agent '${activeAgent.Name}'.`
-                    };
-                }
-            } catch {
-                // If permission cache is uninitialized in isolated unit tests, allow only when Agents was pre-seeded
-                if (AIEngine.Instance.Loaded) {
-                    return {
-                        Agent: null,
-                        ErrorMessage: `Unable to verify run permission for AI agent '${activeAgent.Name}'.`
-                    };
-                }
+                canRun = await AIEngine.Instance.CanUserRunAgent(activeAgent.ID, user);
+            } catch (permErr) {
+                const msg = permErr instanceof Error ? permErr.message : String(permErr);
+                LogError(
+                    `DocumentCollaborationResolver.resolveAgentByHandle failed CanUserRunAgent for '${activeAgent.Name}': ${msg}`
+                );
+                return {
+                    Agent: null,
+                    ErrorMessage: `Unable to verify run permission for AI agent '${activeAgent.Name}'.`
+                };
+            }
+            if (!canRun) {
+                return {
+                    Agent: null,
+                    ErrorMessage: `User does not have permission to run AI agent '${activeAgent.Name}'.`
+                };
             }
         }
 
@@ -1068,20 +1113,24 @@ export class DocumentCollaborationResolver extends ResolverBase {
         artifactId: string,
         anchorQuote: string,
         agentId: string,
-        replyMessage: string
+        replyMessage: string,
+        conversationId?: string
     ): Promise<void> {
         if (!replyMessage.trim()) {
             return;
         }
         try {
             const rv = RunView.FromMetadataProvider(provider);
+            const conversationFilterPrefix = conversationId
+                ? `ID='${EscapeSQLString(conversationId)}' AND `
+                : '';
             const convRes = await rv.RunView<{
                 ID: string;
                 AnchorMetadata?: string | null;
             }>(
                 {
                     EntityName: 'MJ: Conversations',
-                    ExtraFilter: `LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType IS NOT NULL`,
+                    ExtraFilter: `${conversationFilterPrefix}LinkedRecordID='${EscapeSQLString(artifactId)}' AND AnchorType IS NOT NULL`,
                     OrderBy: '__mj_CreatedAt DESC',
                     Fields: ['ID', 'AnchorMetadata'],
                     MaxRows: 10,
@@ -1095,7 +1144,10 @@ export class DocumentCollaborationResolver extends ResolverBase {
             }
 
             let targetConversationId: string | undefined;
-            if (anchorQuote) {
+            if (conversationId) {
+                const matched = convRes.Results.find((row) => UUIDsEqual(row.ID, conversationId));
+                targetConversationId = matched?.ID;
+            } else if (anchorQuote) {
                 for (const row of convRes.Results) {
                     if (!row.AnchorMetadata) {
                         continue;
@@ -1115,7 +1167,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 }
             }
             if (!targetConversationId) {
-                targetConversationId = convRes.Results[0].ID;
+                return;
             }
 
             const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
@@ -1137,8 +1189,12 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     }`
                 );
             }
-        } catch {
-            // Best-effort persistence when an anchored conversation thread exists
+        } catch (err) {
+            LogError(
+                `DocumentCollaborationResolver.persistAnchoredAgentReplyIfThreadExists error: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
         }
     }
 }

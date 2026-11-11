@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
     ArtifactEmbedMode,
+    CompileSafeUserRegex,
     DocumentBlockKind,
     DocumentBlockMode,
     DocumentBlockSpec,
@@ -673,10 +674,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             };
         }
 
-        let compiledRegex: RegExp | null = null;
+        let syntaxValid = true;
         try {
-            compiledRegex = new RegExp(query, 'i');
+            new RegExp(query, 'i');
         } catch (err) {
+            syntaxValid = false;
             if (input.useRegex === true) {
                 return {
                     success: false,
@@ -684,18 +686,17 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
                 };
             }
-            compiledRegex = null;
         }
 
-        if (compiledRegex) {
-            if (!IsSafeUserRegex(query)) {
+        if (syntaxValid) {
+            const activeRegex = CompileSafeUserRegex(query, 'i');
+            if (!activeRegex) {
                 return {
                     success: false,
                     data: null,
                     errorMessage: 'Unsafe or overly complex regular expression rejected'
                 };
             }
-            const activeRegex = compiledRegex;
             const matches = blocks.filter((b) => SafeRegexTest(activeRegex, b.rawMarkdown));
             return {
                 success: true,
@@ -748,9 +749,9 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: true, data: matches };
         }
 
-        let regex: RegExp;
+        const cleanFlags = flags ? flags.replace(/[gy]/g, () => '') : undefined;
         try {
-            regex = new RegExp(patternStr, flags);
+            new RegExp(patternStr, cleanFlags);
         } catch (err) {
             if (input.useRegex === true) {
                 return {
@@ -772,7 +773,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             return { success: true, data: matches };
         }
 
-        if (!IsSafeUserRegex(patternStr)) {
+        const safeRegex = CompileSafeUserRegex(patternStr, cleanFlags);
+        if (!safeRegex || !IsSafeUserRegex(patternStr)) {
             return {
                 success: false,
                 data: null,
@@ -782,7 +784,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
         const matches: Array<{ lineNumber: number; text: string }> = [];
         for (let i = 0; i < lines.length; i++) {
-            if (SafeRegexTest(regex, lines[i])) {
+            if (SafeRegexTest(safeRegex, lines[i])) {
                 matches.push({ lineNumber: i, text: lines[i] });
             }
         }

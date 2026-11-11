@@ -511,8 +511,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // The same tasks the conversation workspace's tasks view shows.
-    let filter = await BuildConversationTasksFilter(this.Provider, currentUser);
+    // The same tasks the conversation workspace's tasks view shows (bypassing the 30s polling cache for explicit user searches).
+    let filter = await BuildConversationTasksFilter(this.Provider, currentUser, { bypassCache: true });
 
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 

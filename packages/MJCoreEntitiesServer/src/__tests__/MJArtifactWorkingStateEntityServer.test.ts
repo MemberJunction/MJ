@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     BaseEntity,
+    DatabasePlatform,
     DatabaseProviderBase,
     ExecuteSQLOptions,
     IMetadataProvider,
@@ -11,8 +12,10 @@ import {
 } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactWorkingStatePostRunViewHook,
+    ArtifactWorkingStatePreRunViewHook,
     MJArtifactWorkingStateEntityServer
 } from '../custom/MJArtifactWorkingStateEntityServer.server';
 import { ArtifactVersionPostRunViewHook } from '../custom/MJArtifactVersionEntityServer.server';
@@ -75,12 +78,12 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
             async (_p, artifactId) => ({
                 ArtifactID: artifactId,
-                CanRead: artifactId === allowedArtifactId,
+                CanRead: UUIDsEqual(artifactId, allowedArtifactId),
                 CanEdit: false,
                 CanDelete: false,
                 CanShare: false,
-                Source: artifactId === allowedArtifactId ? 'ArtifactPermission' : 'Denied',
-                Reason: artifactId === allowedArtifactId ? 'Allowed' : 'Denied'
+                Source: UUIDsEqual(artifactId, allowedArtifactId) ? 'ArtifactPermission' : 'Denied',
+                Reason: UUIDsEqual(artifactId, allowedArtifactId) ? 'Allowed' : 'Denied'
             })
         );
 
@@ -148,6 +151,10 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
                 super();
                 this._dialect = dialect;
                 this._handler = handler;
+            }
+
+            public override get PlatformKey(): DatabasePlatform {
+                return this._dialect === 'pg' ? 'postgresql' : 'sqlserver';
             }
 
             public override get ConfigData(): ProviderConfigDataBase {
@@ -260,6 +267,9 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         const pgEntity = makeWorkingStateEntity(pgProvider);
         expect(await pgEntity.Save()).toBe(true);
         expect(pgProvider.calls.every((c) => !/MERGE|DECLARE|UNIQUEIDENTIFIER|\[/i.test(c.sql))).toBe(true);
+        expect(pgProvider.calls[0]?.sql).toBe(
+            'SELECT "ID" FROM "__mj"."vwArtifactWorkingStates" WHERE "ArtifactID" = $1'
+        );
         expect(pgProvider.calls[1]?.sql).toBe(
             'INSERT INTO "__mj"."ArtifactWorkingState" ("ID", "ArtifactID", "YjsState", "LastModifiedByUserID") VALUES ($1, $2, $3, $4)'
         );
@@ -292,20 +302,151 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             'DELETE FROM "__mj"."ArtifactWorkingState" WHERE "ID" = $1 OR "ArtifactID" = $2'
         );
 
-        // 2. SQL Server dialect: verifies @p0 / [__mj].[ArtifactWorkingState]
+        // 2. SQL Server dialect: reads vwArtifactWorkingStates and executes generated CRUD sprocs
+        //    without ever passing JS `null` in positional parameter arrays (DSL2 / DSLC3 / R5-9)
+        let mssqlRowExists = false;
+        let mssqlThrowUniqueOnce = false;
         const mssqlProvider = new MockDialectDbProvider('mssql', (sql) => {
-            if (sql.startsWith('SELECT [ID]')) {
-                return [];
+            if (sql.startsWith('SELECT [ID] FROM [__mj].[vwArtifactWorkingStates]')) {
+                return mssqlRowExists ? [{ ID: 'ws-ms-1' }] : [];
             }
-            if (sql.startsWith('SELECT * FROM')) {
-                return [{ ID: 'ws-ms-1', ArtifactID: allowedArtifactId, YjsState: 'AQIDBA==' }];
+            if (sql.startsWith('EXEC [__mj].[spCreateArtifactWorkingState]')) {
+                if (mssqlThrowUniqueOnce) {
+                    mssqlThrowUniqueOnce = false;
+                    mssqlRowExists = true;
+                    throw new Error('Violation of UNIQUE KEY constraint UQ_ArtifactWorkingState_ArtifactID (2627)');
+                }
+                mssqlRowExists = true;
+                return [{ ID: 'ws-ms-1', ArtifactID: allowedArtifactId, YjsState: Buffer.from([1, 2, 3, 4]) }];
+            }
+            if (sql.startsWith('EXEC [__mj].[spUpdateArtifactWorkingState]')) {
+                return [{ ID: 'ws-ms-1', ArtifactID: allowedArtifactId, YjsState: null }];
+            }
+            if (sql.startsWith('SELECT * FROM [__mj].[vwArtifactWorkingStates]')) {
+                return [{ ID: 'ws-ms-1', ArtifactID: allowedArtifactId, YjsState: Buffer.from([1, 2, 3, 4]) }];
             }
             return [];
         });
+
+        // 2a. SQL Server spCreate with Buffer YjsState + LastModifiedByUserID
         const mssqlEntity = makeWorkingStateEntity(mssqlProvider);
         expect(await mssqlEntity.Save()).toBe(true);
-        expect(mssqlProvider.calls[1]?.sql).toBe(
-            'INSERT INTO [__mj].[ArtifactWorkingState] ([ID], [ArtifactID], [YjsState], [LastModifiedByUserID]) VALUES (@p0, @p1, @p2, @p3)'
+        expect(mssqlProvider.calls[0]?.sql).toBe(
+            'SELECT [ID] FROM [__mj].[vwArtifactWorkingStates] WHERE [ArtifactID] = @p0'
         );
+        expect(mssqlProvider.calls[1]?.sql).toBe(
+            'EXEC [__mj].[spCreateArtifactWorkingState] @ID = @p0, @ArtifactID = @p1, @YjsState = @p2, @LastModifiedByUserID = @p3'
+        );
+        expect(Buffer.isBuffer(mssqlProvider.calls[1]?.params?.[2])).toBe(true);
+        expect(mssqlProvider.calls.every((c) => !(c.params ?? []).includes(null))).toBe(true);
+        expect(mssqlProvider.calls.every((c) => !c.sql.includes('[__mj].[ArtifactWorkingState]'))).toBe(true);
+
+        // 2b. SQL Server spUpdate with non-null Buffer YjsState passes @YjsState_Clear = 0, @YjsState = @p2
+        mssqlProvider.calls.length = 0;
+        expect(await mssqlEntity.Save()).toBe(true);
+        expect(mssqlProvider.calls[1]?.sql).toBe(
+            'EXEC [__mj].[spUpdateArtifactWorkingState] @ID = @p0, @ArtifactID = @p1, @YjsState_Clear = 0, @YjsState = @p2, @LastModifiedByUserID_Clear = 0, @LastModifiedByUserID = @p3'
+        );
+        expect(Buffer.isBuffer(mssqlProvider.calls[1]?.params?.[2])).toBe(true);
+        expect(mssqlProvider.calls.every((c) => !(c.params ?? []).includes(null))).toBe(true);
+
+        // 2c. SQL Server spUpdate with NULL YjsState & NULL LastModifiedByUserID passes _Clear = 1 and OMITS null params
+        mssqlProvider.calls.length = 0;
+        mssqlEntity.YjsState = null;
+        mssqlEntity.LastModifiedByUserID = null;
+        expect(await mssqlEntity.Save()).toBe(true);
+        expect(mssqlProvider.calls[1]?.sql).toBe(
+            'EXEC [__mj].[spUpdateArtifactWorkingState] @ID = @p0, @ArtifactID = @p1, @YjsState_Clear = 1, @LastModifiedByUserID_Clear = 1'
+        );
+        expect(mssqlProvider.calls[1]?.params).toEqual(['ws-ms-1', allowedArtifactId]);
+        expect(mssqlProvider.calls.every((c) => !(c.params ?? []).includes(null))).toBe(true);
+
+        // 2d. SQL Server spCreate with NULL YjsState & NULL LastModifiedByUserID omits both optional params
+        mssqlRowExists = false;
+        mssqlProvider.calls.length = 0;
+        const mssqlNullCreate = makeWorkingStateEntity(mssqlProvider);
+        mssqlNullCreate.YjsState = null;
+        mssqlNullCreate.LastModifiedByUserID = null;
+        expect(await mssqlNullCreate.Save()).toBe(true);
+        expect(mssqlProvider.calls[1]?.sql).toBe(
+            'EXEC [__mj].[spCreateArtifactWorkingState] @ID = @p0, @ArtifactID = @p1'
+        );
+        expect(mssqlProvider.calls[1]?.params).toHaveLength(2);
+        expect(mssqlProvider.calls.every((c) => !(c.params ?? []).includes(null))).toBe(true);
+
+        // 2e. SQL Server unique-key race falls back from spCreate to vwArtifactWorkingStates probe + spUpdate
+        mssqlRowExists = false;
+        mssqlThrowUniqueOnce = true;
+        mssqlProvider.calls.length = 0;
+        const mssqlRacing = makeWorkingStateEntity(mssqlProvider);
+        expect(await mssqlRacing.Save()).toBe(true);
+        expect(mssqlProvider.calls.some((c) => c.sql.startsWith('EXEC [__mj].[spCreateArtifactWorkingState]'))).toBe(true);
+        expect(mssqlProvider.calls.some((c) => c.sql.startsWith('EXEC [__mj].[spUpdateArtifactWorkingState]'))).toBe(true);
+
+        // 2f. SQL Server delete executes spDeleteArtifactWorkingState
+        mssqlProvider.calls.length = 0;
+        expect(await mssqlEntity.Delete()).toBe(true);
+        expect(mssqlProvider.calls[0]?.sql).toBe(
+            'EXEC [__mj].[spDeleteArtifactWorkingState] @ID = @p0'
+        );
+        expect(mssqlProvider.calls[0]?.params).toEqual(['ws-ms-1']);
+    });
+
+    it('mutates params.Fields in place in ArtifactWorkingStatePreRunViewHook and strips synthetic ArtifactID in PostRunView (R5-2)', async () => {
+        const fakeDbProvider = { ProviderType: 'Database' } as IMetadataProvider;
+        Object.defineProperty(devUser, 'OwningProvider', { value: fakeDbProvider, configurable: true });
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(
+            async (_p, artifactId) => ({
+                ArtifactID: artifactId,
+                CanRead: UUIDsEqual(artifactId, allowedArtifactId),
+                CanEdit: false,
+                CanDelete: false,
+                CanShare: false,
+                Source: UUIDsEqual(artifactId, allowedArtifactId) ? 'ArtifactPermission' : 'Denied',
+                Reason: UUIDsEqual(artifactId, allowedArtifactId) ? 'Allowed' : 'Denied'
+            })
+        );
+
+        const params: RunViewParams = {
+            EntityName: 'MJ: Artifact Working States',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        const hooked = await ArtifactWorkingStatePreRunViewHook(params, devUser);
+        expect(hooked).toBe(params);
+        expect(params.Fields).toEqual(['ID', 'ArtifactID']);
+
+        const postRes = await ArtifactWorkingStatePostRunViewHook(
+            params,
+            {
+                Success: true,
+                Results: [
+                    { ID: 'ws-allowed', ArtifactID: allowedArtifactId },
+                    { ID: 'ws-denied', ArtifactID: deniedArtifactId }
+                ],
+                RowCount: 2,
+                TotalRowCount: 2,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            devUser
+        );
+        expect(postRes.Results).toEqual([{ ID: 'ws-allowed' }]);
+        expect(Object.prototype.hasOwnProperty.call(postRes.Results[0], 'ArtifactID')).toBe(false);
+
+        // Client-side PostRunView invocation (contextUser === undefined) preserves server-vetted rows (DSLC2)
+        const clientRes = await ArtifactWorkingStatePostRunViewHook(
+            { EntityName: 'MJ: Artifact Working States', ResultType: 'simple' },
+            {
+                Success: true,
+                Results: [{ ID: 'ws-client', ArtifactID: allowedArtifactId }],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            },
+            undefined
+        );
+        expect(clientRes.Results).toEqual([{ ID: 'ws-client', ArtifactID: allowedArtifactId }]);
     });
 });

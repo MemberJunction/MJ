@@ -73,6 +73,8 @@ if [ "$FRESH_CLONE" = true ] && [ -f "$MJ_DIR/package.json" ]; then
 fi
 
 # ─── Create .env for MJAPI if missing ────────────────────────────────────────
+[ -z "${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-}" ] && unset MJ_ARTIFACT_COLLAB_HMAC_SECRET
+[ -z "${MJ_FROZEN_BLOCK_HMAC_SECRET:-}" ] && unset MJ_FROZEN_BLOCK_HMAC_SECRET
 if [ -d "$MJ_DIR" ] && [ ! -f "$MJ_DIR/.env" ]; then
     echo "Creating .env for MJAPI (pointing at sql-claude)..."
     COLLAB_SECRET="${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-$(openssl rand -hex 32)}"

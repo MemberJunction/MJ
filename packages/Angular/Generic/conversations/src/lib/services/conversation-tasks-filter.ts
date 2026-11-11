@@ -29,14 +29,23 @@ interface InFlightAgentActivityScope {
   userEpoch: number;
 }
 
+interface CachedAgentActivityAuthorization {
+  allowed: boolean;
+  expiresAt: number;
+  globalEpoch: number;
+  userEpoch: number;
+}
+
 let globalScopeCacheEpoch = 0;
 const userScopeCacheEpochs = new Map<string, number>();
 const scopeCacheByProvider = new WeakMap<IMetadataProvider, Map<string, CachedAgentActivityScope>>();
 const inFlightScopeByProvider = new WeakMap<IMetadataProvider, Map<string, InFlightAgentActivityScope>>();
+const authCacheByProvider = new WeakMap<IMetadataProvider, Map<string, CachedAgentActivityAuthorization>>();
+const defaultProviderAuthCache = new Map<string, CachedAgentActivityAuthorization>();
 
 /**
- * Invalidates cached `{ conversationIds, detailIds }` scope entries used by
- * {@link BuildConversationTasksFilter} and {@link BuildAgentActivityTasksFilter}.
+ * Invalidates cached `{ conversationIds, detailIds }` scope and authorization entries used by
+ * {@link BuildConversationTasksFilter}, {@link BuildAgentActivityTasksFilter}, and {@link CanUserViewAllAgentTasks}.
  *
  * Pass `userId` to invalidate a single user's cached scope, or omit `userId` to clear all users.
  */
@@ -44,10 +53,12 @@ export function InvalidateAgentActivityScopeCache(userId?: string): void {
   if (userId && userId.trim().length > 0) {
     const normId = NormalizeUUID(userId);
     userScopeCacheEpochs.set(normId, (userScopeCacheEpochs.get(normId) ?? 0) + 1);
+    defaultProviderAuthCache.delete(normId);
     return;
   }
   globalScopeCacheEpoch += 1;
   userScopeCacheEpochs.clear();
+  defaultProviderAuthCache.clear();
 }
 
 /** The ExtraFilter for the top-level tasks a user owns. */
@@ -59,6 +70,9 @@ export function OwnTasksFilter(user: UserInfo): string {
  * Returns `true` only when `user` is authorized to switch Agent Activity from personal/conversation
  * scope to the organization-wide "All Users" scope (`User.Type === 'Owner'` or the seeded
  * `Agent Activity: View All Users` authorization via `AuthorizationEngine`).
+ *
+ * Results are cached per `(provider, userId)` for {@link AGENT_ACTIVITY_SCOPE_CACHE_TTL_MS} (30s)
+ * so 4-second polling does not repeatedly scan authorization metadata.
  *
  * Note: `MJ: Tasks` has no server-side RLS filter in a default install, so this check gates the
  * Agent Activity UX scope control rather than enforcing database-level row security.
@@ -73,7 +87,47 @@ export function CanUserViewAllAgentTasks(
   if ((user.Type ?? '').trim().toLowerCase() === 'owner') {
     return true;
   }
-  return UserHoldsAuthorization(user, AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION, provider ?? undefined);
+
+  const userKey = NormalizeUUID(user.ID);
+  const currentGlobalEpoch = globalScopeCacheEpoch;
+  const currentUserEpoch = userScopeCacheEpochs.get(userKey) ?? 0;
+  const now = Date.now();
+
+  let authCache: Map<string, CachedAgentActivityAuthorization>;
+  if (provider) {
+    const existing = authCacheByProvider.get(provider);
+    if (existing) {
+      authCache = existing;
+    } else {
+      authCache = new Map<string, CachedAgentActivityAuthorization>();
+      authCacheByProvider.set(provider, authCache);
+    }
+  } else {
+    authCache = defaultProviderAuthCache;
+  }
+
+  const cached = authCache.get(userKey);
+  if (
+    cached &&
+    cached.globalEpoch === currentGlobalEpoch &&
+    cached.userEpoch === currentUserEpoch &&
+    now < cached.expiresAt
+  ) {
+    return cached.allowed;
+  }
+
+  const allowed = UserHoldsAuthorization(
+    user,
+    AGENT_ACTIVITY_VIEW_ALL_USERS_AUTHORIZATION,
+    provider ?? undefined,
+  );
+  authCache.set(userKey, {
+    allowed,
+    expiresAt: now + AGENT_ACTIVITY_SCOPE_CACHE_TTL_MS,
+    globalEpoch: currentGlobalEpoch,
+    userEpoch: currentUserEpoch,
+  });
+  return allowed;
 }
 
 function buildAgentBackedClause(provider?: IMetadataProvider | null): string {
@@ -147,22 +201,24 @@ export async function BuildAgentActivityTasksFilter(
  * The conversation and message IDs are read with their own RunView, so the row-level security on
  * those entities applies. A subquery over their views would skip it, and the server refuses one
  * for a user whose read of them is row-filtered. When a read fails, the result is the user's own
- * tasks. When `options?.useCache` is `true` (used by {@link BuildAgentActivityTasksFilter}),
- * resolved `{ conversationIds, detailIds }` are cached per user with a 30-second TTL and
- * concurrent in-flight deduplication so 4-second polling and `TaskGraphEvents$` bursts do not
- * repeatedly query `MJ: Conversations` and `MJ: Conversation Details` with `IgnoreMaxRows: true`.
+ * tasks. By default (`options?.useCache !== false` and `options?.bypassCache !== true`), resolved
+ * `{ conversationIds, detailIds }` are cached per user with a 30-second TTL and concurrent
+ * in-flight deduplication so 4-second polling (including `ConversationWorkspaceComponent.TasksFilterResolver`)
+ * and `TaskGraphEvents$` bursts do not repeatedly query `MJ: Conversations` and
+ * `MJ: Conversation Details` with `IgnoreMaxRows: true`.
  */
 export async function BuildConversationTasksFilter(
   provider: IMetadataProvider,
   user: UserInfo,
-  options?: { useCache?: boolean },
+  options?: { useCache?: boolean; bypassCache?: boolean },
 ): Promise<string> {
   const ownTasks = OwnTasksFilter(user);
   const tasks = provider.EntityByName('MJ: Tasks');
   if (!tasks) {
     return ownTasks;
   }
-  const scope = await resolveUserActivityScope(provider, user, tasks, Boolean(options?.useCache));
+  const shouldUseCache = options?.bypassCache !== true && options?.useCache !== false;
+  const scope = await resolveUserActivityScope(provider, user, tasks, shouldUseCache);
   if (scope == null || scope.detailIds.length === 0) {
     return ownTasks;
   }
