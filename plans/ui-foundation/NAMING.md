@@ -1,6 +1,6 @@
 # MJ UI Naming Convention
 
-Written by Matt Chriest. Colin Brockman reviewed the draft on 2026-11-09 and agreed the seven open calls. Five changes made after that review are pending his look: three control heights at 32 / 40 / 52, surfaces as tier 2 roles, the private height token for square buttons, the `checked` and `error` states, and the surface level mapping still open in tier 2. Working copy: [Claude Doc](https://claude.ai/artifact/To8QVLiCRHssdhbMhBcpLp). This file is the version of record once merged. Companion to [UNIFIED_PLAN.md](UNIFIED_PLAN.md).
+Written by Matt Chriest. Colin Brockman reviewed the draft on 2026-11-09 and agreed the seven open calls, then on 2026-11-10 agreed the five changes made after that review. The three surface decisions in tier 2 (overlays sit on elevated, sunken has no state tokens, card is a fill and not a level) are Matt's calls, made after Colin's second pass. Working copy: [Claude Doc](https://claude.ai/artifact/To8QVLiCRHssdhbMhBcpLp). This file is the version of record once merged. Companion to [UNIFIED_PLAN.md](UNIFIED_PLAN.md).
 
 The convention every public CSS custom property, named part and region in the MJ UI kit follows, so one name predicts the next.
 
@@ -94,11 +94,11 @@ New in wave 0, the radius roles:
 
 Roles for other families get added the same way, when the first component that needs them is converted, never ahead of it:
 
-- `--mj-control-height-<step>`: sm 32, md 40, lg 52 on desktop. This one is a scale, not a role: the steps are t-shirt sizes and hold values directly. It is listed here because it is new in wave 0. Under `pointer: coarse` sm and md both become 44, set on the token itself, so inputs get the touch target too, not only buttons, and the override leaves button.scss. Three steps ship; xs and xl are added only when a component needs them, and never for something people tap: 44px is the touch bar this kit holds (WCAG 2.5.5; the 2.5.8 floor in WCAG 2.2 is 24px). Family is control-height, spelled out, never h. Why 40: today inputs and dropdowns are 38 and the medium button is 44, so a button beside a search box never lines up. One shared token fixes that by construction, and 40 is where desktop density and touch targets both get what they need.
+- `--mj-control-height-<step>`: sm 32, md 40, lg 52 on desktop. This one is a scale, not a role: the steps are t-shirt sizes and hold values directly. It is listed here because it is new in wave 0. Under `pointer: coarse` sm and md both become 44, set on the token itself, so inputs get the touch target too, not only buttons, and the override leaves button.scss. Three steps ship; xs and xl are added only when a component needs them, and never for something people tap: 44px is the touch bar this kit holds (WCAG 2.5.5; the 2.5.8 floor in WCAG 2.2 is 24px). Family is control-height, spelled out, never h. Why 40: today inputs and dropdowns are 38 and the medium button is 44, so a button beside a search box never lines up. One shared token fixes that by construction, and 40 is where desktop density and touch targets both get what they need. This is an intentional visible change, not a silent default: on desktop the medium button goes from 44 to 40, inputs and dropdowns go from 38 to 40, and the view toggle goes from 28 to the sm step at 32 so it lines up with page search and the filter popover in the same toolbar. On touch, buttons stay at 44 and inputs rise to 44.
 - `--mj-shadow-<role>`: surface, overlay, raised (the elevation ramp).
 - `--mj-space-<role>`: control-padding, surface-padding, stack-gap, inline-gap. Only if the space scale alone proves too loose in practice.
 
-Surfaces are roles too, not components. A surface level (sunken, base, elevated, overlay) is a context content sits on, not a thing you place, so surface tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Leave the level out when the token applies to every level.
+Surfaces are roles too, not components. A surface level is a context content sits on, not a thing you place, so surface tokens live in this tier: `--mj-surface[-<level>]-<role>[-<state>]`. The role slot is the tier 2 token tail the surface re-points for its children, and state is last, same as everywhere else. Leave the level out when the token applies to every level.
 
 | Token | What it does |
 | --- | --- |
@@ -107,9 +107,23 @@ Surfaces are roles too, not components. A surface level (sunken, base, elevated,
 | `--mj-surface-elevated-text-muted` | what `--mj-text-muted` resolves to inside an elevated surface |
 | `--mj-surface-text-muted-selected` | muted text inside a selected surface at any level |
 
-The resting background of each level stays the existing `--mj-bg-surface*` token; this family adds only what those cannot say. Keeping these here, not in tier 3, is what lets `text-muted` and `text-link` stay role names instead of leaking into the component property vocabulary.
+Keeping these here, not in tier 3, is what lets `text-muted` and `text-link` stay role names instead of leaking into the component property vocabulary.
 
-Open with Colin: how the four levels map onto today's tokens. `--mj-bg-surface-hover` already exists and is the base-level hover in all but name, there is no `base` word today (it is plain `--mj-bg-surface`), and `--mj-bg-overlay` is the backdrop scrim, not an overlay surface. The new tokens default to the existing ones, so there are two names at most and never two values.
+There are four levels. Each has a background token that defaults to an existing `--mj-bg-*` token, so there are two names at most and never two values:
+
+| Level | What it is | `-bg` defaults to | `-bg-hover` defaults to |
+| --- | --- | --- | --- |
+| `sunken` | a well that content sits in | `--mj-bg-surface-sunken` | none (no state tokens) |
+| `base` | the default surface | `--mj-bg-surface` | `--mj-bg-surface-hover` |
+| `elevated` | raised above base, still part of the page | `--mj-bg-surface-elevated` | `--mj-bg-surface-hover` |
+| `overlay` | floats over the page: dialogs, sheets, popovers, menus, toasts | `--mj-bg-surface-elevated` | `--mj-bg-surface-hover` |
+
+- **Which name to write.** The surface classes (`.mj-surface-base` and the other three) read the `--mj-surface-<level>-*` names, so that is the name to override inside a container. Existing code keeps `--mj-bg-surface*`. Nothing is renamed and there is no mass migration.
+- **Why `base` is a word.** Today the default surface is plain `--mj-bg-surface`. It needs a level name so a card or panel nested inside a dialog can declare itself `base` and get its text and state tokens reset.
+- **Overlay is the panel, not the scrim.** `--mj-surface-overlay-bg` is the opaque dialog or drawer. `--mj-bg-overlay` stays what it is today, the translucent backdrop behind it.
+- **Overlays sit on elevated.** In the light theme base and elevated are the same white, so nothing moves. In the dark theme elevated is one step lighter than base, so dialogs, bottom sheets, slide panels and windows get one step lighter when they are converted. Menus, dropdown panels and the datepicker are already there. This is an intentional visible change. Shadows barely read on a dark background, so height is shown by lightness: the higher the surface, the lighter it is. Overlay keeps its own name so a theme can lift it above elevated later. Check at conversion: dialog and window title bars and the inputs inside dialogs are painted with `--mj-bg-surface-card`, which in dark sits below elevated, so they will read darker than the body around them instead of lighter.
+- **Sunken has no state tokens.** A sunken surface is a well, something content sits in, and a well is not something you click. Hover, active and selected exist for base, elevated and overlay only. If a thing in a well is interactive it is a control or a base surface sitting in the well, and it brings its own hover. A state token with no level, such as `--mj-surface-text-muted-selected`, covers those three. This also closes a real hole: in the light theme `--mj-bg-surface-sunken` and `--mj-bg-surface-hover` are the same gray, so a shared hover on a sunken surface would not show at all.
+- **Card is not a level.** `--mj-bg-surface-card` keeps its name and its value. It is a fill, not a context: today it paints cards and also chips, tab bars, the view toggle, stat badges, and dialog and window title bars. `--mj-card-bg` defaults to it. For token re-pointing a card sits at the base level.
 
 Rules for the role tier:
 
@@ -311,4 +325,20 @@ Colin reviewed the seven open calls on 2026-11-09 and agreed on all of them, the
 - **Both part shapes stay, with the rule.** Layout boxes (header, body, footer) are elements because they own flex/grid and padding tokens. Leaf text (title, subtitle) is an attribute so the consumer picks the heading level (`<h2 mjCardTitle>` vs `<h3>`) for the page outline. That fixes the WCAG 1.3.1 bug `mj-card` has today, a hardcoded `h3` in the template. The `components.json` extractor already walks `@Component` and `@Directive`, so indexing both costs nothing.
 - **Font weights stay as they are.** `--mj-font-{normal,medium,semibold,bold}` keep their names. "Nothing renames an existing public token" is the strongest promise in this doc; four font weights aren't worth breaking it. Tier 3 uses `font-weight`.
 - **Focus rings.** `--mj-button-shadow-focus: var(--mj-focus-ring)` fits the grammar without a new ring word. The one WS6 case to watch is a surface with a resting elevation shadow; there the default composes the two (component rule above) so focus never drops the elevation.
-- **All 60 WS6 tokens checked.** Four alignments, all resolved, with one follow-up open on how the surface levels map onto the existing bg tokens (see tier 2): (1) surface state order flips to state-last, `--mj-surface-elevated-bg-hover` and `--mj-surface-base-border-selected`, 12 tokens. (2) Surface-scoped text re-points are Tier 2 surface roles, written up in the role tier above, so `text-muted` and `text-link` never enter the component property list, 17 tokens. (3) `--mj-control-h-*` is spelled out as `--mj-control-height-*`, three steps, values listed under tier 2. (4) ng-timeline keeps its `:host` mechanism, not its names; the old names get aliased when it is next touched.
+- **All 60 WS6 tokens checked.** Four alignments, all resolved: (1) surface state order flips to state-last, `--mj-surface-elevated-bg-hover` and `--mj-surface-base-border-selected`, 12 tokens. (2) Surface-scoped text re-points are Tier 2 surface roles, written up in the role tier above, so `text-muted` and `text-link` never enter the component property list, 17 tokens. (3) `--mj-control-h-*` is spelled out as `--mj-control-height-*`, three steps, values listed under tier 2. (4) ng-timeline keeps its `:host` mechanism, not its names; the old names get aliased when it is next touched.
+
+## Settled after the review
+
+Five changes were made after Colin's review. He looked at them on 2026-11-10 and agreed all five:
+
+- **Three control heights, 32 / 40 / 52, with 44 on touch.** Nothing in WS6 needs 28 or 38. 38 was only on the earlier five-step list because inputs sit there today. Colin asked that 40 be listed as an intentional change, which it now is under tier 2, and it goes on the Phase 0 checklist in the unified plan.
+- **Surfaces live in the role tier.**
+- **Square buttons resolve height into the private `--_mj-button-height`.** The public token stays unset on the small button, so a host override on a parent container still wins.
+- **`checked` and `error` join the state list.**
+- **`--mj-font-normal`** is the token's real name, not `--mj-font-regular`.
+
+Colin also proposed the surface level mapping: each level's background defaults to the matching `--mj-bg-surface*` token, overlay defaults to elevated, and hover on every level defaults to `--mj-bg-surface-hover`. That mapping is adopted in tier 2 with three decisions on top, each made by Matt after checking the tokens file and how Atlassian's and GitHub Primer's systems handle the same question:
+
+- **Overlays on elevated is adopted, and named as a visible change.** Dialogs and sheets use the base surface today, so they get lighter in the dark theme. Atlassian states the same principle for its dark theme: the higher the elevation, the lighter the surface.
+- **Sunken gets no hover.** The proposed shared hover is the same gray as the sunken surface in the light theme. Atlassian's elevation guide lists hover and pressed tokens for its default, raised and overlay surfaces and none for sunken.
+- **Card stays a fill.** `--mj-bg-surface-card` has 1,600+ uses, and in the shared kit alone it paints chips, tab bars and title bars as well as cards. Atlassian builds a flat card from the default surface plus a border, and Primer keeps a muted fill (`--bgColor-muted`) next to its default, inset and overlay backgrounds.
