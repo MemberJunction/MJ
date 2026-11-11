@@ -214,21 +214,77 @@ export class MarkdownService {
     return code;
   };
 
+  private engineConfigured = false;
+
+  private areConfigsEqual(a: ResolvedMarkdownConfig, b: ResolvedMarkdownConfig): boolean {
+    if (
+      a.enableHighlight !== b.enableHighlight ||
+      a.enableMermaid !== b.enableMermaid ||
+      a.enableMath !== b.enableMath ||
+      a.enableCodeCopy !== b.enableCodeCopy ||
+      a.enableCollapsibleHeadings !== b.enableCollapsibleHeadings ||
+      a.collapsibleHeadingLevel !== b.collapsibleHeadingLevel ||
+      a.collapsibleDefaultExpanded !== b.collapsibleDefaultExpanded ||
+      a.enableAlerts !== b.enableAlerts ||
+      a.enableSmartypants !== b.enableSmartypants ||
+      a.enableSvgRenderer !== b.enableSvgRenderer ||
+      a.enableHtml !== b.enableHtml ||
+      a.enableJavaScript !== b.enableJavaScript ||
+      a.enableHeadingIds !== b.enableHeadingIds ||
+      a.headingIdPrefix !== b.headingIdPrefix ||
+      a.enableLineNumbers !== b.enableLineNumbers ||
+      a.mermaidTheme !== b.mermaidTheme ||
+      a.sanitize !== b.sanitize
+    ) {
+      return false;
+    }
+    const aLevels = a.autoExpandLevels;
+    const bLevels = b.autoExpandLevels;
+    if (aLevels === bLevels) return true;
+    if (!aLevels || !bLevels) return false;
+    if (aLevels.length !== bLevels.length) return false;
+    for (let i = 0; i < aLevels.length; i++) {
+      if (aLevels[i] !== bLevels[i]) return false;
+    }
+    return true;
+  }
+
   constructor() {
     this.ConfigureMarked(this.currentConfig);
   }
 
   /**
    * Configure the underlying engine with the provided options.
+   * Redundant configuration setup is cached and skipped when options have not changed.
    */
   public ConfigureMarked(config: MarkdownConfig): void {
-    this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
+    const newConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
+    if (this.engineConfigured && this.areConfigsEqual(this.currentConfig, newConfig)) {
+      return;
+    }
+    this.currentConfig = newConfig;
     this.engine.configureMarked(this.currentConfig, { highlightFn: this.prismHighlight });
+    this.engineConfigured = true;
   }
 
   /** @deprecated Use {@link ConfigureMarked}. */
   public configureMarked(config: MarkdownConfig): void {
     return this.ConfigureMarked(config);
+  }
+
+  /**
+   * Parse markdown to a token list (AST) using the underlying engine.
+   * @param markdown The markdown string to tokenize
+   * @param config Optional config overrides
+   * @returns The marked token list
+   */
+  public ParseToTokens(markdown: string, config?: Partial<MarkdownConfig>): ReturnType<MarkdownEngine['ParseToTokens']> {
+    return this.engine.ParseToTokens(markdown, config);
+  }
+
+  /** @deprecated Use {@link ParseToTokens}. */
+  public parseToTokens(markdown: string, config?: Partial<MarkdownConfig>): ReturnType<MarkdownEngine['ParseToTokens']> {
+    return this.ParseToTokens(markdown, config);
   }
 
   /**

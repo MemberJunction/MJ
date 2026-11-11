@@ -3,13 +3,16 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import type { AgentAction, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
+import { BaseAgent } from '../base-agent.js';
 import { DetectVolatilePlaceholders } from '../volatile-child-prompt.js';
 import type {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
     MJAIAgentUserPolicyEntity_IAgentUserEntityAccessRule,
 } from '@memberjunction/core-entities';
-import type { UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,5 +190,75 @@ describe('Chief of Staff End-to-End Metadata, Policy & Security Lifecycle', () =
         expect(promptBlock).toContain('Atlas');
         expect(promptBlock).toContain('Coordinator');
         expect(promptBlock).toContain('Focus on Q4 enterprise renewals');
+    });
+
+    it('BaseAgent.checkUserActionPolicy loads the user policy on cold cache and fails closed on lookup error', async () => {
+        class TestPolicyGateAgent extends BaseAgent {
+            public ExposeCheckUserActionPolicy(
+                params: ExecuteAgentParams,
+                action: AgentAction,
+                actionEntity: MJActionEntityExtended,
+                user?: UserInfo
+            ): Promise<ActionResult | null> {
+                return this.checkUserActionPolicy(params, action, actionEntity, user);
+            }
+        }
+
+        const agent = new TestPolicyGateAgent();
+        const actionEntity = {
+            ID: 'act-send-1',
+            Name: 'Send Single Message',
+            Params: [],
+        } as unknown as MJActionEntityExtended;
+        const action: AgentAction = {
+            name: 'Send Single Message',
+            params: {},
+        };
+
+        const coldPolicy = {
+            ID: 'pol-cold-1',
+            AgentID: 'agent-cos-1',
+            UserID: contextUser.ID,
+            Status: 'Active',
+            ActionPolicyRulesObject: [
+                {
+                    actionPattern: 'Send Single Message',
+                    policy: 'Deny',
+                    rationale: 'Outbound messages disabled by user policy',
+                },
+            ],
+        } as unknown as MJAIAgentUserPolicyEntity;
+
+        // 1. Cold cache (GetCachedPolicy returns null): checkUserActionPolicy loads via provider.RunView and enforces Deny
+        let runViewShouldFail = false;
+        const providerWithRunView = {
+            RunView: async () =>
+                runViewShouldFail
+                    ? { Success: false, Results: [], ErrorMessage: 'Simulated policy store outage' }
+                    : { Success: true, Results: [coldPolicy] },
+        } as unknown as IMetadataProvider;
+
+        const execParams = {
+            agent: { ID: 'agent-cos-1', Name: 'Chief of Staff' },
+            contextUser,
+            provider: providerWithRunView,
+            conversationMessages: [],
+        } as unknown as ExecuteAgentParams;
+
+        expect(AgentUserPolicyEngine.Instance.GetCachedPolicy('agent-cos-1', contextUser.ID, providerWithRunView)).toBeNull();
+        const coldDenied = await agent.ExposeCheckUserActionPolicy(execParams, action, actionEntity, contextUser);
+        expect(coldDenied).not.toBeNull();
+        expect(coldDenied?.Success).toBe(false);
+        expect(coldDenied?.ResultCode).toBe('POLICY_DENIED');
+        expect(coldDenied?.Message).toContain("Action 'Send Single Message' denied by action policy rule");
+
+        // 2. Lookup error on cold cache fails closed with POLICY_DENIED
+        AgentUserPolicyEngine.Instance.ClearCache();
+        runViewShouldFail = true;
+        const errorBlocked = await agent.ExposeCheckUserActionPolicy(execParams, action, actionEntity, contextUser);
+        expect(errorBlocked).not.toBeNull();
+        expect(errorBlocked?.Success).toBe(false);
+        expect(errorBlocked?.ResultCode).toBe('POLICY_DENIED');
+        expect(errorBlocked?.Message).toContain('Simulated policy store outage');
     });
 });

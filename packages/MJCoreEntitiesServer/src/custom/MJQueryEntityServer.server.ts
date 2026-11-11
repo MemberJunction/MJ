@@ -251,7 +251,7 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
             return false;
         }
         if (extraction) {
-            await this.writeExtractionAsync(extraction, options, postCommit);
+            await this.writeExtractionAsync(extraction);
             // A refresh brings the derived rows in line with the SQL; it never writes SQL, a dialect variant's included.
             if (!this.refreshing) await this.autoConvertDialectsAsync();
         } else if (!this.hasSQL) {
@@ -261,6 +261,9 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         // taken last, from the definition as stored.
         if (approving) {
             await this.stampApprovalFingerprintAsync(options);
+        }
+        if (this.lastWriteSummary) {
+            this.queueDescriptionPass(this.lastWriteSummary, options, postCommit);
         }
         return true;
     }
@@ -541,16 +544,15 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     /**
      * Writes the derived child rows as the system user, inside the caller's transaction when there
-     * is one, then queues the description pass. A failed write is recorded on the query
-     * (`ExtractionStatus` `Error`) rather than failing a save whose row is already written.
+     * is one. A failed write is recorded on the query (`ExtractionStatus` `Error`) rather than
+     * failing a save whose row is already written.
      */
-    private async writeExtractionAsync(extraction: QueryExtractionResult, options: EntitySaveOptions | undefined, postCommit: PostCommitToken | undefined): Promise<void> {
+    private async writeExtractionAsync(extraction: QueryExtractionResult): Promise<void> {
         const provider = this.extractionProvider;
         try {
             if (!provider) throw new Error('the query is not saved through a database provider');
             const summary = await WriteExtractedChildRows({ QueryID: this.ID, Provider: provider, User: this.extractionUser, EntityName: id => this.entityNameOf(id) }, extraction);
             this.lastWriteSummary = summary;
-            this.queueDescriptionPass(summary, options, postCommit);
         } catch (e) {
             // An explicit refresh runs in its own transaction, which a failed write rolls back.
             if (this.refreshing) throw e;

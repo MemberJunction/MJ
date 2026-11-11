@@ -61,7 +61,15 @@ function loadPolicy(): DeletePolicy {
     return JSON.parse(readFileSync(path.join(here, 'fixtures', 'entity-delete-fk-policy.json'), 'utf8')) as DeletePolicy;
 }
 
-/** Reads every generated entity module and returns the core-schema FK fields with their target tables. */
+/**
+ * Reads every generated entity module and returns the physical core-schema FK fields with their target tables.
+ *
+ * IS-A child entities (`Comment`, `FieldSuggestion`, etc.) expose ancestor view columns in their generated Zod
+ * schemas for read/type convenience, and CodeGen marks those inherited getters with `* * IS-A Source: Inherited from ...`
+ * on the entity sub-class. Because `spDeleteEntityWithCoreDependencies` executes DML against physical base tables
+ * (where inherited columns live on the ancestor table, not the child table), inherited IS-A view fields are excluded
+ * while the child table's own physical FKs (including its shared-PK `ID` FK to its IS-A parent) are retained.
+ */
 function loadGeneratedForeignKeys(): GeneratedForeignKey[] {
     const dir = path.join(repoRoot, 'packages/MJCoreEntities/src/generated/entities');
     const source = readdirSync(dir)
@@ -70,9 +78,21 @@ function loadGeneratedForeignKeys(): GeneratedForeignKey[] {
         .join('\n');
 
     const baseTables = new Map<string, string>();
-    const classHeader = /\/\*\*\n \* (.+?) - strongly typed entity sub-class\n \* \* Schema: (\S+)\n \* \* Base Table: (\S+)/g;
-    for (const m of source.matchAll(classHeader)) {
-        if (m[2] === CORE_SCHEMA) baseTables.set(m[1], m[3]);
+    const inheritedByEntity = new Map<string, Set<string>>();
+    for (const chunk of source.split(/\/\*\*\n \* (?=.+? - strongly typed entity sub-class\n)/).slice(1)) {
+        const m = /^(.+?) - strongly typed entity sub-class\n \* \* Schema: (\S+)\n \* \* Base Table: (\S+)/.exec(chunk);
+        if (!m || m[2] !== CORE_SCHEMA) continue;
+        baseTables.set(m[1], m[3]);
+
+        const classEnd = chunk.indexOf('\n}\n');
+        const classBody = classEnd >= 0 ? chunk.slice(0, classEnd) : chunk;
+        const inherited = new Set<string>();
+        for (const prop of classBody.matchAll(/\/\*\*\n {4}\* \* Field Name: (\w+)[\s\S]*?\n {4}\*\/(?=\n {4}get )/g)) {
+            if (prop[0].includes('* * IS-A Source: Inherited from ')) {
+                inherited.add(prop[1]);
+            }
+        }
+        if (inherited.size > 0) inheritedByEntity.set(m[1], inherited);
     }
 
     const fks: GeneratedForeignKey[] = [];
@@ -80,8 +100,10 @@ function loadGeneratedForeignKeys(): GeneratedForeignKey[] {
         const entityName = block.slice(0, block.indexOf('\n')).trim();
         const table = baseTables.get(entityName);
         if (!table) continue;
+        const inherited = inheritedByEntity.get(entityName);
         const body = block.slice(0, block.indexOf('\n});'));
         for (const f of body.matchAll(/\n {4}(\w+): z\.([^\n]*?)\.describe\(`([\s\S]*?)`\)/g)) {
+            if (inherited?.has(f[1])) continue;
             const related = /Related Entity\/Foreign Key: (.+?) \(\w+\.ID\)/.exec(f[3]);
             if (!related) continue;
             const referencedTable = baseTables.get(related[1]);
@@ -257,6 +279,18 @@ describe('spDeleteEntityWithCoreDependencies FK coverage', () => {
         for (const r of policy.references.filter((x) => x.action === 'block')) {
             expect(handled.has(key(r.table, r.column))).toBe(false);
         }
+    });
+
+    it('attributes IS-A child FKs to physical tables rather than duplicating inherited parent view columns', () => {
+        const byTriple = new Set(generated.map((fk) => `${fk.table}.${fk.column}->${fk.referencedTable}`));
+        expect(byTriple.has('Conversation.LinkedEntityID->Entity')).toBe(true);
+        expect(byTriple.has('Comment.ID->Conversation')).toBe(true);
+        expect(byTriple.has('Comment.CommentTypeID->CommentType')).toBe(true);
+        expect(byTriple.has('Comment.LinkedEntityID->Entity')).toBe(false);
+        expect(byTriple.has('FieldSuggestion.ID->Comment')).toBe(true);
+        expect(byTriple.has('FieldSuggestion.AIPromptRunID->AIPromptRun')).toBe(true);
+        expect(byTriple.has('FieldSuggestion.CommentTypeID->CommentType')).toBe(false);
+        expect(byTriple.has('FieldSuggestion.LinkedEntityID->Entity')).toBe(false);
     });
 
     it('runs in its own transaction with XACT_ABORT when the caller has none', () => {

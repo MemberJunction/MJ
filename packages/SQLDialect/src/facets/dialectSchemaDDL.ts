@@ -204,6 +204,10 @@ export interface DialectSchemaDDL {
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string;
     /** A single-statement CREATE TABLE that runs only when the table is absent. */
     CreateTableIfAbsent(fullTable: string, columnsBody: string): string;
+    /** A single-statement CREATE INDEX that runs only when the index (or an index on the same column tuple) is absent. */
+    CreateIndexIfAbsent(options: IndexOptions): string;
+    /** A single-statement DROP INDEX that runs only when the index exists. */
+    DropIndexIfExists(schema: string, tableName: string, indexName: string): string;
     /** {@link CommentOnObject} that is safe to re-run. */
     CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string;
     /** {@link CommentOnColumn} that is safe to re-run. */

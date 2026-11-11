@@ -1,0 +1,39 @@
+[
+  {
+    "fields": {
+      "Name": "IT_DatasetCache",
+      "Description": "Test-only dataset for the integration tier's dataset-cache bundle (IT07). Its items are tables that only metadata sync writes, so no other bundle or MJAPI background job can change them between a check that caches the dataset and a check that asks whether the cache is up to date."
+    },
+    "relatedEntities": {
+      "MJ: Dataset Items": [
+        {
+          "fields": {
+            "Code": "TestTypes",
+            "DatasetID": "@parent:ID",
+            "Sequence": 1,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Types",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A6887AF7-18FB-48BA-BFED-5AE5EC9BEC0F"
+          }
+        },
+        {
+          "fields": {
+            "Code": "TestSuites",
+            "DatasetID": "@parent:ID",
+            "Sequence": 2,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Test Suites",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "A41E0B81-6BA1-4DF1-B33B-E77EBF7D9AC4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6F426B37-540E-450F-B48F-29948FAF7062"
+    }
+  }
+]

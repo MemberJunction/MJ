@@ -657,7 +657,7 @@
     }
 
     <!-- Remote Browser Side Pane -->
-    @if (ShowRemoteBrowserPanel) {
+    @if (AllowRemoteBrowser && ShowRemoteBrowserPanel) {
       @if (!isArtifactPaneMaximized) {
         <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
       }

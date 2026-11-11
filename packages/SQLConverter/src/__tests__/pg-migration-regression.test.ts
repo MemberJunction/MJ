@@ -73,6 +73,13 @@ describe.skipIf(!hasMigrations)('v5 migration regression — conversion', () => 
     'V202605041250__v5.33.x__Search_Hygiene_For_Mj_Schema_And_Field_Types.sql',
     'V202605041300__v5.33.x__EntityField_UserSearchPredicateAPI_Check_Constraint.sql',
     'V202605281538__v5.38.x__Fix_AllowUpdateAPI_On_Virtual_Transition.sql',
+    // Each file is one CREATE OR ALTER PROC of spUpdateExistingEntityFieldsFromSchema, a
+    // SQL Server CodeGen internal (temp tables, table variables) that PostgreSQL implements
+    // natively. CREATE OR ALTER PROC is classified as a procedure (issue #5364), so the
+    // classifier's SQL Server-procedure skip applies, as it does to CREATE PROCEDURE. Before,
+    // the body was sub-split into fragments that did not apply on PostgreSQL.
+    'V202607202000__v5.49.x__SS_Materialize_Catalog_Views_spUpdateExistingEntityFields.sql',
+    'V202607202100__v5.49.x__SoftPK_Guard_Materialized_spUpdateExistingEntityFieldsFromSchema.sql',
   ]);
 
   describe.skipIf(SKIP_HEAVY_IN_CI)('every T-SQL migration converts without error', () => {

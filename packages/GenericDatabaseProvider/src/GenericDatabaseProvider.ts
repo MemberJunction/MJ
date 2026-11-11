@@ -18,10 +18,13 @@
 
 import {
     BaseEntity,
+    BaseEntityResult,
+    ConcurrencyCheckMode,
     SerializeCloneChangeContext,
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
+    EntityRelationshipInfo,
     EntityFieldTSType,
     ProjectRowsToFields,
     ProjectEntityValueRowsForUser,
@@ -76,6 +79,7 @@ import {
     CachedRunViewResult,
     FieldSecurityViolation,
     LogError,
+    LogErrorEx,
     LogStatus,
     LogStatusEx,
     DiagnosticContext,
@@ -103,6 +107,7 @@ import {
     BuildViewPropertyFilter,
     ServerOperationScopeManager,
     NormalizeRunViewParameters,
+    CompositeFilterSQLCompiler,
 } from '@memberjunction/core';
 
 import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UnwrapPhraseQuotes, UUIDsEqual, UUIDSet } from '@memberjunction/global';
@@ -124,6 +129,13 @@ import { UndescribedColumnNames, WithheldColumnNames, WithholdColumns } from './
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
 import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from './saveTypes.js';
+import {
+    AreEntityFieldValuesDifferent,
+    ClientOldValueToFieldValue,
+    DetectFieldConcurrencyConflicts,
+    FindEntityFieldByCodeNameOrName,
+    IsFieldOpaqueToClient,
+} from './concurrency/fieldConflictDetector.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
@@ -534,6 +546,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Server-side concurrency check mode for entity UPDATEs (`'off' | 'log' | 'enforce'`).
+     * Defaults to `'off'` so direct server-side background saves pay zero extra lock-read or
+     * transaction round-trips unless opted in via provider configuration or per-save
+     * `EntitySaveOptions.ConcurrencyCheck` (GraphQL mutations with `OldValues___` always pass `'enforce'`).
+     */
+    public ConcurrencyCheck: ConcurrencyCheckMode = 'off';
+
+    /**
+     * Controls whether entity UPDATEs against CodeGen-generated routines (`spUpdateGenerated === true`)
+     * bind only dirty columns instead of every loaded column. Defaults to `true`. Set to `false`
+     * (or configure `databaseSettings.deltaUpdates: false`) as an operational kill-switch to restore
+     * legacy full-row parameter binding across all saves.
+     */
+    public DeltaUpdates: boolean = true;
+
+    /**
      * Installs {@link ProviderConfigDataBase.LocalStorageProvider}, when the configuration carries
      * one, before the base configuration loads metadata. A server fleet passes its shared (Redis)
      * store this way so the metadata load and the engines loaded at startup use it from the first
@@ -543,6 +571,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     public override async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         if (data?.LocalStorageProvider) {
             this.SetLocalStorageProvider(data.LocalStorageProvider);
+        }
+        if (data?.ConcurrencyCheck) {
+            this.ConcurrencyCheck = data.ConcurrencyCheck;
+        }
+        if (data?.DeltaUpdates !== undefined) {
+            this.DeltaUpdates = data.DeltaUpdates;
         }
         return super.Config(data, providerToUse);
     }
@@ -1094,6 +1128,184 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return activeActions.some((a) => a.RunMode === 'Durable' && !originatingSet?.Has(a.ID));
     }
 
+    /**
+     * Dialect hook for reading a row under an exclusive/update row lock inside the save transaction
+     * immediately before `spUpdate*` executes.
+     *
+     * - SQL Server overrides to emit `SELECT [col1], ... FROM [schema].[BaseTable] WITH (UPDLOCK, ROWLOCK) WHERE ...`
+     * - PostgreSQL overrides to emit `SELECT "col1", ... FROM "schema"."BaseTable" WHERE ... FOR UPDATE`
+     */
+    protected RenderLockedRowReadSQL(
+        _entityInfo: EntityInfo,
+        _pkWhereClause: string,
+        _columns: string[],
+    ): string | null {
+        return null;
+    }
+
+    protected getEffectiveConcurrencyCheckMode(options?: EntitySaveOptions): ConcurrencyCheckMode {
+        return options?.ConcurrencyCheck ?? this.ConcurrencyCheck;
+    }
+
+    protected override ShouldCheckUpdateConcurrency(
+        entity: BaseEntity,
+        options: EntitySaveOptions,
+    ): boolean {
+        if (this.getEffectiveConcurrencyCheckMode(options) === 'off') {
+            return false;
+        }
+        if (options?.SkipOldValuesCheck || options?.IgnoreDirtyState || options?.ReplayOnly) {
+            return false;
+        }
+        if (!entity.PrimaryKey || entity.PrimaryKey.KeyValuePairs.length === 0) {
+            return false;
+        }
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const currentVal = entity.GetFieldByName(f.Name)?.Value;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    return true;
+                }
+            }
+        }
+        return entity.Fields.some(
+            (f) =>
+                f.Dirty &&
+                !f.EntityFieldInfo.ReadOnly &&
+                !f.EntityFieldInfo.IsVirtual &&
+                !f.EntityFieldInfo.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f.EntityFieldInfo),
+        );
+    }
+
+    protected override async CheckUpdateConcurrency(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return true;
+        }
+
+        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+        const baselineValues: Record<string, unknown> = {};
+        const newValues: Record<string, unknown> = {};
+
+        if (options?.ConcurrencyBaseline) {
+            for (const [key, rawBaseline] of Object.entries(options.ConcurrencyBaseline)) {
+                const f = FindEntityFieldByCodeNameOrName(entity.EntityInfo, key);
+                if (!f || f.ReadOnly || f.IsVirtual || f.IsPrimaryKey || IsFieldOpaqueToClient(f)) {
+                    continue;
+                }
+                const coercedBaseline = ClientOldValueToFieldValue(f, rawBaseline);
+                const entityField = entity.GetFieldByName(f.Name);
+                const currentVal = entityField ? entityField.Value : undefined;
+                if (AreEntityFieldValuesDifferent(f, coercedBaseline, currentVal, false)) {
+                    baselineValues[f.Name] = coercedBaseline;
+                    newValues[f.Name] = currentVal;
+                }
+            }
+        }
+
+        for (const entityField of entity.Fields) {
+            const f = entityField.EntityFieldInfo;
+            if (
+                entityField.Dirty &&
+                !f.ReadOnly &&
+                !f.IsVirtual &&
+                !f.IsPrimaryKey &&
+                !IsFieldOpaqueToClient(f) &&
+                !(f.Name in baselineValues)
+            ) {
+                baselineValues[f.Name] = entityField.OldValue;
+                newValues[f.Name] = entityField.Value;
+            }
+        }
+
+        const columnsToRead = Object.keys(baselineValues);
+        if (columnsToRead.length === 0) {
+            return true;
+        }
+
+        const pkWhereClause = this.BuildPrimaryKeyWhereClause(entity.EntityInfo, entity.PrimaryKey);
+        if (!pkWhereClause) {
+            return true;
+        }
+
+        const sql = this.RenderLockedRowReadSQL(entity.EntityInfo, pkWhereClause, columnsToRead);
+        if (!sql) {
+            return true;
+        }
+
+        const rawRows = await this.ExecuteSQL<Record<string, unknown>>(
+            sql,
+            undefined,
+            {
+                description: `Concurrency check lock read for ${entity.EntityInfo.Name}`,
+                ignoreLogging: true,
+            },
+            user,
+        );
+        if (!rawRows || rawRows.length === 0) {
+            return true;
+        }
+
+        const processedRows = await this.PostProcessRows(rawRows, entity.EntityInfo, user);
+        const storedRow = processedRows[0] ?? rawRows[0];
+        this.TrimFixedWidthValues(entity.EntityInfo, storedRow);
+
+        const checkResult = DetectFieldConcurrencyConflicts(
+            entity.EntityInfo,
+            baselineValues,
+            newValues,
+            storedRow,
+        );
+
+        if (checkResult.ConflictingFields.length === 0) {
+            return true;
+        }
+
+        const msg = {
+            Message:
+                'Concurrent modification conflict: one or more fields modified by the caller were updated in the database since the record was loaded.',
+            ClientDifferences: checkResult.ClientDifferences,
+            DBDifferences: checkResult.DBDifferences,
+            Overlap: checkResult.Overlap,
+        };
+
+        LogErrorEx({
+            message: `Entity save concurrency conflict detected on ${entity.EntityInfo.Name}: ${JSON.stringify(msg)}`,
+            severity: 'warning',
+            category: 'GenericDatabaseProvider.CheckUpdateConcurrency',
+            metadata: {
+                entityName: entity.EntityInfo.Name,
+                mode: effectiveMode,
+                conflictingFields: checkResult.ConflictingFields,
+                clientDifferences: checkResult.ClientDifferences,
+                dbDifferences: checkResult.DBDifferences,
+                overlap: checkResult.Overlap,
+            },
+        });
+
+        if (effectiveMode === 'enforce') {
+            entityResult.Success = false;
+            entityResult.EndedAt = new Date();
+            entityResult.ConcurrencyConflict = {
+                ConflictingFields: checkResult.ConflictingFields,
+            };
+            entityResult.Message = `Concurrent modification conflict on ${entity.EntityInfo.Name} for field(s): ${checkResult.ConflictingFields.join(', ')}. Reload the record and retry your changes.`;
+            return false;
+        }
+
+        return true;
+    }
+
     protected override async OnDurableAfterSaveExecute(
         entity: BaseEntity,
         user: UserInfo,
@@ -1340,6 +1552,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                         // fault: one warning per key, and the value stays encrypted.
                         if (IsEncryptionKeyUnavailable(decryptError)) {
                             ReportEncryptionKeyUnavailable(decryptError);
+                            continue;
+                        }
+                        // Inactive rows (e.g., disabled template credentials seeded before activation)
+                        // may hold placeholder ciphertext from another environment; preserve ciphertext without spamming error logs.
+                        if (processedRow['IsActive'] === false || processedRow['IsActive'] === 0) {
                             continue;
                         }
                         const message = decryptError instanceof Error ? decryptError.message : String(decryptError);
@@ -2034,11 +2251,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
         }
 
-        // 2. Encrypt — between coercion and rendering, mutates the map in place.
-        await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
+        // 2. On normal UPDATEs where DeltaUpdates is enabled, the entity's spUpdate is CodeGen-generated,
+        //    and at least one field is dirty, pass ONLY the dirty fields (plus the PK appended by
+        //    RenderSaveCallBinding) to the stored procedure / function so untouched columns default to NULL
+        //    and retain their stored database values via ISNULL(@Param, [Col]) / COALESCE(p_param, "Col").
+        //    Provider-wide DeltaUpdates=false, forced saves (IgnoreDirtyState), ReplayOnly saves, and
+        //    entities with custom spUpdate implementations keep the full-row parameter map.
+        const useDeltaUpdate =
+            this.DeltaUpdates &&
+            isUpdate &&
+            !options?.IgnoreDirtyState &&
+            !options?.ReplayOnly &&
+            entity.EntityInfo.spUpdateGenerated &&
+            (dirtyFields?.size ?? 0) > 0;
+        const effectiveFieldValueMap = useDeltaUpdate
+            ? this.changedFieldValues(entity, fieldValueMap, dirtyFields)
+            : fieldValueMap;
 
-        // 3. Render the provider-specific binding.
-        const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+        // 3. Encrypt — between coercion and rendering, mutates the map in place.
+        await this.EncryptFieldValuesForSave(entity, effectiveFieldValueMap, user);
+
+        // 4. Render the provider-specific binding.
+        const binding = this.RenderSaveCallBinding(entity, effectiveFieldValueMap, isUpdate, spName);
 
         // 4. Resolve SaveReturnContext and wrap with result capture.
         //    `unprojectedSaveSQL` is the bare SP/function call (kept for `simpleSQL` fallback so
@@ -2068,10 +2302,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const computeSimpleSQL = (): string => {
             if (cachedSimpleSQL === undefined) {
                 const replaySQL = isNew
-                    ? this.RenderReplaySaveSQL(binding, entity, fieldValueMap)
+                    ? this.RenderReplaySaveSQL(binding, entity, effectiveFieldValueMap)
                     : options?.IgnoreDirtyState
                       ? undefined
-                      : this.RenderReplayUpdateSQL(binding, entity, this.changedFieldValues(entity, fieldValueMap, dirtyFields));
+                      : this.RenderReplayUpdateSQL(
+                            binding,
+                            entity,
+                            useDeltaUpdate
+                                ? effectiveFieldValueMap
+                                : this.changedFieldValues(entity, effectiveFieldValueMap, dirtyFields),
+                        );
                 // A statement that runs with parameters is logged in its literal form, which replays alone.
                 cachedSimpleSQL = replaySQL ?? unprojectedSaveSQL.literalSQL ?? unprojectedSaveSQL.sql;
             }
@@ -2888,6 +3128,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Compiles `params.Filter` (a structured `CompositeFilter` / `CompositeFilterDescriptor`) into a
+     * parameterized SQL WHERE fragment for `entityInfo` using {@link CompositeFilterSQLCompiler.Compile}
+     * and binds its parameters onto `queryParameters` via {@link BindExtraFilterParameters}.
+     */
+    protected CompileStructuredRunViewFilter(
+        params: RunViewParams,
+        entityInfo: EntityInfo,
+        user: UserInfo,
+        queryParameters?: NamedQueryParameter[],
+    ): string {
+        if (!params.Filter) {
+            return '';
+        }
+        const compiled = CompositeFilterSQLCompiler.Compile(params.Filter, entityInfo, {
+            platform: this.PlatformKey,
+            user,
+            parameterPrefix: '_cf_',
+        });
+        if (!compiled.whereClause) {
+            return '';
+        }
+        return this.BindExtraFilterParameters(compiled.whereClause, compiled.parameters, queryParameters);
+    }
+
+    /**
      * Optionally wraps a view query with user view run logging.
      * SQL Server overrides to use spCreateUserViewRunWithDetail.
      * Default: returns null (no view run logging).
@@ -3168,7 +3433,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
                 // normal SQL path that applies them runs below this early return — so fold them in
                 // here, else a UserView over an external entity silently returns unfiltered rows.
-                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user, entityInfo);
                 this.assertExternalClausesRespectFieldSecurity(entityInfo, externalParams, user);
                 const externalRouter = this.resolveExternalReadRouterOrThrow(`Entity '${entityInfo.Name}'`);
                 const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
@@ -3189,6 +3454,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
             const queryParameters: NamedQueryParameter[] = [];
             const extraFilter: string = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo, params.Parameters, queryParameters);
+            const structuredFilter: string = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
             const userSearchString: string = params.UserSearchString ?? '';
             const excludeUserViewRunID: string = params.ExcludeUserViewRunID ?? '';
             const overrideExcludeFilter: string = params.OverrideExcludeFilter ?? '';
@@ -3303,6 +3569,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (!this.ValidateUserProvidedSQLClause(extraFilter))
                     throw new Error(`Invalid Extra Filter: ${extraFilter}, contains one more for forbidden keywords`);
                 whereSQL = bHasWhere ? `${whereSQL} AND (${extraFilter})` : `(${extraFilter})`;
+                bHasWhere = true;
+            }
+
+            // 2a. Structured Filter (CompositeFilter / CompositeFilterDescriptor)
+            if (structuredFilter.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
                 bHasWhere = true;
             }
 
@@ -3894,7 +4166,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
-     * the columns this user is allowed to read when field security denies them any.
+     * the columns this user is allowed to read when field security denies them any. With
+     * `tableAlias`, every column (or the `*`) is qualified with it.
      *
      * Deliberately NOT routed through RunView, which is the other way to get this behavior.
      * That reroute is the tidier long-term shape and is planned separately (it must pass
@@ -3902,19 +4175,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * — and it changes relationship loading, which stays on its current path). Filtering the
      * column list here buys the same protection without touching either.
      */
-    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
+    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined, tableAlias?: string): string {
+        const prefix = tableAlias ? `${tableAlias}.` : '';
         if (!user || !entityInfo.FieldLevelSecurityApplies) {
-            return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
+            return `${prefix}*`; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
         if (denied.size === 0) {
-            return '*';
+            return `${prefix}*`;
         }
         const allowed = entityInfo.Fields.filter(f => !denied.has(f.Name.trim().toLowerCase()));
         if (allowed.length === 0) {
-            return '*'; // degenerate; PKs are unrestrictable so this should be unreachable
+            return `${prefix}*`; // degenerate; PKs are unrestrictable so this should be unreachable
         }
-        return allowed.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+        return allowed.map(f => `${prefix}${this.QuoteIdentifier(f.Name)}`).join(', ');
     }
 
     /**
@@ -5010,6 +5284,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             bHasWhere = true;
         }
 
+        const structuredFilter = this.CompileStructuredRunViewFilter(params, entityInfo, user, queryParameters);
+        if (structuredFilter.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${structuredFilter})` : `(${structuredFilter})`;
+            bHasWhere = true;
+        }
+
         // Free text, not a SQL fragment — deliberately NOT run through
         // ValidateUserProvidedSQLClause. See the equivalent note on the view path above (#4392).
         if (params.UserSearchString && params.UserSearchString.length > 0) {
@@ -5323,10 +5603,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         params: RunViewParams,
         viewEntity: MJUserViewEntityExtended | null,
         user: UserInfo,
+        entityInfo?: EntityInfo,
     ): Promise<RunViewParams> {
-        if (!viewEntity) return params;
+        if (!viewEntity && !params.Filter) return params;
         const merged: RunViewParams = { ...params };
-        const callerFilter = (params.ExtraFilter as string) || '';
+        let callerFilter = (params.ExtraFilter as string) || '';
+        if (params.Filter && entityInfo) {
+            const literalStructured = CompositeFilterSQLCompiler.CompileLiteral(params.Filter, entityInfo, {
+                platform: this.PlatformKey,
+                user,
+            }).trim();
+            if (literalStructured) {
+                callerFilter = callerFilter ? `(${callerFilter}) AND (${literalStructured})` : literalStructured;
+                merged.ExtraFilter = callerFilter;
+            }
+            delete merged.Filter;
+        }
+        if (!viewEntity) return merged;
         if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
             const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
             if (renderedWhere) {
@@ -7798,15 +8091,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                     // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
                     // that references this entity's key — a single-column foreign-key target by metadata design.
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: relationship join field is a single-column FK target
-                    const pkValue = ret[entity.FirstPrimaryKey.Name]; // first-pk-ok: relationship join field is a single-column FK target
-                    let relSql: string;
-
-                    if (relInfo.Type.trim().toLowerCase() === 'one to many') {
-                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
-                    } else {
-                        // many to many — use join view
-                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                    const relSql = this.BuildRelatedRowsLoadSQL(
+                        relInfo,
+                        relEntityInfo,
+                        ret[entity.FirstPrimaryKey.Name], // first-pk-ok: relationship join field is a single-column FK target
+                        entity.FirstPrimaryKey.NeedsQuotes, // first-pk-ok: relationship join field is a single-column FK target
+                        user,
+                    );
+                    if (relSql === null) {
+                        LogStatus(`[GenericDatabaseProvider] Skipping relationship '${rel}' on '${entityInfo.Name}': the user cannot read '${relEntityInfo.Name}'.`);
+                        continue;
                     }
 
                     const rawRelData = await this.ExecuteSQL<Record<string, unknown>>(relSql, undefined, undefined, user);
@@ -7818,6 +8112,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return ret;
         }
         return null;
+    }
+
+    /**
+     * Builds the SELECT for one relationship of a single-record load, or returns null when the
+     * user may not read the related entity at all (the caller skips the relationship).
+     *
+     * The related rows get the same protection the parent row gets: the column list leaves out
+     * fields the user may not read, and the user's Read row filter narrows the rows. A user with
+     * no field denials and no row filter gets the same SQL as before. With no user (server-side
+     * system work) nothing is narrowed, which matches the parent load.
+     *
+     * For a many-to-many relationship the row filter is applied inside a derived table over the
+     * related view, so its column names cannot clash with the join view's.
+     */
+    protected BuildRelatedRowsLoadSQL(
+        relInfo: EntityRelationshipInfo,
+        relEntityInfo: EntityInfo,
+        pkValue: unknown,
+        pkNeedsQuotes: boolean,
+        user: UserInfo | undefined,
+    ): string | null {
+        if (user && !relEntityInfo.GetUserPermisions(user)?.CanRead) {
+            return null;
+        }
+        const quotes = pkNeedsQuotes ? "'" : '';
+        const safeValue = pkNeedsQuotes ? String(pkValue).replace(/'/g, "''") : String(pkValue);
+        const keyLiteral = `${quotes}${safeValue}${quotes}`;
+        const rowFilter = user ? relEntityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '') : '';
+        const relatedView = this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView);
+
+        if (relInfo.Type.trim().toLowerCase() === 'one to many') {
+            const filterClause = rowFilter ? ` AND (${rowFilter})` : '';
+            return `SELECT ${this.buildFieldSecuritySelectList(relEntityInfo, user)} FROM ${relatedView} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${keyLiteral}${filterClause}`;
+        }
+
+        // many to many — through the join view
+        const columns = this.buildFieldSecuritySelectList(relEntityInfo, user, '_theview');
+        const source = rowFilter ? `(SELECT * FROM ${relatedView} WHERE (${rowFilter}))` : relatedView;
+        return `SELECT ${columns} FROM ${source} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${keyLiteral}`;
     }
 
     /**************************************************************************/
@@ -7923,6 +8256,70 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Evaluates an arbitrary SQL `whereClause` against an entity's pending in-memory field values
+     * using the same typed synthetic-row subquery (`SELECT CASE WHEN (...) THEN 1 ELSE 0 END`)
+     * used by Create/Update RLS post-image enforcement, without taking or blocking on table locks.
+     *
+     * When `dirtyOnlyOptimization` is `true` and `whereClause` decomposes cleanly into simple
+     * column comparisons whose referenced columns are all clean on `entity`, returns `true`
+     * without a database round-trip (safe only when the pre-image was already verified).
+     */
+    public async EvaluateSyntheticRowWhereClause(
+        entity: BaseEntity,
+        whereClause: string,
+        user: UserInfo,
+        dirtyOnlyOptimization: boolean = false
+    ): Promise<boolean> {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) {
+            return true;
+        }
+        const parentFieldNames = entity.EntityInfo?.ParentEntityFieldNames;
+        const nonIsaVirtualNames = new Set(
+            (entity.EntityInfo?.Fields ?? [])
+                .filter(f => f.IsVirtual && !parentFieldNames?.has(f.Name))
+                .map(f => f.Name.trim().toLowerCase())
+        );
+        if (nonIsaVirtualNames.size > 0) {
+            const matchedVirtual = ClientClauseScreen.ExtractStatementIdentifierTokens(trimmed, this.Dialect).filter(
+                tok => nonIsaVirtualNames.has(tok.trim().toLowerCase())
+            );
+            if (matchedVirtual.length > 0) {
+                LogError(
+                    `EvaluateSyntheticRowWhereClause refused for entity '${entity.EntityInfo?.Name}': write-side whereClause references non-IS-A virtual view column(s) [${matchedVirtual.join(', ')}]`
+                );
+                return false;
+            }
+        }
+        if (dirtyOnlyOptimization) {
+            const referencedColumns = this.TryExtractSimpleFilterColumns(trimmed);
+            if (referencedColumns) {
+                const dirtyNames = new Set(
+                    entity.Fields.filter(f => f.Dirty).map(f => f.Name.trim().toLowerCase())
+                );
+                const touchesFilterColumn = referencedColumns.some(c => dirtyNames.has(c));
+                if (!touchesFilterColumn) {
+                    return true;
+                }
+            }
+        }
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo, true);
+        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        try {
+            const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
+                sql,
+                undefined,
+                undefined,
+                user
+            );
+            return Boolean(result && result.length > 0 && Number(result[0]['pass']) === 1);
+        } catch (err) {
+            LogError(`EvaluateSyntheticRowWhereClause failed for entity '${entity.EntityInfo?.Name}': ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    /**
      * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
      * references. Returns the columns ONLY when the whole clause is a conjunction of simple
      * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,
@@ -7961,10 +8358,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
      * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected BuildRLSSyntheticRowProjections(
+        entity: BaseEntity,
+        entityInfo: EntityInfo,
+        includeISAParentFields: boolean = false
+    ): string {
         const parts: string[] = [];
+        const parentFieldNames = includeISAParentFields ? entityInfo.ParentEntityFieldNames : undefined;
         for (const field of entityInfo.Fields) {
-            if (field.IsVirtual) continue;
+            if (field.IsVirtual && !parentFieldNames?.has(field.Name)) continue;
             const val = entity.Get(field.Name);
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
@@ -8064,6 +8466,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
+    }
+
+    /** An ItemFilter that is exactly `1=0` (spacing aside): the caller wants no rows from the item. */
+    private static readonly _noRowItemFilter = /^\s*1\s*=\s*0\s*$/;
+
+    /** Whether a dataset ItemFilter asks for no rows at all, so the item needs no read. */
+    private static isNoRowItemFilter(filter: string | undefined): boolean {
+        return !!filter && GenericDatabaseProvider._noRowItemFilter.test(filter);
     }
 
     /**
@@ -8192,7 +8602,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
      * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
-     * item runs no SQL and fails the dataset.
+     * item runs no SQL and fails the dataset. An item whose ItemFilter is exactly `1=0` runs no SQL
+     * either: it returns an empty, successful result.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -8238,6 +8649,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const errorResults: DatasetItemResultType[] = [];
         const cachedResults: DatasetItemResultType[] = [];
+        // Items the caller asked for with a no-row ItemFilter: answered without a read.
+        const noRowResults: DatasetItemResultType[] = [];
         const uncachedQueries: string[] = [];
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
@@ -8301,6 +8714,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     LatestUpdateDate: undefined,
                     Status: scope.Refusal,
                     Success: false,
+                });
+                continue;
+            }
+            // An ItemFilter of exactly `1=0` asks for no rows, whatever the stored WhereClause or the
+            // caller's row filter add to it, so the item is answered without a read. The scoped
+            // metadata reload (ProviderBase.TryPartialMetadataReload) sends it for every item it does
+            // not reload; each used to run its own empty SELECT, one pool connection apiece.
+            if (GenericDatabaseProvider.isNoRowItemFilter(itemFilters?.find(f => f?.ItemCode === code)?.Filter)) {
+                noRowResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: this.computeLatestUpdateDate([], String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt'), item),
+                    Success: true,
                 });
                 continue;
             }
@@ -8573,11 +9001,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             });
         }
 
-        // Merge results: errors + cached + SQL (maintain original item order via code matching)
+        // Merge results: errors + no-row + cached + SQL (maintain original item order via code matching)
         const results: DatasetItemResultType[] = [];
         for (const item of items) {
             const code = String(item['Code']);
             const found = errorResults.find(r => r.Code === code)
+                ?? noRowResults.find(r => r.Code === code)
                 ?? cachedResults.find(r => r.Code === code)
                 ?? sqlResults.find(r => r.Code === code);
             if (found) results.push(found);

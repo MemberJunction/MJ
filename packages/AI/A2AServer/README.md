@@ -170,6 +170,15 @@ module.exports = {
 };
 ```
 
+### Task store (`a2aServerSettings.taskStoreMode`)
+
+| Mode | Where tasks live | Who can call |
+|---|---|---|
+| `'memory'` (default) | In the server process. `tasks/get`, cancel and resubscribe must reach the replica that holds the task, and tasks are lost on restart. | Any authenticated caller. |
+| `'entity'` (opt in) | In `MJ: Tasks` rows filed under the `A2A Task` task type, so any replica can serve a task, cancel it, or stream it. | Every A2A caller needs **Create** and **Update** permission on `MJ: Tasks`. A caller without it gets `The task could not be saved`. |
+
+The `A2A Task` type ships as metadata (`metadata/task-types`). The durable store finds it by name and never creates it; without it every save is refused.
+
 Required environment variables:
 - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` -- Database connection
 - `AI_VENDOR_API_KEY__*` -- AI provider API keys

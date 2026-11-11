@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { Content, Part } from '@google/genai';
 import { ChatMessage, ChatMessageRole, ChatParams, ChatReasoningBlock, ChatResult } from '@memberjunction/ai';
 import { GeminiLLM } from '../index';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 const MODEL = 'gemini-3.5-flash';
 const ORIGIN = `gemini-api:${MODEL}`;
@@ -125,7 +126,7 @@ describe('Gemini reasoning — replay', () => {
 
         await llm.ChatCompletion(paramsFor(replayedHistory(first)));
 
-        const model = histories[1].find((c) => c.role === 'model');
+        const model = WithoutCacheAnchor(histories[1]).find((c) => c.role === 'model');
         expect(model?.parts).toEqual([
             { text: 'The user wants Q3 numbers; search first.', thought: true, thoughtSignature: 'thought-sig' },
             { text: 'Searching for the figures.', thoughtSignature: 'text-sig' },

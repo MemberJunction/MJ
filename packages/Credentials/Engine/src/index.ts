@@ -10,7 +10,8 @@ export {
     CredentialResolutionError,
     CredentialExpiredError,
     CredentialNotFoundError,
-    CredentialOwnerMismatchError
+    CredentialOwnerMismatchError,
+    CredentialValuesUnreadableError
 } from './expiration';
 
 export type {
@@ -37,7 +38,9 @@ export {
     DatabaseConnectionCredentialValues,
     TwilioCredentialValues,
     UserDelegatedOAuthCredentialValues,
-    StoreUserDelegatedCredentialOptions
+    StoreUserDelegatedCredentialOptions,
+    GitHubAppCredentialValues,
+    GitHubPATCredentialValues
 } from './types';
 
 // Re-export entity types for convenience

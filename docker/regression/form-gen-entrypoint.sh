@@ -52,7 +52,13 @@ echo "Step 3: Running CodeGen to generate Angular entity forms..."
 # metadata that now includes those committed fields and regenerates the output
 # correctly. Without this, single-record reads + saves of demo entities fail
 # at runtime with "Cannot query field _mj__CreatedAt on type AssociationDemoMember_".
+# Both passes must succeed.
 node /app/packages/MJCLI/bin/run.js codegen
+# Pass 1 created the demo EntityField rows; type the email/URL ones so the next
+# pass generates their fields as mailto / external links (T044).
+node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
+    echo "  WARNING: Demo field type update failed — T044 will see plain-text emails"
+}
 echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
 node /app/packages/MJCLI/bin/run.js codegen
 echo "  ✓ CodeGen complete (2 passes)"

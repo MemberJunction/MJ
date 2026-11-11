@@ -729,4 +729,101 @@ describe('AssemblyAIRealtimeSession guard rails', () => {
         const session = new AssemblyAIRealtimeSession({ system_prompt: 'p' });
         expect(() => session.SendInput({ Data: new Uint8Array([1]).buffer, Kind: 'audio' })).toThrow('not open');
     });
+
+    it('reconnects in place with a fresh socket, strips greeting, and preserves memory seed across SendContextNote (#2, #7, #13, #21, #28)', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, {
+            SystemPrompt: 'Base prompt.',
+            Config: { firstMessage: 'Welcome!' },
+        })) as AssemblyAIRealtimeSession;
+        const socket1 = driver.Socket;
+        const { errors } = collect(session);
+
+        driver.Emit({ type: 'transcript.user', text: 'Hello agent', item_id: 'u1' });
+        driver.Emit({ type: 'transcript.agent', text: 'Hi caller', reply_id: 'r1', item_id: 'a1', interrupted: false });
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+
+        // Before session.ready on socket2, socket1 has not been closed yet, and an error on socket1 is ignored
+        expect(socket1.Closed).toBe(false);
+        socket1.ConnectArgs?.OnError('old socket error during handshake');
+        expect(errors).toEqual([]);
+
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        expect(socket1.Closed).toBe(true);
+        expect(errors).toEqual([]);
+        const updateFrame = socket2.SentFrames().find((f) => f.type === 'session.update');
+        expect(updateFrame?.session?.system_prompt).toContain('Base prompt.');
+        expect(updateFrame?.session?.system_prompt).toContain('Hello agent');
+        expect(updateFrame?.session?.system_prompt).toContain('Hi caller');
+        expect(updateFrame?.session?.greeting).toBeUndefined();
+
+        // A subsequent SendContextNote after reconnect must preserve the seeded conversation history
+        session.SendContextNote('Order 99 shipped');
+        const noteUpdate = socket2.SentFrames().at(-1);
+        expect(noteUpdate?.session?.system_prompt).toContain('Hello agent');
+        expect(noteUpdate?.session?.system_prompt).toContain('Order 99 shipped');
+    });
+
+    it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+        const socket1 = driver.Socket;
+        driver.Emit({ type: 'tool.call', call_id: 'c_1', name: 'get_weather', arguments: { city: 'NYC' } });
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        await session.SendToolResult('c_1', '{"status":"shipped"}');
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        const carrying = (socket: FakeSocket) => socket.SentFrames().filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying(socket1)).toEqual([]);
+        expect(carrying(socket2)).toHaveLength(1);
+        expect(carrying(socket2)[0].type).toBe('session.update'); // the late-result note rides the system prompt
+        await session.Close();
+    });
+
+    it('replaces StateKey notes in system_prompt (using MemoryText) and omits Ephemeral progress notes across reconnects', async () => {
+        const driver = new TestAssemblyAIRealtime('fake-api-key');
+        const session = (await startSession(driver, { SystemPrompt: 'Base prompt.' })) as AssemblyAIRealtimeSession;
+
+        session.SendContextNote('[app-context]\nlocation: Explorer › Screen 1', {
+            StateKey: 'app-context',
+            MemoryText: '[app-context]\nlocation: Explorer › Screen 1\nsections: Home, Accounts',
+        });
+        session.SendContextNote('[app-context]\nlocation: Explorer › Screen 2', {
+            StateKey: 'app-context',
+            MemoryText: '[app-context]\nlocation: Explorer › Screen 2\nsections: Home, Screen 1',
+        });
+        session.SendContextNote('[delegated-agent progress] step 1', { Ephemeral: true });
+        session.SendContextNote('[delegated-agent progress] step 2', { Ephemeral: true });
+
+        const livePrompt = String(driver.Socket.SentFrames().at(-1)?.session?.system_prompt ?? '');
+        expect(livePrompt).toContain('Screen 2');
+        expect(livePrompt).not.toContain('Explorer › Screen 1\n');
+        expect(livePrompt).toContain('step 2');
+        expect(livePrompt).not.toContain('step 1');
+
+        const socket2 = new FakeSocket();
+        driver.Socket = socket2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        driver.Emit(readyEvent());
+        expect(await reconnectPromise).toBe(true);
+
+        const resumedPrompt = String(socket2.SentFrames().find((f) => f.type === 'session.update')?.session?.system_prompt ?? '');
+        expect(resumedPrompt).toContain('Screen 2');
+        expect(resumedPrompt).not.toContain('step 2');
+        await session.Close();
+    });
 });
+
+

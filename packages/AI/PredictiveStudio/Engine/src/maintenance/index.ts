@@ -17,3 +17,5 @@ export * from './types';
 export * from './metrics';
 export * from './maintenance-engine';
 export * from './seams';
+export * from './psi-drift-detector';
+

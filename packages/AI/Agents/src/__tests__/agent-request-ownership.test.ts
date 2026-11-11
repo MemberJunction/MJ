@@ -9,6 +9,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { ValidationResult } from '@memberjunction/global';
+import { ServerOperationScopeManager } from '@memberjunction/core';
+import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION } from '@memberjunction/ai-core-plus';
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -28,6 +30,12 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     class MockMJAIAgentRequestEntity {
         public RequestForUserID: string | null = null;
+        public Status = 'Requested';
+        public ResponseByUserID: string | null = null;
+        public OriginatingTaskID: string | null = null;
+        public OriginatingAgentRunID: string | null = null;
+        public ResumingAgentRunID: string | null = null;
+        public AgentID: string | null = null;
         public ID = 'QQQQQQQQ-0000-0000-0000-00000000000Q';
         public IsSaved = false;
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
@@ -42,6 +50,10 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
             const r = new ValidationResult();
             r.Success = true;
             return r;
+        }
+        /** As `BaseEntity.Save`: validates, and writes only when that passes. */
+        public async Save(): Promise<boolean> {
+            return this.Validate().Success;
         }
     }
     return { ...actual, MJAIAgentRequestEntity: MockMJAIAgentRequestEntity };
@@ -108,5 +120,150 @@ describe('MJAIAgentRequestEntityServer.Validate — ownership', () => {
         r.RequestForUserID = THEM;
         r.ContextCurrentUser = null;
         expect(r.Validate().Success).toBe(true);
+    });
+});
+
+describe('MJAIAgentRequestEntityServer — who answered', () => {
+    /** A request for ME answered by this save: a workflow step's (updated) or an agent's (created already answered). */
+    function answered(opts: { saved: boolean; user: { ID: string; Type: string | null } }): MJAIAgentRequestEntityServer & MockHooks {
+        const r = makeRequest();
+        r.IsSaved = opts.saved;
+        r.RequestForUserID = ME;
+        // Only the dispatcher creates a workflow request, so a create here is an agent's request.
+        r.OriginatingTaskID = opts.saved ? 'task-1' : null;
+        r.Status = 'Approved';
+        if (opts.saved) r.SetFieldState('Status', { Dirty: true, OldValue: 'Requested' });
+        r.ResponseByUserID = THEM;
+        r.ContextCurrentUser = opts.user;
+        return r;
+    }
+
+    const asClient = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(fn);
+
+    it("records the user whose own request answers it as the responder, whatever the caller wrote", async () => {
+        const r = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await asClient(() => r.Save())).toBe(true);
+        expect(r.ResponseByUserID).toBe(ME);
+    });
+
+    it("records the creator as the responder of a request their own request created already answered", async () => {
+        const r = answered({ saved: false, user: { ID: ME, Type: 'User' } });
+        expect(await asClient(() => r.Save())).toBe(true);
+        expect(r.ResponseByUserID).toBe(ME);
+    });
+
+    it("records nobody when server code answers a workflow step's request, even as the user it is for", async () => {
+        // An agent run calling Update Record as ME. (Creating one already answered is refused outright: below.)
+        const updated = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await updated.Save()).toBe(true);
+        expect(updated.ResponseByUserID).toBeNull();
+
+        // Server work started inside a client's request (a resumed agent run) is server code too.
+        const fromServerWork = answered({ saved: true, user: { ID: ME, Type: 'User' } });
+        expect(await asClient(() => ServerOperationScopeManager.Instance.RunAsServerWork(() => fromServerWork.Save()))).toBe(true);
+        expect(fromServerWork.ResponseByUserID).toBeNull();
+    });
+
+    it('records the user when server code answers any other request, such as an agent answering an inter-agent request', async () => {
+        const created = answered({ saved: false, user: { ID: ME, Type: 'User' } });
+        expect(created.OriginatingTaskID).toBeNull();
+        expect(await created.Save()).toBe(true);
+        expect(created.ResponseByUserID).toBe(ME);
+    });
+
+    it("refuses changing an answered request's responder, an Owner-type user's change included", () => {
+        const r = makeRequest();
+        r.IsSaved = true;
+        r.RequestForUserID = ME;
+        r.Status = 'Approved';
+        r.SetFieldState('Status', { Dirty: false, OldValue: 'Approved' });
+        r.ResponseByUserID = ME;
+        r.SetFieldState('ResponseByUserID', { Dirty: true, OldValue: THEM });
+        r.ContextCurrentUser = { ID: THEM, Type: 'Owner' };
+        const result = r.Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors.map((e) => e.Source)).toEqual(['ResponseByUserID']);
+    });
+});
+
+describe('MJAIAgentRequestEntityServer — workflow requests', () => {
+    const asClient = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(fn);
+    const asDispatcher = <T>(fn: () => T): T => ServerOperationScopeManager.Instance.RunWithAuthority(
+        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: AI Agent Requests'], userId: ME },
+        fn,
+    );
+    const user = { ID: ME, Type: 'User' };
+
+    /** A request for ME naming a workflow step; `stored` is its status before this save. */
+    function workflowRequest(opts: { saved: boolean; stored?: string; next?: string }): MJAIAgentRequestEntityServer & MockHooks {
+        const r = makeRequest();
+        r.IsSaved = opts.saved;
+        r.RequestForUserID = ME;
+        r.OriginatingTaskID = 'task-1';
+        r.Status = (opts.next ?? opts.stored ?? 'Requested') as typeof r.Status;
+        if (opts.saved) r.SetFieldState('Status', { Dirty: r.Status !== (opts.stored ?? 'Requested'), OldValue: opts.stored ?? 'Requested' });
+        r.ContextCurrentUser = user;
+        return r;
+    }
+    const refusedFields = (r: MJAIAgentRequestEntityServer): string[] => r.Validate().Errors.map((e) => e.Source);
+
+    it("refuses creating one outside the dispatcher's scope, already answered or not, by server code or a client", async () => {
+        expect(await workflowRequest({ saved: false, next: 'Approved' }).Save()).toBe(false);
+        expect(await workflowRequest({ saved: false }).Save()).toBe(false);
+        expect(await asClient(() => workflowRequest({ saved: false, next: 'Approved' }).Save())).toBe(false);
+        expect(await asDispatcher(() => workflowRequest({ saved: false }).Save())).toBe(true);
+    });
+
+    it("refuses pointing any saved request at a different step, an answered one included", () => {
+        const repointed = makeRequest();
+        repointed.IsSaved = true;
+        repointed.RequestForUserID = ME;
+        repointed.Status = 'Responded';
+        repointed.ResponseByUserID = ME;
+        repointed.OriginatingTaskID = 'task-1';
+        repointed.SetFieldState('OriginatingTaskID', { Dirty: true, OldValue: null });
+        repointed.ContextCurrentUser = user;
+        expect(refusedFields(repointed)).toEqual(['OriginatingTaskID']);
+        expect(asDispatcher(() => refusedFields(repointed))).toEqual(['OriginatingTaskID']);
+    });
+
+    it("refuses changing the dispatcher's question outside its scope", () => {
+        const edited = workflowRequest({ saved: true });
+        edited.SetFieldState('Request', { Dirty: true, OldValue: 'Approve the payment run?' });
+        edited.SetFieldState('ResponseSchema', { Dirty: true, OldValue: null });
+        expect(refusedFields(edited)).toEqual(['Request', 'ResponseSchema']);
+        expect(asDispatcher(() => refusedFields(edited))).toEqual([]);
+    });
+
+    it('refuses changing an answer once given, and lets the open request be answered or withdrawn', () => {
+        const changed = workflowRequest({ saved: true, stored: 'Approved', next: 'Approved' });
+        changed.SetFieldState('ResponseData', { Dirty: true, OldValue: '{"ok":true}' });
+        expect(refusedFields(changed)).toEqual(['ResponseData']);
+        const reversed = workflowRequest({ saved: true, stored: 'Approved', next: 'Rejected' });
+        expect(refusedFields(reversed)).toEqual(['Status']);
+
+        expect(refusedFields(workflowRequest({ saved: true, stored: 'Requested', next: 'Approved' }))).toEqual([]);
+        expect(refusedFields(workflowRequest({ saved: true, stored: 'Requested', next: 'Canceled' }))).toEqual([]);
+    });
+
+    it("lets only a person's own request hand a workflow step's request to someone else", () => {
+        // Mine, handed to THEM.
+        const reassigned = workflowRequest({ saved: true });
+        reassigned.RequestForUserID = THEM;
+        reassigned.SetFieldState('RequestForUserID', { Dirty: true, OldValue: ME });
+        expect(refusedFields(reassigned)).toEqual(['RequestForUserID']);
+        expect(asClient(() => refusedFields(reassigned))).toEqual([]);
+    });
+
+    it('takes an answer only from the save that gives it, so nothing can fill one in for the person to approve', () => {
+        const prefilled = workflowRequest({ saved: true });
+        prefilled.SetFieldState('ResponseData', { Dirty: true, OldValue: null });
+        prefilled.SetFieldState('Response', { Dirty: true, OldValue: null });
+        expect(refusedFields(prefilled)).toEqual(['Response', 'ResponseData']);
+        expect(asClient(() => refusedFields(prefilled))).toEqual(['Response', 'ResponseData']);
+
+        const answering = workflowRequest({ saved: true, stored: 'Requested', next: 'Approved' });
+        answering.SetFieldState('ResponseData', { Dirty: true, OldValue: null });
+        expect(refusedFields(answering)).toEqual([]);
     });
 });

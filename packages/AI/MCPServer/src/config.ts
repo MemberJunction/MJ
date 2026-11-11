@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { mergeConfigs } from '@memberjunction/config';
+import { OAuthProxyRateLimitSchema, TrustProxySettingSchema } from './ProxySettings.js';
 
 /**
  * IMPORTANT: Why we use dynamic import() for DEFAULT_SERVER_CONFIG
@@ -184,6 +185,13 @@ const oauthProxySettingsSchema = z.object({
    * @default false
    */
   enableConsentScreen: z.boolean().default(false),
+  /**
+   * Per-client-IP rate limit for every request that passes through the OAuth proxy router. The
+   * router is mounted at the app root, so `/mcp` traffic counts too, not only the `/oauth/*` routes.
+   * A field left out keeps the default (60 requests per 60-second window). Behind a reverse proxy,
+   * also set `mcpServerSettings.trustProxy`, or every client shares one limit.
+   */
+  rateLimit: OAuthProxyRateLimitSchema.optional(),
 });
 
 /**
@@ -239,6 +247,13 @@ const mcpServerInfoSchema = z.object({
   systemApiKey: z.string().optional(),
   /** OAuth authentication settings for the MCP Server */
   auth: mcpServerAuthSettingsSchema.optional(),
+  /**
+   * Express `trust proxy` setting, for a server behind CloudFront, a load balancer or another
+   * reverse proxy: a hop count, `true`, or a list of trusted addresses (see `ProxySettings.ts`).
+   * Without it Express sees the proxy as every request's client, so all clients share the OAuth
+   * proxy's per-IP rate limit. Leave unset when clients connect directly.
+   */
+  trustProxy: TrustProxySettingSchema.optional(),
 });
 
 const configInfoSchema = z.object({

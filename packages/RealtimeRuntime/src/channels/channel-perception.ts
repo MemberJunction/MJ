@@ -26,8 +26,8 @@ export interface ChannelPerceptionHost {
     readonly InstanceId: string;
     /** Reads the channel's current state snapshot (the nouns). */
     GetState(): JSONObject;
-    /** Delivers a finished note to the model. */
-    SendNote(text: string): void;
+    /** Delivers a finished note to the model, along with the full current state snapshot for reconnect memory. */
+    SendNote(text: string, latestState?: JSONObject): void;
     /** Reports a problem reading state (logged by the caller); the coalescer never throws into a timer. */
     OnError(error: unknown): void;
 }
@@ -135,7 +135,11 @@ export class ChannelPerceptionCoalescer {
         const previous = this.baseline;
         this.baseline = state;
         if (previous === null) {
-            this.deliver({ changeId, changes, snapshot: state }, () => ({ changeId, changes, truncated: true, keys: Object.keys(state) }));
+            this.deliver(
+                { changeId, changes, snapshot: state },
+                () => ({ changeId, changes, truncated: true, keys: Object.keys(state) }),
+                state,
+            );
             return;
         }
         const delta = ComputeStateDelta(previous, state);
@@ -145,12 +149,13 @@ export class ChannelPerceptionCoalescer {
         this.deliver(
             { changeId, changes, delta: { changed: delta.Changed, removed: delta.Removed } },
             () => ({ changeId, changes, truncated: true, changedPaths: ListChangedPaths(delta) }),
+            state,
         );
     }
 
     /** Sends `full` unless it is too large, in which case the compact fallback goes instead. */
-    private deliver(full: JSONObject, compact: () => JSONObject): void {
+    private deliver(full: JSONObject, compact: () => JSONObject, latestState: JSONObject): void {
         const body = JSON.stringify(full).length <= this.options.MaxNoteChars ? full : compact();
-        this.host.SendNote(FormatChannelNote(this.host.ChannelKey, this.host.InstanceId, 'state_changed', body));
+        this.host.SendNote(FormatChannelNote(this.host.ChannelKey, this.host.InstanceId, 'state_changed', body), latestState);
     }
 }

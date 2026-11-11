@@ -1,19 +1,27 @@
 export * from './types.js';
 export * from './HarnessAgentType.js';
 export * from './HarnessAgentBase.js';
+export * from './HarnessCredentialResolver.js';
+
 export * from './adapters/BaseHarnessAdapter.js';
 export * from './adapters/BaseCliHarnessAdapter.js';
+export * from './adapters/BaseCloudHarnessAdapter.js';
 export * from './adapters/StdioJsonAdapter.js';
 export * from './adapters/ClaudeCodeCliAdapter.js';
+export * from './adapters/ClaudeCodeCloudAdapter.js';
 export * from './adapters/CodexAdapter.js';
+export * from './adapters/CodexCloudAdapter.js';
 export * from './adapters/OpenCodeAdapter.js';
 export * from './adapters/GeminiCliAdapter.js';
+export * from './adapters/AntigravityCliAdapter.js';
+export * from './adapters/AntigravityCloudAdapter.js';
 export * from './adapters/PiAdapter.js';
 export * from './sandbox/SandboxExecutor.js';
 export * from './sandbox/ISandboxProvider.js';
 export * from './sandbox/ChildProcessExecutor.js';
 export * from './sandbox/DockerSandboxProvider.js';
 export * from './sandbox/LocalDirectorySandboxProvider.js';
+export * from './sandbox/CloudSandboxProvider.js';
 
 /**
  * Tree-shaking guard.

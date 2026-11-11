@@ -445,7 +445,7 @@ export class SearchService {
     return result.Results.map(artifact => {
       const collection = collections.get(artifact.ID.toLowerCase());
       return collection
-        ? this.mapArtifactToSearchResult(artifact, query, collection.CollectionID, collection.Collection)
+        ? this.mapArtifactToSearchResult(artifact, query, collection.CollectionID, collection.Collection ?? undefined)
         : this.mapArtifactToSearchResult(artifact, query);
     });
   }
