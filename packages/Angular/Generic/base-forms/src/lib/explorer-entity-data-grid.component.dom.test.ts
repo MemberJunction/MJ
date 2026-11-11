@@ -6,7 +6,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs, GridColumnConfig } from '@memberjunction/ng-entity-viewer';
 import type { ViewGridState } from '@memberjunction/core-entities';
-import type { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
+import { type CompositeFilterDescriptor } from '@memberjunction/core';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
 import { RELATED_GRID_HSCROLLBAR_PX, RelatedGridHeightPx } from './related-grid-height';

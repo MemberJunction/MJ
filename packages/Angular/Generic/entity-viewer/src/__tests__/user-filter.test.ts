@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ChangeDetectorRef, ElementRef, NgZone } from '@angular/core';
 import { EntityInfo, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
-import type { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
+import { type CompositeFilterDescriptor } from '@memberjunction/core';
 import { EntityDataGridComponent } from '../lib/entity-data-grid/entity-data-grid.component';
 import { BuildFilterFields, CollectFilterFieldNames } from '../lib/utils/filter-fields.util';
 import {

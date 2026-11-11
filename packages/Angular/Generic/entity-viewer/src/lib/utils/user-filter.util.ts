@@ -1,25 +1,17 @@
 import { EntityFieldInfo, EntityFieldTSType, EntityInfo } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import type { AppliedFilter } from '@memberjunction/ng-ui-components';
-import {
-  CompositeFilterDescriptor,
-  FilterDescriptor,
-  FilterFieldInfo,
-  GetOperatorInfo,
-  IsCompositeFilter,
-  IsSimpleFilter,
-  OperatorRequiresValue
-} from '@memberjunction/ng-filter-builder';
+import { FilterFieldInfo, GetOperatorInfo, OperatorRequiresValue } from '@memberjunction/ng-filter-builder';
+import { type CompositeFilterDescriptor, type FilterDescriptor, IsCompositeFilter, IsSimpleFilter } from '@memberjunction/core';
 
 
 /**
  * A copy of a user filter that is safe to compile: conditions on fields the entity does not have,
- * and conditions still missing a value, are dropped; string values are SQL-escaped; values for
- * unquoted (numeric) fields must be finite numbers. Returns `null` when nothing is left.
+ * and conditions still missing a value, are dropped; values for unquoted (numeric) fields must be
+ * finite numbers. Returns `null` when nothing is left.
  *
- * The saved-view compiler (`GenerateWhereClauseFromFilterState`) wraps values in quotes without
- * escaping them, so the escaping happens here, before it.
+ * String values stay raw: the saved-view compiler (`GenerateWhereClauseFromFilterState`) doubles
+ * quotes and escapes LIKE wildcards itself, so escaping here would double them.
  */
 export function SanitizeUserFilter(
   filter: CompositeFilterDescriptor | null | undefined,
@@ -59,7 +51,7 @@ function sanitizeValue(value: unknown, field: EntityFieldInfo): string | number 
     return Number.isFinite(num) ? num : null;
   }
   const text = value instanceof Date ? value.toISOString() : String(value);
-  return EscapeSQLString(text);
+  return text;
 }
 
 function findField(entity: EntityInfo, name: string | undefined): EntityFieldInfo | undefined {

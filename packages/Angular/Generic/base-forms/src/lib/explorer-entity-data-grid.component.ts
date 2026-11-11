@@ -14,7 +14,7 @@ import {
     buildCompositeKey
 } from '@memberjunction/ng-entity-viewer';
 import { ViewGridState } from '@memberjunction/core-entities';
-import { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
+import { type CompositeFilterDescriptor } from '@memberjunction/core';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
 import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid-height';

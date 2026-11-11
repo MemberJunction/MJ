@@ -82,7 +82,8 @@ import {
   RemoveTopLevelCondition,
   UserFilterChips
 } from '../utils/user-filter.util';
-import { CompositeFilterDescriptor, FilterBuilderConfig, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { FilterBuilderConfig, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { type CompositeFilterDescriptor } from '@memberjunction/core';
 import { MJFilterPopoverComponent, AppliedFilter } from '@memberjunction/ng-ui-components';
 import {
   GridSelectionMode,
