@@ -94,16 +94,18 @@ function groupByModel(ledgers: BacktestLedger[]): BacktestLedger[][] {
     return [...groups.values()];
 }
 
-/** The report of one model over its ledgers and the loaded run data. */
+/** The report of one model over its ledgers and the loaded run data. The set counts cover only entries whose PR is still in the corpus; the cost covers every attempt. */
 function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<string, RunData>, prices: Settings['Prices']): ModelReport {
     const entries = uniqueEntries(ledgers);
     const assessed = entries.filter((e) => e.Status === 'Assessed');
     const runs = assessed.flatMap((e) => runData(e, data));
     const catches = runs.flatMap((r) => r.Catches);
-    const bug = bugSetOf(entries.filter((e) => e.Set === 'Bug'), corpusPRs(ledgers, corpus, 'Bug'));
+    const bugPRs = corpusPRs(ledgers, corpus, 'Bug');
+    const cleanPRs = corpusPRs(ledgers, corpus, 'Clean');
+    const bug = bugSetOf(entries.filter((e) => e.Set === 'Bug' && bugPRs.has(e.PR)), bugPRs);
     return {
         Model: ledgers[0].Model, Ledgers: ledgers.map((l) => l.ID), BugSet: bug,
-        CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean'), corpusPRs(ledgers, corpus, 'Clean').size, data),
+        CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean' && cleanPRs.has(e.PR)), cleanPRs.size, data),
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),

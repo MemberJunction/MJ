@@ -107,12 +107,12 @@ describe('BuildGateReport', () => {
   const dirs: string[] = [];
   afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
-  async function build(s: MemoryStore): Promise<GateReport> {
+  async function build(s: MemoryStore, extra: BacktestLedger[] = []): Promise<GateReport> {
     const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
     const redaction = new RedactionCheck([]);
     const r12 = new RunDir(root, 'r12', redaction);
     r12.WriteExecution({ RunID: 'r12', Tests: [candidate(P1), candidate(P2)], Results: [], Coverage: [{ CandidateTestID: P1, CoveredChangedLines: 2 }], TypeErrors: {} });
-    return BuildGateReport({ Ledgers: ledgers(), Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES });
+    return BuildGateReport({ Ledgers: [...ledgers(), ...extra], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES });
   }
 
   it('gives one model report per generator model, combining ledgers of the same model', async () => {
@@ -124,6 +124,13 @@ describe('BuildGateReport', () => {
     const m1 = (await build(store())).Models[0];
     expect(m1.BugSet).toMatchObject({ PRs: 6, Run: 4, Failed: 1, AnyWeakMatched: 2, NotMatched: 1, NoCatch: 0, ApplyFailed: 0 });
     expect(m1.BugSet.Caught).toMatchObject({ K: 1, N: 3 });
+  });
+
+  it('leaves a ledger entry whose PR is no longer in the corpus out of the run and failed counts', async () => {
+    const gone = [ledger('c-Tuning-Both-m1', 'Both', 'm1', [entry(98, 'Bug', { Status: 'Failed', Error: 'boom' }), entry(99, 'Clean', { Status: 'Failed', Error: 'boom' })])];
+    const m1 = (await build(store(), gone)).Models[0];
+    expect(m1.BugSet).toMatchObject({ PRs: CORPUS.Bug.length, Failed: 1 });
+    expect(m1.CleanSet).toMatchObject({ PRs: CORPUS.Clean.filter((c) => c.Slice === 'Tuning').length, Failed: 0 });
   });
 
   it('divides GateCaught by every curated bug PR of the slices, so failed, not run and not yet matched PRs count as not caught', async () => {
