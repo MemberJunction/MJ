@@ -564,7 +564,7 @@ it('system prompt tells the agent that files are type-checked and abstract class
 
 ### Task 2.17: Tuning slice, cheapest generator first (stop point: spend)
 
-The comparison is staged (D24: keep the cheapest model that passes). Each stage is its own spend approval, with the figure re-estimated from the measured cost per PR of the stage before it.
+The comparison is staged (D24: keep the cheapest model that passes). Each stage is its own spend approval, with the figure re-estimated from the measured cost per PR of the stage before it. **Order changed after the smoke (2026-11-11, user decision):** the generator is a small share of the run cost (Haiku 0.02–0.03 of 0.16 USD per PR; the analyzer and judges are the rest) while every stage costs a day of wall time, and Haiku caught 0 of 2 smoke bugs, so the tuning slice runs Sonnet first (≈ 35 USD, cap 50). Haiku is not run unless the user asks for a sample; Opus stays as stage C.
 
 - [ ] **Step 1 (controller):** from the smoke run, compute Haiku's cost per PR and wall time per PR. Ask the user for stage A with the figures (estimate: 60 PRs × ~0.3 USD ≈ 18 USD; phase 1 wall time 10–19 minutes per PR, serial because of Docker CPU).
 - [ ] **Step 2, stage A:** `backtest --corpus corpus/gate1.json --slice Tuning --set Both --model claude-haiku-5-5 --max-usd <approved>` in the background (`run_in_background`, log under the scratchpad), then `backtest match`, then `clean --all-finished`. `report` → `GATE1.md` "Tuning / Haiku".
