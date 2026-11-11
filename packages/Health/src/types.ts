@@ -1,4 +1,5 @@
 import type { DatabaseProviderBase, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { BaseLiveCrudVerifier } from './LiveCrudVerifier';
 
 /**
  * The three-value severity domain every MJ health signal evaluates to. There is no finer grain —
@@ -153,6 +154,8 @@ export interface HealthProbeContext {
   AppFilter?: string;
   /** Timeout budget in milliseconds for this probe. */
   TimeoutMs: number;
+  /** Optional caller-supplied verifiers to evaluate alongside or instead of ClassFactory-registered verifiers. */
+  LiveCrudVerifier?: BaseLiveCrudVerifier | readonly BaseLiveCrudVerifier[];
 }
 
 /** Options accepted by `MJHealthEngine.Evaluate()`. */
@@ -170,4 +173,6 @@ export interface HealthEvaluateOptions {
   MJVersion?: string;
   /** Database platform to stamp onto the report. Defaults to `'sqlserver'`. */
   DatabasePlatform?: 'sqlserver' | 'postgresql';
+  /** Optional caller-supplied verifiers to evaluate alongside or instead of ClassFactory-registered verifiers. */
+  LiveCrudVerifier?: BaseLiveCrudVerifier | readonly BaseLiveCrudVerifier[];
 }

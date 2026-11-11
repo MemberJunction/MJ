@@ -1,16 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { EntityInfo, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { MetadataCacheParityProbe, METADATA_CACHE_PARITY_SIGNAL_CODE } from '../../probes/MetadataCacheParityProbe';
 import type { HealthProbeContext } from '../../types';
 
+class TestMetadataProviderStub extends DatabaseProviderStub {
+  private readonly _testEntities: EntityInfo[];
+
+  constructor(entities: EntityInfo[]) {
+    super();
+    this._testEntities = entities;
+  }
+
+  public override get Entities(): EntityInfo[] {
+    return this._testEntities;
+  }
+}
+
 function makeContext(entityCount: number): HealthProbeContext {
-  const metadataProvider = {
-    Entities: Array.from({ length: entityCount }, () => ({}) as EntityInfo),
-  } as unknown as IMetadataProvider;
+  const provider = new TestMetadataProviderStub(Array.from({ length: entityCount }, () => ({} as EntityInfo)));
 
   return {
-    DatabaseProvider: {} as HealthProbeContext['DatabaseProvider'],
-    MetadataProvider: metadataProvider,
+    DatabaseProvider: provider,
+    MetadataProvider: provider,
     SystemUser: {} as UserInfo,
     Mode: 'passive',
     TimeoutMs: 15_000,

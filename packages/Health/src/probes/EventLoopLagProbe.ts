@@ -69,7 +69,7 @@ export class EventLoopLagProbe extends BaseHealthProbe {
   public override async Evaluate(): Promise<HealthSignalEvaluation[]> {
     const startedAt = Date.now();
     const definition = this.SignalDefinitions[0];
-    const lagMs = await this.measureEventLoopLagMs();
+    const lagMs = await this.MeasureEventLoopLagMs();
     const durationMs = Date.now() - startedAt;
 
     const status = this.classify(lagMs);
@@ -100,7 +100,7 @@ export class EventLoopLagProbe extends BaseHealthProbe {
    * full `Evaluate()` call, and so tests can substitute a deterministic value without reaching
    * past TypeScript's access modifiers.
    */
-  public measureEventLoopLagMs(): Promise<number> {
+  public MeasureEventLoopLagMs(): Promise<number> {
     return new Promise<number>((resolve) => {
       const start = process.hrtime.bigint();
       setImmediate(() => {

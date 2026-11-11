@@ -15,19 +15,18 @@ export class HealthProbeRollbackError extends Error {
   public readonly ProbeKey: string;
 
   /** The error the rollback itself threw. */
-  public readonly RollbackError: unknown;
+  public readonly RollbackError: Error;
 
   /**
    * The error `fn` threw, if any. When set, the rollback failure compounds an already-failing
    * probe; when absent, `fn` had succeeded and the rollback failure is the *only* reason this
    * probe run is unsafe to treat as clean.
    */
-  public readonly FnError: unknown;
+  public readonly FnError?: Error;
 
-  constructor(probeKey: string, rollbackError: unknown, fnError: unknown) {
-    const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-    const fnSuffix = fnError ? ` (the probe's synthetic work had also thrown: ${fnError instanceof Error ? fnError.message : String(fnError)})` : '';
-    super(`BaseHealthProbe.WithRolledBackTransaction (${probeKey}): rollback failed — ${rollbackMessage}${fnSuffix}`);
+  constructor(probeKey: string, rollbackError: Error, fnError?: Error) {
+    const fnSuffix = fnError ? ` (the probe's synthetic work had also thrown: ${fnError.message})` : '';
+    super(`BaseHealthProbe.WithRolledBackTransaction (${probeKey}): rollback failed — ${rollbackError.message}${fnSuffix}`);
     this.name = 'HealthProbeRollbackError';
     this.ProbeKey = probeKey;
     this.RollbackError = rollbackError;
@@ -79,50 +78,45 @@ export abstract class BaseHealthProbe {
    * `RunInEntityTransaction`, this helper NEVER commits.
    *
    * A rollback failure is always surfaced — as a thrown {@link HealthProbeRollbackError} — rather
-   * than merely logged. If `fn` had already thrown, the rollback failure is logged and the
-   * original error from `fn` still wins (that is the caller's real failure; the rollback failure
-   * is recorded as context on it via {@link HealthProbeRollbackError.FnError} is not re-thrown in
-   * that branch, since rethrowing it would mask the original diagnostic). If `fn` succeeded, the
-   * rollback failure becomes the exception the caller sees instead of a silently clean result.
+   * than merely logged. If `fn` had already thrown and the rollback fails, {@link HealthProbeRollbackError}
+   * is still thrown with {@link HealthProbeRollbackError.FnError} populated, surfacing the critical
+   * un-rolled-back transaction state while preserving the original error from `fn`.
    *
    * @param context The probe context; `context.DatabaseProvider` supplies the transaction scope.
    * @param fn The synthetic work to run. Receives the same `DatabaseProviderBase` the scope was
    *           opened on — there is no separate "isolated" provider instance, isolation comes
    *           entirely from the unconditional rollback.
    * @returns Whatever `fn` returns.
-   * @throws Whatever `fn` throws (rollback failures alongside it are logged, not swallowed). When
-   *         `fn` succeeds but the rollback itself fails, throws {@link HealthProbeRollbackError}.
+   * @throws Whatever `fn` throws when `fn` fails and rollback succeeds. When the rollback itself
+   *         fails (regardless of whether `fn` succeeded or failed), throws {@link HealthProbeRollbackError}.
    */
   protected async WithRolledBackTransaction<T>(context: HealthProbeContext, fn: (txProvider: DatabaseProviderBase) => Promise<T>): Promise<T> {
     const provider = context.DatabaseProvider;
     const scope = await provider.BeginEntityTransaction();
 
-    let fnError: unknown;
+    let fnFailed = false;
+    let fnError: Error | undefined;
     let result: T | undefined;
     try {
       result = await fn(provider);
-    } catch (error) {
-      fnError = error;
+    } catch (err) {
+      fnFailed = true;
+      fnError = err instanceof Error ? err : new Error(String(err));
     }
 
     try {
       await scope.Rollback();
-    } catch (rollbackError) {
+    } catch (rollbackErr) {
+      const normalizedRollbackErr = rollbackErr instanceof Error ? rollbackErr : new Error(String(rollbackErr));
       LogError(
         `BaseHealthProbe.WithRolledBackTransaction (${this.ProbeKey}): rollback failed after the ` +
-          `probe's synthetic work ${fnError ? 'threw' : 'finished'}. Rollback failure: ` +
-          `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          `probe's synthetic work ${fnFailed ? 'threw' : 'finished'}. Rollback failure: ` +
+          `${normalizedRollbackErr.message}`,
       );
-      // Surface the rollback failure itself when fn succeeded — a silently-swallowed rollback
-      // failure would let the probe report a clean result while a real side effect (or lock) may
-      // still be sitting in the database. When fn ALSO threw, its error is the more actionable
-      // diagnostic and wins below; the rollback failure is still logged above, not lost.
-      if (!fnError) {
-        throw new HealthProbeRollbackError(this.ProbeKey, rollbackError, fnError);
-      }
+      throw new HealthProbeRollbackError(this.ProbeKey, normalizedRollbackErr, fnError);
     }
 
-    if (fnError) {
+    if (fnFailed) {
       throw fnError;
     }
     return result as T;

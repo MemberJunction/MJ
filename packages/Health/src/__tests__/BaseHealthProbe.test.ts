@@ -82,24 +82,57 @@ describe('BaseHealthProbe.WithRolledBackTransaction', () => {
     vi.spyOn(provider, 'RollbackTransaction').mockRejectedValue(new Error('savepoint vanished'));
     const probe = new TestProbe();
 
-    await expect(probe.RunRolledBack(makeContext(provider), async () => 'done')).rejects.toSatisfy((error: unknown) => {
-      expect(error).toBeInstanceOf(HealthProbeRollbackError);
-      const rollbackError = error as HealthProbeRollbackError;
-      expect(rollbackError.ProbeKey).toBe('test.probe');
-      expect(rollbackError.FnError).toBeUndefined();
-      return true;
-    });
+    let capturedError: HealthProbeRollbackError | undefined;
+    try {
+      await probe.RunRolledBack(makeContext(provider), async () => 'done');
+    } catch (err) {
+      if (err instanceof HealthProbeRollbackError) {
+        capturedError = err;
+      }
+    }
+
+    expect(capturedError).toBeDefined();
+    expect(capturedError?.ProbeKey).toBe('test.probe');
+    expect(capturedError?.RollbackError.message).toBe('savepoint vanished');
+    expect(capturedError?.FnError).toBeUndefined();
   });
 
-  it('re-throws the original work error (not the rollback error) when both fail', async () => {
+  it('rolls back and propagates when the work throws a falsy value like an empty string', async () => {
     const provider = new DatabaseProviderStub();
-    vi.spyOn(provider, 'RollbackTransaction').mockRejectedValue(new Error('savepoint vanished'));
+    const rollbackSpy = vi.spyOn(provider, 'RollbackTransaction');
     const probe = new TestProbe();
 
     await expect(
       probe.RunRolledBack(makeContext(provider), async () => {
-        throw new Error('synthetic failure');
+        throw '';
       }),
-    ).rejects.toThrow('synthetic failure');
+    ).rejects.toThrow();
+
+    expect(rollbackSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws HealthProbeRollbackError carrying both RollbackError and FnError when both fn and rollback fail', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'RollbackTransaction').mockRejectedValue(new Error('savepoint vanished'));
+    const probe = new TestProbe();
+
+    let capturedError: HealthProbeRollbackError | undefined;
+    try {
+      await probe.RunRolledBack(makeContext(provider), async () => {
+        throw new Error('synthetic failure');
+      });
+    } catch (err) {
+      if (err instanceof HealthProbeRollbackError) {
+        capturedError = err;
+      }
+    }
+
+    expect(capturedError).toBeDefined();
+    expect(capturedError?.ProbeKey).toBe('test.probe');
+    expect(capturedError?.RollbackError.message).toBe('savepoint vanished');
+    expect(capturedError?.FnError).toBeDefined();
+    expect(capturedError?.FnError?.message).toBe('synthetic failure');
+    expect(capturedError?.message).toContain('savepoint vanished');
+    expect(capturedError?.message).toContain('synthetic failure');
   });
 });

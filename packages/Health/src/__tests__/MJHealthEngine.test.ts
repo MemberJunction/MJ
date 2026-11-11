@@ -4,6 +4,8 @@ import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import type { UserInfo } from '@memberjunction/core';
 import { BaseHealthProbe } from '../BaseHealthProbe';
 import { MJHealthEngine } from '../MJHealthEngine';
+import { BaseLiveCrudVerifier, type LiveCrudVerifierResult } from '../LiveCrudVerifier';
+import { LiveEntityCrudProbe } from '../probes/LiveEntityCrudProbe';
 import type { HealthEvaluateOptions, HealthSignalDefinition, HealthSignalEvaluation, ProbeExecutionMode } from '../types';
 
 const NO_OP_PLAYBOOK = {
@@ -163,7 +165,7 @@ class LiveProbe extends BaseHealthProbe {
  * array exists only to give that side effect an explicit reference, so lint doesn't flag the
  * classes as unused and the fixture set reads as one deliberate list.
  */
-const FIXTURE_PROBES = [GreenProbe, YellowProbe, ThrowingProbe, SlowProbe, OpenAppProbe, LiveProbe];
+const FIXTURE_PROBES = [GreenProbe, YellowProbe, ThrowingProbe, SlowProbe, OpenAppProbe, LiveProbe, LiveEntityCrudProbe];
 
 function makeEvaluateOptions(overrides: Partial<HealthEvaluateOptions> = {}): HealthEvaluateOptions {
   const provider = new DatabaseProviderStub();
@@ -216,7 +218,10 @@ describe('MJHealthEngine', () => {
 
   it('filters probes by Mode', async () => {
     const report = await MJHealthEngine.Instance.Evaluate(makeEvaluateOptions({ AppFilter: '__mj', Mode: 'live-test' }));
-    expect(report.Signals.map((s) => s.Code)).toEqual(['TEST.LIVE']);
+    const codes = report.Signals.map((s) => s.Code);
+    expect(codes).toContain('TEST.LIVE');
+    expect(codes).toContain('MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS');
+    expect(codes).not.toContain('TEST.GREEN');
   });
 
   it('reports GREEN overall status when every evaluated signal is GREEN', async () => {
@@ -239,5 +244,34 @@ describe('MJHealthEngine', () => {
     );
     expect(report.MJVersion).toBe('6.3.0-edge.0');
     expect(report.DatabasePlatform).toBe('postgresql');
+  });
+
+  it('retains LiveEntityCrudProbe when AppFilter matches a supplied LiveCrudVerifier', async () => {
+    class CollabVerifier extends BaseLiveCrudVerifier {
+      public override get VerifierKey() {
+        return 'collab.access';
+      }
+      public override get OwnerApp() {
+        return 'mj-bizapps-collaboration';
+      }
+      public override get Title() {
+        return 'Collaboration Access Check';
+      }
+      public override async Verify(): Promise<LiveCrudVerifierResult> {
+        return { Success: true, Summary: 'collab verified' };
+      }
+    }
+
+    const report = await MJHealthEngine.Instance.Evaluate(
+      makeEvaluateOptions({
+        Mode: 'live-test',
+        AppFilter: 'mj-bizapps-collaboration',
+        LiveCrudVerifier: new CollabVerifier(),
+      }),
+    );
+
+    const codes = report.Signals.map((s) => s.Code);
+    expect(codes).toContain('MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS');
+    expect(codes).toContain('LIVE.MJ-BIZAPPS-COLLABORATION.COLLAB.ACCESS');
   });
 });

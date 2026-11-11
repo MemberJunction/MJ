@@ -21,7 +21,7 @@ function makeContext(provider: DatabaseProviderStub): HealthProbeContext {
 }
 
 describe('LiveEntityCrudProbe', () => {
-  it('reports GREEN and always rolls back the synthetic transaction on success', async () => {
+  it('reports YELLOW when zero verifiers are registered or supplied and always rolls back', async () => {
     const provider = new DatabaseProviderStub();
     vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{}]);
     const rollbackSpy = vi.spyOn(provider, 'RollbackTransaction');
@@ -31,9 +31,25 @@ describe('LiveEntityCrudProbe', () => {
     const [evaluation] = await probe.Evaluate(makeContext(provider));
 
     expect(evaluation.Code).toBe(LIVE_ENTITY_CRUD_SIGNAL_CODE);
-    expect(evaluation.Status).toBe('GREEN');
+    expect(evaluation.Status).toBe('YELLOW');
+    expect(evaluation.Summary).toContain('no BaseLiveCrudVerifier is registered');
+    expect(evaluation.ObservedMetrics.RegisteredVerifierCount).toBe(0);
+    expect(evaluation.ActivePlaybook).toBeDefined();
     expect(rollbackSpy).toHaveBeenCalledTimes(1);
     expect(commitSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports GREEN on built-in signal when a verifier is registered or supplied in context', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{}]);
+    const probe = new LiveEntityCrudProbe();
+
+    const evaluations = await probe.Evaluate(makeVerifierContext(provider, 'some-open-app'));
+    const builtIn = evaluations.find((e) => e.Code === LIVE_ENTITY_CRUD_SIGNAL_CODE);
+
+    expect(builtIn?.Status).toBe('GREEN');
+    expect(builtIn?.ObservedMetrics.RegisteredVerifierCount).toBeGreaterThanOrEqual(1);
+    expect(builtIn?.ActivePlaybook).toBeUndefined();
   });
 
   it('reports RED and still rolls back when the synthetic write fails', async () => {
@@ -158,5 +174,61 @@ describe('LiveEntityCrudProbe — BaseLiveCrudVerifier discovery', () => {
 
     expect(greenEval?.Status).toBe('RED');
     expect(greenEval?.DiagnosticError).toContain('savepoint vanished');
+  });
+
+  it('executes multiple verifiers sequentially without overlapping execution', async () => {
+    const provider = new DatabaseProviderStub();
+    const probe = new LiveEntityCrudProbe();
+    const sequence: string[] = [];
+
+    class SeqVerifier1 extends BaseLiveCrudVerifier {
+      public override get VerifierKey() {
+        return 'seq.v1';
+      }
+      public override get OwnerApp() {
+        return 'seq-app';
+      }
+      public override get Title() {
+        return 'V1';
+      }
+      public override async Verify(): Promise<LiveCrudVerifierResult> {
+        sequence.push('v1:start');
+        await new Promise((r) => setTimeout(r, 10));
+        sequence.push('v1:end');
+        return { Success: true, Summary: 'v1 done' };
+      }
+    }
+
+    class SeqVerifier2 extends BaseLiveCrudVerifier {
+      public override get VerifierKey() {
+        return 'seq.v2';
+      }
+      public override get OwnerApp() {
+        return 'seq-app';
+      }
+      public override get Title() {
+        return 'V2';
+      }
+      public override async Verify(): Promise<LiveCrudVerifierResult> {
+        sequence.push('v2:start');
+        await new Promise((r) => setTimeout(r, 10));
+        sequence.push('v2:end');
+        return { Success: true, Summary: 'v2 done' };
+      }
+    }
+
+    const context: HealthProbeContext = {
+      DatabaseProvider: provider,
+      MetadataProvider: provider,
+      SystemUser: {} as UserInfo,
+      Mode: 'live-test',
+      AppFilter: 'seq-app',
+      TimeoutMs: 15_000,
+      LiveCrudVerifier: [new SeqVerifier1(), new SeqVerifier2()],
+    };
+
+    const evals = await probe.Evaluate(context);
+    expect(sequence).toEqual(['v1:start', 'v1:end', 'v2:start', 'v2:end']);
+    expect(evals.length).toBe(3); // builtIn + v1 + v2
   });
 });

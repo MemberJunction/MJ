@@ -63,7 +63,23 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
     const timeoutMs = options.TimeoutMs ?? DEFAULT_TIMEOUT_MS;
     const startedAt = Date.now();
 
-    const probes = this.GetRegisteredProbes().filter((probe) => probe.Mode === mode && (!options.AppFilter || probe.OwnerApp === options.AppFilter));
+    const suppliedVerifiers = options.LiveCrudVerifier
+      ? Array.isArray(options.LiveCrudVerifier)
+        ? options.LiveCrudVerifier
+        : [options.LiveCrudVerifier]
+      : [];
+    const allVerifiers = [...this.GetRegisteredLiveCrudVerifiers(), ...suppliedVerifiers];
+    const hasMatchingVerifier = options.AppFilter
+      ? allVerifiers.some((v) => v.OwnerApp === options.AppFilter)
+      : false;
+
+    const probes = this.GetRegisteredProbes().filter((probe) => {
+      if (probe.Mode !== mode) return false;
+      if (!options.AppFilter) return true;
+      if (probe.OwnerApp === options.AppFilter) return true;
+      if (probe.ProbeKey === 'MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS' && hasMatchingVerifier) return true;
+      return false;
+    });
 
     const context: HealthProbeContext = {
       DatabaseProvider: options.DatabaseProvider,
@@ -72,6 +88,7 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
       Mode: mode,
       AppFilter: options.AppFilter,
       TimeoutMs: timeoutMs,
+      LiveCrudVerifier: options.LiveCrudVerifier,
     };
 
     const perProbeResults = await Promise.all(probes.map((probe) => this.evaluateProbeSafely(probe, context)));
@@ -94,25 +111,28 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
     const probeStartedAt = Date.now();
     try {
       return await this.runWithTimeout(probe.Evaluate(context), context.TimeoutMs, probe.ProbeKey);
-    } catch (error) {
-      LogError(`MJHealthEngine: probe '${probe.ProbeKey}' failed: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      LogError(`MJHealthEngine: probe '${probe.ProbeKey}' failed: ${error.message}`);
       return probe.SignalDefinitions.map((definition) => this.buildFailureEvaluation(definition, error, probeStartedAt));
     }
   }
 
   private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number, probeKey: string): Promise<T> {
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`Probe '${probeKey}' timed out after ${timeoutMs}ms`)), timeoutMs);
     });
     try {
       return await Promise.race([promise, timeout]);
     } finally {
-      clearTimeout(timer);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
     }
   }
 
-  private buildFailureEvaluation(definition: HealthSignalDefinition, error: unknown, startedAt: number): HealthSignalEvaluation {
+  private buildFailureEvaluation(definition: HealthSignalDefinition, error: Error, startedAt: number): HealthSignalEvaluation {
     return {
       Code: definition.Code,
       Title: definition.Title,
@@ -120,12 +140,12 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
       OwnerApp: definition.OwnerApp,
       Mode: definition.Mode,
       Status: 'RED',
-      Summary: `Probe threw an unhandled exception: ${error instanceof Error ? error.message : String(error)}`,
+      Summary: `Probe threw an unhandled exception: ${error.message}`,
       ObservedMetrics: {},
       EvaluatedAt: new Date().toISOString(),
       DurationMs: Date.now() - startedAt,
       ActivePlaybook: definition.RedPlaybook,
-      DiagnosticError: error instanceof Error ? (error.stack ?? error.message) : String(error),
+      DiagnosticError: error.stack ?? error.message,
     };
   }
 

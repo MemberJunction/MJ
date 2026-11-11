@@ -3,7 +3,7 @@ import type { DatabaseProviderBase } from '@memberjunction/core';
 import { BaseHealthProbe, HealthProbeRollbackError } from '../BaseHealthProbe';
 import { BaseLiveCrudVerifier } from '../LiveCrudVerifier';
 import { MJHealthEngine } from '../MJHealthEngine';
-import type { AgentRemediationPlaybook, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, ProbeExecutionMode } from '../types';
+import type { AgentRemediationPlaybook, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, ProbeExecutionMode } from '../types';
 
 /** Signal code for {@link LiveEntityCrudProbe}. */
 export const LIVE_ENTITY_CRUD_SIGNAL_CODE = 'MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS';
@@ -103,13 +103,34 @@ export class LiveEntityCrudProbe extends BaseHealthProbe {
   }
 
   public override async Evaluate(context: HealthProbeContext): Promise<HealthSignalEvaluation[]> {
-    const builtIn = await this.evaluateBuiltInRoundTrip(context);
-    const verifiers = this.GetRegisteredVerifiers().filter((v) => !context.AppFilter || v.OwnerApp === context.AppFilter);
-    const verifierResults = await Promise.all(verifiers.map((v) => this.evaluateVerifier(context, v)));
+    const registered = this.GetRegisteredVerifiers();
+    const supplied = context.LiveCrudVerifier
+      ? Array.isArray(context.LiveCrudVerifier)
+        ? context.LiveCrudVerifier
+        : [context.LiveCrudVerifier]
+      : [];
+
+    const verifierMap = new Map<string, BaseLiveCrudVerifier>();
+    for (const v of registered) {
+      verifierMap.set(v.VerifierKey, v);
+    }
+    for (const v of supplied) {
+      verifierMap.set(v.VerifierKey, v);
+    }
+
+    const verifiers = Array.from(verifierMap.values()).filter((v) => !context.AppFilter || v.OwnerApp === context.AppFilter);
+    const hasActiveVerifiers = verifiers.length > 0;
+
+    const builtIn = await this.evaluateBuiltInRoundTrip(context, hasActiveVerifiers, verifiers.length);
+
+    const verifierResults: HealthSignalEvaluation[] = [];
+    for (const verifier of verifiers) {
+      verifierResults.push(await this.evaluateVerifier(context, verifier));
+    }
     return [builtIn, ...verifierResults];
   }
 
-  private async evaluateBuiltInRoundTrip(context: HealthProbeContext): Promise<HealthSignalEvaluation> {
+  private async evaluateBuiltInRoundTrip(context: HealthProbeContext, hasActiveVerifiers: boolean, verifierCount: number): Promise<HealthSignalEvaluation> {
     const startedAt = Date.now();
     const definition = this.builtInSignalDefinition();
     let diagnosticError: string | undefined;
@@ -118,12 +139,37 @@ export class LiveEntityCrudProbe extends BaseHealthProbe {
       await this.WithRolledBackTransaction(context, async (txProvider: DatabaseProviderBase) => {
         await txProvider.ExecuteSQL('SELECT 1', undefined, undefined, context.SystemUser);
       });
-    } catch (error) {
-      diagnosticError = error instanceof Error ? (error.stack ?? error.message) : String(error);
+    } catch (err) {
+      diagnosticError = err instanceof Error ? (err.stack ?? err.message) : String(err);
     }
 
     const durationMs = Date.now() - startedAt;
-    const status = diagnosticError ? 'RED' : durationMs >= YELLOW_LATENCY_MS ? 'YELLOW' : 'GREEN';
+    let status: HealthStatus;
+    let summary: string;
+    let activePlaybook: AgentRemediationPlaybook | undefined;
+    const observedMetrics: Record<string, string | number | boolean | null> = {
+      DurationMs: durationMs,
+      RegisteredVerifierCount: verifierCount,
+    };
+
+    if (diagnosticError) {
+      status = 'RED';
+      summary = `Transactional round trip failed: ${diagnosticError.split('\n')[0]}`;
+      activePlaybook = RED_PLAYBOOK;
+    } else if (durationMs >= YELLOW_LATENCY_MS) {
+      status = 'YELLOW';
+      summary = `Transactional round trip (begin, write, rollback) completed in ${durationMs}ms (exceeded threshold ${YELLOW_LATENCY_MS}ms).`;
+      activePlaybook = YELLOW_PLAYBOOK;
+    } else if (!hasActiveVerifiers) {
+      status = 'YELLOW';
+      summary = `Transactional rollback round-trip succeeded via SELECT 1 (${durationMs}ms), but no BaseLiveCrudVerifier is registered to exercise real entity CRUD/RLS.`;
+      activePlaybook = YELLOW_PLAYBOOK;
+      observedMetrics.RegisteredVerifierCount = 0;
+    } else {
+      status = 'GREEN';
+      summary = `Transactional round trip (begin, write, rollback) completed in ${durationMs}ms.`;
+      activePlaybook = undefined;
+    }
 
     return {
       Code: definition.Code,
@@ -132,14 +178,12 @@ export class LiveEntityCrudProbe extends BaseHealthProbe {
       OwnerApp: definition.OwnerApp,
       Mode: definition.Mode,
       Status: status,
-      Summary: diagnosticError
-        ? `Transactional round trip failed: ${diagnosticError.split('\n')[0]}`
-        : `Transactional round trip (begin, write, rollback) completed in ${durationMs}ms.`,
-      ObservedMetrics: { DurationMs: durationMs },
+      Summary: summary,
+      ObservedMetrics: observedMetrics,
       Thresholds: { YellowLatencyMs: YELLOW_LATENCY_MS },
       EvaluatedAt: new Date().toISOString(),
       DurationMs: durationMs,
-      ActivePlaybook: status === 'GREEN' ? undefined : status === 'YELLOW' ? YELLOW_PLAYBOOK : RED_PLAYBOOK,
+      ActivePlaybook: activePlaybook,
       DiagnosticError: diagnosticError,
     };
   }
@@ -159,11 +203,8 @@ export class LiveEntityCrudProbe extends BaseHealthProbe {
       } else {
         diagnosticError = result.DiagnosticError ?? result.Summary;
       }
-    } catch (error) {
-      // A rollback failure (HealthProbeRollbackError) is at least as serious as a verifier
-      // failure — in both cases the synthetic work's guarantees did not hold, so both surface
-      // identically as a RED signal with the full diagnostic attached.
-      diagnosticError = error instanceof HealthProbeRollbackError ? error.message : error instanceof Error ? (error.stack ?? error.message) : String(error);
+    } catch (err) {
+      diagnosticError = err instanceof HealthProbeRollbackError ? err.message : err instanceof Error ? (err.stack ?? err.message) : String(err);
     }
 
     const durationMs = Date.now() - startedAt;

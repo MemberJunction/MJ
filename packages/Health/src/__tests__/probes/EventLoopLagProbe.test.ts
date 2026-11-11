@@ -4,7 +4,7 @@ import { EventLoopLagProbe, EVENT_LOOP_LAG_SIGNAL_CODE } from '../../probes/Even
 describe('EventLoopLagProbe', () => {
   it('reports GREEN when measured lag is below the YELLOW threshold', async () => {
     const probe = new EventLoopLagProbe();
-    vi.spyOn(probe, 'measureEventLoopLagMs').mockResolvedValue(2);
+    vi.spyOn(probe, 'MeasureEventLoopLagMs').mockResolvedValue(2);
 
     const [evaluation] = await probe.Evaluate();
 
@@ -16,7 +16,7 @@ describe('EventLoopLagProbe', () => {
 
   it('reports YELLOW when measured lag is between the YELLOW and RED thresholds', async () => {
     const probe = new EventLoopLagProbe();
-    vi.spyOn(probe, 'measureEventLoopLagMs').mockResolvedValue(35);
+    vi.spyOn(probe, 'MeasureEventLoopLagMs').mockResolvedValue(35);
 
     const [evaluation] = await probe.Evaluate();
 
@@ -26,7 +26,7 @@ describe('EventLoopLagProbe', () => {
 
   it('reports RED when measured lag meets or exceeds the RED threshold', async () => {
     const probe = new EventLoopLagProbe();
-    vi.spyOn(probe, 'measureEventLoopLagMs').mockResolvedValue(300);
+    vi.spyOn(probe, 'MeasureEventLoopLagMs').mockResolvedValue(300);
 
     const [evaluation] = await probe.Evaluate();
 
