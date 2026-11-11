@@ -154,5 +154,112 @@
       "lastModified": "2026-08-07T23:58:30.298Z",
       "checksum": "8cc18c694906c87b5982030bc3551d4d56a2563cb821fb3e921c137c255daecd"
     }
+  },
+  {
+    "fields": {
+      "Name": "Google Antigravity (Cloud)",
+      "Description": "Google Antigravity Cloud / Gemini Agent Interactions API (`AntigravityCloudAdapter`), supporting asynchronous background agent leasing (`background: true`), `x-goog-api-key` or Bearer authentication, repository/branch workspace context, remote MCP tool declarations, thinking/token telemetry, and `adaptive-wake` session continuation across AgentWake cycles.",
+      "DriverClass": "AntigravityCloudAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+      "DefaultModel": "gemini-3.1-pro-preview",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true,
+        "SupportsCloudExecution": true,
+        "SupportsAsyncWakeHandoff": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "77421E47-605A-41CB-A55C-F4FC5FE4509A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Google Antigravity (CLI)",
+      "Description": "Google Antigravity CLI (`agy -p --output-format stream-json`), executed inside a local or Docker sandbox. Resumes conversations natively via `--conversation <id>`, maps MJ postures onto `--mode plan|accept-edits` + `--sandbox` or `--dangerously-skip-permissions`, and accepts `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or `ANTIGRAVITY_API_KEY` via MJ: AI Agent Credentials.",
+      "DriverClass": "AntigravityCliAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true,
+        "SupportsCloudExecution": false,
+        "SupportsAsyncWakeHandoff": false
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "83B96013-4591-4FDC-B755-E4B6A656C35F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Code (Cloud)",
+      "Description": "Anthropic Claude Cloud Sessions / Managed Remote Environments (`ClaudeCodeCloudAdapter`), driven over `/v1/sessions` with `x-api-key` (`ANTHROPIC_API_KEY`), `anthropic-version: 2023-06-01`, `anthropic-beta` headers, repository/gitRef mounts, remote MCP server registration, usage/cost accounting, and `adaptive-wake` async session continuation.",
+      "DriverClass": "ClaudeCodeCloudAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5",
+      "DefaultModel": "claude-sonnet-5",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true,
+        "SupportsCloudExecution": true,
+        "SupportsAsyncWakeHandoff": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "4FBAF63E-88EB-446A-9A4C-17BCBC67C841"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenAI Codex (Cloud)",
+      "Description": "OpenAI Codex Cloud / Background Responses API (`CodexCloudAdapter`), driven over `/v1/responses` with `Authorization: Bearer <OPENAI_API_KEY>`, `background: true` async execution, `previous_response_id` continuation, repository/environment context, remote MCP tool declarations, reasoning token telemetry, and `adaptive-wake` async resume.",
+      "DriverClass": "CodexCloudAdapter",
+      "AIVendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "AIModelID": "@lookup:MJ: AI Models.Name=o3",
+      "DefaultModel": "o3",
+      "CapabilitySettings": {
+        "SessionResume": true,
+        "MidTurnCancellation": true,
+        "StructuredOutput": false,
+        "UsageReporting": true,
+        "PermissionPolicy": true,
+        "PermissionHooks": false,
+        "McpClient": true,
+        "WorkspaceScoping": true,
+        "ModelSelection": true,
+        "SupportsCloudExecution": true,
+        "SupportsAsyncWakeHandoff": true
+      },
+      "Status": "Inactive"
+    },
+    "primaryKey": {
+      "ID": "7E562EED-791A-41C3-92A7-83BC9818DD71"
+    }
   }
 ]

@@ -10,16 +10,24 @@ import {
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
-import { ApplyGitHubEnvironmentConventions, ExtractHarnessCredentialSecret } from './HarnessCredentialResolver.js';
+import {
+    ApplyGitHubEnvironmentConventions,
+    ExtractHarnessCredentialSecret,
+    NormalizeAntigravityEnvironment,
+    ResolveDriverVendorFallbackEnvironment,
+} from './HarnessCredentialResolver.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
 import { DockerSandboxProvider } from './sandbox/DockerSandboxProvider.js';
+import { CloudSandboxProvider } from './sandbox/CloudSandboxProvider.js';
 import {
+    CloudSandboxOptions,
     HarnessTurnResult,
     HarnessWorkspaceScope,
     HarnessNetworkPolicy,
     HarnessPosture,
     HarnessPermissionPolicy,
+    HarnessSandboxProviderType,
 } from './types.js';
 
 /**
@@ -31,8 +39,12 @@ import {
  */
 const HARNESS_CREDENTIAL_ENV_VARS: Record<string, string> = {
     ClaudeCodeCliAdapter: 'ANTHROPIC_API_KEY',
+    ClaudeCodeCloudAdapter: 'ANTHROPIC_API_KEY',
     CodexAdapter: 'OPENAI_API_KEY',
+    CodexCloudAdapter: 'OPENAI_API_KEY',
     GeminiCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCliAdapter: 'GEMINI_API_KEY',
+    AntigravityCloudAdapter: 'GEMINI_API_KEY',
 };
 
 /**
@@ -52,14 +64,17 @@ const TURN_END_CONTRACT = [
 ].join('\n');
 
 /** Shape of the harness block inside `AIAgent.TypeConfiguration`. */
-interface HarnessAgentConfig {
+export interface HarnessAgentConfig {
     harnessName?: string;
     sandbox?: {
-        provider?: 'local' | 'docker';
+        provider?: HarnessSandboxProviderType;
         image?: string;
         workspaceScope?: HarnessWorkspaceScope;
         networkPolicy?: HarnessNetworkPolicy;
+        cloud?: CloudSandboxOptions;
     };
+    mcpServerUrl?: string;
+    mcpCredential?: string;
     posture?: HarnessPosture;
     permissions?: { allowedTools?: string[]; disallowedTools?: string[] };
     limits?: { maxWallClockSeconds?: number };
@@ -148,8 +163,10 @@ export class HarnessAgentBase extends BaseAgent {
             RunId: this._agentRunId(),
         };
         this.sandboxHandle = await this.sandboxProvider.Provision(key, {
+            provider: config.sandbox?.provider,
             NetworkPolicy: config.sandbox?.networkPolicy ?? 'mcp-only',
             Image: config.sandbox?.image,
+            cloud: config.sandbox?.cloud,
         });
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
@@ -163,6 +180,7 @@ export class HarnessAgentBase extends BaseAgent {
         this.warnOnUnenforceablePolicy(harness.Name, policy);
 
         const resumeSessionId = await this.findResumableSession(harness, key.Scope, contextUser);
+        const mcpBinding = this.resolveMcpSessionEndpoint(config);
 
         await this.adapter.StartSession({
             ResumeSessionId: resumeSessionId,
@@ -170,8 +188,12 @@ export class HarnessAgentBase extends BaseAgent {
             Executor: this.sandboxHandle.Executor,
             WorkspacePath: this.sandboxHandle.WorkspacePath,
             Environment: environment,
+            McpServerUrl: mcpBinding.mcpServerUrl,
+            McpCredential: mcpBinding.mcpCredential,
             Model: harness.DefaultModel ?? undefined,
             CancellationToken: promptParams.cancellationToken,
+            CloudOptions: config.sandbox?.cloud,
+            SandboxMetadata: this.sandboxHandle.Metadata,
         });
 
         LogStatus(`Harness session started for '${harness.Name}' (${harness.DriverClass})`);
@@ -265,7 +287,16 @@ export class HarnessAgentBase extends BaseAgent {
         if (!this.adapter?.Capabilities?.SessionResume) {
             return undefined;
         }
-        if (scope === 'run') {
+        // When AgentWake resumes an existing run with ExternalSessionID already populated on _agentRun,
+        // prefer that exact session ID directly before querying conversation history.
+        const currentRunSessionId = this._agentRunExternalSessionId();
+        if (currentRunSessionId) {
+            LogStatus(`Resuming in-flight harness session ${currentRunSessionId} for '${harness.Name}'.`);
+            return currentRunSessionId;
+        }
+        // Local CLI harnesses key their session store by directory path, so 'run' scope cannot resume;
+        // cloud harnesses store sessions remotely by ID and can resume regardless of workspace scope.
+        if (scope === 'run' && !this.adapter.Capabilities.SupportsCloudExecution) {
             return undefined;
         }
         const conversationId = this._agentRunConversationId();
@@ -315,13 +346,21 @@ export class HarnessAgentBase extends BaseAgent {
                     // turn, and undercounting here silently weakens the cost guardrail.
                     turn.InputTokens += event.InputTokens;
                     turn.OutputTokens += event.OutputTokens;
+                    if (event.ThinkingTokens !== undefined) {
+                        turn.ThinkingTokens = (turn.ThinkingTokens ?? 0) + event.ThinkingTokens;
+                    }
                     turn.CostUsd = (turn.CostUsd ?? 0) + (event.CostUsd ?? 0);
                     break;
                 case 'turn-complete':
                     turn.RawText = event.RawText;
+                    turn.CloudExecutionState = event.CloudExecutionState;
+                    turn.AsyncWakePending = event.AsyncWakePending;
+                    turn.ArtifactUrls = event.ArtifactUrls;
+                    turn.PullRequestUrl = event.PullRequestUrl;
                     break;
                 case 'session-error':
                     turn.ErrorMessage = event.Error;
+                    turn.CloudExecutionState = event.CloudExecutionState;
                     break;
                 default:
                     // assistant-text and sandbox-activity are live-view only. They are deliberately
@@ -509,7 +548,7 @@ export class HarnessAgentBase extends BaseAgent {
      */
     private persistExternalSessionId(sessionId: string | undefined): void {
         const run = (this as unknown as { _agentRun?: { ExternalSessionID?: string | null } })._agentRun;
-        if (run && sessionId && !run.ExternalSessionID) {
+        if (run && sessionId && run.ExternalSessionID !== sessionId) {
             run.ExternalSessionID = sessionId;
         }
     }
@@ -586,6 +625,11 @@ export class HarnessAgentBase extends BaseAgent {
 
             if (Object.keys(environment).length === 0) {
                 this.applyVendorKeyFallback(environment);
+            } else if (
+                this.harnessRow?.DriverClass === 'AntigravityCliAdapter' ||
+                this.harnessRow?.DriverClass === 'AntigravityCloudAdapter'
+            ) {
+                NormalizeAntigravityEnvironment(environment);
             }
 
             // If no explicit GitHub credential grant resolved, check if the calling user has an active
@@ -663,25 +707,23 @@ export class HarnessAgentBase extends BaseAgent {
         if (!harness?.DriverClass) {
             return;
         }
-        const envKey = `AI_VENDOR_API_KEY__${harness.DriverClass.toUpperCase()}`;
-        const value = process.env[envKey];
-        if (!value) {
+        const matchedSourceKey = ResolveDriverVendorFallbackEnvironment(
+            harness.DriverClass,
+            environment,
+        );
+        if (matchedSourceKey) {
+            LogStatus(
+                `Harness '${harness.Name}' using vendor key fallback from ${matchedSourceKey}.`,
+            );
             return;
         }
-        // The variable the harness itself expects. Kept as an explicit map rather than guessed,
-        // because writing a key into the wrong variable name is a silent no-op the harness reports
-        // only as an auth failure. A harness not listed here must be granted explicitly through
-        // MJ: AI Agent Credentials.
         const target = HARNESS_CREDENTIAL_ENV_VARS[harness.DriverClass];
         if (!target) {
             LogStatus(
                 `Harness '${harness.Name}' has no credential grants and no known env-var convention for ` +
                     `driver '${harness.DriverClass}'. Grant one via MJ: AI Agent Credentials.`,
             );
-            return;
         }
-        environment[target] = value;
-        LogStatus(`Harness '${harness.Name}' using vendor key fallback from ${envKey}.`);
     }
 
     /**
@@ -768,9 +810,61 @@ export class HarnessAgentBase extends BaseAgent {
 
     /** Chooses a sandbox provider from the agent's configuration. */
     private createSandboxProvider(config: HarnessAgentConfig): ISandboxProvider {
-        return config.sandbox?.provider === 'docker'
-            ? new DockerSandboxProvider({ defaultImage: config.sandbox?.image })
-            : new LocalDirectorySandboxProvider();
+        switch (config.sandbox?.provider) {
+            case 'cloud':
+                return new CloudSandboxProvider(config.sandbox.cloud);
+            case 'docker':
+                return new DockerSandboxProvider({ defaultImage: config.sandbox?.image });
+            case 'local':
+            default:
+                return new LocalDirectorySandboxProvider();
+        }
+    }
+
+    /**
+     * Resolves the MCP endpoint URL and credential handed to `StartSession`.
+     *
+     * When `sandbox.provider === 'cloud'` (or the adapter executes in a remote cloud), an external
+     * reachability URL (`sandbox.cloud.mcpExternalServerUrl` or a non-loopback `mcpServerUrl`) is
+     * required. A localhost ephemeral binding cannot be reached from a remote vendor cloud without a
+     * tunnel, so it is omitted cleanly with a status log rather than failing or passing a dead URL.
+     */
+    private resolveMcpSessionEndpoint(
+        config: HarnessAgentConfig,
+    ): { mcpServerUrl?: string; mcpCredential?: string } {
+        if (!this.adapter?.Capabilities?.McpClient) {
+            return {};
+        }
+
+        const isCloudRemote =
+            config.sandbox?.provider === 'cloud' ||
+            this.adapter.Capabilities.SupportsCloudExecution === true;
+
+        const externalTunnelUrl = config.sandbox?.cloud?.mcpExternalServerUrl?.trim();
+        if (externalTunnelUrl) {
+            return {
+                mcpServerUrl: externalTunnelUrl,
+                mcpCredential: config.mcpCredential,
+            };
+        }
+
+        const configuredUrl = config.mcpServerUrl?.trim();
+        if (!configuredUrl) {
+            return {};
+        }
+
+        if (isCloudRemote && isLoopbackMcpUrl(configuredUrl)) {
+            LogStatus(
+                `Harness MCP endpoint '${configuredUrl}' is a localhost loopback binding and ` +
+                    `sandbox.cloud.mcpExternalServerUrl is not set; skipping MCP binding for remote cloud session.`,
+            );
+            return {};
+        }
+
+        return {
+            mcpServerUrl: configuredUrl,
+            mcpCredential: config.mcpCredential,
+        };
     }
 
     /** Reads and parses the harness block from the agent's TypeConfiguration. */
@@ -1015,6 +1109,11 @@ export class HarnessAgentBase extends BaseAgent {
         return (this as unknown as { _agentRun?: { ConversationID?: string | null } })._agentRun?.ConversationID ?? null;
     }
 
+    private _agentRunExternalSessionId(): string | undefined {
+        const current = this.AgentRun?.ExternalSessionID?.trim();
+        return current && current.length > 0 ? current : undefined;
+    }
+
     private _agentTypeConfiguration(): string | null {
         return this._executeAgentParams()?.agent?.TypeConfiguration ?? null;
     }
@@ -1028,4 +1127,20 @@ export class HarnessAgentBase extends BaseAgent {
 
 function describeError(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
+}
+
+function isLoopbackMcpUrl(rawUrl: string): boolean {
+    try {
+        const parsed = new URL(rawUrl);
+        const host = parsed.hostname.toLowerCase();
+        return (
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '0.0.0.0' ||
+            host === '::1' ||
+            host === '[::1]'
+        );
+    } catch {
+        return false;
+    }
 }
