@@ -34,6 +34,7 @@ import {
     DescribeUnappliedTurnDetection,
     type RealtimeInputFrame,
     type RealtimeReconnectContext,
+    type RealtimeContextNoteOptions,
 } from '@memberjunction/ai';
 
 /**
@@ -980,10 +981,11 @@ export class OpenAILiveSession extends BaseRealtimeSession implements IRealtimeS
         }
     }
 
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
         this.sendFrame({
             event_id: randomUUID(),

@@ -2,6 +2,7 @@ import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane, RealtimeTurnDetectionSettings } from "./modelConfiguration";
 import {
     RealtimeConversationMemory,
+    type RealtimeContextNoteOptions,
     type RealtimeMemoryEntry,
     type RealtimeMemorySeed,
 } from "./realtimeConversationMemory";
@@ -1518,8 +1519,10 @@ export interface IRealtimeSession {
      *
      * @param text The context note to append to the conversation (plain text; the caller owns any
      * prefixing/framing policy such as "[progress]" markers).
+     * @param options Optional retention policy (`StateKey`, `Ephemeral`, `MemoryText`) controlling how
+     * the note is recorded in `RealtimeConversationMemory` across mid-call reconnects.
      */
-    SendContextNote?(text: string): void;
+    SendContextNote?(text: string, options?: RealtimeContextNoteOptions): void;
 
     /**
      * **Optional capability** — asks the model to voice **one brief interim update** following the

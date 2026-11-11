@@ -150,10 +150,19 @@ An agent can ask a fast decision model typed questions in six places on its own.
 | `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
 | Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
 | Payload change check | `payloadFeedbackCheck: true` |
-| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` / `maxSkillsInPrompt` > 0 |
 | Memory Manager note gate | run `data.enableDecisionGate: true` |
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
+##### Skill Catalog Narrowing & Hybrid Prioritization (`maxSkillsInPrompt`)
+
+When an agent has access to a large library of skills (`AcceptsSkills = 'All'`), `LoopAgentPromptParams` supports capping the skills injected into the system prompt via `maxSkillsInPrompt` (default `25` when `decisionsEnabled: true` or when explicitly set) and `maxSkillDecisionCandidates` (default `60`).
+
+In [`catalog-narrowing.ts`](./src/catalog-narrowing.ts), [`BaseAgent.narrowCatalogsIfConfigured`](./src/base-agent.ts) runs a **two-stage narrowing pipeline**:
+1. **Stage 1 (`PreFilterSkillCandidatesForDecision` + `RankSkillsByHybridRelevance`)**: Ranks all available skills in-memory (`0ms`) using a weighted hybrid score combining lexical/semantic query fit across skill name, description, category, and bundled action names (`0.55`), log-normalized agent-specific + global usage frequency from recent `MJ: AI Agent Run Steps` (`0.25`), and exponential recency decay with a 7-day half-life (`0.20`), slicing the top `maxSkillDecisionCandidates` (60).
+2. **Stage 2 (`NarrowSkillsWithDecision`)**: When `decisionsEnabled: true`, passes the Stage 1 shortlist to `AgentDecisionService` (`selectRelevantCatalogItems`) to pick up to `maxSkillsInPrompt`. When `decisionsEnabled: false` (or if the decision call fails), deterministically slices the top `maxSkillsInPrompt` from Stage 1.
+3. **Pinned Skills & Discovery Guidance**: Any skill already activated in the run (`_activatedSkillIDs`) or requested via `requestedSkillIDs` is pinned (`pinnedSkillIDs`) so it is never dropped. When skills are narrowed and the agent holds `Find Candidate Skills`, `BuildCatalogNarrowingNote` appends guidance instructing the model to use `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
 
 ##### Untrusted external data
 
@@ -685,6 +694,7 @@ Self-scheduling agents such as the Chief of Staff normally wake on a cron or ada
 | `TriggerWakeOnAgentRequestResolution` | `MJAIAgentRequestEntityServer.Save()` when an action-created `MJ: AI Agent Requests` row (`OriginatingAgentRunID` and `OriginatingTaskID` both null) moves from `Requested` to `Approved`, `Rejected` or `Responded` | The request owner (`RequestForUserID`) and `AgentID` | `approval-resolution` | `AgentRequestResolution` — `requestID`, `status`, `request`, `response`, parsed `responseData` and `commentsData`, `respondedByUserID`, `respondedAt` |
 | Same method, inter-agent envelope | The resolved request's `Comments` is a `Send Inter-Agent Request` envelope (`interAgentCoordination: true`) | The **sender** user (`envelope.senderUserID`) and `senderAgentID` | envelope `workstreamKey`, else `inter-agent-resolution` | `InterAgentRequestResolved` — `requestID`, `status`, `subject`, `response`, `responseData`, `respondedByUserID`, `respondedAt`, `targetUserID`, `targetUserName` |
 | `TriggerWakeOnIncomingInterAgentRequest` | `MJAIAgentRequestEntityServer.Save()` on a **new** `Requested` row whose `Comments` is an inter-agent envelope (`interAgentCoordination: true`) | The **target** user (`envelope.targetUserID`) and the request's `AgentID` | envelope `workstreamKey`, else `inter-agent-inbox` | `InterAgentRequestReceived` — `requestID`, `senderUserID`, `senderUserName`, `senderAgentID`, `subject`, `messageBody` |
+| `TriggerWakeForWorkstream` | Generic programmatic entry point (`Trigger Agent Wake` action, `TaskType` `OnCreate` / `OnStatusChange` hooks, GitHub webhook handlers, Software Factory pipeline gates) passing `TriggerWorkstreamWakeInput` | Explicit `targetUserID` + `targetAgentID` (or `targetAgentName`) | Required `workstreamKey` (e.g., `task:<TaskID>`) | `ExternalWorkstreamEvent` (or caller's `resumeState.triggerType`) — `workstreamKey`, `wakeReason`, `triggeredAt`, and caller `resumeState` |
 | `RouteInboundUtilityMailboxWake` | An inbound-email ingestion path (none wired yet) passing an `InboundUtilityMailboxEmailInput` | The verified internal sender (`fromAddress` matches an active `MJ: Users` row) and the `AgentID` of the matching `MJ: AI Bridge Agent Identities` row (`IdentityType = 'Email'`, `IsActive`) | input `workstreamKey`, else identity `Configuration.defaultWorkstreamKey`, else `inbound-utility-mailbox` | `InboundUtilityMailboxEmail` — `identityID`, `utilityMailboxAddress`, `senderUserID`, `senderEmail`, `messageID`, `subject`, `bodyPreview`, `receivedAt` |
 
 Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.

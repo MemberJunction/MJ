@@ -915,6 +915,23 @@ export interface IFileSystemProvider {
 }
 
 /**
+ * Options controlling how {@link IMetadataProvider.GetEntityObject} initializes a newly
+ * instantiated entity when no `loadKey` is supplied.
+ */
+export interface GetEntityObjectOptions {
+    /**
+     * When `true`, skips calling `NewRecord()` after constructing and configuring the entity.
+     *
+     * Use this only when the caller immediately hydrates the entity via `LoadFromData(...)` or
+     * `LoadFromDataBatchAsISAParent(...)`. Skipping `NewRecord()` avoids minting a throwaway
+     * UUID primary key, hydrating all `EntityField` instances for defaults that `LoadFromData`
+     * immediately discards, and broadcasting a synthetic `'new_record'` event — keeping
+     * `BaseEntity`'s lazy `_raw` row fast path intact.
+     */
+    SkipNewRecord?: boolean;
+}
+
+/**
  * Core interface for metadata providers in MemberJunction.
  * Provides access to all system metadata including entities, applications, security, and queries.
  * This is the primary interface for accessing MemberJunction's metadata layer.
@@ -1025,6 +1042,14 @@ export interface IMetadataProvider {
      * @throws Error if the record cannot be found or loaded
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
+
+    /**
+     * Optional fast-path entity instantiation method accepting {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     * Keeping this separate and optional on `IMetadataProvider` preserves exact backwards
+     * compatibility for lightweight test stubs and custom `IMetadataProvider` implementations.
+     */
+    GetEntityObjectWithOptions?<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question

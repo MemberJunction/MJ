@@ -457,6 +457,25 @@ describe('decideTypeOverlay — silence keeps the declaration (§ no fabrication
         expect(DecideTypeOverlay('nvarchar(MAX)', undefined).value).toBe('nvarchar(MAX)');
         expect(DecideTypeOverlay('nvarchar(MAX)', '').value).toBe('nvarchar(MAX)');
     });
+
+    it('maps numeric, date, boolean, and uuid source types to native MJ catalog types instead of nvarchar', () => {
+        expect(DecideTypeOverlay(null, 'integer').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'int').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'bigint').value).toBe('bigint');
+        expect(DecideTypeOverlay(null, 'decimal').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'currency').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'number').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'percent').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'float').value).toBe('float');
+        expect(DecideTypeOverlay(null, 'double').value).toBe('float');
+        expect(DecideTypeOverlay(null, 'boolean').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'bit').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'date').value).toBe('date');
+        expect(DecideTypeOverlay(null, 'datetime').value).toBe('datetimeoffset');
+        expect(DecideTypeOverlay(null, 'datetimeoffset').value).toBe('datetimeoffset');
+        expect(DecideTypeOverlay(null, 'uuid').value).toBe('uniqueidentifier');
+        expect(DecideTypeOverlay(null, 'uniqueidentifier').value).toBe('uniqueidentifier');
+    });
 });
 
 describe('decideNullabilityOverlay — both-silent keeps the declaration', () => {

@@ -348,9 +348,13 @@ describe('calibration against MJ core entity field names', () => {
         // columns the name rule refuses, `FeatureSchemaHash` (matches `hash`: a content hash
         // of a training snapshot's feature schema) and `AuthoredBy` (matches `auth`: the name
         // of a unit's author). Neither holds a credential; they are counted, not exempted.
+        //
+        // Raised again for the Action saga compensation fields (`CompensationAction`,
+        // `CompensationActionID`, `CompensationInputMapping`, which match `auth` inside
+        // `Compensation`): no credential either.
         const refused = FIELDS.filter((f) => IsSensitiveFieldName(f));
         expect(refused.length).toBeGreaterThanOrEqual(30);
-        expect(refused.length).toBeLessThanOrEqual(60);
+        expect(refused.length).toBeLessThanOrEqual(65);
         // And as a rate, so the bracket keeps its meaning if the fixture doubles in size.
         // 40/2111 is 1.9%; 3% leaves room for real additions and none for a broad one.
         expect(refused.length / FIELDS.length).toBeLessThan(0.03);

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
     BuildPolicyDraftFromEntity,
@@ -66,16 +66,18 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         { Value: 'AllowListOnly', Label: 'Allow-List Only' },
         { Value: 'UserCeiling', Label: 'User Ceiling (Full Delegated Access)' },
     ];
-    public readonly EmailChannelOptions: readonly {
+    public get EmailChannelOptions(): readonly {
         Value: PolicyEmailChannelModeValue;
         Label: string;
-    }[] = [
-        { Value: 'Disabled', Label: 'Disabled' },
-        { Value: 'ReadOnly', Label: 'Read Only' },
-        { Value: 'DraftOnly', Label: 'Draft Only' },
-        { Value: 'SendAsAgent', Label: 'Send as Chief of Staff' },
-        { Value: 'SendAsUser', Label: 'Send on Behalf of User' },
-    ];
+    }[] {
+        return [
+            { Value: 'Disabled', Label: 'Disabled' },
+            { Value: 'ReadOnly', Label: 'Read Only' },
+            { Value: 'DraftOnly', Label: 'Draft Only' },
+            { Value: 'SendAsAgent', Label: `Send as ${this.SelectedAgentName}` },
+            { Value: 'SendAsUser', Label: 'Send on Behalf of User' },
+        ];
+    }
     public readonly CalendarChannelOptions: readonly {
         Value: PolicyCalendarChannelModeValue;
         Label: string;
@@ -104,6 +106,18 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
 
     /** A reload replaces the draft with the saved policy. */
     protected override OnDataLoaded(): void {
+        this.PolicyDirty = false;
+    }
+
+    protected override HasUnsavedPageEdits(): boolean {
+        return this.PolicyDirty;
+    }
+
+    protected override IsPageSaveInFlight(): boolean {
+        return this.IsSavingPolicy;
+    }
+
+    protected override ResetUnsavedPageEdits(): void {
         this.PolicyDirty = false;
     }
 
@@ -176,7 +190,7 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
     }
 
     public ResetDraftPolicy(): void {
-        this.DraftPolicy = BuildPolicyDraftFromEntity(this.PolicyEntity);
+        this.DraftPolicy = BuildPolicyDraftFromEntity(this.PolicyEntity, this.SelectedAgentName);
         this.PolicyDirty = false;
         this.cdr.markForCheck();
     }
@@ -189,17 +203,23 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
         this.cdr.markForCheck();
 
         try {
+            const targetAgentId = this.SelectedAgentID ?? this.chiefOfStaffAgentId;
+            if (!targetAgentId) {
+                throw new Error(`The "${this.SelectedAgentName}" agent id has not been resolved; reload the page.`);
+            }
             let entity = this.PolicyEntity;
+            if (entity && !UUIDsEqual(entity.AgentID, targetAgentId)) {
+                throw new Error(
+                    `Loaded policy record belongs to a different agent than "${this.SelectedAgentName}". Reload the page and try again.`,
+                );
+            }
             if (!entity) {
                 entity = await this.ProviderToUse.GetEntityObject<MJAIAgentUserPolicyEntity>(
                     'MJ: AI Agent User Policies',
                     this.ProviderToUse.CurrentUser,
                 );
                 entity.NewRecord();
-                if (!this.chiefOfStaffAgentId) {
-                    throw new Error(`The "${CHIEF_OF_STAFF_AGENT_NAME}" agent id has not been resolved; reload the page.`);
-                }
-                entity.AgentID = this.chiefOfStaffAgentId;
+                entity.AgentID = targetAgentId;
                 const currentUserId = this.ProviderToUse.CurrentUser?.ID;
                 if (currentUserId) {
                     entity.UserID = currentUserId;
@@ -233,9 +253,9 @@ export class ChiefOfStaffGovernanceComponent extends BaseChiefOfStaffPage {
             const saved = await entity.Save();
             if (saved) {
                 this.PolicyEntity = entity;
-                this.DraftPolicy = BuildPolicyDraftFromEntity(entity);
+                this.DraftPolicy = BuildPolicyDraftFromEntity(entity, this.SelectedAgentName);
                 this.PolicyDirty = false;
-                this.showBanner('success', 'Chief of Staff governance policy saved.');
+                this.showBanner('success', `${this.SelectedAgentName} governance policy saved.`);
                 this.publishAgentContext();
             } else {
                 const errText =

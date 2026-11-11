@@ -28,6 +28,7 @@ export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
 export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
+export * from './checks/predictive-shadow-drift.checks';
 export * from './checks/prompt-eval-harness.checks';
 export * from './checks/agent-decisions-switch.checks';
 export * from './checks/agent-prompt-cancellation.checks';
@@ -240,5 +241,9 @@ export * from './checks/entity-status-fanout-client.checks';
 export * from './checks/encrypted-read-client.checks';
 export * from './checks/diagnostics.checks';
 export * from './checks/semantic-graph.checks';
+export * from './checks/graph-runtime.checks';
+export * from './checks/task-graph-security.checks';
+export * from './checks/work-bus-core.checks';
+export * from './checks/integration-schema-pipeline.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';
