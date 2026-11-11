@@ -568,6 +568,32 @@ BEGIN
 END
 ```
 
+### Foreign Key Indexes
+
+With FK auto-indexing on (the default), CodeGen emits one create-if-absent index per foreign key column, named `IDX_AUTO_MJ_FKEY_{Table}_{Column}` (PostgreSQL: `idx_auto_mj_fkey_<table>_<column>`), and one `IDX_AUTO_MJ_SOFTPK_*` index on a soft primary key. The guard is written into the SQL, so a capture replayed on another database decides against that database's indexes: the statement is skipped when the generated name already exists **or** when another enabled, unfiltered (non-partial) index on the table already has the column(s) as its leading key columns, in order. Included columns do not count.
+
+Existing duplicates created before this guard are left in place; dropping one is the operator's choice. This query lists every SQL Server table where an `IDX_AUTO_MJ_FKEY_*` index has the same key columns as another index:
+
+```sql
+WITH keys AS (
+  SELECT i.object_id, i.index_id, i.name AS idx, SCHEMA_NAME(o.schema_id) AS sch, o.name AS tbl,
+         (SELECT STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal)
+            FROM sys.index_columns ic
+            JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+           WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id
+             AND ic.is_included_column = 0) AS keylist
+  FROM sys.indexes i
+  JOIN sys.objects o ON o.object_id = i.object_id AND o.type = 'U'
+  WHERE i.type_desc = 'NONCLUSTERED' AND i.has_filter = 0
+)
+SELECT sch, tbl, keylist, COUNT(*) AS n, STRING_AGG(idx, ' | ') AS indexes
+FROM keys
+GROUP BY sch, tbl, keylist
+HAVING COUNT(*) > 1
+   AND SUM(CASE WHEN idx LIKE 'IDX[_]AUTO[_]MJ[_]FKEY[_]%' THEN 1 ELSE 0 END) >= 1
+ORDER BY sch, tbl;
+```
+
 ## AI-Powered Advanced Generation
 
 When `advancedGeneration.enableAdvancedGeneration` is enabled, CodeGen uses AI prompts (stored in the database as AI Prompt entities) to enhance the generation process:
