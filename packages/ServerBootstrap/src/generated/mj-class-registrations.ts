@@ -1457,7 +1457,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (81 classes)
+// @memberjunction/core-entities-server (82 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1527,6 +1527,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2950,6 +2951,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -3095,11 +3097,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     Get_AI_Model_Cost_Action,
     GitHubAddCommentAction,
     GitHubCommitFilesAndCreatePRAction,
-    GitHubCommitFilesToBranchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GitHubCommitFilesToBranchAction,
     GitHubCreateOrUpdateIssueAction,
     GitHubCreatePullRequestAction,
     GitHubGetPullRequestContextAction,

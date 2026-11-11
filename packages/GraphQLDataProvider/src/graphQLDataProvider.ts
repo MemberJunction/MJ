@@ -20,7 +20,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          GetLocalTimeZone, TIME_ZONE_HEADER, ViewPropertyValues, ResolveMJAPIURL,
          GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed,
          CompositeFilter } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, NormalizeUUID, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -168,6 +168,23 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+interface QueuedEntityRecordNameRequest {
+    entityName: string;
+    compositeKey: CompositeKey;
+    contextUser?: UserInfo;
+    forceRefresh: boolean;
+    resolve: (value: string) => void;
+    reject: (reason: Error) => void;
+}
+
+interface UniqueRecordNameBatchItem {
+    entityName: string;
+    compositeKey: CompositeKey;
+    contextUser?: UserInfo;
+    forceRefresh: boolean;
+    callers: QueuedEntityRecordNameRequest[];
+}
 
 /** The RunQueriesWithCacheCheck response as it arrives over GraphQL. */
 interface RunQueriesCacheCheckGQLResponse {
@@ -432,6 +449,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     public static VerboseCacheInvalidationLogging = false;
 
     /**
+     * Controls whether concurrent `GetEntityRecordName` calls within the same microtask turn
+     * are coalesced into a single batched `GetEntityRecordNames` network request.
+     */
+    public static CoalesceEntityRecordNames: boolean = true;
+
+    /**
      * Global Object Store key — follows BaseSingleton's naming convention so the
      * singleton is discoverable in the same way as BaseSingleton-derived classes.
      *
@@ -489,12 +512,32 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (!ignoreExistingSingleton) {
             const g = GetGlobalObjectStore();
             if (g && g[GraphQLDataProvider._globalStoreKey]) {
-                return g[GraphQLDataProvider._globalStoreKey] as this;
+                const existing = g[GraphQLDataProvider._globalStoreKey] as GraphQLDataProvider;
+                // Allow a more-specific UI-layer subclass (e.g. AngularGraphQLDataProvider) constructed
+                // prior to Config() to upgrade an unconfigured base singleton, while preserving strict
+                // singleton identity for same-class or already-configured instances.
+                if (this.constructor === GraphQLDataProvider || existing instanceof this.constructor || existing.ConfigData) {
+                    return existing as this;
+                }
             }
             if (g) {
                 g[GraphQLDataProvider._globalStoreKey] = this;
             }
         }
+    }
+
+    /**
+     * Lifecycle hook invoked around background transport operations (WebSocket connection
+     * creation/teardown, ping/pong watchdog timers, subscription frame listeners, and periodic
+     * maintenance intervals) that should not trigger host UI framework render/tick cycles on
+     * every frame.
+     *
+     * Default implementation executes `fn()` directly with zero framework coupling. UI framework
+     * subclasses override this hook to run background transport I/O outside their framework's
+     * automatic change-detection tracking.
+     */
+    protected ExecuteInBackgroundScope<T>(fn: () => T): T {
+        return fn();
     }
 
     private _client: GraphQLClient;
@@ -3525,6 +3568,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * because every request on a connection is answered as the same user.
      */
     private readonly _recordNames = new EntityRecordNameCache();
+    private readonly _recordNameCoalesceQueue: QueuedEntityRecordNameRequest[] = [];
+    private _recordNameCoalesceMicrotaskScheduled = false;
+
+    private recordLookupKey(entityName: string, compositeKey: CompositeKey): string {
+        const keyParts = compositeKey?.KeyValuePairs
+            ? compositeKey.KeyValuePairs.map((kv) => {
+                const val = typeof kv.Value === 'string' ? NormalizeUUID(kv.Value) : String(kv.Value ?? '');
+                return `${kv.FieldName.toLowerCase()}|${val}`;
+            }).join('||')
+            : '';
+        return `${(entityName || '').trim().toLowerCase()}:::${keyParts}`;
+    }
 
     public override async GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined> {
         const cached = this._recordNames.Get(entityName, compositeKey);
@@ -3547,8 +3602,140 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public override async GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh: boolean = false): Promise<string> {
-        return this._recordNames.GetOrFetch(entityName, compositeKey, forceRefresh,
-            () => this.InternalGetEntityRecordName(entityName, compositeKey));
+        if (!GraphQLDataProvider.CoalesceEntityRecordNames) {
+            return this._recordNames.GetOrFetch(entityName, compositeKey, forceRefresh,
+                () => this.InternalGetEntityRecordName(entityName, compositeKey));
+        }
+
+        if (!entityName || !compositeKey || !compositeKey.KeyValuePairs || compositeKey.KeyValuePairs.length === 0) {
+            return this.InternalGetEntityRecordName(entityName, compositeKey);
+        }
+
+        if (!forceRefresh) {
+            const cached = this._recordNames.Get(entityName, compositeKey);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        return new Promise<string>((resolve, reject) => {
+            this._recordNameCoalesceQueue.push({
+                entityName,
+                compositeKey,
+                contextUser,
+                forceRefresh,
+                resolve,
+                reject,
+            });
+            if (!this._recordNameCoalesceMicrotaskScheduled) {
+                this._recordNameCoalesceMicrotaskScheduled = true;
+                this.scheduleRecordNameMicrotaskCoalesceDrain(this._recordNameCoalesceQueue.length, 1);
+            }
+        });
+    }
+
+    private scheduleRecordNameMicrotaskCoalesceDrain(seenLength: number, hop: number): void {
+        queueMicrotask(() => {
+            const currentLength = this._recordNameCoalesceQueue.length;
+            if (currentLength === 0) {
+                this._recordNameCoalesceMicrotaskScheduled = false;
+                return;
+            }
+            if (hop < 5 || (currentLength > seenLength && hop < 16)) {
+                this.scheduleRecordNameMicrotaskCoalesceDrain(currentLength, hop + 1);
+                return;
+            }
+            this._recordNameCoalesceMicrotaskScheduled = false;
+            void this.flushRecordNameCoalesceQueue();
+        });
+    }
+
+    private async flushRecordNameCoalesceQueue(): Promise<void> {
+        const queue = this._recordNameCoalesceQueue.splice(0);
+        if (queue.length === 0) {
+            return;
+        }
+
+        const uniqueMap = new Map<string, UniqueRecordNameBatchItem>();
+        for (const item of queue) {
+            const key = this.recordLookupKey(item.entityName, item.compositeKey);
+            let existing = uniqueMap.get(key);
+            if (!existing) {
+                existing = {
+                    entityName: item.entityName,
+                    compositeKey: item.compositeKey,
+                    contextUser: item.contextUser,
+                    forceRefresh: item.forceRefresh,
+                    callers: [item],
+                };
+                uniqueMap.set(key, existing);
+            } else {
+                existing.callers.push(item);
+                if (item.forceRefresh) {
+                    existing.forceRefresh = true;
+                }
+            }
+        }
+
+        const uniqueItems = Array.from(uniqueMap.values());
+        if (uniqueItems.length === 1) {
+            const single = uniqueItems[0];
+            try {
+                const name = await this._recordNames.GetOrFetch(
+                    single.entityName,
+                    single.compositeKey,
+                    single.forceRefresh,
+                    () => this.InternalGetEntityRecordName(single.entityName, single.compositeKey)
+                );
+                for (const caller of single.callers) {
+                    caller.resolve(name);
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                for (const caller of single.callers) {
+                    caller.reject(error);
+                }
+            }
+            return;
+        }
+
+        try {
+            const inputs: EntityRecordNameInput[] = uniqueItems.map((u) => ({
+                EntityName: u.entityName,
+                CompositeKey: u.compositeKey,
+            }));
+            const anyForceRefresh = uniqueItems.some((u) => u.forceRefresh);
+            const results = await this.GetEntityRecordNames(inputs, undefined, anyForceRefresh);
+
+            for (let i = 0; i < uniqueItems.length; i++) {
+                const unique = uniqueItems[i];
+                let result: EntityRecordNameResult | undefined = results && results[i];
+                if (
+                    !result ||
+                    result.EntityName.toLowerCase() !== unique.entityName.toLowerCase() ||
+                    (unique.compositeKey && !unique.compositeKey.Equals(result.CompositeKey))
+                ) {
+                    result = results?.find(
+                        (r) =>
+                            r.EntityName.toLowerCase() === unique.entityName.toLowerCase() &&
+                            ((!unique.compositeKey && !r.CompositeKey) ||
+                                (unique.compositeKey && r.CompositeKey && unique.compositeKey.Equals(r.CompositeKey)))
+                    );
+                }
+
+                const recordName = result?.Success ? result.RecordName : undefined;
+                for (const caller of unique.callers) {
+                    caller.resolve(recordName as string);
+                }
+            }
+        } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            for (const unique of uniqueItems) {
+                for (const caller of unique.callers) {
+                    caller.reject(error);
+                }
+            }
+        }
     }
 
     public override async GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh: boolean = false): Promise<EntityRecordNameResult[]> {
@@ -4426,136 +4613,138 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns Active WebSocket client
      */
     private getOrCreateWSClient(): Client {
-        const now = Date.now();
+        return this.ExecuteInBackgroundScope(() => {
+            const now = Date.now();
 
-        // Check if existing client is too old and should be recreated
-        if (this._wsClient && this._wsClientCreatedAt) {
-            const age = now - this._wsClientCreatedAt;
-            if (age > this.WS_CLIENT_MAX_AGE_MS && this._activeSubscriptionCount === 0) {
-                // Client is old and no active subscriptions, recreate it
-                this.disposeWSClient();
+            // Check if existing client is too old and should be recreated
+            if (this._wsClient && this._wsClientCreatedAt) {
+                const age = now - this._wsClientCreatedAt;
+                if (age > this.WS_CLIENT_MAX_AGE_MS && this._activeSubscriptionCount === 0) {
+                    // Client is old and no active subscriptions, recreate it
+                    this.disposeWSClient();
+                }
             }
-        }
 
-        // Create new client if needed
-        if (!this._wsClient) {
-            this._isDisposingSocketIntentionally = false;
-            // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
-            // on one socket must never be able to terminate a *replacement* socket created while
-            // that timer was still pending.
-            const client = createClient({
-                url: this.ConfigData.WSURL,
-                // Function form: re-evaluated on every connection attempt (including
-                // retries after 4403 "Token expired"). This lets the client pick up a
-                // freshly-refreshed token instead of reusing the stale one.
-                connectionParams: () => ({
-                    Authorization: 'Bearer ' + this.ConfigData.Token,
-                    // Also carry the API keys (if configured) so API-key / MCP / Node clients can authenticate
-                    // the subscription socket — the server validates these the same way it does the HTTP headers.
-                    ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
-                    ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
-                }),
-                keepAlive: WS_KEEPALIVE_MS,
-                connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
-                retryAttempts: 3,
-                shouldRetry: () => true,
-            });
-            this._wsClient = client;
-            this._wsClientCreatedAt = now;
+            // Create new client if needed
+            if (!this._wsClient) {
+                this._isDisposingSocketIntentionally = false;
+                // Bind handlers to this LOCAL client, not to `this._wsClient`. A pong watchdog armed
+                // on one socket must never be able to terminate a *replacement* socket created while
+                // that timer was still pending.
+                const client = createClient({
+                    url: this.ConfigData.WSURL,
+                    // Function form: re-evaluated on every connection attempt (including
+                    // retries after 4403 "Token expired"). This lets the client pick up a
+                    // freshly-refreshed token instead of reusing the stale one.
+                    connectionParams: () => ({
+                        Authorization: 'Bearer ' + this.ConfigData.Token,
+                        // Also carry the API keys (if configured) so API-key / MCP / Node clients can authenticate
+                        // the subscription socket — the server validates these the same way it does the HTTP headers.
+                        ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
+                        ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
+                    }),
+                    keepAlive: WS_KEEPALIVE_MS,
+                    connectionAckWaitTimeout: WS_CONNECTION_ACK_TIMEOUT_MS,
+                    retryAttempts: 3,
+                    shouldRetry: () => true,
+                });
+                this._wsClient = client;
+                this._wsClientCreatedAt = now;
 
-            // The pong timer belongs to this client alone, so a late event from a replaced client
-            // can never disarm the watchdog of the client that took its place.
-            let pongTimeout: ReturnType<typeof setTimeout> | null = null;
-            const disarmPongWatchdog = (): void => {
-                if (pongTimeout !== null) {
-                    clearTimeout(pongTimeout);
-                    pongTimeout = null;
-                }
-            };
-            this._disarmPongWatchdog = disarmPongWatchdog;
-
-            // ── Pong watchdog (MJ #4222) ──
-            // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
-            // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
-            // the library emits exactly one 'ping' and then falls permanently silent: no close,
-            // no error, no retry. This watchdog is what converts that silence into a real close
-            // event, which is the single signal the retry logic, `_socketStateSubject`,
-            // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
-            client.on('ping', (received: boolean) => {
-                // `received === true` is a server-initiated ping, which graphql-ws answers on our
-                // behalf — it tells us nothing about whether OUR traffic is getting through. Only
-                // a ping we sent starts the countdown.
-                if (received) {
-                    return;
-                }
-                disarmPongWatchdog();
-                pongTimeout = setTimeout(() => {
-                    pongTimeout = null;
-                    try {
-                        // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
-                        // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
-                        client.terminate();
-                    } catch {
-                        // Socket already gone — the close we wanted has effectively happened.
+                // The pong timer belongs to this client alone, so a late event from a replaced client
+                // can never disarm the watchdog of the client that took its place.
+                let pongTimeout: ReturnType<typeof setTimeout> | null = null;
+                const disarmPongWatchdog = (): void => {
+                    if (pongTimeout !== null) {
+                        clearTimeout(pongTimeout);
+                        pongTimeout = null;
                     }
-                }, WS_PONG_TIMEOUT_MS);
-            });
-            client.on('pong', (received: boolean) => {
-                // The link is proven alive in both directions; stand the watchdog down.
-                if (received) {
+                };
+                this._disarmPongWatchdog = disarmPongWatchdog;
+
+                // ── Pong watchdog (MJ #4222) ──
+                // graphql-ws sends the keepalive ping but deliberately does nothing when no pong
+                // comes back, and re-arms the ping ONLY on pong receipt. So on a half-open socket
+                // the library emits exactly one 'ping' and then falls permanently silent: no close,
+                // no error, no retry. This watchdog is what converts that silence into a real close
+                // event, which is the single signal the retry logic, `_socketStateSubject`,
+                // ServerConnectivityService, ConversationStreaming and FireAndForgetHelper all wait on.
+                client.on('ping', (received: boolean) => {
+                    // `received === true` is a server-initiated ping, which graphql-ws answers on our
+                    // behalf — it tells us nothing about whether OUR traffic is getting through. Only
+                    // a ping we sent starts the countdown.
+                    if (received) {
+                        return;
+                    }
                     disarmPongWatchdog();
-                }
-            });
+                    pongTimeout = this.ExecuteInBackgroundScope(() => setTimeout(() => {
+                        pongTimeout = null;
+                        try {
+                            // Issues a synthetic `4499 Terminated` close. graphql-ws treats terminate
+                            // as non-fatal, so `retryAttempts`/`shouldRetry` reconnect as normal.
+                            client.terminate();
+                        } catch {
+                            // Socket already gone — the close we wanted has effectively happened.
+                        }
+                    }, WS_PONG_TIMEOUT_MS));
+                });
+                client.on('pong', (received: boolean) => {
+                    // The link is proven alive in both directions; stand the watchdog down.
+                    if (received) {
+                        disarmPongWatchdog();
+                    }
+                });
 
-            // Emit connectivity events — consumed by ServerConnectivityService
-            client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
-                this._socketStateSubject.next('connected');
-                if (wasRetry) {
-                    // A RECONNECT, not a first connect. This is the only trustworthy reconnect
-                    // signal available: graphql-ws re-establishes subscriptions transparently, so
-                    // the RxJS stream may never error or complete, and `_socketStateSubject` can
-                    // re-emit 'connected' without an intervening 'disconnected' when the close was
-                    // suppressed. Anything published while the socket was down was dropped with no
-                    // replay, so a listener must reconcile against durable state (MJ #4222).
-                    this._socketReconnectedSubject.next();
-                }
-            });
-            client.on('closed', (event: unknown) => {
-                // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
-                // pending watchdog cannot fire against an already-dead client.
-                disarmPongWatchdog();
-                // A replaced client's late close says nothing about the socket in use now.
-                if (this._wsClient !== client) {
-                    return;
-                }
-                // Ignore closes we initiated via disposeWSClient() — those already
-                // emit 'unknown' themselves. Only treat unexpected closes (retries
-                // exhausted) as 'disconnected'.
-                if (this._isDisposingSocketIntentionally) {
-                    return;
-                }
-                this._socketStateSubject.next('disconnected');
+                // Emit connectivity events — consumed by ServerConnectivityService
+                client.on('connected', (_socket: unknown, _payload: unknown, wasRetry: boolean) => {
+                    this._socketStateSubject.next('connected');
+                    if (wasRetry) {
+                        // A RECONNECT, not a first connect. This is the only trustworthy reconnect
+                        // signal available: graphql-ws re-establishes subscriptions transparently, so
+                        // the RxJS stream may never error or complete, and `_socketStateSubject` can
+                        // re-emit 'connected' without an intervening 'disconnected' when the close was
+                        // suppressed. Anything published while the socket was down was dropped with no
+                        // replay, so a listener must reconcile against durable state (MJ #4222).
+                        this._socketReconnectedSubject.next();
+                    }
+                });
+                client.on('closed', (event: unknown) => {
+                    // Whatever closed the socket, no pong can arrive on it now. Disarm first so a
+                    // pending watchdog cannot fire against an already-dead client.
+                    disarmPongWatchdog();
+                    // A replaced client's late close says nothing about the socket in use now.
+                    if (this._wsClient !== client) {
+                        return;
+                    }
+                    // Ignore closes we initiated via disposeWSClient() — those already
+                    // emit 'unknown' themselves. Only treat unexpected closes (retries
+                    // exhausted) as 'disconnected'.
+                    if (this._isDisposingSocketIntentionally) {
+                        return;
+                    }
+                    this._socketStateSubject.next('disconnected');
 
-                // If the server closed with 4403 "Token expired", eagerly refresh
-                // the token so that graphql-ws retries use a fresh one. Without this,
-                // all retry attempts would reuse the stale token and fail.
-                const closeCode = (event as { code?: number })?.code;
-                if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
-                    this.RefreshToken().catch(() => {
-                        // RefreshToken failure is handled via notifyAuthenticationError
-                    });
-                }
-            });
+                    // If the server closed with 4403 "Token expired", eagerly refresh
+                    // the token so that graphql-ws retries use a fresh one. Without this,
+                    // all retry attempts would reuse the stale token and fail.
+                    const closeCode = (event as { code?: number })?.code;
+                    if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
+                        this.RefreshToken().catch(() => {
+                            // RefreshToken failure is handled via notifyAuthenticationError
+                        });
+                    }
+                });
 
-            // Start cleanup timer if not already running
-            if (!this._subscriptionCleanupTimer) {
-                this._subscriptionCleanupTimer = setInterval(() => {
-                    this.cleanupStaleSubscriptions();
-                }, this.SUBSCRIPTION_CLEANUP_INTERVAL_MS);
+                // Start cleanup timer if not already running
+                if (!this._subscriptionCleanupTimer) {
+                    this._subscriptionCleanupTimer = this.ExecuteInBackgroundScope(() => setInterval(() => {
+                        this.cleanupStaleSubscriptions();
+                    }, this.SUBSCRIPTION_CLEANUP_INTERVAL_MS));
+                }
             }
-        }
 
-        return this._wsClient;
+            return this._wsClient;
+        });
     }
 
     /**
@@ -4563,21 +4752,23 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Does NOT complete subjects - caller should handle that separately to avoid double-cleanup
      */
     private disposeWSClient(): void {
-        if (this._wsClient) {
-            this._isDisposingSocketIntentionally = true;
-            // Disarm before disposing: a deliberate teardown must not leave a watchdog running
-            // against a client that is going away.
-            this._disarmPongWatchdog?.();
-            this._disarmPongWatchdog = null;
-            try {
-                this._wsClient.dispose();
-            } catch (e) {
-                console.error('[GraphQLDataProvider] Error disposing WebSocket client:', e);
+        this.ExecuteInBackgroundScope(() => {
+            if (this._wsClient) {
+                this._isDisposingSocketIntentionally = true;
+                // Disarm before disposing: a deliberate teardown must not leave a watchdog running
+                // against a client that is going away.
+                this._disarmPongWatchdog?.();
+                this._disarmPongWatchdog = null;
+                try {
+                    this._wsClient.dispose();
+                } catch (e) {
+                    console.error('[GraphQLDataProvider] Error disposing WebSocket client:', e);
+                }
+                this._wsClient = null;
+                this._wsClientCreatedAt = null;
+                this._socketStateSubject.next('unknown');
             }
-            this._wsClient = null;
-            this._wsClientCreatedAt = null;
-            this._socketStateSubject.next('unknown');
-        }
+        });
     }
 
     /**
@@ -4700,7 +4891,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 ...(diagCtx?.sessionId ? { diagnosticSessionId: diagCtx.sessionId } : {}),
             };
 
-            const unsubscribe = client.subscribe(
+            const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
                 { query: subscription, variables, extensions },
                 {
                     next: (data) => {
@@ -4738,13 +4929,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         observer.complete();
                     },
                 }
-            );
+            ));
 
             // Return cleanup function - this is ALWAYS called when subscription ends
             // whether by error, completion, or manual unsubscribe
             return () => {
                 this._activeSubscriptionCount--;
-                unsubscribe();
+                this.ExecuteInBackgroundScope(() => unsubscribe());
             };
         });
     }
@@ -4801,7 +4992,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const subscription = new Subscription();
         subscription.add(
             new Observable((observer) => {
-                const unsubscribe = client.subscribe(
+                const unsubscribe = this.ExecuteInBackgroundScope(() => client.subscribe(
                     { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
                     {
                         next: (data: any) => {
@@ -4844,14 +5035,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             observer.complete();
                         },
                     }
-                );
+                ));
 
                 // Increment AFTER successful subscription setup
                 this._activeSubscriptionCount++;
 
                 return () => {
                     this._activeSubscriptionCount--;
-                    unsubscribe();
+                    this.ExecuteInBackgroundScope(() => unsubscribe());
                 };
             }).subscribe({
                 next: (message: string) => subject.next(message),
@@ -5021,23 +5212,25 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Call this when shutting down the provider or on logout
      */
     public DisposeWebSocketResources(): void {
-        // Stop cleanup timer
-        if (this._subscriptionCleanupTimer) {
-            clearInterval(this._subscriptionCleanupTimer);
-            this._subscriptionCleanupTimer = null;
-        }
+        this.ExecuteInBackgroundScope(() => {
+            // Stop cleanup timer
+            if (this._subscriptionCleanupTimer) {
+                clearInterval(this._subscriptionCleanupTimer);
+                this._subscriptionCleanupTimer = null;
+            }
 
-        // Unsubscribe from cache invalidation
-        this.UnsubscribeFromCacheInvalidation();
+            // Unsubscribe from cache invalidation
+            this.UnsubscribeFromCacheInvalidation();
 
-        // Complete all subjects and clear cache
-        this.completeAllSubjects();
+            // Complete all subjects and clear cache
+            this.completeAllSubjects();
 
-        // Reset counters
-        this._activeSubscriptionCount = 0;
+            // Reset counters
+            this._activeSubscriptionCount = 0;
 
-        // Dispose WebSocket client
-        this.disposeWSClient();
+            // Dispose WebSocket client
+            this.disposeWSClient();
+        });
     }
 
     /** @deprecated Use {@link DisposeWebSocketResources}. */
@@ -5388,7 +5581,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     },
                 },
             });
-            this._tabInvalidationMultiplexer.Start();
+            const mux = this._tabInvalidationMultiplexer;
+            this.ExecuteInBackgroundScope(() => mux.Start());
             return;
         }
 

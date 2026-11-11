@@ -1197,7 +1197,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (81 classes)
+// @memberjunction/core-entities-server (82 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1267,6 +1267,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2512,6 +2513,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2561,11 +2563,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
     CreateSVGNetworkAction,
-    CreateSVGSketchDiagramAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
     CreateUserAction_core_actions,
     Create_Conversation_Record_Action,
@@ -2772,7 +2774,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1190;
+export const CLASS_REGISTRATIONS_COUNT = 1191;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
