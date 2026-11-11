@@ -13,6 +13,7 @@ import {
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeReconnectContext,
+    type RealtimeContextNoteOptions,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
     type RealtimeTranscript,
@@ -1504,10 +1505,11 @@ export class ElevenLabsRealtimeSession extends BaseRealtimeSession implements IR
      * non-interrupting context channel — sent immediately regardless of an in-flight response
      * (the platform guarantees it never triggers or disturbs generation).
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
         this.sendFrame({ type: 'contextual_update', text });
     }

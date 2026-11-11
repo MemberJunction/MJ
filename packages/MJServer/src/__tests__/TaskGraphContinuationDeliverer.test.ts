@@ -41,7 +41,26 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentRunEntity: class {},
 }));
 
-vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {} }));
+vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIAgentEntityExtended: class {}, TASK_SECURITY_ENVELOPE_VERSION: 1 }));
+
+// The tenant clone is task-graph's (tested there); here it only has to return a stamped copy, never the input.
+vi.mock('@memberjunction/task-graph', () => ({
+    CloneUserWithTenantContext: (user: object, tenant: object) => ({ ...user, TenantContext: { ...tenant } }),
+}));
+
+// The action catalog the removals for a tainted turn are read from.
+vi.mock('@memberjunction/actions', () => ({
+    ActionEngineServer: {
+        Instance: {
+            Config: vi.fn(),
+            Actions: [
+                { ID: 'egress-action', Config_Object: { disallowWhenTainted: true } },
+                { ID: 'search-action', Config_Object: null },
+            ],
+        },
+    },
+}));
+vi.mock('@memberjunction/aiengine', () => ({ AIEngine: { Instance: { Agents: [] } } }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
 vi.mock('@memberjunction/ai-agents', () => ({
@@ -350,6 +369,77 @@ describe('Reinvoke — restarting the submitting agent', () => {
         runAgent.mockRejectedValueOnce(new Error('agent exploded'));
         const h = reinvokeHarness();
         await expect(h.deliverer.Reinvoke(params())).resolves.toBeUndefined();
+    });
+});
+
+describe("Reinvoke — under the graph's security envelope (B1)", () => {
+    const ENVELOPE = {
+        Version: 1 as const,
+        IsRunTainted: true,
+        RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-A', SecondaryScopes: { Region: 'eu' }, SearchScopeIDs: ['scope-1'] },
+        Audience: { ReaderUserIDs: ['reader-1'] },
+        BoundActionParams: { 'search-action': { OrganizationID: 'org-A' } },
+        CallerTenantContext: { TenantID: 'org-A', Source: 'header' as const },
+    };
+
+    function envelopeHarness() {
+        const details: Array<ReturnType<typeof detailRow>> = [];
+        const provider = {
+            GetEntityObject: vi.fn().mockImplementation(async (name: string) => {
+                if (name === 'MJ: AI Agent Runs') return { AgentID: 'agent-1', UserID: 'owner-1', Load: vi.fn().mockResolvedValue(true) };
+                if (name === 'MJ: AI Agents') return { ID: 'agent-1', Load: vi.fn().mockResolvedValue(true) };
+                const row = detailRow();
+                details.push(row);
+                return row;
+            }),
+        };
+        const deliverer = new TaskGraphContinuationDeliverer(
+            { CreateProvider: vi.fn().mockResolvedValue(provider) } as never,
+            { ID: 'user-1' } as UserInfo,
+        );
+        return { deliverer, details };
+    }
+
+    it('starts the turn as a tenant-stamped clone of the submitter with the scope, readers, bindings, envelope and removals', async () => {
+        const h = envelopeHarness();
+        await h.deliverer.Reinvoke(params({ SecurityEnvelope: ENVELOPE }));
+
+        expect(runAgent).toHaveBeenCalledTimes(1);
+        const run = runAgent.mock.calls[0][0];
+        expect(run.contextUser).not.toBe(SUBMITTER);
+        expect(run.contextUser).toEqual({ ID: 'submitter-1', TenantContext: { TenantID: 'org-A', Source: 'header' } });
+        expect(SUBMITTER).not.toHaveProperty('TenantContext');
+        expect(run.SecurityEnvelope).toEqual(ENVELOPE);
+        expect(run.PrimaryScopeEntityName).toBe('Organizations');
+        expect(run.PrimaryScopeRecordID).toBe('org-A');
+        expect(run.SecondaryScopes).toEqual({ Region: 'eu' });
+        expect(run.SearchScopeIDs).toEqual(['scope-1']);
+        expect(run.Audience).toEqual({ Mode: 'Intersection', UserIDs: ['reader-1'] });
+        expect(run.boundActionParams).toEqual({ 'search-action': { OrganizationID: 'org-A' } });
+        expect(run.actionChanges).toEqual([{ scope: 'global', mode: 'remove', actionIds: ['egress-action'] }]);
+    });
+
+    it('posts the outcome instead of starting a turn when the submitter cannot be resolved', async () => {
+        const h = envelopeHarness();
+        await h.deliverer.Reinvoke(params({ SecurityEnvelope: ENVELOPE, SubmittedByUserID: 'someone-not-cached' }));
+
+        expect(runAgent).not.toHaveBeenCalled();
+        const posted = h.details.find((d) => d.Role === 'AI' && d.Message.includes('Weekly digest'));
+        expect(posted).toBeDefined();
+    });
+
+    it('adds nothing for a graph that carries no envelope', async () => {
+        const h = envelopeHarness();
+        await h.deliverer.Reinvoke(params());
+
+        const run = runAgent.mock.calls[0][0];
+        expect(run.SecurityEnvelope).toBeUndefined();
+        expect(run.Audience).toBeUndefined();
+        expect(run.PrimaryScopeRecordID).toBeUndefined();
+    });
+
+    it('declares that it enforces envelopes, so the dispatcher lets constrained graphs reinvoke', () => {
+        expect(envelopeHarness().deliverer.EnforcesSecurityEnvelope).toBe(true);
     });
 });
 

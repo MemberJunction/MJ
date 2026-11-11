@@ -89,7 +89,7 @@ describe('SchemaEvolution', () => {
             expect(diff.ModifiedColumns).toHaveLength(0);
         });
 
-        it('should detect modified columns (type change)', () => {
+        it('should detect modified columns (type change within same family)', () => {
             const target = MakeTargetConfig([
                 { SourceFieldName: 'email', TargetColumnName: 'Email', TargetSqlType: 'NVARCHAR(500)', IsNullable: true, MaxLength: 500, Precision: null, Scale: null, DefaultValue: null },
             ]);
@@ -101,6 +101,26 @@ describe('SchemaEvolution', () => {
             expect(diff.ModifiedColumns).toHaveLength(1);
             expect(diff.ModifiedColumns[0].OldType).toBe('NVARCHAR(255)');
             expect(diff.ModifiedColumns[0].NewType).toBe('NVARCHAR(500)');
+        });
+
+        it('should warn and skip cross-family type changes on existing columns (e.g. NVARCHAR to INT or DECIMAL)', () => {
+            const target = MakeTargetConfig([
+                { SourceFieldName: 'amount', TargetColumnName: 'Amount', TargetSqlType: 'DECIMAL(28,2)', IsNullable: true, MaxLength: null, Precision: 28, Scale: 2, DefaultValue: null },
+                { SourceFieldName: 'count', TargetColumnName: 'Count', TargetSqlType: 'INT', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+                { SourceFieldName: 'created_at', TargetColumnName: 'CreatedAt', TargetSqlType: 'DATETIMEOFFSET', IsNullable: true, MaxLength: null, Precision: null, Scale: null, DefaultValue: null },
+            ]);
+            const existing = MakeExistingTable([
+                { Name: 'Amount', SqlType: 'NVARCHAR(255)', IsNullable: true },
+                { Name: 'Count', SqlType: 'NVARCHAR(255)', IsNullable: true },
+                { Name: 'CreatedAt', SqlType: 'NVARCHAR(255)', IsNullable: true },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.ModifiedColumns).toHaveLength(0);
+            expect(diff.Warnings).toHaveLength(3);
+            expect(diff.Warnings[0]).toContain("Column 'Amount' type family changed from NVARCHAR(255) to DECIMAL(28,2)");
+            expect(diff.Warnings[1]).toContain("Column 'Count' type family changed from NVARCHAR(255) to INT");
+            expect(diff.Warnings[2]).toContain("Column 'CreatedAt' type family changed from NVARCHAR(255) to DATETIMEOFFSET");
         });
 
         it('should detect modified columns (nullability change)', () => {

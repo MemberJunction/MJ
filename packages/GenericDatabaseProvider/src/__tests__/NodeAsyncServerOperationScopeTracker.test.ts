@@ -107,3 +107,60 @@ describe('NodeAsyncServerOperationScopeTracker (AsyncLocalStorage isolation)', (
         );
     });
 });
+
+describe('ServerOperationScopeManager: a client\'s own request vs server work (AsyncLocalStorage)', () => {
+    const scopes = (): ServerOperationScopeManager => ServerOperationScopeManager.Instance;
+    const anyAuthority = (): boolean => scopes().IsOperationActive(['Some.Operation'], 'Some Entity') || scopes().IsOperationActive(undefined, 'Some Entity');
+
+    beforeEach(() => {
+        ServerOperationScopeManager.Instance.SetTracker(new NodeAsyncServerOperationScopeTracker());
+    });
+
+    afterEach(() => {
+        ServerOperationScopeManager.Instance.SetTracker(new StackServerOperationScopeTracker());
+    });
+
+    it('reads only code directly inside a client CRUD boundary as the client\'s own request', async () => {
+        expect(scopes().IsInDirectClientCrud()).toBe(false);
+        await scopes().RunInClientCrudBoundary(async () => {
+            await delayTick(1);
+            expect(scopes().IsInDirectClientCrud()).toBe(true);
+            await scopes().RunWithAuthority({ operationKey: 'Some.Operation', source: 'ServerEngine', allowedEntities: ['Some Entity'] }, async () => {
+                expect(scopes().IsInDirectClientCrud()).toBe(false);
+            });
+            await scopes().RunWithoutAuthority(async () => {
+                expect(scopes().IsInDirectClientCrud()).toBe(false);
+            });
+        });
+    });
+
+    it('takes work a client request starts and leaves running out of the request, granting it nothing', async () => {
+        let leftRunning: Promise<void> = Promise.resolve();
+        let plainSeesClient: boolean | undefined;
+        let serverWorkSeesClient: boolean | undefined;
+        let serverWorkHasAuthority: boolean | undefined;
+        await scopes().RunInClientCrudBoundary(async () => {
+            // As a save hook starting an agent run without waiting for it.
+            void (async () => { await delayTick(10); plainSeesClient = scopes().IsInDirectClientCrud(); })();
+            leftRunning = scopes().RunAsServerWork(async () => {
+                await delayTick(10);
+                serverWorkSeesClient = scopes().IsInDirectClientCrud();
+                serverWorkHasAuthority = anyAuthority();
+            });
+        });
+        await leftRunning;
+        await delayTick(5);
+        expect(plainSeesClient).toBe(true);
+        expect(serverWorkSeesClient).toBe(false);
+        expect(serverWorkHasAuthority).toBe(false);
+    });
+
+    it('leaves code outside a client request as it was, its server authority included', async () => {
+        const frame = { operationKey: 'Some.Operation', source: 'ServerEngine' as const, allowedEntities: ['Some Entity'] };
+        await scopes().RunWithAuthority(frame, () => scopes().RunAsServerWork(async () => {
+            await delayTick(1);
+            expect(anyAuthority()).toBe(true);
+            expect(scopes().IsInDirectClientCrud()).toBe(false);
+        }));
+    });
+});

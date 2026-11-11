@@ -141,15 +141,22 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
         const runner = new AgentRunner(makeProvider([convEntity, userDetail, agentDetail]));
         const gatherSpy = vi.spyOn(runner as unknown as RunAgentStub, 'gatherConversationArtifacts');
 
+        let markRunAgentStarted: () => void = () => {};
+        const runAgentStarted = new Promise<void>((resolve) => {
+            markRunAgentStarted = resolve;
+        });
+
         vi.spyOn(runner as unknown as RunAgentStub, 'generateConversationName').mockImplementation(async () => {
             events.push('rename:start');
-            await delay(80);
+            await Promise.race([runAgentStarted, delay(500)]);
+            await delay(10);
             events.push('rename:done');
             return { name: 'Smart Title', description: 'Smart Description' };
         });
 
         vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
             events.push('runAgent:start');
+            markRunAgentStarted();
             expect(params.inputArtifacts).toEqual([]);
             await delay(10);
             events.push('runAgent:done');

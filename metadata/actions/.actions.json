@@ -243,7 +243,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-envelope",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3238,7 +3241,10 @@
       "DriverClass": "CreateRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3557,7 +3563,10 @@
       "DriverClass": "UpdateRecordAction",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Type": "Custom",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3772,7 +3781,10 @@
       "DriverClass": "DeleteRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
-      "Status": "Active"
+      "Status": "Active",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -3972,7 +3984,10 @@
       "CodeLocked": false,
       "ForceCodeGeneration": false,
       "Status": "Active",
-      "DriverClass": "ApolloEnrichmentContactsAction"
+      "DriverClass": "ApolloEnrichmentContactsAction",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -4466,7 +4481,10 @@
       "CodeLocked": false,
       "ForceCodeGeneration": false,
       "Status": "Active",
-      "DriverClass": "ApolloEnrichmentAccountsAction"
+      "DriverClass": "ApolloEnrichmentAccountsAction",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

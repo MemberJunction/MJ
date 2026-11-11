@@ -57,4 +57,25 @@ describe('PredictiveStudioScoringStartup', () => {
 
     expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
   });
+
+  it('gracefully handles malformed JSON in ChallengerConfigurationObject by logging and setting no challenger (S2)', async () => {
+    await PredictiveStudioScoringStartup.Instance.HandleStartup();
+
+    const mockRp = {
+      ID: 'rp-malformed',
+      Name: 'Malformed Challenger RP',
+      get ChallengerConfigurationObject(): never {
+        throw new SyntaxError('Unexpected token in JSON: {"Enabled":true,}');
+      },
+    };
+
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      Configuration: JSON.stringify({ modelId: '11111111-1111-1111-1111-111111111111' }),
+      RecordProcess: mockRp,
+    }) as MLModelInferenceProcessor;
+
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+    expect((proc as unknown as { challengerConfig?: unknown }).challengerConfig).toBeUndefined();
+  });
 });

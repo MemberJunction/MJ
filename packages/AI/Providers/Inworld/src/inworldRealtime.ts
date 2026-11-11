@@ -32,6 +32,7 @@ import {
     RenderRealtimeMemorySeedAsContextNote,
     type IRealtimeSession,
     type RealtimeReconnectContext,
+    type RealtimeContextNoteOptions,
     type RealtimeTurnDetectionSettings,
     type RealtimeTurnDetectionSettingKey,
     type RealtimeSessionParams,
@@ -470,8 +471,8 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
     private params: RealtimeSessionParams;
     /** The base system prompt (with InitialContext folded in) — context notes append to it. */
     private basePrompt: string;
-    /** Accumulated {@link SendContextNote} texts, re-sent with the full prompt each time. */
-    private contextNotes: string[] = [];
+    /** Accumulated {@link SendContextNote} entries, re-sent with the full prompt each time. */
+    private contextNotes: Array<{ Text: string; StateKey?: string; Ephemeral?: boolean }> = [];
 
     /**
      * Whether a model response is currently in flight. Set when output audio / a response-started
@@ -681,12 +682,25 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
      *
      * @param text The context note to append to the conversation.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
-        this.contextNotes.push(text);
+        const stateKey = options?.StateKey?.trim();
+        if (stateKey) {
+            const storedText = options?.MemoryText ?? text;
+            this.contextNotes = this.contextNotes.filter((n) => n.StateKey !== stateKey);
+            if (storedText.trim().length > 0 && !options?.Ephemeral) {
+                this.contextNotes.push({ Text: storedText, StateKey: stateKey });
+            }
+        } else if (options?.Ephemeral) {
+            this.contextNotes = this.contextNotes.filter((n) => !n.Ephemeral);
+            this.contextNotes.push({ Text: text, Ephemeral: true });
+        } else {
+            this.contextNotes.push({ Text: text });
+        }
         this.sendFrame(this.buildContextItemFrame(this.composePromptWithNotes()));
     }
 
@@ -753,6 +767,9 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
         const nextBasePrompt = seedNote
             ? `${InworldRealtimeSession.composeSystemPrompt(this.params.SystemPrompt, this.params.InitialContext)}\n\n${seedNote}`
             : null;
+        if (nextBasePrompt === null) {
+            this.contextNotes = this.contextNotes.filter((n) => !n.Ephemeral);
+        }
 
         try {
             this.SendSessionUpdate(nextSocket, nextBasePrompt ?? undefined);
@@ -1294,7 +1311,7 @@ export class InworldRealtimeSession extends BaseRealtimeSession implements IReal
         if (this.contextNotes.length === 0) {
             return this.basePrompt;
         }
-        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n}`).join('\n')}`;
+        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n.Text}`).join('\n')}`;
     }
 
     /** JSON-serializes and sends one client frame (throws if the socket was never attached). */

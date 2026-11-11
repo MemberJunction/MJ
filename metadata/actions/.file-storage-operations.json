@@ -1353,7 +1353,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-copy"
+      "IconClass": "fa-solid fa-copy",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1539,7 +1542,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-arrows-turn-right"
+      "IconClass": "fa-solid fa-arrows-turn-right",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1725,7 +1731,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-trash"
+      "IconClass": "fa-solid fa-trash",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1878,7 +1887,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-folder-plus"
+      "IconClass": "fa-solid fa-folder-plus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2031,7 +2043,10 @@
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
-      "IconClass": "fa-solid fa-folder-minus"
+      "IconClass": "fa-solid fa-folder-minus",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

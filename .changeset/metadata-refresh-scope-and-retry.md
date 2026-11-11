@@ -1,0 +1,10 @@
+---
+"@memberjunction/core": patch
+"@memberjunction/generic-database-provider": patch
+---
+
+Metadata refresh reloads only what changed, and retries a failed refresh instead of escalating it to a full reload.
+
+- **`@memberjunction/core`.** `ProviderBase.MetadataRefreshScope()` decides, from the local and remote timestamps, whether a refresh needs nothing, only the saved-query family, or everything (with a logged reason). It replaces `PartialRefreshItemCodes()`, which stays as a deprecated wrapper. A change to an MJ_Metadata item the metadata build never reads (`Dashboards`, `Dashboard_Categories`; see `ProviderBase.MetadataBuildItemCodes`) reloads nothing, and so does a write-event refresh whose timestamps show nothing changed. `RefreshAfterMetadataMemberChange`, `RefreshIfNeeded`, `Config`'s staleness check, `backgroundValidateAndRefresh` and `preValidateAndRefresh` all use it. The dataset item list is stored beside the metadata snapshot (`___MJCore_Metadata_DatasetItems`), so a process that starts from the snapshot can also reload only the saved-query family.
+- **Retries (`@memberjunction/core`).** While metadata is loaded, a failed timestamp read, a failed scoped reload and a failed full reload keep that metadata and are retried after `ProviderBase.MetadataRefreshRetryDelaysMs` (15 s, 30 s, 60 s, 120 s, then every 5 min). A failed timestamp read never becomes a full reload. Only the third scoped failure in a row (`ProviderBase.MetadataScopedReloadAttempts`) runs the full reload. The retry shares the member-change timer, does not keep a Node process alive, and is cancelled by `CancelPendingMetadataMemberRefresh`. Every full reload logs `[Metadata] Full reload (<reason>) took <n> ms`. An explicit `Refresh()` is still a full reload, and a provider with no metadata loaded still loads everything.
+- **`@memberjunction/generic-database-provider`.** `GetDatasetByName` answers an item whose ItemFilter is exactly `1=0` with an empty, successful result and runs no SQL for it. The scoped metadata reload sends `1=0` for every item it does not reload, and each of those items used to run its own empty `SELECT` on its own pool connection.

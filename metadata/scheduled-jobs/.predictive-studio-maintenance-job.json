@@ -16,5 +16,21 @@
       "lastModified": "2026-10-28T00:36:02.882Z",
       "checksum": "43aa3ce9323a207b087668ab93f7f88405b6a1875a92e30d7767261a14fc8856"
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Drift Evaluation",
+      "Description": "Disabled by default. When enabled by an administrator, runs the weekly Predictive Studio feature and prediction drift evaluation pass across active ML Model and Infer Record Processes (Population Stability Index, confidence-floor degradation, and champion-vs-challenger shadow divergence) via PredictiveStudioEvaluateDriftAction. To receive alert notifications, set NotifyUserID in Configuration.Params under ActionScheduledJobDriver.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
+      "CronExpression": "0 0 3 * * 0",
+      "Timezone": "UTC",
+      "Status": "Disabled",
+      "Configuration": {
+        "ActionID": "@lookup:MJ: Actions.DriverClass=PredictiveStudioEvaluateDriftAction"
+      }
+    },
+    "primaryKey": {
+      "ID": "79A7BC11-5A3D-4FFB-8341-6235F5EA3E71"
+    }
   }
 ]
