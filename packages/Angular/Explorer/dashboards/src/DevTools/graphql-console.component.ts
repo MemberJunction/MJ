@@ -306,7 +306,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
         // Tiny pretty-printer: collapse multiple blank lines + trim trailing whitespace
         this.Query = this.Query
             .split('\n')
-            .map(line => line.replace(/\s+$/, ''))
+            .map(line => line.trimEnd())
             .join('\n')
             .replace(/\n{3,}/g, '\n\n')
             .trim() + '\n';
