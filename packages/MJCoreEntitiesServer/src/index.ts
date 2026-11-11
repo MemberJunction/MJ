@@ -27,6 +27,7 @@ export * from './custom/MJVectorIndexEntityServer.server';
 export * from './custom/MJTagEntityServer.server';
 export * from './custom/MJSearchScopeEntityServer.server';
 export * from './custom/MJTagScopeEntityServer.server';
+export * from './custom/MJScopedNotificationConfigEntityServer.server';
 export * from './custom/MJRecordProcessEntityServer.server';
 export * from './custom/RecordProcessOnChangeReconciler';
 export * from './custom/MJCompanyIntegrationEntityServer.server';

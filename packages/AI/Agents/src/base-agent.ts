@@ -249,7 +249,7 @@ import {
     formatFinalOutput,
     summarizePipelineStages,
 } from './pipeline';
-import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { AgentPayloadChangeRequest, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
 import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
@@ -20217,7 +20217,7 @@ The context is now within limits. Please retry your request with the recovered c
             // path carried neither, so every documented `data.x` condition evaluated against the
             // origin step's output, found nothing, and silently took the other branch.
             Invocation: { Data: params.data, Context: params.context },
-            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
+            Debug: BuildTaskGraphStartDebug(params.taskGraphDebug),
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
             ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),

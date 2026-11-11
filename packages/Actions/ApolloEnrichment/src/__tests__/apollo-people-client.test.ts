@@ -119,6 +119,21 @@ describe('ApolloPeopleClient', () => {
             expect(calls).toHaveLength(1);
             expect(sleeps).toEqual([]);
         });
+        it('retries once on a 429 with Retry-After just over 60s and no window in the body, waiting the 60s cap (#5597)', async () => {
+            const { c, calls } = client([{ status: 429, body: {}, headers: { 'retry-after': '61' } }, { body: bulk.body }]);
+            const result = await c.BulkMatch(inputs);
+            expect(calls).toHaveLength(2);
+            expect(sleeps).toEqual([60_000]);
+            expect(result.CreditsConsumed).toBe(5);
+        });
+        it('does not retry a 429 with a long Retry-After and no window in the body', async () => {
+            const { c, calls } = client([{ status: 429, body: {}, headers: { 'retry-after': '3600' } }]);
+            const error = await c.BulkMatch(inputs).catch((e: unknown) => e);
+            expect(error).toBeInstanceOf(ApolloRateLimitError);
+            expect((error as InstanceType<typeof ApolloRateLimitError>).Window).toBe('unknown');
+            expect(calls).toHaveLength(1);
+            expect(sleeps).toEqual([]);
+        });
         it('maps 401 and 403 to ApolloAuthError and other failures to ApolloRequestError', async () => {
             await expect(client([{ status: 401, body: { error: 'Invalid API key' } }]).c.BulkMatch(inputs)).rejects.toBeInstanceOf(ApolloAuthError);
             await expect(client([{ status: 403, body: { error: 'forbidden' } }]).c.BulkMatch(inputs)).rejects.toBeInstanceOf(ApolloAuthError);
