@@ -2,6 +2,25 @@ import { describe, it, expect } from 'vitest';
 import { Marked } from 'marked';
 import { CreateSvgRendererExtension, IsSvgContent } from '../extensions/svg-renderer.extension.js';
 
+describe('IsSvgContent self-closing scan', () => {
+  it.each([
+    ['text <svg width="1"/> more', true],
+    ['<SVG />', true],
+    ['<svg/>', true],
+    ['<svg <svg a="1"/>', true],
+    ['<svg a="/" >', false],
+    ['<svg', false],
+  ])('reads %j', (content, expected) => {
+    expect(IsSvgContent(content)).toBe(expected);
+  });
+
+  it('reads 100k characters of unclosed <svg openings in linear time', () => {
+    const started = Date.now();
+    expect(IsSvgContent('x' + '<svg'.repeat(50_000))).toBe(false);
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
+});
+
 describe('isSvgContent', () => {
   it('accepts a normal svg element', () => {
     expect(IsSvgContent('<svg><circle/></svg>')).toBe(true);

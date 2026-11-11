@@ -71,6 +71,25 @@ describe('ComponentErrorAnalyzer', () => {
       expect(compFailure!.lineNumber).toBe(42);
     });
 
+    it.each([
+      ['ReferenceError: Panel is not defined (at panel.js:3)', 'panel.js:3'],
+      ['ReferenceError: Panel is not defined (at ) then (at grid.js)', 'grid.js'],
+      ['ReferenceError: Panel is not defined (at (at nested.js)', '(at nested.js'],
+      ['ReferenceError: Panel is not defined (at unclosed', undefined],
+      ['ReferenceError: Panel is not defined, created by Shell', 'Created by Shell'],
+    ])('reads the context of %j', (error, context) => {
+      const failure = ComponentErrorAnalyzer.AnalyzeComponentErrors([error]).find(f => f.componentName === 'Panel');
+      expect(failure?.context).toBe(context);
+    });
+
+    it('reads 100k characters of unclosed "(at (" groups in linear time', () => {
+      const error = 'ReferenceError: Panel is not defined ' + '(at ('.repeat(20_000);
+      const started = Date.now();
+      const failure = ComponentErrorAnalyzer.AnalyzeComponentErrors([error]).find(f => f.componentName === 'Panel');
+      expect(failure?.context).toBeUndefined();
+      expect(Date.now() - started).toBeLessThan(2500);
+    });
+
     it('should deduplicate failures by component name and error type', () => {
       const errors = [
         'ReferenceError: Widget is not defined',
