@@ -448,11 +448,70 @@ check("guarded INSERT + extprop in one IF body → DO block with INSERT and COMM
       must_not_contain=["sp_addextendedproperty"])
 
 # --- UPDATE…FROM join semantics ------------------------------------------------
-check("UPDATE…FROM LEFT JOIN anti-join → unhandled (inner-join rewrite would update 0 rows)",
+check("UPDATE…FROM LEFT JOIN anti-join → ctid self-join keeps outer-join semantics (#6538 item 2)",
       "UPDATE t SET t.Flag = 1 FROM ${flyway:defaultSchema}.Target AS t "
       "LEFT JOIN ${flyway:defaultSchema}.Other o ON o.TargetID = t.ID WHERE o.ID IS NULL;",
+      must_contain=['UPDATE ${flyway:defaultSchema}."Target" AS "t" SET "Flag" = 1',
+                    'FROM ${flyway:defaultSchema}."Target" AS "t_mj"',
+                    'LEFT JOIN ${flyway:defaultSchema}."Other" AS "o"',
+                    'ON "o"."TargetID" = "t_mj"."ID"',
+                    '"t"."ctid" = "t_mj"."ctid" AND "o"."ID" IS NULL'],
+      expect_unhandled=0)
+check("UPDATE…FROM RIGHT JOIN on a self-aliased target stays a reported gap",
+      "UPDATE t SET t.Flag = o.F FROM ${flyway:defaultSchema}.Target AS t "
+      "RIGHT JOIN ${flyway:defaultSchema}.Other o ON o.TargetID = t.ID;",
       must_not_contain=["UPDATE"],
       expect_unhandled=1)
+
+# --- #6348 / #6538 item 3: DATEDIFF(day), user function names, HASHBYTES + CONVERT style --------
+check("DATEDIFF(day, s, e) → date subtraction, not epoch arithmetic",
+      "SELECT DATEDIFF(day, c.StartDate, c.EndDate) AS Days FROM ${flyway:defaultSchema}.Contract c;",
+      must_contain=['(CAST("c"."EndDate" AS DATE) - CAST("c"."StartDate" AS DATE))'],
+      must_not_contain=["epoch"])
+check("DATEDIFF(hour, …) keeps the epoch form",
+      "SELECT DATEDIFF(hour, c.StartDate, c.EndDate) AS H FROM ${flyway:defaultSchema}.Contract c;",
+      must_contain=["epoch", "/ 3600"])
+check("a mixed-case user function keeps its name, quoted",
+      "SELECT ${flyway:defaultSchema}.fnBusinessToday() AS a, fnBusinessToday() AS b FROM ${flyway:defaultSchema}.T;",
+      must_contain=['${flyway:defaultSchema}."fnBusinessToday"()', '"fnBusinessToday"() AS "b"'],
+      must_not_contain=["FNBUSINESSTODAY"])
+check("HASHBYTES SHA2_256 + CONVERT style 2 → upper hex of sha256 over UTF-8 bytes",
+      "SELECT CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', t.Body), 2) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["UPPER(ENCODE(SHA256(CONVERT_TO(\"t\".\"Body\", 'UTF8')), 'hex'))"],
+      must_not_contain=["TO_CHAR", "YY.MM.DD"])
+check("HASHBYTES SHA2_512 + CONVERT style 1 → 0x-prefixed upper hex",
+      "SELECT CONVERT(VARCHAR(130), HASHBYTES('SHA2_512', t.Body), 1) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["'0x' || UPPER(ENCODE(SHA512(CONVERT_TO("],
+      must_not_contain=["TO_CHAR"])
+check("HASHBYTES MD5 → bytea of md5",
+      "SELECT HASHBYTES('MD5', t.Body) AS H FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["DECODE(MD5(\"t\".\"Body\"), 'hex')"])
+check("CONVERT of a binary value with another style stays a reported gap",
+      "SELECT CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', t.Body), 0) AS H FROM ${flyway:defaultSchema}.T t;",
+      expect_unhandled=1)
+check("CONVERT style 1 on a non-binary value keeps the date format",
+      "SELECT CONVERT(VARCHAR(20), t.D, 1) AS X FROM ${flyway:defaultSchema}.T t;",
+      must_contain=["TO_CHAR"])
+
+# --- #5194: unique indexes and constraints keep SQL Server NULL semantics ------------------------
+check("CREATE UNIQUE INDEX gets NULLS NOT DISTINCT before WHERE",
+      "CREATE UNIQUE INDEX UQ_T_A ON ${flyway:defaultSchema}.T (A, B) INCLUDE (C) WHERE A IS NOT NULL;",
+      must_contain=['("A", "B") INCLUDE ("C") NULLS NOT DISTINCT WHERE'])
+check("a non-unique index is unchanged",
+      "CREATE INDEX IX_T_A ON ${flyway:defaultSchema}.T (A);",
+      must_not_contain=["NULLS NOT DISTINCT"])
+
+# --- #3345 item 3: DROP COLUMN drops dependent views first ---------------------------------------
+check("ALTER TABLE … DROP COLUMN is preceded by the dependent-view drop block",
+      "ALTER TABLE ${flyway:defaultSchema}.T DROP COLUMN OldCol;",
+      must_contain=["DO $$", "WHERE tc.relname = 'T' AND a.attname = 'OldCol'",
+                    'ALTER TABLE ${flyway:defaultSchema}."T" DROP COLUMN "OldCol"'])
+
+# --- #4385: CodeGen's apply-time EntityField Sequence expression survives conversion --------------
+check("EntityField INSERT keeps the COALESCE(MAX(Sequence), 0) + 1 expression",
+      "INSERT INTO ${flyway:defaultSchema}.EntityField (ID, EntityID, Name, Sequence) "
+      "SELECT 'f1', 'e1', 'Col', COALESCE(MAX(Sequence), 0) + 1 FROM ${flyway:defaultSchema}.EntityField WHERE EntityID = 'e1';",
+      must_contain=['COALESCE(MAX("Sequence"), 0) + 1'])
 
 check("UPDATE…FROM with two INNER joins: extra join's ON moves to WHERE once (not duplicated)",
       "UPDATE uv SET uv.X = b.Y FROM ${flyway:defaultSchema}.UserView AS uv "
@@ -929,12 +988,12 @@ check("PK NONCLUSTERED in ALTER ADD folds to plain PRIMARY KEY (valid PG)",
       expect_unhandled=0)
 check("UNIQUE CLUSTERED in CREATE TABLE folds to plain UNIQUE (valid PG)",
       "CREATE TABLE ${flyway:defaultSchema}.T (ID UNIQUEIDENTIFIER NOT NULL, CONSTRAINT UQ_T UNIQUE CLUSTERED (ID));",
-      must_contain=['UNIQUE ("ID")'],
+      must_contain=['UNIQUE NULLS NOT DISTINCT ("ID")'],
       must_not_contain=['CLUSTERED'],
       expect_unhandled=0)
 check("UNIQUE CLUSTERED in ALTER ADD folds to plain UNIQUE (valid PG)",
       "ALTER TABLE ${flyway:defaultSchema}.T ADD CONSTRAINT UQ_T UNIQUE CLUSTERED (ID);",
-      must_contain=['UNIQUE ("ID")'],
+      must_contain=['UNIQUE NULLS NOT DISTINCT ("ID")'],
       must_not_contain=['CLUSTERED'],
       expect_unhandled=0)
 
