@@ -82,7 +82,7 @@ export function Glob(root: string, input: { pattern: string; path?: string }): R
 
 /** Declarations of read_file, grep and glob, with schemas in the cross-provider subset. */
 export const READ_TOOLS: ChatTool[] = [
-    { name: 'read_file', description: 'Read a text file of the base worktree. Returns its lines prefixed with their line numbers.',
+    { name: 'read_file', description: 'Read a text file of the base worktree. Returns its lines prefixed with their line numbers, up to 2000 lines per call, so one call reads a whole source file; use offset and limit only for very large files.',
         inputSchema: { type: 'object', properties: {
             path: { type: 'string', description: 'File path, relative to the worktree root.' },
             offset: { type: 'integer', description: 'First line to return, 1-based. Default 1.' },
