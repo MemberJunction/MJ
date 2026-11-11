@@ -1358,6 +1358,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Comments&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:06.179Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
           }
         }
       ]
@@ -1381,6 +1385,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Field Suggestions&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:06.195Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
           }
         }
       ]
