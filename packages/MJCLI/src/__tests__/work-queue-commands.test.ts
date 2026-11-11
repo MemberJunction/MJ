@@ -26,7 +26,7 @@ const COMMANDS: Array<[string, CommandSurface, string[], string[]]> = [
     ['replay', QueueReplay, ['delivery', 'note', 'subscription'], ['delivery', 'subscription']],
     ['discard', QueueDiscard, ['delivery', 'reason', 'subscription'], ['delivery', 'reason', 'subscription']],
     ['backlog', QueueBacklog, ['json', 'subscription'], ['subscription']],
-    ['work', QueueWork, ['concurrency', 'idle-exit-ms', 'max', 'max-duration-ms', 'once', 'shutdown-drain-ms', 'subscription'], ['subscription']],
+    ['work', QueueWork, ['concurrency', 'idle-exit-ms', 'max', 'max-duration-ms', 'once', 'reconcile-interval-ms', 'shutdown-drain-ms', 'subscription', 'sweeper-interval-ms'], ['subscription']],
     ['export-topology', QueueExportTopology, ['output', 'transport'], ['transport']],
     ['import-bindings', QueueImportBindings, ['json'], []],
     ['validate-bindings', QueueValidateBindings, ['json', 'transport'], []],

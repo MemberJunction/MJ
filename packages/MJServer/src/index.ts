@@ -310,6 +310,7 @@ import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 export type MJServerOptions = {
   /**
@@ -1748,6 +1749,10 @@ const setupComplete$ = new ReplaySubject(1);
     msg => console.warn(msg),
     runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
   );
+
+  // Notification delivery providers from mj.config.cjs (env vars and defaults apply when unset)
+  NotificationEngine.EmailProviderName = configInfo.notifications?.emailProvider;
+  NotificationEngine.SMSProviderName = configInfo.notifications?.smsProvider;
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;

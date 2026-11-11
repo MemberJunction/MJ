@@ -86,3 +86,19 @@ export function ToDeadLetterRecord(item: ScannedDeadLetter): DeadLetterRecord {
         LastError: lastError ? `${lastError}; ${preview}` : preview,
     };
 }
+
+/**
+ * Drops later copies of a dead letter that a lost lease wrote twice (#5143): items sharing a
+ * {@link DEAD_LETTER_ATTRIBUTES.SourceMessageId} are listed once, keeping the first. Items without the attribute (written
+ * before it existed) are all kept.
+ */
+export function DistinctDeadLetters(items: ScannedDeadLetter[]): ScannedDeadLetter[] {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+        const source = item.Raw.Attributes[DEAD_LETTER_ATTRIBUTES.SourceMessageId];
+        if (!source) return true;
+        if (seen.has(source)) return false;
+        seen.add(source);
+        return true;
+    });
+}

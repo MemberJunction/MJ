@@ -77,7 +77,7 @@ const RERENDER_INPUTS = new Set([
 @Component({
   selector: 'mj-markdown',
   standalone: false,
-  template: ` <div class="mj-markdown-container" [class]="containerClass" [innerHTML]="renderedContent"></div> `,
+  template: ` <div class="mj-markdown-container" [class]="containerClass"></div> `,
   styleUrls: ['./markdown.component.css'],
   encapsulation: ViewEncapsulation.None, // Allow styles to penetrate into rendered content
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -459,6 +459,19 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private renderSeq = 0;
   private isDestroyed = false;
 
+  // Streaming fast-path state
+  private lastRenderedMarkdown: string = '';
+  private committedPrefixMarkdown: string = '';
+  private committedPrefixHtml: string = '';
+  private committedPrefixNodeCount: number = 0;
+  private tailNodeCount: number = 0;
+  private prefixHeadingList: HeadingInfo[] = [];
+  private prefixHeadingTexts: Set<string> = new Set<string>();
+  private currentHeadingList: HeadingInfo[] = [];
+  private streamingFallbackForced: boolean = false;
+  private containerElement: HTMLElement | null = null;
+  private pendingRenderMarkdown: string | null = null;
+
   constructor(
     private elementRef: ElementRef<HTMLElement>,
     private sanitizer: DomSanitizer,
@@ -474,13 +487,23 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     );
 
     if (needsRerender) {
+      const configChanged = Object.keys(changes).some((name) => {
+        const lower = name.charAt(0).toLowerCase() + name.slice(1);
+        return lower !== 'data' && RERENDER_INPUTS.has(lower);
+      });
+      if (configChanged) {
+        this.resetStreamingState();
+      }
       this.render();
     }
   }
 
   ngAfterViewInit(): void {
-    // Initial render if data was provided
-    if (this.Data) {
+    if (this.pendingRenderMarkdown !== null) {
+      const md = this.pendingRenderMarkdown;
+      this.pendingRenderMarkdown = null;
+      this.renderFull(md, this.renderSeq);
+    } else if (this.Data) {
       void this.postRenderProcessing(this.renderSeq);
     }
 
@@ -494,6 +517,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.themeObserver = null;
     this.destroyDiagramViewers();
     this.cleanupEventListeners();
+    this.resetStreamingState();
   }
 
   private destroyDiagramViewers(): void {
@@ -503,22 +527,27 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.diagramViewers = [];
   }
 
-  /**
-   * Render the markdown content
-   */
-  private render(): void {
-    const seq = ++this.renderSeq;
-    this.destroyDiagramViewers();
-    if (!this.Data) {
-      this.RenderedContent = '';
-      this.cdr.markForCheck();
-      return;
+  private getContainer(): HTMLElement | null {
+    if (!this.containerElement) {
+      this.containerElement = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
     }
+    return this.containerElement;
+  }
 
-    this.renderStartTime = performance.now();
+  private resetStreamingState(): void {
+    this.lastRenderedMarkdown = '';
+    this.committedPrefixMarkdown = '';
+    this.committedPrefixHtml = '';
+    this.committedPrefixNodeCount = 0;
+    this.tailNodeCount = 0;
+    this.prefixHeadingList = [];
+    this.prefixHeadingTexts.clear();
+    this.currentHeadingList = [];
+    this.streamingFallbackForced = false;
+  }
 
-    // Build config from inputs
-    const config: MarkdownConfig = {
+  private buildConfig(): MarkdownConfig {
+    return {
       enableHighlight: this.EnableHighlight,
       enableMermaid: this.EnableMermaid,
       enableMath: this.EnableMath,
@@ -537,34 +566,345 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       mermaidTheme: this.MermaidTheme,
       sanitize: this.Sanitize,
     };
+  }
 
-    // Configure service and parse
-    this.markdownService.configureMarked(config);
-    let html = this.markdownService.parse(this.Data);
+  private prepareHtml(rawHtml: string): string {
+    const bypassAngularSanitizer = this.EnableSvgRenderer || this.EnableHtml;
+    if (this.Sanitize && !bypassAngularSanitizer) {
+      return this.sanitizer.sanitize(SecurityContext.HTML, rawHtml) || '';
+    }
+    return rawHtml;
+  }
 
-    // Check for mermaid and code blocks
+  private updateContentFlags(html: string): void {
     this.hasMermaid = html.includes('language-mermaid') || html.includes('class="mermaid"');
     this.hasCodeBlocks = html.includes('<pre>') && html.includes('<code');
     this.hasMath = html.includes('class="mj-math') || /<math[\s>]/.test(html);
+  }
 
-    // Sanitize if enabled
-    // Note: We bypass Angular's sanitizer when SVG renderer or HTML passthrough is enabled
-    // because it strips SVG elements and most HTML layout tags.
-    const bypassAngularSanitizer = this.EnableSvgRenderer || this.EnableHtml;
-    if (this.Sanitize && !bypassAngularSanitizer) {
-      const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html);
-      html = sanitized || '';
+  /**
+   * Linear O(N) non-regex detector for whole-document Markdown cross-references:
+   * - Reference-style link definitions: `[id]: url`
+   * - Footnote definitions: `[^id]:`
+   * - Table-of-contents directives: `[toc]` or `[[toc]]`
+   *
+   * Uses pure string scanning with zero regular expressions to avoid polynomial backtracking (ReDoS).
+   */
+  private hasWholeDocCrossRef(text: string): boolean {
+    if (!text.includes('[')) {
+      return false;
+    }
+    if (text.toLowerCase().includes('[toc]')) {
+      return true;
+    }
+    if (!text.includes(']:')) {
+      return false;
     }
 
-    // When Angular's sanitizer is bypassed, the HTML has already been sanitized by
-    // MarkdownService.parse() (DOMPurify, HTML, SVG and MathML profiles) unless enableJavaScript
-    // opted out. Nothing further to do here.
+    let lineStart = 0;
+    const len = text.length;
+    while (lineStart < len) {
+      const nlIdx = text.indexOf('\n', lineStart);
+      const rawLineEnd = nlIdx === -1 ? len : nlIdx;
+      const lineEnd = rawLineEnd > lineStart && text.charCodeAt(rawLineEnd - 1) === 13 ? rawLineEnd - 1 : rawLineEnd;
 
-    // Trust the HTML for display
-    this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(html);
+      let pos = lineStart;
+      while (pos < lineEnd && (text.charCodeAt(pos) === 32 || text.charCodeAt(pos) === 9)) {
+        pos++;
+      }
+      if (pos < lineEnd && text.charCodeAt(pos) === 91 /* '[' */) {
+        const closeBracket = text.indexOf(']', pos + 1);
+        if (closeBracket > pos + 1 && closeBracket + 1 < lineEnd && text.charCodeAt(closeBracket + 1) === 58 /* ':' */) {
+          if (text.charCodeAt(pos + 1) === 94 /* '^' */) {
+            return true;
+          }
+          let afterColon = closeBracket + 2;
+          while (afterColon < lineEnd && (text.charCodeAt(afterColon) === 32 || text.charCodeAt(afterColon) === 9)) {
+            afterColon++;
+          }
+          if (afterColon < lineEnd) {
+            return true;
+          }
+        }
+      }
+
+      if (nlIdx === -1) {
+        break;
+      }
+      lineStart = nlIdx + 1;
+    }
+
+    return false;
+  }
+
+  private canStreamAppend(markdown: string): boolean {
+    if (!this.lastRenderedMarkdown || this.streamingFallbackForced) return false;
+    if (markdown.length <= this.lastRenderedMarkdown.length) return false;
+    if (!markdown.startsWith(this.lastRenderedMarkdown)) return false;
+    if (this.EnableCollapsibleHeadings) return false;
+    // Scan only the uncommitted tail (+1 newline lookbehind) so per-frame checks stay O(1)
+    const scanStart = this.committedPrefixMarkdown.length > 0 ? this.committedPrefixMarkdown.length - 1 : 0;
+    const uncommittedWindow = markdown.slice(scanStart);
+    return !this.hasWholeDocCrossRef(uncommittedWindow);
+  }
+
+  private hasDuplicateHeadingsAgainstPrefix(tokens: ReturnType<MarkdownService['ParseToTokens']>): boolean {
+    if (!this.EnableHeadingIds) return false;
+    const seenInTail = new Set<string>();
+    for (const t of tokens) {
+      if (t.type === 'heading') {
+        const key = t.text.toLowerCase();
+        if (this.prefixHeadingTexts.has(key) || seenInTail.has(key)) {
+          return true;
+        }
+        seenInTail.add(key);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Render the markdown content
+   */
+  private render(): void {
+    const seq = ++this.renderSeq;
+    if (!this.Data) {
+      this.destroyDiagramViewers();
+      this.resetStreamingState();
+      const container = this.getContainer();
+      if (container) {
+        container.innerHTML = '';
+      }
+      this.RenderedContent = '';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.renderStartTime = performance.now();
+    const config = this.buildConfig();
+    this.markdownService.configureMarked(config);
+
+    if (this.canStreamAppend(this.Data)) {
+      this.renderIncremental(this.Data, seq);
+    } else {
+      this.renderFull(this.Data, seq);
+    }
+  }
+
+  private renderFull(markdown: string, seq: number, forceSinglePass: boolean = false): void {
+    this.destroyDiagramViewers();
+    this.resetStreamingState();
+    if (forceSinglePass) {
+      this.streamingFallbackForced = true;
+    }
+
+    const container = this.getContainer();
+    if (!container) {
+      this.pendingRenderMarkdown = markdown;
+      return;
+    }
+
+    let targetPrefixCount = 0;
+    let splitIndex = 0;
+    const mayHaveMultipleBlocks =
+      !forceSinglePass &&
+      !this.EnableCollapsibleHeadings &&
+      markdown.includes('\n\n') &&
+      !this.hasWholeDocCrossRef(markdown);
+
+    let tokens: ReturnType<MarkdownService['ParseToTokens']> | null = null;
+    if (mayHaveMultipleBlocks) {
+      tokens = this.markdownService.ParseToTokens(markdown);
+      const hasDef = tokens.some((t) => t.type === 'def');
+      const hasHtml = this.EnableHtml && tokens.some((t) => t.type === 'html');
+      const headingTokens = tokens.filter((t) => t.type === 'heading');
+      const hasDuplicateHeadingTexts =
+        this.EnableHeadingIds &&
+        new Set(headingTokens.map((t) => (t.type === 'heading' ? t.text.toLowerCase() : ''))).size < headingTokens.length;
+      if (hasDef || hasHtml || hasDuplicateHeadingTexts) {
+        this.streamingFallbackForced = true;
+      } else {
+        const substantive = tokens.filter((t) => t.type !== 'space');
+        if (substantive.length > 1) {
+          targetPrefixCount = substantive.length - 1;
+          let counted = 0;
+          for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            if (t.type !== 'space') {
+              counted++;
+            }
+            splitIndex += t.raw.length;
+            if (counted === targetPrefixCount) {
+              if (i + 1 < tokens.length && tokens[i + 1].type === 'space') {
+                splitIndex += tokens[i + 1].raw.length;
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (targetPrefixCount > 0 && splitIndex > 0 && splitIndex < markdown.length && tokens) {
+      const prefixMarkdown = markdown.slice(0, splitIndex);
+      const tailMarkdown = markdown.slice(splitIndex);
+
+      const rawPrefixHtml = this.markdownService.parse(prefixMarkdown);
+      const prefixHtml = this.prepareHtml(rawPrefixHtml);
+      const prefixHeadings = this.markdownService.getHeadingList();
+
+      const rawTailHtml = this.markdownService.parse(tailMarkdown);
+      const tailHtml = this.prepareHtml(rawTailHtml);
+      const tailHeadings = this.markdownService.getHeadingList();
+
+      const template = document.createElement('template');
+      template.innerHTML = prefixHtml;
+      const prefixNodes = Array.from(template.content.childNodes);
+
+      const tailTemplate = document.createElement('template');
+      tailTemplate.innerHTML = tailHtml;
+      const tailNodes = Array.from(tailTemplate.content.childNodes);
+
+      container.replaceChildren(...prefixNodes, ...tailNodes);
+
+      this.committedPrefixMarkdown = prefixMarkdown;
+      this.committedPrefixHtml = prefixHtml;
+      this.committedPrefixNodeCount = prefixNodes.length;
+      this.tailNodeCount = tailNodes.length;
+      this.prefixHeadingList = prefixHeadings;
+      for (const h of prefixHeadings) {
+        this.prefixHeadingTexts.add(h.text.toLowerCase());
+      }
+      this.currentHeadingList = [...prefixHeadings, ...tailHeadings];
+
+      const fullHtml = prefixHtml + tailHtml;
+      this.updateContentFlags(fullHtml);
+      this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(fullHtml);
+    } else {
+      let html = this.markdownService.parse(markdown);
+      html = this.prepareHtml(html);
+      this.currentHeadingList = this.markdownService.getHeadingList();
+
+      container.innerHTML = html;
+      this.tailNodeCount = container.childNodes.length;
+      this.committedPrefixNodeCount = 0;
+      this.committedPrefixMarkdown = '';
+      this.committedPrefixHtml = '';
+      this.prefixHeadingList = [];
+      this.prefixHeadingTexts.clear();
+
+      this.updateContentFlags(html);
+      this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(html);
+    }
+
+    this.lastRenderedMarkdown = markdown;
     this.cdr.markForCheck();
+    Promise.resolve().then(() => this.postRenderProcessing(seq));
+  }
 
-    // Schedule post-render processing for next tick (after DOM update)
+  private renderIncremental(markdown: string, seq: number): void {
+    const container = this.getContainer();
+    if (!container) {
+      this.pendingRenderMarkdown = markdown;
+      return;
+    }
+
+    // Tokenize ONLY the uncommitted tail so per-chunk lexing is O(1) in total document size
+    const uncommittedOffset = this.committedPrefixMarkdown.length;
+    const uncommittedMarkdown = markdown.slice(uncommittedOffset);
+    const tokens = this.markdownService.ParseToTokens(uncommittedMarkdown);
+    if (
+      tokens.some((t) => t.type === 'def') ||
+      (this.EnableHtml && tokens.some((t) => t.type === 'html')) ||
+      this.hasDuplicateHeadingsAgainstPrefix(tokens)
+    ) {
+      this.renderFull(markdown, seq, true);
+      return;
+    }
+
+    const substantive = tokens.filter((t) => t.type !== 'space');
+    const targetPrefixCount = Math.max(0, substantive.length - 1);
+
+    let splitInUncommitted = 0;
+    if (targetPrefixCount > 0) {
+      let counted = 0;
+      for (let i = 0; i < tokens.length; i++) {
+        const t = tokens[i];
+        if (t.type !== 'space') {
+          counted++;
+        }
+        splitInUncommitted += t.raw.length;
+        if (counted === targetPrefixCount) {
+          if (i + 1 < tokens.length && tokens[i + 1].type === 'space') {
+            splitInUncommitted += tokens[i + 1].raw.length;
+          }
+          break;
+        }
+      }
+    }
+
+    let splitIndex = uncommittedOffset + splitInUncommitted;
+    if (splitIndex < uncommittedOffset || splitIndex >= markdown.length) {
+      splitIndex = uncommittedOffset;
+    }
+
+    // Remove ONLY the mutable tail nodes from previous frame
+    for (let i = 0; i < this.tailNodeCount; i++) {
+      container.lastChild?.remove();
+    }
+    this.tailNodeCount = 0;
+
+    // Clean up any diagram viewers attached to removed tail elements
+    if (this.diagramViewers.length > 0) {
+      this.diagramViewers = this.diagramViewers.filter((v) => {
+        if (!container.contains(v.Svg)) {
+          v.Destroy();
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // Graduate new blocks to stable prefix if boundary advanced
+    if (splitIndex > uncommittedOffset) {
+      const sliceMarkdown = markdown.slice(uncommittedOffset, splitIndex);
+      const rawSliceHtml = this.markdownService.parse(sliceMarkdown);
+      const sliceHtml = this.prepareHtml(rawSliceHtml);
+      const sliceHeadings = this.markdownService.getHeadingList();
+
+      const template = document.createElement('template');
+      template.innerHTML = sliceHtml;
+      const newPrefixNodes = Array.from(template.content.childNodes);
+      container.appendChild(template.content);
+
+      this.committedPrefixNodeCount += newPrefixNodes.length;
+      this.committedPrefixMarkdown += sliceMarkdown;
+      this.committedPrefixHtml += sliceHtml;
+      this.prefixHeadingList.push(...sliceHeadings);
+      for (const h of sliceHeadings) {
+        this.prefixHeadingTexts.add(h.text.toLowerCase());
+      }
+    }
+
+    // Render the active tail
+    const tailMarkdown = markdown.slice(this.committedPrefixMarkdown.length);
+    const rawTailHtml = this.markdownService.parse(tailMarkdown);
+    const tailHtml = this.prepareHtml(rawTailHtml);
+    const tailHeadings = this.markdownService.getHeadingList();
+    this.currentHeadingList = [...this.prefixHeadingList, ...tailHeadings];
+
+    const tailTemplate = document.createElement('template');
+    tailTemplate.innerHTML = tailHtml;
+    const tailNodes = Array.from(tailTemplate.content.childNodes);
+    this.tailNodeCount = tailNodes.length;
+    container.appendChild(tailTemplate.content);
+
+    const fullHtml = this.committedPrefixHtml + tailHtml;
+    this.updateContentFlags(fullHtml);
+    this.RenderedContent = this.sanitizer.bypassSecurityTrustHtml(fullHtml);
+    this.lastRenderedMarkdown = markdown;
+
+    this.cdr.markForCheck();
     Promise.resolve().then(() => this.postRenderProcessing(seq));
   }
 
@@ -631,7 +971,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
     // Emit rendered event
     const renderTime = performance.now() - this.renderStartTime;
-    const headingIds = this.markdownService.getHeadingList();
+    const headingIds = this.GetHeadings();
 
     this.Rendered.emit({
       html: (container as HTMLElement).innerHTML,
@@ -884,6 +1224,8 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const headings = container.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');
 
     headings.forEach((heading) => {
+      if (heading.classList.contains('mj-heading-wired')) return;
+      heading.classList.add('mj-heading-wired');
       heading.addEventListener('click', () => {
         const id = heading.getAttribute('id') || '';
         const text = heading.textContent || '';
@@ -928,6 +1270,8 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const copyButtons = container.querySelectorAll('.code-copy-btn');
 
     copyButtons.forEach((button) => {
+      if (button.classList.contains('mj-code-copy-wired')) return;
+      button.classList.add('mj-code-copy-wired');
       button.addEventListener('click', () => {
         const pre = button.closest('pre');
         const code = pre?.querySelector('code');
@@ -967,6 +1311,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    */
   private onThemeAttributeChanged(): void {
     if (this.MermaidTheme === 'auto' && this.EnableMermaid && this.hasMermaid && this.Data) {
+      this.resetStreamingState();
       this.render();
     }
   }
@@ -975,18 +1320,20 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Cleanup event listeners
    */
   private cleanupEventListeners(): void {
-    const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
+    const container = this.getContainer();
     if (!container) return;
 
     // Clone and replace to remove all listeners
     const clone = container.cloneNode(true);
     container.parentNode?.replaceChild(clone, container);
+    this.containerElement = clone as HTMLElement;
   }
 
   /**
    * Force a re-render of the markdown content
    */
   public Refresh(): void {
+    this.resetStreamingState();
     this.render();
   }
 
@@ -999,7 +1346,9 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Get the current heading list (for TOC building)
    */
   public GetHeadings(): HeadingInfo[] {
-    return this.markdownService.getHeadingList();
+    return this.currentHeadingList.length > 0
+      ? this.currentHeadingList
+      : this.markdownService.getHeadingList();
   }
 
   /** @deprecated Use {@link GetHeadings}. */

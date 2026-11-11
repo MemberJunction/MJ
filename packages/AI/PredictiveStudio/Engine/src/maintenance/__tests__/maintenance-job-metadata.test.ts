@@ -79,7 +79,7 @@ describe('Predictive Studio maintenance job and action metadata (D9, R2, R3, R5)
       ActionID: `@lookup:MJ: Actions.DriverClass=${EVALUATE_DRIFT_DRIVER_CLASS}`,
     });
     expect(driftJob?.primaryKey.ID).toMatch(/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/);
-    expect(driftJob?.sync).toBeUndefined();
+    // No assertion on `sync`: the release Metadata_Sync push writes a sync block back onto every pushed record.
   });
 
   it('registers Evaluate Feature and Prediction Drift with non-sequential uuidgen IDs and declares every param used in evaluate-drift.action.ts (R3, R5)', () => {

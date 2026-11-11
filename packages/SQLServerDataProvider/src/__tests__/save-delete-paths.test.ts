@@ -124,6 +124,17 @@ function extractSuffix(sql: string, codeName: string): string {
   return (match as RegExpExecArray)[1];
 }
 
+const DUPLICATE_KEY_ERROR =
+  "Cannot insert duplicate key row in object 'dbo.Widget' with unique index 'UQ_Widget'. The duplicate key value is (Doomed, stored-secret).";
+
+/** A Widget entity on which the test user is denied reading one field. */
+function restrictedWidgetEntityInfo(options: Parameters<typeof makeWidgetEntityInfo>[0] = {}): EntityInfo {
+  const entityInfo = makeWidgetEntityInfo(options);
+  vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+  vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['description']));
+  return entityInfo;
+}
+
 describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → mssql request)', () => {
   beforeEach(() => {
     mssqlState.Reset();
@@ -333,6 +344,65 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(message).toMatch(/SET @Name_[0-9a-f]{12} = N'Doomed'/);
     expect(message).not.toContain('@p$');
     expect(message).toContain('Parameters: None');
+  });
+
+  it('a failed save gives a caller denied a field of the entity the message without the SQL or the quoted values', async () => {
+    const provider = makeProvider();
+    const entityInfo = makeWidgetEntityInfo();
+    vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+    vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['description']));
+    const entity = makeSavedWidgetEntity(entityInfo, TEST_USER);
+    entity.Set('Name', 'Doomed');
+    mssqlState.QueueResult({
+      error: new Error("Cannot insert duplicate key row in object 'dbo.Widget' with unique index 'UQ_Widget'. The duplicate key value is (Doomed, stored-secret)."),
+    });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions()).catch(() => undefined);
+
+    const message = entity.LatestResult?.Message ?? '';
+    expect(message).toContain("unique index 'UQ_Widget'");
+    expect(message).toContain('(values withheld)');
+    expect(message).not.toContain('stored-secret');
+    expect(message).not.toContain("N'Doomed'");
+  });
+
+  it('a save that returns no rows gives a caller denied a field of the entity the message without the inline SQL', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(restrictedWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Vanished');
+    mssqlState.QueueResult({ rows: [] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions()).catch(() => undefined);
+
+    const message = entity.LatestResult?.Message ?? '';
+    expect(message).toMatch(/Error updating record, no MATCHING rows found within the database:$/);
+    expect(message).not.toContain("N'Vanished'");
+    expect(message).not.toContain('spUpdateWidget');
+  });
+
+  it('a save in a transaction group gives a caller denied a field of the entity the redacted message', async () => {
+    const previousProvider = Metadata.Provider;
+    try {
+      const provider = makeProvider();
+      const info = restrictedWidgetEntityInfo();
+      provider.SetTestEntities([info]);
+      Metadata.Provider = provider as object as IMetadataProvider;
+      const group = new SQLServerTransactionGroup();
+      const entity = makeSavedWidgetEntity(info, TEST_USER);
+      entity.Set('Name', 'Doomed');
+      entity.TransactionGroup = group;
+      expect(await provider.Save(entity, TEST_USER, new EntitySaveOptions())).toBeTruthy(); // queued, not run
+      mssqlState.QueueResult({ error: new Error(DUPLICATE_KEY_ERROR) });
+
+      expect(await group.Submit()).toBe(false);
+
+      const message = entity.LatestResult?.Message ?? '';
+      expect(message).toContain("unique index 'UQ_Widget'");
+      expect(message).toContain('(values withheld)');
+      expect(message).not.toContain('stored-secret');
+    } finally {
+      Metadata.Provider = previousProvider as IMetadataProvider;
+    }
   });
 
   it('CREATE: throws when the proc returns no rows, including literal SQL instead of @p$ placeholders', async () => {
@@ -669,6 +739,31 @@ describe('SQLServerDataProvider delete path (real Delete() → GenerateDeleteSQL
     expect(entity.LatestResult?.Message).toBe('No result returned from SQL');
   });
 
+  it('a failed delete gives a caller denied a field of the entity the message without the SQL or the quoted values', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(restrictedWidgetEntityInfo({ trackRecordChanges: true }), TEST_USER);
+    mssqlState.QueueResult({ error: new Error(DUPLICATE_KEY_ERROR) });
+
+    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(false);
+
+    const message = entity.LatestResult?.Message ?? '';
+    expect(message).toContain("unique index 'UQ_Widget'");
+    expect(message).toContain('(values withheld)');
+    expect(message).not.toContain('stored-secret');
+    expect(message).not.toContain('spCreateRecordChange_Internal');
+  });
+
+  it('a failed delete keeps the full message for a caller with no denials', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    mssqlState.QueueResult({ error: new Error(DUPLICATE_KEY_ERROR) });
+
+    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(false);
+
+    expect(entity.LatestResult?.Message).toContain('stored-secret');
+  });
+
   it('validates against the LAST result set when CASCADE deletes return multiple result sets', async () => {
     const provider = makeProvider();
     const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
@@ -726,6 +821,24 @@ describe('SQLServerDataProvider delete inside a TransactionGroup (result callbac
     expect(mssqlState.EventKinds()).not.toContain('commit');
     expect(entity.LatestResult?.Success).toBe(false);
     expect(entity.LatestResult?.Message).toContain('ID=w-0001 not found');
+  });
+
+  it('a failed delete in a group gives a caller denied a field of the entity the redacted message', async () => {
+    const provider = makeProvider();
+    const info = restrictedWidgetEntityInfo();
+    provider.SetTestEntities([info]);
+    Metadata.Provider = provider as object as IMetadataProvider;
+    const group = new SQLServerTransactionGroup();
+    const entity = makeSavedWidgetEntity(info, TEST_USER);
+    entity.TransactionGroup = group;
+    expect(await provider.Delete(entity, new EntityDeleteOptions(), TEST_USER)).toBe(true); // queued, not run
+    mssqlState.QueueResult({ error: new Error(DUPLICATE_KEY_ERROR) });
+
+    expect(await group.Submit()).toBe(false);
+
+    const message = entity.LatestResult?.Message ?? '';
+    expect(message).toContain('(values withheld)');
+    expect(message).not.toContain('stored-secret');
   });
 
   it('fails and rolls back the group when the proc echoes a different key', async () => {

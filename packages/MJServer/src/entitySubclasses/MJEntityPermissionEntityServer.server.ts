@@ -102,6 +102,8 @@ export class MJEntityPermissionEntityServer extends MJEntityPermissionEntity {
   }
 
   override async Save(options?: EntitySaveOptions): Promise<boolean> {
+    this.clearFiltersOfUngrantedVerbs();
+
     // simply queue up the entity ID
     if (this.Dirty || options?.IgnoreDirtyState) MJEntityPermissionEntityServer.AddToQueue(this.EntityID);
 
@@ -127,6 +129,19 @@ export class MJEntityPermissionEntityServer extends MJEntityPermissionEntity {
     }
 
     return success;
+  }
+
+  /**
+   * Clears the row-level security filter of every verb this row does not grant, so a row never
+   * keeps a filter beside a cleared `Can<Op>` flag. Readers ignore such a filter (they only collect
+   * filters from rows whose flag is set), but code that reads permissions more widely would still
+   * see it, and an administrator reading the row cannot tell whether it applies.
+   */
+  protected clearFiltersOfUngrantedVerbs(): void {
+    if (!this.CanRead && this.ReadRLSFilterID) this.ReadRLSFilterID = null;
+    if (!this.CanCreate && this.CreateRLSFilterID) this.CreateRLSFilterID = null;
+    if (!this.CanUpdate && this.UpdateRLSFilterID) this.UpdateRLSFilterID = null;
+    if (!this.CanDelete && this.DeleteRLSFilterID) this.DeleteRLSFilterID = null;
   }
 
   /**

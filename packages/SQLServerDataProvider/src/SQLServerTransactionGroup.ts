@@ -413,6 +413,17 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     }
 
     /**
+     * The first character of the next token on the line starting at `pos`: spaces, tabs and CRs are
+     * skipped, and null means the line ends (or holds only whitespace) first. A loop rather than the
+     * sticky `/[ \t\r]*(\S)/y`, which CodeQL flags as polynomial on long whitespace runs.
+     */
+    private static firstTokenCharAt(text: string, pos: number): string | null {
+        let i = pos;
+        while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\r')) i++;
+        return i < text.length && !/\s/.test(text[i]) ? text[i] : null;
+    }
+
+    /**
      * Names declared by every `DECLARE` statement in `masked` (comments and strings already
      * blanked by {@link maskNonCode}), lower-cased. Walks the whole declaration list: a name is
      * declared when it directly follows `DECLARE` or a top-level comma. Parentheses are tracked so
@@ -423,7 +434,6 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     private static collectDeclaredNames(masked: string): Set<string> {
         const declared = new Set<string>();
         const nameAt = /@([A-Za-z_][A-Za-z0-9_$#@]*)/y;
-        const nextTokenAt = /[ \t\r]*(\S)/y;
         for (const d of masked.matchAll(/\bDECLARE\b/gi)) {
             let i = d.index! + d[0].length;
             let depth = 0;
@@ -435,9 +445,8 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                 if (depth === 0 && ch === ';') break;
                 if (depth === 0 && ch === ',') { expectName = true; i++; continue; }
                 if (depth === 0 && ch === '\n') {
-                    nextTokenAt.lastIndex = i + 1;
-                    const next = nextTokenAt.exec(masked);
-                    if (!next || (next[1] !== '@' && next[1] !== ',')) break;
+                    const next = SQLServerTransactionGroup.firstTokenCharAt(masked, i + 1);
+                    if (next !== '@' && next !== ',') break;
                     i++;
                     continue;
                 }

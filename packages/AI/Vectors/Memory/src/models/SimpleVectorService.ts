@@ -1415,7 +1415,7 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
 
       if (!converged) {
         // Update step: recalculate centroids, keeping the old one for an empty cluster
-        const newCentroids = this.recomputeCentroids(rows, assignments, k, centroids);
+        const newCentroids = this.recomputeCentroids(rows, assignments, k, centroids, scorer);
         // Stop when no centroid moved significantly
         if (this.maxCentroidMovement(centroids, newCentroids, scorer) < tolerance) {
           converged = true;
@@ -1531,12 +1531,13 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
     return assignments;
   }
 
-  /** Mean of each cluster's members, summed in insertion order like {@link FindCentroid}. */
+  /** Mean of each cluster's members, summed in insertion order like {@link FindCentroid}; empty clusters are relocated. */
   private recomputeCentroids(
     rows: Int32Array,
     assignments: Int32Array,
     k: number,
-    previous: Map<number, Centroid>
+    previous: Map<number, Centroid>,
+    scorer: MetricScorer
   ): Map<number, Centroid> {
     const dims = this.store.Dims;
     const view = this.store.View();
@@ -1550,17 +1551,54 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       counts[assignments[i]]++;
     }
     const next = new Map<number, Centroid>();
+    const empty: number[] = [];
     for (let c = 0; c < k; c++) {
       if (counts[c] === 0) {
-        // Empty cluster - keep old centroid
-        next.set(c, previous.get(c)!);
+        empty.push(c);
         continue;
       }
       const values = sums[c];
       for (let d = 0; d < dims; d++) values[d] /= counts[c];
       next.set(c, { Values: values, NormSq: SumOfSquares(values, 0, dims) });
     }
+    if (empty.length > 0) this.relocateEmptyClusters(rows, assignments, counts, next, empty, previous, scorer);
     return next;
+  }
+
+  /**
+   * Gives each empty cluster a new centroid at the point farthest from its own
+   * centroid, taken only from a cluster that still has another member, so no
+   * cluster is emptied to fill one. Without this an empty cluster keeps its old
+   * centroid, usually never wins a point again, and the run returns fewer than k
+   * clusters. When every remaining point sits on its centroid (fewer distinct
+   * points than k) there is nothing to split, so the old centroid is kept.
+   */
+  private relocateEmptyClusters(
+    rows: Int32Array,
+    assignments: Int32Array,
+    counts: Int32Array,
+    next: Map<number, Centroid>,
+    empty: number[],
+    previous: Map<number, Centroid>,
+    scorer: MetricScorer
+  ): void {
+    const distances = new Float64Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      distances[i] = 1 - scorer.RowVsCentroid(rows[i], next.get(assignments[i])!);
+    }
+    const farthestFirst = Array.from(rows.keys()).sort((a, b) => distances[b] - distances[a]);
+    let cursor = 0;
+    for (const cluster of empty) {
+      while (cursor < farthestFirst.length && counts[assignments[farthestFirst[cursor]]] < 2) cursor++;
+      const candidate = cursor < farthestFirst.length ? farthestFirst[cursor] : -1;
+      if (candidate < 0 || distances[candidate] <= 0) {
+        next.set(cluster, previous.get(cluster)!);
+        continue;
+      }
+      next.set(cluster, this.centroidFromRow(rows[candidate]));
+      counts[assignments[candidate]]--;
+      cursor++;
+    }
   }
 
   /** Largest euclidean distance (1 - similarity) any centroid moved. */
