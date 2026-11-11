@@ -82,7 +82,7 @@ describe('BacktestStep', () => {
     expect(stdout.join('')).toContain(`backtest ${l.ID}: PR #1 → run run-1 (1.50 USD, total 1.50)`);
   });
 
-  it('marks an entry Failed with the redacted first line of the error and continues', async () => {
+  it('marks an entry Failed with the redacted error text and continues', async () => {
     const { root, corpus } = setup();
     vi.stubEnv('GITHUB_TOKEN', 'super-secret-value-123');
     const d = fakes(async (o) => { if (o.PR === 1) throw new Error('boom super-secret-value-123\n  at stack'); return { RunID: `run-${o.PR}`, Reported: [] }; });
@@ -90,6 +90,14 @@ describe('BacktestStep', () => {
     expect(l.Entries[0].Status).toBe('Failed');
     expect(l.Entries[0].Error).toBe('boom [REDACTED]');
     expect(l.Entries[1].Status).toBe('Assessed');
+  });
+
+  it('keeps the cause of an error whose first line is the failed command', async () => {
+    const { root, corpus } = setup();
+    const message = 'install failed on Base: Command failed: docker run --rm jit-sandbox:local sh -c pnpm install\n ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile"\n    at ChildProcess.exithandler (node:child_process:422:12)';
+    const d = fakes(async (o) => { if (o.PR === 1) throw new Error(message); return { RunID: `run-${o.PR}`, Reported: [] }; });
+    const l = await backtest(options(root, corpus, d));
+    expect(l.Entries[0].Error).toBe('install failed on Base: Command failed: docker run --rm jit-sandbox:local sh -c pnpm install\nERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile"');
   });
 
   it('records the run ID and the recovered cost of a run that failed after Generate, and counts it toward MaxUsd', async () => {

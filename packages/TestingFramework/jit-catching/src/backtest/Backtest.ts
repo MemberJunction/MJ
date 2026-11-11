@@ -13,6 +13,9 @@ import { IsValidRunID, RunDir } from '../pipeline/RunDir';
 import { LoadCorpus, RevisionsOf, type Corpus, type Slice } from '../corpus/Corpus';
 import { LedgerFile, LedgerID, type BacktestLedger, type LedgerEntry } from './Ledger';
 
+/** Characters of an error's redacted text kept in the ledger and on stdout. */
+const ERROR_TEXT_CHARS = 2000;
+
 /** The run stops after this many Failed entries in a row, so an outage does not mark the whole corpus Failed. */
 const MAX_FAILED_IN_ROW = 3;
 
@@ -138,7 +141,7 @@ function selectedPRs(corpus: Corpus, o: BacktestOptions): SelectedPR[] {
 async function pendingEntry(p: SelectedPR, repo: BacktestDeps['Repo']): Promise<LedgerEntry> {
     let revisions: { BaseSHA: string; HeadSHA: string };
     try { revisions = await RevisionsOf(p.MergeSHA, repo); }
-    catch (e) { throw new Error(`PR #${p.PR}: cannot find the first parent of ${p.MergeSHA}: ${firstLine(e)}`, { cause: e }); }
+    catch (e) { throw new Error(`PR #${p.PR}: cannot find the first parent of ${p.MergeSHA}: ${errorText(e)}`, { cause: e }); }
     return { PR: p.PR, Set: p.Set, ...revisions, RunID: null, Status: 'Pending', Error: null, CostUSD: 0, StartedAt: null, EndedAt: null, Match: null };
 }
 
@@ -267,19 +270,21 @@ async function costOf(runID: string, deps: BacktestDeps): Promise<number | null>
 }
 
 /** The first non-empty line of the error with this process's secrets replaced. */
-function firstLine(e: unknown): string {
+/** The redacted message without stack frames, cut to its last ERROR_TEXT_CHARS characters. */
+function errorText(e: unknown): string {
     const message = e instanceof Error ? e.message : String(e);
-    return RedactTail(message.split('\n').map((l) => l.trim()).find((l) => l.length > 0) ?? 'failed');
+    const lines = message.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith('at '));
+    return RedactTail((lines.join('\n') || 'failed').slice(-ERROR_TEXT_CHARS));
 }
 
-/** `firstLine`, withheld when it still holds a secret the redaction check knows. */
+/** `errorText`, withheld when it still holds a secret the redaction check knows. */
 function errorLine(e: unknown, redaction: RedactionCheck): string {
-    const line = firstLine(e);
-    const match = redaction.Check(line);
-    return match ? `[error withheld: ${match.Kind}]` : line;
+    const text = errorText(e);
+    const match = redaction.Check(text);
+    return match ? `[error withheld: ${match.Kind}]` : text;
 }
 
 function report(ledger: BacktestLedger, entry: LedgerEntry): void {
-    const outcome = entry.Status === 'Failed' ? `failed: ${entry.Error}` : `run ${entry.RunID}`;
+    const outcome = entry.Status === 'Failed' ? `failed: ${entry.Error?.replace(/\n/g, ' | ')}` : `run ${entry.RunID}`;
     process.stdout.write(`backtest ${ledger.ID}: PR #${entry.PR} → ${outcome} (${entry.CostUSD.toFixed(2)} USD, total ${totalCost(ledger).toFixed(2)})\n`);
 }
