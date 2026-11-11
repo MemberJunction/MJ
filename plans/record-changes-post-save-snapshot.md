@@ -1,9 +1,63 @@
 # Record Changes — Aligning `FullRecordJSON` with Stored Post-Save State Under Delta Updates
 
-**Status:** Proposed
+**Status:** Implemented (Option A) — see [Outcome](#outcome-option-a-implemented)
 **Date:** 2026-11-09
 **Scope:** `@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/postgresql-dataprovider`
 **Related:** PR [#6474](https://github.com/MemberJunction/MJ/pull/6474) (`plans/orm-improvements-ef-comparison.md`), PR [#6490](https://github.com/MemberJunction/MJ/pull/6490) (`plans/transaction-group-concurrency.md`), [#6468](https://github.com/MemberJunction/MJ/issues/6468), [#4339](https://github.com/MemberJunction/MJ/issues/4339), [PR #6474 review comment](https://github.com/MemberJunction/MJ/pull/6474#issuecomment-6744739815), [#6468 review conditions](https://github.com/MemberJunction/MJ/issues/6468#issuecomment-6728103040)
+
+---
+
+## Outcome: Option A implemented
+
+`FullRecordJSON` for tracked creates and updates is built in the save's own statement from the returned row: `FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES` over `@ResultTable` on SQL Server, `row_to_json` over `save_result` on PostgreSQL. `ChangesJSON` and `ChangesDescription` are still computed in TypeScript. Deletes are unchanged.
+
+### What the investigation found in real databases
+
+Read from local SQL Server databases (`more-cheese-2`, `agrip2`, `Skip-3`) and PostgreSQL databases (`mc_pg`, `more-cheese`, `mj_pg_test`):
+
+- **Decrypted secrets in the audit table.** Every `MJ: Credentials` Record Change held the decrypted `Values` (289 rows in one database) while the table held ciphertext. Option A records the ciphertext.
+- **Stale update snapshots.** `__mj_UpdatedAt` was the pre-save value; another writer's change was missing.
+- **Incomplete create snapshots.** Null ID, timestamps and joined display values.
+- **Numbers at the wrong precision.** JavaScript values rather than what the column stored (`63.760888` recorded where `int` stored `63`).
+- **PostgreSQL doubled apostrophes.** `EscapeQuotesInProperties` is applied, then the JSON is bound as a parameter, so `'` was stored as `''`. Option A fixes this for `FullRecordJSON` on saves; deletes and `ChangesJSON` still have it (follow-up below).
+- Older rows on one database stored dates as `{}` (an earlier bug, already fixed).
+
+### Format decisions
+
+Each column is rendered the way a loaded entity serializes it, so readers that compare an old snapshot with a new one as strings see no false changes:
+
+| Column type | Rendered as |
+|---|---|
+| `datetime2`, `smalldatetime`, `datetimeoffset`, `timestamptz` | UTC `YYYY-MM-DDTHH:MM:SS.mmmZ`, milliseconds truncated (as the driver does) |
+| `datetime` | Same, milliseconds rounded (it stores 1/300-second ticks; the driver rounds) |
+| `date` / `time` | `YYYY-MM-DDT00:00:00.000Z` / `1970-01-01THH:MM:SS.mmmZ` |
+| `bigint` | String (as the drivers return it) |
+| binary | base64 (PostgreSQL `bytea` would otherwise be `\x…` hex) |
+| `json`/`jsonb`, `xml`, `sql_variant`, unknown types | Text |
+| `geography`, `geometry`, `hierarchyid` | `.ToString()` (`FOR JSON` refuses CLR types with error 13604 and fails the whole save) |
+
+Without the explicit `Z`, `datetime`/`datetime2` values (MJ stores them as UTC) would be read as local time by every restore path.
+
+### Fallbacks to the in-memory snapshot
+
+- Entities whose compiled procedure returns datestamps only (15 high-volume log entities), and PostgreSQL saves that project the result to datestamps: there is no full row to read.
+- SQL Server entities with a `.` in a column name, which `FOR JSON PATH` would nest.
+
+A restricted user's update now reads stored values only for fields the object wrote without having read them (needed for the diff's old values), not the whole row.
+
+### Verified
+
+- Unit tests in the three changed packages, plus a mutation check that the new tests fail without the change.
+- Live tests against a fresh SQL Server and a fresh PostgreSQL database (`record-change-snapshot-live-db.integration.test.ts` in each provider, env-gated): create snapshot holds server values; a stale writer's snapshot carries another server's change and the stored `__mj_UpdatedAt`; restoring that version keeps the other change; encrypted values are ciphertext; every column type renders as above, including under a non-UTC PostgreSQL session. With the old behavior forced, the snapshot checks fail on both databases.
+- Deterministic integration tier on SQL Server.
+
+### Follow-ups (not in this change)
+
+1. **PostgreSQL `''` in deletes and `ChangesJSON`.** Same root cause as above; needs the payload builder to skip SQL quote escaping when the value is bound as a parameter.
+2. **Readers comparing snapshots across formats.** VersionHistory `DiffEngine` and the label diffs compare with string/JSON equality, so a pre-change snapshot vs a post-change one can still differ on UUID case, encrypted values and PostgreSQL apostrophes.
+3. **Create cards list more fields.** `ng-record-changes` `GetCreatedFields` will now show `__mj_` timestamps and joined display fields, which are no longer null; filter `__mj_` and virtual fields there.
+4. **Encrypted fields in readers.** Restore previews show `$ENC$…` and always mark the field changed; Predictive Studio's continuity check treats ciphertext vs decrypted current value as a mismatch. Restoring ciphertext works while the key is unchanged.
+5. **Other snapshot writers keep the old format.** VersionHistory `SnapshotBuilder` and Predictive Studio `WriteHistorySnapshots` (decrypted, in-memory), and the IS-A sibling writer (`FOR JSON` without `INCLUDE_NULL_VALUES`).
 
 ---
 
