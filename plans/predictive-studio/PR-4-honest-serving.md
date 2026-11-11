@@ -3432,7 +3432,9 @@ annotated tag answers `tag <sha>`: dereference it with `gh api repos/actions/set
   (M8.4) does not carry it. The truth-suite pytest (`TruthSuite`, `pnpm run test:python`) still runs at every milestone
   exit, counts in §11. **Carried at the M1 exit:** this box is ticked so the exit gate's `tasks` check
   (boxes above `milestone-exit.mjs`) passes, but the step needs the push, which the merge-of-next pass makes; that pass
-  runs `gh pr checks` after its push and records the CI result in its §11 entry (D4-79).
+  runs `gh pr checks` after its push and records the CI result in its §11 entry (D4-79). Its first CI run failed
+  (`9 failed, 486 passed`: the job built no Core for the parity tests); the job now installs the sidecar's workspace
+  dependencies and builds Core first (`.github/workflows/integration.yml`), and §11 records the re-run.
 
 **Coverage table**
 
@@ -9592,11 +9594,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611101201__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->da45376b51<!-- /gen:head -->
+- Head: <!-- gen:head -->e8f5683866<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10137,8 +10139,17 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   merging gate; Feature Pipelines (0 / 5) is outside §4.2's 53 + 10 (PR 3's D3-78). Write-backs at the exit: 11 = 10
   tracked files restored from the index + the then-untracked `.latest-feature-values-permissions.json` whose `sync`
   block was stripped (`m1-exit-report.md` §3a).
-- **M1.6 Step 5 (CI after the push):** read after this commit's push with `gh pr checks 6517`; the result (or the run
-  URL, if still running) is the line below, which rides M2's first commit with §10's `gen:head` (M2's start reads it).
+- **M1.6 Step 5 (CI after the push):** the push of `e8f5683866` ran the job in run
+  `https://github.com/MemberJunction/MJ/actions/runs/43072310090` (job `130703679916`, "Predictive Studio sidecar
+  (pytest)") → **failure**: `9 failed, 486 passed in 115.97s`, every failure `AssertionError: the built Core is missing
+  (…/Sidecar/node_modules/@memberjunction/predictive-studio-core/dist/index.js)` (`test_gate_parity.py` ×4,
+  `test_snapshot.py::test_period_starts_match_the_engines_holdout_periods` ×5). Root cause: M1.6's job never installs
+  the workspace or builds Core, and those tests run the built Core through node; locally Core was always built. Fix
+  (this pass's follow-up commit): two steps before the Python setup — `pnpm install --frozen-lockfile --filter
+  "@memberjunction/predictive-studio-sidecar..."` and `pnpm --filter "@memberjunction/predictive-studio-core..." run
+  build` (selects `packages/MJGlobal` and Core). Simulated in a clean worktree of `e8f5683866`: install EXIT=0, build
+  EXIT=0, `dist/index.js` present, `pnpm run setup:python` EXIT=0, `pnpm run test:python` → `495 passed in 97.80s`. The
+  follow-up push's CI result is the line below (read after that push; it rides M2's first commit).
 - **State left behind:** `MJ_PS_PR4_claude` from the fourth clean build (D4-80's pin), plus the sync push,
   `truth:provision`, the IT metadata, the C1 corpus and the two suite runs above; truth sidecar on `:61968`; MJAPI
   stopped; the seven owner files untracked as before; the interrupted deterministic re-run of this pass went with the

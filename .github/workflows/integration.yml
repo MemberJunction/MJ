@@ -204,6 +204,15 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      # The parity tests (tests/tools/gate_parity.py, tests/test_snapshot.py) run the built Core through node, from
+      # Sidecar/node_modules/@memberjunction/predictive-studio-core/dist, so the sidecar's workspace dependencies are
+      # installed and Core is built with its own workspace dependencies first.
+      - name: Install the sidecar's workspace dependencies
+        run: pnpm install --frozen-lockfile --filter "@memberjunction/predictive-studio-sidecar..."
+
+      - name: Build Predictive Studio Core and its dependencies
+        run: pnpm --filter "@memberjunction/predictive-studio-core..." run build
+
       - name: Set up Python 3.11
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
