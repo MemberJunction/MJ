@@ -17,22 +17,47 @@
 --
 -- The formulas are unchanged: the triggers call the same functions the views called, so every
 -- value is identical to what the views returned before this migration.
+--
+-- Idempotent on purpose (reviewed exception to migration-existence-guards). This script is also
+-- run by hand as a hotfix on deployments still on 6.1.x / 6.2.x, which have the slow views and
+-- cannot wait for the upgrade. When such a deployment later upgrades, Skyway runs this migration
+-- again over the already-patched schema, so every step must be safe to repeat:
+--   - the column adds and descriptions are guarded;
+--   - functions, triggers and views use CREATE OR ALTER;
+--   - the backfill writes only rows whose stored value differs, so a second run changes nothing
+--     and does not bump __mj_UpdatedAt (which would force every server to reload its metadata).
 -- ═══════════════════════════════════════════════════════════════════════════════════════════
 
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────
 -- 1. Stored columns. Nullable: an AFTER trigger fills them, so the INSERT itself carries NULL.
 -- ───────────────────────────────────────────────────────────────────────────────────────────
-ALTER TABLE [${flyway:defaultSchema}].[Entity] ADD
-    [CodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [ClassName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [BaseTableCodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF COL_LENGTH(N'${flyway:defaultSchema}.Entity', N'CodeName') IS NULL
+    ALTER TABLE [${flyway:defaultSchema}].[Entity] ADD
+        [CodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
 GO
 
-ALTER TABLE [${flyway:defaultSchema}].[EntityField] ADD
-    [FieldCodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF COL_LENGTH(N'${flyway:defaultSchema}.Entity', N'ClassName') IS NULL
+    ALTER TABLE [${flyway:defaultSchema}].[Entity] ADD
+        [ClassName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
 GO
 
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF COL_LENGTH(N'${flyway:defaultSchema}.Entity', N'BaseTableCodeName') IS NULL
+    ALTER TABLE [${flyway:defaultSchema}].[Entity] ADD
+        [BaseTableCodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+GO
+
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF COL_LENGTH(N'${flyway:defaultSchema}.EntityField', N'FieldCodeName') IS NULL
+    ALTER TABLE [${flyway:defaultSchema}].[EntityField] ADD
+        [FieldCodeName] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+GO
+
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${flyway:defaultSchema}', N'TABLE', N'Entity', N'COLUMN', N'CodeName'))
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Schema-prefixed programmatic name derived from the entity Name: GetClassNameSchemaPrefix(COALESCE(CanonicalSchemaName, SchemaName)) followed by the Name with the schema''s EntityNamePrefix and spaces removed. Maintained by trigger; read-only.',
@@ -41,6 +66,8 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'CodeName';
 GO
 
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${flyway:defaultSchema}', N'TABLE', N'Entity', N'COLUMN', N'ClassName'))
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Schema-prefixed programmatic class name used for TypeScript entity classes, Zod schemas and Angular form components: GetProgrammaticName(GetClassNameSchemaPrefix(COALESCE(CanonicalSchemaName, SchemaName)) + BaseTable + NameSuffix). Maintained by trigger; read-only.',
@@ -49,6 +76,8 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'ClassName';
 GO
 
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${flyway:defaultSchema}', N'TABLE', N'Entity', N'COLUMN', N'BaseTableCodeName'))
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Programmatic name of the base table plus NameSuffix, without a schema prefix: GetProgrammaticName(BaseTable + NameSuffix). Used to name generated procedures and triggers. Maintained by trigger; read-only.',
@@ -57,6 +86,8 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'BaseTableCodeName';
 GO
 
+-- mj-standards-allow: existence-guard (also applied by hand as a hotfix before the upgrade)
+IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${flyway:defaultSchema}', N'TABLE', N'EntityField', N'COLUMN', N'FieldCodeName'))
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Programmatic name of the field: GetProgrammaticName of the Name with spaces removed. Maintained by trigger; read-only.',
@@ -100,7 +131,9 @@ GO
 
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────
--- 3. Backfill existing rows (before the triggers exist, so each row is written once).
+-- 3. Backfill existing rows. On a first run the triggers do not exist yet, so each row is written
+--    once. Only rows whose stored value differs (case-sensitively) are written, so a repeat run
+--    over an already-patched schema changes nothing and leaves __mj_UpdatedAt alone.
 -- ───────────────────────────────────────────────────────────────────────────────────────────
 UPDATE e
 SET
@@ -110,11 +143,25 @@ SET
 FROM
     [${flyway:defaultSchema}].[Entity] e
 INNER JOIN
-    [${flyway:defaultSchema}].GetEntityProgrammaticNames() n ON n.ID = e.ID;
+    [${flyway:defaultSchema}].GetEntityProgrammaticNames() n ON n.ID = e.ID
+WHERE EXISTS (
+    SELECT e.CodeName COLLATE Latin1_General_BIN2, e.ClassName COLLATE Latin1_General_BIN2, e.BaseTableCodeName COLLATE Latin1_General_BIN2
+    EXCEPT
+    SELECT n.CodeName COLLATE Latin1_General_BIN2, n.ClassName COLLATE Latin1_General_BIN2, n.BaseTableCodeName COLLATE Latin1_General_BIN2
+);
 GO
 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET FieldCodeName = [${flyway:defaultSchema}].GetProgrammaticName(REPLACE(Name, ' ', ''));
+UPDATE ef
+SET ef.FieldCodeName = c.FieldCodeName
+FROM
+    [${flyway:defaultSchema}].[EntityField] ef
+CROSS APPLY
+    (SELECT [${flyway:defaultSchema}].GetProgrammaticName(REPLACE(ef.Name, ' ', '')) AS FieldCodeName) c
+WHERE EXISTS (
+    SELECT ef.FieldCodeName COLLATE Latin1_General_BIN2
+    EXCEPT
+    SELECT c.FieldCodeName COLLATE Latin1_General_BIN2
+);
 GO
 
 
@@ -125,7 +172,7 @@ GO
 --    by the computed value; their own write then fires them once more and changes nothing.
 --    Names avoid CodeGen's trgUpdate<Table> pattern, which CodeGen drops and recreates.
 -- ───────────────────────────────────────────────────────────────────────────────────────────
-CREATE TRIGGER [${flyway:defaultSchema}].[trgEntity_SyncProgrammaticNames]
+CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].[trgEntity_SyncProgrammaticNames]
 ON [${flyway:defaultSchema}].[Entity]
 AFTER INSERT, UPDATE
 AS
@@ -155,7 +202,7 @@ BEGIN
 END;
 GO
 
-CREATE TRIGGER [${flyway:defaultSchema}].[trgSchemaInfo_SyncEntityProgrammaticNames]
+CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].[trgSchemaInfo_SyncEntityProgrammaticNames]
 ON [${flyway:defaultSchema}].[SchemaInfo]
 AFTER INSERT, UPDATE, DELETE
 AS
@@ -185,7 +232,7 @@ BEGIN
 END;
 GO
 
-CREATE TRIGGER [${flyway:defaultSchema}].[trgEntityField_SyncFieldCodeName]
+CREATE OR ALTER TRIGGER [${flyway:defaultSchema}].[trgEntityField_SyncFieldCodeName]
 ON [${flyway:defaultSchema}].[EntityField]
 AFTER INSERT, UPDATE
 AS
