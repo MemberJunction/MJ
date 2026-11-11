@@ -9,7 +9,7 @@ import { MJFilterPopoverComponent } from '../filter-popover/filter-popover.compo
 
 /**
  * DOM coverage for the mj-dialog family (dialog.component.ts) — the native-<dialog>-based modal that
- * replaced kendo-dialog (~54× across the app via its projected footer). Covers the main
+ * is used across the app via its projected footer. Covers the main
  * MJDialogComponent behavior (Visible gating, title, close button / backdrop / escape → Close, the
  * Closeable gate, the Role aria attribute, size→width resolution, focus entry / trap / return, and
  * AriaLabel when there is no Title) plus the two projection wrappers (mj-dialog-actions footer,

@@ -4,23 +4,24 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
-import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
+import { ResolvePostRestartFields, type IntrospectedSchema } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
 import { useServer } from 'graphql-ws/lib/use/ws';
-import { createServer } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -45,6 +46,8 @@ import { requireSystemUserDirective, publicDirective } from './directives/index.
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
+import { MJServerStartupState } from './startupState.js';
+import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -68,7 +71,7 @@ import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js'
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents, WrapSharedCacheWithL1 } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -88,6 +91,7 @@ import { ClientToolRequestManager, AgentRunWatchdog, SqlRealtimeRecordingLedger 
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { RegisterSemanticGraphExpansionService } from './services/RegisterSemanticGraphExpansion.js';
 import { MJServerWorkQueueProviderSource, StartWorkQueueHost } from './services/WorkQueueHostService.js';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
@@ -121,7 +125,8 @@ import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
 import { MountHealthcheckRoute, MountPublicCoreRoutes, MountExtensionHealthRoute, MountAuthCatalogRoute, MountAuthenticatedCoreRoutes } from './coreRoutes.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 import { CreateMetadataRefreshSignalHandler, METADATA_REFRESH_SIGNAL } from './metadataRefreshSignal.js';
-import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
+import { CacheInvalidationBroadcastManager, RedisStreamBroadcastProvider } from './broadcast/index.js';
+import { AttachRedisClusterPubSub } from './generic/RedisClusterPubSubEngine.js';
 import { ResolveServerRole, ShouldRunBackgroundWorkers } from './serverRoleConfigUnits.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
@@ -272,6 +277,7 @@ export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
 export * from './rest/MediaStreamHandler.js';
+export * from './routeRateLimitConfigUnits.js';
 export * from './rest/RealtimeRecordingHandler.js';
 export * from './resolvers/InfoResolver.js';
 export * from './resolvers/PotentialDuplicateRecordResolver.js';
@@ -305,8 +311,14 @@ import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
+import { NotificationEngine } from '@memberjunction/notifications';
 
 export type MJServerOptions = {
+  /**
+   * Runs at the end of the bootstrap, before any request reaches the app. The port is already bound
+   * by then (Serve binds it first), but until this returns every request is answered by the startup
+   * gate (503, or the health endpoints), never by the app.
+   */
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
   /**
@@ -447,7 +459,43 @@ async function wireRealtimeSessionEventFanOut(redisProvider: RedisLocalStoragePr
 // there is no ordering hazard in binding this early.
 GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
+/**
+ * Starts MJServer. The port is bound first, behind a startup gate: until the bootstrap finishes,
+ * `/healthcheck` answers 503 with the current phase, `/healthcheck/live` answers 200, and every
+ * other request gets 503 with `Retry-After`. A port already in use therefore fails at the start of
+ * boot, not the end. A bootstrap that throws marks the server `failed` (the health endpoint keeps
+ * saying so if the process stays up), logs the phase it failed in, and rethrows.
+ */
 export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
+  const startup = MJServerStartupState.Instance;
+  startup.Begin();
+  const httpServer = createServer(CreateStartupGate(app, startup));
+  // Until the upgrade router is installed, every WebSocket upgrade is refused with a 503.
+  httpServer.on('upgrade', (_request, socket) => {
+    RejectUpgradeWhileStarting(startup, socket);
+  });
+  try {
+    await ListenOnPort(httpServer, graphqlPort);
+    await serveBehindStartupGate(httpServer, startup, resolverPaths, app, options);
+  } catch (err) {
+    // A throw after the gate opened leaves the server serving, as it did before the gate existed.
+    if (!startup.IsReady) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      startup.MarkFailed(error);
+      console.error(`❌ MJServer startup failed during "${startup.Phase}": ${error.message}`);
+    }
+    throw err;
+  }
+};
+
+/** The bootstrap {@link Serve} runs once its port is bound; requests stay behind the startup gate until it returns. */
+const serveBehindStartupGate = async (
+  httpServer: HttpServer,
+  startup: MJServerStartupState,
+  resolverPaths: Array<string>,
+  app: Application,
+  options?: MJServerOptions
+): Promise<void> => {
   const t0 = performance.now();
   // Name this MJAPI instance by its port before anything stamps a session row with its identity, so the janitor's
   // startup recovery closes only the sessions an earlier boot of this instance left, never those of another MJAPI on
@@ -458,6 +506,10 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
   // An anonymous visitor may join only the LiveKit agent-session room it owns by scope; the room gate cannot import
   // this package's session-access decision, so it is handed in here, before any resolver runs (MJ#6044).
   RoomAuthorizationService.Instance.SetAnonymousSessionOwnerCheck(AuthorizeAnonymousRoomSessions);
+  // The semantic-graph search lane and the graphExpand pipeline stage expand only through a registered
+  // service; register the engine-backed one before any search configures its providers (GraphEngine
+  // itself loads lazily on first use).
+  RegisterSemanticGraphExpansionService();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
   // the one-line summary; at `verbose`+ each phase prints inline as before.
@@ -485,6 +537,7 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
 const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
+  SetTypedQueryDriftMode(configInfo.databaseSettings.typedQueryDrift ?? 'warn');
 
   // Shared cache first: the database provider loads metadata and startup engines through
   // it, so the first server to start fills it and later servers read it instead of each querying
@@ -569,6 +622,8 @@ const setupComplete$ = new ReplaySubject(1);
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
     pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
+    pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -782,6 +837,8 @@ const setupComplete$ = new ReplaySubject(1);
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
     config.LocalStorageProvider = sharedCache ?? undefined;
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
@@ -929,7 +986,8 @@ const setupComplete$ = new ReplaySubject(1);
   // skipped exactly the case that needed it.
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
   if (sharedCache) {
-    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
+    const wrappedStorage = WrapSharedCacheWithL1(sharedCache, configInfo.cacheSettings);
+    await LocalCacheManager.Instance.SetStorageProvider(wrappedStorage);
   }
   // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
   startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
@@ -971,17 +1029,7 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Telemetry + Cache + APIKey Init', tServe);
   tServe = startupLog.BeginPhase('Discovering resolvers');
 
-  const dynamicModules = await Promise.all(
-    paths.map((modulePath) => {
-      try {
-        const module = import(isWindows ? `file://${modulePath}` : modulePath);
-        return module;
-      } catch (e) {
-        console.error(`Error loading dynamic module at '${modulePath}'`, e);
-        throw e;
-      }
-    })
-  );
+  const dynamicModules = await ImportResolverModules(paths, isWindows, 'Error loading dynamic module');
   const resolvers = dynamicModules.flatMap((module) =>
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
@@ -1055,16 +1103,7 @@ const setupComplete$ = new ReplaySubject(1);
       const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
       const mwResolverFiles = fg.globSync(mwGlobs);
       if (mwResolverFiles.length > 0) {
-          const mwModules = await Promise.all(
-              mwResolverFiles.map((modulePath) => {
-                  try {
-                      return import(isWindows ? `file://${modulePath}` : modulePath);
-                  } catch (e) {
-                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
-                      throw e;
-                  }
-              })
-          );
+          const mwModules = await ImportResolverModules(mwResolverFiles, isWindows, 'Error loading middleware resolver');
           const mwResolvers = mwModules.flatMap((module) =>
               Object.values(module).filter((value) => typeof value === 'function')
           );
@@ -1080,7 +1119,12 @@ const setupComplete$ = new ReplaySubject(1);
   if (!pubSub.asyncIterator && typeof pubSub.asyncIterableIterator === 'function') {
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
-  PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+  let activePubSub = pubSub as unknown as PubSubEngine;
+  if (sharedCache) {
+    const clusterBridge = await AttachRedisClusterPubSub(activePubSub, sharedCache);
+    activePubSub = clusterBridge.Engine;
+  }
+  PubSubManager.Instance.SetPubSubEngine(activePubSub);
 
   // Wire the ClientToolRequestManager so BaseAgent can publish client tool requests
   // via the same PubSub infrastructure used for pipeline progress and cache invalidation.
@@ -1118,7 +1162,19 @@ const setupComplete$ = new ReplaySubject(1);
   // config.ts loads and validates at module scope, so importing it there would pull full config
   // validation into every import chain that touches the resolver, unit tests included.
   ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
-  CacheInvalidationBroadcastManager.Instance.Configure(configInfo.cacheSettings?.broadcast);
+  const broadcastConfig = { ...configInfo.cacheSettings?.broadcast };
+  if (sharedCache && (!broadcastConfig.provider || broadcastConfig.provider === 'RedisStream')) {
+    broadcastConfig.provider = 'RedisStream';
+  }
+  const broadcastProvider = CacheInvalidationBroadcastManager.Instance.Configure(broadcastConfig);
+  if (sharedCache && broadcastProvider instanceof RedisStreamBroadcastProvider) {
+    await broadcastProvider.BindTransport(sharedCache);
+    broadcastProvider.SetLocalPubSubDeliverer((sequencedPayload) => {
+      if (PubSubManager.Instance.PubSubEngine) {
+        void PubSubManager.Instance.PubSubEngine.publish(CACHE_INVALIDATION_TOPIC, sequencedPayload);
+      }
+    });
+  }
 
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
@@ -1242,7 +1298,9 @@ const setupComplete$ = new ReplaySubject(1);
   lap('Schema Build', tServe);
   tServe = startupLog.BeginPhase('Starting HTTP server');
 
-  const httpServer = createServer(app);
+  // The HTTP server was created and bound at the top of Serve (behind the startup gate); the startup
+  // gate's upgrade listener is replaced by the router below, which checks readiness itself.
+  httpServer.removeAllListeners('upgrade');
 
   // `noServer` so we own the HTTP `upgrade` routing ourselves (below) and can dispatch by path between
   // the graphql-ws server and the realtime proxy. (In `{ server, path }` mode, ws destroys any socket whose
@@ -1252,11 +1310,14 @@ const setupComplete$ = new ReplaySubject(1);
   // Single upgrade router: the realtime proxy claims its own path first (an authenticated byte-tunnel that
   // lets self-hosted realtime providers — e.g. HuggingFace speech-to-speech — run the shipped client-direct
   // audio topology without the internal endpoint ever being exposed to the browser); everything on the
-  // graphql path goes to graphql-ws; anything else is rejected. Must be registered before httpServer.listen().
+  // graphql path goes to graphql-ws; anything else is rejected. Until the server is ready, every upgrade is refused (503).
   // Path acceptance (including the bare-root/`/graphql` alias) is centralized in `IsGraphQLWsPath` — see
   // its doc comment for why the alias exists — so this listener and `InstallMediaUpgradeDispatcher`'s
   // telephony-active replacement listener can never disagree on what counts as "the GraphQL path."
   httpServer.on('upgrade', (request, socket, head) => {
+    if (RejectUpgradeWhileStarting(startup, socket)) {
+      return;
+    }
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
@@ -1602,7 +1663,7 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return RejectUpgradeWhileStarting(startup, socket) || RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1708,6 +1769,10 @@ const setupComplete$ = new ReplaySubject(1);
     runBackgroundWorkers ? RSUPostRestartProgressSession.WasKilledAtRestart : undefined
   );
 
+  // Notification delivery providers from mj.config.cjs (env vars and defaults apply when unset)
+  NotificationEngine.EmailProviderName = configInfo.notifications?.emailProvider;
+  NotificationEngine.SMSProviderName = configInfo.notifications?.smsProvider;
+
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
   if (runBackgroundWorkers && configInfo.scheduledJobs?.enabled) {
@@ -1745,7 +1810,8 @@ const setupComplete$ = new ReplaySubject(1);
 
   lap('Apollo + Express Setup', tServe);
 
-  await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  // The port was bound at the top of Serve; from here on requests reach the app.
+  startup.MarkReady();
   // The summary headline reports TRUE wall-clock since process start (see
   // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
   // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
@@ -2091,28 +2157,33 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object.
+      // Resolve every object's fields ONCE, then reuse per object.
       //
-      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
-      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
-      // the SHARED catalog by design. That would build these field maps from the connector's
-      // declared fields alone: every column this connection's own discovery sampled would get a
-      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
-      // and its values would land in the overflow JSON instead of the column. Observed on the
-      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
-      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
-      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
+      // From the connection's PERSISTED catalog first: its active field rows are what the RSU built
+      // the tables from, so the field maps match the columns that exist. The connector is
+      // introspected only for objects with no persisted fields, in the connection's catalog scope
+      // with those objects warm. Introspecting every object instead is a live re-discovery on a
+      // connector whose IntrospectSchema calls the vendor (NetForum: every object, at every restart).
+      // This runs at process start, outside any request, so the resolver enters the scope itself.
       const introspect = connector.IntrospectSchema.bind(connector) as
-        (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await IntrospectInCatalogScope(
+        (ci: unknown, u: unknown) => Promise<IntrospectedSchema>;
+      const postRestartFields = await ResolvePostRestartFields(
         item.CompanyIntegrationID,
+        companyIntegration.IntegrationID,
         item.SourceObjectNames,
         () => introspect(companyIntegration, systemUser),
         systemUser,
       );
+      console.log(
+        `[RSU] Field maps for ${item.CompanyIntegrationID}: ${postRestartFields.PersistedCount} object(s) from the ` +
+        `persisted catalog, ${postRestartFields.Introspected.length} by introspection`
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
+      // Objects whose map ended with no field maps at all. A sync skips such a map (it cannot write
+      // a single column), so they are reported as failed here rather than as created.
+      const withoutFieldMaps: string[] = [];
 
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
@@ -2176,16 +2247,14 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
-        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
+        let noFieldMaps = false;
         try {
-          const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
-
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // Always maps the PRIMARY KEY, selected or not — see SelectFieldsToMap for why identity
           // cannot be left to the selection.
-          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
+          const fieldsToMap = SelectFieldsToMap(postRestartFields.FieldsByObject.get(objName.toLowerCase()) ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -2213,19 +2282,47 @@ async function processRSUPendingWork(): Promise<void> {
             fieldMap.Direction = 'SourceToDest';
             fieldMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
             if (await fieldMap.Save()) fieldCount++;
+            else console.warn(`[RSU] Failed to save field map ${field.Name} for ${objName}: ${fieldMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
           console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
+          // A map with no field maps cannot write a single column: the sync skips it. Say so by
+          // name, instead of reporting it as a created map.
+          if (fieldCount === 0 && existingFieldNames.size === 0) {
+            noFieldMaps = true;
+            const why = fieldsToMap.length === 0
+              ? 'neither the persisted catalog nor introspection returned a field for it'
+              : `all ${fieldsToMap.length} of its field map save(s) failed`;
+            console.error(`[RSU] NO FIELD MAPS for ${objName} → ${entity.Name}: ${why}, so a sync cannot write this table.`);
+          }
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
 
+        // Not counted as mapped: the stage reports it as failed, and a retry of this item retries it.
+        if (noFieldMaps) {
+          withoutFieldMaps.push(objName);
+          continue;
+        }
+        mappedObjectNames.add(objName);
         progress?.ObjectMapped(objName, mappedObjectNames.size, objectsToMap);
       }
 
       // The applied rollup for this half of the run, in OBJECTS. `mappedObjectNames` is the same set
       // the retry path narrows against, so what is reported succeeded here is exactly what a retry
       // would NOT redo.
-      progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      //
+      // A map left with no field maps fails the stage, naming the objects: those tables exist and
+      // nothing can sync into them, and this stream is what the client is watching. The healthy
+      // maps still sync below.
+      if (withoutFieldMaps.length > 0) {
+        progress?.FailEntityMaps(
+          `${withoutFieldMaps.length} of ${objectsToMap} object(s) ended with no field maps, so a sync cannot ` +
+          `write their tables. Re-run discovery for this connection, then apply these objects again.`,
+          withoutFieldMaps
+        );
+      } else {
+        progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      }
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
@@ -2483,3 +2580,6 @@ export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
 export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
 export type { StartupSummarySnapshot } from './logging/StartupLogger.js';
+
+export * from './generic/RedisClusterPubSubEngine.js';
+export { WrapSharedCacheWithL1 } from './sharedCache.js';

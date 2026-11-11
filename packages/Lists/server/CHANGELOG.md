@@ -1,5 +1,52 @@
 # @memberjunction/lists
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- d466c22: An Additive refresh (Refresh List From Source, Add View Results To List) no longer fails with STALE_DELTA whenever the list holds a member its source has dropped. Additive keeps those members without listing them in the delta, so the drift check, which compared the list against Unchanged + ToRemove, always saw a size mismatch. `Counts.TargetTotal` now records the list's size at preview, and the drift check compares against it; a list that gained or lost a member since the preview still returns STALE_DELTA. One case gets through: if a kept member leaves and a record the delta adds joins in between, the size matches, and the insert then hits the `(ListID, RecordID)` unique index, so the result is PARTIAL_SUCCESS rather than a duplicate row.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/lists-base@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ProviderConfigDataBase } from '../generic/interfaces';
+import { DatasetStatusResultType, ProviderConfigDataBase } from '../generic/interfaces';
+import { ProviderBase } from '../generic/providerBase';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 
 /**
@@ -13,6 +14,23 @@ import { TestMetadataProvider } from './mocks/TestMetadataProvider';
  */
 class RefreshableProvider extends TestMetadataProvider {
     public mustWait = false;
+    /** When set, the status query answers unsuccessfully — what an exhausted pool gives. */
+    public failStatus = false;
+    /** What the status query reports for `MJ: Entities`; a test moves it to say the server changed. */
+    public entitiesStamp = new Date('2026-01-01T00:00:00.000Z');
+    public override async GetDatasetStatusByName(datasetName: string): Promise<DatasetStatusResultType> {
+        if (this.failStatus) {
+            return { DatasetID: '', DatasetName: datasetName, Success: false, Status: 'No update dates found', LatestUpdateDate: new Date(0), EntityUpdateDates: [] };
+        }
+        return {
+            DatasetID: 'mock-dataset-id',
+            DatasetName: datasetName,
+            Success: true,
+            Status: 'Ready',
+            LatestUpdateDate: this.entitiesStamp,
+            EntityUpdateDates: [{ EntityID: '2', EntityName: 'MJ: Entities', UpdateDate: this.entitiesStamp, RowCount: 1 }],
+        };
+    }
     protected override get MetadataMemberRefreshMustWait(): boolean { return this.mustWait; }
     public schedule(): void { this.scheduleMetadataMemberRefresh(); }
     public refreshAfterChange(): Promise<boolean> { return this.RefreshAfterMetadataMemberChange(); }
@@ -22,8 +40,13 @@ class RefreshableProvider extends TestMetadataProvider {
 
 const config = () => new ProviderConfigDataBase({}, '__mj', [], [], true);
 
+const shippedRetryDelaysMs = ProviderBase.MetadataRefreshRetryDelaysMs;
+
 describe('GetAllMetadata with an empty Entities item', () => {
-    afterEach(() => vi.restoreAllMocks());
+    afterEach(() => {
+        ProviderBase.MetadataRefreshRetryDelaysMs = shippedRetryDelaysMs;
+        vi.restoreAllMocks();
+    });
 
     it('keeps the entities already loaded when a refresh returns none', async () => {
         const provider = new TestMetadataProvider();
@@ -37,6 +60,52 @@ describe('GetAllMetadata with an empty Entities item', () => {
         await provider.Refresh();
 
         expect(provider.Entities.length).toBe(loaded);
+        provider['CancelPendingMetadataMemberRefresh'](); // the retry of the failed reload
+    });
+
+    it('retries a refresh that came back empty, and adopts it once the server answers again', async () => {
+        // Keeping the old metadata is half the fix: nothing else would reload it until the next
+        // metadata write, so the failed reload is retried on the backoff (shortened here).
+        const provider = new RefreshableProvider();
+        provider.setMockDelay(0);
+        await provider.Config(config());
+        const before = provider.Entities.map(e => e.Name);
+        ProviderBase.MetadataRefreshRetryDelaysMs = [20];
+        try {
+            provider.entitiesStamp = new Date('2026-01-02T00:00:00.000Z'); // the server's metadata moved
+            provider.setMockMetadata({ Entities: [], EntityFields: [], Applications: [] });
+            await provider.Refresh();
+            expect(provider.Entities.map(e => e.Name)).toEqual(before);
+            expect(provider.hasPendingTimer()).toBe(true);
+
+            provider.setMockMetadata(null); // the server answers with real metadata again
+            await vi.waitFor(() => expect(provider.Entities.map(e => e.Name)).not.toEqual(before));
+            expect(provider.Entities.length).toBeGreaterThan(0);
+            await vi.waitFor(() => expect(provider.hasPendingTimer()).toBe(false));
+        } finally {
+            provider.cancelPending();
+        }
+    });
+
+    it('a background refresh that comes back empty keeps the entities and is retried', async () => {
+        const provider = new RefreshableProvider();
+        provider.setMockDelay(0);
+        await provider.Config(config());
+        const before = provider.Entities.map(e => e.Name);
+        provider['_lastRefreshCheckAt'] = 0; // step past the min-interval throttle
+        ProviderBase.MetadataRefreshRetryDelaysMs = [20];
+        try {
+            provider.entitiesStamp = new Date('2026-01-02T00:00:00.000Z');
+            provider.setMockMetadata({ Entities: [], EntityFields: [], Applications: [] });
+            await provider.backgroundValidateAndRefresh();
+            expect(provider.Entities.map(e => e.Name)).toEqual(before);
+            expect(provider.hasPendingTimer()).toBe(true);
+
+            provider.setMockMetadata(null);
+            await vi.waitFor(() => expect(provider.Entities.map(e => e.Name)).not.toEqual(before));
+        } finally {
+            provider.cancelPending();
+        }
     });
 
     it('still adopts a refresh that carries entities', async () => {
@@ -102,5 +171,35 @@ describe('a member-change refresh that must wait re-arms instead of running', ()
         const refresh = vi.spyOn(provider, 'Refresh').mockResolvedValue(true);
         await provider.refreshAfterChange();
         expect(refresh).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('a member-change refresh that cannot read the timestamps', () => {
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    it('keeps the loaded metadata and retries later instead of running a full reload', async () => {
+        const provider = new RefreshableProvider();
+        provider.setMockDelay(0);
+        await provider.Config(config());
+        const before = provider.Entities;
+        const refresh = vi.spyOn(provider, 'Refresh');
+        try {
+            provider.failStatus = true;
+            expect(await provider.refreshAfterChange()).toBe(true);
+            expect(refresh).not.toHaveBeenCalled();
+            expect(provider.Entities).toBe(before);
+            expect(provider.hasPendingTimer()).toBe(true);
+        } finally {
+            provider.cancelPending();
+        }
+    });
+
+    it('still runs the full load when nothing is loaded — there is nothing to keep serving', async () => {
+        const provider = new RefreshableProvider();
+        const refresh = vi.spyOn(provider, 'Refresh').mockResolvedValue(true);
+        provider.failStatus = true;
+        await provider.refreshAfterChange();
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(provider.hasPendingTimer()).toBe(false);
     });
 });

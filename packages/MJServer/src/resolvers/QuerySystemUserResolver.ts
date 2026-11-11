@@ -474,6 +474,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             SourceEntityFieldID: f.SourceEntityFieldID,
             SourceEntityField: f.SourceEntityField,
             SourceObjectName: f.SourceObjectName,
+            InAllBranchVariants: f.InAllBranchVariants,
             IsNullable: f.IsNullable,
             IsComputed: f.IsComputed,
             ComputationDescription: f.ComputationDescription,

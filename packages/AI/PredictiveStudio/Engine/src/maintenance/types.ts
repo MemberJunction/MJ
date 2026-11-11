@@ -128,19 +128,28 @@ export interface IDriftDetector {
 export interface DriftContext {
   /** The model being evaluated. */
   modelId: string;
+  /** Optional Record Process ID whose `MJ: Feature Values` rows should be evaluated. */
+  recordProcessId?: string;
   /** Row count the model was trained on. */
   trainedRowCount?: number;
   /** Current target-entity row count (from the injected counter). */
   currentRowCount?: number;
   /** The binding's last-recorded scored row count (`LastRowCount`). */
   lastScoredRowCount?: number;
+  /** Request user for server-side `RunView` queries. */
+  contextUser?: UserInfo;
+  /** Metadata provider for server-side `RunView` queries. */
+  provider?: IMetadataProvider;
 }
 
 /** An {@link IDriftDetector}'s verdict. */
 export interface DriftResult {
   /** Whether the model has drifted past the detector's own threshold. */
   drifted: boolean;
-  /** A 0..1 drift score (the detector's own metric); optional. */
+  /**
+   * The detector's own drift score (detector-specific and unbounded `>= 0` for PSI;
+   * relative row-count delta for {@link RowCountProxyDriftDetector}); optional.
+   */
   score?: number;
   /** Plain-language explanation. */
   detail: string;
@@ -329,7 +338,7 @@ export interface RetrainOutcome {
   stalenessReasons: StalenessReason[];
   /** The newly-trained challenger model + run (present only when `retrained`). */
   challenger?: TrainModelResult;
-  /** Challenger-vs-incumbent comparison (present only when `retrained`). */
+  /** Challenger-vs-incumbent comparison (present only when `retrained` and the retrain shipped a model). */
   comparison?: ChallengerComparison;
 }
 

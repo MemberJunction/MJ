@@ -244,6 +244,21 @@ export abstract class TransactionGroupBase {
     }
 
     private _preprocessingItems: TransactionPreprocessingItem[] = [];
+    private _inTransactionAfterSaveHooks = new Map<BaseEntity, Array<(result: unknown) => Promise<void>>>();
+
+    /**
+     * Enlists an async hook (such as a `SubtypeSelector.Driver` `AfterSave` callback) to be awaited
+     * inside the open group transaction after item SQL execution and PK hydration, before
+     * `CommitGroupTransaction()` commits. If the hook throws, the group transaction rolls back.
+     */
+    public RegisterInTransactionAfterSave(entity: BaseEntity, hook: (result: unknown) => Promise<void>): void {
+        let list = this._inTransactionAfterSaveHooks.get(entity);
+        if (!list) {
+            list = [];
+            this._inTransactionAfterSaveHooks.set(entity, list);
+        }
+        list.push(hook);
+    }
     /**
      * If an entity object needs to conduct any type of asynchronous preprocessing before a transaction is submitted, it must notify its transaction group
      * that it is doing so with this method. This causes the TransactionGroup to wait for all preprocessing to be completed before submitting the transaction.
@@ -345,6 +360,21 @@ export abstract class TransactionGroupBase {
         }
 
         this._status = 'In Progress';
+        let committed = false;
+        let rolledBack = false;
+        const rollbackGroupOnce = async (): Promise<void> => {
+            if (committed || rolledBack) {
+                return;
+            }
+            rolledBack = true;
+            try {
+                await this.RollbackGroupTransaction();
+            } catch (rollbackErr) {
+                LogError(rollbackErr);
+            }
+            this.revertPendingTransactions();
+        };
+
         try {
             // Wait for all preprocessing to be complete
             await this.waitForPreprocessing();
@@ -360,27 +390,51 @@ export abstract class TransactionGroupBase {
                 // now, see if there are any false values for results[x].Success, if so, roll back and return false
                 const overallSuccess = results.every(r => r.Success);
 
-                if (overallSuccess) {
-                    // Call callbacks and notify the group's entities while the group transaction is still open
-                    // (so OnSaveCompleted runs in-transaction and RunAfterCommit defers post-commit side effects
-                    // until CommitGroupTransaction settles the transaction).
-                    await this.completeSubmittedResults(results, true);
-                    await this.CommitGroupTransaction();
-                    this._status = 'Complete';
-                    return true;
-                } else {
-                    try {
-                        await this.completeSubmittedResults(results, false);
-                    } finally {
+                const cache = LocalCacheManager.Instance;
+                const owners = cache.IsInitialized ? this.entityProviders(results) : [];
+                for (const owner of owners) {
+                    cache.BeginEntityEventBatch(owner);
+                }
+                let batchCommitted = false;
+                try {
+                    if (overallSuccess) {
+                        // 1. Run per-item in-transaction callbacks (PK hydration, ValidateDeleteResult,
+                        //    OnDurableAfterSaveExecute, OnSaveCompleted, OnAfterSaveExecute) and
+                        //    in-transaction subtype AfterSave hooks while the group transaction is still
+                        //    open so durable SQL writes enlist atomically and any failure rolls back.
+                        await this.runInTransactionResults(results, true);
+
+                        // 2. Commit the database transaction BEFORE emitting entity finalization
+                        //    notifications (PostSave hooks) and BEFORE EndEntityEventBatch (which
+                        //    awaits LocalCacheManager / Redis cross-process locks and pub/sub).
+                        await this.CommitGroupTransaction();
+                        committed = true;
+
+                        // 3. Finalize entities and notify subscribers now that COMMIT has succeeded.
+                        this.notifyTransactionStatus(true, results);
+                        batchCommitted = true;
+                        this._status = 'Complete';
+                        return true;
+                    } else {
+                        // Release DB locks immediately via ROLLBACK before invoking failure callbacks
+                        // and waiting on cache invalidation.
+                        await rollbackGroupOnce();
                         try {
-                            await this.RollbackGroupTransaction();
-                        } catch (rollbackErr) {
-                            LogError(rollbackErr);
+                            await this.runInTransactionResults(results, false);
+                            this.notifyTransactionStatus(false, results);
+                        } finally {
+                            this._status = 'Failed';
                         }
-                        this.revertPendingTransactions();
-                        this._status = 'Failed';
+                        return false;
                     }
-                    return false;
+                } catch (innerErr) {
+                    // Ensure DB locks are released BEFORE EndEntityEventBatch runs in finally.
+                    await rollbackGroupOnce();
+                    throw innerErr;
+                } finally {
+                    for (const owner of owners) {
+                        await cache.EndEntityEventBatch(owner, batchCommitted);
+                    }
                 }
             }
             else {
@@ -391,12 +445,15 @@ export abstract class TransactionGroupBase {
             }
         }
         catch (err) {
-            await this.RollbackGroupTransaction();
-            this.revertPendingTransactions();
+            await rollbackGroupOnce();
             console.error(err);
             // it failed, so we have to call the callback functions with the error
             for (let i = 0; i < this._pendingTransactions.length; i++) {
-                await this._pendingTransactions[i].CallBack(err, false);
+                try {
+                    await this._pendingTransactions[i].CallBack(err, false);
+                } catch (cbErr) {
+                    LogError(cbErr);
+                }
             }
 
             this.notifyTransactionStatus(false, undefined, err);
@@ -404,6 +461,7 @@ export abstract class TransactionGroupBase {
             return false;
         }
         finally {
+            this._inTransactionAfterSaveHooks.clear();
             CrossEntityPolicyEngine.Instance.ClearTransactionGroupScope(this);
         }
     }
@@ -422,7 +480,8 @@ export abstract class TransactionGroupBase {
 
     /**
      * Optional hook for database-backed subclasses to commit the transaction opened in
-     * {@link BeginGroupTransaction} after {@link completeSubmittedResults} finishes.
+     * {@link BeginGroupTransaction} after {@link runInTransactionResults} finishes and before
+     * entity finalization notifications and cache batch flushing run.
      */
     protected async CommitGroupTransaction(): Promise<void> {
         // Default no-op for non-DB subclasses (e.g., GraphQLTransactionGroup)
@@ -437,47 +496,31 @@ export abstract class TransactionGroupBase {
     }
 
     /**
-     * Finishes a submitted group: calls each result's callback, then notifies subscribers of the
-     * outcome. Each entity in the group listens for that notification and finalizes there, which
-     * is when it raises its save or delete event.
+     * Runs each result's per-item callback and any registered in-transaction subtype AfterSave
+     * hooks while the group transaction is still open (when `groupSucceeded === true`), or invokes
+     * per-item failure callbacks after rollback (when `groupSucceeded === false`).
      *
-     * Both steps run inside an entity-event batch for every provider the group's entities save
-     * through, so the local cache applies the whole group to each cached result set once, rather
-     * than rewriting (and on a shared cache, republishing) each result set once per row. When the
-     * group did not fully succeed, or a callback throws, the batches close as failed and the
-     * affected result sets are invalidated instead of being given part of the group.
-     *
-     * A group submitted inside a provider transaction joins that transaction's open batch, which
-     * then applies when the transaction settles.
-     *
-     * `Submit()` waits for each batch to close, so its result now includes the cache maintenance
-     * (slot reads and writes, and any wait on a shared cache's cross-process lock) that per-row
-     * maintenance used to run without waiting. That is one wait per provider per group.
-     *
-     * Batches are keyed by provider, not by group. Any save raised for the same provider while the
-     * callbacks and notification run joins this group's batch, and is invalidated rather than
-     * applied if the group fails. In a browser every entity shares one provider, so an unrelated
-     * save in that window is affected. Invalidating is the safe direction: the slot reloads on its
-     * next read.
+     * Entity finalization (`notifyTransactionStatus`) and `LocalCacheManager.EndEntityEventBatch`
+     * intentionally run in {@link Submit} *after* {@link CommitGroupTransaction} /
+     * {@link RollbackGroupTransaction} settles so database locks are never held across post-save
+     * hooks or cross-process cache locks.
      */
-    private async completeSubmittedResults(results: TransactionResult[], groupSucceeded: boolean): Promise<void> {
-        const cache = LocalCacheManager.Instance;
-        const owners = cache.IsInitialized ? this.entityProviders(results) : [];
-        for (const owner of owners) {
-            cache.BeginEntityEventBatch(owner);
+    private async runInTransactionResults(results: TransactionResult[], groupSucceeded: boolean): Promise<void> {
+        for (const result of results) {
+            const effectiveSuccess = groupSucceeded && result.Success;
+            await result.Transaction.CallBack(result.Result, effectiveSuccess);
         }
-        let completed = false;
-        try {
+        if (groupSucceeded) {
             for (const result of results) {
-                const effectiveSuccess = groupSucceeded && result.Success;
-                await result.Transaction.CallBack(result.Result, effectiveSuccess);
-            }
-            this.notifyTransactionStatus(groupSucceeded, results);
-            completed = true;
-        }
-        finally {
-            for (const owner of owners) {
-                await cache.EndEntityEventBatch(owner, groupSucceeded && completed);
+                if (!result.Success || result.Transaction.OperationType === 'Delete') {
+                    continue;
+                }
+                const hooks = this._inTransactionAfterSaveHooks.get(result.Transaction.BaseEntity);
+                if (hooks) {
+                    for (const hook of hooks) {
+                        await hook(result.Result);
+                    }
+                }
             }
         }
     }

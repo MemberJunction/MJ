@@ -71,7 +71,7 @@ export class FeatureValuesPanel extends BaseFormPanel implements OnInit {
                     Fields: ['ID', 'RecordProcessID', 'EntityID', 'RecordID', 'FeatureName', 'ValueText', 'ValueNumeric',
                         'ValueDate', 'ValueBoolean', 'ValueJSON', 'Reasoning', 'Confidence', 'ProcessRunID', 'ComputedAt',
                         'PipelineVersion', 'Source', 'RecordProcess'],
-                    ExtraFilter: `EntityID='${EscapeSQLString(entityID)}' AND RecordID='${EscapeSQLString(recordID)}'`,
+                    ExtraFilter: `EntityID='${EscapeSQLString(entityID)}' AND RecordID='${EscapeSQLString(recordID)}' AND Role='Champion'`,
                     OrderBy: 'ComputedAt DESC',
                     MaxRows: 500,
                     ResultType: 'simple',

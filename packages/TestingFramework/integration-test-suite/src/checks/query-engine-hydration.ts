@@ -53,10 +53,12 @@ function slotFor(config: BaseEnginePropertyConfig): QuerySlot | null {
     const includeBinary = config.IncludeBinaryFields === 'DatabaseProviderOnly'
         ? provider.ProviderType === ProviderType.Database
         : config.IncludeBinaryFields === true;
+    const rawFilter = config.Filter;
     const params: RunViewParams = {
         EntityName: config.EntityName,
         ResultType: config.ResultType || 'entity_object',
-        ExtraFilter: config.Filter,
+        ExtraFilter: typeof rawFilter === 'string' ? rawFilter : undefined,
+        ...(rawFilter != null && typeof rawFilter !== 'string' ? { Filter: rawFilter } : {}),
         OrderBy: config.OrderBy,
         IgnoreMaxRows: true,
         CacheLocal: config.CacheLocal,

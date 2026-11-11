@@ -10,14 +10,16 @@
  *
  */
 import { BaseEngineSweeper, CacheCategory, LocalCacheManager, LogError, LogStatusEx } from '@memberjunction/core';
-import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
+import type { CacheChangedEvent, ILocalStorageProvider, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
 import type { CacheSettingsConfig } from './config.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import type { CachePublishMode } from '@memberjunction/redis-provider';
+import type { CachePublishMode, RedisProviderConfig } from '@memberjunction/redis-provider';
+import * as RedisProviderModule from '@memberjunction/redis-provider';
 import { MJGlobal } from '@memberjunction/global';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { PUSH_STATUS_UPDATES_TOPIC, SetPushStatusPublishHook, ParseReplicatedStatusUpdate } from './generic/PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
@@ -40,7 +42,28 @@ export interface SharedCacheProviderOptions {
     Url: string;
     KeyPrefix: string;
     DefaultTTLSeconds?: number;
+    /** Longest a cache read waits before it is answered as a miss; 0 = no limit. */
+    ReadTimeoutMs?: number;
     EnableLogging: boolean;
+}
+
+/** Read timeout for the shared cache when neither config nor environment sets one. */
+export const DEFAULT_REDIS_READ_TIMEOUT_MS = 2000;
+
+/**
+ * Read timeout for the shared Redis cache: `REDIS_READ_TIMEOUT_MS` when it holds a non-negative
+ * integer, otherwise `cacheSettings.redisReadTimeoutMs`, otherwise {@link DEFAULT_REDIS_READ_TIMEOUT_MS}.
+ */
+export function ResolveRedisReadTimeoutMs(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const fromEnv = env.REDIS_READ_TIMEOUT_MS;
+  if (fromEnv !== undefined && fromEnv.trim() !== '') {
+    const parsed = Number(fromEnv);
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+    console.warn(`REDIS_READ_TIMEOUT_MS="${fromEnv}" is not a non-negative integer; ignoring it`);
+  }
+  return configured ?? DEFAULT_REDIS_READ_TIMEOUT_MS;
 }
 
 /**
@@ -60,7 +83,8 @@ export function ResolveSharedCacheTTLSeconds(configured: number | undefined, env
 }
 
 /**
- * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`),
+ * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`,
+ * `REDIS_READ_TIMEOUT_MS`),
  * or null. Built before the database provider so metadata and startup engines use it from the
  * first read.
  */
@@ -72,6 +96,7 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
         Url: env.REDIS_URL,
         KeyPrefix: env.REDIS_KEY_PREFIX || 'mj',
         DefaultTTLSeconds: ResolveSharedCacheTTLSeconds(settings?.sharedCacheTTLSeconds, env),
+        ReadTimeoutMs: ResolveRedisReadTimeoutMs(settings?.redisReadTimeoutMs, env),
         EnableLogging: settings?.verboseLogging ?? false,
     });
 }
@@ -182,18 +207,61 @@ export function StartUserCacheChecks(settings: CacheSettingsConfig | undefined):
     return intervalMs;
 }
 
+/** Extended configuration for Redis provider supporting hash storage for RunView slots. */
+export interface ExtendedRedisProviderConfig extends RedisProviderConfig {
+    useHashForRunViewSlots?: boolean;
+}
+
+/** Configuration options for optional TwoTierCacheStorageProvider from `@memberjunction/redis-provider`. */
+export interface TwoTierCacheStorageConfig {
+    MaxL1Bytes?: number;
+    CategoriesInL1?: ReadonlyArray<string>;
+}
+
+/** Structural type for optional TwoTierCacheStorageProvider constructor from `@memberjunction/redis-provider`. */
+type TwoTierStorageConstructor = new (
+    redisProvider: RedisLocalStorageProvider,
+    config?: TwoTierCacheStorageConfig
+) => ILocalStorageProvider;
+
+interface OptionalTwoTierModule {
+    RedisLocalStorageProvider: typeof RedisLocalStorageProvider;
+    TwoTierCacheStorageProvider?: TwoTierStorageConstructor;
+}
+
+/**
+ * Wraps a Redis shared cache provider in a two-tier L1 (in-memory LRU) + L2 (Redis) cache
+ * if `@memberjunction/redis-provider` exports `TwoTierCacheStorageProvider`.
+ * Falls back cleanly to the raw Redis provider if TwoTierCacheStorageProvider is not available.
+ */
+export function WrapSharedCacheWithL1(
+    redis: RedisLocalStorageProvider,
+    settings?: CacheSettingsConfig
+): ILocalStorageProvider {
+    const mod: OptionalTwoTierModule = RedisProviderModule;
+    if (typeof mod.TwoTierCacheStorageProvider === 'function' && typeof redis?.OnCacheChanged === 'function') {
+        const maxBytes = (settings?.maxMemoryMB ?? 150) * 1024 * 1024;
+        return new mod.TwoTierCacheStorageProvider(redis, {
+            MaxL1Bytes: maxBytes,
+        });
+    }
+    return redis;
+}
+
 /** Builds the Redis provider MJAPI uses as its shared cache. Pub/sub starts with {@link WireSharedCacheEvents}. */
 export function CreateSharedCacheProvider(options: SharedCacheProviderOptions): RedisLocalStorageProvider {
-    // The provider's own config keys stay as the package declares them.
-    return new RedisLocalStorageProvider({
+    const config: ExtendedRedisProviderConfig = {
         url: options.Url,
         keyPrefix: options.KeyPrefix,
         defaultTTLSeconds: options.DefaultTTLSeconds,
+        readTimeoutMs: options.ReadTimeoutMs,
         enablePubSub: true,
         enableLogging: options.EnableLogging,
         publishModes: MJAPI_PUBLISH_MODES,
         defaultPublishMode: 'none',
-    });
+        useHashForRunViewSlots: true,
+    };
+    return new RedisLocalStorageProvider(config);
 }
 
 /**
@@ -229,6 +297,9 @@ export function RouteSharedCacheEvent(event: CacheChangedEvent, metadataProvider
  */
 function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     if (event.Category !== CacheCategory.RunViewCache || event.Action === 'category_cleared') {
+        return;
+    }
+    if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation === 'function') {
         return;
     }
     const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';

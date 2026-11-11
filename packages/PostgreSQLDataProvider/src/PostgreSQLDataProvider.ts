@@ -26,6 +26,7 @@ import {
     EntitySaveOptions,
     GetDiagnosticContext,
     IsDiagnosticCaptureSuppressed,
+    RunViewWithCacheCheckParams,
 } from '@memberjunction/core';
 
 
@@ -38,6 +39,8 @@ import {
     DescribeStatementFailure,
     SummarizeSqlParameters,
     FormatSqlParameterTypesForError,
+    ExecuteSQLBatchOptions,
+    NamedQueryParameter,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -367,6 +370,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             parent.ExcludeSchemas,
             false,
         );
+        cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+        cfg.DeltaUpdates = this.DeltaUpdates;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -622,6 +627,315 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         } finally {
             await this.releaseOwnConnection(client);
         }
+    }
+
+    /**
+     * Executes multiple SQL queries on a single connection and returns an array of result arrays,
+     * one per query. Overrides GenericDatabaseProvider.ExecuteSQLBatch to avoid checking out multiple
+     * connections from the pool in parallel.
+     *
+     * - Empty `queries`: returns `[]` immediately without checking out any connection.
+     * - Single query: delegates to `ExecuteSQL` and wraps in a single-element array.
+     * - Multiple queries without parameters: joins statements with `\n;\n` to prevent trailing `--`
+     *   comments from swallowing subsequent tokens, executing in a single network round-trip on one
+     *   connection.
+     * - Multiple queries with parameters: executes sequentially on the same checked-out connection.
+     * - Always releases checked-out connections in a `finally` block to prevent pool starvation.
+     */
+    public override async ExecuteSQLBatch(
+        queries: string[],
+        parameters?: unknown[][] | ExecuteSQLBatchOptions,
+        options?: ExecuteSQLBatchOptions | UserInfo,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> {
+        if (!queries || queries.length === 0) {
+            return [];
+        }
+
+        let actualParams: unknown[][] | undefined;
+        let actualOptions: ExecuteSQLBatchOptions | undefined;
+        let actualUser: UserInfo | undefined;
+
+        if (Array.isArray(parameters)) {
+            actualParams = parameters;
+            actualOptions = options as ExecuteSQLBatchOptions | undefined;
+            actualUser = contextUser;
+        } else if (parameters && typeof parameters === 'object' && !('length' in parameters)) {
+            actualParams = undefined;
+            actualOptions = parameters as ExecuteSQLBatchOptions;
+            actualUser = options as UserInfo | undefined;
+        } else {
+            actualParams = undefined;
+            actualOptions = options as ExecuteSQLBatchOptions | undefined;
+            actualUser = contextUser;
+        }
+
+        if (queries.length === 1) {
+            const execOptions: ExecuteSQLOptions | undefined = actualOptions ? {
+                description: actualOptions.description,
+                ignoreLogging: actualOptions.ignoreLogging,
+                isMutation: actualOptions.isMutation,
+                ignoreAmbientTransaction: actualOptions.ignoreAmbientTransaction,
+            } : undefined;
+            const singleParam = actualParams?.[0];
+            const singleResult = await this.ExecuteSQL<Record<string, unknown>>(
+                queries[0],
+                singleParam,
+                execOptions,
+                actualUser,
+            );
+            return [singleResult];
+        }
+
+        const optionsConnectionSource = (actualOptions as ExecuteSQLOptions | undefined)?.connectionSource as {
+            query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }>;
+        } | undefined;
+
+        const joinsAmbient = !actualOptions?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+        if (joinsAmbient) {
+            this.AssertAmbientTransactionUsable();
+        }
+
+        let client: pg.PoolClient | { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> } | null = null;
+        const shouldRelease = !joinsAmbient && !optionsConnectionSource;
+
+        try {
+            if (optionsConnectionSource) {
+                client = optionsConnectionSource;
+            } else if (joinsAmbient) {
+                client = this._transaction!;
+            } else {
+                client = await this._connectionManager.AcquireClient();
+            }
+
+            const hasParams = actualParams !== undefined && actualParams.some((p) => p && p.length > 0);
+            if (hasParams) {
+                return await this.executeSequentialBatchOnClient(client, queries, actualParams, actualOptions, actualUser);
+            }
+
+            return await this.executeMultiStatementBatchOnClient(client, queries, actualOptions, actualUser);
+        } finally {
+            if (shouldRelease && client) {
+                await this.releaseOwnConnection(client as pg.PoolClient);
+            }
+        }
+    }
+
+    private async executeSequentialBatchOnClient(
+        client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> },
+        queries: string[],
+        parameters: unknown[][] | undefined,
+        options: ExecuteSQLBatchOptions | undefined,
+        contextUser: UserInfo | undefined,
+    ): Promise<Record<string, unknown>[][]> {
+        const results: Record<string, unknown>[][] = [];
+        for (let i = 0; i < queries.length; i++) {
+            const q = queries[i];
+            const p = parameters?.[i];
+            const quotedQuery = this.AutoQuoteIdentifiers(q);
+            const processedParams = PGQueryParameterProcessor.ProcessParameters(p);
+            const execOptions: ExecuteSQLOptions | undefined = options ? {
+                description: options.description ? `${options.description} [${i + 1}/${queries.length}]` : undefined,
+                ignoreLogging: options.ignoreLogging,
+                isMutation: options.isMutation,
+                ignoreAmbientTransaction: options.ignoreAmbientTransaction,
+            } : undefined;
+            const rows = await this.ExecuteObservedQuery<Record<string, unknown>>(
+                client,
+                quotedQuery,
+                processedParams,
+                execOptions,
+                contextUser,
+            );
+            results.push(rows);
+        }
+        return results;
+    }
+
+    private async executeMultiStatementBatchOnClient(
+        client: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+        queries: string[],
+        options: ExecuteSQLBatchOptions | undefined,
+        contextUser: UserInfo | undefined,
+    ): Promise<Record<string, unknown>[][]> {
+        const quotedQueries = queries.map((q) => this.AutoQuoteIdentifiers(q));
+        const formattedQueries = quotedQueries.map((q) => {
+            const trimmed = q.trim();
+            return trimmed.endsWith(';') ? `${trimmed}\n` : `${trimmed}\n;\n`;
+        });
+        const combinedSql = formattedQueries.join('');
+        const startTime = performance.now();
+        try {
+            const rawResult = await client.query(combinedSql);
+            const durationMs = performance.now() - startTime;
+            const resultSets: Array<{ rows?: unknown[]; rowCount?: number | null }> = Array.isArray(rawResult)
+                ? (rawResult as Array<{ rows?: unknown[]; rowCount?: number | null }>)
+                : [rawResult as { rows?: unknown[]; rowCount?: number | null }];
+
+            const totalRowCount = resultSets.reduce(
+                (sum, r) => sum + (Array.isArray(r?.rows) ? r.rows.length : (typeof r?.rowCount === 'number' ? r.rowCount : 0)),
+                0,
+            );
+
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: combinedSql,
+                    parameterSummaries: [],
+                    durationMs,
+                    rowCount: totalRowCount,
+                    isMutation: options?.isMutation ?? false,
+                    description: options?.description ?? 'ExecuteSQLBatch',
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+
+            if (!options?.ignoreLogging && this.HasActiveSqlLoggingSessions) {
+                await this._logSqlStatement(
+                    combinedSql,
+                    undefined,
+                    options?.description ?? 'ExecuteSQLBatch',
+                    options?.ignoreLogging ?? false,
+                    options?.isMutation ?? false,
+                    undefined,
+                    contextUser,
+                );
+            }
+
+            if (Array.isArray(rawResult)) {
+                return resultSets.map((r) => ((r?.rows ?? []) as Record<string, unknown>[]));
+            }
+
+            return queries.map(() => ((resultSets[0]?.rows ?? []) as Record<string, unknown>[]));
+        } catch (err) {
+            const durationMs = performance.now() - startTime;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: combinedSql,
+                    parameterSummaries: [],
+                    durationMs,
+                    rowCount: 0,
+                    isMutation: options?.isMutation ?? false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                    description: options?.description ?? 'ExecuteSQLBatch',
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            const desc = options?.description ? ` [${options.description}]` : '';
+            LogError(`PostgreSQLDataProvider.ExecuteSQLBatch failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
+        }
+    }
+
+    /**
+     * Executes server cache status checks for multiple views in a single UNION ALL query
+     * over 1 network round-trip instead of K separate pool connections.
+     * If any query has bound parameters or the UNION ALL query fails, falls back to the
+     * base class per-item execution.
+     */
+    protected override async getBatchedServerCacheStatus(
+        items: Array<{
+            index: number;
+            item: RunViewWithCacheCheckParams;
+            entityInfo: EntityInfo;
+            whereSQL: string;
+            queryParameters?: NamedQueryParameter[];
+        }>,
+        contextUser?: UserInfo,
+    ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+        const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+        if (!items || items.length === 0) {
+            return results;
+        }
+
+        // Parameterized cache status queries fall back to individual execution
+        if (items.some((it) => it.queryParameters && it.queryParameters.length > 0)) {
+            return await super.getBatchedServerCacheStatus(items, contextUser);
+        }
+
+        const validItems: Array<{
+            index: number;
+            entityInfo: EntityInfo;
+            effectiveTarget: { viewName: string; schemaName: string };
+            whereSQL: string;
+        }> = [];
+
+        for (const entry of items) {
+            const { index, item, entityInfo, whereSQL } = entry;
+            try {
+                const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+                validItems.push({
+                    index,
+                    entityInfo,
+                    effectiveTarget,
+                    whereSQL,
+                });
+            } catch (err) {
+                results.set(index, {
+                    success: false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+
+        if (validItems.length === 0) {
+            return results;
+        }
+
+        const branches = validItems.map(({ index, entityInfo, effectiveTarget, whereSQL }) => {
+            const schema = effectiveTarget.schemaName || entityInfo.SchemaName || this._schemaName;
+            const view = effectiveTarget.viewName;
+            const from = `FROM ${this.QuoteSchemaAndView(schema, view)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+            const hasUpdatedAt = entityInfo.Fields?.some((f) => f.IsUpdatedAtField);
+            const maxUpdatedCol = hasUpdatedAt
+                ? `MAX(${this.QuoteIdentifier('__mj_UpdatedAt')})::timestamptz`
+                : 'CAST(NULL AS timestamptz)';
+            return `SELECT ${index} AS "ItemIndex", COUNT(*) AS "TotalRows", ${maxUpdatedCol} AS "MaxUpdatedAt" ${from}`;
+        });
+
+        const unionSql = branches.map((b) => `(${b})`).join('\nUNION ALL\n');
+
+        try {
+            const rows = await this.ExecuteSQL<Record<string, unknown>>(
+                unionSql,
+                undefined,
+                { description: 'Batched server cache status check', ignoreLogging: true },
+                contextUser,
+            );
+
+            const rowMap = new Map<number, Record<string, unknown>>();
+            for (const row of rows) {
+                const idx = Number(row['ItemIndex']);
+                rowMap.set(idx, row);
+            }
+
+            for (const { index } of validItems) {
+                const row = rowMap.get(index);
+                if (row) {
+                    const totalRows = Number(row['TotalRows'] ?? 0);
+                    const rawUpdatedAt = row['MaxUpdatedAt'];
+                    const maxUpdatedAt = rawUpdatedAt
+                        ? new Date(rawUpdatedAt as Date | string).toISOString()
+                        : undefined;
+                    results.set(index, {
+                        success: true,
+                        rowCount: totalRows,
+                        maxUpdatedAt,
+                    });
+                } else {
+                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+                }
+            }
+        } catch {
+            // One bad view or error fails the UNION ALL batch.
+            // Fall back to super (individual queries) so a single bad entity doesn't break the entire sweep.
+            return await super.getBatchedServerCacheStatus(items, contextUser);
+        }
+
+        return results;
     }
 
     /**
@@ -1148,6 +1462,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Reads the target record's physical columns from `"schema"."BaseTable" WHERE ... FOR UPDATE`
+     * inside the save transaction so concurrent writers serialize on the row lock before `spUpdate*`
+     * executes. Queries `BaseTable` directly because PostgreSQL does not allow `FOR UPDATE` on views
+     * containing `LEFT JOIN`s.
+     */
+    protected override RenderLockedRowReadSQL(
+        entityInfo: EntityInfo,
+        pkWhereClause: string,
+        columns: string[],
+    ): string | null {
+        if (columns.length === 0 || !pkWhereClause || !entityInfo.BaseTable) {
+            return null;
+        }
+        const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+        const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable);
+        return `SELECT ${selectCols} FROM ${tableRef} WHERE ${pkWhereClause} FOR UPDATE`;
+    }
+
+    /**
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
@@ -1470,12 +1803,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
+            // Negative lookbehind (?<!\$): don't quote $1 parameter tokens whose identifier
+            // part might match a numeric/field pattern (BindExtraFilterParameters rewrites
+            // @paramName to $1 before TransformExternalSQLClause runs; on PostgreSQL, @ is the
+            // unary absolute-value operator, so @FieldName must still quote "FieldName").
             // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
             // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);

@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Comments",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Comments&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:57.420Z",
+      "checksum": "8cca6a7185c20d9189bde1d7d4aec6921193551fc3eddd974511840ab6a71d83"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Field Suggestions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Field Suggestions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"
+    },
+    "sync": {
+      "lastModified": "2026-11-10T23:41:57.443Z",
+      "checksum": "2bd5f7cdc6c262f9c705b7fa65edbf2cedca659c3df6ac2c22f51a10f407ef08"
+    }
+  }
+]

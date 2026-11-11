@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S4.1",
+    "Description": "Gate G2.19 (phase 2, dataset C2, criterion S4.1): on C2 (2% fraud) log loss, not accuracy, ranks and gates: a near-constant candidate listed first ranks above 0 candidates whose inner log-loss interval lies below its own, the finalist's holdout log loss beats the constant predictor's, and the gate does not end no-signal, 1 of 1. It fails when candidate selection ranks the inner folds by accuracy instead of log loss (the near-constant candidate becomes the finalist).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.19\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S4.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "On C2 the near-constant candidate ranks above no candidate with a better inner log loss; the finalist beats the constant predictor on holdout log loss (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s4-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "4AC1A08F-C924-4BBB-A0C3-A2B36B749654"
+  }
+}

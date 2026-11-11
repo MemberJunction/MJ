@@ -1,11 +1,26 @@
 <mj-page-layout>
     <mj-page-header
         Title="Governance"
-        Subtitle="How much your Chief of Staff may do on its own, and what needs your approval"
+        [Subtitle]="'How much ' + SelectedAgentDisplayName + ' may do on its own, and what needs your approval'"
         Icon="fa-solid fa-shield-halved">
 
 
         <ng-container toolbar>
+            @if (AvailableAgents.length > 0) {
+                <div class="cos-agent-picker">
+                    <span class="cos-agent-picker__label">
+                        <i class="fa-solid fa-robot"></i> Agent
+                    </span>
+                    <mj-dropdown
+                        [Data]="AvailableAgents"
+                        TextField="Name"
+                        ValueField="ID"
+                        [ValuePrimitive]="true"
+                        [(ngModel)]="SelectedAgentID"
+                        (ValueChange)="OnSelectedAgentSelectionChanged()">
+                    </mj-dropdown>
+                </div>
+            }
             <mj-refresh-button
                 [Loading]="IsLoading"
                 [ShowLabel]="true"
@@ -41,10 +56,10 @@
                 <div class="cos-governance-header">
                     <div>
                         <h3 class="cos-governance-header__title">
-                            <i class="fa-solid fa-shield-halved"></i> Chief of Staff Governance Policy
+                            <i class="fa-solid fa-shield-halved"></i> {{ SelectedAgentName }} Governance Policy
                         </h3>
                         <p class="cos-governance-header__subtitle">
-                            Backed by <code>MJ: AI Agent User Policies</code> — controls coordination autonomy, communication channels, and approval guardrails for your Chief of Staff.
+                            Backed by <code>MJ: AI Agent User Policies</code> — controls coordination autonomy, communication channels, and approval guardrails for {{ SelectedAgentDisplayName }}.
                         </p>
                     </div>
                     <div class="cos-governance-header__actions">

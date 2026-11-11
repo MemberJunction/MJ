@@ -541,3 +541,204 @@ describe('convertFile (BatchConverter)', () => {
     expect(result.OutputSQL).not.toMatch(/^\s*p_B_aa :=/m);
   });
 });
+
+// ============================================================
+// Issue #5364 — Open App migrations (non-__mj schema) through the legacy converter.
+// Each case is a small T-SQL input shaped like the bizapps-accounting migrations that
+// reproduced the defect, converted with the app's schema as --schema.
+// ============================================================
+describe('Open App migrations (issue #5364)', () => {
+  const APP = '__mj_BizAppsAccounting';
+  const convert = (sql: string) => ConvertFile(makeConfig(sql, { Schema: APP }));
+
+  it('item 1: built-ins in CHECK constraints and OBJECT_ID guards are not quoted identifiers', () => {
+    const sql = [
+      "ALTER TABLE ${flyway:defaultSchema}.[Account] ADD CONSTRAINT [CK_Account_Code_Trim] CHECK (LEN(LTRIM(RTRIM([Code]))) > 0);",
+      'GO',
+      "IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Account_Upper' AND parent_object_id = OBJECT_ID('${flyway:defaultSchema}.Account'))",
+      'BEGIN',
+      '  ALTER TABLE ${flyway:defaultSchema}.[Account] ADD CONSTRAINT [CK_Account_Upper] CHECK ([Code] = UPPER([Code]));',
+      'END',
+      'GO',
+    ].join('\n');
+    const out = convert(sql).OutputSQL;
+    expect(out).toContain('CHECK (LENGTH(LTRIM(RTRIM("Code"))) > 0)');
+    expect(out).toContain('CHECK ("Code" = UPPER("Code"))');
+    expect(out).toContain(`conrelid = to_regclass('${APP}."Account"')`);
+    expect(out).not.toMatch(/"(?:UPPER|LTRIM|RTRIM|LEN|OBJECT_ID)"\(/);
+    expect(out).not.toContain('parent_object_id');
+  });
+
+  it('item 2: a LIKE character class becomes a regex instead of a CHECK that accepts everything', () => {
+    const sql = "ALTER TABLE ${flyway:defaultSchema}.[Account] ADD CONSTRAINT [CK_Account_Code_Chars] CHECK ([Code] NOT LIKE '%[^A-Z0-9_-]%');";
+    const out = convert(sql).OutputSQL;
+    expect(out).toContain(`CHECK ("Code" !~ '[^A-Z0-9_-]')`);
+    expect(out).not.toContain('LIKE');
+  });
+
+  it('item 3: an IF COL_LENGTH(...) IS NULL column add is translated and lands before its backfill and CHECK', () => {
+    const sql = [
+      "IF COL_LENGTH('${flyway:defaultSchema}.GLAccountRole', 'Cardinality') IS NULL",
+      'BEGIN',
+      '    ALTER TABLE ${flyway:defaultSchema}.GLAccountRole',
+      "        ADD Cardinality NVARCHAR(10) NOT NULL CONSTRAINT DF_GLAccountRole_Cardinality DEFAULT 'One';",
+      'END',
+      'GO',
+      "UPDATE ${flyway:defaultSchema}.GLAccountRole SET Cardinality = 'One' WHERE Cardinality IS NULL;",
+      'GO',
+      "ALTER TABLE ${flyway:defaultSchema}.GLAccountRole ADD CONSTRAINT CK_GLAccountRole_Cardinality CHECK (Cardinality IN ('One', 'Many'));",
+      'GO',
+    ].join('\n');
+    const out = convert(sql).OutputSQL;
+    expect(out).not.toContain('COL_LENGTH');
+    expect(out).toContain(`attrelid = to_regclass('${APP}."GLAccountRole"') AND attname = 'Cardinality'`);
+    expect(out).toContain('ADD "Cardinality" VARCHAR(10) NOT NULL');
+    // The backfill names the schema unquoted, like the CREATE SCHEMA that made it.
+    expect(out).toContain(`UPDATE ${APP}."GLAccountRole"`);
+    const add = out.indexOf('ADD "Cardinality"');
+    expect(add).toBeGreaterThan(-1);
+    expect(add).toBeLessThan(out.indexOf(`UPDATE ${APP}."GLAccountRole"`));
+    expect(add).toBeLessThan(out.indexOf('CK_GLAccountRole_Cardinality'));
+  });
+
+  it('item 4: a mid-batch DECLARE @X = (SELECT ...) is inlined where it is used', () => {
+    const sql = [
+      "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='', @IncludedSchemaNames='${flyway:defaultSchema}';",
+      '',
+      'DECLARE @JournalEntryEntityID UNIQUEIDENTIFIER =',
+      "    (SELECT [ID] FROM [${mjSchema}].[Entity] WHERE [Name] = 'Journal Entries');",
+      "IF @JournalEntryEntityID IS NULL RAISERROR('Journal Entries entity not registered', 16, 1);",
+      '',
+      "IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[EntityField] WHERE [EntityID] = @JournalEntryEntityID AND [Name] = 'Score')",
+      'BEGIN',
+      '   INSERT INTO [${mjSchema}].[EntityField] ([ID], [EntityID], [Name])',
+      "   VALUES ('65A6D82B-E0F2-441C-B528-D02FD788CBA5', @JournalEntryEntityID, 'Score')",
+      'END;',
+      'GO',
+    ].join('\n');
+    const result = convert(sql);
+    const out = result.OutputSQL;
+    expect(out).not.toMatch(/@"?JournalEntryEntityID/);
+    expect(out).toContain(`"EntityID" = (SELECT "ID" FROM \${mjSchema}."Entity" WHERE "Name" = 'Journal Entries')`);
+    expect(out).toContain("RAISE EXCEPTION 'Journal Entries entity not registered'");
+    // the assertion runs in order with the data statements, ahead of the insert that relies on it
+    expect(out.indexOf('RAISE EXCEPTION')).toBeLessThan(out.indexOf('INSERT INTO'));
+  });
+
+  it('item 4: a guard over an inlined variable keeps its nested IF NOT EXISTS blocks as PL/pgSQL', () => {
+    const sql = [
+      "EXEC [${mjSchema}].[spSetDefaultColumnWidthWhereNeeded] @ExcludedSchemaNames='';",
+      'DECLARE @BandFieldID UNIQUEIDENTIFIER = (',
+      "   SELECT ID FROM [${mjSchema}].[EntityField] WHERE [Name] = 'RiskBand'",
+      ');',
+      'IF @BandFieldID IS NOT NULL',
+      'BEGIN',
+      "   IF NOT EXISTS (SELECT 1 FROM [${mjSchema}].[EntityFieldValue] WHERE [EntityFieldID] = @BandFieldID AND [Value] = 'High')",
+      '   BEGIN',
+      '      INSERT INTO [${mjSchema}].[EntityFieldValue] ([ID], [EntityFieldID], [Value])',
+      "      VALUES ('463cca8d-b9c3-4942-8140-a70fbfd74650', @BandFieldID, 'High');",
+      '   END;',
+      "   UPDATE [${mjSchema}].[EntityField] SET ValueListType='List' WHERE ID = @BandFieldID;",
+      'END;',
+      'GO',
+    ].join('\n');
+    const out = convert(sql).OutputSQL;
+    expect(out).not.toMatch(/@"?BandFieldID/);
+    expect(out).toMatch(/IF NOT EXISTS \(SELECT 1 FROM \$\{mjSchema\}\."EntityFieldValue"[^\n]*\) THEN/);
+    expect(out).toContain('END IF;');
+    expect(out).not.toMatch(/^\s*BEGIN\s*$\n\s*INSERT/m);
+    expect(out).toContain(`SET "ValueListType"='List'`);
+  });
+
+  it('item 5: Length= and Precision= in a CodeGen EntityField UPDATE are quoted like every other column', () => {
+    const sql = [
+      'UPDATE [${mjSchema}].[EntityField]',
+      "   SET IsVirtual = 1, Type='nvarchar', Length=100, Precision=0, Scale=0",
+      "   WHERE ID='B79E7941-2AA9-4761-BEB7-9ABF2A98C0AD'",
+      'GO',
+    ].join('\n');
+    const out = convert(sql).OutputSQL;
+    expect(out).toContain('"Length"=100');
+    expect(out).toContain('"Precision"=0');
+    expect(out).toContain('"Scale"=0');
+  });
+
+  it('item 7: a hand-written CREATE OR ALTER TRIGGER is commented out whole and counted as a gap', () => {
+    const sql = [
+      'CREATE OR ALTER TRIGGER __mj_BizAppsAccounting.trg_JournalEntry_BalancedOnLock',
+      'ON __mj_BizAppsAccounting.JournalEntry',
+      'AFTER INSERT, UPDATE',
+      'AS',
+      'BEGIN',
+      '    SET NOCOUNT ON;',
+      "    IF NOT UPDATE(Status) AND NOT EXISTS (SELECT 1 FROM inserted WHERE Status IN ('Batched'))",
+      '        RETURN;',
+      "    IF EXISTS (SELECT 1 FROM inserted i WHERE i.Status = 'Batched')",
+      '    BEGIN',
+      "        THROW 50001, 'Unbalanced entry.', 1;",
+      '    END;',
+      'END;',
+      'GO',
+    ].join('\n');
+    const result = convert(sql);
+    const live = result.OutputSQL.split('\n').filter(l => l.trim() && !l.trim().startsWith('--'));
+    expect(live).toEqual([]);
+    expect(result.OutputSQL).toContain('-- NEEDS HAND AUTHORING: trigger');
+    expect(result.OutputSQL).toContain("--         THROW 50001, 'Unbalanced entry.', 1;");
+    expect(result.Stats.Gaps).toBe(1);
+  });
+
+  it('item 8: CodeGen CRUD procedures and the UpdatedAt trigger convert in the app schema', () => {
+    const sql = [
+      'CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGLAccountRole]',
+      '    @ID uniqueidentifier',
+      'AS',
+      'BEGIN',
+      '    SET NOCOUNT ON;',
+      '    DELETE FROM [${flyway:defaultSchema}].[GLAccountRole] WHERE [ID] = @ID',
+      '    IF @@ROWCOUNT = 0',
+      '        SELECT NULL AS [ID]',
+      '    ELSE',
+      '        SELECT @ID AS [ID]',
+      'END',
+      'GO',
+      'CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGLAccountRole',
+      'ON [${flyway:defaultSchema}].[GLAccountRole]',
+      'AFTER UPDATE',
+      'AS',
+      'BEGIN',
+      '    SET NOCOUNT ON;',
+      '    UPDATE [${flyway:defaultSchema}].[GLAccountRole]',
+      '    SET __mj_UpdatedAt = GETUTCDATE()',
+      '    FROM [${flyway:defaultSchema}].[GLAccountRole] AS _organicTable',
+      '    INNER JOIN INSERTED AS I ON _organicTable.[ID] = I.[ID];',
+      'END;',
+      'GO',
+    ].join('\n');
+    const result = convert(sql);
+    const out = result.OutputSQL;
+    expect(out).not.toContain('SKIPPED');
+    expect(out).toContain(`CREATE OR REPLACE FUNCTION ${APP}."spDeleteGLAccountRole"(`);
+    expect(out).toContain(`DELETE FROM ${APP}."GLAccountRole"`);
+    expect(out).toContain(`pronamespace = '${APP}'::regnamespace`);
+    expect(out).toContain(`CREATE OR REPLACE FUNCTION ${APP}."trgUpdateGLAccountRole_func"()`);
+    expect(out).toContain(`BEFORE UPDATE ON ${APP}."GLAccountRole"`);
+    expect(out).not.toMatch(/(?<![\w"])__mj\./);
+    expect(result.Stats.Gaps).toBe(0);
+  });
+
+  it('item 8: a hand-written app procedure is a counted gap, not a silent skip', () => {
+    const sql = [
+      'CREATE PROCEDURE [${flyway:defaultSchema}].[spAssignNextBatchNumber]',
+      '    @Next INT OUTPUT',
+      'AS',
+      'BEGIN',
+      '    UPDATE [${flyway:defaultSchema}].[Sequence] SET @Next = NextValue = NextValue + 1;',
+      'END',
+      'GO',
+    ].join('\n');
+    const result = convert(sql);
+    expect(result.OutputSQL).toContain('-- NEEDS HAND AUTHORING: procedure');
+    expect(result.Stats.Gaps).toBe(1);
+  });
+});

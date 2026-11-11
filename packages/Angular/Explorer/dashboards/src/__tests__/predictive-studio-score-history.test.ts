@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PredictiveStudioScoreHistoryService } from '../PredictiveStudio/predictive-studio-score-history.service';
 import type { EntityInfo, IMetadataProvider, RunView, RunViewParams, RunViewResult, BaseEntity, UserInfo } from '@memberjunction/core';
 
@@ -106,9 +106,11 @@ describe('PredictiveStudioScoreHistoryService', () => {
     expect(service.Fake.Requests[0].ExtraFilter).not.toContain('ProcessRunID IN');
   });
 
-  it('returns an empty history when the read fails', async () => {
+  it('returns an empty history when the read fails, and logs the read error', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { result } = load([], { failWith: 'Timeout expired' });
     expect(await result).toEqual([]);
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('LoadRecordScoreHistory: Timeout expired')]);
   });
 
   it('inverts driver up polarity when InvertedRisk is true (F8)', async () => {

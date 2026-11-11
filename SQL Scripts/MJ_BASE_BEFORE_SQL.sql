@@ -148,24 +148,41 @@ GO
 
 DROP VIEW IF EXISTS [__mj].[vwTableUniqueKeys]
 GO
+-- One row per KEY column of every enabled unique index/constraint (#4536). Disabled and
+-- hypothetical indexes enforce nothing, so they are left out; INCLUDE columns are not keys.
 CREATE VIEW [__mj].[vwTableUniqueKeys] AS
 SELECT
     s.name AS SchemaName,
     t.name AS TableName,
-    c.name AS ColumnName
-FROM 
+    c.name AS ColumnName,
+    i.name AS IndexName,
+    CAST(ic.key_ordinal AS INT) AS KeyOrdinal,
+    kc.KeyColumnCount,
+    i.has_filter AS IsFiltered,
+    i.filter_definition AS FilterDefinition
+FROM
     sys.tables t
-INNER JOIN 
+INNER JOIN
     sys.schemas s ON t.schema_id = s.schema_id
-INNER JOIN 
+INNER JOIN
     sys.indexes i ON t.object_id = i.object_id
-INNER JOIN 
+INNER JOIN
     sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-INNER JOIN 
+INNER JOIN
     sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
-WHERE 
+CROSS APPLY (
+    SELECT COUNT(*) AS KeyColumnCount
+    FROM sys.index_columns k
+    WHERE k.object_id = i.object_id
+      AND k.index_id = i.index_id
+      AND k.is_included_column = 0
+) kc
+WHERE
     i.is_unique = 1
-    AND i.is_primary_key = 0;
+    AND i.is_primary_key = 0
+    AND i.is_disabled = 0
+    AND i.is_hypothetical = 0
+    AND ic.is_included_column = 0;
 GO
 
 
@@ -1252,8 +1269,10 @@ BEGIN
         re.ID AS RelatedEntityID,
         fk.referenced_column AS RelatedEntityFieldName,
         CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
+        -- IsUnique: the column alone is the primary key, or alone is the key of an unfiltered
+        -- unique index/constraint (#4536). Composite keys are recorded in EntityUniqueKey.
         CASE 
-            WHEN pk.ColumnName IS NOT NULL THEN 1 
+            WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1 
             ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
@@ -1279,13 +1298,18 @@ BEGIN
         re.BaseTable = fk.referenced_table AND
         re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN 
-        [__mj].vwTablePrimaryKeys pk
+        (SELECT SchemaName, TableName, ColumnName,
+                COUNT(*) OVER (PARTITION BY SchemaName, TableName) AS KeyColumnCount
+         FROM [__mj].vwTablePrimaryKeys) pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN 
-        [__mj].vwTableUniqueKeys uk
+        (SELECT DISTINCT SchemaName, TableName, ColumnName
+         FROM [__mj].vwTableUniqueKeys
+         WHERE KeyColumnCount = 1
+           AND IsFiltered = 0) uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -1315,7 +1339,7 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
           ef.IsUnique <> CASE
-              WHEN pk.ColumnName IS NOT NULL THEN 1
+              WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
           END OR
           -- Detect AllowUpdateAPI that needs clearing on virtual transition
@@ -1627,7 +1651,7 @@ GO
 
 
 -- spDeleteEntityWithCoreDependencies is no longer defined here. Its current definition ships
--- only in migrations (latest: migrations/v6/V202610261530__v6.2.x__CodeGen_EntityField_Drift_Repairs.sql).
+-- only in migrations (latest: migrations/v6/V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql).
 -- The body that used to live here predated the FK coverage and transaction handling, so running
 -- this script would have replaced the migrated proc with an older, weaker one.
 

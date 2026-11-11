@@ -58,6 +58,7 @@ import {
     IsVectorizableEntity,
     SuggestedMatchThresholds,
     TemplateFieldCapRefusal,
+    SelectedTemplateFieldPaths,
 } from './vector-document-rules';
 
 /** Flattened row for the entity sync table */
@@ -169,12 +170,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Parse {{ FieldName }} patterns from the edit panel's template */
     public get EditDocSelectedFields(): string[] {
-        if (!this.EditDocTemplate) return [];
-        const matches = this.EditDocTemplate.match(/\{\{\s*(\w+(?:\.\w+)*)\s*\}\}/g);
-        if (!matches) return [];
-        return [...new Set(
-            matches.map(m => m.replace(/\{\{\s*/, '').replace(/\s*\}\}/, ''))
-        )];
+        return SelectedTemplateFieldPaths(this.EditDocTemplate);
     }
 
     // --- Zero Vector Indexes Warning ---
@@ -851,7 +847,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             // Step 2: Subscribe to progress updates and also set a safety timeout
             // in case the subscription misses events (race condition, network issue, etc.)
-            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity);
+            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity ?? doc.Name);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             console.error(`[VectorManagement] Error starting sync for ${entityDocumentId}:`, msg);

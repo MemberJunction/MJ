@@ -14,6 +14,9 @@
  *   RLS5 — a live RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate (real scoping)
  *   RLS6 — empty effective clause shares the slot / non-empty diverges (always-runnable fingerprint invariant)
  *   RLS7 — client smart-cache validation does not cross-serve User A's slot to User B (client transport)
+ *   RLS13 — a seeded user with a filtered + an unfiltered role (and a Deny row) gets exactly the filtered
+ *           predicate, and that predicate is in the SQL sent to the database
+ *   RLS14 — that user's live row set is exactly its own rows
  *
  * The mechanism under test is already in the product: ProviderBase computes a per-user
  * RLS WHERE clause (EntityInfo.GetUserRowLevelSecurityWhereClause) and threads it as
@@ -39,8 +42,9 @@
  */
 import { RunView, LocalCacheManager, EntityPermissionType } from '@memberjunction/core';
 import { RowLevelSecurityFilterInfo } from '@memberjunction/core';
-import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams, ExecuteSQLOptions, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { GenericDatabaseProvider, UserCache } from '@memberjunction/generic-database-provider';
 import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, RlsFixture } from '@memberjunction/testing-integration';
@@ -477,6 +481,202 @@ export async function CheckRls11_DollarInUserProperty(ctx: IntegrationCheckConte
     return CheckRls11DollarInUserProperty(ctx);
 }
 
+/**
+ * The seeded mixed-role fixture (metadata-optional/integration-test): one user holding a FILTERED
+ * role and an UNFILTERED role on the same entity, where the unfiltered role also carries a Deny row.
+ *   - 'Integration Test: RLS Mixed Filtered'   — Allow Read, bound to MIXED_RLS_FILTER.
+ *   - 'Integration Test: RLS Mixed Unfiltered' — Allow Create with no filter (grants no Read), plus a
+ *     Deny row on Create that cancels it.
+ * `MJ: User Roles` is the entity because every user owns rows in it (this user owns exactly its two
+ * role assignments), so the narrowed row set can be compared with the full one on any database.
+ */
+const SEEDED_MIXED_EMAIL = 'it-rls-mixed@integration.test';
+const MIXED_RLS_ENTITY = 'MJ: User Roles';
+const MIXED_RLS_FILTER = 'Integration Test: Own Rows by UserID';
+const MIXED_ROLE_ASSIGNMENTS = 2;
+
+/** The seeded mixed-role user, resolved from the live user cache; skips when the seed is absent. */
+function requireSeededMixedUser(): UserInfo {
+    const user = findUserByEmail(UserCache.Instance.Users, SEEDED_MIXED_EMAIL);
+    if (!user) {
+        SkipCheck(`seeded mixed-role user ${SEEDED_MIXED_EMAIL} is not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
+    }
+    return user;
+}
+
+interface CapturedSqlStatement {
+    Sql: string;
+    Parameters?: unknown[];
+}
+
+/**
+ * Resolves bound `@rls_p<n>` / `$<n>` parameter placeholders in `stmt.Sql` back to their SQL string
+ * literals so the emitted statement can be verified against both literal and parameterized (#5713)
+ * row-level security predicates — proving BOTH the SQL placeholder and the bound parameter value
+ * reached the driver.
+ */
+function resolveBoundParametersInSql(stmt: CapturedSqlStatement): string {
+    if (!Array.isArray(stmt.Parameters) || stmt.Parameters.length === 0) {
+        return stmt.Sql;
+    }
+    let resolved = stmt.Sql;
+    for (const rawParam of stmt.Parameters) {
+        if (!rawParam || typeof rawParam !== 'object') {
+            continue;
+        }
+        const paramObj = rawParam as { Name?: unknown; Value?: unknown };
+        if (typeof paramObj.Name !== 'string' || paramObj.Name.length === 0 || paramObj.Value === undefined) {
+            continue;
+        }
+        const token = paramObj.Name.startsWith('@') || paramObj.Name.startsWith('$')
+            ? paramObj.Name
+            : `@${paramObj.Name}`;
+        const literal = paramObj.Value === null
+            ? 'NULL'
+            : `'${String(paramObj.Value).replace(/'/g, "''")}'`;
+        const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        resolved = resolved.replace(new RegExp(`${escapedToken}(?![A-Za-z0-9_])`, 'g'), () => literal);
+    }
+    return resolved;
+}
+
+/**
+ * Records every statement (and its bound parameters) the provider sends while `run` executes.
+ * RunView reaches the database through `ExecuteSQL` (one statement), `ExecuteSQLBatch` (unparameterized
+ * batch), or `ExecuteSQLBatchWithSharedParameters` (parameterized batch), so all three are wrapped on
+ * the instance and the prototype methods are restored afterwards.
+ */
+async function captureEmittedSql(provider: GenericDatabaseProvider, run: () => Promise<void>): Promise<CapturedSqlStatement[]> {
+    const statements: CapturedSqlStatement[] = [];
+    const single = provider.ExecuteSQL.bind(provider);
+    const batch = provider.ExecuteSQLBatch.bind(provider);
+    const providerWithSharedBatch = provider as unknown as {
+        ExecuteSQLBatchWithSharedParameters: (
+            queries: string[],
+            parameters: unknown[],
+            options?: unknown,
+            contextUser?: UserInfo,
+        ) => Promise<Record<string, unknown>[][]>;
+    };
+    const sharedBatch = providerWithSharedBatch.ExecuteSQLBatchWithSharedParameters.bind(provider);
+    provider.ExecuteSQL = <T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<T[]> => {
+        statements.push({ Sql: query, Parameters: parameters });
+        return single<T>(query, parameters, options, contextUser);
+    };
+    provider.ExecuteSQLBatch = (...args: Parameters<GenericDatabaseProvider['ExecuteSQLBatch']>): ReturnType<GenericDatabaseProvider['ExecuteSQLBatch']> => {
+        for (const q of args[0]) {
+            statements.push({ Sql: q });
+        }
+        return batch(...args);
+    };
+    providerWithSharedBatch.ExecuteSQLBatchWithSharedParameters = (
+        queries: string[],
+        parameters: unknown[],
+        options?: unknown,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> => {
+        for (const q of queries) {
+            statements.push({ Sql: q, Parameters: parameters });
+        }
+        return sharedBatch(queries, parameters, options, contextUser);
+    };
+    try {
+        await run();
+    } finally {
+        Reflect.deleteProperty(provider, 'ExecuteSQL');
+        Reflect.deleteProperty(provider, 'ExecuteSQLBatch');
+        Reflect.deleteProperty(provider, 'ExecuteSQLBatchWithSharedParameters');
+    }
+    return statements;
+}
+
+/**
+ * RLS13 — a user holding a filtered and an unfiltered role gets the filtered role's predicate,
+ * and that predicate reaches the SQL sent to the database.
+ *
+ * The unit tests (entityInfo.rlsFilterCollection / rlsExemption) prove the collection logic with
+ * hand-built permission objects. This pins the seams they mock away, on real permission rows:
+ *   - the permission gate: Read is granted by the filtered role, and the unfiltered role's Create
+ *     grant is cancelled by its own Deny row (Deny subtracts from Allow);
+ *   - the RLS reader: the unfiltered role grants no Read, so it must not exempt the user from the
+ *     read filter; exactly the one bound filter is collected;
+ *   - the emitted SQL: a live RunView sends a statement that carries that exact clause.
+ */
+export async function CheckRls13MixedRolesEmittedSql(ctx: IntegrationCheckContext): Promise<void> {
+    const user = requireSeededMixedUser();
+    const entity = ctx.Provider.EntityByName(MIXED_RLS_ENTITY);
+    Assert(entity != null, `'${MIXED_RLS_ENTITY}' not found in provider metadata`);
+    const provider = ctx.Provider;
+    if (!(provider instanceof GenericDatabaseProvider)) {
+        throw new Error('RLS13 needs a database provider (server transport) to observe the emitted SQL');
+    }
+
+    // Permission gate.
+    const perms = entity!.GetUserPermisions(user);
+    Assert(perms != null && perms.CanRead, `${SEEDED_MIXED_EMAIL} must be able to read '${MIXED_RLS_ENTITY}' through the filtered role`);
+    Assert(entity!.AllowCreateAPI, `'${MIXED_RLS_ENTITY}' must allow Create through the API, or the Deny assertion below proves nothing`);
+    Assert(!perms!.CanCreate, `the Deny row must cancel the unfiltered role's Create grant, but ${SEEDED_MIXED_EMAIL} can still create`);
+
+    // RLS reader.
+    Assert(!entity!.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read),
+        `${SEEDED_MIXED_EMAIL} is exempt from read RLS: the unfiltered role grants no Read, so it must not lift the filtered role's predicate`);
+    const filters = entity!.GetUserRowLevelSecurityInfo(user, EntityPermissionType.Read);
+    AssertEqual(filters.map(f => f.Name).join(', '), MIXED_RLS_FILTER, 'exactly the filtered role\'s read filter is collected');
+    const clause = entity!.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+    AssertEqual(clause, `((${filters[0].MarkupFilterText(user)}))`, 'the effective read clause is the one collected filter');
+    Assert(clause.toLowerCase().includes(user.ID.toLowerCase()), `the effective read clause is not scoped to ${SEEDED_MIXED_EMAIL}: ${clause}`);
+
+    // Emitted SQL.
+    const view = entity!.BaseView.toLowerCase();
+    const statements = await captureEmittedSql(provider, async () => {
+        const result = await RunView.FromMetadataProvider(provider).RunView(
+            { EntityName: MIXED_RLS_ENTITY, ResultType: 'simple', BypassCache: true }, user
+        );
+        Assert(result.Success, `RunView on '${MIXED_RLS_ENTITY}' as ${SEEDED_MIXED_EMAIL} failed: ${result.ErrorMessage}`);
+    });
+    const reads = statements.filter(s => s.Sql.toLowerCase().includes(view));
+    Assert(reads.length > 0, `no statement against ${entity!.BaseView} was sent (captured ${statements.length} statement(s))`);
+    const unscoped = reads.filter(s => !resolveBoundParametersInSql(s).includes(clause));
+    Assert(unscoped.length === 0, `RLS LEAK: a read of ${entity!.BaseView} was sent without the clause ${clause}: ${unscoped[0]?.Sql}`);
+}
+
+/**
+ * RLS14 — the live row set of the mixed-role user is exactly its own rows.
+ *
+ * The RunView result as the seeded user must equal what an unrestricted read filtered to that user
+ * returns (its two role assignments), and the unrestricted read of the whole entity must be larger,
+ * so the comparison shows the filter narrowed the set rather than an empty table agreeing with itself.
+ */
+export async function CheckRls14MixedRolesLiveRows(ctx: IntegrationCheckContext): Promise<void> {
+    const user = requireSeededMixedUser();
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+
+    const mine = await rv.RunView<{ ID: string; UserID: string }>(
+        { EntityName: MIXED_RLS_ENTITY, Fields: ['ID', 'UserID'], ResultType: 'simple', BypassCache: true }, user
+    );
+    Assert(mine.Success, `RunView on '${MIXED_RLS_ENTITY}' as ${SEEDED_MIXED_EMAIL} failed: ${mine.ErrorMessage}`);
+    const leaks = mine.Results.filter(r => !UUIDsEqual(r.UserID, user.ID));
+    Assert(leaks.length === 0, `RLS LEAK: ${leaks.length} '${MIXED_RLS_ENTITY}' row(s) of other users reached ${SEEDED_MIXED_EMAIL}`);
+
+    const expected = await rv.RunView<{ ID: string }>(
+        { EntityName: MIXED_RLS_ENTITY, Fields: ['ID'], ExtraFilter: `UserID = '${user.ID}'`, ResultType: 'simple', BypassCache: true }, ctx.User
+    );
+    Assert(expected.Success, `unrestricted RunView filtered to ${SEEDED_MIXED_EMAIL} failed: ${expected.ErrorMessage}`);
+    AssertEqual(expected.Results.length, MIXED_ROLE_ASSIGNMENTS, `${SEEDED_MIXED_EMAIL} should hold exactly the two seeded roles`);
+    const got = mine.Results.map(r => r.ID.toLowerCase()).sort();
+    const want = expected.Results.map(r => r.ID.toLowerCase()).sort();
+    AssertEqual(got.join(','), want.join(','), `the scoped row set of ${SEEDED_MIXED_EMAIL} must be exactly its own rows`);
+
+    const all = await rv.RunView(
+        { EntityName: MIXED_RLS_ENTITY, ResultType: 'count_only', BypassCache: true }, ctx.User
+    );
+    Assert(all.Success, `unrestricted count of '${MIXED_RLS_ENTITY}' failed: ${all.ErrorMessage}`);
+    Assert(all.TotalRowCount !== undefined, `the count_only read of '${MIXED_RLS_ENTITY}' returned no TotalRowCount`);
+    const total = all.TotalRowCount ?? 0;
+    Assert(total > got.length,
+        `precondition: other users must own '${MIXED_RLS_ENTITY}' rows (total ${total}, scoped ${got.length}), or the filter is not observable`);
+}
+
 export const RlsIsolationChecks: NamedCheck[] = [
     {
         Id: 'rls-isolation.RLS1',
@@ -532,6 +732,16 @@ export const RlsIsolationChecks: NamedCheck[] = [
         Id: 'rls-isolation.RLS12',
         Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load), and list reads return exactly the rows either filter admits',
         Fn: CheckRls12TwoFilterLoadById
+    },
+    {
+        Id: 'rls-isolation.RLS13',
+        Name: 'RLS13: a user with a filtered and an unfiltered role gets the filtered predicate, the Deny row wins the gate, and the predicate reaches the emitted SQL',
+        Fn: CheckRls13MixedRolesEmittedSql
+    },
+    {
+        Id: 'rls-isolation.RLS14',
+        Name: 'RLS14: the live row set of the mixed-role user is exactly its own rows',
+        Fn: CheckRls14MixedRolesLiveRows
     }
 ];
 

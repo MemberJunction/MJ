@@ -25,6 +25,11 @@ export class ComponentNameMismatchRule extends BaseLintRule {
     // The expected component name from the spec
     const expectedName = componentSpec?.name || componentName;
 
+    // Without a spec name or a component name there is nothing to compare against.
+    if (!expectedName) {
+      return violations;
+    }
+
     // Find the main function declaration
     let foundMainFunction = false;
 
