@@ -346,7 +346,11 @@ ${this.trimStatementTerminator(selectSQL)}`;
             }
             additionalFieldList = pkColumns.join(',\n                ');
             additionalValueList = pkValues.join(',\n                ');
-            const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+            // #3526: a key column that allows NULL is matched NULL-safely, or a row inserted with a NULL key
+            // part is never found again and the create reports "no rows returned". Index-friendly on SQL Server.
+            const pkWhereClause = entity.PrimaryKeys.map(k => k.AllowsNull
+                ? `([${k.Name}] = @${k.CodeName} OR ([${k.Name}] IS NULL AND @${k.CodeName} IS NULL))`
+                : `[${k.Name}] = @${k.CodeName}`).join(' AND ');
             selectInsertedRecord = this.buildCRUDReturnSelect(entity, pkWhereClause);
         }
 

@@ -34133,6 +34133,10 @@ export class MJCompanyIntegrationRecordMap_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: "How the integration came to map this MJ row: Created when the sync inserted the row, Adopted when the row already existed and the sync matched it by key fields or primary key. The orphan sweep never hard-deletes an Adopted row; under HardDelete it archives the row when the entity has integration tombstone columns and otherwise leaves it with a warning."}) 
+    @MaxLength(20)
+    Origin?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     CompanyIntegration?: string;
@@ -34166,6 +34170,9 @@ export class CreateMJCompanyIntegrationRecordMapInput {
     @Field({ nullable: true })
     EntityRecordID?: string;
 
+    @Field({ nullable: true })
+    Origin?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -34190,6 +34197,9 @@ export class UpdateMJCompanyIntegrationRecordMapInput {
 
     @Field({ nullable: true })
     EntityRecordID?: string;
+
+    @Field({ nullable: true })
+    Origin?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

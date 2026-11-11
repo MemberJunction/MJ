@@ -431,6 +431,18 @@ export class AIPromptParams extends AIModelRunParams {
   PreRenderedChildTemplates?: Record<string, string>;
 
   /**
+   * Called by the prompt runner once this attempt's template data is final — the native tool-calling
+   * flags (`_NATIVE_TOOL_CALLING`, `_NATIVE_CONTROL_FLOW`) set from the gate's decision — and before
+   * the prompt renders. A caller that rendered something from `data` ahead of the runner renders it
+   * again here, so it reads the same flags as the system prompt: the loop agent's relocated
+   * specialization, which it pre-rendered into `PreRenderedChildTemplates` and the trailing message
+   * before a model was selected. The runner awaits it and reads `PreRenderedChildTemplates` after.
+   * A failover attempt whose decision differs re-renders only the system prompt (see the runner's
+   * `rerenderForNativeDecision`), not what this callback rendered.
+   */
+  OnTemplateDataFinalized?: (params: AIPromptParams) => Promise<void>;
+
+  /**
    * The system-prompt-and-tools fingerprint of the previous request in this conversation, from
    * `GetSentPrefixFingerprint`. Set by a caller that replays reasoning to a provider which binds it
    * to an unchanged prefix. When this request's system prompt or tools differ, the runner sends
