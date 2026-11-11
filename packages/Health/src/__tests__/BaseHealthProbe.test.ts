@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import type { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
-import { BaseHealthProbe } from '../BaseHealthProbe';
+import { BaseHealthProbe, HealthProbeRollbackError } from '../BaseHealthProbe';
 import type { HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, ProbeExecutionMode } from '../types';
 
 /** Minimal concrete probe so tests can reach the protected `WithRolledBackTransaction` helper. */
@@ -75,5 +75,31 @@ describe('BaseHealthProbe.WithRolledBackTransaction', () => {
     });
 
     expect(receivedProvider).toBe(provider);
+  });
+
+  it('surfaces a rollback failure as HealthProbeRollbackError when the work succeeded', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'RollbackTransaction').mockRejectedValue(new Error('savepoint vanished'));
+    const probe = new TestProbe();
+
+    await expect(probe.RunRolledBack(makeContext(provider), async () => 'done')).rejects.toSatisfy((error: unknown) => {
+      expect(error).toBeInstanceOf(HealthProbeRollbackError);
+      const rollbackError = error as HealthProbeRollbackError;
+      expect(rollbackError.ProbeKey).toBe('test.probe');
+      expect(rollbackError.FnError).toBeUndefined();
+      return true;
+    });
+  });
+
+  it('re-throws the original work error (not the rollback error) when both fail', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'RollbackTransaction').mockRejectedValue(new Error('savepoint vanished'));
+    const probe = new TestProbe();
+
+    await expect(
+      probe.RunRolledBack(makeContext(provider), async () => {
+        throw new Error('synthetic failure');
+      }),
+    ).rejects.toThrow('synthetic failure');
   });
 });

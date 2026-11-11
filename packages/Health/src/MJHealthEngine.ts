@@ -1,6 +1,7 @@
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseHealthProbe } from './BaseHealthProbe';
+import { BaseLiveCrudVerifier } from './LiveCrudVerifier';
 import type { HealthEvaluateOptions, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, InstanceHealthReport } from './types';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -29,6 +30,19 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
    */
   public GetRegisteredProbes(): BaseHealthProbe[] {
     return MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseHealthProbe).map((reg) => new (reg.SubClass as new () => BaseHealthProbe)());
+  }
+
+  /**
+   * Every `BaseLiveCrudVerifier` currently registered with the ClassFactory, regardless of owning
+   * app. Exposed at the engine level (mirroring {@link GetRegisteredProbes}) so a fleet dashboard
+   * or CLI can enumerate the full live-verification surface — built-in probes plus every
+   * Open App-supplied synthetic CRUD/permission verifier — without reaching into
+   * `LiveEntityCrudProbe` directly.
+   */
+  public GetRegisteredLiveCrudVerifiers(): BaseLiveCrudVerifier[] {
+    return MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseLiveCrudVerifier).map(
+      (reg) => new (reg.SubClass as new () => BaseLiveCrudVerifier)(),
+    );
   }
 
   /**
