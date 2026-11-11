@@ -42,6 +42,28 @@
             <i class="fas fa-star-half-stroke"></i>
           </button>
         }
+        @if (pluginViewer?.SupportsPDFExport) {
+          <div class="export-pdf-menu" (click)="$event.stopPropagation()">
+            <button class="export-pdf-btn"
+                    (click)="TogglePDFMenu()"
+                    [disabled]="IsExportingPDF"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="ShowPDFMenu"
+                    [title]="IsExportingPDF ? 'Preparing PDF…' : 'Export as PDF'">
+              <i class="fas" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+            </button>
+            @if (ShowPDFMenu) {
+              <div class="export-pdf-dropdown" role="menu">
+                <button type="button" role="menuitem" (click)="OnExportPDF('portrait')">
+                  <i class="fas fa-file"></i> PDF – Portrait
+                </button>
+                <button type="button" role="menuitem" (click)="OnExportPDF('landscape')">
+                  <i class="fas fa-file fa-rotate-90"></i> PDF – Landscape
+                </button>
+              </div>
+            }
+          </div>
+        }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"
                   [class.in-collection]="isInCollection"

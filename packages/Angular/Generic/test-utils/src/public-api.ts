@@ -6,3 +6,4 @@ export * from './lib/overlay-helpers.js';
 export * from './lib/fake-provider.js';
 export * from './lib/global-provider.js';
 export * from './lib/stubs.js';
+export * from './lib/expected-console.js';

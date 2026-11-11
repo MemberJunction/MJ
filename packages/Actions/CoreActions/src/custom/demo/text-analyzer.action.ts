@@ -2,6 +2,41 @@ import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunctio
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 
+function isSentenceEnd(c: string): boolean {
+    return c === '.' || c === '!' || c === '?';
+}
+
+/**
+ * Split text into sentences: each run of non-terminator characters plus the `.`, `!` or `?` run that
+ * ends it, trimmed, blanks dropped. Text with no terminated sentence comes back whole. A single
+ * left-to-right pass with the same result as `text.match(/[^.!?]+[.!?]+/g)`, which rescans to the
+ * end of the text from every position when the last sentence is unterminated (CodeQL
+ * js/polynomial-redos).
+ */
+export function ExtractSentences(text: string): string[] {
+    const sentences: string[] = [];
+    let i = 0;
+    while (i < text.length) {
+        if (isSentenceEnd(text[i])) {
+            i++;
+            continue;
+        }
+        let end = i;
+        while (end < text.length && !isSentenceEnd(text[end])) {
+            end++;
+        }
+        if (end === text.length) {
+            break; // an unterminated tail is not a sentence
+        }
+        while (end < text.length && isSentenceEnd(text[end])) {
+            end++;
+        }
+        sentences.push(text.slice(i, end));
+        i = end;
+    }
+    return sentences.length > 0 ? sentences.map(s => s.trim()).filter(s => s.length > 0) : [text];
+}
+
 /**
  * Action that analyzes text content and provides various statistics including
  * word count, character count, readability scores, and common word analysis.
@@ -158,8 +193,7 @@ export class TextAnalyzerAction extends BaseAction {
     }
 
     private extractSentences(text: string): string[] {
-        // Simple sentence extraction (ends with . ! ? followed by space or end)
-        return text.match(/[^.!?]+[.!?]+/g)?.map(s => s.trim()).filter(s => s.length > 0) || [text];
+        return ExtractSentences(text);
     }
 
     private calculateWordFrequency(words: string[]): Map<string, number> {

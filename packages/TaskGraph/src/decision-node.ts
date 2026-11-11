@@ -20,6 +20,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { ParseConditionOutput } from './condition-gate';
+import type { TaskCompensationStepMetadata } from './saga-compensation';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -45,11 +46,31 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
 export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     /** Pre-resolved ActionIDs by action name for multi-step loop bodies (`steps[]`), stamped at submit time. */
     stepActionIds?: Record<string, string>;
+    /** The step's spec `tempId`: stable across runs of the same workflow, unlike the task ID (#3798). */
+    stepId?: string;
     /** Settings for a Decision step. The decision prompt itself is `Task.PromptID`. */
     decision?: TaskDecisionStepConfiguration;
     /** Settings for an Agent step, extended with optional configuration preset name. */
     agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
         presetName?: string;
+    };
+    /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
+    compensation?: TaskCompensationStepMetadata;
+    /**
+     * Runtime execution metadata, plus whether the node's output was tainted when it ran (its input
+     * taint OR its own untrusted output). Written for every node that ran, `false` included, so a node
+     * that never ran is told apart from one that ran clean (see `UpstreamCarriesTaint`).
+     */
+    runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
+        isOutputTainted?: boolean;
+        /**
+         * The parameters an Action step's action was actually given: its input mapping resolved over
+         * the upstream outputs, with the envelope's bound parameters restored. `InputPayload` holds only
+         * the authored input, so this is what a compensation's `input.*` mapping reads.
+         */
+        actionInput?: Record<string, unknown>;
+        /** Who completed a Human step, recorded server-side (see `HumanReviewClearsTaint`). */
+        completedByUserID?: string;
     };
 };
 

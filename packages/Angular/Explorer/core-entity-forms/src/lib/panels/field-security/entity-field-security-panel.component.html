@@ -1,0 +1,31 @@
+<div class="mj-fls-panel">
+  <div class="mj-fls-status" [class.enabled]="Enabled">
+    <i class="fa-solid" [ngClass]="Enabled ? 'fa-check' : 'fa-xmark'"></i>
+    <span>{{ Enabled ? 'Field-level security is on' : 'Field-level security is off' }}</span>
+  </div>
+
+  @if (EditMode) {
+    <label class="mj-fls-toggle">
+      <mj-switch [ngModel]="SwitchValue" (ngModelChange)="OnSwitchChange($event)"></mj-switch>
+      <span>Enforce per-field permissions</span>
+    </label>
+    @if (ConfirmingEnable) {
+      <div class="mj-fls-confirm" role="alertdialog" aria-label="Turn on field-level security">
+        <p>
+          Saving will create a permission row for every field and role, copied from this entity's
+          current role permissions, so access does not change until you restrict a field.
+        </p>
+        <div class="mj-fls-confirm-actions">
+          <button type="button" mjButton Variant="primary" Size="sm" (click)="ConfirmEnable()">Turn on</button>
+          <button type="button" mjButton Variant="outline" Size="sm" (click)="CancelEnable()">Cancel</button>
+        </div>
+      </div>
+    } @else if (!Enabled) {
+      <p class="mj-fls-help">Turning it off keeps the existing per-field rules; they stop applying until it is turned on again.</p>
+    }
+  }
+
+  @if (Enabled && FieldPermissionCount !== null) {
+    <p class="mj-fls-count">{{ FieldPermissionCount }} field permission {{ FieldPermissionCount === 1 ? 'rule' : 'rules' }}</p>
+  }
+</div>

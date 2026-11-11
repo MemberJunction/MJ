@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T2p -> S-T.6",
+    "Description": "Gate G2.14 (phase 2, dataset T2p, criterion S-T.6): residual autocorrelation is flagged on T2p, 1 of 1, by Box–Pierce on the selected model's residuals pooled within entities, the reference pipeline's panel statistic (reference acf1 0.723, p 0.0000), and Ljung–Box does not flag T1p's final-origin residuals (reference p 0.9002). It fails when the residual check skips the test on pooled panel residuals (T2p not flagged).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.14\",\"owner:PR3\",\"phase:2\",\"dataset:T2p\",\"criterion:S-T.6\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "T2p's pooled within-entity residual autocorrelation (Box-Pierce on 3 lags) is flagged and T1p's final-origin residuals (Ljung-Box) are not (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t2p-s-t-6"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "95EE309A-46EE-496B-B037-F90B723A8697"
+  }
+}

@@ -123,6 +123,12 @@ as `MJWorker` subscriptions instead.
 
 Every dead letter is its own FIFO message group, so a scan can reach all of a poison key's dead letters.
 
+**Duplicates on a standard queue.** The consumer sends the dead-letter copy, then deletes the source. If the lease was
+lost in between (the delete fails with a stale receipt), SQS redelivers the source and it can be dead-lettered again,
+leaving two copies. Every copy carries `mj_source_message_id` (the source's SQS MessageId); `mj queue dead-letters`
+lists one copy per value, and two copies with the same value are the same message. FIFO queues deduplicate the second
+send themselves.
+
 Operate them from MJ:
 
 ```bash

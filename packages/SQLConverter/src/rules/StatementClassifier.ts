@@ -76,6 +76,14 @@ export function ClassifyBatch(batch: string): StatementType {
     return 'SKIP_SQLSERVER';
   }
 
+  // IF COL_LENGTH('schema.Table', 'Column') IS NULL ... → the SQL Server idiom for "add the column
+  // if it is missing". ConditionalDDLRule rewrites the probe to a PostgreSQL catalog check; left
+  // UNKNOWN it was passed through untranslated into the trailing "Other" section, after the CHECK,
+  // backfill and seed statements that use the column (issue #5364 item 3).
+  if (/^IF\s+COL_LENGTH\s*\(/i.test(upper)) {
+    return 'CONDITIONAL_DDL';
+  }
+
   // IF NOT EXISTS ... → conditional DDL or SKIP depending on body content
   if (/^IF\s+NOT\s+EXISTS\s*\(/i.test(upper)) {
     // CREATE ROLE conditional: convert to PG-compatible DO block
@@ -120,23 +128,24 @@ export function ClassifyBatch(batch: string): StatementType {
   }
 
   // CREATE VIEW
-  if (/^CREATE\s+VIEW\s/i.test(upper)) {
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?VIEW\s/i.test(upper)) {
     return 'CREATE_VIEW';
   }
 
   // CREATE/ALTER PROCEDURE (both full and short form)
   // ALTER PROCEDURE is treated the same as CREATE — PG uses CREATE OR REPLACE FUNCTION
-  if (/^(?:CREATE|ALTER)\s+PROC(?:EDURE)?\s/i.test(upper)) {
+  if (/^(?:CREATE\s+OR\s+ALTER|CREATE|ALTER)\s+PROC(?:EDURE)?\s/i.test(upper)) {
     return classifyProcedure(batch, upper);
   }
 
   // CREATE/ALTER FUNCTION — PG uses CREATE OR REPLACE FUNCTION
-  if (/^(?:CREATE|ALTER)\s+FUNCTION\s/i.test(upper)) {
+  if (/^(?:CREATE\s+OR\s+ALTER|CREATE|ALTER)\s+FUNCTION\s/i.test(upper)) {
     return 'CREATE_FUNCTION';
   }
 
-  // CREATE TRIGGER
-  if (/^CREATE\s+TRIGGER\s/i.test(upper)) {
+  // CREATE [OR ALTER] TRIGGER. The OR ALTER form (hand-written triggers) was UNKNOWN and passed
+  // through as live T-SQL (issue #5364 item 7).
+  if (/^CREATE\s+(?:OR\s+ALTER\s+)?TRIGGER\s/i.test(upper)) {
     return 'CREATE_TRIGGER';
   }
 

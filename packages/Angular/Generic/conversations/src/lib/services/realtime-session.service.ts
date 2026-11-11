@@ -59,10 +59,15 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
      * Sends the recording terminal (tail shard + counts, as a keepalive request) when the page is
      * going away: on `pagehide`, and when the page becomes hidden — the last event a mobile browser
      * reliably fires before it may discard a backgrounded tab without any unload event. Both handlers
-     * only call the runtime's synchronous {@link RealtimeSessionRuntime.SendRecordingTerminal}, which
-     * does no IndexedDB work and no encoding: there is no time for either while a page is unloading.
+     * only call the runtime's synchronous {@link RealtimeSessionRuntime.SendRecordingTerminal} (`pagehide`
+     * through {@link RealtimeSessionRuntime.SendPageHideSignals}), which does no IndexedDB work and no
+     * encoding: there is no time for either while a page is unloading.
      * It does nothing when no call is recording, and repeating it is safe (a sent tail is sealed, so a
      * call that continues after the tab comes back sends its later shards at new indexes).
+     *
+     * `pagehide` goes through {@link RealtimeSessionRuntime.SendPageHideSignals}, which also closes the
+     * server session with a `keepalive` request when the page is going away for good (not entering the
+     * back/forward cache); a hidden tab never closes it, the user may come back.
      *
      * There is deliberately no `beforeunload` prompt any more: shards already on the server plus the
      * terminal make closing the tab safe, and a `beforeunload` listener blocks the back/forward cache.
@@ -74,7 +79,7 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
      * @param visibility the visibility source (`document`)
      */
     protected WireRecordingTerminalTriggers(page: PageHideEventTarget, visibility: VisibilityEventSource): void {
-        page.addEventListener('pagehide', () => this.SendRecordingTerminal({ Final: true }));
+        page.addEventListener('pagehide', (event) => this.SendPageHideSignals({ Persisted: event.persisted }));
         visibility.addEventListener('visibilitychange', () => {
             if (visibility.visibilityState === 'hidden') {
                 // Not final: the user may come back and the call go on, so the server only stamps the
@@ -88,7 +93,7 @@ export class RealtimeSessionService extends RealtimeSessionRuntime {
 /** The slice of `window` the terminal wiring needs; `window` itself satisfies it. */
 export interface PageHideEventTarget {
     // case-violation-ok-legacy-back-compat: mirrors the DOM EventTarget API so `window` itself satisfies this interface
-    addEventListener(type: 'pagehide', listener: () => void): void;
+    addEventListener(type: 'pagehide', listener: (event: { readonly persisted: boolean }) => void): void;
 }
 
 /** The slice of `document` the terminal wiring needs; `document` itself satisfies it. */

@@ -625,3 +625,50 @@ describe('H9: spExtendScheduledJobLease is built via the dialect, not a hardcode
         }
     });
 });
+
+// ============================================================================
+// R1: jobs written without a cache event are picked up on a polling tick (#4822)
+// ============================================================================
+
+describe('R1: ReconcileJobsIfDue reloads jobs written behind the engine\'s back', () => {
+    const probe = (count: number, newest: string) =>
+        ({ Success: true, Results: [{ ID: 'j', __mj_UpdatedAt: newest }], TotalRowCount: count }) as { Success: boolean; Results: unknown[] };
+
+    it('records the first snapshot, reloads when the newest row or the count changes, and not otherwise', async () => {
+        const engine = SchedulingEngine.Instance;
+        engine.JobReconcileIntervalMs = 1000;
+        // @ts-expect-error: reset reconcile state for isolation
+        engine._lastReconcileAt = 0;
+        // @ts-expect-error
+        engine._jobTableSnapshot = undefined;
+        const config = mockBase.Config as ReturnType<typeof vi.fn>;
+        config.mockClear();
+
+        mockRunViewQueue.push(probe(3, '2026-01-01T00:00:00.000Z'));
+        expect(await engine.ReconcileJobsIfDue(mockUser as never, 10_000)).toBe(false);
+
+        // Within the interval: no query at all.
+        expect(await engine.ReconcileJobsIfDue(mockUser as never, 10_500)).toBe(false);
+        expect(mockRunViewQueue).toHaveLength(0);
+
+        mockRunViewQueue.push(probe(3, '2026-01-01T00:00:00.000Z'));
+        expect(await engine.ReconcileJobsIfDue(mockUser as never, 11_100)).toBe(false);
+        expect(config).not.toHaveBeenCalled();
+
+        // A job inserted by raw SQL: one more row, newer timestamp.
+        mockBase.ScheduledJobs = [makeJob({ NextRunAt: null })];
+        mockRunViewQueue.push(probe(4, '2026-01-02T00:00:00.000Z'));
+        expect(await engine.ReconcileJobsIfDue(mockUser as never, 12_200)).toBe(true);
+        expect(config).toHaveBeenCalledWith(true, mockUser, undefined, false, false);
+    });
+
+    it('is off when the interval is 0', async () => {
+        const engine = SchedulingEngine.Instance;
+        engine.JobReconcileIntervalMs = 0;
+        mockRunViewQueue.push(probe(9, '2026-02-01T00:00:00.000Z'));
+        expect(await engine.ReconcileJobsIfDue(mockUser as never, 99_999_999)).toBe(false);
+        expect(mockRunViewQueue).toHaveLength(1);
+        mockRunViewQueue.length = 0;
+        engine.JobReconcileIntervalMs = 5 * 60_000;
+    });
+});

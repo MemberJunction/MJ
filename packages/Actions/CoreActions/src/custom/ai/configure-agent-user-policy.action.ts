@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
 import {
     MJAIAgentUserPolicyEntity,
     MJAIAgentUserPolicyEntity_IAgentUserActionPolicyRule,
@@ -37,38 +37,115 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
             await AIEngine.Instance.Config(false, contextUser);
             const rawAgentId = this.getStringParam(params, 'AgentID');
             const rawAgentName = this.getStringParam(params, 'AgentName');
-            const byName = rawAgentName
-                ? AIEngine.Instance.Agents.find(
-                      (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
-                  )
-                : undefined;
-            const byId = rawAgentId
-                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
-                : undefined;
-            const defaultCos = !rawAgentName
-                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
-                : undefined;
-            const agent = byName ?? byId ?? defaultCos;
+            const contextAgentId = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || null;
+
+            let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
+            let requestedLabel: string;
+            if (contextAgentId) {
+                requestedLabel = contextAgentId;
+                agent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId));
+                if (agent) {
+                    if (rawAgentId && !UUIDsEqual(rawAgentId, agent.ID)) {
+                        return {
+                            Success: false,
+                            ResultCode: 'PERMISSION_DENIED',
+                            Message: `An executing agent ("${agent.Name}") may only configure its own user policy, never another agent's policy.`,
+                            Params: params.Params,
+                        };
+                    }
+                    if (rawAgentName && rawAgentName.trim().toLowerCase() !== agent.Name.trim().toLowerCase()) {
+                        return {
+                            Success: false,
+                            ResultCode: 'PERMISSION_DENIED',
+                            Message: `An executing agent ("${agent.Name}") may only configure its own user policy, never "${rawAgentName}".`,
+                            Params: params.Params,
+                        };
+                    }
+                }
+            } else if (rawAgentName) {
+                requestedLabel = rawAgentName;
+                agent = AIEngine.Instance.Agents.find(
+                    (a) => a.Name.trim().toLowerCase() === rawAgentName.trim().toLowerCase()
+                );
+            } else {
+                const byId = rawAgentId
+                    ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawAgentId))
+                    : undefined;
+                const defaultCos = AIEngine.Instance.Agents.find(
+                    (a) => a.Name.trim().toLowerCase() === 'chief of staff'
+                );
+                agent = byId ?? defaultCos;
+                requestedLabel = rawAgentId ?? 'Chief of Staff';
+            }
 
             if (!agent) {
                 return {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Agent "${ rawAgentId ?? rawAgentName ?? 'Chief of Staff' }" not found.`,
+                    Message: `Agent "${ requestedLabel }" not found.`,
                     Params: params.Params,
                 };
             }
 
-            const existing = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+            if (!AIEngine.Instance.CanUserRunAgent(agent.ID, contextUser)) {
+                return {
+                    Success: false,
+                    ResultCode: 'PERMISSION_DENIED',
+                    Message: `User "${contextUser.Name || contextUser.ID}" does not have permission to run agent "${agent.Name}".`,
+                    Params: params.Params,
+                };
+            }
+
+            const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 agent.ID,
                 contextUser.ID,
                 contextUser,
-                true
+                { forceRefresh: true, provider: params.Provider }
             );
+            if (policyLookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_LOOKUP_FAILED',
+                    Message: `Failed to load existing agent user policy: ${policyLookup.errorMessage}`,
+                    Params: params.Params,
+                };
+            }
+            const existing = policyLookup.policy;
+            const baselineSnapshot =
+                contextAgentId && existing ? AgentUserPolicyEngine.Instance.SnapshotPolicy(existing) : null;
+
             const md = params.Provider ?? new Metadata();
-            const policy =
-                existing ??
-                (await md.GetEntityObject<MJAIAgentUserPolicyEntity>('MJ: AI Agent User Policies', contextUser));
+            const policyEntityInfo = md.EntityByName?.('MJ: AI Agent User Policies');
+            if (policyEntityInfo && typeof policyEntityInfo.GetUserPermisions === 'function') {
+                const perms = policyEntityInfo.GetUserPermisions(contextUser);
+                const allowed = existing ? perms?.CanUpdate !== false : perms?.CanCreate !== false;
+                if (!allowed) {
+                    return {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `User "${contextUser.Name || contextUser.ID}" does not have ${existing ? 'Update' : 'Create'} permission on MJ: AI Agent User Policies.`,
+                        Params: params.Params,
+                    };
+                }
+            }
+
+            const policy = await md.GetEntityObject<MJAIAgentUserPolicyEntity>(
+                'MJ: AI Agent User Policies',
+                contextUser
+            );
+            if (existing) {
+                const loaded =
+                    Boolean(policy && existing.ID && typeof policy.InnerLoad === 'function') &&
+                    (await policy!.InnerLoad(CompositeKey.FromID(existing.ID))); // first-pk-ok: MJ: AI Agent User Policies is keyed by ID
+                if (!loaded) {
+                    return {
+                        Success: false,
+                        ResultCode: 'POLICY_LOOKUP_FAILED',
+                        Message: `Failed to load existing agent user policy "${existing.ID}" under caller context.`,
+                        Params: params.Params,
+                    };
+                }
+            }
             if (!policy) {
                 return {
                     Success: false,
@@ -85,6 +162,22 @@ export class ConfigureAgentUserPolicyAction extends BaseAction {
             this.applyChannelModes(policy, params);
             this.applyDataAndApprovalSwitches(policy, params);
             this.applyJsonRuleArrays(policy, params);
+
+            if (contextAgentId) {
+                const violations = AgentUserPolicyEngine.Instance.DetectAgentPolicyWidening(
+                    baselineSnapshot,
+                    policy
+                );
+                if (violations.length > 0) {
+                    AgentUserPolicyEngine.Instance.ClearCache(agent.ID, contextUser.ID);
+                    return {
+                        Success: false,
+                        ResultCode: 'PERMISSION_DENIED',
+                        Message: `Agents may only narrow or personalize their policy, never widen permissions: ${violations.join(' ')}`,
+                        Params: params.Params,
+                    };
+                }
+            }
 
             const saved = await policy.Save();
             if (!saved) {

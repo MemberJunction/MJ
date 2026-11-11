@@ -7,7 +7,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { ComputeFieldPermissionDelta, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
+import { ComputeFieldPermissionDelta, ExistingFieldPermissionRow, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
 
 /** What a reconciliation run actually wrote. */
 export type FieldPermissionReconcileResult = {
@@ -32,16 +32,19 @@ const NOTHING_DONE: FieldPermissionReconcileResult = { Inserted: 0, Deleted: 0 }
  * @param entity the entity to reconcile — its `Fields` and `Permissions` are the desired state
  * @param provider the provider to transact on and to build entity objects from
  * @param contextUser the user the writes are attributed to
+ * @param existingRows the entity's field-permission rows as read from the database; when omitted,
+ *   the rows metadata holds are used (see {@link ComputeFieldPermissionDelta})
  */
 export async function ReconcileFieldPermissions(
     entity: EntityInfo,
     provider: IMetadataProvider,
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    existingRows?: ExistingFieldPermissionRow[]
 ): Promise<FieldPermissionReconcileResult> {
     if (!entity || !provider) {
         return NOTHING_DONE;
     }
-    const delta = ComputeFieldPermissionDelta(entity);
+    const delta = ComputeFieldPermissionDelta(entity, existingRows);
     if (IsEmptyFieldPermissionDelta(delta)) {
         return NOTHING_DONE;
     }

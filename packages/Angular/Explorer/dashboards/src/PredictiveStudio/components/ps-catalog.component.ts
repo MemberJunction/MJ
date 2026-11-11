@@ -129,7 +129,7 @@ const USE_CASE_ICONS: Record<string, string> = {
                 }
                 <span class="ps-spacer"></span>
                 <button mjButton variant="secondary" size="sm" data-testid="ps-catalog-details"
-                  [class.on]="detailId === card.algo.ID" (click)="toggleDetail(card.algo.ID)">
+                  [class.on]="IsDetailOpen(card.algo.ID)" (click)="ToggleDetail(card.algo.ID)">
                   <i class="fa-solid fa-circle-info"></i> Details
                 </button>
                 <button mjButton variant="secondary" size="sm" data-testid="ps-catalog-create-pipeline"
@@ -141,7 +141,7 @@ const USE_CASE_ICONS: Record<string, string> = {
                   <i class="fa-solid fa-robot"></i> Agent
                 </button>
               </div>
-              @if (detailId === card.algo.ID) {
+              @if (IsDetailOpen(card.algo.ID)) {
                 <div class="adetail" data-testid="ps-catalog-detail">
                   @if (card.algo.Description) {
                     <p class="ps-small adetail-desc">{{ card.algo.Description }}</p>
@@ -307,9 +307,14 @@ export class PSCatalogComponent implements OnInit {
 
   // ---- algorithm card actions ----
 
+  /** Whether an algorithm card's inline detail panel is open (IDs compared case-insensitively). */
+  public IsDetailOpen(id: string): boolean {
+    return this.DetailId !== null && UUIDsEqual(this.DetailId, id);
+  }
+
   /** Toggle the inline detail panel for an algorithm card. */
   public ToggleDetail(id: string): void {
-    this.DetailId = this.DetailId === id ? null : id;
+    this.DetailId = this.IsDetailOpen(id) ? null : id;
   }
 
   /** @deprecated Use {@link ToggleDetail}. */
@@ -385,7 +390,7 @@ export class PSCatalogComponent implements OnInit {
    */
   public get Recommendation(): { scenarioLabel: string; primaries: string[] } {
     const levels = this.engine.BestLevelsForScenarios(this.SelectedUseCaseIds);
-    const primaries = this.engine.Algorithms.filter((a) => levels.get(a.ID) === 'Primary').map((a) => a.Name);
+    const primaries = this.engine.Algorithms.filter((a) => levels.Get(a.ID) === 'Primary').map((a) => a.Name);
     const scenarioLabel =
       this.SelectedUseCaseIds.length === 1
         ? this.UseCases.find((u) => UUIDsEqual(u.ID, this.SelectedUseCaseIds[0]))?.Name ?? 'your scenario'
@@ -404,7 +409,7 @@ export class PSCatalogComponent implements OnInit {
       algo,
       icon: ALGO_ICONS[algo.DriverClass] ?? 'fa-solid fa-shapes',
       problemTypes: (algo.ProblemTypes || '').split(',').map((p) => p.trim()).filter((p) => p.length > 0),
-      bestLevel: levels.get(algo.ID) ?? null,
+      bestLevel: levels.Get(algo.ID) ?? null,
     }));
     if (this.SelectedUseCaseIds.length > 0) {
       cards.sort((a, b) => {

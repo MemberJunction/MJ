@@ -26,6 +26,7 @@
 
 import { AIModelConfiguration, AIPromptConfiguration, ChatParams, ChatResult, ChatTool, ChatToolChoice, ResolveEffectiveModelConfiguration } from '@memberjunction/ai';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { SharedWeakMap } from './sharedWeakMap';
 
 /**
  * Which tool-calling path a run took. Derived from the entity so it tracks the column's CHECK
@@ -182,9 +183,11 @@ export function ResolveToolChoiceForRequest(
  * prompt runner chose is the runner's own bookkeeping and has no business on the wire contract.
  *
  * A WeakMap keyed by the request/result object is safe under concurrency — every prompt run builds
- * its own `ChatParams` — and leaks nothing, since entries disappear with the objects.
+ * its own `ChatParams` — and leaks nothing, since entries disappear with the objects. It is shared by
+ * every copy of this package ({@link SharedWeakMap}): the Loop agent type that reads `toolResults`
+ * back may come from a different copy than the runner that recorded it.
  */
-const toolCallingDecisionByObject = new WeakMap<ChatParams | ChatResult, NativeToolCallingDecision>();
+const toolCallingDecisionByObject = SharedWeakMap<ChatParams | ChatResult, NativeToolCallingDecision>('ai-prompts:toolCallingDecision');
 
 /**
  * Tags a request (at gate time) or a result (after a fallback) with the tool-calling mode.

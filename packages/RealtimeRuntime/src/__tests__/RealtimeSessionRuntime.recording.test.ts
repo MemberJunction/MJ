@@ -10,7 +10,7 @@ import {
     RealtimeSessionRuntime,
     type StartRealtimeClientSessionResult,
 } from '../index';
-import { FakeRecordingHost, FakeRecordingRuntime, FakeRecordingTransport, FakeShardStore, type FakeUploadOutcome } from './recording-test-helpers';
+import { FakeRecordingHost, FakeRecordingRuntime, FakeRecordingTransport, FakeSessionCloseBeacon, FakeShardStore, type FakeUploadOutcome } from './recording-test-helpers';
 
 const WINDOW = RECORDING_SHARD_WINDOW_PACKETS;
 const WINDOW_SAMPLES = WINDOW * RECORDING_FRAME_SAMPLES;
@@ -42,8 +42,18 @@ class GqlProvider {
     public CurrentUser: { ID: string } | null = { ID: 'user-a' };
     public Mutations: string[] = [];
     public readonly sessionId = 'transport-session-1';
+    /** When set, a `CloseAgentSession` mutation waits on it (a close still in flight). */
+    public HeldClose: Promise<void> | null = null;
+    /** What the server's `CloseAgentSession` returns: true when it closed the session. */
+    public CloseResult = true;
     public async ExecuteGQL(query: string): Promise<unknown> {
         this.Mutations.push(query);
+        if (/mutation CloseAgentSession/.test(query)) {
+            if (this.HeldClose) {
+                await this.HeldClose;
+            }
+            return { CloseAgentSession: this.CloseResult };
+        }
         return {};
     }
     public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
@@ -632,5 +642,147 @@ describe('RealtimeSessionRuntime recording shards (MJ#5294)', () => {
         recorder.StopError = new Error('encoder crashed');
         await runtime.EndRealtimeSession();
         expect(transport.Terminals[0].Input.CapturedSamples).toBe(9 * RECORDING_FRAME_SAMPLES);
+    });
+});
+
+describe('RealtimeSessionRuntime.SendPageHideSignals — closing the tab closes the session (F15)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+        vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('a terminal pagehide sends the final recording terminal first, then a keepalive close of the live session, synchronously', async () => {
+        const { runtime, transport, recorder, log } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon(log);
+        runtime.CloseBeacon = beacon;
+        recorder.Capture(7);
+        const logBefore = log.length;
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        // The recording keeps priority on the page's keepalive budget: its terminal is dispatched first.
+        expect(log.slice(logBefore)).toEqual(['terminal:session-1/0', 'close:session-1']);
+        expect(transport.Terminals[0].Input.Final).toBe(true);
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-1', CloseReason: 'Explicit' }]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('closes a live call that is not recorded', async () => {
+        const runtime = new FakeRecordingRuntime(new FakeRecordingHost(), new FakeShardStore(), new FakeRecordingTransport());
+        runtime.Provider = new GqlProvider() as unknown as IMetadataProvider;
+        await runtime.StartRealtimeSessionFromResult(mintedSession('session-7'), { recordingConsent: false });
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-7', CloseReason: 'Explicit' }]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a pagehide into the back/forward cache sends the terminal but leaves the session open: the page may come back', async () => {
+        const { runtime, transport, recorder } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        recorder.Capture(7);
+
+        runtime.SendPageHideSignals({ Persisted: true });
+
+        expect(transport.Terminals).toHaveLength(1);
+        expect(beacon.Closes).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('sends no close when the host closes the session itself', async () => {
+        const { runtime } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        runtime.ClosesSessionOnPageHide = false;
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('sends no close once the call has ended', async () => {
+        const { runtime } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        await runtime.EndRealtimeSession();
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([]);
+    });
+
+    // #6462 review #37: End's teardown keeps the session id until the recording terminal's ack wait settles, after its
+    // own CloseAgentSession. A pagehide in that window must not send a second close of the same session.
+    it('sends no close once this runtime\'s own close has completed, while End still waits on the recording terminal', async () => {
+        const { runtime, transport, provider, recorder } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        recorder.Capture(7);
+        transport.HoldTerminal();
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([]);
+        transport.ReleaseTerminal(true);
+        await ended;
+    });
+
+    it('still sends the close when the server reported that its own close did not close the session', async () => {
+        const { runtime, transport, provider, recorder } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        provider.CloseResult = false;
+        recorder.Capture(7);
+        transport.HoldTerminal();
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-1', CloseReason: 'Explicit' }]);
+        transport.ReleaseTerminal(true);
+        await ended;
+    });
+
+    it('still sends the close while this runtime\'s own close is in flight: unload can cancel it', async () => {
+        const { runtime, provider } = await startRecorded();
+        const beacon = new FakeSessionCloseBeacon();
+        runtime.CloseBeacon = beacon;
+        let releaseClose: () => void = () => undefined;
+        provider.HeldClose = new Promise<void>((resolve) => {
+            releaseClose = resolve;
+        });
+        const ended = runtime.EndRealtimeSession();
+        await vi.advanceTimersByTimeAsync(RECORDER_STOP_TIMEOUT_MS);
+        expect(provider.MutationNames).toContain('CloseAgentSession');
+
+        runtime.SendPageHideSignals({ Persisted: false });
+
+        expect(beacon.Closes).toEqual([{ AgentSessionId: 'session-1', CloseReason: 'Explicit' }]);
+        releaseClose();
+        await ended;
+    });
+
+    it('logs, and does not throw, when the provider has no endpoint to close on', async () => {
+        const { runtime } = await startRecorded();
+        runtime.CloseBeacon = null;
+
+        expect(() => runtime.SendPageHideSignals({ Persisted: false })).not.toThrow();
+        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('session-1 live, but the provider has no endpoint'));
+        await runtime.EndRealtimeSession();
     });
 });

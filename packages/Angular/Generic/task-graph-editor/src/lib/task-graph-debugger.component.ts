@@ -95,6 +95,15 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     @Input() public ToolbarVisibility: FlowToolbarVisibility = 'minimized';
     @Input() public ToolbarAlign: FlowToolbarAlign = 'left';
     @Input() public AllowBreakpointEditing: boolean = true;
+    /**
+     * Breakpoints the person keeps for future runs of this workflow, as stable step IDs (#3798). The host loads
+     * them from the user's settings, stores changes from {@link RememberBreakpointToggled}, and passes them as
+     * `taskGraphDebug.breakpointStepIDs` when it starts the next debug run. Generic components hold no settings
+     * of their own.
+     */
+    @Input() public RememberedStepIDs: readonly string[] = [];
+    /** Offer "Remember Breakpoint for Future Runs" on a step. Off unless the host stores the set. */
+    @Input() public AllowRememberBreakpoints: boolean = false;
     @Input() public ShowVariables: boolean = true;
     /** VCR + error line above the canvas. Off if the host already has its own bar. */
     @Input() public ShowChrome: boolean = true;
@@ -120,6 +129,8 @@ export class TaskGraphDebuggerComponent extends BaseAngularComponent implements 
     @Output() public Frame = new EventEmitter<TaskGraphRunFrame>();
     @Output() public ControlFailed = new EventEmitter<string>();
     @Output() public Settled = new EventEmitter<void>();
+    /** A step's remembered breakpoint was turned on or off. Intent only — the host stores it. */
+    @Output() public RememberBreakpointToggled = new EventEmitter<{ TaskID: string; StepID: string; Remember: boolean }>();
 
     @ViewChild(TaskGraphRunViewComponent) public RunView: TaskGraphRunViewComponent | undefined;
 

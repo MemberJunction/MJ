@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { StorageAccountWithProvider } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, TrimChars } from '@memberjunction/global';
 
 /**
  * Represents a breadcrumb item in the path
@@ -366,7 +366,7 @@ export class FolderTreeComponent {
       // never matches real keys — so nested-folder listings came back empty (empty folder
       // names). Normalize to a slash-free, trailing-slash prefix before listing.
       const rawPath = this.CurrentPath && this.CurrentPath !== '/' ? this.CurrentPath : '';
-      const listPrefix = rawPath ? rawPath.replace(/^\/+/, '').replace(/\/+$/, '') + '/' : '';
+      const listPrefix = rawPath ? TrimChars(rawPath, '/') + '/' : '';
       const listResult = await this.storageClient.ListObjects(
         this.Account.account.ID,
         listPrefix,
