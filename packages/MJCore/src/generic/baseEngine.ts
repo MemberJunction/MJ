@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, IsValueEncrypted, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { buffer, debounceTime, filter } from "rxjs/operators";
@@ -3692,6 +3692,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * path performs, and enforces in this direction the same type-homogeneity invariant
      * {@link canUseImmediateMutation} enforces for the sibling mutation path.
      *
+     * Server caches hold encrypted fields as ciphertext at rest, and only the provider's cache-read
+     * path decrypts them. A payload carrying ciphertext is therefore never assigned: the reload it
+     * falls back to reads the same slot through that path and gets the decrypted values.
+     *
      * @returns the rows to assign, or null when they cannot be safely materialized (caller should
      *          fall back to a full reload).
      */
@@ -3699,6 +3703,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         config: BaseEnginePropertyConfig,
         rows: Array<Record<string, unknown>>
     ): Promise<Array<BaseEntity> | Array<Record<string, unknown>> | null> {
+        if (this.cacheEventRowsCarryCiphertext(config, rows)) {
+            return null;
+        }
         const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
         if (effectiveResultType === 'simple') {
             return rows; // property holds plain objects by design
@@ -3709,6 +3716,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return TransformSimpleObjectToEntityObject(
             this.ProviderToUse, config.EntityName, rows, this._contextUser
         );
+    }
+
+    /**
+     * True when any payload row holds ciphertext (`$ENC$…`) on one of the entity's encrypted
+     * fields. Applying such a row would hand consumers the stored ciphertext as the field's value.
+     */
+    private cacheEventRowsCarryCiphertext(config: BaseEnginePropertyConfig, rows: Array<Record<string, unknown>>): boolean {
+        const entityInfo = config.EntityName ? this.ProviderToUse?.EntityByName?.(config.EntityName) : undefined;
+        const encryptedFields = entityInfo?.EncryptedFields ?? [];
+        if (encryptedFields.length === 0) {
+            return false;
+        }
+        return rows.some(row => encryptedFields.some(field => {
+            const value = row[field.Name];
+            return typeof value === 'string' && IsValueEncrypted(value);
+        }));
     }
 
     /**

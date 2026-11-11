@@ -19,6 +19,7 @@ import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type Nat
 import { TurnToolCallingMode } from './native-tools/turn-mode';
 import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-breaker';
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -694,6 +695,13 @@ interface DecisionCallAllowance {
     Allowed: number;
 }
 
+/** A payload change from a refused completion, held until a completion is accepted. */
+interface HeldCompletionChange {
+    Change: AgentPayloadChangeRequest<unknown>;
+    /** Whether it was built on a payload still inherited unmodified from a prior run (see applyTurnPayloadChange). */
+    UnmodifiedInheritedPayload: boolean;
+}
+
 /** The prompt params that limit one turn's decisions. */
 type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
@@ -798,6 +806,13 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /**
+     * Payload changes sent with completions that were refused, in order. They are held, not
+     * committed: the next prompt sees the payload with them applied, and the next completion is
+     * built on top of them, so a model only has to send its corrections. They are committed with
+     * the next accepted completion, and dropped if the run ends without one.
+     */
+    private _heldCompletionChanges: HeldCompletionChange[] = [];
     /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
     private _lastSentFingerprints: string[] | undefined;
     /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
@@ -885,6 +900,13 @@ export class BaseAgent {
         identicalFailures: number;
         totalConsecutiveFailures: number;
     }> = new Map();
+
+    /**
+     * The same identical-arguments and attempt-budget rules for agent-local tools
+     * ({@link GetAgentTools}), which run outside the action dispatch path.
+     * @private
+     */
+    private _agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
 
     /**
      * The identity of one action call's arguments, for the circuit breaker's identical-arguments
@@ -1056,6 +1078,7 @@ export class BaseAgent {
         this._fatalActionFailures.clear();
         this._audienceLockedActions.clear();
         this._actionFailureHistory.clear();
+        this._agentToolBreaker.Reset();
     }
 
     /**
@@ -2784,6 +2807,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._heldCompletionChanges = [];
             this._resolvedTrailingStateMode = undefined;
             this._lastSentFingerprints = undefined;
             this._lastSentPrefix = undefined;
@@ -6205,24 +6229,71 @@ export class BaseAgent {
         });
         // Whatever fails below, the step is finalized and the call answered — never left Running.
         let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        const breakerKey = this.agentToolBreakerKey(call);
         try {
-            const ran = await this.runAgentTool(call, payload, params);
-            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
-            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
-            const applied = !ran.IsError && ran.PayloadChange
-                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
-                : { payload, error: undefined };
-            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+            const refusal = breakerKey === null ? null : this._agentToolBreaker.Check(call.toolName, breakerKey);
+            if (refusal) {
+                this.logStatus(`   ⚡ Circuit breaker: agent tool '${call.toolName}' not run (0ms)`, false, params);
+                outcome = { payload, content: refusal, isError: true };
+            } else {
+                outcome = await this.runAndApplyAgentTool(call, payload, params);
+                this.recordAgentToolOutcome(call.toolName, breakerKey, outcome.isError);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
             outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+            this.recordAgentToolOutcome(call.toolName, breakerKey, true);
         } finally {
             step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
             await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
                 { tool: call.toolName, content: outcome.content, isError: outcome.isError });
         }
         return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Runs one call and applies its payload change; a refused change makes the call an error. */
+    private async runAndApplyAgentTool<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; content: string; isError: boolean }> {
+        const ran = await this.runAgentTool(call, payload, params);
+        // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+        const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+        const applied = !ran.IsError && ran.PayloadChange
+            ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+            : { payload, error: undefined };
+        return { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+    }
+
+    /**
+     * The identity of a call's arguments for the agent-tool circuit breaker, or null when the call is
+     * not tracked: it is not an agent tool (`payload_change_request`, an unknown name), the agent type
+     * opted out of the breaker (`UsesActionCircuitBreaker === false`), or the tool did
+     * (`UsesCircuitBreaker === false`). Arguments are normalized like an action's.
+     */
+    private agentToolBreakerKey(call: AgentToolCallRequest): string | null {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind !== 'agentTool' || binding.definition.UsesCircuitBreaker === false) {
+            return null;
+        }
+        if (this.AgentTypeInstance?.UsesActionCircuitBreaker === false) {
+            return null;
+        }
+        return this.normalizeActionParams(call.arguments);
+    }
+
+    /** Updates the agent-tool circuit breaker after a call that ran (nothing for an untracked call). */
+    private recordAgentToolOutcome(toolName: string, breakerKey: string | null, isError: boolean): void {
+        if (breakerKey === null) {
+            return;
+        }
+        if (isError) {
+            this._agentToolBreaker.RecordFailure(toolName, breakerKey);
+        } else {
+            this._agentToolBreaker.RecordSuccess(toolName);
+        }
     }
 
     /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
@@ -6645,26 +6716,85 @@ export class BaseAgent {
             ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
+        return promptParams;
+    }
+
+    /**
+     * Completes the prompt params once {@link preparePromptParams} — including any subclass override —
+     * has returned: builds the trailing runtime-state message and checks the outgoing history for replayed
+     * reasoning that no longer matches.
+     *
+     * This runs after the hook, not inside it, because building the trailing message can render the child
+     * prompt (a relocated specialization) and caches that render for the prompt runner. Rendered inside the
+     * hook, it would miss the template data a subclass adds after calling `super.preparePromptParams()`, and
+     * the prompt would be sent without it. The history comes from `promptParams.conversationMessages`, so a
+     * subclass's own changes to the outgoing messages are kept and the trailing message stays last.
+     */
+    private async finalizePromptParams<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
         // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
         // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
         // In append-only mode (OpenAI prompt caching), prior runtime-state fragments are retained in history
         // so each turn extends the exact byte prefix of the previous request, maintaining ~93% cache hits.
         // In replace-in-place mode (Gemini/Cerebras), only the latest fragment is attached, keeping history lean.
-        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
         if (volatileStateMessage) {
             const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
             this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
-            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
+            promptParams.conversationMessages = this.assembleOutgoingMessages(promptParams.conversationMessages ?? params.conversationMessages, volatileStateMessage, isAppendOnly);
             if (isAppendOnly) {
                 params.conversationMessages.push(volatileStateMessage);
             }
             this._lastVolatileStateMessage = volatileStateMessage;
+            if (promptParams.data?._SPECIALIZATION_RELOCATED === true) {
+                promptParams.OnTemplateDataFinalized = (finalParams) =>
+                    this.refreshRelocatedSpecialization(finalParams, config, payload, params, volatileStateMessage);
+            }
         }
         if (promptParams.conversationMessages) {
             promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
-
         return promptParams;
+    }
+
+    /**
+     * Renders the trailing message again once the prompt runner has set the native tool-calling flags,
+     * and swaps it in when the text changed.
+     *
+     * A relocated specialization is pre-rendered here, before a model is selected, so it renders
+     * without the flags the runner sets from the selected model's tool-calling decision — a child
+     * prompt that words its instructions for the native or envelope path would get the envelope
+     * wording while the system prompt gets the native one. The runner calls this through
+     * {@link AIPromptParams.OnTemplateDataFinalized}. On any failure the message already built is kept.
+     */
+    private async refreshRelocatedSpecialization<P>(
+        promptParams: AIPromptParams,
+        config: AgentConfiguration,
+        payload: P,
+        params: ExecuteAgentParams,
+        previous: AgentChatMessage
+    ): Promise<void> {
+        try {
+            const rebuilt = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
+            if (!rebuilt || rebuilt.content === previous.content) {
+                return;
+            }
+            const replace = (messages: ChatMessage[] | undefined) => {
+                const at = messages ? messages.indexOf(previous) : -1;
+                if (messages && at >= 0) {
+                    messages[at] = rebuilt;
+                }
+            };
+            replace(promptParams.conversationMessages);
+            replace(params.conversationMessages);
+            this._lastVolatileStateMessage = rebuilt;
+            // The fingerprints were taken before the swap; without this, an append-only history
+            // reads the swapped message as changed next turn and drops the reasoning after it.
+            if (promptParams.conversationMessages) {
+                this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
+            }
+        } catch (error) {
+            this.logStatus(`Kept the trailing message as first built: re-rendering it with the final template data failed (${error instanceof Error ? error.message : String(error)})`, true, params);
+        }
     }
 
     /**
@@ -10154,10 +10284,13 @@ The context is now within limits. Please retry your request with the recovered c
         currentPayload: P,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Read before validation: a subclass may change the step in place (turn a Chat into a Success),
+        // and only a change the prompt step held as a completion draft can have been discarded.
+        const heldCompletionChange = BaseAgent.carriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = this.noteDiscardedCompletionChange(nextStep, await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteHeldCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
@@ -10211,22 +10344,26 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * A completion refused with a payload change in hand: the change is discarded (the prompt step
-     * commits it only for an accepted completion), so the refusal the model reads says so, and asks
-     * for the change again with the next completion. Otherwise the model would take the change as
-     * saved and its work would be lost. The change is removed from the step, so nothing later
-     * applies it. Any other step is returned as it is.
+     * A completion refused with a payload change in hand: the change is held, not applied (see
+     * {@link _heldCompletionChanges}), so the refusal the model reads says so and asks for the
+     * corrections only. The model sees the payload with the held change applied from the next turn,
+     * and its next completion's change is applied on top of it. The change is removed from the step,
+     * so nothing later applies it a second time. Any other step is returned as it is.
+     *
+     * `heldChange` is the change the prompt step held as a draft, read from the step before
+     * validation, so a step a subclass changed in place is judged by what the model sent.
      */
-    private noteDiscardedCompletionChange<P>(original: BaseAgentNextStep<P>, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
-        if (!BaseAgent.carriesCompletionChange(original) || step.step === 'Success') {
+    private noteHeldCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+        if (!heldChange || step.step === 'Success') {
             return step;
         }
         const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
-        const note = native
-            ? 'The payloadChangeRequest sent with this complete_task call was NOT applied. Send it again with your next complete_task call.'
-            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion.';
+        const call = native ? 'complete_task call' : 'completion';
+        const note = `The payloadChangeRequest sent with this ${call} was not applied yet: it is held, and the payload you see `
+            + `from now on includes it. It is applied together with your next ${call}. In that ${call}, send only the `
+            + `corrections, not the whole change again.`;
         const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
-        const { payloadChangeRequest: _discarded, ...rest } = step;
+        const { payloadChangeRequest: _held, ...rest } = step;
         return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };
     }
 
@@ -16795,14 +16932,61 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The payload a completion would leave behind: the committed payload with the completion's
-     * change applied. Success validation (the minimum-execution check, then `FinalPayloadValidation`)
-     * checks this draft, and it becomes the payload only if the completion is accepted. The
-     * opt-in payload change check is not asked here: it never runs on a step that ends the run.
+     * The payload a completion would leave behind: the committed payload with the held changes and
+     * then the completion's own change applied. Success validation (the minimum-execution check, then
+     * `FinalPayloadValidation`) checks this draft, and it becomes the payload only if the completion is
+     * accepted. A change identical to a held one is not applied again, so a model that resends its whole
+     * refused change does not duplicate array elements. The opt-in payload change check is not asked
+     * here: it never runs on a step that ends the run.
      */
-    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary } {
-        const changeResult = this.applyTurnPayloadChange(params, step, committed, isUnmodifiedInheritedPayload);
+    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary | undefined } {
+        const working = this.withHeldCompletionChanges(params, committed);
+        const change = step.payloadChangeRequest;
+        if (!change || this.isHeldCompletionChange(change)) {
+            return { payload: working, summary: undefined };
+        }
+        const changeResult = this.applyTurnPayloadChange(params, step, working, isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0);
         return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
+    }
+
+    /** `payload` with the held completion changes applied in order; `payload` itself when none are held. */
+    private withHeldCompletionChanges<P>(params: ExecuteAgentParams, payload: P): P {
+        return this._heldCompletionChanges.reduce<P>((current, held) => {
+            const step: BaseAgentNextStep<P> = { step: 'Success', terminate: false, payloadChangeRequest: held.Change as AgentPayloadChangeRequest<P> };
+            return this.applyTurnPayloadChange(params, step, current, held.UnmodifiedInheritedPayload).result;
+        }, payload);
+    }
+
+    /**
+     * After a completion: an accepted one commits the held changes (they were in its draft), so the
+     * list is cleared; a refused one adds its own change to the list, unless the same change is held.
+     */
+    private updateHeldCompletionChanges<P>(step: BaseAgentNextStep<P>, committedDraft: boolean, isUnmodifiedInheritedPayload: boolean): void {
+        if (committedDraft) {
+            this._heldCompletionChanges = [];
+            return;
+        }
+        const change = BaseAgent.carriesCompletionChange(step) ? step.payloadChangeRequest : undefined;
+        if (change && !this.isHeldCompletionChange(change)) {
+            this._heldCompletionChanges.push({
+                Change: change as AgentPayloadChangeRequest<unknown>,
+                UnmodifiedInheritedPayload: isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0
+            });
+        }
+    }
+
+    /** Whether `change` is, key order aside, one of the held completion changes. */
+    private isHeldCompletionChange<P>(change: AgentPayloadChangeRequest<P>): boolean {
+        const key = BaseAgent.stableJSON(change);
+        return this._heldCompletionChanges.some((held) => BaseAgent.stableJSON(held.Change) === key);
+    }
+
+    /** JSON with object keys sorted, so two equal values serialize the same. */
+    private static stableJSON(value: unknown): string {
+        return JSON.stringify(value, (_key, v: unknown) =>
+            v && typeof v === 'object' && !Array.isArray(v)
+                ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+                : v);
     }
 
     /**
@@ -16877,13 +17061,15 @@ The context is now within limits. Please retry your request with the recovered c
             // PayloadAtStart was already serialized from this same `payload` by createStepEntity
             // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
 
-            let downstreamPayload = payload; // Start with current payload
+            // The model sees the payload with any held completion changes applied (see _heldCompletionChanges).
+            const workingPayload = this.withHeldCompletionChanges(params, payload);
+            let downstreamPayload = workingPayload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
                 // Extract only allowed downstream payload
                 downstreamPayload = this._payloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
-                    payload, // our inbound payload before prompt
+                    workingPayload, // our inbound payload before prompt
                     downstreamPaths
                 );
             }
@@ -16905,7 +17091,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // don't need to save here, the run will be saved later
             }
 
-            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
+            const promptParams = await this.finalizePromptParams(
+                await this.preparePromptParams(promptConfig, downstreamPayload, params), promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution.
             // Coalesce rapid token chunks within a ~35ms window while emitting the first chunk immediately
@@ -17103,7 +17290,8 @@ The context is now within limits. Please retry your request with the recovered c
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             // A completion's payload change is held as a draft until Success validation accepts it
             // (see buildCompletionDraft); every other step's change is applied now, as it always was.
-            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep);
+            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep)
+                || (initialNextStep.step === 'Success' && this._heldCompletionChanges.length > 0);
             if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
                 const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
                 // Store payload change metadata for audit trail; merged into outputData later
@@ -17216,8 +17404,9 @@ The context is now within limits. Please retry your request with the recovered c
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
             const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
             finalPayload = resolved.payload;
-            const discardedCompletionChange = holdsCompletionChange && !resolved.committedDraft;
-            if (discardedCompletionChange && currentStepPayloadChangeResult) {
+            const heldCompletionChange = holdsCompletionChange && !resolved.committedDraft;
+            this.updateHeldCompletionChanges(initialNextStep, resolved.committedDraft, finalPayload === params.payload);
+            if (heldCompletionChange && currentStepPayloadChangeResult) {
                 currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
             }
 
@@ -17235,8 +17424,8 @@ The context is now within limits. Please retry your request with the recovered c
                     payloadChangeResult: currentStepPayloadChangeResult
                 }),
                 // A completion's change that was not applied because the completion was refused
-                ...(discardedCompletionChange && {
-                    payloadChangeDiscarded: 'The payload change was sent with a completion that was refused, so it was not applied.'
+                ...(heldCompletionChange && {
+                    payloadChangeHeld: 'The completion was refused, so its payload change is held: it is applied with the next accepted completion, or dropped if the run ends without one.'
                 }),
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
