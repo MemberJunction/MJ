@@ -81,6 +81,7 @@ import {
   FormatSqlParameterTypesForError,
   RowFilterParameterCollector,
   type RowFilterBoundParameter,
+  RecordChangeSnapshotColumnKindOf,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
@@ -2029,12 +2030,24 @@ export class SQLServerDataProvider
       .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
       .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
-    // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
-    // referencing `@ID` (set below from the result table).
-    const recordChangeEXEC = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+
+    // The snapshot is the row the procedure returned, when @ResultTable holds the whole row;
+    // otherwise the payload's in-memory snapshot. Build the inline `EXEC spCreateRecordChange_Internal`
+    // from the payload, referencing `@ID` (set below from the result table).
+    const snapshotFromRow = this.BuildsFullRecordJSONFromResultRow(entity, resolvedReturn);
+    const recordChangeEXEC = this.renderRecordChangeEXEC(
+      entity.EntityInfo.Name,
+      '@ID',
+      payload,
+      params,
+      snapshotFromRow ? SQLServerDataProvider.resultRowSnapshotVariable : undefined,
+    );
+    const snapshotDeclareSQL = snapshotFromRow
+      ? `DECLARE ${SQLServerDataProvider.resultRowSnapshotVariable} NVARCHAR(MAX) = (${this.renderResultRowSnapshotSelect(entity.EntityInfo)});`
+      : '';
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
-    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
     const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, resolvedReturn);
     const finalSelectSQL = `SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM @ResultTable;`;
 
@@ -2060,6 +2073,8 @@ export class SQLServerDataProvider
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
                         );
 
+                        ${snapshotDeclareSQL}
+
                         INSERT INTO @ResultChangesTable
                         ${recordChangeEXEC};
                     END;
@@ -2074,7 +2089,13 @@ export class SQLServerDataProvider
    * for the rendered form; without, the literals are written in directly. The entity name and change
    * type stay literal: they are constant for an entity and operation.
    */
-  private renderRecordChangeEXEC(entityName: string, recordIDSQL: string, payload: RecordChangePayload, params?: SaveParameterCollector): string {
+  private renderRecordChangeEXEC(
+    entityName: string,
+    recordIDSQL: string,
+    payload: RecordChangePayload,
+    params?: SaveParameterCollector,
+    fullRecordJSONSQL?: string,
+  ): string {
     const bind = (fieldName: string, literal: string): string => (params ? params.AddField(this.recordChangeField(fieldName), literal) : literal);
     const lineageClause = payload.source === 'Restore'
       ? `,
@@ -2092,9 +2113,87 @@ export class SQLServerDataProvider
                                                                                         @Type='${payload.type}',
                                                                                         @ChangesJSON=${bind('ChangesJSON', `N'${payload.changesJSON}'`)},
                                                                                         @ChangesDescription=${bind('ChangesDescription', `N'${payload.changesDescription}'`)},
-                                                                                        @FullRecordJSON=${bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
+                                                                                        @FullRecordJSON=${fullRecordJSONSQL ?? bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
+  }
+
+  /** The batch variable a save's Record Change snapshot is built into from `@ResultTable`. */
+  private static readonly resultRowSnapshotVariable = '@__mj_FullRecordJSON';
+
+  /** `FOR JSON` select lists by entity, built once per entity metadata object. */
+  private static readonly _resultRowSnapshotSelectCache = new WeakMap<EntityInfo, string>();
+
+  /**
+   * True when a save's Record Change snapshot can be built from the row its procedure returned:
+   * `@ResultTable` holds the whole row (the compiled procedure does not return datestamps only), and
+   * no column name contains a `.`, which `FOR JSON PATH` would turn into a nested object.
+   *
+   * Built from the returned row, the snapshot holds what the database stored: values another writer
+   * committed to columns this save did not change, server-set timestamps and defaults, current
+   * joined display values, and encrypted columns as their ciphertext.
+   */
+  protected override BuildsFullRecordJSONFromResultRow(entity: BaseEntity, returnContext: SaveReturnContext): boolean {
+    return !returnContext.spReturnsDatestampsOnly && entity.EntityInfo.Fields.every((f) => !f.Name.includes('.'));
+  }
+
+  /**
+   * `SELECT … FROM @ResultTable FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES`, one
+   * column per entity field, each rendered as {@link renderResultRowSnapshotColumn} describes.
+   */
+  private renderResultRowSnapshotSelect(entityInfo: EntityInfo): string {
+    const cached = SQLServerDataProvider._resultRowSnapshotSelectCache.get(entityInfo);
+    if (cached) {
+      return cached;
+    }
+    const columns = entityInfo.Fields.map((f) => `${this.renderResultRowSnapshotColumn(f)} AS ${this.QuoteIdentifier(f.Name)}`);
+    const sql = `SELECT ${columns.join(', ')} FROM @ResultTable FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES`;
+    SQLServerDataProvider._resultRowSnapshotSelectCache.set(entityInfo, sql);
+    return sql;
+  }
+
+  /**
+   * One `@ResultTable` column as the snapshot writes it, matching how a loaded entity serializes the
+   * same value: date-times as UTC ISO-8601 with milliseconds and `Z` (MJ stores `datetime`/`datetime2`
+   * as UTC), `bigint` as a string, binary as base64, and CLR types (which `FOR JSON` cannot serialize)
+   * and unrecognized types as text.
+   */
+  private renderResultRowSnapshotColumn(field: EntityFieldInfo): string {
+    const col = this.QuoteIdentifier(field.Name);
+    switch (RecordChangeSnapshotColumnKindOf(field.Type, 'sqlserver')) {
+      case 'utc-datetime':
+        // `datetime` holds 1/300-second ticks (.997 is stored as .99667), which the driver rounds to the
+        // millisecond; the finer types are truncated, as JavaScript's Date truncates them.
+        return SQLServerDataProvider.isoMillisecondsUTC(
+          `CAST(${col} AS ${field.Type.trim().toLowerCase() === 'datetime' ? 'datetime2(3)' : 'datetime2(7)'})`,
+        );
+      case 'offset-datetime':
+        return SQLServerDataProvider.isoMillisecondsUTC(`CAST(SWITCHOFFSET(${col}, '+00:00') AS datetime2(7))`);
+      case 'date':
+        return `CONVERT(nvarchar(10), ${col}, 23) + 'T00:00:00.000Z'`;
+      case 'time':
+        return `'1970-01-01T' + CONVERT(nvarchar(8), ${col}, 108) + '.' + RIGHT('00' + CONVERT(nvarchar(3), DATEPART(millisecond, ${col})), 3) + 'Z'`;
+      case 'bigint':
+        return `CONVERT(nvarchar(20), ${col})`;
+      case 'binary':
+        return `CAST(${col} AS varbinary(max))`;
+      case 'clr':
+        return `${col}.ToString()`;
+      case 'json':
+      case 'text':
+        return `CONVERT(nvarchar(max), ${col})`;
+      default:
+        return col;
+    }
+  }
+
+  /**
+   * `YYYY-MM-DDTHH:MM:SS.mmmZ` for a `datetime2` expression already in UTC. Style 126 drops the
+   * fraction when it is zero, so the milliseconds are written separately, truncated as JavaScript's
+   * `Date` truncates them. NULL stays NULL.
+   */
+  private static isoMillisecondsUTC(datetime2SQL: string): string {
+    return `CONVERT(nvarchar(19), ${datetime2SQL}, 126) + '.' + RIGHT('00' + CONVERT(nvarchar(3), DATEPART(millisecond, ${datetime2SQL})), 3) + 'Z'`;
   }
 
   /** A field of `MJ: Record Changes`, whose column types type the Record Change parameters. */
