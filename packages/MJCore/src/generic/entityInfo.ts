@@ -8,6 +8,7 @@ import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityIn
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
+import type { DatabasePlatform } from "./platformSQL"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual, NormalizeUUID, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
@@ -5141,9 +5142,11 @@ export class EntityInfo extends BaseInfo {
      * @param user
      * @param type
      * @param returnPrefix
+     * @param platform - the database platform the clause is rendered for; selects each filter's
+     *   `PlatformVariants` text when present. Omitted: each filter's base `FilterText`.
      * @returns
      */
-    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, platform?: DatabasePlatform): string {
         // Central exemption check: if the user holds any role that grants this
         // permission without an RLS filter, they are exempt — return no filter.
         if (this.UserExemptFromRowLevelSecurity(user, type)) {
@@ -5158,7 +5161,7 @@ export class EntityInfo extends BaseInfo {
         // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
         // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
         // than binding to the first one only. A single filter keeps its one pair of parentheses.
-        const terms = userRLS.map((rls) => `(${rls.MarkupFilterText(user)})`);
+        const terms = userRLS.map((rls) => `(${rls.MarkupFilterText(user, platform ? { platform } : undefined)})`);
         const sRLSSQL = terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
         return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
     }
@@ -5179,14 +5182,18 @@ export class EntityInfo extends BaseInfo {
      *
      * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
      * design decision; the column ships unused and the term composes here when it lands.
+     *
+     * `platform` is the database platform the clause is rendered for (a provider passes its own
+     * `PlatformKey`): each filter's `PlatformVariants` text for it is used when present, otherwise
+     * its base `FilterText`. Omitted, every filter renders its base text.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, platform?: DatabasePlatform): string {
         const layers: string[] = [];
-        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '');
+        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '', platform);
         if (roleClause && roleClause.length > 0) {
             layers.push(`(${roleClause})`);
         }
-        const keyClause = this.getAPIKeyRowFilterClause(user, type);
+        const keyClause = this.getAPIKeyRowFilterClause(user, type, platform);
         if (keyClause && keyClause.length > 0) {
             layers.push(`(${keyClause})`);
         }
@@ -5205,7 +5212,7 @@ export class EntityInfo extends BaseInfo {
      * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
      * to `(1=0)` via the match-nothing markup mode.
      */
-    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType): string {
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, platform?: DatabasePlatform): string {
         const bindings = user?.APIKeyRowFilters;
         if (!bindings || bindings.length === 0) {
             return '';
@@ -5222,7 +5229,7 @@ export class EntityInfo extends BaseInfo {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
                 }
-                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing' })})`;
+                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing', platform })})`;
             });
         return clauses.join(' AND ');
     }

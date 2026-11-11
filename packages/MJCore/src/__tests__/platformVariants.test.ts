@@ -5,7 +5,7 @@ import {
     ResolvePlatformVariant
 } from '../generic/platformVariants';
 import { QueryInfo } from '../generic/queryInfo';
-import { RowLevelSecurityFilterInfo } from '../generic/securityInfo';
+import { RowLevelSecurityFilterInfo, UserInfo } from '../generic/securityInfo';
 
 describe('PlatformVariants', () => {
     describe('ParsePlatformVariants', () => {
@@ -222,6 +222,25 @@ describe('PlatformVariants', () => {
                 PlatformVariants: '{bad json'
             });
             expect(filter.GetPlatformFilterText('postgresql')).toBe('[IsActive] = 1');
+        });
+
+        it('MarkupFilterText marks up the platform variant when a platform is given (#4435)', () => {
+            const filter = createRLSFilter({
+                FilterText: "[OwnerID] = '{{UserID}}'",
+                PlatformVariants: JSON.stringify({
+                    FilterText: { postgresql: `"OwnerID" = '{{UserID}}'` }
+                })
+            });
+            const user = new UserInfo(null, { ID: 'u-1', Name: 'Test', Email: 'test@example.com', IsActive: true });
+            expect(filter.MarkupFilterText(user, { platform: 'postgresql' })).toBe(`"OwnerID" = 'u-1'`);
+            expect(filter.MarkupFilterText(user, { platform: 'sqlserver' })).toBe(`[OwnerID] = 'u-1'`);
+            expect(filter.MarkupFilterText(user)).toBe(`[OwnerID] = 'u-1'`);
+        });
+
+        it('MarkupFilterText marks up the base text when the row has no variant', () => {
+            const filter = createRLSFilter({ FilterText: "[OwnerID] = '{{UserID}}'" });
+            const user = new UserInfo(null, { ID: 'u-1', Name: 'Test', Email: 'test@example.com', IsActive: true });
+            expect(filter.MarkupFilterText(user, { platform: 'postgresql' })).toBe(`[OwnerID] = 'u-1'`);
         });
 
         it('should cache parsed variants across multiple calls', () => {

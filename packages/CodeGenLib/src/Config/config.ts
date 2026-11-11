@@ -915,6 +915,13 @@ const configInfoSchema = z.object({
   verboseOutput: z.boolean().optional().default(false),
 
   /**
+   * PostgreSQL only: log, once per distinct statement and at verbose level, every statement the
+   * identifier auto-quote shim changes (#4435). The log is the inventory of SQL that still depends on
+   * the shim. Unset: on unless `NODE_ENV` is `production`.
+   */
+  pgAutoQuoteAudit: z.boolean().optional(),
+
+  /**
    * Number of metadata `INSERT` statements CodeGen joins into a single batched
    * round-trip when syncing newly-discovered entity fields into the metadata
    * tables (`createNewEntityFieldsFromSchema`). Each row's INSERT SQL is

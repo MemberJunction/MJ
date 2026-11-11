@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, LogStatusEx, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
@@ -15,7 +15,7 @@ import {
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { BuildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, AutoQuotePostgreSQLIdentifiersAudited, PostgreSQLAutoQuoteAuditor, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
@@ -72,6 +72,7 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     async SetupDataSource(): Promise<DataSourceResult> {
         StartSpinner('Initializing database connection...');
+        PostgreSQLAutoQuoteAuditor.Instance.Configure({ Enabled: configInfo.pgAutoQuoteAudit });
         const pool = await PGConnection();
         const pgConfig = GetPgConfig()!;
         const coreSchema = MjCoreSchema();
@@ -2373,10 +2374,13 @@ $if_view_exists$;
      * quoted by one implementation rather than two hand-synced copies. See
      * {@link AutoQuotePostgreSQLIdentifiers} for the quoting rule and its rationale.
      *
+     * A statement the shim changes is logged once at verbose level when the auto-quote audit is on
+     * (`pgAutoQuoteAudit` in the CodeGen config, #4435).
+     *
      * @inheritdoc
      */
     quoteSQLForExecution(sql: string): string {
-        return AutoQuotePostgreSQLIdentifiers(sql);
+        return AutoQuotePostgreSQLIdentifiersAudited(sql, 'codegen', (message) => LogStatusEx({ message, verboseOnly: true }));
     }
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
