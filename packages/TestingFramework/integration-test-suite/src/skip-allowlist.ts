@@ -212,6 +212,12 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
             + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
     },
     {
+        CheckId: 'record-change-snapshot.RCS4',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
         CheckId: 'ciphertext-cache.CT0',
         Gate: 'credentials',
         Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
