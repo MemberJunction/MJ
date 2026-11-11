@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { MJUserViewEntity_IGridAggregate as ViewGridAggregate } from '@memberjunction/core-entities';
+import { ParseSimpleAggregateExpression } from './aggregate-expression';
 
 type AggregateDisplayType = 'column' | 'card';
 
@@ -247,8 +248,7 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
    * Also matches COUNT(*) for row counting
    */
   private isSimpleExpression(expression: string): boolean {
-    const pattern = /^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*(\*|\[?[\w\s]+\]?)\s*\)$/i;
-    return pattern.test(expression.trim());
+    return ParseSimpleAggregateExpression(expression) !== null;
   }
 
   /**
@@ -256,14 +256,8 @@ export class AggregateSetupDialogComponent implements OnInit, OnChanges {
    * Returns empty string for column if COUNT(*)
    */
   private parseSimpleExpression(expression: string): { func: AggregateFunctionType; column: string } | null {
-    const match = expression.trim().match(/^(SUM|AVG|COUNT|MIN|MAX|COUNT_DISTINCT)\s*\(\s*(\*|\[?([\w\s]+)\]?)\s*\)$/i);
-    if (!match) return null;
-
-    const funcName = match[1].toUpperCase().replace(' ', '_') as AggregateFunctionType;
-    // If it's COUNT(*), column will be empty string
-    const column = match[2] === '*' ? '' : (match[3] || match[2]).trim();
-
-    return { func: funcName, column };
+    const parsed = ParseSimpleAggregateExpression(expression);
+    return parsed ? { func: parsed.Func, column: parsed.Column } : null;
   }
 
   /**
