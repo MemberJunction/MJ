@@ -7,7 +7,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-list-check",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -274,8 +277,8 @@
       "ID": "5ED2D719-3B8C-47F2-BF6D-DE74FD643C6C"
     },
     "sync": {
-      "lastModified": "2026-06-26T21:32:00.661Z",
-      "checksum": "e54aeb2fdcd0b0a9407f392648c8ad57b624861f8c2f2c107b786a47c58061ac"
+      "lastModified": "2026-11-10T23:41:37.382Z",
+      "checksum": "d717983381751618c74f74ddec3d311e40753161279edfcff67d8e4dd296c38d"
     }
   }
 ]

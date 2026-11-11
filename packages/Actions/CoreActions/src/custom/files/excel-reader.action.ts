@@ -4,6 +4,63 @@ import { BaseFileHandlerAction } from "../utilities/base-file-handler";
 import ExcelJS from "exceljs";
 import { BaseAction } from '@memberjunction/actions';
 
+/** The parts of an `A1:D10`-style cell range, as written. */
+export interface CellRange {
+    StartColumn: string;
+    StartRow: string;
+    EndColumn: string;
+    EndRow: string;
+}
+
+function isUpperLetter(c: string): boolean {
+    return c >= 'A' && c <= 'Z';
+}
+
+function isDigit(c: string): boolean {
+    return c >= '0' && c <= '9';
+}
+
+/** Index just past the run of characters from `start` that pass `test`. */
+function runEnd(text: string, start: number, test: (c: string) => boolean): number {
+    let i = start;
+    while (i < text.length && test(text[i])) {
+        i++;
+    }
+    return i;
+}
+
+/**
+ * The first `LETTERS digits : LETTERS digits` range in `text` (e.g. `B2:D10`), or null. Same result
+ * as `text.match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/)`, scanned once: that regex restarts inside every run
+ * of capitals, which is quadratic on a long run (CodeQL js/polynomial-redos). A match can only start
+ * where a run of capitals starts, so each run is tried once.
+ */
+export function ParseCellRange(text: string): CellRange | null {
+    let i = 0;
+    while (i < text.length) {
+        if (!isUpperLetter(text[i])) {
+            i++;
+            continue;
+        }
+        const startColEnd = runEnd(text, i, isUpperLetter);
+        const startRowEnd = runEnd(text, startColEnd, isDigit);
+        if (startRowEnd > startColEnd && text[startRowEnd] === ':') {
+            const endColEnd = runEnd(text, startRowEnd + 1, isUpperLetter);
+            const endRowEnd = runEnd(text, endColEnd, isDigit);
+            if (endColEnd > startRowEnd + 1 && endRowEnd > endColEnd) {
+                return {
+                    StartColumn: text.slice(i, startColEnd),
+                    StartRow: text.slice(startColEnd, startRowEnd),
+                    EndColumn: text.slice(startRowEnd + 1, endColEnd),
+                    EndRow: text.slice(endColEnd, endRowEnd),
+                };
+            }
+        }
+        i = startColEnd;
+    }
+    return null;
+}
+
 /**
  * Action that reads Excel files and converts them to JSON format
  * Supports multiple sheets, ranges, and various data types
@@ -203,12 +260,12 @@ export class ExcelReaderAction extends BaseFileHandlerAction {
         let endCol = worksheet.columnCount;
 
         if (options.range) {
-            const rangeMatch = options.range.match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/);
-            if (rangeMatch) {
-                startCol = this.columnToNumber(rangeMatch[1]);
-                startRow = parseInt(rangeMatch[2]);
-                endCol = this.columnToNumber(rangeMatch[3]);
-                endRow = parseInt(rangeMatch[4]);
+            const range = ParseCellRange(options.range);
+            if (range) {
+                startCol = this.columnToNumber(range.StartColumn);
+                startRow = parseInt(range.StartRow);
+                endCol = this.columnToNumber(range.EndColumn);
+                endRow = parseInt(range.EndRow);
             }
         }
 

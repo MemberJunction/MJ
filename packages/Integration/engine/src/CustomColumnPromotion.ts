@@ -23,6 +23,8 @@
  *   capture→promote loop converges instead of re-promoting forever.
  */
 
+import { TrimChars } from '@memberjunction/global';
+
 /** The schema-builder field-type family + the concrete per-dialect SQL types we infer. */
 export interface InferredColumnType {
     /** Schema-builder SchemaFieldType family ('string' | 'number' | 'boolean' | 'datetime'). */
@@ -367,7 +369,8 @@ export function buildOverflowStats(
  * the existing-column context.
  */
 export function SanitizeColumnName(key: string): string {
-    let name = key.replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    let name = key.replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_');
+    name = TrimChars(name, '_');
     if (name.length === 0) name = 'Custom';
     if (/^[0-9]/.test(name)) name = `c_${name}`;
     return name.length > 120 ? name.slice(0, 120) : name;

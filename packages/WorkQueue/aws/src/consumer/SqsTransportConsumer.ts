@@ -109,6 +109,11 @@ export class SqsTransportConsumer<TPayload extends WorkJson = WorkJson> implemen
         return this.settle(delivery, 'Pending', () => this.gateway.ChangeVisibility(this.config.QueueUrl, delivery.LeaseToken, seconds));
     }
 
+    /**
+     * Sends the dead-letter copy, then deletes the source. On a standard queue, a lost lease makes that delete fail
+     * (`LeaseLost`) and the source comes back; dead-lettering it again writes a second copy. Both carry the same
+     * `mj_source_message_id`, and the operator listing shows one of them (#5143).
+     */
     public async DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
         const tracked = this.tracked.get(delivery.DeliveryID);
         if (!tracked) {

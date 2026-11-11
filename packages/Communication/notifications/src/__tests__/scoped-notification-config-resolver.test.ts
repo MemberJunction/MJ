@@ -101,6 +101,25 @@ describe('ScopedNotificationConfigResolver', () => {
   });
 });
 
+describe('malformed SecondaryScopes and the specificity weights (#5492)', () => {
+  it('skips a row whose SecondaryScopes is not a JSON object instead of applying it to everyone', () => {
+    const rows = [row({ SecondaryScopes: '{not json', Email: 'Deny', IsLocked: true }), row({ SecondaryScopes: '["origin"]', InApp: 'Deny' })];
+    const r = resolver.Resolve(rows, TYPE, undefined, recipient);
+    expect(r.rows).toHaveLength(0);
+    expect(r.email).toEqual({ value: null, lockedOff: false });
+    expect(r.inApp.value).toBeNull();
+  });
+
+  it('weighs a secondary-scope match (+4) above a primary-record match (+2)', () => {
+    // With equal weights these two would tie and the Deny would win; +4 > +2 makes the secondary row more specific.
+    const rows = [
+      row({ PrimaryScopeRecordID: USER, Email: 'Deny' }),
+      row({ SecondaryScopes: JSON.stringify({ origin: 'System' }), Email: 'Allow' }),
+    ];
+    expect(resolver.Resolve(rows, TYPE, { secondaryScopes: { origin: 'System' } }, recipient).email.value).toBe('Allow');
+  });
+});
+
 describe('ResolveChannel', () => {
   const scoped = (value: 'Allow' | 'Deny' | null, lockedOff = false) => ({ value, lockedOff });
 

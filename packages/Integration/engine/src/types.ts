@@ -36,6 +36,8 @@ export type SyncErrorCode =
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'OBJECT_UNAVAILABLE'
+    /** An object reached the per-run page cap (`maxBatchesPerMap`) before the source said it was done. */
+    | 'BATCH_CAP_REACHED'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
@@ -202,6 +204,11 @@ export interface MappedRecord {
      * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
      */
     UnmappedFields?: Record<string, unknown>;
+    /**
+     * #5202 — the source flags this record as deleted (entity-map Configuration `sourceDeleteField` /
+     * `sourceDeleteValue`) and the map's DeleteBehavior is SoftDelete: the row is written tombstoned.
+     */
+    SourceDeleted?: boolean;
 }
 
 /**

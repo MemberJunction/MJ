@@ -358,6 +358,7 @@ export class WakeGateEvaluator {
             watermarks,
             deltas: watermarks,
             totalChangedCount,
+            TotalChangedRecords: totalChangedCount,
             minutesSinceLastRun,
             elapsedMinutes: minutesSinceLastRun ?? minutesSinceLastCheck ?? 0,
             minutesSinceLastCheck,
@@ -396,6 +397,9 @@ export class WakeGateEvaluator {
                         OrderBy: '__mj_UpdatedAt DESC',
                         MaxRows: MAX_WATERMARK_SAMPLE_RECORDS,
                         ResultType: 'simple',
+                        // The watermark in the filter changes every evaluation, so a cached
+                        // entry would never be read again; read live.
+                        BypassCache: true,
                     },
                     {
                         EntityName: rule.entityName,

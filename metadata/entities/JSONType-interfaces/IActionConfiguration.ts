@@ -3,14 +3,15 @@
  * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
  * column each. New optional keys can be added without a schema migration.
  *
- * Two kinds of setting share it today:
+ * Three kinds of setting share it today:
  *
  *  - Integration routing, written by IntegrationActionGenerator for actions with
  *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
  *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
  *    how far to trust what the action returns.
+ *  - The taint gate, read by the task-graph dispatcher to refuse egress from a tainted run.
  *
- * NULL for actions that need neither.
+ * NULL for actions that need none of them.
  */
 export interface IActionConfiguration {
     /** Integration routing: the MJ: Integrations record the generated action calls. */
@@ -36,4 +37,12 @@ export interface IActionConfiguration {
      *    AIDirectives are dropped, and the run is marked tainted so its memory writes land Pending.
      */
     outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
+
+    /**
+     * True for an action that sends data out of MJ or makes a change that cannot be taken back
+     * (email, webhooks, payments, external writes). A durable task graph whose run is tainted (it
+     * ingested SemiTrusted or Untrusted content) refuses to run it unless a completed Human node
+     * upstream approved the work. Absent means false.
+     */
+    disallowWhenTainted?: boolean;
 }

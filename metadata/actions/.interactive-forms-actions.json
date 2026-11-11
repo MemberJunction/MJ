@@ -953,7 +953,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-circle-check",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1159,8 +1162,8 @@
       "ID": "68B9E24D-3ECF-4D5D-81FF-95CDFC27BE70"
     },
     "sync": {
-      "lastModified": "2026-10-06T20:21:42.914Z",
-      "checksum": "c880914bec63eb4eca6bf525cd1c712c75818fbbaa29021fcd026f0d8ba7f981"
+      "lastModified": "2026-11-10T23:41:34.709Z",
+      "checksum": "6cc10bc6037bf0299f61d0f0214067193e55aa49229cd816bf3f7e9ae998d661"
     }
   },
   {
@@ -1171,7 +1174,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rotate-left",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1449,8 +1455,8 @@
       "ID": "DDACA877-B97A-40FA-B434-E002193DCC2C"
     },
     "sync": {
-      "lastModified": "2026-10-06T20:21:42.933Z",
-      "checksum": "e197a581205943fb201ef330fa2f1d6a09355ec86adb6e842a4acaea82e569d2"
+      "lastModified": "2026-11-10T23:41:34.722Z",
+      "checksum": "75d2c658d390f341180d288da35e21a7f23fd4c9b7b4362178d5190e6789dc36"
     }
   }
 ]

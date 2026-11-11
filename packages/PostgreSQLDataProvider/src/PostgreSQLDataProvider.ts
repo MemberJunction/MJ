@@ -367,6 +367,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             parent.ExcludeSchemas,
             false,
         );
+        cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+        cfg.DeltaUpdates = this.DeltaUpdates;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -1148,6 +1150,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Reads the target record's physical columns from `"schema"."BaseTable" WHERE ... FOR UPDATE`
+     * inside the save transaction so concurrent writers serialize on the row lock before `spUpdate*`
+     * executes. Queries `BaseTable` directly because PostgreSQL does not allow `FOR UPDATE` on views
+     * containing `LEFT JOIN`s.
+     */
+    protected override RenderLockedRowReadSQL(
+        entityInfo: EntityInfo,
+        pkWhereClause: string,
+        columns: string[],
+    ): string | null {
+        if (columns.length === 0 || !pkWhereClause || !entityInfo.BaseTable) {
+            return null;
+        }
+        const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+        const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable);
+        return `SELECT ${selectCols} FROM ${tableRef} WHERE ${pkWhereClause} FOR UPDATE`;
+    }
+
+    /**
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
@@ -1470,12 +1491,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
+            // Negative lookbehind (?<!\$): don't quote $1 parameter tokens whose identifier
+            // part might match a numeric/field pattern (BindExtraFilterParameters rewrites
+            // @paramName to $1 before TransformExternalSQLClause runs; on PostgreSQL, @ is the
+            // unary absolute-value operator, so @FieldName must still quote "FieldName").
             // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
             // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);

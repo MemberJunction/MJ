@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W8 -> S9.4",
+    "Description": "Gate G2.40 (phase 2, dataset W8, criterion S9.4): noise columns carry <= 10% of held-out permutation importance on W8-highcard s42 (T8; 87-100% today). The noise columns are Noise1-Noise5, Region, PostalCode and MemberNumber, which is also flagged as a high-cardinality identifier. It fails when importance is computed on training rows (noise share > 10%).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.40\",\"owner:PR3\",\"phase:2\",\"dataset:W8\",\"criterion:S9.4\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The noise columns of W8-highcard s42 carry at most 10% of the positive held-out permutation importance of a LightGBM run, and MemberNumber is flagged high-cardinality-id (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w8-s9-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "7A80E3B7-EB02-4BB1-A714-6DD7DBECFD5D"
+  }
+}

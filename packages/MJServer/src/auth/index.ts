@@ -8,6 +8,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
+import { DomainMatchesPattern } from './domainPattern.js';
 
 export * from './APIKeyScopeAuth.js';
 export * from './scopeLimitedPrincipal.js';
@@ -234,11 +235,7 @@ const extractEmailDomain = (email: string): string => {
  * `example.com` — list both if you need both.
  */
 const isDomainAuthorized = (domain: string): boolean =>
-  configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => {
-    // Convert wildcard domain patterns to regular expressions
-    const regex = new RegExp('^' + pattern.toLowerCase().trim().replace(/\./g, '\\.').replace(/\*/g, '.*') + '$');
-    return regex.test(domain);
-  });
+  configInfo.userHandling.newUserAuthorizedDomains.some((pattern) => DomainMatchesPattern(domain, pattern));
 
 /** Cached users whose email matches, case-insensitively and trimmed. */
 const findCachedByEmail = (email: string): UserInfo[] =>

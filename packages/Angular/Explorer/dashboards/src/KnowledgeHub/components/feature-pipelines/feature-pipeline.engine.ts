@@ -190,7 +190,7 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
       Status: p.Status,
       WorkType: p.WorkType,
       TargetEntityID: p.EntityID,
-      TargetEntity: p.Entity,
+      TargetEntity: p.Entity ?? p.EntityID,
       OutputAttribute: FeaturePipelineEngine.deriveOutputAttribute(p.OutputMapping),
       OnDemandEnabled: p.OnDemandEnabled,
       ScheduleEnabled: p.ScheduleEnabled,

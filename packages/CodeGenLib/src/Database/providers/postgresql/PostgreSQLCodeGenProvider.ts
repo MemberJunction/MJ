@@ -2882,10 +2882,13 @@ WHERE p.prokind IN ('f', 'p')
             };
         }
 
-        // Composite keys or non-auto, non-UUID PKs
-        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
-        ).join(' AND ');
+        // Composite keys or non-auto, non-UUID PKs. #3526: a key column that allows NULL is matched
+        // NULL-safely (IS NOT DISTINCT FROM would not use a btree index).
+        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) => {
+            const col = pgDialect.QuoteIdentifier(k.Name);
+            const param = pgDialect.ParameterRef(k.CodeName);
+            return k.AllowsNull ? `(${col} = ${param} OR (${col} IS NULL AND ${param} IS NULL))` : `${col} = ${param}`;
+        }).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
@@ -3160,13 +3163,19 @@ WITH fk_cache AS (
    SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
    FROM ${qs(schema, 'vwForeignKeys')}
 ),
+-- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
 pk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT "TableName", "ColumnName", "SchemaName",
+          COUNT(*) OVER (PARTITION BY "SchemaName", "TableName") AS "KeyColumnCount"
    FROM ${qs(schema, 'vwTablePrimaryKeys')}
 ),
+-- Only columns that are, alone, the key of a non-partial unique index or constraint (#4536).
+-- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
 uk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT DISTINCT "TableName", "ColumnName", "SchemaName"
    FROM ${qs(schema, 'vwTableUniqueKeys')}
+   WHERE "KeyColumnCount" = 1
+     AND NOT "IsFiltered"
 ),
 max_sequences AS (
    SELECT
@@ -3204,7 +3213,7 @@ numbered_rows AS (
       CASE WHEN sf."FieldName" = 'Name' THEN TRUE ELSE FALSE END AS "IsNameField",
       CASE WHEN pk."ColumnName" IS NOT NULL THEN TRUE ELSE FALSE END AS "IsPrimaryKey",
       CASE
-            WHEN pk."ColumnName" IS NOT NULL THEN TRUE
+            WHEN pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1 THEN TRUE
             WHEN uk."ColumnName" IS NOT NULL THEN TRUE
             ELSE FALSE
       END AS "IsUnique",
