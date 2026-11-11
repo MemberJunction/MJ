@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TelemetryManager, TelemetryEventLifecycleType } from '../generic/telemetryManager';
+import { TelemetryManager, TelemetryEventLifecycleType, TelemetryCustomParams } from '../generic/telemetryManager';
 import { WithoutDiagnosticCapture } from '../generic/logging';
 
 /**
@@ -86,8 +86,8 @@ describe('TelemetryManager — OnEvent lifecycle hook', () => {
 
     it('preserves numeric AI token counts through sanitizeTelemetryParams (not redacted as secrets)', () => {
         const tm = TelemetryManager.Instance;
-        let capturedInputTokens: unknown;
-        let capturedOutputTokens: unknown;
+        let capturedInputTokens: number | undefined;
+        let capturedOutputTokens: number | undefined;
 
         tm.OnEvent((event) => {
             if (event.category === 'AI') {
@@ -105,8 +105,8 @@ describe('TelemetryManager — OnEvent lifecycle hook', () => {
 
     it('still redacts a string field whose name matches a sensitive-key substring', () => {
         const tm = TelemetryManager.Instance;
-        let capturedApiKey: unknown;
-        let capturedUrl: unknown;
+        let capturedApiKey: string | undefined;
+        let capturedUrl: string | undefined;
 
         tm.OnEvent((event) => {
             if (event.category === 'Custom') {
@@ -123,5 +123,91 @@ describe('TelemetryManager — OnEvent lifecycle hook', () => {
         // test proves a numeric field with a matching substring (e.g. token counts) is spared.
         expect(capturedApiKey).toBe('[REDACTED]');
         expect(capturedUrl).toBe('https://example.com');
+    });
+
+    it('notifies 1-arg listeners only on "end" while 2-arg listeners receive both "start" and "end"', () => {
+        const tm = TelemetryManager.Instance;
+        let oneArgCount = 0;
+        const twoArgPhases: TelemetryEventLifecycleType[] = [];
+
+        const unsub1 = tm.OnEvent((_event) => {
+            oneArgCount++;
+        });
+        const unsub2 = tm.OnEvent((_event, type) => {
+            twoArgPhases.push(type);
+        });
+
+        const id = tm.StartEvent('RunView', 'ProviderBase.RunView', { EntityName: 'MJ: Users' });
+        expect(oneArgCount).toBe(0);
+        expect(twoArgPhases).toEqual(['start']);
+
+        tm.EndEvent(id);
+        expect(oneArgCount).toBe(1);
+        expect(twoArgPhases).toEqual(['start', 'end']);
+
+        tm.RecordEvent('AI', 'Chat.Complete', { modelName: 'gpt' }, 15);
+        expect(oneArgCount).toBe(2);
+        expect(twoArgPhases).toEqual(['start', 'end', 'start', 'end']);
+
+        unsub1();
+        unsub2();
+    });
+
+    it('is idempotent when calling unsubscribe multiple times', () => {
+        const tm = TelemetryManager.Instance;
+        let callCount = 0;
+        const unsubscribe = tm.OnEvent((_event) => {
+            callCount++;
+        });
+
+        tm.RecordEvent('AI', 'Chat.Complete', { modelName: 'gpt' }, 5);
+        expect(callCount).toBe(1);
+
+        unsubscribe();
+        unsubscribe();
+        unsubscribe();
+
+        tm.RecordEvent('AI', 'Chat.Complete', { modelName: 'gpt' }, 5);
+        expect(callCount).toBe(1);
+    });
+
+    it('preserves all allowlisted numeric token counts while redacting other sensitive fields', () => {
+        const tm = TelemetryManager.Instance;
+        let capturedParams: Record<string, string | number | boolean | object | null | undefined> | undefined;
+
+        tm.OnEvent((event) => {
+            if (event.category === 'Custom') {
+                capturedParams = event.params as Record<string, string | number | boolean | object | null | undefined>;
+            }
+        });
+
+        const testParams: TelemetryCustomParams = {
+            modelName: 'gpt',
+            inputTokens: 100,
+            outputTokens: 200,
+            promptTokens: 100,
+            completionTokens: 200,
+            totalTokens: 300,
+            cachedInputTokens: 50,
+            secretCode: 9999,
+            tokenNaN: NaN,
+            tokenInfinity: Infinity,
+            authorization: { bearer: 'abc' },
+        };
+
+        tm.RecordEvent('Custom', 'Chat.Complete', testParams, 10);
+
+        expect(capturedParams).toBeDefined();
+        expect(capturedParams?.inputTokens).toBe(100);
+        expect(capturedParams?.outputTokens).toBe(200);
+        expect(capturedParams?.promptTokens).toBe(100);
+        expect(capturedParams?.completionTokens).toBe(200);
+        expect(capturedParams?.totalTokens).toBe(300);
+        expect(capturedParams?.cachedInputTokens).toBe(50);
+
+        expect(capturedParams?.secretCode).toBe('[REDACTED]');
+        expect(capturedParams?.tokenNaN).toBe('[REDACTED]');
+        expect(capturedParams?.tokenInfinity).toBe('[REDACTED]');
+        expect(capturedParams?.authorization).toBe('[REDACTED]');
     });
 });
