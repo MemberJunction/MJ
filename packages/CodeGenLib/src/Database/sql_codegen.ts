@@ -14,7 +14,7 @@ import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { CombineFiles, LogIf, SortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
 import { writeFileIfChanged as writeFileIfChangedShared } from '../Misc/file-write';
@@ -48,6 +48,229 @@ export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
 ): T[] {
     return EntitiesNotInExcludedSchemas(entities, excludeSchemas);
 }
+
+/** Precomputed SQL fragments for phased provider execution, avoiding double SQL generation and database queries. */
+export interface PrecomputedEntityPhasedSQL {
+    TvfSQL: string;
+    ViewSQL: string;
+    CrudCreateSQL: string;
+    CrudUpdateSQL: string;
+    CrudDeleteSQL: string;
+    FtsSQL: string;
+    ViewPermSQL: string;
+}
+
+/**
+ * Partitions entities into waves where all entities within each wave can be executed concurrently
+ * without SQL object creation or dependency conflicts on PostgreSQL.
+ *
+ * Conflict rules:
+ *   1. Direct FK / IS-A parent dependency: referencing entities run in later waves than referenced entities.
+ *   2. 2-hop shared-dependent conflict: two entities both joined into a third entity's view never share a wave.
+ *   3. Custom / layered / alternate base view entities are isolated into singleton waves.
+ *   4. Topological wave assignment ensures referenced views exist before dependent views update.
+ */
+export function PartitionEntitiesIntoConflictFreeWaves(entities: EntityInfo[], maxWaveSize: number): EntityInfo[][] {
+    if (entities.length === 0) {
+        return [];
+    }
+    if (maxWaveSize <= 1 || entities.length <= 1) {
+        return entities.map(e => [e]);
+    }
+
+    // Assign each entity an index 0..N-1 and map NormalizeUUID(e.ID) -> index
+    const idToIndex = new Map<string, number>();
+    for (let i = 0; i < entities.length; i++) {
+        const e = entities[i];
+        if (e.ID) {
+            idToIndex.set(NormalizeUUID(e.ID), i);
+        }
+    }
+
+    // For each entity i, collect all referenced entity indices refs[i]
+    // i depends on j (j must be executed before or in an earlier wave than i)
+    const refs: Array<Set<number>> = entities.map(() => new Set<number>());
+    for (let i = 0; i < entities.length; i++) {
+        const e = entities[i];
+        const eRefs = refs[i];
+
+        // Every f.RelatedEntityID on e.Fields
+        for (const f of e.Fields ?? []) {
+            if (f.RelatedEntityID) {
+                const j = idToIndex.get(NormalizeUUID(f.RelatedEntityID));
+                if (j !== undefined && j !== i) {
+                    eRefs.add(j);
+                }
+            }
+        }
+
+        // e.ParentID
+        if (e.ParentID) {
+            const j = idToIndex.get(NormalizeUUID(e.ParentID));
+            if (j !== undefined && j !== i) {
+                eRefs.add(j);
+            }
+        }
+
+        // every p.ID in e.ParentChain ?? []
+        for (const p of e.ParentChain ?? []) {
+            if (p?.ID) {
+                const j = idToIndex.get(NormalizeUUID(p.ID));
+                if (j !== undefined && j !== i) {
+                    eRefs.add(j);
+                }
+            }
+        }
+    }
+
+    // Build undirected conflicts: Array<Set<number>>
+    const conflicts: Array<Set<number>> = entities.map(() => new Set<number>());
+    for (let i = 0; i < entities.length; i++) {
+        for (const j of refs[i]) {
+            conflicts[i].add(j);
+            conflicts[j].add(i);
+        }
+    }
+
+    // 2-hop shared-dependent edge:
+    // for each entity w, if w references both a and b, a and b conflict
+    for (let w = 0; w < entities.length; w++) {
+        const arr = Array.from(refs[w]);
+        for (let aIdx = 0; aIdx < arr.length; aIdx++) {
+            const a = arr[aIdx];
+            for (let bIdx = aIdx + 1; bIdx < arr.length; bIdx++) {
+                const b = arr[bIdx];
+                if (a !== b) {
+                    conflicts[a].add(b);
+                    conflicts[b].add(a);
+                }
+            }
+        }
+    }
+
+    // Custom / layered / alternate base view isolation
+    const isIsolated = (e: EntityInfo): boolean => {
+        return !e.BaseViewGenerated || e.HasLayeredBaseView || ((e.AlternateBaseViews?.length ?? 0) > 0);
+    };
+
+    // Topological + 2-hop conflict wave assignment using Kahn's algorithm over refs
+    // In refs: i references j => j must come before i (j is a dependency of i).
+    // inDegree[i] is the number of unplaced dependencies of i.
+    const inDegree: number[] = refs.map(r => r.size);
+    const dependentsOf: Array<number[]> = entities.map(() => []);
+    for (let i = 0; i < entities.length; i++) {
+        for (const j of refs[i]) {
+            dependentsOf[j].push(i);
+        }
+    }
+
+    const placed = new Set<number>();
+    const waves: EntityInfo[][] = [];
+    const waveIndices: Array<Set<number>> = [];
+    const waveIsIsolated: boolean[] = [];
+    const entityWaveIndex = new Map<number, number>();
+
+    while (placed.size < entities.length) {
+        // Ready candidates: unplaced entities with inDegree === 0
+        let readyCandidates: number[] = [];
+        for (let i = 0; i < entities.length; i++) {
+            if (!placed.has(i) && inDegree[i] === 0) {
+                readyCandidates.push(i);
+            }
+        }
+
+        // If cycle exists, break cycle deterministically by picking unplaced entity with smallest index
+        if (readyCandidates.length === 0) {
+            let bestIndex = -1;
+            let minDegree = Infinity;
+            for (let i = 0; i < entities.length; i++) {
+                if (!placed.has(i)) {
+                    if (inDegree[i] < minDegree || (inDegree[i] === minDegree && (bestIndex === -1 || i < bestIndex))) {
+                        minDegree = inDegree[i];
+                        bestIndex = i;
+                    }
+                }
+            }
+            readyCandidates = [bestIndex];
+        }
+
+        // Process ready candidates deterministically in index order
+        readyCandidates.sort((a, b) => a - b);
+        for (const curr of readyCandidates) {
+            if (placed.has(curr)) continue;
+
+            const e = entities[curr];
+            const isolated = isIsolated(e);
+
+            // minWave: must be strictly greater than wave index of any already-placed dependency j in refs[curr]
+            let minWave = 0;
+            for (const j of refs[curr]) {
+                const jWave = entityWaveIndex.get(j);
+                if (jWave !== undefined) {
+                    minWave = Math.max(minWave, jWave + 1);
+                }
+            }
+
+            if (isolated) {
+                // Must be placed alone in a dedicated singleton wave [e]
+                // Find smallest w >= minWave that doesn't exist yet, or allocate new wave
+                let targetWave = minWave;
+                while (targetWave < waves.length) {
+                    targetWave++;
+                }
+                waves[targetWave] = [e];
+                waveIndices[targetWave] = new Set<number>([curr]);
+                waveIsIsolated[targetWave] = true;
+                entityWaveIndex.set(curr, targetWave);
+            } else {
+                // Find smallest w >= minWave such that:
+                // 1. !waveIsIsolated[w]
+                // 2. waves[w].length < maxWaveSize
+                // 3. no entity member in waveIndices[w] conflicts with curr
+                let targetWave = minWave;
+                let found = false;
+                while (targetWave < waves.length) {
+                    if (!waveIsIsolated[targetWave] && waves[targetWave].length < maxWaveSize) {
+                        let hasConflict = false;
+                        for (const member of waveIndices[targetWave]) {
+                            if (conflicts[curr].has(member)) {
+                                hasConflict = true;
+                                break;
+                            }
+                        }
+                        if (!hasConflict) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    targetWave++;
+                }
+
+                if (!found) {
+                    waves[targetWave] = [e];
+                    waveIndices[targetWave] = new Set<number>([curr]);
+                    waveIsIsolated[targetWave] = false;
+                } else {
+                    waves[targetWave].push(e);
+                    waveIndices[targetWave].add(curr);
+                }
+                entityWaveIndex.set(curr, targetWave);
+            }
+
+            placed.add(curr);
+            for (const dep of dependentsOf[curr]) {
+                if (inDegree[dep] > 0) {
+                    inDegree[dep]--;
+                }
+            }
+        }
+    }
+
+    return waves.filter(w => Array.isArray(w) && w.length > 0);
+}
+
+/** @deprecated Use {@link PartitionEntitiesIntoConflictFreeWaves}. */
+export const partitionEntitiesIntoConflictFreeWaves = PartitionEntitiesIntoConflictFreeWaves;
 
 /** One parent column an IS-A child's base view selects from a parent's base table. */
 export interface InheritedParentColumn {
@@ -378,6 +601,18 @@ export class SQLCodeGenBase {
     protected existingRoutineDefinitions: Map<string, string> | null = null;
 
     /**
+     * Map of `schema.view` (lowercased) to its live `OBJECT_DEFINITION` text on SQL Server,
+     * preloaded in one bulk query to eliminate per-entity round-trips in `checkBaseViewChangedInDB`.
+     */
+    protected existingBaseViewDefinitions: Map<string, string> | null = null;
+
+    /**
+     * Map of `schema.view` (lowercased) to its live column name Set (lowercased) on PostgreSQL,
+     * preloaded in one bulk query to eliminate per-entity round-trips in `checkBaseViewColumnsChangedPG`.
+     */
+    protected existingBaseViewColumnsPG: Map<string, Set<string>> | null = null;
+
+    /**
      * `schema.routine` keys of CRUD routines whose live definition differed from the body generated
      * this run, so they were force-logged and re-executed. Reported once after generation.
      */
@@ -463,14 +698,15 @@ export class SQLCodeGenBase {
                 SucceedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
             }
 
-            await this.loadExistingRoutines(pool, entities);
-
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
 
             // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
             const includedEntities = EntitiesNotInExcludedSchemas(baselineEntities, configInfo.excludeSchemas);
+
+            await this.loadExistingRoutines(pool, includedEntities);
+            await this.loadExistingBaseViews(pool, includedEntities);
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
@@ -563,6 +799,12 @@ export class SQLCodeGenBase {
             const configuredBatch = configInfo.fileEmit?.sqlEntityBatchSize ?? 8;
             const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : configuredBatch;
 
+            let entityWaves: EntityInfo[][] | undefined;
+            if (useProviderPhasedExecution && configuredBatch > 1) {
+                const maxWaveSize = Math.min(configuredBatch, 6);
+                entityWaves = PartitionEntitiesIntoConflictFreeWaves(entitiesWithoutCascadeRegeneration, maxWaveSize);
+            }
+
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.GenerateAndExecuteEntitySQLToSeparateFiles({
                 pool,
@@ -574,6 +816,7 @@ export class SQLCodeGenBase {
                 skipExecution: perEntitySkipExecution,
                 writeFiles: true,
                 batchSize: perEntityBatchSize,
+                waves: entityWaves,
                 enableSQLLoggingForNewOrModifiedEntities: true,
                 willRegenerate: globalWillRegenerate
             }); // enable sql logging for NEW entities....
@@ -692,6 +935,10 @@ export class SQLCodeGenBase {
             else {
                 SucceedSpinner('Custom base views refreshed');
             }
+
+            // Invalidate preloaded base view caches so late-phase regeneration reads fresh DB state
+            this.existingBaseViewDefinitions = null;
+            this.existingBaseViewColumnsPG = null;
 
             const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
             // STEP 3 - re-run the process to manage entity fields since the Step 1 and 2 above might have resulted in differences in base view columns compared to what we had at first
@@ -1101,10 +1348,14 @@ export class SQLCodeGenBase {
          * Phase name for the per-batch progress line, e.g. 'Generating SQL'. Defaults from
          * `onlyPermissions`. See {@link reportEntityBatchProgress} for why the line exists.
          */
-        progressLabel?: string
+        progressLabel?: string,
+        /**
+         * Optional pre-partitioned conflict-free waves. When supplied, waves are executed sequentially,
+         * with all entities within each wave running concurrently.
+         */
+        waves?: EntityInfo[][]
     }): Promise<{Success: boolean, Files: string[]}> {
-        if (!options.batchSize)
-            options.batchSize = 5; // default to 5 if not specified
+        const batchSize = options.batchSize ?? 5;
 
         const files: string[] = [];
         try {
@@ -1123,11 +1374,24 @@ export class SQLCodeGenBase {
 
             const phaseLabel = options.progressLabel ?? (options.onlyPermissions ? 'Applying permissions' : 'Generating SQL');
             const phaseStart = Date.now();
-            for (let i = 0; i < totalEntities; i += options.batchSize) {
-                const batch = options.entities.slice(i, i + options.batchSize);
-                this.reportEntityBatchProgress(phaseLabel, i, totalEntities, batch[0], phaseStart);
+            const waves = options.waves && options.waves.length > 0 ? options.waves : null;
+            let processedEntities = 0;
+            const batchIterator: Array<{ batch: EntityInfo[]; offset: number }> = waves
+                ? waves.map(w => {
+                    const offset = processedEntities;
+                    processedEntities += w.length;
+                    return { batch: w, offset };
+                })
+                : Array.from({ length: Math.ceil(totalEntities / batchSize) }, (_, idx) => {
+                    const offset = idx * batchSize;
+                    return { batch: options.entities.slice(offset, offset + batchSize), offset };
+                });
+
+            for (const { batch, offset } of batchIterator) {
+                if (batch.length === 0) continue;
+                this.reportEntityBatchProgress(phaseLabel, offset, totalEntities, batch[0], phaseStart);
                 const promises = batch.map(async (e) => {
-                    const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
+                    const pkeyField = e.Fields.find(f => f.IsPrimaryKey);
                     if (!pkeyField) {
                         logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
                         return {entity: e, result: {Success: false, Files: []}};
@@ -1188,7 +1452,8 @@ export class SQLCodeGenBase {
         enableSQLLoggingForNewOrModifiedEntities?: boolean,
         /** Optional UNION of will-regenerate keys across ALL batches in the same
          *  codegen run. When provided, takes precedence over the per-batch set. */
-        willRegenerate?: Set<string>
+        willRegenerate?: Set<string>,
+        waves?: EntityInfo[][]
     }): Promise<{Success: boolean, Files: string[]}> {
       return this.GenerateAndExecuteEntitySQLToSeparateFiles(options);
     }
@@ -1286,7 +1551,7 @@ export class SQLCodeGenBase {
         willRegenerate?: Set<string>
     }): Promise<{Success: boolean, Files: string[]}> {
         try {
-            const {sql, permissionsSQL, files} = await this.GenerateSingleEntitySQLToSeparateFiles(options); // this creates the files and returns a single string with all the SQL we can then execute
+            const {sql, permissionsSQL, files, phasedSQL} = await this.GenerateSingleEntitySQLToSeparateFiles(options); // this creates the files and returns a single string with all the SQL we can then execute
             if (options.skipExecution) {
                 return {Success: true, Files: files};
             }
@@ -1301,7 +1566,8 @@ export class SQLCodeGenBase {
                 const phaseResult = await this.ExecuteEntityInPhases(
                     options.pool,
                     options.entity,
-                    options.willRegenerate
+                    options.willRegenerate,
+                    phasedSQL
                 );
                 if (!phaseResult.success) {
                     const where = phaseResult.phase ?? 'unknown';
@@ -1359,7 +1625,8 @@ export class SQLCodeGenBase {
     public async ExecuteEntityInPhases(
         pool: CodeGenConnection,
         entity: EntityInfo,
-        willRegenerate: Set<string> | undefined
+        willRegenerate: Set<string> | undefined,
+        precomputed?: PrecomputedEntityPhasedSQL
     ): Promise<PhasedExecutionResult> {
         // External-data-source entities have no physical MJ table/view/sproc — their data is
         // proxied live. Skip all DDL generation/execution (mirrors the early-return in
@@ -1368,6 +1635,20 @@ export class SQLCodeGenBase {
         // since this method regenerates the SQL pieces itself rather than reusing that path's output.
         if (entity.ExternalDataSourceID) {
             return { success: true, phase: null };
+        }
+
+        if (precomputed) {
+            return this._dbProvider.executeEntityPhased!({
+                entity,
+                tvfSQL: precomputed.TvfSQL,
+                viewSQL: precomputed.ViewSQL,
+                crudCreateSQL: precomputed.CrudCreateSQL,
+                crudUpdateSQL: precomputed.CrudUpdateSQL,
+                crudDeleteSQL: precomputed.CrudDeleteSQL,
+                ftsSQL: precomputed.FtsSQL,
+                viewPermSQL: precomputed.ViewPermSQL,
+                willRegenerate,
+            });
         }
 
         // Pieces needed for the phased executor. Empty string when the entity
@@ -1446,9 +1727,10 @@ export class SQLCodeGenBase {
     public async executeEntityInPhases(
         pool: CodeGenConnection,
         entity: EntityInfo,
-        willRegenerate: Set<string> | undefined
+        willRegenerate: Set<string> | undefined,
+        precomputed?: PrecomputedEntityPhasedSQL
     ): Promise<PhasedExecutionResult> {
-      return this.ExecuteEntityInPhases(pool, entity, willRegenerate);
+      return this.ExecuteEntityInPhases(pool, entity, willRegenerate, precomputed);
     }
 
     /**
@@ -1512,9 +1794,15 @@ export class SQLCodeGenBase {
                 return await this.checkBaseViewColumnsChangedPG(pool, entity, viewName);
             }
 
-            const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
-            const result = await pool.query(viewDefSQL);
-            const dbDefinition = result.recordset?.[0]?.ViewDefinition;
+            let dbDefinition: string | undefined;
+            if (this.existingBaseViewDefinitions != null) {
+                const key = `${entity.SchemaName.toLowerCase()}.${viewName.toLowerCase()}`;
+                dbDefinition = this.existingBaseViewDefinitions.get(key);
+            } else {
+                const viewDefSQL = this._dbProvider.getViewDefinitionSQL(entity.SchemaName, viewName);
+                const result = await pool.query(viewDefSQL);
+                dbDefinition = (result.recordset?.[0] as { ViewDefinition?: string } | undefined)?.ViewDefinition;
+            }
             if (!dbDefinition) {
                 // View doesn't exist in the database. This happens when:
                 // 1. The entity is brand new (handled by newEntityList — early return above)
@@ -1564,9 +1852,15 @@ export class SQLCodeGenBase {
      * @returns true if the view's column set differs from the entity's fields (or the view is missing)
      */
     protected async checkBaseViewColumnsChangedPG(pool: CodeGenConnection, entity: EntityInfo, viewName: string): Promise<boolean> {
-        const sql = `SELECT column_name FROM information_schema.columns WHERE table_schema = '${entity.SchemaName}' AND table_name = '${viewName}'`;
-        const result = await pool.query(sql);
-        const dbCols = new Set((result.recordset ?? []).map((r: { column_name: string }) => r.column_name.toLowerCase()));
+        let dbCols: Set<string>;
+        if (this.existingBaseViewColumnsPG != null) {
+            const key = `${entity.SchemaName.toLowerCase()}.${viewName.toLowerCase()}`;
+            dbCols = this.existingBaseViewColumnsPG.get(key) ?? new Set<string>();
+        } else {
+            const sql = `SELECT column_name FROM information_schema.columns WHERE table_schema = '${entity.SchemaName}' AND table_name = '${viewName}'`;
+            const result = await pool.query(sql);
+            dbCols = new Set(((result.recordset ?? []) as Array<{ column_name?: string }>).map((r: { column_name?: string }) => String(r.column_name ?? '').toLowerCase()));
+        }
 
         // Empty set = the view does not exist → force-recreate (missing-view self-heal).
         if (dbCols.size === 0) {
@@ -1874,7 +2168,7 @@ export class SQLCodeGenBase {
         writeFiles: boolean, 
         skipExecution: boolean, 
         enableSQLLoggingForNewOrModifiedEntities?: boolean
-    }): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
+    }): Promise<{sql: string, permissionsSQL: string, files: string[], phasedSQL?: PrecomputedEntityPhasedSQL}> {
         const files: string[] = [];
         try {
             // External-data-source entities are backed by a remote system (Snowflake/MongoDB/
@@ -1897,6 +2191,13 @@ export class SQLCodeGenBase {
 
             let sRet: string = ''
             let permissionsSQL: string = ''
+            let precomputedTVFSQL = '';
+            let precomputedViewSQL = '';
+            let precomputedViewPermSQL = '';
+            let precomputedCrudCreateSQL = '';
+            let precomputedCrudUpdateSQL = '';
+            let precomputedCrudDeleteSQL = '';
+            let precomputedFtsSQL = '';
             // Tracks whether the base view SQL differs from what's in the database.
             // When true, we force-log the view, its permissions, and all SPs (which compile the view in)
             // so the migration log script can fully update target databases.
@@ -1953,13 +2254,25 @@ export class SQLCodeGenBase {
                             const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, fn.functionName, false, true));
                             tvfEntries.push({sql: fn.sql, filePath: tvfFilePath, fieldName: fn.fieldName, description: fn.description});
                             // Add function SQL to output BEFORE the view
-                            sRet += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+                            const piece = fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+                            sRet += piece;
+                            precomputedTVFSQL += piece;
                         }
                     }
                 }
 
                 // Generate the base view (which may reference the TVFs created above)
-                const s = this.GenerateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + await this.GenerateBaseView(options.pool, options.entity)
+                let viewBaseSQL = '';
+                if (this.GenerateBaseView === ORIGINAL_GENERATE_BASE_VIEW) {
+                    const viewPieces = await this.GenerateBaseViewPieces(options.pool, options.entity);
+                    precomputedViewSQL = viewPieces.viewSQL;
+                    precomputedViewPermSQL = viewPieces.viewPermSQL;
+                    viewBaseSQL = viewPieces.viewSQL + viewPieces.viewPermSQL;
+                } else {
+                    viewBaseSQL = await this.GenerateBaseView(options.pool, options.entity);
+                    precomputedViewSQL = viewBaseSQL;
+                }
+                const s = this.GenerateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + viewBaseSQL;
 
                 // Compare generated view SQL against what's currently in the database.
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
@@ -2029,7 +2342,8 @@ export class SQLCodeGenBase {
                 // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
                 if (!options.onlyPermissions && options.entity.spCreateGenerated) {
                     // generate the create SP
-                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
+                    precomputedCrudCreateSQL = this.generateSPCreate(options.entity);
+                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + precomputedCrudCreateSQL;
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
@@ -2064,7 +2378,8 @@ export class SQLCodeGenBase {
                 // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
                 if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
                     // generate the update SP
-                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
+                    precomputedCrudUpdateSQL = this.generateSPUpdate(options.entity);
+                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + precomputedCrudUpdateSQL;
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
@@ -2105,7 +2420,8 @@ export class SQLCodeGenBase {
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
                         logStatus(`  Regenerating ${spName} due to cascade dependency changes`);
                     }
-                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + await this.generateSPDelete(options.entity, options.pool)
+                    precomputedCrudDeleteSQL = await this.generateSPDelete(options.entity, options.pool);
+                    const s = this.GenerateSingleEntitySQLFileHeader(options.entity, spName) + precomputedCrudDeleteSQL;
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
@@ -2136,6 +2452,9 @@ export class SQLCodeGenBase {
                 // always generate the code so we can get the function name from the below function call
                 const ft = await this.GenerateEntityFullTextSearchSQL(options.pool, options.entity);
                 if (!options.onlyPermissions) {
+                    if (options.entity.FullTextSearchEnabled && !options.entity.VirtualEntity) {
+                        precomputedFtsSQL = ft.sql;
+                    }
                     // only write the actual sql out if we're not only generating permissions
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('full_text_search_function', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     if (options.writeFiles) {
@@ -2163,7 +2482,17 @@ export class SQLCodeGenBase {
                     sRet += sP + '\n' + this._dbProvider.BatchSeparator + '\n';
             }
 
-            return {sql: sRet, permissionsSQL: permissionsSQL, files: files};
+            const phasedSQL: PrecomputedEntityPhasedSQL | undefined = options.onlyPermissions ? undefined : {
+                TvfSQL: precomputedTVFSQL,
+                ViewSQL: precomputedViewSQL,
+                CrudCreateSQL: precomputedCrudCreateSQL,
+                CrudUpdateSQL: precomputedCrudUpdateSQL,
+                CrudDeleteSQL: precomputedCrudDeleteSQL,
+                FtsSQL: precomputedFtsSQL,
+                ViewPermSQL: precomputedViewPermSQL,
+            };
+
+            return {sql: sRet, permissionsSQL: permissionsSQL, files: files, phasedSQL};
         }
         catch (err) {
             logError(err as string)
@@ -2180,7 +2509,7 @@ export class SQLCodeGenBase {
         writeFiles: boolean, 
         skipExecution: boolean, 
         enableSQLLoggingForNewOrModifiedEntities?: boolean
-    }): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
+    }): Promise<{sql: string, permissionsSQL: string, files: string[], phasedSQL?: PrecomputedEntityPhasedSQL}> {
       return this.GenerateSingleEntitySQLToSeparateFiles(options);
     }
 
@@ -2237,6 +2566,64 @@ export class SQLCodeGenBase {
             LogWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
             this.existingRoutines = null;
             this.existingRoutineDefinitions = null;
+        }
+    }
+
+    /**
+     * Snapshot base view definitions (SQL Server) or column sets (PostgreSQL) in one bulk query
+     * so `checkBaseViewChangedInDB` / `checkBaseViewColumnsChangedPG` perform O(1) in-memory checks
+     * without 400+ per-entity database queries.
+     */
+    protected async loadExistingBaseViews(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
+        this.existingBaseViewDefinitions = null;
+        this.existingBaseViewColumnsPG = null;
+
+        const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
+        if (schemas.length === 0) {
+            return;
+        }
+
+        const inList = schemas.map((s) => `'${s.replace(/'/g, "''")}'`).join(', ');
+
+        try {
+            if (this._dbProvider.PlatformKey === 'postgresql' || configInfo.dbPlatform === 'postgresql') {
+                const sql = `SELECT table_schema, table_name, column_name FROM information_schema.columns WHERE table_schema IN (${inList})`;
+                const result = await pool.query(sql);
+                const colsMap = new Map<string, Set<string>>();
+                for (const row of (result.recordset ?? []) as Array<{ table_schema?: string; table_name?: string; column_name?: string }>) {
+                    const schema = String(row.table_schema ?? '').toLowerCase();
+                    const table = String(row.table_name ?? '').toLowerCase();
+                    const col = String(row.column_name ?? '').toLowerCase();
+                    if (schema && table && col) {
+                        const key = `${schema}.${table}`;
+                        let set = colsMap.get(key);
+                        if (!set) {
+                            set = new Set<string>();
+                            colsMap.set(key, set);
+                        }
+                        set.add(col);
+                    }
+                }
+                this.existingBaseViewColumnsPG = colsMap;
+            } else if (this._dbProvider.PlatformKey === 'sqlserver') {
+                const sql = `SELECT s.name AS schema_name, v.name AS view_name, OBJECT_DEFINITION(v.object_id) AS view_definition ` +
+                            `FROM sys.views v INNER JOIN sys.schemas s ON s.schema_id = v.schema_id WHERE s.name IN (${inList})`;
+                const result = await pool.query(sql);
+                const defsMap = new Map<string, string>();
+                for (const row of (result.recordset ?? []) as Array<{ schema_name?: string; view_name?: string; view_definition?: string | null }>) {
+                    const schema = String(row.schema_name ?? '').toLowerCase();
+                    const view = String(row.view_name ?? '').toLowerCase();
+                    const def = row.view_definition != null ? String(row.view_definition) : '';
+                    if (schema && view && def) {
+                        defsMap.set(`${schema}.${view}`, def);
+                    }
+                }
+                this.existingBaseViewDefinitions = defsMap;
+            }
+        } catch (e) {
+            LogWarning(`Could not preload existing base view definitions: ${e instanceof Error ? e.message : String(e)}`);
+            this.existingBaseViewDefinitions = null;
+            this.existingBaseViewColumnsPG = null;
         }
     }
 
@@ -4082,3 +4469,5 @@ export class SQLCodeGenBase {
         return ordered;
     }
 }
+
+const ORIGINAL_GENERATE_BASE_VIEW = SQLCodeGenBase.prototype.GenerateBaseView;

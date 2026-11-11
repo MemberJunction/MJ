@@ -42,6 +42,35 @@ import {
 
 const SQLSTATE_INVALID_TABLE_DEFINITION = '42P16';
 
+let dropCascadeMutexChain: Promise<void> = Promise.resolve();
+
+/**
+ * Async mutex that serializes 42P16 DROP CASCADE recovery paths so two
+ * concurrent fallback transactions can never deadlock against each other on pg_depend.
+ */
+export async function RunExclusiveDropCascade<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = dropCascadeMutexChain;
+    let release!: () => void;
+    dropCascadeMutexChain = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+
+    try {
+        await prev;
+    } catch {
+        // Prev error already surfaced to its caller; do not block this execution.
+    }
+
+    try {
+        return await fn();
+    } finally {
+        release();
+    }
+}
+
+/** @deprecated Use {@link RunExclusiveDropCascade}. */
+export const runExclusiveDropCascade = RunExclusiveDropCascade;
+
 /**
  * An error thrown from the restore phase. Tagged so callers can distinguish
  * a port regression (restore failed because the new view has incompatible
@@ -135,71 +164,74 @@ export async function ExecuteWithFallback(opts: ExecuteWithFallbackOptions): Pro
         }
     }
 
-    // 42P16 path. Everything from here runs inside a transaction so a failed
-    // restore rolls back to the pre-drop state.
-    await client.query('BEGIN');
-    try {
-        const oid = await ResolveViewOid(client, schema, viewName);
-        // If the view doesn't exist, 42P16 would never have been raised — so
-        // this should be impossible, but fail loudly if it happens.
-        if (oid === null) {
-            throw new Error(
-                `Cannot fall back — view ${schema}.${viewName} resolved to no oid after 42P16.`
+    // 42P16 path. Everything from here runs inside an exclusive mutex and
+    // transaction so concurrent fallbacks never deadlock against each other on pg_depend,
+    // and a failed restore rolls back to the pre-drop state.
+    return RunExclusiveDropCascade(async () => {
+        await client.query('BEGIN');
+        try {
+            const oid = await ResolveViewOid(client, schema, viewName);
+            // If the view doesn't exist, 42P16 would never have been raised — so
+            // this should be impossible, but fail loudly if it happens.
+            if (oid === null) {
+                throw new Error(
+                    `Cannot fall back — view ${schema}.${viewName} resolved to no oid after 42P16.`
+                );
+            }
+
+            const dependents = await CaptureDependentViews(client, oid);
+
+            // Capture functions transitively. A DROP VIEW ... CASCADE on the
+            // target removes BOTH directly-dependent functions (those whose
+            // RETURNS SETOF references the target's rowtype) AND functions that
+            // depend on the cascaded dependent views. Without the transitive
+            // sweep, codegen pass 1 leaves spCreateX/spUpdateX functions
+            // permanently missing for any entity X whose view is reached only
+            // through the cascade chain — surfacing as "Post-CodeGen CRUD
+            // validation FAILED: missing create routine spCreateX" and forcing
+            // a second codegen pass to converge.
+            const directFunctions = await CaptureDependentFunctions(client, oid);
+            const transitiveFnLists = await Promise.all(
+                dependents.map(async (dep) => {
+                    const depOid = await ResolveViewOid(client, dep.schema, dep.name);
+                    return depOid !== null ? CaptureDependentFunctions(client, depOid) : [];
+                })
             );
+            // De-duplicate by schema+name — direct + transitive lists can overlap
+            // when the same function depends on both target and a dependent view.
+            const seen = new Set<string>();
+            const dependentFunctions = [...directFunctions, ...transitiveFnLists.flat()].filter(fn => {
+                const key = `${fn.schema}.${fn.name}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+
+            const grants = await CaptureGrants(client, schema, viewName);
+            const metadata = await CaptureMetadata(client, oid);
+
+            const qualified = quoteQualified(schema, viewName);
+            await client.query(`DROP VIEW IF EXISTS ${qualified} CASCADE`);
+            await client.query(createOrReplaceSQL);
+
+            await restoreDependents(
+                client,
+                schema,
+                viewName,
+                dependents,
+                dependentFunctions,
+                grants,
+                metadata,
+                willRegenerate
+            );
+
+            await client.query('COMMIT');
+        } catch (err) {
+            await safelyRollback(client);
+            throw err;
         }
-
-        const dependents = await CaptureDependentViews(client, oid);
-
-        // Capture functions transitively. A DROP VIEW ... CASCADE on the
-        // target removes BOTH directly-dependent functions (those whose
-        // RETURNS SETOF references the target's rowtype) AND functions that
-        // depend on the cascaded dependent views. Without the transitive
-        // sweep, codegen pass 1 leaves spCreateX/spUpdateX functions
-        // permanently missing for any entity X whose view is reached only
-        // through the cascade chain — surfacing as "Post-CodeGen CRUD
-        // validation FAILED: missing create routine spCreateX" and forcing
-        // a second codegen pass to converge.
-        const directFunctions = await CaptureDependentFunctions(client, oid);
-        const transitiveFnLists = await Promise.all(
-            dependents.map(async (dep) => {
-                const depOid = await ResolveViewOid(client, dep.schema, dep.name);
-                return depOid !== null ? CaptureDependentFunctions(client, depOid) : [];
-            })
-        );
-        // De-duplicate by schema+name — direct + transitive lists can overlap
-        // when the same function depends on both target and a dependent view.
-        const seen = new Set<string>();
-        const dependentFunctions = [...directFunctions, ...transitiveFnLists.flat()].filter(fn => {
-            const key = `${fn.schema}.${fn.name}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-
-
-        const grants = await CaptureGrants(client, schema, viewName);
-        const metadata = await CaptureMetadata(client, oid);
-
-        const qualified = quoteQualified(schema, viewName);
-        await client.query(`DROP VIEW IF EXISTS ${qualified} CASCADE`);
-        await client.query(createOrReplaceSQL);
-
-        await restoreDependents(
-            client,
-            schema,
-            viewName,
-            dependents,
-            dependentFunctions,
-            grants,
-            metadata,
-            willRegenerate
-        );
-
-        await client.query('COMMIT');
-    } catch (err) {
-        await safelyRollback(client);
-        throw err;
-    }
+    });
 }
 
 /** @deprecated Use {@link ExecuteWithFallback}. */
