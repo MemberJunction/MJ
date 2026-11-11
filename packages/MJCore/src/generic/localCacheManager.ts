@@ -1,5 +1,6 @@
 import { BaseSingleton, MJGlobal, MJEventType, IsValueEncrypted, ENCRYPTED_SENTINEL } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
+import { InMemoryLocalStorageProvider } from "./InMemoryLocalStorageProvider";
 import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
@@ -761,7 +762,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @returns A promise that resolves when initialization is complete
      */
     public Initialize(
-        storageProvider: ILocalStorageProvider,
+        storageProvider?: ILocalStorageProvider,
         config?: Partial<LocalCacheManagerConfig>
     ): Promise<void> {
         if (this._initialized) {
@@ -778,8 +779,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 : this._initializePromise;
         }
 
-        // First caller - start initialization and store the promise
-        this._initializePromise = this.doInitialize(storageProvider, config);
+        // First caller - start initialization and store the promise.
+        // Fall back to the currently configured storage provider or a fresh in-memory
+        // provider when a caller passes only `config` overrides before any provider has
+        // initialized the cache manager (e.g. single-node MJServer without Redis).
+        const effectiveProvider = storageProvider ?? this._storageProvider ?? new InMemoryLocalStorageProvider();
+        this._initializePromise = this.doInitialize(effectiveProvider, config);
         return this._initializePromise;
     }
 

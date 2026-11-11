@@ -9,6 +9,7 @@ import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, Summarize
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ResolveOriginSessionId } from './requestSessionContext.js';
 import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
@@ -66,12 +67,12 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
+import { InMemoryLocalStorageProvider, LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, PublishEntityInvalidationToPeers, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireEntityInvalidationFanOut, WirePushStatusFanOut, WireSharedCacheEvents } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -549,12 +550,15 @@ const setupComplete$ = new ReplaySubject(1);
     // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
     // acquire a dependency on either.
     await WirePushStatusFanOut(sharedCache);
+    await WireEntityInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
+  const effectiveStorageProvider = sharedCache ?? new InMemoryLocalStorageProvider();
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  await LocalCacheManager.Instance.Initialize(effectiveStorageProvider, cacheManagerConfig);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
 
   if (dbType === 'postgresql') {
@@ -619,7 +623,7 @@ const setupComplete$ = new ReplaySubject(1);
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
-    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
+    pgConfigData.LocalStorageProvider = effectiveStorageProvider;
     pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const provider = new PostgreSQLDataProvider();
@@ -834,7 +838,7 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
-    config.LocalStorageProvider = sharedCache ?? undefined;
+    config.LocalStorageProvider = effectiveStorageProvider;
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
@@ -1166,13 +1170,13 @@ const setupComplete$ = new ReplaySubject(1);
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
         const entityName = beEvent.baseEntity.EntityInfo.Name;
-        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+        const invalidationPayload = {
           entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
-          originSessionId: null,
+          originSessionId: ResolveOriginSessionId(beEvent.baseEntity),
           // Opt-in only: this event reaches every connected client unfiltered, and this listener
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
@@ -1181,7 +1185,9 @@ const setupComplete$ = new ReplaySubject(1);
               // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
-        });
+        };
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, invalidationPayload);
+        PublishEntityInvalidationToPeers(invalidationPayload);
       }
     }
   });

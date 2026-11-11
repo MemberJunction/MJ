@@ -14,7 +14,7 @@ import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@
 import type { CacheSettingsConfig } from './config.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CachePublishMode } from '@memberjunction/redis-provider';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { PUSH_STATUS_UPDATES_TOPIC, SetPushStatusPublishHook, ParseReplicatedStatusUpdate } from './generic/PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
@@ -255,6 +255,12 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     if (event.Category !== CacheCategory.RunViewCache || event.Action === 'category_cleared') {
         return;
     }
+    // Only relay 'removed' or 'row_delta' to browsers. When a peer suffers a RunView cache miss
+    // on a pure read, it sets the cache entry (Action: 'set'). Relaying Action: 'set' with
+    // primaryKeyValues: null wiped every connected browser's entity cache on every peer read miss!
+    if (event.Action !== 'removed' && event.Action !== 'row_delta') {
+        return;
+    }
     const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
     if (!entityName) {
         return;
@@ -325,5 +331,102 @@ export async function WirePushStatusFanOut(redis: RedisLocalStorageProvider): Pr
         // Single-instance delivery still works, and the durable tail query covers the rest.
         // Degraded, not broken — so this must not stop the server from starting.
         console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    }
+}
+
+/** Redis channel carrying cross-replica entity cache invalidation payloads. */
+const ENTITY_INVALIDATION_FANOUT_CHANNEL = 'entity-cache-invalidation';
+
+interface EntityInvalidationWirePayload {
+    entityName: string;
+    primaryKeyValues: string | null;
+    action: 'save' | 'delete' | 'set' | 'removed';
+    sourceServerId: string;
+    timestamp: string;
+    originSessionId: string | null;
+    recordData?: string;
+}
+
+type EntityInvalidationPublishHook = (payload: EntityInvalidationWirePayload) => void;
+let entityInvalidationPublishHook: EntityInvalidationPublishHook | undefined;
+
+export function SetEntityInvalidationPublishHook(hook: EntityInvalidationPublishHook | undefined): void {
+    entityInvalidationPublishHook = hook;
+}
+
+export function ResetEntityInvalidationFanOutForTests(): void {
+    entityInvalidationPublishHook = undefined;
+}
+
+/**
+ * Publishes an entity invalidation payload to peer replicas across Redis.
+ * Called when a local entity Save() / Delete() occurs.
+ */
+export function PublishEntityInvalidationToPeers(payload: {
+    entityName: string;
+    primaryKeyValues: string | null;
+    action: string;
+    sourceServerId: string;
+    timestamp: Date | string;
+    originSessionId?: string | null;
+    recordData?: string;
+}): void {
+    if (!entityInvalidationPublishHook) {
+        return;
+    }
+    const wirePayload: EntityInvalidationWirePayload = {
+        entityName: payload.entityName,
+        primaryKeyValues: payload.primaryKeyValues,
+        action: payload.action as 'save' | 'delete' | 'set' | 'removed',
+        sourceServerId: payload.sourceServerId,
+        timestamp: typeof payload.timestamp === 'string' ? payload.timestamp : payload.timestamp.toISOString(),
+        originSessionId: payload.originSessionId ?? null,
+        ...(payload.recordData !== undefined ? { recordData: payload.recordData } : {}),
+    };
+    entityInvalidationPublishHook(wirePayload);
+}
+
+/**
+ * Replicate entity invalidations across server instances over Redis.
+ *
+ * Inbound: listens on ENTITY_INVALIDATION_FANOUT_CHANNEL, suppresses self-echo,
+ * and republishes onto local PubSubManager CACHE_INVALIDATION_TOPIC.
+ *
+ * Outbound: registers hook so PublishEntityInvalidationToPeers forwards invalidations
+ * onto Redis.
+ */
+export async function WireEntityInvalidationFanOut(redis: RedisLocalStorageProvider): Promise<void> {
+    try {
+        await redis.SubscribeToChannel(ENTITY_INVALIDATION_FANOUT_CHANNEL, (raw: string) => {
+            try {
+                const parsed = JSON.parse(raw) as EntityInvalidationWirePayload;
+                if (!parsed || typeof parsed !== 'object') {
+                    return;
+                }
+                // Ignore self-echo: do not re-process invalidations originated by this process
+                if (parsed.sourceServerId && UUIDsEqual(parsed.sourceServerId, MJGlobal.Instance.ProcessUUID)) {
+                    return;
+                }
+                PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+                    entityName: parsed.entityName,
+                    primaryKeyValues: parsed.primaryKeyValues,
+                    action: parsed.action,
+                    sourceServerId: parsed.sourceServerId,
+                    timestamp: new Date(parsed.timestamp),
+                    originSessionId: parsed.originSessionId,
+                    recordData: parsed.recordData,
+                });
+            } catch (err) {
+                LogError('Error processing entity invalidation fan-out message', undefined, err);
+            }
+        });
+
+        SetEntityInvalidationPublishHook((payload) => {
+            redis.PublishMessage(ENTITY_INVALIDATION_FANOUT_CHANNEL, JSON.stringify(payload));
+        });
+
+        console.log('[MJAPI] Entity invalidation: cross-instance fan-out enabled via Redis');
+    } catch (err) {
+        console.warn(`Entity invalidation fan-out unavailable: ${(err as Error).message}`);
     }
 }

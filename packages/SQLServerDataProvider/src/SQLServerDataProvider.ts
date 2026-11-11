@@ -19,6 +19,7 @@
 
 import {
   BaseEntity,
+  LocalCacheManager,
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
@@ -586,6 +587,8 @@ export class SQLServerDataProvider
    */
   private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
   private static readonly _viewColumnOrderCacheByDbKey = new Map<string, Promise<Map<string, string[]>>>();
+  private static _resolvedViewColumnOrderByPool = new WeakMap<sql.ConnectionPool, Map<string, string[]>>();
+  private static readonly _resolvedViewColumnOrderByDbKey = new Map<string, Map<string, string[]>>();
   private static readonly DEFAULT_SQL_SERVER_PORT = 1433;
 
   private static viewColumnOrderDbKey(pool: sql.ConnectionPool): string | null {
@@ -777,6 +780,46 @@ export class SQLServerDataProvider
    * @param configData - Configuration data including connection string and options
    * @returns Promise<boolean> - True if configuration succeeded
    */
+  /**
+   * Returns `true` when global metadata, `LocalCacheManager`, and `pool`'s view-column-order
+   * cache are all warm in memory so {@link ConfigureFromGlobalSync} will succeed without I/O.
+   */
+  public static CanConfigureFromGlobalSync(pool: sql.ConnectionPool | null | undefined): boolean {
+    if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+      return false;
+    }
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    const resolvedCache = dbKey !== null
+      ? SQLServerDataProvider._resolvedViewColumnOrderByDbKey.get(dbKey)
+      : SQLServerDataProvider._resolvedViewColumnOrderByPool.get(pool);
+    return resolvedCache !== undefined;
+  }
+
+  /**
+   * Synchronously configures a per-request `SQLServerDataProvider` when global metadata and this
+   * pool's view-column-order cache are already warm in memory. Returns `false` if any dependency
+   * is not yet warm, allowing callers to fall back to async {@link Config}.
+   */
+  public ConfigureFromGlobalSync(configData: SQLServerProviderConfigData): boolean {
+    const pool = configData.ConnectionPool;
+    if (!pool) {
+      return false;
+    }
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    const resolvedCache = dbKey !== null
+      ? SQLServerDataProvider._resolvedViewColumnOrderByDbKey.get(dbKey)
+      : SQLServerDataProvider._resolvedViewColumnOrderByPool.get(pool);
+    if (!resolvedCache) {
+      return false;
+    }
+    this._pool = pool;
+    if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+      return false;
+    }
+    this._viewColumnOrderCache = resolvedCache;
+    return true;
+  }
+
   public async Config(configData: SQLServerProviderConfigData, providerToUse?: IMetadataProvider): Promise<boolean> {
     try {
       this._pool = configData.ConnectionPool; // Now expects a ConnectionPool instead of DataSource
@@ -822,7 +865,13 @@ export class SQLServerDataProvider
       }
     }
     try {
-      this._viewColumnOrderCache = await scanPromise;
+      const resolved = await scanPromise;
+      this._viewColumnOrderCache = resolved;
+      if (dbKey !== null) {
+        SQLServerDataProvider._resolvedViewColumnOrderByDbKey.set(dbKey, resolved);
+      } else {
+        SQLServerDataProvider._resolvedViewColumnOrderByPool.set(pool, resolved);
+      }
     } catch (e) {
       // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
       // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
@@ -879,9 +928,11 @@ export class SQLServerDataProvider
    */
   public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
     SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+    SQLServerDataProvider._resolvedViewColumnOrderByPool.delete(pool);
     const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
     if (dbKey !== null) {
       SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+      SQLServerDataProvider._resolvedViewColumnOrderByDbKey.delete(dbKey);
     }
   }
 
