@@ -181,15 +181,17 @@ export function RenderMarkdownInert(markdown: string): string {
       code = [];
       continue;
     }
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    // Each `\s+` is followed by `\S` (or the line's end), so a line of tabs is read in linear time
+    // (CodeQL js/polynomial-redos); the captured text is the same as with `\s+(.*)$`.
+    const heading = /^(#{1,6})\s+((?:\S.*)?)$/.exec(line);
     if (heading) {
       flushPara();
       flushList();
       out.push(`<h${heading[1].length}>${markdownInline(heading[2])}</h${heading[1].length}>`);
       continue;
     }
-    const ul = /^\s*[-*]\s+(.*)$/.exec(line);
-    const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
+    const ul = /^\s*[-*]\s+((?:\S.*)?)$/.exec(line);
+    const ol = /^\s*\d+\.\s+((?:\S.*)?)$/.exec(line);
     if (ul || ol) {
       flushPara();
       const tag: 'ul' | 'ol' = ul ? 'ul' : 'ol';

@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, RemoveNPrefix, CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, RemoveNPrefix, CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments, ConvertObjectIdCalls, UnquoteBuiltinFunctionCalls, IsKeywordNamedColumn } from './ExpressionHelpers.js';
 
 /** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
 const PLACEHOLDER = /\$\{[\w:.-]+\}/;
@@ -98,6 +98,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // with @level0type = SCHEMA, no level1) → PG-native COMMENT ON SCHEMA
     const extPropResult = this.tryConvertConditionalSchemaExtendedProperty(result);
     if (extPropResult) return extPropResult + '\n';
+
+    // IF COL_LENGTH('s.T', 'C') IS NULL → IF NOT EXISTS (<pg_attribute probe>), so the generic
+    // DO-block conversion below handles it like any other missing-column guard.
+    result = ConditionalDDLRule.convertColLengthGuard(result);
 
     // Convert IF NOT EXISTS (...) BEGIN ... END → DO $$ BEGIN IF NOT EXISTS (...) THEN ... END IF; END $$;
     result = this.convertToDoBlock(result);
@@ -479,9 +483,14 @@ export class ConditionalDDLRule implements IConversionRule {
     // equivalent and would otherwise reference a non-existent relation.
     condition = this.convertConstraintCatalogCondition(condition);
 
-    // Quote PascalCase column names that aren't already quoted
-    condition = this.quoteColumnNames(condition);
-    body = this.quoteColumnNames(body);
+    // A guarded block can itself hold guarded blocks (IF NOT EXISTS (...) BEGIN INSERT ... END;),
+    // which are T-SQL control flow inside the PL/pgSQL body unless converted too.
+    body = ConditionalDDLRule.convertNestedIfBlocks(body);
+
+    // Quote PascalCase column names that aren't already quoted, then undo the quoting for
+    // built-in function calls (UPPER, LTRIM, LEN, ...) the keyword list does not cover.
+    condition = UnquoteBuiltinFunctionCalls(this.quoteColumnNames(condition));
+    body = UnquoteBuiltinFunctionCalls(this.quoteColumnNames(body));
 
     // Indent the condition lines
     const condLines = condition.split('\n').map(l => '        ' + l.trim()).join('\n');
@@ -498,6 +507,73 @@ export class ConditionalDDLRule implements IConversionRule {
       '    END IF;',
       'END $$;',
     ].join('\n');
+  }
+
+  /**
+   * Convert nested T-SQL `IF [NOT] EXISTS (...) BEGIN ... END[;]` blocks in a DO-block body to
+   * PL/pgSQL `IF [NOT] EXISTS (...) THEN ... END IF;`, innermost content included. A block whose
+   * BEGIN/END cannot be matched is left as it was.
+   */
+  private static convertNestedIfBlocks(body: string): string {
+    const ifRe = /\bIF\s+(?:NOT\s+)?EXISTS\s*\(/gi;
+    let out = '';
+    let pos = 0;
+    for (let m = ifRe.exec(body); m; m = ifRe.exec(body)) {
+      const close = ConditionalDDLRule.findCloseParen(body, m.index + m[0].length - 1);
+      const begin = close < 0 ? null : body.slice(close + 1).match(/^\s*BEGIN\b/i);
+      if (close < 0 || !begin) continue;
+      const innerStart = close + 1 + begin[0].length;
+      const endPos = ConditionalDDLRule.findMatchingEnd(body, innerStart);
+      if (endPos < 0) continue;
+      const inner = ConditionalDDLRule.convertNestedIfBlocks(body.slice(innerStart, endPos).trim()).replace(/;?\s*$/, ';');
+      const afterEnd = body.slice(endPos + 3).match(/^\s*;?/)?.[0] ?? '';
+      out += body.slice(pos, close + 1) + ' THEN\n' + inner + '\nEND IF;';
+      pos = endPos + 3 + afterEnd.length;
+      ifRe.lastIndex = pos;
+    }
+    return out + body.slice(pos);
+  }
+
+  /**
+   * Position of the END closing a BEGIN whose body starts at `from`, counting nested BEGIN and CASE
+   * (both closed by END) and skipping string literals and comments; -1 if unbalanced.
+   */
+  private static findMatchingEnd(sql: string, from: number): number {
+    const code = sql.slice(from).replace(/'(?:''|[^'])*'|--[^\n]*|\/\*[\s\S]*?\*\//g, (t) => ' '.repeat(t.length));
+    let depth = 1;
+    for (const m of code.matchAll(/\b(BEGIN|CASE|END)\b/gi)) {
+      depth += m[1].toUpperCase() === 'END' ? -1 : 1;
+      if (depth === 0) return from + (m.index ?? 0);
+    }
+    return -1;
+  }
+
+  /**
+   * Rewrite SQL Server's missing-column probe to a PostgreSQL catalog check:
+   *
+   *     IF COL_LENGTH('schema.Table', 'Column') IS NULL
+   *
+   * becomes
+   *
+   *     IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = to_regclass('schema."Table"')
+   *                    AND attname = 'Column' AND NOT attisdropped)
+   *
+   * `to_regclass` resolves the table the way the converted DDL names it (schema unquoted and folded,
+   * table name case-sensitive), so the probe finds exactly the table the guarded ALTER targets.
+   * `IS NOT NULL` (drop-if-present) becomes `IF NOT EXISTS (SELECT 1 WHERE NOT EXISTS (<probe>))`.
+   */
+  private static convertColLengthGuard(sql: string): string {
+    return sql.replace(
+      /\bIF\s+COL_LENGTH\s*\(\s*N?'([^']+)'\s*,\s*N?'([^']+)'\s*\)\s*IS\s+(NOT\s+)?NULL\b/i,
+      (_m, table: string, column: string, not: string | undefined) => {
+        const regclass = ConvertObjectIdCalls(`OBJECT_ID('${table}')`);
+        const col = column.replace(/^\[(.*)\]$/, '$1').replace(/'/g, "''");
+        const probe = `SELECT 1 FROM pg_attribute WHERE attrelid = ${regclass} AND attname = '${col}' AND NOT attisdropped`;
+        // IS NOT NULL (the column exists) is spelled as a double negative so it takes the same
+        // IF NOT EXISTS path as the add-if-missing form.
+        return not ? `IF NOT EXISTS (SELECT 1 WHERE NOT EXISTS (${probe}))` : `IF NOT EXISTS (${probe})`;
+      }
+    );
   }
 
   /**
@@ -586,8 +662,8 @@ export class ConditionalDDLRule implements IConversionRule {
 
   /** Quote standalone PascalCase words that aren't SQL keywords and aren't already quoted */
   private quotePascalCaseIdentifiers(sql: string): string {
-    return sql.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
-      if (ConditionalDDLRule.SQL_KEYWORDS.has(word.toUpperCase())) return match;
+    return sql.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string, offset: number, whole: string) => {
+      if (ConditionalDDLRule.SQL_KEYWORDS.has(word.toUpperCase()) && !IsKeywordNamedColumn(word, whole, offset)) return match;
       return `"${word}"`;
     });
   }
@@ -622,6 +698,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // bare `name` identifier (not part of a larger word, not already prefixed)
     // is rewritten.
     result = result.replace(/(?<![\w.])name\b/gi, 'conname');
+    // `parent_object_id = OBJECT_ID('schema.Table')` scopes the probe to one table; pg_constraint
+    // keys that as `conrelid`, which compares directly with the regclass `to_regclass` returns.
+    result = result.replace(/(?<![\w.])parent_object_id\b/gi, 'conrelid');
+    result = ConvertObjectIdCalls(result);
     return result;
   }
 

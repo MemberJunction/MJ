@@ -1,5 +1,109 @@
 # Change Log - @memberjunction/cli
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 8fb8a07: Open App CLI messages and exit codes: `mj app check-updates` and migration downloads explain a private repository the credential cannot read, the credential message names the token in use and covers fine-grained and SSO tokens; `mj app remove`/`enable`/`disable` exit 1 once on failure; `mj migrate` without `--schema` uses the schema from `mj-app.json` and logs it.
+- 2bf6237: Polish Citizen Agent Builder Docker runtime, audit CLI, and inactive credential decryption:
+  - Fix `mj ai audit agent-run --list` (`FormatRunList`) to handle plain objects returned by `ResultType: 'simple'` when formatting as JSON, and safely normalize `Date | string` step timestamps in `AgentAuditService`.
+  - Pass `-w /workspace` in `citizen-builder/scripts/query-run-history.sh` and `citizen-builder/scripts/sync-metadata.sh` so container CLI commands always resolve `/workspace/mj.config.cjs`.
+  - Pass `API_PORT` and `EXPLORER_PORT` into the `mj` container, sync `GRAPHQL_URI` and `GRAPHQL_WS_URI` in MJExplorer's environment files when `API_PORT` is non-default, and display actual host ports in the container startup banner.
+  - Cap SQL Server container memory (`MSSQL_MEMORY_LIMIT_MB`, default `3072`), run `mjapi` and `mjexplorer` directly under PM2 in `apps/MJAPI` and `apps/MJExplorer` so OOM exits are not masked by `turbo`, and add `globalPassThroughEnv` to `distribution.turbo.json`.
+  - Suppress false-alarm `LogError` messages when decrypting fields on explicitly inactive rows (`IsActive === false` or `0`) in `GenericDatabaseProvider`.
+- 93cae0c: `mj dev workspace` adds the linked repos' npm scopes to each app shell's `angular.json` prebundle exclude on join, records them in the sentinel, reports them in `status`/`doctor`, and `clean` removes exactly those entries (#3875).
+- fcc8668: PostgreSQL converter: an `EXEC` inside a converted procedure body (such as CodeGen's spDelete cascade updates) now emits a call that works whether the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1` to `_Clear` flags and known boolean columns as `FALSE`/`TRUE`. Before, these calls used typed arguments and integer literals, so deleting a record with dependents failed at run time with `function ... does not exist` (for example, deleting a conversation). The call logic is now shared with the top-level EXEC conversion.
+
+  Converted procedure bodies also handle three more T-SQL forms: `SELECT @a = x, @b = y ...` becomes `SELECT x, y INTO p_a, p_b ...` (before, it became a comparison with no destination); `OUTPUT` parameters become `INOUT` when the procedure returns no rows (before, they were `IN` with `RETURNS VOID`, so the caller got nothing back); and `0`/`1` compared with a known boolean column, such as `ci.IsActive = 1`, becomes `FALSE`/`TRUE`.
+
+  `mj migrate convert` without `--split` now warns when a migration contains CodeGen CRUD procedures, and names `--split --bake-codegen` as the way to write them natively for PostgreSQL.
+
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- f0c7dcd: Add `mj doctor value-lists`, which finds rows whose value-list field holds a value outside its list (they fail validation on their next save) and can set named fields to `ListOrUserEntry`. Add the `migration-string-collation` standard, which flags new string columns in migrations that do not declare a collation.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [8fb8a07]
+- Updated dependencies [76dc1bb]
+- Updated dependencies [064f9a9]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [ed5c6e2]
+- Updated dependencies [6555a44]
+- Updated dependencies [c3a1be6]
+- Updated dependencies [7bbc72f]
+- Updated dependencies [1ce1b80]
+- Updated dependencies [9cd37bd]
+- Updated dependencies [a0079ce]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [a894cd0]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [fcc8668]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [2aa1c10]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [1e73a8d]
+- Updated dependencies [7069bfe]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [f0c7dcd]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/open-app-engine@6.3.0-edge.0
+  - @memberjunction/codegen-lib@6.3.0-edge.0
+  - @memberjunction/testing-cli@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/ai-cli@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.0
+  - @memberjunction/installer@6.3.0-edge.0
+  - @memberjunction/sqlglot-ts@6.3.0-edge.0
+  - @memberjunction/cli-core@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/record-cloning@6.3.0-edge.0
+  - @memberjunction/sql-converter@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/core-entities-server@6.3.0-edge.0
+  - @memberjunction/redis-provider@6.3.0-edge.0
+  - @memberjunction/standards@6.3.0-edge.0
+  - @memberjunction/work-queue-engine@6.3.0-edge.0
+  - @memberjunction/db-auto-doc@6.3.0-edge.0
+  - @memberjunction/metadata-sync@6.3.0-edge.0
+  - @memberjunction/query-gen@6.3.0-edge.0
+  - @memberjunction/diagnostics@6.3.0-edge.0
+  - @memberjunction/config@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+  - @memberjunction/work-queue-core@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

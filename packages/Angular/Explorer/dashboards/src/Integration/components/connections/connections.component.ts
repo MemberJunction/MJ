@@ -213,6 +213,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     IsCustom: boolean;
   }> = [];
   IsLoadingCreateTablesObjects = false;
+  /**
+   * Why the source objects could not be listed (#3321) — e.g. the connector driver is not registered. Shown in the
+   * panel with a Retry; null when the last load worked. Without it a failure read as "no objects available".
+   */
+  CreateTablesObjectsError: string | null = null;
   CreateTablesSearch = '';
   CreateTablesSchema = '';
   IsCreatingTables = false;
@@ -1643,9 +1648,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     );
   }
 
+  /** Retry button of the Create Tables error state. */
+  async RetryCreateTablesObjects(): Promise<void> {
+    await this.loadCreateTablesObjects();
+  }
+
   private async loadCreateTablesObjects(): Promise<void> {
     if (!this.SelectedSummary) return;
     this.IsLoadingCreateTablesObjects = true;
+    this.CreateTablesObjectsError = null;
     this.cdr.detectChanges();
 
     try {
@@ -1669,10 +1680,12 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       } else {
         console.error('[IntegrationConnections] ListSourceObjects failed:', result.Message);
         this.CreateTablesObjects = [];
+        this.CreateTablesObjectsError = result.Message || 'The connector could not list its source objects.';
       }
     } catch (err) {
       console.error('[IntegrationConnections] Failed to load source objects for Create Tables:', err);
       this.CreateTablesObjects = [];
+      this.CreateTablesObjectsError = err instanceof Error ? err.message : String(err);
     } finally {
       this.IsLoadingCreateTablesObjects = false;
       this.cdr.detectChanges();
