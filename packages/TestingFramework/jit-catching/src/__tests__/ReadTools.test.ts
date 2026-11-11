@@ -50,6 +50,15 @@ describe('Grep', () => {
     symlinkSync(outside, join(root, 'src/link'));
     expect(Grep(root, { pattern: 'secret' }).Text).not.toMatch(/secret\.ts/);
   });
+  it('stops the walk after 2000 files and says so', () => {
+    const { root } = world(); mkdirSync(join(root, 'many'));
+    for (let i = 0; i < 2001; i++) writeFileSync(join(root, 'many', `f${String(i).padStart(4, '0')}.txt`), 'x\n');
+    expect(Grep(root, { pattern: 'needle', path: 'many' })).toEqual({ Text: 'no matches\n… [search stopped after 2000 files]', IsError: false });
+  });
+  it('searches a worktree whose root is a symlink to a real folder', () => {
+    const { root } = world(); const link = join(root, '..', 'root-link'); symlinkSync(root, link);
+    expect(Grep(link, { pattern: 'markdown' }).Text).toBe('src/sub/b.md:1: needle in markdown');
+  });
   it('reports an invalid regular expression as an error', () => {
     const { root } = world();
     expect(Grep(root, { pattern: '(' }).IsError).toBe(true);
@@ -65,6 +74,10 @@ describe('Glob', () => {
     const { root } = world();
     expect(Glob(root, { pattern: '**/*.ts' }).Text).toBe('src/a.ts');
     expect(Glob(root, { pattern: '**/*', path: 'src/sub' }).Text).toBe('src/sub/b.md');
+  });
+  it('lists paths of a worktree whose root is a symlink to a real folder', () => {
+    const { root } = world(); const link = join(root, '..', 'root-link'); symlinkSync(root, link);
+    expect(Glob(link, { pattern: '**/*.ts' }).Text).toBe('src/a.ts');
   });
   it('does not list names behind a symlink out of the worktree', () => {
     const { root, outside } = world();

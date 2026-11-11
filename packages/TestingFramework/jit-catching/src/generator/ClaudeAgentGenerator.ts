@@ -1,7 +1,6 @@
 import { closeSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { z } from 'zod';
 import { query, tool, createSdkMcpServer, type CanUseTool, type McpSdkServerConfigWithInstance, type Options, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { CandidateTest, GenerationRequest, GenerationResult, MutantEdit, TokenUsage } from '../types';
@@ -15,6 +14,8 @@ import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompt
 import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from './AgentGuards';
 import { SessionError, UsageCounter, type Price } from './UsageCounter';
 import { GeminiRunner } from './GeminiRunner';
+import { RunTestShape, WriteTestShape } from './ToolShapes';
+import { GeneratorVendor } from '../pipeline/Preflight';
 
 export type AgentMessage =
     | { Type: 'result'; Usage: { InputTokens: number; OutputTokens: number; CacheReadTokens: number }; CostUSD: number; Turns: number; Subtype: string }
@@ -180,10 +181,6 @@ function writeTranscript(dir: string, path: string, text: string): void {
 
 function safeName(text: string): string { return text.replace(/[^A-Za-z0-9._-]/g, '_'); }
 
-const MutantSchema = z.object({ Edits: z.array(z.object({ File: z.string(), Find: z.string(), Replace: z.string() })).min(1) });
-export const RunTestShape = { File: z.string(), Mutant: MutantSchema.optional() };
-export const WriteTestShape = { File: z.string(), Source: z.string() };
-
 /** The listener `FilterProcessWarnings` installed, while it is attached. */
 let warningFilter: ((w: Error & { code?: string }) => void) | null = null;
 
@@ -209,8 +206,8 @@ function warningsSilenced(): boolean {
     return process.execArgv.includes('--no-warnings') || options.includes('--no-warnings') || process.env.NODE_NO_WARNINGS === '1';
 }
 
-/** The runner for a generator model: `gemini-*` on the MJ Gemini provider, every other model on the Claude Agent SDK. */
-export function RunnerForModel(model: string): AgentRunner { return /^gemini-/i.test(model) ? GeminiRunner : SdkRunner; }
+/** The runner for a generator model: the MJ Gemini provider when `GeneratorVendor` names Gemini, the Claude Agent SDK otherwise. */
+export function RunnerForModel(model: string): AgentRunner { return GeneratorVendor(model) === 'Gemini' ? GeminiRunner : SdkRunner; }
 
 /** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
 export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpSdkServerConfigWithInstance; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): Options {

@@ -5,7 +5,8 @@ import { CreateLLM } from '../judges/ProviderFactory';
 import { SafeChat } from '../judges/SafeChat';
 import { AddUsage, NoUsage, SessionError, UsageFromChat } from './UsageCounter';
 import { Glob, Grep, READ_TOOLS, ReadFile, type ReadToolResult } from './ReadTools';
-import { RunTestShape, WriteTestShape, type AgentHooks, type AgentMessage, type AgentRunner, type AgentRunOptions } from './ClaudeAgentGenerator';
+import { RunTestShape, WriteTestShape } from './ToolShapes';
+import type { AgentHooks, AgentMessage, AgentRunner, AgentRunOptions } from './ClaudeAgentGenerator';
 
 const MAX_OUTPUT_TOKENS = 8192;
 const MAX_TOOL_RESULT_CHARS = 20_000;
@@ -74,7 +75,7 @@ async function* runSession(llm: () => BaseLLM, prompt: string, system: string, o
         for (const call of toolCalls) {
             let out: ReadToolResult;
             try { out = await runTool(call, o); } catch (e) { throw new SessionError(errorText(e), usage); }
-            const text = out.Text.length > MAX_TOOL_RESULT_CHARS ? out.Text.slice(0, MAX_TOOL_RESULT_CHARS) + TRUNCATED_TAIL : out.Text;
+            const text = out.Text.length > MAX_TOOL_RESULT_CHARS ? out.Text.slice(0, MAX_TOOL_RESULT_CHARS - TRUNCATED_TAIL.length) + TRUNCATED_TAIL : out.Text;
             blocks.push({ type: 'tool_result', toolCallId: call.id, toolName: call.name, content: text, ...(out.IsError ? { isError: true } : {}) });
             yield { Type: 'tool', Name: call.name, Input: call.arguments, Output: text };
         }

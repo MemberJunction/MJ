@@ -1,4 +1,4 @@
-import { globSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { globSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { basename, join, matchesGlob, relative, resolve } from 'node:path';
 import type { ChatTool } from '@memberjunction/ai';
 import { IsInside, ReadAllowed } from './AgentGuards';
@@ -11,6 +11,7 @@ const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_LINE_LIMIT = 2000;
 const MAX_GREP_LINES = 200;
 const MAX_GLOB_PATHS = 500;
+const MAX_GREP_FILES = 2000;
 /** Folders the search tools never enter. */
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', '.git', '.turbo', '.jit-catch']);
 
@@ -28,17 +29,23 @@ export function ReadFile(root: string, input: { path: string; offset?: number; l
     return { Text: lines.slice(start - 1, start - 1 + limit).map((line, i) => `${start + i}\t${line}`).join('\n'), IsError: false };
 }
 
-/** Lines matching the JS regular expression `pattern` under `path` (default `root`), as `relative/path:line: text`; `glob` filters file names. */
+/**
+ * Lines matching the JS regular expression `pattern` under `path` (default `root`), as `relative/path:line: text`; `glob` filters file names.
+ * Stops at 200 lines or after 2000 files read, and says so on a last line.
+ */
 export function Grep(root: string, input: { pattern: string; path?: string; glob?: string }): ReadToolResult {
     const abs = input.path === undefined ? undefined : resolve(root, input.path);
     if (!ReadAllowed('Grep', { path: abs, glob: input.glob }, root)) return DENIED;
     let regex: RegExp;
     try { regex = new RegExp(input.pattern); } catch (e) { return error(`invalid regular expression: ${(e as Error).message}`); }
-    const out: string[] = [];
-    for (const file of walkFiles(abs ?? root)) {
-        const rel = relative(root, file);
+    const real = realpathSync.native(root);
+    const out: string[] = []; let filesRead = 0;
+    for (const file of walkFiles(input.path === undefined ? real : resolve(real, input.path))) {
+        const rel = relative(real, file);
         if (input.glob !== undefined && !matchesGlob(rel, input.glob) && !matchesGlob(basename(file), input.glob)) continue;
         if (statSync(file).size > MAX_FILE_BYTES) continue;
+        if (filesRead === MAX_GREP_FILES) return { Text: `${out.length > 0 ? out.join('\n') : 'no matches'}\n… [search stopped after ${MAX_GREP_FILES} files]`, IsError: false };
+        filesRead++;
         const lines = readFileSync(file, 'utf8').split('\n');
         for (let i = 0; i < lines.length; i++) {
             if (!regex.test(lines[i])) continue;
@@ -49,27 +56,25 @@ export function Grep(root: string, input: { pattern: string; path?: string; glob
     return { Text: out.length > 0 ? out.join('\n') : 'no matches', IsError: false };
 }
 
-/** Regular files under `start` (or `start` itself when it is one), sorted; skips `SKIPPED_DIRS` and every symlink. */
-function walkFiles(start: string): string[] {
+/** Regular files under `start` (or `start` itself when it is one), in name order; skips `SKIPPED_DIRS` and every symlink. */
+function* walkFiles(start: string): Generator<string> {
     const stat = lstatSync(start, { throwIfNoEntry: false });
-    if (!stat || stat.isSymbolicLink()) return [];
-    if (stat.isFile()) return [start];
-    if (!stat.isDirectory()) return [];
-    const files: string[] = [];
+    if (!stat || stat.isSymbolicLink()) return;
+    if (stat.isFile()) { yield start; return; }
+    if (!stat.isDirectory()) return;
     for (const entry of readdirSync(start, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-        if (entry.isDirectory() && !SKIPPED_DIRS.has(entry.name)) files.push(...walkFiles(join(start, entry.name)));
-        else if (entry.isFile()) files.push(join(start, entry.name));
+        if (entry.isDirectory() && !SKIPPED_DIRS.has(entry.name)) yield* walkFiles(join(start, entry.name));
+        else if (entry.isFile()) yield join(start, entry.name);
     }
-    return files;
 }
 
 /** Paths matching `pattern` under `path` (default `root`), relative to `root`, sorted, at most 500; names behind a symlink out of `root` are left out. */
 export function Glob(root: string, input: { pattern: string; path?: string }): ReadToolResult {
     const abs = input.path === undefined ? undefined : resolve(root, input.path);
     if (!ReadAllowed('Glob', { path: abs, pattern: input.pattern }, root)) return DENIED;
-    const cwd = abs ?? root;
+    const real = realpathSync.native(root); const cwd = input.path === undefined ? real : resolve(real, input.path);
     const paths = globSync(input.pattern, { cwd, exclude: (p) => SKIPPED_DIRS.has(basename(p)) })
-        .map((p) => join(cwd, p)).filter((p) => IsInside(root, p)).map((p) => relative(root, p)).sort();
+        .map((p) => join(cwd, p)).filter((p) => IsInside(real, p)).map((p) => relative(real, p)).sort();
     if (paths.length === 0) return { Text: 'no matches', IsError: false };
     const shown = paths.slice(0, MAX_GLOB_PATHS).join('\n');
     return { Text: paths.length > MAX_GLOB_PATHS ? `${shown}\n… [more paths]` : shown, IsError: false };

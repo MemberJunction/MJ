@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ModelUsage, type ChatMessage, type ChatMessageContentBlock, type ChatToolCall } from '@memberjunction/ai';
@@ -11,7 +11,7 @@ import type { AgentHooks, AgentMessage, AgentRunOptions } from '../generator/Cla
 const PRICE = { Input: 1, Output: 2, CachedInput: 0.1 };
 const DENIED = 'denied: reads stay inside the base worktree';
 
-/** A successful reply with `toolCalls` that used `prompt` input and `completion` output tokens. */
+/** A successful reply with `toolCalls` that used `prompt` input and `completion` output tokens. `failResult` is the only TestLLM outcome kind that carries `toolCalls`. */
 function reply(content: string, toolCalls?: ChatToolCall[], prompt = 100, completion = 10): TestLLMOutcome {
   const result = MakeSuccessChatResult(content, { usage: new ModelUsage(prompt, completion) });
   result.data.choices[0].message.toolCalls = toolCalls;
@@ -88,7 +88,7 @@ describe('GeminiRunner', () => {
     expect(out.at(-1)).toMatchObject({ Type: 'result', Turns: 2, Subtype: 'error_max_budget_usd' });
   });
   it('refuses read_file outside the worktree, also through a symlink', async () => {
-    const root = worktree(); const { symlinkSync } = await import('node:fs'); symlinkSync(join(root, '..'), join(root, 'up'));
+    const root = worktree(); symlinkSync(join(root, '..'), join(root, 'up'));
     const llm = new TestLLM().Script(reply('', [call('r1', 'read_file', { path: '../x' }), call('r2', 'read_file', { path: join(root, '../x') }), call('r3', 'read_file', { path: 'up/x' }), call('r4', 'read_file', { path: 'src/a.ts' })]), reply('done'));
     await collect(llm, options(root));
     expect(toolResults(llm, 1).map((b) => [b.content, b.isError ?? false])).toEqual([[DENIED, true], [DENIED, true], [DENIED, true], ['1\texport const a = 1;\n2\t', false]]);
@@ -104,7 +104,7 @@ describe('GeminiRunner', () => {
     const llm = new TestLLM().Script(reply('', [call('r', 'read_file', { path: 'big.txt' })]), reply('done'));
     await collect(llm, options(root));
     const text = toolResults(llm, 1)[0].content;
-    expect(text.length).toBe(20_000 + '… [truncated]'.length); expect(text.endsWith('… [truncated]')).toBe(true);
+    expect(text.length).toBe(20_000); expect(text.endsWith('… [truncated]')).toBe(true);
   });
   it('throws a SessionError with the usage of earlier calls when the provider fails', async () => {
     const llm = new TestLLM().Script(reply('', [call('c', 'glob', { pattern: '*' })]), { kind: 'fail', error: new Error('503 overloaded') });
