@@ -40,7 +40,15 @@ export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
     _keyScopes = keyScopes;
 }
 
+let _refreshIntervalMs: number | undefined;
+
+/** The last interval passed to APIKeysEngineBase.SetRefreshInterval. */
+export function GetMockBaseRefreshInterval(): number | undefined {
+    return _refreshIntervalMs;
+}
+
 export function clearMockBaseState(): void {
+    _refreshIntervalMs = undefined;
     _scopes = [];
     _applications = [];
     _applicationScopes = [];
@@ -58,6 +66,11 @@ export class APIKeysEngineBase {
 
     async Config(): Promise<void> {
         // No-op in mock
+    }
+
+    SetRefreshInterval(intervalMs: number | undefined): Promise<void> {
+        _refreshIntervalMs = intervalMs;
+        return Promise.resolve();
     }
 
     get Scopes(): MJAPIScopeEntity[] {
