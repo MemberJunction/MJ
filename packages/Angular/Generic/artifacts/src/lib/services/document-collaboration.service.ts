@@ -86,6 +86,7 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
       ExpiresAt
       CanRead
       CanEdit
+      ErrorCode
       ErrorMessage
     }
   }
@@ -170,36 +171,37 @@ const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
 `;
 
 const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000] as const;
+export const MAX_RECONNECT_ATTEMPTS = 10;
+export const COLLAB_SECRET_UNCONFIGURED_CODE = 'COLLAB_SECRET_UNCONFIGURED';
 
 /**
- * Returns `true` strictly when `MintArtifactCollaborationTicket` explicitly reports that the
- * server's collaboration ticket signing secret (`MJ_ARTIFACT_COLLAB_HMAC_SECRET` /
- * `MJ_COLLABORATION_TICKET_SECRET`) is unset, too short, or unconfigured.
+ * Strict fallback check for thrown errors or legacy responses without `ErrorCode`.
+ * Returns `true` strictly when `message` explicitly contains the structured error code token
+ * `'COLLAB_SECRET_UNCONFIGURED'` or one of the exact environment variable identifiers
+ * `'MJ_ARTIFACT_COLLAB_HMAC_SECRET'` / `'MJ_COLLABORATION_TICKET_SECRET'`.
  *
- * Transient failures (network errors such as `Failed to fetch`, HTTP 5xx, GraphQL transport
- * errors, MJAPI restarts, or generic server errors) return `false` so exponential-backoff
- * reconnection remains active without locking viewers read-only.
+ * Never uses generic `/ticket.*not configured/i` regexes so unrelated errors (such as
+ * `"Jira ticket integration is not configured"`) never lock documents read-only.
  */
 function isCollaborationSecretUnconfiguredMessage(message: string | null | undefined): boolean {
   if (!message) {
     return false;
   }
-  const normalized = message.trim();
-  if (!normalized) {
+  return (
+    message.includes(COLLAB_SECRET_UNCONFIGURED_CODE) ||
+    message.includes('MJ_ARTIFACT_COLLAB_HMAC_SECRET') ||
+    message.includes('MJ_COLLABORATION_TICKET_SECRET')
+  );
+}
+
+function isCollaborationSecretUnconfiguredTicket(ticketData: CollaborationTicketPayload): boolean {
+  if (ticketData.ErrorCode === COLLAB_SECRET_UNCONFIGURED_CODE) {
+    return true;
+  }
+  if (ticketData.ErrorCode && ticketData.ErrorCode.trim().length > 0) {
     return false;
   }
-  return (
-    /MJ_ARTIFACT_COLLAB_HMAC_SECRET/i.test(normalized) ||
-    /MJ_COLLABORATION_TICKET_SECRET/i.test(normalized) ||
-    /collaboration\s+ticket\s+signing\s+secret/i.test(normalized) ||
-    /signing\s+secret\b[\s\S]*\b(?:must\s+be\s+configured|not\s+configured|unset|shorter\s+than)/i.test(
-      normalized,
-    ) ||
-    /live\s+collaborative\s+editing\s+is\s+disabled/i.test(normalized) ||
-    /\b(?:collab(?:oration)?|hmac|ticket)\b[\s\S]*\b(?:not\s+configured|must\s+be\s+configured|unconfigured)\b/i.test(
-      normalized,
-    )
-  );
+  return isCollaborationSecretUnconfiguredMessage(ticketData.ErrorMessage);
 }
 
 export interface CollaborationTicketPayload {
@@ -211,6 +213,7 @@ export interface CollaborationTicketPayload {
   ExpiresAt?: string | null;
   CanRead?: boolean | null;
   CanEdit?: boolean | null;
+  ErrorCode?: string | null;
   ErrorMessage?: string | null;
 }
 
@@ -265,10 +268,15 @@ export interface CollaborationGraphQLResponseMap {
   ExecuteAnchoredCommentAgentMention?: ServerAnchoredCommentAgentMentionPayload | null;
 }
 
+export type CollaborationGraphQLVariables = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
 export interface CollaborationGraphQLProviderLike {
   ExecuteGQL: (
     query: string,
-    variables?: Record<string, unknown>,
+    variables?: CollaborationGraphQLVariables,
   ) => Promise<CollaborationGraphQLResponseMap | null | undefined>;
   ConfigData?: {
     URL?: string;
@@ -352,7 +360,14 @@ export function ComputeBoundedSequenceDiff<T>(
 /**
  * Connection status for a collaborative document editing session.
  */
-export type CollaborationConnectionStatus = 'connected' | 'connecting' | 'local' | 'readonly' | 'revoked';
+export type CollaborationConnectionStatus =
+  | 'connected'
+  | 'connecting'
+  | 'local'
+  | 'readonly'
+  | 'revoked'
+  | 'disconnected'
+  | 'error';
 
 /**
  * Active collaborator presence metadata broadcast via Yjs awareness.
@@ -561,6 +576,18 @@ export class DocumentCollaborationSession {
     return this.reconnectTimer !== null;
   }
 
+  public get ReconnectAttempts(): number {
+    return this.reconnectAttempts;
+  }
+
+  public get IsReconnectExhausted(): boolean {
+    return (
+      this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS &&
+      !this.HasPendingReconnect &&
+      (!this.socket || this.socket.readyState !== WebSocket.OPEN)
+    );
+  }
+
   public get LiveSyncErrorReason(): string {
     return this.liveSyncErrorReason;
   }
@@ -640,8 +667,14 @@ export class DocumentCollaborationSession {
       this.setStatus('readonly');
     } else if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.setStatus(canEdit ? 'connected' : 'readonly');
-    } else if (this.status !== 'connecting') {
-      this.setStatus(canEdit ? 'local' : 'readonly');
+    } else if (!canEdit) {
+      this.setStatus('readonly');
+    } else if (
+      this.status !== 'connecting' &&
+      this.status !== 'error' &&
+      this.status !== 'disconnected'
+    ) {
+      this.setStatus('local');
     }
   }
 
@@ -810,6 +843,9 @@ export class DocumentCollaborationSession {
     }
 
     this.hasCompletedInitialSync = true;
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.reconnectAttempts = 0;
+    }
     this.setLiveSyncUnavailable(false);
     if (this.status === 'readonly' && this.canEdit) {
       this.status = 'local';
@@ -913,6 +949,7 @@ export class DocumentCollaborationSession {
     this.configuredWsUrlOverride = wsUrl ?? null;
     this.configuredProvider = provider ?? null;
     const generation = ++this.connectGeneration;
+    this.clearReconnectTimer();
 
     let targetWsUrl = wsUrl ?? '';
     try {
@@ -982,7 +1019,6 @@ export class DocumentCollaborationSession {
           ws.close();
           return;
         }
-        this.reconnectAttempts = 0;
         this.setLiveSyncUnavailable(false);
         this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
@@ -1058,6 +1094,28 @@ export class DocumentCollaborationSession {
         this.scheduleReconnect();
       }
     }
+  }
+
+  /**
+   * Resets automatic exponential-backoff exhaustion (`reconnectAttempts = 0`) and immediately
+   * attempts a fresh ticket-authenticated WebSocket connection.
+   */
+  public async Retry(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    if (this.destroyed) {
+      return;
+    }
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
+    const nextWsUrl = wsUrl !== undefined ? wsUrl : this.configuredWsUrlOverride;
+    const nextProvider = provider !== undefined ? provider : this.configuredProvider;
+    await this.Connect(nextWsUrl, nextProvider);
+  }
+
+  /**
+   * Alias for {@link Retry} that resets reconnect backoff attempts and reconnects immediately.
+   */
+  public async Reconnect(wsUrl?: string | null, provider?: IMetadataProvider | null): Promise<void> {
+    await this.Retry(wsUrl, provider);
   }
 
   /**
@@ -1433,6 +1491,7 @@ export class DocumentCollaborationSession {
       }
       if (syncMsgType === syncProtocol.messageYjsSyncStep2) {
         this.hasCompletedInitialSync = true;
+        this.reconnectAttempts = 0;
         this.setLiveSyncUnavailable(false);
         this.overrideSeedContent = null;
         if (
@@ -1458,6 +1517,9 @@ export class DocumentCollaborationSession {
         this.lastSyncedRemoteContent = this.GetContent();
         this.statusChanged$.next(this.status);
       } else if (syncMsgType === syncProtocol.messageYjsUpdate) {
+        if (this.hasCompletedInitialSync) {
+          this.reconnectAttempts = 0;
+        }
         if (
           this.ContentText.length > 0 ||
           this.Doc.getArray<string>('slideOrder').length > 0 ||
@@ -1466,8 +1528,13 @@ export class DocumentCollaborationSession {
           this.seededInDoc = true;
         }
         this.lastSyncedRemoteContent = this.GetContent();
-      } else if (this.ContentText.length > 0) {
-        this.seededInDoc = true;
+      } else {
+        if (this.hasCompletedInitialSync) {
+          this.reconnectAttempts = 0;
+        }
+        if (this.ContentText.length > 0) {
+          this.seededInDoc = true;
+        }
       }
     } else if (msgType === MSG_AWARENESS) {
       const update = decoding.readVarUint8Array(decoder);
@@ -1519,6 +1586,10 @@ export class DocumentCollaborationSession {
       return;
     }
     this.clearReconnectTimer();
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.setStatus('error');
+      return;
+    }
     const baseDelay =
       RECONNECT_BACKOFF_MS[Math.min(this.reconnectAttempts, RECONNECT_BACKOFF_MS.length - 1)];
     const jitter = Math.floor(Math.random() * 250);
@@ -2107,7 +2178,7 @@ export class DocumentCollaborationService {
         }
         if (!ticketData.Success || !ticketData.Ticket) {
           const errorMessage = ticketData.ErrorMessage || '';
-          const secretUnconfigured = isCollaborationSecretUnconfiguredMessage(errorMessage);
+          const secretUnconfigured = isCollaborationSecretUnconfiguredTicket(ticketData);
           return {
             Mode: 'local',
             WsUrl: '',

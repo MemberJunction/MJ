@@ -14,6 +14,9 @@
  *   - `docs-slides-sheets-library.DSL7` — `MJGlobal.ClassFactory` resolution and headless execution of `DocumentToolLibrary`, `SlideDeckToolLibrary`, `SpreadsheetToolLibrary`, and `WhiteboardToolLibrary` with SHA-256 optimistic concurrency guards
  */
 
+import { randomBytes } from 'node:crypto';
+import * as http from 'node:http';
+import * as https from 'node:https';
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
@@ -1592,40 +1595,185 @@ async function checkDslc3TicketMintSocketUpgradeAndReadOnlyRejection(): Promise<
     Assert(wsOutcome.upgraded, 'WebSocket upgrade to /collaboration/yjs with valid ticket must succeed');
     Assert(wsOutcome.readonlyRejected, 'Read-only peer Yjs update frame must be rejected with readonly-rejected');
 
-    // 4. Reusing the same single-use ticket on a second WebSocket connection must be rejected immediately before opening (HTTP 401 pre-handshake -> CloseEvent 1006 + error, or 1008 Policy Violation; never open or pass on timeout)
-    const replayOutcome = await new Promise<{
+    // 4. Replaying a consumed single-use ticket (or presenting a forged invalid ticket) MUST be rejected specifically with HTTP 401/403 pre-handshake or WebSocket close code 4401/4403 — so 500/502 or TCP ECONNRESET fails DSLC3!
+    const probeWebSocketRejection = (
+        targetWsUrl: string,
+    ): Promise<{
         opened: boolean;
-        hadError: boolean;
-        closedCode: number;
+        upgradeStatusCode: number | undefined;
+        closeCode: number | undefined;
+        errorMessage: string | undefined;
         timedOut: boolean;
-    }>((resolve) => {
-        const replaySocket = new WebSocket(wsUrl);
-        let opened = false;
-        let hadError = false;
-        const timer = setTimeout(() => {
-            try {
-                replaySocket.close();
-            } catch {
-                // ignore
-            }
-            resolve({ opened, hadError, closedCode: 0, timedOut: true });
-        }, 5_000);
-        replaySocket.addEventListener('open', () => {
-            opened = true;
+    }> =>
+        new Promise((resolve) => {
+            const parsedTarget = new URL(targetWsUrl);
+            const isSecure = parsedTarget.protocol === 'wss:' || parsedTarget.protocol === 'https:';
+            const requestFn = isSecure ? https.request : http.request;
+            let settled = false;
+            const settle = (result: {
+                opened: boolean;
+                upgradeStatusCode: number | undefined;
+                closeCode: number | undefined;
+                errorMessage: string | undefined;
+                timedOut: boolean;
+            }): void => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                clearTimeout(timer);
+                resolve(result);
+            };
+
+            const req = requestFn({
+                protocol: isSecure ? 'https:' : 'http:',
+                hostname: parsedTarget.hostname,
+                port: parsedTarget.port || (isSecure ? 443 : 80),
+                path: `${parsedTarget.pathname}${parsedTarget.search}`,
+                method: 'GET',
+                headers: {
+                    Connection: 'Upgrade',
+                    Upgrade: 'websocket',
+                    'Sec-WebSocket-Version': '13',
+                    'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+                },
+            });
+
+            const timer = setTimeout(() => {
+                req.destroy();
+                settle({
+                    opened: false,
+                    upgradeStatusCode: undefined,
+                    closeCode: undefined,
+                    errorMessage: undefined,
+                    timedOut: true,
+                });
+            }, 5_000);
+
+            // Equivalent to `ws.on('unexpected-response', (_req, res) => ...)` on raw RFC 6455 HTTP upgrade
+            req.on('response', (res) => {
+                const upgradeStatusCode = res.statusCode;
+                res.resume();
+                settle({
+                    opened: false,
+                    upgradeStatusCode,
+                    closeCode: undefined,
+                    errorMessage: undefined,
+                    timedOut: false,
+                });
+            });
+
+            req.on('upgrade', (_res, socket, head) => {
+                const chunks: Buffer[] = head.length > 0 ? [Buffer.from(head)] : [];
+                const tryExtractCloseCode = (): number | undefined => {
+                    const combined = Buffer.concat(chunks);
+                    if (combined.length < 2) {
+                        return undefined;
+                    }
+                    const opcode = combined[0] & 0x0f;
+                    if (opcode !== 0x08) {
+                        return undefined;
+                    }
+                    const masked = (combined[1] & 0x80) !== 0;
+                    let payloadLen = combined[1] & 0x7f;
+                    let offset = 2;
+                    if (payloadLen === 126) {
+                        if (combined.length < 4) return undefined;
+                        payloadLen = combined.readUInt16BE(2);
+                        offset = 4;
+                    } else if (payloadLen === 127) {
+                        return undefined;
+                    }
+                    if (masked) {
+                        offset += 4;
+                    }
+                    if (payloadLen < 2 || combined.length < offset + 2) {
+                        return undefined;
+                    }
+                    return combined.readUInt16BE(offset);
+                };
+
+                const immediateClose = tryExtractCloseCode();
+                if (immediateClose !== undefined) {
+                    socket.destroy();
+                    settle({
+                        opened: false,
+                        upgradeStatusCode: 101,
+                        closeCode: immediateClose,
+                        errorMessage: undefined,
+                        timedOut: false,
+                    });
+                    return;
+                }
+
+                socket.on('data', (chunk: Buffer) => {
+                    chunks.push(chunk);
+                    const parsedClose = tryExtractCloseCode();
+                    if (parsedClose !== undefined) {
+                        socket.destroy();
+                        settle({
+                            opened: false,
+                            upgradeStatusCode: 101,
+                            closeCode: parsedClose,
+                            errorMessage: undefined,
+                            timedOut: false,
+                        });
+                    }
+                });
+                socket.on('close', () => {
+                    settle({
+                        opened: true,
+                        upgradeStatusCode: 101,
+                        closeCode: tryExtractCloseCode(),
+                        errorMessage: undefined,
+                        timedOut: false,
+                    });
+                });
+                socket.on('error', (err: Error) => {
+                    settle({
+                        opened: true,
+                        upgradeStatusCode: 101,
+                        closeCode: tryExtractCloseCode(),
+                        errorMessage: err.message,
+                        timedOut: false,
+                    });
+                });
+            });
+
+            req.on('error', (err: Error) => {
+                settle({
+                    opened: false,
+                    upgradeStatusCode: undefined,
+                    closeCode: undefined,
+                    errorMessage: err.message,
+                    timedOut: false,
+                });
+            });
+
+            req.end();
         });
-        replaySocket.addEventListener('close', (ev: CloseEvent) => {
-            clearTimeout(timer);
-            resolve({ opened, hadError, closedCode: ev.code, timedOut: false });
-        });
-        replaySocket.addEventListener('error', () => {
-            hadError = true;
-        });
-    });
+
+    const replayOutcome = await probeWebSocketRejection(wsUrl);
     Assert(
         !replayOutcome.timedOut &&
             !replayOutcome.opened &&
-            (replayOutcome.closedCode === 1008 || (replayOutcome.closedCode === 1006 && replayOutcome.hadError)),
-        `Replaying a consumed single-use collaboration ticket must be rejected without opening or timing out (got opened=${replayOutcome.opened}, hadError=${replayOutcome.hadError}, code=${replayOutcome.closedCode}, timedOut=${replayOutcome.timedOut})`,
+            (replayOutcome.upgradeStatusCode === 401 ||
+                replayOutcome.upgradeStatusCode === 403 ||
+                replayOutcome.closeCode === 4401 ||
+                replayOutcome.closeCode === 4403),
+        `Replaying a consumed single-use collaboration ticket must reject with HTTP 401/403 or close 4401/4403 (got upgradeStatusCode=${String(replayOutcome.upgradeStatusCode)}, closeCode=${String(replayOutcome.closeCode)}, opened=${replayOutcome.opened}, error=${String(replayOutcome.errorMessage)}, timedOut=${replayOutcome.timedOut})`,
+    );
+
+    const invalidTicketUrl = `${wsScheme}//${httpUrl.host}${rawPath}?ticket=invalid.forged.ticket&artifactId=${encodeURIComponent(fx.ParentDocID!)}`;
+    const invalidOutcome = await probeWebSocketRejection(invalidTicketUrl);
+    Assert(
+        !invalidOutcome.timedOut &&
+            !invalidOutcome.opened &&
+            (invalidOutcome.upgradeStatusCode === 401 ||
+                invalidOutcome.upgradeStatusCode === 403 ||
+                invalidOutcome.closeCode === 4401 ||
+                invalidOutcome.closeCode === 4403),
+        `Invalid collaboration ticket must reject with HTTP 401/403 or close 4401/4403 (got upgradeStatusCode=${String(invalidOutcome.upgradeStatusCode)}, closeCode=${String(invalidOutcome.closeCode)}, opened=${invalidOutcome.opened}, error=${String(invalidOutcome.errorMessage)}, timedOut=${invalidOutcome.timedOut})`,
     );
 }
 

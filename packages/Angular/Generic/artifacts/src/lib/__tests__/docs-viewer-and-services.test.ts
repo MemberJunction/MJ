@@ -15,7 +15,11 @@ import {
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
-import { DocumentCollaborationService } from '../services/document-collaboration.service';
+import {
+  COLLAB_SECRET_UNCONFIGURED_CODE,
+  DocumentCollaborationService,
+  MAX_RECONNECT_ATTEMPTS,
+} from '../services/document-collaboration.service';
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import { SlideDeckExportService } from '../services/slide-deck-export.service';
 import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
@@ -266,7 +270,7 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
 
   it('acquires a single-use ticket via MintArtifactCollaborationTicket and derives cross-port WS origin from ConfigData.URL (A3)', async () => {
     const executeGqlCalls: Array<{ query: string; variables?: Record<string, string> }> = [];
-    const mockGraphQlProvider = {
+    const mockGraphQlProvider = Object.assign(Object.create(null) as IMetadataProvider, {
       ConfigData: {
         URL: 'https://mjapi.corp.example:4443/graphql',
       },
@@ -283,11 +287,12 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
           },
         };
       },
-    } as unknown as IMetadataProvider;
+    });
 
     const resolved = await service.ResolveCollaborationEndpoint('art-uuid-42', null, mockGraphQlProvider);
     expect(executeGqlCalls).toHaveLength(1);
     expect(executeGqlCalls[0].query).toContain('MintArtifactCollaborationTicket');
+    expect(executeGqlCalls[0].query).toContain('ErrorCode');
     expect(executeGqlCalls[0].variables).toEqual({ artifactId: 'art-uuid-42' });
     expect(resolved.Mode).toBe('connect');
     expect(resolved.WsUrl).toBe(
@@ -297,7 +302,7 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
   });
 
   it('stays cleanly in local mode when no GraphQLDataProvider or wsUrl override is configured (A3)', async () => {
-    const plainProvider = { Entities: [] } as unknown as IMetadataProvider;
+    const plainProvider = Object.assign(Object.create(null) as IMetadataProvider, { Entities: [] });
     const resolved = await service.ResolveCollaborationEndpoint('art-local-1', null, plainProvider);
     expect(resolved.Mode).toBe('local');
     expect(resolved.WsUrl).toBe('');
@@ -349,9 +354,9 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
       }
     }
 
-    (globalThis as unknown as { WebSocket: typeof FakeWebSocket }).WebSocket = FakeWebSocket;
+    Reflect.set(globalThis, 'WebSocket', FakeWebSocket);
     let ticketCounter = 0;
-    const mockGraphQlProvider = {
+    const mockGraphQlProvider = Object.assign(Object.create(null) as IMetadataProvider, {
       ConfigData: { URL: 'http://localhost:4000/graphql' },
       ExecuteGQL: async () => ({
         MintArtifactCollaborationTicket: {
@@ -362,7 +367,7 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
           CanEdit: true,
         },
       }),
-    } as unknown as IMetadataProvider;
+    });
 
     try {
       const session = service.CreateSession('art-reconnect-1', '# Initial', { id: 'u1', name: 'Alice' }, true, true);
@@ -423,7 +428,7 @@ describe('DocumentCollaborationService — ticket-authenticated URL resolution, 
       await vi.advanceTimersByTimeAsync(20000);
       expect(createdSockets).toHaveLength(2);
     } finally {
-      (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = originalWebSocket;
+      Reflect.set(globalThis, 'WebSocket', originalWebSocket);
       vi.useRealTimers();
     }
   });
@@ -1355,6 +1360,216 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
         sheetViewer.ngOnDestroy();
       }
     } finally {
+      Reflect.set(globalThis, 'WebSocket', originalWebSocket);
+      vi.useRealTimers();
+    }
+  });
+
+  it('R7: ErrorCode COLLAB_SECRET_UNCONFIGURED sets LiveSyncUnavailable === true even with generic ErrorMessage, while unrelated "ticket ... not configured" errors keep LiveSyncUnavailable === false', async () => {
+    const collabService = new DocumentCollaborationService();
+
+    // 1. Structured ErrorCode === 'COLLAB_SECRET_UNCONFIGURED' with generic ErrorMessage -> LiveSyncUnavailable === true
+    const structuredUnconfiguredProvider = Object.assign(Object.create(null) as IMetadataProvider, {
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => ({
+        MintArtifactCollaborationTicket: {
+          Success: false,
+          CanRead: true,
+          CanEdit: true,
+          ErrorCode: COLLAB_SECRET_UNCONFIGURED_CODE,
+          ErrorMessage: 'Live collaboration disabled',
+        },
+      }),
+    });
+
+    const unconfiguredSession = collabService.CreateSession(
+      'art-structured-secret-code',
+      '# Quarterly Plan',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    await unconfiguredSession.Connect(null, structuredUnconfiguredProvider);
+    expect(unconfiguredSession.LiveSyncUnavailable).toBe(true);
+    expect(unconfiguredSession.HasPendingReconnect).toBe(false);
+    expect(unconfiguredSession.Status).toBe('readonly');
+    expect(unconfiguredSession.CanMutateDocument).toBe(false);
+    unconfiguredSession.Destroy();
+
+    // 2. Unrelated error mentioning "ticket ... not configured" (no ErrorCode) -> LiveSyncUnavailable === false
+    const jiraTicketUnconfiguredProvider = Object.assign(Object.create(null) as IMetadataProvider, {
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => ({
+        MintArtifactCollaborationTicket: {
+          Success: false,
+          CanRead: true,
+          CanEdit: true,
+          ErrorMessage: 'Jira ticket integration is not configured',
+        },
+      }),
+    });
+
+    const jiraErrorSession = collabService.CreateSession(
+      'art-jira-ticket-msg',
+      '# Quarterly Plan',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    await jiraErrorSession.Connect(null, jiraTicketUnconfiguredProvider);
+    expect(jiraErrorSession.LiveSyncUnavailable).toBe(false);
+    expect(jiraErrorSession.CanEdit).toBe(true);
+    expect(jiraErrorSession.Status).toBe('local');
+    expect(jiraErrorSession.HasPendingReconnect).toBe(true);
+    jiraErrorSession.Destroy();
+
+    // 3. Thrown unrelated error mentioning "ticket ... not configured" -> LiveSyncUnavailable === false
+    const thrownSupportTicketProvider = Object.assign(Object.create(null) as IMetadataProvider, {
+      ConfigData: { URL: 'https://example.com/graphql' },
+      ExecuteGQL: async () => {
+        throw new Error('Support ticket webhook is not configured');
+      },
+    });
+
+    const thrownTicketSession = collabService.CreateSession(
+      'art-thrown-support-ticket',
+      '# Quarterly Plan',
+      { id: 'u1', name: 'Alice' },
+      true,
+      true,
+    );
+    await thrownTicketSession.Connect(null, thrownSupportTicketProvider);
+    expect(thrownTicketSession.LiveSyncUnavailable).toBe(false);
+    expect(thrownTicketSession.HasPendingReconnect).toBe(true);
+    thrownTicketSession.Destroy();
+  });
+
+  it('R7: caps automatic reconnects at MAX_RECONNECT_ATTEMPTS with zero infinite retry loop, keeps LiveSyncUnavailable === false, and recovers on explicit Retry()', async () => {
+    vi.useFakeTimers();
+    const originalWebSocket = Reflect.get(globalThis, 'WebSocket');
+
+    class BoundedRetrySocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+
+      public static instances: BoundedRetrySocket[] = [];
+      public readonly url: string;
+      public readyState = BoundedRetrySocket.CONNECTING;
+      public binaryType = 'blob';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        BoundedRetrySocket.instances.push(this);
+      }
+
+      public send(_data: Uint8Array): void {
+        // no-op
+      }
+
+      public close(): void {
+        this.readyState = BoundedRetrySocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'WebSocket', BoundedRetrySocket);
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+
+    try {
+      const collabService = new DocumentCollaborationService();
+      let ticketMintCalls = 0;
+      let serverHealthy = false;
+
+      const provider = Object.assign(Object.create(null) as IMetadataProvider, {
+        ConfigData: { URL: 'https://example.com/graphql' },
+        ExecuteGQL: async () => {
+          ticketMintCalls++;
+          if (!serverHealthy) {
+            return {
+              MintArtifactCollaborationTicket: {
+                Success: false,
+                ErrorMessage: '503 Service Temporarily Unavailable',
+              },
+            };
+          }
+          return {
+            MintArtifactCollaborationTicket: {
+              Success: true,
+              Ticket: `tkt-recovered-${ticketMintCalls}`,
+              WsPath: '/collaboration/yjs',
+              CanRead: true,
+              CanEdit: true,
+            },
+          };
+        },
+      });
+
+      const session = collabService.CreateSession(
+        'art-bounded-retry-1',
+        '# Bounded Retry Doc',
+        { id: 'u1', name: 'Alice' },
+        true,
+        true,
+      );
+
+      // Initial Connect (attempt 0) fails -> schedules retry 1
+      await session.Connect(null, provider);
+      expect(ticketMintCalls).toBe(1);
+      expect(session.HasPendingReconnect).toBe(true);
+      expect(session.LiveSyncUnavailable).toBe(false);
+
+      // Step through all MAX_RECONNECT_ATTEMPTS (10) scheduled exponential-backoff retries (capped at 30s)
+      const backoffSchedule = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
+      for (let i = 1; i <= MAX_RECONNECT_ATTEMPTS; i++) {
+        const expectedBackoffMs = backoffSchedule[Math.min(i - 1, backoffSchedule.length - 1)];
+        await vi.advanceTimersByTimeAsync(expectedBackoffMs - 1);
+        expect(ticketMintCalls).toBe(i);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(ticketMintCalls).toBe(1 + i);
+      }
+
+      // After MAX_RECONNECT_ATTEMPTS consecutive failures, no further timers are scheduled!
+      expect(session.ReconnectAttempts).toBe(MAX_RECONNECT_ATTEMPTS);
+      expect(session.HasPendingReconnect).toBe(false);
+      expect(session.IsReconnectExhausted).toBe(true);
+      expect(session.Status).toBe('error');
+      expect(session.LiveSyncUnavailable).toBe(false);
+
+      // Advancing time by 10 full minutes produces ZERO extra ticket mint calls (no infinite loop)
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(ticketMintCalls).toBe(1 + MAX_RECONNECT_ATTEMPTS);
+      expect(session.HasPendingReconnect).toBe(false);
+
+      // Explicit Retry() resets ReconnectAttempts = 0 and reconnects once server recovers
+      serverHealthy = true;
+      await session.Retry();
+      expect(ticketMintCalls).toBe(2 + MAX_RECONNECT_ATTEMPTS);
+      expect(BoundedRetrySocket.instances).toHaveLength(1);
+
+      const sock = BoundedRetrySocket.instances[0];
+      sock.readyState = BoundedRetrySocket.OPEN;
+      sock.onopen?.();
+      const serverDoc = new Y.Doc();
+      serverDoc.getText('content').insert(0, '# Bounded Retry Doc');
+      const step2Enc = encoding.createEncoder();
+      encoding.writeVarUint(step2Enc, 0);
+      syncProtocol.writeSyncStep2(step2Enc, serverDoc);
+      sock.onmessage?.({ data: encoding.toUint8Array(step2Enc).buffer } as MessageEvent);
+
+      expect(session.Status).toBe('connected');
+      expect(session.HasCompletedInitialSync).toBe(true);
+      expect(session.ReconnectAttempts).toBe(0);
+      expect(session.IsReconnectExhausted).toBe(false);
+      expect(session.LiveSyncUnavailable).toBe(false);
+
+      session.Destroy();
+    } finally {
+      randomSpy.mockRestore();
       Reflect.set(globalThis, 'WebSocket', originalWebSocket);
       vi.useRealTimers();
     }

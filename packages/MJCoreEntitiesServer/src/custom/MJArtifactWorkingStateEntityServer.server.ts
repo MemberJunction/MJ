@@ -46,9 +46,9 @@ function isServerSystemUser(user: UserInfo | undefined | null): boolean {
 }
 
 function isMetadataProvider(
-    provider: IEntityDataProvider | null | undefined
-): provider is IEntityDataProvider & IMetadataProvider {
-    return Boolean(provider && 'Entities' in provider);
+    provider: IEntityDataProvider | IMetadataProvider | null | undefined
+): provider is IMetadataProvider {
+    return Boolean(provider && ('Entities' in provider || 'ProviderType' in provider));
 }
 
 function resolveTargetEntityName(params: RunViewParams): string {
@@ -64,7 +64,7 @@ function resolveTargetEntityName(params: RunViewParams): string {
 }
 
 function resolveMetadataProvider(
-    entityProvider: IEntityDataProvider | null | undefined,
+    entityProvider: IEntityDataProvider | IMetadataProvider | null | undefined,
     contextUser: UserInfo | undefined | null
 ): IMetadataProvider | null {
     if (isMetadataProvider(entityProvider)) {
@@ -108,9 +108,10 @@ function stripSyntheticWorkingStateArtifactId(row: unknown): unknown {
 
 export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
     params: RunViewParams,
-    contextUser: UserInfo | undefined
+    contextUser: UserInfo | undefined,
+    hookProvider?: IMetadataProvider
 ): RunViewParams => {
-    const provider = resolveMetadataProvider(undefined, contextUser);
+    const provider = resolveMetadataProvider(hookProvider, contextUser);
     if (
         !params ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
@@ -142,7 +143,8 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
 export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     params: RunViewParams,
     results: RunViewResult,
-    contextUser: UserInfo | undefined
+    contextUser: UserInfo | undefined,
+    hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
     if (!results?.Success || resolveTargetEntityName(params) !== 'MJ: Artifact Working States') {
         return results;
@@ -154,7 +156,7 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
-    const provider = resolveMetadataProvider(undefined, contextUser);
+    const provider = resolveMetadataProvider(hookProvider, contextUser);
 
     if (!contextUser) {
         // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke

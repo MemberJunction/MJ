@@ -81,6 +81,7 @@ import {
     ARTIFACT_COLLABORATION_WS_PATH,
     ARTIFACT_VERSION_SAVED_EVENT_CODE,
     ArtifactCollaborationServer,
+    COLLAB_SECRET_UNCONFIGURED_CODE,
     CollaborationControlFrame,
     CollaborationPermissionStatusFrame,
     WS_CLOSE_FORBIDDEN,
@@ -90,6 +91,7 @@ import {
     YJS_MESSAGE_SYNC
 } from '../collaboration/ArtifactCollaborationServer.js';
 import {
+    type IYjsRoomRelay,
     InMemoryYjsRelayBus,
     InMemoryYjsRoomRelay,
     RedisYjsRoomRelay,
@@ -2070,6 +2072,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             ].join('\n')
         );
         client.ws.close();
+        const compactedStep2 = await server.CompactRoomToArtifactVersion(artifactId, editorUser);
+        expect(compactedStep2.Saved).toBe(true);
 
         // 3. Out-of-band version write while room is open is reconciled, not overwritten on next compaction
         versions.push({
@@ -3440,7 +3444,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(r2.serverText).not.toContain('Line 1');
         expect(r2.serverText).not.toContain('Line 3');
 
-        // 2b. Simulation R2 with line-count-changing full rewrite: Human 2 still survives, base lines do NOT
+        // 2b. Simulation R2 with line-count-changing full rewrite (R7-5): live edit wins consistently without duplicating agent lines
         const r2Condensed = await runYjsSim(
             'r64-r2b-2222-4222-8222-222222222223',
             'Line 1\nLine 2\nLine 3\n',
@@ -3451,9 +3455,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             },
             'Agent condensed summary.\n'
         );
-        expect(r2Condensed.serverText).toBe('Agent condensed summary.\nHuman 2\n');
-        expect(r2Condensed.serverText).not.toContain('Line 1');
-        expect(r2Condensed.serverText).not.toContain('Line 3');
+        expect(r2Condensed.serverText).toBe('Line 1\nHuman 2\nLine 3\n');
+        expect(r2Condensed.serverText).not.toContain('Agent condensed summary.');
 
         // 3. Prepend + full rewrite: human prepends header at pos 0 while agent rewrites entire base
         const prependSim = await runYjsSim(
@@ -3642,10 +3645,13 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             expect(roomBLarge).not.toBeNull();
             syncRequestCount = 0;
 
-            // Unrelayed edit on Node A ("A line.\n") + concurrent edit on Node B ("B line.\n") at end of >256KB doc
+            // Unrelayed >256KB paste on Node A ("largePaste + A line.\n") + concurrent edit on Node B ("B line.\n")
+            const largePastePrefix = `${'Pasted paragraph line exceeding 256KB delta threshold.\n'.repeat(5000)}`;
+            const largePaste = `${largePastePrefix}A line.\n`;
+            expect(Buffer.byteLength(largePaste, 'utf8')).toBeGreaterThan(262_144);
             const docOnA = new Y.Doc();
             Y.applyUpdate(docOnA, Y.encodeStateAsUpdate(roomALarge!.Doc));
-            docOnA.getText('content').insert(docOnA.getText('content').length, 'A line.\n');
+            docOnA.getText('content').insert(docOnA.getText('content').length, largePaste);
             Y.applyUpdate(roomALarge!.Doc, Y.encodeStateAsUpdate(docOnA), 'relay');
             docOnA.destroy();
 
@@ -3664,7 +3670,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 const mergedLargeB = await nodeB2.GetRoomContent(artLarge, secondEditorUser);
                 const tail = mergedLargeB.slice(largeBody.length);
                 // Exact CRDT merge without redundant text-merge duplication ('A line.\nB line.\nA line.\n' never happens!)
-                expect(tail === 'A line.\nB line.\n' || tail === 'B line.\nA line.\n').toBe(true);
+                expect(tail === `${largePaste}B line.\n` || tail === `B line.\n${largePaste}`).toBe(true);
                 expect(tail.match(/A line\.\n/g)?.length).toBe(1);
                 expect(tail.match(/B line\.\n/g)?.length).toBe(1);
             });
@@ -4147,6 +4153,795 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             else process.env.MJ_FROZEN_BLOCK_HMAC_SECRET = prevFrozen;
             if (prevSnapshot === undefined) delete process.env.MJ_FROZEN_SNAPSHOT_SECRET;
             else process.env.MJ_FROZEN_SNAPSHOT_SECRET = prevSnapshot;
+        }
+    });
+
+    it('R7-5: MergeConcurrentDocumentEditsDetailed resolves WD1, WD2/WD3, R2, Prepend, NoTrailingNl, ZeroHumanRewrite, A2, A9, A11, A14, A15, S2, and concurrent Whiteboard JSON merges without duplication or JSON corruption', () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // WD1: 1-line doc, human appends paragraph, agent fixes typo -> pure insertion, NOT a conflict
+        const wd1 = server.MergeConcurrentDocumentEditsDetailed(
+            'Helo world.\n',
+            'Helo world.\n\nHuman paragraph.\n',
+            'Hello world.\n'
+        );
+        expect(wd1).toEqual({
+            MergedText: 'Hello world.\n\nHuman paragraph.\n',
+            HadConflict: false,
+            RejectedAgentHunks: []
+        });
+
+        // WD2 / WD3: human inserts new paragraph inside multi-paragraph doc without modifying base lines
+        const wd2 = server.MergeConcurrentDocumentEditsDetailed(
+            'First paragraph.\nSecond paragraph.\n',
+            'First paragraph.\nHuman inserted middle paragraph.\nSecond paragraph.\n',
+            'First paragraph polished.\nSecond paragraph polished.\n'
+        );
+        expect(wd2).toEqual({
+            MergedText:
+                'First paragraph polished.\nHuman inserted middle paragraph.\nSecond paragraph polished.\n',
+            HadConflict: false,
+            RejectedAgentHunks: []
+        });
+
+        // R2: 3-line doc rewritten 1:1 by agent while human edited ONLY line 2 -> positional rebase + conflict reported
+        const r2 = server.MergeConcurrentDocumentEditsDetailed(
+            'Line 1\nLine 2\nLine 3\n',
+            'Line 1\nHuman 2\nLine 3\n',
+            'Agent 1\nAgent 2\nAgent 3\n'
+        );
+        expect(r2.MergedText).toBe('Agent 1\nHuman 2\nAgent 3\n');
+        expect(r2.HadConflict).toBe(true);
+        expect(r2.RejectedAgentHunks).toEqual([
+            {
+                BaseText: 'Line 2\n',
+                LiveText: 'Human 2\n',
+                RejectedIncomingText: 'Agent 2\n'
+            }
+        ]);
+
+        // Prepend: human prepends intro at top while agent rewrites base -> pure insertion, NOT a conflict
+        const prepend = server.MergeConcurrentDocumentEditsDetailed(
+            'Line 1\nLine 2\n',
+            'Human prepended intro.\n\nLine 1\nLine 2\n',
+            'Agent 1\nAgent 2\n'
+        );
+        expect(prepend).toEqual({
+            MergedText: 'Human prepended intro.\n\nAgent 1\nAgent 2\n',
+            HadConflict: false,
+            RejectedAgentHunks: []
+        });
+
+        // NoTrailingNl: 1-line doc without '\n', human appends paragraph, agent fixes typo -> NOT a conflict
+        const noNl = server.MergeConcurrentDocumentEditsDetailed(
+            'Helo world.',
+            'Helo world.\n\nHuman paragraph.',
+            'Hello world.'
+        );
+        expect(noNl).toEqual({
+            MergedText: 'Hello world.\n\nHuman paragraph.',
+            HadConflict: false,
+            RejectedAgentHunks: []
+        });
+
+        // ZeroHumanRewrite: no human edits -> incoming rewrite wins cleanly, NOT a conflict
+        const zeroHuman = server.MergeConcurrentDocumentEditsDetailed(
+            'Old 1\nOld 2\n',
+            'Old 1\nOld 2\n',
+            'Concise rewrite.\n'
+        );
+        expect(zeroHuman).toEqual({
+            MergedText: 'Concise rewrite.\n',
+            HadConflict: false,
+            RejectedAgentHunks: []
+        });
+
+        // A2: human fixes typo in multi-sentence paragraph while agent condenses it -> live edit wins, ZERO duplicate lines
+        const a2 = server.MergeConcurrentDocumentEditsDetailed(
+            'The cat sat on the mat.\nIt purred loudly.\n',
+            'The cat sat down.\nIt purred loudly.\n',
+            'The feline sat and purred.\n'
+        );
+        expect(a2.MergedText).toBe('The cat sat down.\nIt purred loudly.\n');
+        expect(a2.MergedText).not.toContain('The feline sat and purred.');
+        expect(a2.HadConflict).toBe(true);
+        expect(a2.RejectedAgentHunks).toHaveLength(1);
+        expect(a2.RejectedAgentHunks[0].RejectedIncomingText).toBe('The feline sat and purred.\n');
+
+        // A9: 3-line doc where human edited all 3 lines and agent rewrote all 3 lines -> live edit wins, ZERO duplication
+        const a9 = server.MergeConcurrentDocumentEditsDetailed(
+            'a\nb\nc\n',
+            'a1\nb1\nc1\n',
+            'A\nB\nC\n'
+        );
+        expect(a9.MergedText).toBe('a1\nb1\nc1\n');
+        expect(a9.HadConflict).toBe(true);
+        expect(a9.RejectedAgentHunks).toEqual([
+            {
+                BaseText: 'a\nb\nc\n',
+                LiveText: 'a1\nb1\nc1\n',
+                RejectedIncomingText: 'A\nB\nC\n'
+            }
+        ]);
+
+        // A11: 1-line doc edited differently by both sides -> live edit wins, ZERO duplication
+        const a11 = server.MergeConcurrentDocumentEditsDetailed(
+            'Hello',
+            'Hello world',
+            'Hello there'
+        );
+        expect(a11.MergedText).toBe('Hello world');
+        expect(a11.HadConflict).toBe(true);
+        expect(a11.RejectedAgentHunks).toEqual([
+            {
+                BaseText: 'Hello',
+                LiveText: 'Hello world',
+                RejectedIncomingText: 'Hello there'
+            }
+        ]);
+
+        // A14: same-line conflict in a multi-line doc -> live edit wins AND conflict is reported
+        const a14 = server.MergeConcurrentDocumentEditsDetailed(
+            'Header\nShared line\nFooter\n',
+            'Header\nHuman line\nFooter\n',
+            'Header\nAgent line\nFooter\n'
+        );
+        expect(a14.MergedText).toBe('Header\nHuman line\nFooter\n');
+        expect(a14.HadConflict).toBe(true);
+        expect(a14.RejectedAgentHunks).toEqual([
+            {
+                BaseText: 'Shared line\n',
+                LiveText: 'Human line\n',
+                RejectedIncomingText: 'Agent line\n'
+            }
+        ]);
+
+        // S2: multi-section doc with non-conflicting agent edit in Section 1 + same-line conflict in Section 2
+        const s2 = server.MergeConcurrentDocumentEditsDetailed(
+            '# Section 1\nOld 1\n\n# Section 2\nOld 2\n',
+            '# Section 1\nOld 1\n\n# Section 2\nHuman 2\n',
+            '# Section 1\nAgent 1\n\n# Section 2\nAgent 2\n'
+        );
+        expect(s2.MergedText).toBe('# Section 1\nAgent 1\n\n# Section 2\nHuman 2\n');
+        expect(s2.HadConflict).toBe(true);
+        expect(s2.RejectedAgentHunks).toEqual([
+            {
+                BaseText: 'Old 2\n',
+                LiveText: 'Human 2\n',
+                RejectedIncomingText: 'Agent 2\n'
+            }
+        ]);
+
+        // A15a: single-line JSON non-conflicting keys -> structural 3-way JSON merge, 100% valid JSON, HadConflict: false
+        const a15Clean = server.MergeConcurrentDocumentEditsDetailed(
+            '{"a":1,"b":2}',
+            '{"a":5,"b":2}',
+            '{"a":1,"b":3}'
+        );
+        expect(JSON.parse(a15Clean.MergedText)).toEqual({ a: 5, b: 3 });
+        expect(a15Clean.HadConflict).toBe(false);
+        expect(a15Clean.RejectedAgentHunks).toEqual([]);
+
+        // A15b: single-line JSON conflicting key "a" -> live wins on "a", 100% valid JSON, HadConflict: true
+        const a15Conflict = server.MergeConcurrentDocumentEditsDetailed(
+            '{"a":1,"b":2}',
+            '{"a":5,"b":2}',
+            '{"a":9,"b":2}'
+        );
+        expect(JSON.parse(a15Conflict.MergedText)).toEqual({ a: 5, b: 2 });
+        expect(a15Conflict.HadConflict).toBe(true);
+        expect(a15Conflict.RejectedAgentHunks).toHaveLength(1);
+
+        // A15c: JSON key deletions respected on unchanged side
+        const a15Delete = server.MergeConcurrentDocumentEditsDetailed(
+            '{"a":1,"b":2,"c":3}',
+            '{"a":1,"c":3}',
+            '{"a":1,"b":2,"c":30,"d":4}'
+        );
+        expect(JSON.parse(a15Delete.MergedText)).toEqual({ a: 1, c: 30, d: 4 });
+        expect(a15Delete.HadConflict).toBe(false);
+
+        // Concurrent Whiteboard JSON merges: nested appState keys merge cleanly while conflicting elements array picks live
+        const wbBase = JSON.stringify({
+            elements: [{ id: 'rect-1', x: 10, y: 20 }],
+            appState: { viewBackgroundColor: '#ffffff', gridSize: 20 }
+        });
+        const wbLive = JSON.stringify({
+            elements: [{ id: 'rect-1', x: 50, y: 20 }, { id: 'arrow-human', x: 0, y: 0 }],
+            appState: { viewBackgroundColor: '#f8fafc', gridSize: 20 }
+        });
+        const wbIncoming = JSON.stringify({
+            elements: [{ id: 'rect-1', x: 10, y: 99 }],
+            appState: { viewBackgroundColor: '#ffffff', gridSize: 40, zoom: 1.5 }
+        });
+        const wbMerged = server.MergeConcurrentDocumentEditsDetailed(wbBase, wbLive, wbIncoming);
+        const wbParsed = JSON.parse(wbMerged.MergedText) as {
+            elements: Array<{ id: string; x: number; y: number }>;
+            appState: Record<string, string | number>;
+        };
+        expect(wbParsed.elements).toEqual([
+            { id: 'rect-1', x: 50, y: 20 },
+            { id: 'arrow-human', x: 0, y: 0 }
+        ]);
+        expect(wbParsed.appState).toEqual({
+            viewBackgroundColor: '#f8fafc',
+            gridSize: 40,
+            zoom: 1.5
+        });
+        expect(wbMerged.HadConflict).toBe(true);
+
+        // Top-level JSON array -> live edit wins cleanly, valid JSON, HadConflict: true
+        const jsonArr = server.MergeConcurrentDocumentEditsDetailed(
+            '[{"id":1}]',
+            '[{"id":1},{"id":2}]',
+            '[{"id":1},{"id":3}]'
+        );
+        expect(JSON.parse(jsonArr.MergedText)).toEqual([{ id: 1 }, { id: 2 }]);
+        expect(jsonArr.HadConflict).toBe(true);
+    });
+
+    it('R7-5: broadcasts observable merge-conflict WebSocket control frames across ApplyServerContentMutation, checkAndReconcileLatestDatabaseVersion, and cold room hydration', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. ApplyServerContentMutation + checkAndReconcileLatestDatabaseVersion on live room
+        versions = [
+            {
+                ID: 'ver-mc-1',
+                ArtifactID: artifactId,
+                VersionNumber: 1,
+                Content: 'Header\nOriginal line\nFooter\n',
+                ContentHash: 'hash-mc-1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.clear();
+
+        const client = await connectYjsClient(editorUser.ID);
+        await client.waitForText('Original line');
+
+        client.doc.transact(() => {
+            const yText = client.doc.getText('content');
+            const idx = yText.toString().indexOf('Original line');
+            yText.delete(idx, 'Original line'.length);
+            yText.insert(idx, 'Human live line');
+        }, 'human-live');
+
+        await vi.waitFor(async () => {
+            expect(await server.GetRoomContent(artifactId, editorUser)).toBe(
+                'Header\nHuman live line\nFooter\n'
+            );
+        });
+
+        // Agent mutates same line against baseContent -> live wins AND 'merge-conflict' control frame is broadcast!
+        const mutRes = await server.ApplyServerContentMutation(
+            artifactId,
+            'Header\nAgent conflicting line\nFooter\n',
+            editorUser,
+            false,
+            'Header\nOriginal line\nFooter\n'
+        );
+        expect(mutRes.Success).toBe(true);
+        expect(await server.GetRoomContent(artifactId, editorUser)).toBe(
+            'Header\nHuman live line\nFooter\n'
+        );
+
+        await vi.waitFor(() => {
+            const conflictFrames = client.controlFrames.filter((f) => f.action === 'merge-conflict');
+            expect(conflictFrames.length).toBeGreaterThanOrEqual(1);
+            expect(conflictFrames[0].rejectedHunkCount).toBe(1);
+            expect(conflictFrames[0].roomEpoch).toBeTruthy();
+        });
+
+        // Out-of-band DB version write conflicting on the same line -> broadcasts 'merge-conflict' with versionId
+        client.controlFrames.length = 0;
+        versions.push({
+            ID: 'ver-mc-2',
+            ArtifactID: artifactId,
+            VersionNumber: 2,
+            Content: 'Header\nOOB conflicting line\nFooter\n',
+            ContentHash: 'hash-mc-2',
+            UserID: secondEditorUser.ID
+        });
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: artifactId,
+                VersionID: 'ver-mc-2',
+                VersionNumber: 2,
+                Content: 'Header\nOOB conflicting line\nFooter\n'
+            }
+        });
+
+        await vi.waitFor(() => {
+            const oobConflicts = client.controlFrames.filter((f) => f.action === 'merge-conflict');
+            expect(oobConflicts).toHaveLength(1);
+            expect(oobConflicts[0].versionId).toBe('ver-mc-2');
+            expect(oobConflicts[0].rejectedHunkCount).toBe(1);
+        });
+        client.ws.close();
+        client.doc.destroy();
+
+        // 2. Cold room hydration conflict flushes 'merge-conflict' when first WebSocket client connects
+        const coldArtifactId = 'd4444444-4444-4444-8444-444444444444';
+        const offlineDoc = new Y.Doc();
+        offlineDoc.getText('content').insert(0, 'Human offline edit.\n');
+        offlineDoc.getMap('meta').set('baseVersionId', 'ver-hyd-1');
+        offlineDoc.getMap('meta').set('baseVersionNumber', 1);
+        offlineDoc.getMap('meta').set('versionId', 'ver-hyd-1');
+        offlineDoc.getMap('meta').set('versionNumber', 1);
+        workingStates.set(coldArtifactId, {
+            ID: 'ws-hyd-conflict',
+            ArtifactID: coldArtifactId,
+            YjsState: BytesToBase64(Y.encodeStateAsUpdate(offlineDoc)),
+            LastModifiedByUserID: editorUser.ID,
+            __mj_UpdatedAt: new Date().toISOString()
+        });
+        offlineDoc.destroy();
+
+        versions = [
+            {
+                ID: 'ver-hyd-1',
+                ArtifactID: coldArtifactId,
+                VersionNumber: 1,
+                Content: 'Original cold base.\n',
+                ContentHash: 'hash-hyd-1',
+                UserID: editorUser.ID
+            },
+            {
+                ID: 'ver-hyd-2',
+                ArtifactID: coldArtifactId,
+                VersionNumber: 2,
+                Content: 'Agent cold rewrite.\n',
+                ContentHash: 'hash-hyd-2',
+                UserID: secondEditorUser.ID
+            }
+        ];
+
+        const coldControlFrames: CollaborationControlFrame[] = [];
+        const coldDoc = new Y.Doc();
+        const coldWs = await new Promise<WsClient>((resolve, reject) => {
+            const ws = new WsClient(
+                `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${coldArtifactId}&testUserId=${editorUser.ID}`
+            );
+            ws.on('message', (raw: Buffer) => {
+                const decoder = decoding.createDecoder(new Uint8Array(raw));
+                const msgType = decoding.readVarUint(decoder);
+                if (msgType === YJS_MESSAGE_SYNC) {
+                    const encoder = encoding.createEncoder();
+                    encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
+                    syncProtocol.readSyncMessage(decoder, encoder, coldDoc, 'server');
+                    if (encoding.length(encoder) > 1 && ws.readyState === WsClient.OPEN) {
+                        ws.send(encoding.toUint8Array(encoder));
+                    }
+                } else if (msgType === YJS_MESSAGE_CONTROL) {
+                    coldControlFrames.push(
+                        JSON.parse(decoding.readVarString(decoder)) as CollaborationControlFrame
+                    );
+                }
+            });
+            ws.on('open', () => resolve(ws));
+            ws.on('error', reject);
+        });
+
+        await vi.waitFor(() => {
+            expect(coldDoc.getText('content').toString()).toContain('Human offline edit.');
+            const hydConflicts = coldControlFrames.filter((f) => f.action === 'merge-conflict');
+            expect(hydConflicts).toHaveLength(1);
+            expect(hydConflicts[0].versionId).toBe('ver-hyd-2');
+            expect(hydConflicts[0].rejectedHunkCount).toBe(1);
+        });
+        coldWs.close();
+        coldDoc.destroy();
+    });
+
+    it(
+        'R7-6 & Sync waiter: omits duplicate meta.baseContent, publishes <5KB compaction deltas on 300KB docs, recovers M2c/M4b >256KB pastes via WorkingState fallback, detects M5e pure deletes via Snapshot, and rejects corrupt sync-state',
+        async () => {
+            class R76NodeA1 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            class R76NodeB1 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            class R76NodeA2 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            class R76NodeB2 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            class R76NodeA3 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+            class R76NodeB3 extends ArtifactCollaborationServer {
+                public constructor() {
+                    super();
+                }
+            }
+
+            // --- 1 & 2. No meta.baseContent duplication + <5KB typing compaction delta on a 300KB doc ---
+            const busDelta = new InMemoryYjsRelayBus();
+            const baseRelayADelta = new InMemoryYjsRoomRelay(busDelta, 'r76-delta-a');
+            const baseRelayBDelta = new InMemoryYjsRoomRelay(busDelta, 'r76-delta-b');
+            const publishedByA: YjsRelayMessage[] = [];
+            let deltaSyncRequests = 0;
+
+            const spyRelayADelta: IYjsRoomRelay = {
+                get InstanceID(): string {
+                    return baseRelayADelta.InstanceID;
+                },
+                PublishToRoom: async (msg) => {
+                    publishedByA.push(msg);
+                    await baseRelayADelta.PublishToRoom(msg);
+                },
+                SubscribeRoom: (artId, handler) =>
+                    baseRelayADelta.SubscribeRoom(artId, async (msg) => {
+                        if (msg.MessageType === 'sync-request') {
+                            deltaSyncRequests++;
+                        }
+                        await handler(msg);
+                    }),
+                Shutdown: () => baseRelayADelta.Shutdown()
+            };
+
+            const nodeADelta = new R76NodeA1();
+            const nodeBDelta = new R76NodeB1();
+            expect(nodeADelta).not.toBe(nodeBDelta);
+            nodeADelta.SetRoomRelay(spyRelayADelta);
+            nodeBDelta.SetRoomRelay(baseRelayBDelta);
+            nodeADelta.SetMetadataProviderOverride(createMockProvider());
+            nodeBDelta.SetMetadataProviderOverride(createMockProvider());
+
+            try {
+                const art300k = 'c1111111-1111-4111-8111-111111111111';
+                const doc300k = `${'300KB baseline paragraph line for incremental compaction delta check.\n'.repeat(4500)}`;
+                expect(Buffer.byteLength(doc300k, 'utf8')).toBeGreaterThan(300_000);
+                versions = [
+                    {
+                        ID: 'ver-300k-1',
+                        ArtifactID: art300k,
+                        VersionNumber: 1,
+                        Content: doc300k,
+                        ContentHash: 'hash-300k-1',
+                        UserID: editorUser.ID
+                    }
+                ];
+                workingStates.delete(art300k);
+
+                const roomA = await nodeADelta.GetOrCreateRoom(art300k, editorUser);
+                const roomB = await nodeBDelta.GetOrCreateRoom(art300k, secondEditorUser);
+                expect(roomA).not.toBeNull();
+                expect(roomB).not.toBeNull();
+
+                // Verify meta.baseContent is NOT stored on rooms backed by a persisted versionId
+                expect(roomA!.Doc.getMap('meta').has('baseContent')).toBe(false);
+
+                publishedByA.length = 0;
+                deltaSyncRequests = 0;
+
+                // User types a short sentence on Node A (unrelayed live op) and compacts
+                const typingClient = new Y.Doc();
+                Y.applyUpdate(typingClient, Y.encodeStateAsUpdate(roomA!.Doc));
+                typingClient
+                    .getText('content')
+                    .insert(typingClient.getText('content').length, 'Incremental typed line.\n');
+                Y.applyUpdate(roomA!.Doc, Y.encodeStateAsUpdate(typingClient), 'relay');
+                typingClient.destroy();
+
+                const compactRes = await nodeADelta.CompactRoomToArtifactVersion(art300k, editorUser);
+                expect(compactRes.Saved).toBe(true);
+                expect(roomA!.Doc.getMap('meta').has('baseContent')).toBe(false);
+
+                // Persisted WorkingState size must NOT double the 300KB document
+                const persistedWs = workingStates.get(art300k);
+                expect(persistedWs).toBeDefined();
+                const persistedBytes = Base64ToBytes(persistedWs!.YjsState);
+                expect(persistedBytes.byteLength).toBeLessThan(400_000);
+
+                // Published 'version-saved' carries an incremental delta < 5KB (never > 256KB full state!)
+                const versionSavedMsg = publishedByA.find((m) => m.MessageType === 'version-saved');
+                expect(versionSavedMsg).toBeDefined();
+                expect(Buffer.byteLength(versionSavedMsg!.PayloadBase64, 'utf8')).toBeLessThan(5_000);
+                const parsedRelayJson = JSON.parse(versionSavedMsg!.PayloadBase64) as {
+                    savedDocUpdateB64?: string;
+                    prevStateVectorB64?: string;
+                    savedSnapshotB64?: string;
+                };
+                expect(parsedRelayJson.savedDocUpdateB64).toBeTruthy();
+                expect(parsedRelayJson.prevStateVectorB64).toBeTruthy();
+                expect(parsedRelayJson.savedSnapshotB64).toBeTruthy();
+
+                await vi.waitFor(async () => {
+                    expect(await nodeBDelta.GetRoomContent(art300k, secondEditorUser)).toBe(
+                        `${doc300k}Incremental typed line.\n`
+                    );
+                });
+                expect(deltaSyncRequests).toBe(0);
+            } finally {
+                await nodeADelta.Shutdown();
+                await nodeBDelta.Shutdown();
+                await baseRelayADelta.Shutdown();
+                await baseRelayBDelta.Shutdown();
+            }
+
+            // --- 3 & 5. M5e (lost pure delete on Node A while Node B is dirty) + raw Base64 sync-state wire format ---
+            const busM5e = new InMemoryYjsRelayBus();
+            const baseRelayAM5e = new InMemoryYjsRoomRelay(busM5e, 'r76-m5e-a');
+            const baseRelayBM5e = new InMemoryYjsRoomRelay(busM5e, 'r76-m5e-b');
+            const capturedSyncStates: string[] = [];
+
+            // Strip inline savedDocUpdateB64 from version-saved so Node B MUST detect missing pure delete via savedSnapshotB64!
+            const stripInlineRelayA: IYjsRoomRelay = {
+                get InstanceID(): string {
+                    return baseRelayAM5e.InstanceID;
+                },
+                PublishToRoom: async (msg) => {
+                    if (msg.MessageType === 'version-saved') {
+                        const parsed = JSON.parse(msg.PayloadBase64) as Record<string, string>;
+                        delete parsed['savedDocUpdateB64'];
+                        await baseRelayAM5e.PublishToRoom({
+                            ...msg,
+                            PayloadBase64: JSON.stringify(parsed)
+                        });
+                        return;
+                    }
+                    if (msg.MessageType === 'sync-state') {
+                        capturedSyncStates.push(msg.PayloadBase64);
+                    }
+                    await baseRelayAM5e.PublishToRoom(msg);
+                },
+                SubscribeRoom: (artId, handler) => baseRelayAM5e.SubscribeRoom(artId, handler),
+                Shutdown: () => baseRelayAM5e.Shutdown()
+            };
+
+            const nodeAM5e = new R76NodeA2();
+            const nodeBM5e = new R76NodeB2();
+            expect(nodeAM5e).not.toBe(nodeBM5e);
+            nodeAM5e.SetRoomRelay(stripInlineRelayA);
+            nodeBM5e.SetRoomRelay(baseRelayBM5e);
+            nodeAM5e.SetMetadataProviderOverride(createMockProvider());
+            nodeBM5e.SetMetadataProviderOverride(createMockProvider());
+
+            try {
+                const artM5e = 'c2222222-2222-4222-8222-222222222222';
+                versions = [
+                    {
+                        ID: 'ver-m5e-1',
+                        ArtifactID: artM5e,
+                        VersionNumber: 1,
+                        Content: 'Header.\nDelete this range.\nFooter.\n',
+                        ContentHash: 'hash-m5e-1',
+                        UserID: editorUser.ID
+                    }
+                ];
+                workingStates.delete(artM5e);
+
+                const roomAM5e = await nodeAM5e.GetOrCreateRoom(artM5e, editorUser);
+                const roomBM5e = await nodeBM5e.GetOrCreateRoom(artM5e, secondEditorUser);
+                expect(roomAM5e).not.toBeNull();
+                expect(roomBM5e).not.toBeNull();
+                capturedSyncStates.length = 0;
+
+                // Pure delete on Node A (does NOT advance Yjs StateVector clocks!)
+                const delDoc = new Y.Doc();
+                Y.applyUpdate(delDoc, Y.encodeStateAsUpdate(roomAM5e!.Doc));
+                const idx = delDoc.getText('content').toString().indexOf('Delete this range.\n');
+                delDoc.getText('content').delete(idx, 'Delete this range.\n'.length);
+                Y.applyUpdate(roomAM5e!.Doc, Y.encodeStateAsUpdate(delDoc), 'relay');
+                delDoc.destroy();
+
+                // Concurrent unsaved edit on Node B -> roomBM5e.DirtyVersion === true!
+                const editB = new Y.Doc();
+                Y.applyUpdate(editB, Y.encodeStateAsUpdate(roomBM5e!.Doc));
+                editB.getText('content').insert(editB.getText('content').length, 'Node B concurrent line.\n');
+                Y.applyUpdate(roomBM5e!.Doc, Y.encodeStateAsUpdate(editB), 'relay');
+                roomBM5e!.DirtyVersion = true;
+                editB.destroy();
+
+                expect(
+                    nodeBM5e.DoesDocContainStateVector(roomBM5e!.Doc, Y.encodeStateVector(roomAM5e!.Doc))
+                ).toBe(true);
+                expect(
+                    nodeBM5e.DoesDocSatisfySnapshot(
+                        roomBM5e!.Doc,
+                        Y.encodeSnapshot(Y.snapshot(roomAM5e!.Doc))
+                    )
+                ).toBe(false);
+
+                const savedM5e = await nodeAM5e.CompactRoomToArtifactVersion(artM5e, editorUser);
+                expect(savedM5e.Saved).toBe(true);
+
+                await vi.waitFor(async () => {
+                    expect(await nodeBM5e.GetRoomContent(artM5e, secondEditorUser)).toBe(
+                        'Header.\nFooter.\nNode B concurrent line.\n'
+                    );
+                });
+
+                // Rolling-deploy compatibility: sync-state PayloadBase64 is raw Base64 Yjs bytes (NOT JSON!)
+                expect(capturedSyncStates.length).toBeGreaterThanOrEqual(1);
+                expect(capturedSyncStates[0].trim().startsWith('{')).toBe(false);
+                const probeDoc = new Y.Doc();
+                Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(roomBM5e!.Doc));
+                expect(() => Y.applyUpdate(probeDoc, Base64ToBytes(capturedSyncStates[0]))).not.toThrow();
+                probeDoc.destroy();
+            } finally {
+                await nodeAM5e.Shutdown();
+                await nodeBM5e.Shutdown();
+                await baseRelayAM5e.Shutdown();
+                await baseRelayBM5e.Shutdown();
+            }
+
+            // --- 4 & 5b. M2c / M4b (>256KB paste + dropped/corrupt sync-state -> WorkingState DB fallback with zero duplication) ---
+            const busDrop = new InMemoryYjsRelayBus();
+            const baseRelayADrop = new InMemoryYjsRoomRelay(busDrop, 'r76-drop-a');
+            const baseRelayBDrop = new InMemoryYjsRoomRelay(busDrop, 'r76-drop-b');
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            // Drop legitimate sync-state replies AND inject corrupt sync-state payloads while Node B's sync waiter is pending!
+            const dropAndCorruptRelayA: IYjsRoomRelay = {
+                get InstanceID(): string {
+                    return baseRelayADrop.InstanceID;
+                },
+                PublishToRoom: async (msg) => {
+                    if (msg.MessageType === 'sync-state') {
+                        // Inject malformed Base64 + corrupt binary Yjs update instead of real sync-state:
+                        // Neither must resolve Node B's pending sync waiter with true!
+                        await baseRelayADrop.PublishToRoom({
+                            ArtifactID: msg.ArtifactID,
+                            MessageType: 'sync-state',
+                            PayloadBase64: '***not-valid-base64***'
+                        });
+                        await baseRelayADrop.PublishToRoom({
+                            ArtifactID: msg.ArtifactID,
+                            MessageType: 'sync-state',
+                            PayloadBase64: BytesToBase64(new Uint8Array([255, 255, 255, 255]))
+                        });
+                        return;
+                    }
+                    await baseRelayADrop.PublishToRoom(msg);
+                },
+                SubscribeRoom: (artId, handler) => baseRelayADrop.SubscribeRoom(artId, handler),
+                Shutdown: () => baseRelayADrop.Shutdown()
+            };
+
+            const nodeADrop = new R76NodeA3();
+            const nodeBDrop = new R76NodeB3();
+            expect(nodeADrop).not.toBe(nodeBDrop);
+            nodeADrop.SetRoomRelay(dropAndCorruptRelayA);
+            nodeBDrop.SetRoomRelay(baseRelayBDrop);
+            nodeADrop.SetMetadataProviderOverride(createMockProvider());
+            nodeBDrop.SetMetadataProviderOverride(createMockProvider());
+
+            try {
+                const artM2c = 'c3333333-3333-4333-8333-333333333333';
+                versions = [
+                    {
+                        ID: 'ver-m2c-1',
+                        ArtifactID: artM2c,
+                        VersionNumber: 1,
+                        Content: 'World\n',
+                        ContentHash: 'hash-m2c-1',
+                        UserID: editorUser.ID
+                    }
+                ];
+                workingStates.delete(artM2c);
+
+                const roomADrop = await nodeADrop.GetOrCreateRoom(artM2c, editorUser);
+                const roomBDrop = await nodeBDrop.GetOrCreateRoom(artM2c, secondEditorUser);
+                expect(roomADrop).not.toBeNull();
+                expect(roomBDrop).not.toBeNull();
+                errorSpy.mockClear();
+
+                // Node A pastes >256KB ending with "Hello\n" while Node B concurrently types "PeerB\n"
+                const bigPasteBody = `${'Pasted block line for M2c/M4b WorkingState fallback.\n'.repeat(5200)}Hello\n`;
+                expect(Buffer.byteLength(bigPasteBody, 'utf8')).toBeGreaterThan(262_144);
+                const pasteClient = new Y.Doc();
+                Y.applyUpdate(pasteClient, Y.encodeStateAsUpdate(roomADrop!.Doc));
+                pasteClient.getText('content').insert(pasteClient.getText('content').length, bigPasteBody);
+                Y.applyUpdate(roomADrop!.Doc, Y.encodeStateAsUpdate(pasteClient), 'relay');
+                pasteClient.destroy();
+
+                const concurrentB = new Y.Doc();
+                Y.applyUpdate(concurrentB, Y.encodeStateAsUpdate(roomBDrop!.Doc));
+                concurrentB.getText('content').insert(concurrentB.getText('content').length, 'PeerB\n');
+                Y.applyUpdate(roomBDrop!.Doc, Y.encodeStateAsUpdate(concurrentB), 'relay');
+                roomBDrop!.DirtyVersion = true;
+                concurrentB.destroy();
+
+                const savedDrop = await nodeADrop.CompactRoomToArtifactVersion(artM2c, editorUser);
+                expect(savedDrop.Saved).toBe(true);
+
+                await vi.waitFor(
+                    async () => {
+                        const contentB = await nodeBDrop.GetRoomContent(artM2c, secondEditorUser);
+                        expect(contentB.match(/Hello\n/g)?.length).toBe(1);
+                        expect(contentB.match(/PeerB\n/g)?.length).toBe(1);
+                    },
+                    { timeout: 4_000 }
+                );
+
+                // Corrupt binary sync-state logged an applyUpdate error rather than silently resolving sync waiter
+                const loggedErrors = errorSpy.mock.calls.map((args) => args.map(String).join(' ')).join('\n');
+                expect(loggedErrors).toContain('sync-state Y.applyUpdate failed');
+            } finally {
+                errorSpy.mockRestore();
+                await nodeADrop.Shutdown();
+                await nodeBDrop.Shutdown();
+                await baseRelayADrop.Shutdown();
+                await baseRelayBDrop.Shutdown();
+            }
+        },
+        10_000
+    );
+
+    it('Item 4: MintArtifactCollaborationTicket returns ErrorCode COLLAB_SECRET_UNCONFIGURED when HMAC secret is missing or <32 bytes', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const resolver = new DocumentCollaborationResolver();
+        const prevCollab = process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+        const prevTicket = process.env.MJ_COLLABORATION_TICKET_SECRET;
+
+        const ctx: AppContext = {
+            dataSource: {} as AppContext['dataSource'],
+            dataSources: [],
+            providers: [{ provider: createMockProvider(), type: 'Read-Write' }],
+            userPayload: {
+                userRecord: editorUser,
+                email: editorUser.Email,
+                sessionId: 'sess-collab-secret-code'
+            }
+        };
+
+        try {
+            expect(COLLAB_SECRET_UNCONFIGURED_CODE).toBe('COLLAB_SECRET_UNCONFIGURED');
+
+            // 1. Missing HMAC secret -> ErrorCode === 'COLLAB_SECRET_UNCONFIGURED' + human-readable ErrorMessage preserved
+            server.SetTicketHmacSecret(null);
+            delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+
+            const missingRes = await resolver.MintArtifactCollaborationTicket(artifactId, ctx);
+            expect(missingRes.Success).toBe(false);
+            expect(missingRes.ErrorCode).toBe(COLLAB_SECRET_UNCONFIGURED_CODE);
+            expect(missingRes.ErrorMessage).toContain('MJ_ARTIFACT_COLLAB_HMAC_SECRET');
+
+            // 2. <32-byte HMAC secret -> ErrorCode === 'COLLAB_SECRET_UNCONFIGURED'
+            process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = 'short-secret-under-32-bytes';
+            const shortRes = await resolver.MintArtifactCollaborationTicket(artifactId, ctx);
+            expect(shortRes.Success).toBe(false);
+            expect(shortRes.ErrorCode).toBe(COLLAB_SECRET_UNCONFIGURED_CODE);
+            expect(shortRes.ErrorMessage).toContain('32');
+
+            // 3. Valid secret + denied user -> ErrorCode is undefined (not misclassified as secret error)
+            server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+            permissionTable.set(viewerUser.ID, { CanRead: false, CanEdit: false });
+            const deniedCtx: AppContext = {
+                ...ctx,
+                userPayload: {
+                    userRecord: viewerUser,
+                    email: viewerUser.Email,
+                    sessionId: 'sess-collab-denied'
+                }
+            };
+            const deniedRes = await resolver.MintArtifactCollaborationTicket(artifactId, deniedCtx);
+            expect(deniedRes.Success).toBe(false);
+            expect(deniedRes.ErrorCode).toBeUndefined();
+        } finally {
+            server.SetTicketHmacSecret('test-collab-ticket-hmac-secret-at-least-32-bytes!!');
+            if (prevCollab === undefined) delete process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET;
+            else process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevCollab;
+            if (prevTicket === undefined) delete process.env.MJ_COLLABORATION_TICKET_SECRET;
+            else process.env.MJ_COLLABORATION_TICKET_SECRET = prevTicket;
         }
     });
 });

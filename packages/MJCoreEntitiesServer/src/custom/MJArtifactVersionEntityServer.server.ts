@@ -67,13 +67,13 @@ function isServerSystemUser(user: UserInfo | undefined | null): boolean {
 }
 
 function isMetadataProvider(
-    provider: IEntityDataProvider | null | undefined
-): provider is IEntityDataProvider & IMetadataProvider {
-    return Boolean(provider && 'Entities' in provider);
+    provider: IEntityDataProvider | IMetadataProvider | null | undefined
+): provider is IMetadataProvider {
+    return Boolean(provider && ('Entities' in provider || 'ProviderType' in provider));
 }
 
 function resolveMetadataProvider(
-    entityProvider: IEntityDataProvider | null | undefined,
+    entityProvider: IEntityDataProvider | IMetadataProvider | null | undefined,
     actor: UserInfo | undefined | null
 ): IMetadataProvider | null {
     if (isMetadataProvider(entityProvider)) {
@@ -226,9 +226,10 @@ function stripSyntheticArtifactId(row: unknown): unknown {
  */
 export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
     params: RunViewParams,
-    contextUser: UserInfo | undefined
+    contextUser: UserInfo | undefined,
+    hookProvider?: IMetadataProvider
 ): RunViewParams => {
-    const provider = resolveMetadataProvider(undefined, contextUser);
+    const provider = resolveMetadataProvider(hookProvider, contextUser);
     if (
         !params ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
@@ -256,7 +257,8 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
 export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
     params: RunViewParams,
     results: RunViewResult,
-    contextUser: UserInfo | undefined
+    contextUser: UserInfo | undefined,
+    hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
     if (
         !results?.Success ||
@@ -272,7 +274,7 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
         return results;
     }
 
-    const provider = resolveMetadataProvider(undefined, contextUser);
+    const provider = resolveMetadataProvider(hookProvider, contextUser);
 
     if (!contextUser) {
         // Client-side providers (e.g. GraphQLDataProvider where ProviderType === 'Network') invoke

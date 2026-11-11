@@ -2336,7 +2336,7 @@ export class AgentRunner {
                 {
                     EntityName: 'MJ: Artifacts',
                     ExtraFilter: `ID='${EscapeSQLString(sourceArtifactId)}'`,
-                    Fields: ['ID', 'UserID'],
+                    Fields: ['ID', 'UserID', 'User'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -2362,43 +2362,64 @@ export class AgentRunner {
                 const convId = detailRes.Success ? detailRes.Results?.[0]?.ConversationID?.trim() : undefined;
                 if (convId && IsValidUUID(convId)) {
                     const safeConvId = EscapeSQLString(convId);
-                    const [convRes, participantsRes] = await Promise.all([
+                    const participantPageSize = 500;
+                    const maxParticipantPages = 100;
+                    const fetchAllParticipantRows = async (): Promise<
+                        Array<{ UserID?: string | null; User?: string | null }>
+                    > => {
+                        const collected: Array<{ UserID?: string | null; User?: string | null }> = [];
+                        let startRow = 0;
+                        for (let page = 0; page < maxParticipantPages; page++) {
+                            const pageRes = await rv.RunView<{ UserID?: string | null; User?: string | null }>(
+                                {
+                                    EntityName: 'MJ: Conversation Details',
+                                    ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
+                                    Fields: ['UserID', 'User'],
+                                    OrderBy: '__mj_CreatedAt ASC',
+                                    MaxRows: participantPageSize,
+                                    StartRow: startRow,
+                                    SkipTotalRowCount: true,
+                                    ResultType: 'simple'
+                                },
+                                contextUser
+                            );
+                            if (!pageRes.Success) {
+                                LogError(
+                                    `Failed to query conversation participants for forked artifact ${newArtifactId} (conversation ${convId}): ${
+                                        pageRes.ErrorMessage || 'RunView returned Success=false'
+                                    }`
+                                );
+                                break;
+                            }
+                            const rows = Array.isArray(pageRes.Results) ? pageRes.Results : [];
+                            collected.push(...rows);
+                            if (rows.length < participantPageSize) {
+                                break;
+                            }
+                            startRow += rows.length;
+                        }
+                        return collected;
+                    };
+
+                    const [convRes, participantRows] = await Promise.all([
                         rv.RunView<{ ID: string; UserID?: string | null; User?: string | null }>(
                             {
                                 EntityName: 'MJ: Conversations',
                                 ExtraFilter: `ID='${safeConvId}'`,
-                                Fields: ['ID', 'UserID'],
+                                Fields: ['ID', 'UserID', 'User'],
                                 MaxRows: 1,
                                 SkipTotalRowCount: true,
                                 ResultType: 'simple'
                             },
                             contextUser
                         ),
-                        rv.RunView<{ UserID?: string | null; User?: string | null; UserName?: string | null }>(
-                            {
-                                EntityName: 'MJ: Conversation Details',
-                                ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
-                                Fields: ['UserID', 'User'],
-                                MaxRows: 200,
-                                SkipTotalRowCount: true,
-                                ResultType: 'simple'
-                            },
-                            contextUser
-                        )
+                        fetchAllParticipantRows()
                     ]);
                     if (convRes.Success && convRes.Results?.length) {
                         addRecipient(convRes.Results[0].UserID, convRes.Results[0].User);
                     }
-                    if (!participantsRes.Success) {
-                        LogError(
-                            `Failed to query conversation participants for forked artifact ${newArtifactId} (conversation ${convId}): ${
-                                participantsRes.ErrorMessage || 'RunView returned Success=false'
-                            }`
-                        );
-                    } else if (Array.isArray(participantsRes.Results)) {
-                        for (const row of participantsRes.Results) {
-                            addRecipient(row.UserID, row.User ?? row.UserName);
-                        }
+                    for (const row of participantRows) {
+                        addRecipient(row.UserID, row.User);
                     }
                 }
             }

@@ -450,9 +450,68 @@ interface MockVersionRow {
 
 const CACHE_ROLE_ID = '77777777-7777-4777-8777-777777777777';
 const VERSION_ENTITY_ID = '55555555-5555-4555-8555-555555555555';
+const ARTIFACT_ENTITY_ID = '55555555-5555-4555-8555-555555555556';
+const ARTIFACT_PERM_ENTITY_ID = '55555555-5555-4555-8555-555555555557';
+const COLLECTION_ART_ENTITY_ID = '55555555-5555-4555-8555-555555555558';
+const COLLECTION_PERM_ENTITY_ID = '55555555-5555-4555-8555-555555555559';
+
+function buildSupportEntityInfo(
+    id: string,
+    name: string,
+    baseTable: string,
+    baseView: string,
+    extraFieldNames: string[]
+): EntityInfo {
+    return new EntityInfo({
+        ID: id,
+        Name: name,
+        SchemaName: '__mj',
+        BaseTable: baseTable,
+        BaseView: baseView,
+        AllowCaching: false,
+        IncludeInAPI: true,
+        Status: 'Active',
+        EntityFields: [
+            {
+                ID: `${id}-f-id`,
+                EntityID: id,
+                Name: 'ID',
+                CodeName: 'ID',
+                Type: 'uniqueidentifier',
+                IsPrimaryKey: true,
+                Sequence: 1,
+                Status: 'Active'
+            },
+            ...extraFieldNames.map((fieldName, idx) => ({
+                ID: `${id}-f-${idx + 2}`,
+                EntityID: id,
+                Name: fieldName,
+                CodeName: fieldName,
+                Type: 'nvarchar',
+                Sequence: idx + 2,
+                Status: 'Active'
+            }))
+        ],
+        EntityPermissions: [
+            {
+                ID: `${id}-p-dev`,
+                EntityID: id,
+                RoleID: CACHE_ROLE_ID,
+                CanRead: true,
+                CanCreate: true,
+                CanUpdate: true,
+                CanDelete: true
+            }
+        ]
+    });
+}
 
 class TestServerVersionProvider extends DatabaseProviderBase {
-    public internalRunViewCalls: Array<{ Fields?: string[]; ExtraFilter?: RunViewParams['ExtraFilter'] }> = [];
+    public internalRunViewCalls: Array<{
+        EntityName?: string;
+        Fields?: string[];
+        ExtraFilter?: RunViewParams['ExtraFilter'];
+    }> = [];
     private readonly _entities: EntityInfo[];
     private readonly _roles: RoleInfo[];
     private readonly _handler: (params: RunViewParams, contextUser?: UserInfo) => Promise<RunViewResult>;
@@ -533,7 +592,33 @@ class TestServerVersionProvider extends DatabaseProviderBase {
                         CanDelete: true
                     }
                 ]
-            })
+            }),
+            buildSupportEntityInfo(ARTIFACT_ENTITY_ID, 'MJ: Artifacts', 'Artifact', 'vwArtifacts', [
+                'UserID',
+                'DelegateEntityID',
+                'DelegateRecordID'
+            ]),
+            buildSupportEntityInfo(
+                ARTIFACT_PERM_ENTITY_ID,
+                'MJ: Artifact Permissions',
+                'ArtifactPermission',
+                'vwArtifactPermissions',
+                ['ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare']
+            ),
+            buildSupportEntityInfo(
+                COLLECTION_ART_ENTITY_ID,
+                'MJ: Collection Artifacts',
+                'CollectionArtifact',
+                'vwCollectionArtifacts',
+                ['CollectionID', 'ArtifactVersionID']
+            ),
+            buildSupportEntityInfo(
+                COLLECTION_PERM_ENTITY_ID,
+                'MJ: Collection Permissions',
+                'CollectionPermission',
+                'vwCollectionPermissions',
+                ['CollectionID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare']
+            )
         ];
     }
 
@@ -578,6 +663,7 @@ class TestServerVersionProvider extends DatabaseProviderBase {
         contextUser?: UserInfo
     ): Promise<RunViewResult<T>> {
         this.internalRunViewCalls.push({
+            EntityName: params.EntityName,
             Fields: Array.isArray(params.Fields) ? [...params.Fields] : undefined,
             ExtraFilter: params.ExtraFilter
         });
@@ -1013,5 +1099,250 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         );
         expect(serverUnclassifiableRes.Results).toEqual([]);
         expect(serverUnclassifiableRes.RowCount).toBe(0);
+    });
+
+    it('returns [1, 1, 1] rows across 3 concurrent Promise.all calls through ArtifactVersionPostRunViewHook and RunView for artifact owner and collection-shared reader (R7-2)', async () => {
+        const sharedReaderId = '44444444-4444-4444-8444-444444444444';
+        const collectionId = '66666666-6666-4666-8666-666666666666';
+
+        const provider = new TestServerVersionProvider(async (params) => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            if (params.EntityName === 'MJ: Artifacts') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: targetArtifactId,
+                            UserID: ownerUserId,
+                            DelegateEntityID: null,
+                            DelegateRecordID: null
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Permissions') {
+                return {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Collection Artifacts') {
+                return {
+                    Success: true,
+                    Results: [{ CollectionID: collectionId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Collection Permissions') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            CanRead: true,
+                            CanEdit: false,
+                            CanDelete: false,
+                            CanShare: false
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return {
+                Success: true,
+                Results: [
+                    {
+                        ID: targetVersionId,
+                        ArtifactID: targetArtifactId,
+                        VersionNumber: 1,
+                        Content: 'Concurrent read content',
+                        __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+                    }
+                ],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        });
+
+        const systemUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const ownerUser = makeRoleUser(ownerUserId, 'owner@example.com', provider);
+        const sharedReader = makeRoleUser(sharedReaderId, 'shared@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(systemUser);
+
+        // 1. Direct concurrent ArtifactVersionPostRunViewHook calls by artifact owner
+        const makeHookInput = (): RunViewResult<MockVersionRow> => ({
+            Success: true,
+            Results: [
+                {
+                    ID: targetVersionId,
+                    ArtifactID: targetArtifactId,
+                    VersionNumber: 1,
+                    Content: 'Concurrent read content',
+                    __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+                }
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        });
+        const hookParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+            ResultType: 'simple'
+        };
+        const concurrentHookResults = await Promise.all([
+            ArtifactVersionPostRunViewHook(hookParams, makeHookInput(), ownerUser, provider),
+            ArtifactVersionPostRunViewHook(hookParams, makeHookInput(), ownerUser, provider),
+            ArtifactVersionPostRunViewHook(hookParams, makeHookInput(), ownerUser, provider)
+        ]);
+        expect(concurrentHookResults.map((r) => r.Results.length)).toEqual([1, 1, 1]);
+
+        // 2. Concurrent provider.RunView calls by artifact owner (distinct filters avoid ProviderBase dedup)
+        const concurrentOwnerRunViews = await Promise.all([
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber >= 1`,
+                    ResultType: 'simple'
+                },
+                ownerUser
+            ),
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber >= 2`,
+                    ResultType: 'simple'
+                },
+                ownerUser
+            ),
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber >= 3`,
+                    ResultType: 'simple'
+                },
+                ownerUser
+            )
+        ]);
+        expect(concurrentOwnerRunViews.map((r) => r.Results.length)).toEqual([1, 1, 1]);
+
+        // 3. Concurrent provider.RunView calls by collection-shared reader (exercises inner system-user version lookup)
+        const concurrentSharedRunViews = await Promise.all([
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber = 1`,
+                    ResultType: 'simple'
+                },
+                sharedReader
+            ),
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber = 2`,
+                    ResultType: 'simple'
+                },
+                sharedReader
+            ),
+            provider.RunView<MockVersionRow>(
+                {
+                    EntityName: 'MJ: Artifact Versions',
+                    ExtraFilter: `ArtifactID='${targetArtifactId}' AND VersionNumber = 3`,
+                    ResultType: 'simple'
+                },
+                sharedReader
+            )
+        ]);
+        expect(concurrentSharedRunViews.map((r) => r.Results.length)).toEqual([1, 1, 1]);
+    });
+
+    it('uses hookProvider ahead of global Metadata.Provider in hybrid processes when contextUser is undefined (R6-3 provider inference)', async () => {
+        const sampleResults: RunViewResult<MockVersionRow> = {
+            Success: true,
+            Results: [
+                {
+                    ID: targetVersionId,
+                    ArtifactID: targetArtifactId,
+                    VersionNumber: 1,
+                    Content: 'Hybrid process content',
+                    __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+                }
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        };
+
+        const networkProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+        const databaseProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Database',
+            Entities: []
+        };
+
+        // Case A: Global Metadata.Provider is Network, but explicit hookProvider is Database -> fail closed (0 rows)
+        const providerGetterSpy = vi
+            .spyOn(Metadata, 'Provider', 'get')
+            .mockReturnValue(networkProviderPartial as IMetadataProvider);
+
+        const dbParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        ArtifactVersionPreRunViewHook(dbParams, undefined, databaseProviderPartial as IMetadataProvider);
+        expect(dbParams.Fields).toEqual(['ID', 'ArtifactID']);
+
+        const dbHookResult = await ArtifactVersionPostRunViewHook(
+            dbParams,
+            sampleResults,
+            undefined,
+            databaseProviderPartial as IMetadataProvider
+        );
+        expect(dbHookResult.Results).toEqual([]);
+        expect(dbHookResult.RowCount).toBe(0);
+        expect(dbHookResult.TotalRowCount).toBe(0);
+
+        // Case B: Global Metadata.Provider is Database, but explicit hookProvider is Network -> pass rows through
+        providerGetterSpy.mockReturnValue(databaseProviderPartial as IMetadataProvider);
+
+        const netParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Versions',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        ArtifactVersionPreRunViewHook(netParams, undefined, networkProviderPartial as IMetadataProvider);
+        expect(netParams.Fields).toEqual(['ID']);
+
+        const netHookResult = await ArtifactVersionPostRunViewHook(
+            netParams,
+            sampleResults,
+            undefined,
+            networkProviderPartial as IMetadataProvider
+        );
+        expect(netHookResult.Results).toHaveLength(1);
+        expect((netHookResult.Results[0] as MockVersionRow).Content).toBe('Hybrid process content');
+
+        providerGetterSpy.mockRestore();
     });
 });

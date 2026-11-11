@@ -514,4 +514,75 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
             }
         }
     });
+
+    it('uses hookProvider ahead of global Metadata.Provider in hybrid processes when contextUser is undefined (R6-3 provider inference)', async () => {
+        const sampleWorkingStateResults: RunViewResult = {
+            Success: true,
+            Results: [
+                {
+                    ID: 'ws-hybrid-1',
+                    ArtifactID: allowedArtifactId,
+                    YjsState: 'AQIDBA==',
+                    Content: 'Hybrid working state'
+                }
+            ],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 0,
+            ErrorMessage: ''
+        };
+
+        const networkProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Network',
+            Entities: []
+        };
+        const databaseProviderPartial: Partial<IMetadataProvider> = {
+            ProviderType: 'Database',
+            Entities: []
+        };
+
+        // Case A: Global Metadata.Provider is Network, but explicit hookProvider is Database -> fail closed (0 rows)
+        const providerSpy = vi
+            .spyOn(Metadata, 'Provider', 'get')
+            .mockReturnValue(networkProviderPartial as IMetadataProvider);
+
+        const dbParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Working States',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        ArtifactWorkingStatePreRunViewHook(dbParams, undefined, databaseProviderPartial as IMetadataProvider);
+        expect(dbParams.Fields).toEqual(['ID', 'ArtifactID']);
+
+        const dbRes = await ArtifactWorkingStatePostRunViewHook(
+            dbParams,
+            sampleWorkingStateResults,
+            undefined,
+            databaseProviderPartial as IMetadataProvider
+        );
+        expect(dbRes.Results).toEqual([]);
+        expect(dbRes.RowCount).toBe(0);
+        expect(dbRes.TotalRowCount).toBe(0);
+
+        // Case B: Global Metadata.Provider is Database, but explicit hookProvider is Network -> pass rows through
+        providerSpy.mockReturnValue(databaseProviderPartial as IMetadataProvider);
+
+        const netParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Working States',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        ArtifactWorkingStatePreRunViewHook(netParams, undefined, networkProviderPartial as IMetadataProvider);
+        expect(netParams.Fields).toEqual(['ID']);
+
+        const netRes = await ArtifactWorkingStatePostRunViewHook(
+            netParams,
+            sampleWorkingStateResults,
+            undefined,
+            networkProviderPartial as IMetadataProvider
+        );
+        expect(netRes.Results).toHaveLength(1);
+
+        providerSpy.mockRestore();
+    });
 });

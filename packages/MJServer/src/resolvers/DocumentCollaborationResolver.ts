@@ -21,7 +21,9 @@ import { ApiRoute } from '../apiRoot.js';
 import { configInfo } from '../config.js';
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
-    ArtifactCollaborationServer
+    ArtifactCollaborationServer,
+    COLLAB_SECRET_UNCONFIGURED_CODE,
+    CollaborationSecretUnconfiguredError
 } from '../collaboration/ArtifactCollaborationServer.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
@@ -51,6 +53,9 @@ export class CollaborationTicketResult {
 
     @Field({ nullable: true })
     ErrorMessage?: string;
+
+    @Field({ nullable: true })
+    ErrorCode?: string;
 }
 
 @ObjectType()
@@ -224,6 +229,10 @@ export class DocumentCollaborationResolver extends ResolverBase {
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Live collaboration is unavailable on this server.';
+            const errorCode =
+                err instanceof CollaborationSecretUnconfiguredError
+                    ? COLLAB_SECRET_UNCONFIGURED_CODE
+                    : undefined;
             LogError(
                 `DocumentCollaborationResolver.MintArtifactCollaborationTicket failed to issue ticket for artifact '${normalizedArtifactId}': ${message}`
             );
@@ -231,7 +240,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 Success: false,
                 CanRead: true,
                 CanEdit: effectiveCanEdit,
-                ErrorMessage: message
+                ErrorMessage: message,
+                ...(errorCode ? { ErrorCode: errorCode } : {})
             };
         }
 

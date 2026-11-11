@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import vm from 'node:vm';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
@@ -8,13 +9,53 @@ import {
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    GetSafeRegexSandboxExecutor,
     IsSafeUserRegex,
+    RegisterSafeRegexSandboxExecutor,
     SafeRegexSearchDetailed
 } from '@memberjunction/core-entities';
 
 const TOOL_REGEX_BUDGET_MS = 50;
+const GREP_REGEX_BUDGET_MS = 75;
 const PER_BLOCK_REGEX_MAX_MS = 15;
+const PER_LINE_REGEX_MAX_MS = 15;
 const MAX_REGEX_INPUT_BYTES = 65_536;
+const MAX_REPORTED_UNSEARCHABLE_BLOCKS = 25;
+const REGEX_METACHAR_PATTERN = /[\\^$.|?*+()[\]{}]/;
+
+const VM_REGEX_STATE: { rx: RegExp; s: string } = { rx: /(?:)/, s: '' };
+const VM_REGEX_CONTEXT = vm.createContext(VM_REGEX_STATE);
+const VM_REGEX_SCRIPT = new vm.Script('rx.test(s)');
+
+function ensureNodeVmSafeRegexExecutorRegistered(): void {
+    if (GetSafeRegexSandboxExecutor()) {
+        return;
+    }
+    RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
+        regex.lastIndex = 0;
+        VM_REGEX_STATE.rx = regex;
+        VM_REGEX_STATE.s = input;
+        try {
+            const matched = Boolean(
+                VM_REGEX_SCRIPT.runInContext(VM_REGEX_CONTEXT, {
+                    timeout: Math.max(1, Math.ceil(maxDurationMs))
+                })
+            );
+            return { Matched: matched, TimedOut: false };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
+            if (errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out')) {
+                return { Matched: false, TimedOut: true };
+            }
+            throw err;
+        } finally {
+            VM_REGEX_STATE.s = '';
+        }
+    });
+}
+
+ensureNodeVmSafeRegexExecutorRegistered();
 
 export interface UnsearchableDocumentBlock {
     blockId: string;
@@ -125,19 +166,19 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'search_blocks',
                 description:
-                    'Searches logical blocks in the document by plain-text substring (default) or regex pattern (when use_regex is true).',
+                    'Searches logical blocks in the document by regular expression (default, with fast plain-text path when query has no regex metacharacters) or literal substring (when use_regex is false).',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'Case-insensitive text or regex pattern to find.' },
+                        query: { type: 'string', description: 'Case-insensitive regex pattern or plain-text substring to find.' },
                         use_regex: {
                             type: 'boolean',
                             description:
-                                'Optional (default false): set true to evaluate query as a regular expression; leave false for fast plain-text search with no 64 KB cap.'
+                                'Optional (default true): evaluate query as a regular expression; set false for literal substring matching with no 64 KB cap.'
                         },
                         useRegex: {
                             type: 'boolean',
-                            description: 'Alias for use_regex (default false).'
+                            description: 'Alias for use_regex (default true).'
                         }
                     },
                     required: ['query']
@@ -670,27 +711,34 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleSearchBlocks(content: string, input: Record<string, unknown>): ArtifactToolResult {
+        ensureNodeVmSafeRegexExecutorRegistered();
         const query = String(input.query ?? '').trim();
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
         }
-        const useRegex = input.use_regex === true || input.useRegex === true;
+        const explicitLiteral = input.use_regex === false || input.useRegex === false;
+        const explicitRegex = input.use_regex === true || input.useRegex === true;
+        const hasRegexMeta = REGEX_METACHAR_PATTERN.test(query);
         const blocks = this.ParseLogicalBlocks(content);
 
-        if (!useRegex) {
+        const runLiteralSearch = (): ArtifactToolResult => {
             const needle = query.toLowerCase();
-            const matches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
+            const literalMatches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
             return {
                 success: true,
                 data: {
                     revisionHash: this.ComputeRevisionHash(content),
-                    matchCount: matches.length,
-                    matches,
+                    matchCount: literalMatches.length,
+                    matches: literalMatches,
                     unsearchableCount: 0,
                     unsearchableBlocks: [],
                     warnings: []
                 }
             };
+        };
+
+        if (explicitLiteral || (!explicitRegex && !hasRegexMeta)) {
+            return runLiteralSearch();
         }
 
         if (query.length > 256) {
@@ -704,6 +752,9 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         try {
             new RegExp(query, 'i');
         } catch (err) {
+            if (!explicitRegex) {
+                return runLiteralSearch();
+            }
             return {
                 success: false,
                 data: null,
@@ -712,7 +763,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const activeRegex = CompileSafeUserRegex(query, 'i');
-        if (!activeRegex) {
+        if (!activeRegex || !IsSafeUserRegex(query, 'i')) {
             return {
                 success: false,
                 data: null,
@@ -722,17 +773,39 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
 
         const matches: ParsedMarkdownLogicalBlock[] = [];
         const unsearchableBlocks: UnsearchableDocumentBlock[] = [];
+        let tooLongCount = 0;
+        let timeoutCount = 0;
+        let budgetExpired = false;
         const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
 
-        for (const block of blocks) {
-            const remainingMs = regexDeadline - performance.now();
-            if (remainingMs <= 0) {
+        const recordUnsearchableBlock = (
+            block: ParsedMarkdownLogicalBlock,
+            reason: UnsearchableDocumentBlock['reason']
+        ): void => {
+            if (reason === 'exceeds_64kb_regex_limit') {
+                tooLongCount++;
+            } else {
+                timeoutCount++;
+            }
+            if (unsearchableBlocks.length < MAX_REPORTED_UNSEARCHABLE_BLOCKS) {
                 unsearchableBlocks.push({
                     blockId: block.blockId,
                     startLine: block.startLine,
                     endLine: block.endLine,
-                    reason: 'regex_timeout'
+                    reason
                 });
+            }
+        };
+
+        for (const block of blocks) {
+            if (budgetExpired) {
+                recordUnsearchableBlock(block, 'regex_timeout');
+                continue;
+            }
+            const remainingMs = regexDeadline - performance.now();
+            if (remainingMs <= 0) {
+                budgetExpired = true;
+                recordUnsearchableBlock(block, 'regex_timeout');
                 continue;
             }
             const res = SafeRegexSearchDetailed(
@@ -744,25 +817,14 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             if (res.Matched) {
                 matches.push(block);
             } else if (res.InputTooLong) {
-                unsearchableBlocks.push({
-                    blockId: block.blockId,
-                    startLine: block.startLine,
-                    endLine: block.endLine,
-                    reason: 'exceeds_64kb_regex_limit'
-                });
+                recordUnsearchableBlock(block, 'exceeds_64kb_regex_limit');
             } else if (res.TimedOut) {
-                unsearchableBlocks.push({
-                    blockId: block.blockId,
-                    startLine: block.startLine,
-                    endLine: block.endLine,
-                    reason: 'regex_timeout'
-                });
+                recordUnsearchableBlock(block, 'regex_timeout');
             }
         }
 
+        const unsearchableCount = tooLongCount + timeoutCount;
         const warnings: string[] = [];
-        const tooLongCount = unsearchableBlocks.filter((u) => u.reason === 'exceeds_64kb_regex_limit').length;
-        const timeoutCount = unsearchableBlocks.filter((u) => u.reason === 'regex_timeout').length;
         if (tooLongCount > 0) {
             warnings.push(
                 `${tooLongCount} block(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily large blocks.`
@@ -773,6 +835,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 `${timeoutCount} block(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
             );
         }
+        if (unsearchableCount > unsearchableBlocks.length) {
+            warnings.push(
+                `Showing first ${unsearchableBlocks.length} of ${unsearchableCount} unsearchable block(s) in unsearchableBlocks.`
+            );
+        }
 
         return {
             success: true,
@@ -780,7 +847,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 revisionHash: this.ComputeRevisionHash(content),
                 matchCount: matches.length,
                 matches,
-                unsearchableCount: unsearchableBlocks.length,
+                ...(unsearchableCount > 0 ? { partial: true, timedOut: timeoutCount > 0 } : {}),
+                unsearchableCount,
                 unsearchableBlocks,
                 warnings
             }
@@ -788,6 +856,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     }
 
     private handleGrep(content: string, input: Record<string, unknown>): ArtifactToolResult {
+        ensureNodeVmSafeRegexExecutorRegistered();
         const patternStr = String(input.pattern ?? '');
         if (!patternStr) {
             return { success: false, data: null, errorMessage: 'grep requires a non-empty pattern.' };
@@ -796,7 +865,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         const lines = content.split('\n');
         const explicitLiteral = input.useRegex === false || input.use_regex === false;
         const explicitRegex = input.useRegex === true || input.use_regex === true;
-        const hasRegexMeta = /[\\^$.|?*+()[\]{}]/.test(patternStr);
+        const hasRegexMeta = REGEX_METACHAR_PATTERN.test(patternStr);
 
         if (explicitLiteral || (!explicitRegex && !hasRegexMeta)) {
             const caseInsensitive = Boolean(flags?.includes('i'));
@@ -853,23 +922,60 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const matches: Array<{ lineNumber: number; text: string }> = [];
-        const regexDeadline = performance.now() + TOOL_REGEX_BUDGET_MS;
+        let tooLongCount = 0;
+        let timeoutCount = 0;
+        let budgetSkippedCount = 0;
+        const regexDeadline = performance.now() + GREP_REGEX_BUDGET_MS;
         for (let i = 0; i < lines.length; i++) {
             const remainingMs = regexDeadline - performance.now();
             if (remainingMs <= 0) {
+                budgetSkippedCount += lines.length - i;
                 break;
             }
             const res = SafeRegexSearchDetailed(
                 safeRegex,
                 lines[i],
-                Math.min(PER_BLOCK_REGEX_MAX_MS, remainingMs),
+                Math.min(PER_LINE_REGEX_MAX_MS, remainingMs),
                 MAX_REGEX_INPUT_BYTES
             );
             if (res.Matched) {
                 matches.push({ lineNumber: i, text: lines[i] });
+            } else if (res.InputTooLong) {
+                tooLongCount++;
+            } else if (res.TimedOut) {
+                timeoutCount++;
             }
         }
-        return { success: true, data: matches };
+
+        const unsearchableCount = tooLongCount + timeoutCount + budgetSkippedCount;
+        const timedOut = timeoutCount > 0 || budgetSkippedCount > 0;
+        if (unsearchableCount === 0 && !timedOut) {
+            return { success: true, data: matches };
+        }
+
+        const warnings: string[] = [];
+        if (tooLongCount > 0) {
+            warnings.push(
+                `${tooLongCount} line(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily long lines.`
+            );
+        }
+        if (timedOut) {
+            warnings.push(
+                `${timeoutCount + budgetSkippedCount} line(s) timed out or were skipped after reaching the ${GREP_REGEX_BUDGET_MS}ms regex time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+            );
+        }
+
+        return {
+            success: true,
+            data: {
+                matches,
+                matchCount: matches.length,
+                partial: true,
+                timedOut,
+                unsearchableCount,
+                warnings
+            }
+        };
     }
 
     private handleGetLines(content: string, input: Record<string, unknown>): ArtifactToolResult {

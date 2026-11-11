@@ -1476,31 +1476,66 @@ export function ComputeFrozenSnapshotHash(
 
 const MIN_FROZEN_SNAPSHOT_SECRET_BYTES = 32;
 
+function utf8EncodeBytes(str: string): Uint8Array {
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(str);
+    }
+    if (typeof Buffer !== 'undefined') {
+        return new Uint8Array(Buffer.from(str, 'utf8'));
+    }
+    const out: number[] = [];
+    for (let i = 0; i < str.length; i++) {
+        let code = str.charCodeAt(i);
+        if (code < 0x80) {
+            out.push(code);
+        } else if (code < 0x800) {
+            out.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+        } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < str.length) {
+            const next = str.charCodeAt(i + 1);
+            if (next >= 0xdc00 && next <= 0xdfff) {
+                code = 0x10000 + (((code & 0x3ff) << 10) | (next & 0x3ff));
+                out.push(
+                    0xf0 | (code >> 18),
+                    0x80 | ((code >> 12) & 0x3f),
+                    0x80 | ((code >> 6) & 0x3f),
+                    0x80 | (code & 0x3f)
+                );
+                i++;
+            } else {
+                out.push(0xef, 0xbf, 0xbd);
+            }
+        } else if (code >= 0xdc00 && code <= 0xdfff) {
+            out.push(0xef, 0xbf, 0xbd);
+        } else {
+            out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+        }
+    }
+    return new Uint8Array(out);
+}
+
 function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string | null {
-    const enc = new TextEncoder();
     const explicitTrimmed = explicitSecret?.trim() || '';
     if (explicitTrimmed.length > 0) {
-        return enc.encode(explicitTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? explicitTrimmed : null;
+        return utf8EncodeBytes(explicitTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? explicitTrimmed : null;
     }
     const configuredTrimmed = DocumentLiveBlockEngine.Instance.GetSigningSecret()?.trim() || '';
     if (configuredTrimmed.length > 0) {
-        return enc.encode(configuredTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? configuredTrimmed : null;
+        return utf8EncodeBytes(configuredTrimmed).length >= MIN_FROZEN_SNAPSHOT_SECRET_BYTES ? configuredTrimmed : null;
     }
     const env =
         typeof globalThis !== 'undefined' && 'process' in globalThis
             ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
             : undefined;
     const candidate = env?.MJ_FROZEN_BLOCK_HMAC_SECRET?.trim() || env?.MJ_FROZEN_SNAPSHOT_SECRET?.trim() || '';
-    if (enc.encode(candidate).length < MIN_FROZEN_SNAPSHOT_SECRET_BYTES) {
+    if (utf8EncodeBytes(candidate).length < MIN_FROZEN_SNAPSHOT_SECRET_BYTES) {
         return null;
     }
     return candidate;
 }
 
 function constantTimeStringEqual(a: string, b: string): boolean {
-    const enc = new TextEncoder();
-    const aBytes = enc.encode(a);
-    const bBytes = enc.encode(b);
+    const aBytes = utf8EncodeBytes(a);
+    const bBytes = utf8EncodeBytes(b);
     if (aBytes.length !== bBytes.length) {
         return false;
     }
@@ -1626,9 +1661,8 @@ function sha256Bytes(bytes: Uint8Array): Uint8Array {
 }
 
 function hmacSha256HexUtf8(key: string, message: string): string {
-    const enc = new TextEncoder();
-    const rawKey = enc.encode(key);
-    const msgBytes = enc.encode(message);
+    const rawKey = utf8EncodeBytes(key);
+    const msgBytes = utf8EncodeBytes(message);
     const keyBlock = new Uint8Array(64);
     if (rawKey.length > 64) {
         keyBlock.set(sha256Bytes(rawKey), 0);
@@ -1668,15 +1702,16 @@ function validateEntityViewOrderBy(
         if (!clause) {
             return { Valid: false, ErrorMessage: 'Invalid empty clause in OrderBy.' };
         }
-        const match = /^(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))(?:\s+(ASC|DESC))?$/i.exec(clause);
+        const match = /^(?:\[((?:\]\]|[^\]])+)\]|([A-Za-z_][A-Za-z0-9_]*))(?:\s+(ASC|DESC))?$/i.exec(clause);
         if (!match) {
             return { Valid: false, ErrorMessage: `Invalid OrderBy clause '${clause}'.` };
         }
-        const fieldName = (match[1] || match[2]).toLowerCase();
+        const rawField = match[1] ? match[1].replace(/\]\]/g, () => ']') : match[2];
+        const fieldName = rawField.trim().toLowerCase();
         if (!allowedFieldNames.has(fieldName) || deniedFields.has(fieldName)) {
             return {
                 Valid: false,
-                ErrorMessage: `Field '${match[1] || match[2]}' is not permitted or does not exist in OrderBy.`
+                ErrorMessage: `Field '${rawField}' is not permitted or does not exist in OrderBy.`
             };
         }
     }
@@ -1688,26 +1723,88 @@ function validateEntityViewExtraFilter(
     entityInfo?: EntityInfo,
     deniedFields: ReadonlySet<string> = new Set<string>()
 ): { Valid: boolean; ErrorMessage?: string } {
-    if (/--|\/\*|\*\/|;/.test(extraFilter)) {
-        return { Valid: false, ErrorMessage: 'SQL comments and statement terminators are not permitted in ExtraFilter.' };
-    }
-
-    // Verify balanced single quotes and mask string literals before inspecting SQL keywords, globals, and column identifiers
-    let inSingleQuote = false;
+    // Character-by-character scan to mask bracketed column identifiers (`[First Name]`),
+    // Unicode string literals (`N'Renée'`), and standard single-quoted literals (`'Ada'`),
+    // verifying balanced quotes and brackets before inspecting SQL tokens (`R7-9`).
+    const bracketedIdents: string[] = [];
+    let masked = '';
     for (let i = 0; i < extraFilter.length; i++) {
-        if (extraFilter[i] === "'") {
-            if (inSingleQuote && extraFilter[i + 1] === "'") {
-                i++;
-                continue;
+        const ch = extraFilter[i];
+        if (ch === '[') {
+            let j = i + 1;
+            let closed = false;
+            let inner = '';
+            while (j < extraFilter.length) {
+                if (extraFilter[j] === ']') {
+                    if (j + 1 < extraFilter.length && extraFilter[j + 1] === ']') {
+                        inner += ']';
+                        j += 2;
+                        continue;
+                    }
+                    closed = true;
+                    break;
+                }
+                inner += extraFilter[j];
+                j++;
             }
-            inSingleQuote = !inSingleQuote;
+            if (!closed || inner.trim().length === 0) {
+                return { Valid: false, ErrorMessage: 'Invalid or unclosed bracketed identifier in ExtraFilter.' };
+            }
+            const idx = bracketedIdents.length;
+            bracketedIdents.push(inner);
+            masked += `__BRACKET_ID_${idx}__`;
+            i = j;
+        } else if (
+            (ch === 'N' || ch === 'n') &&
+            i + 1 < extraFilter.length &&
+            extraFilter[i + 1] === "'" &&
+            (i === 0 || !/[A-Za-z0-9_]/.test(extraFilter[i - 1]))
+        ) {
+            let j = i + 2;
+            let closed = false;
+            while (j < extraFilter.length) {
+                if (extraFilter[j] === "'") {
+                    if (j + 1 < extraFilter.length && extraFilter[j + 1] === "'") {
+                        j += 2;
+                        continue;
+                    }
+                    closed = true;
+                    break;
+                }
+                j++;
+            }
+            if (!closed) {
+                return { Valid: false, ErrorMessage: 'Unclosed Unicode string literal in ExtraFilter.' };
+            }
+            masked += "'__STR__'";
+            i = j;
+        } else if (ch === "'") {
+            let j = i + 1;
+            let closed = false;
+            while (j < extraFilter.length) {
+                if (extraFilter[j] === "'") {
+                    if (j + 1 < extraFilter.length && extraFilter[j + 1] === "'") {
+                        j += 2;
+                        continue;
+                    }
+                    closed = true;
+                    break;
+                }
+                j++;
+            }
+            if (!closed) {
+                return { Valid: false, ErrorMessage: 'Unclosed string literal in ExtraFilter.' };
+            }
+            masked += "'__STR__'";
+            i = j;
+        } else {
+            masked += ch;
         }
     }
-    if (inSingleQuote) {
-        return { Valid: false, ErrorMessage: 'Unclosed string literal in ExtraFilter.' };
-    }
 
-    const masked = extraFilter.replace(/'(?:''|[^'])*'/g, () => "'__STR__'");
+    if (/--|\/\*|\*\/|;/.test(masked)) {
+        return { Valid: false, ErrorMessage: 'SQL comments and statement terminators are not permitted in ExtraFilter.' };
+    }
 
     if (
         /\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET|OPENQUERY|OPENDATASOURCE)\b/i.test(
@@ -1726,28 +1823,15 @@ function validateEntityViewExtraFilter(
         };
     }
 
-    // Reject disallowed SQL system globals / niladic built-ins anywhere outside string literals (both LHS and RHS, e.g. 'sa' = SYSTEM_USER)
-    const maskedUnbracketed = masked.replace(/\[[^\]]*\]/g, () => '__BRACKET_IDENT__');
-    if (
-        /\b(SYSTEM_USER|CURRENT_USER|SESSION_USER|SUSER_SNAME|SUSER_NAME|SUSER_ID|SUSER_SID|ORIGINAL_LOGIN|USER_NAME|USER_ID|USER|HOST_NAME|HOST_ID|APP_NAME|DB_NAME|DB_ID|OBJECT_NAME|OBJECT_ID|SCHEMA_NAME|PERMISSIONS|HAS_PERMS_BY_NAME|IS_MEMBER|IS_SRVROLEMEMBER)\b/i.test(
-            maskedUnbracketed
-        )
-    ) {
-        return {
-            Valid: false,
-            ErrorMessage: 'Disallowed SQL system globals and functions (e.g. SYSTEM_USER) are not permitted in ExtraFilter.'
-        };
-    }
-
-    // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID) or dbo.Users.ID) and SQL function calls (e.g. REPLICATE('a', 1e8))
-    if (/[A-Za-z_][A-Za-z0-9_]*\s*\.\s*[A-Za-z_]/.test(masked)) {
+    // Reject schema/table-qualified identifiers (e.g. __mj.fnSecret(ID), dbo.Users.ID, or [dbo].[Users]) and SQL function calls
+    if (/(?:[A-Za-z_][A-Za-z0-9_]*|__BRACKET_ID_\d+__)\s*\.\s*(?:[A-Za-z_]|__BRACKET_ID_\d+__)/.test(masked)) {
         return {
             Valid: false,
             ErrorMessage: 'Schema- or table-qualified identifiers and user-defined functions are not permitted in ExtraFilter.'
         };
     }
     const allowedLogicalParenKeywords = new Set(['AND', 'OR', 'NOT', 'IN']);
-    if (/\]\s*\(/.test(masked)) {
+    if (/__BRACKET_ID_\d+__\s*\(/.test(masked)) {
         return {
             Valid: false,
             ErrorMessage: 'Scalar or user-defined SQL function calls are not permitted in ExtraFilter.'
@@ -1777,19 +1861,54 @@ function validateEntityViewExtraFilter(
         'true',
         'false'
     ]);
+    const niladicSqlKeywords = new Set(['system_user', 'current_user', 'session_user', 'user']);
     const allowedFieldNames = entityInfo
         ? new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()))
         : null;
+    const standaloneDisallowedBuiltinTokens = new Set([
+        'suser_sname',
+        'suser_name',
+        'suser_id',
+        'suser_sid',
+        'original_login',
+        'user_name',
+        'user_id',
+        'host_name',
+        'host_id',
+        'object_name',
+        'object_id',
+        'schema_name',
+        'permissions',
+        'has_perms_by_name',
+        'is_member',
+        'is_srvrolemember'
+    ]);
 
     // Verify EVERY identifier token anywhere outside string literals (both LHS and RHS) against FLS deniedFields and entityInfo.Fields
-    const allIdentsRegex = /(?<![0-9])(?:\[([A-Za-z_][A-Za-z0-9_]*)\]|([A-Za-z_][A-Za-z0-9_]*))/g;
+    const allIdentsRegex = /__BRACKET_ID_(\d+)__|(?<![0-9])([A-Za-z_][A-Za-z0-9_]*)/g;
     let identMatch: RegExpExecArray | null;
     while ((identMatch = allIdentsRegex.exec(masked)) !== null) {
-        const isBracketed = Boolean(identMatch[1]);
-        const rawIdent = identMatch[1] || identMatch[2];
-        const token = rawIdent.toLowerCase();
-        if (token === '__str__') continue;
+        const isBracketed = identMatch[1] !== undefined;
+        const rawIdent = isBracketed
+            ? (bracketedIdents[Number(identMatch[1])] ?? '')
+            : identMatch[2];
+        const token = rawIdent.trim().toLowerCase();
+        if (!isBracketed && token === '__str__') continue;
         if (!isBracketed && allowedSqlPredicateKeywords.has(token)) continue;
+        if (!isBracketed && niladicSqlKeywords.has(token)) {
+            if (!allowedFieldNames || !allowedFieldNames.has(token)) {
+                return {
+                    Valid: false,
+                    ErrorMessage: 'Disallowed SQL system globals and functions (e.g. SYSTEM_USER) are not permitted in ExtraFilter.'
+                };
+            }
+        }
+        if (!isBracketed && !allowedFieldNames && standaloneDisallowedBuiltinTokens.has(token)) {
+            return {
+                Valid: false,
+                ErrorMessage: 'Disallowed SQL system globals and functions (e.g. SYSTEM_USER) are not permitted in ExtraFilter.'
+            };
+        }
         if (deniedFields.has(token)) {
             return {
                 Valid: false,

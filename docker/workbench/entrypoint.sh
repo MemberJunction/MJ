@@ -100,17 +100,24 @@ ENVEOF
     echo "  Created $MJ_DIR/.env"
     echo ""
 elif [ -f "$MJ_DIR/.env" ]; then
-    if ! grep -qE '^(MJ_ARTIFACT_COLLAB_HMAC_SECRET|MJ_COLLABORATION_TICKET_SECRET)=.+' "$MJ_DIR/.env"; then
+    ENV_FILE="$MJ_DIR/.env"
+    if ! grep -qE '^(MJ_ARTIFACT_COLLAB_HMAC_SECRET|MJ_COLLABORATION_TICKET_SECRET)=.+' "$ENV_FILE"; then
         COLLAB_SECRET="${MJ_ARTIFACT_COLLAB_HMAC_SECRET:-${MJ_COLLABORATION_TICKET_SECRET:-$(openssl rand -hex 32)}}"
-        sed -i.bak '/^MJ_ARTIFACT_COLLAB_HMAC_SECRET=$/d' "$MJ_DIR/.env" && rm -f "$MJ_DIR/.env.bak"
-        printf '\nMJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\n' "$COLLAB_SECRET" >> "$MJ_DIR/.env"
-        echo "  Added MJ_ARTIFACT_COLLAB_HMAC_SECRET to existing $MJ_DIR/.env"
+        sed -i.bak '/^MJ_ARTIFACT_COLLAB_HMAC_SECRET=$/d' "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+        if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
+            printf '\n' >> "$ENV_FILE"
+        fi
+        printf 'MJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\n' "$COLLAB_SECRET" >> "$ENV_FILE"
+        echo "  Added MJ_ARTIFACT_COLLAB_HMAC_SECRET to existing $ENV_FILE"
     fi
-    if ! grep -qE '^(MJ_FROZEN_BLOCK_HMAC_SECRET|MJ_FROZEN_SNAPSHOT_SECRET)=.+' "$MJ_DIR/.env"; then
+    if ! grep -qE '^(MJ_FROZEN_BLOCK_HMAC_SECRET|MJ_FROZEN_SNAPSHOT_SECRET)=.+' "$ENV_FILE"; then
         FROZEN_SECRET="${MJ_FROZEN_BLOCK_HMAC_SECRET:-${MJ_FROZEN_SNAPSHOT_SECRET:-$(openssl rand -hex 32)}}"
-        sed -i.bak '/^MJ_FROZEN_BLOCK_HMAC_SECRET=$/d' "$MJ_DIR/.env" && rm -f "$MJ_DIR/.env.bak"
-        printf 'MJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$FROZEN_SECRET" >> "$MJ_DIR/.env"
-        echo "  Added MJ_FROZEN_BLOCK_HMAC_SECRET to existing $MJ_DIR/.env"
+        sed -i.bak '/^MJ_FROZEN_BLOCK_HMAC_SECRET=$/d' "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+        if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
+            printf '\n' >> "$ENV_FILE"
+        fi
+        printf 'MJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$FROZEN_SECRET" >> "$ENV_FILE"
+        echo "  Added MJ_FROZEN_BLOCK_HMAC_SECRET to existing $ENV_FILE"
     fi
 fi
 

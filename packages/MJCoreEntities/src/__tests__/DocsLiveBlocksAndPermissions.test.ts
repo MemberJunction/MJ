@@ -834,10 +834,38 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = 'SYSTEM_USER and @@VERSION'", mockEntity, deniedLower).Valid,
     ).toBe(true);
 
-    // R6 Item 5.4: ArtifactPermissionEngine.ResolvePermissions guards against recursion when GetSystemUser() returns null
+    // R7-9: Entity fields named User, APP_NAME, DB_NAME, bracketed [First Name], and Unicode N'...' literals are allowed,
+    // while niladic SYSTEM_USER, function calls APP_NAME(), and @@VERSION remain blocked!
+    const r79Entity = new EntityInfo({
+      ID: 'e-r79',
+      Name: 'AppDeployments',
+      BaseView: 'vwAppDeployments',
+      Fields: [
+        new EntityFieldInfo({ ID: 'f1', Name: 'ID', Type: 'uniqueidentifier', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f2', Name: 'User', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f3', Name: 'APP_NAME', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f4', Name: 'DB_NAME', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f5', Name: 'Name', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+        new EntityFieldInfo({ ID: 'f6', Name: 'First Name', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
+      ],
+    });
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("User = 'bob'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("APP_NAME = 'CRM'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("DB_NAME = 'Prod'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = N'Renée'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[First Name] = N'Ada'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("'sa' = SYSTEM_USER", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("APP_NAME() = 'x'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = @@VERSION", r79Entity).Valid).toBe(false);
+
+    // R7-2: Concurrent ResolvePermissions calls for the artifact owner ALL return 'Owner', and on a Database provider
+    // when GetSystemUser() returns null, loadCollectionPermissionRows fails closed (0 MJ: Artifact Versions queries)
+    // while still resolving 'Owner' for the owner!
     const sysUserSpy = vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(null);
     try {
       const recursiveArtId = 'abababab-abab-abab-abab-abababababab';
+      const ownerId = '00000000-0000-0000-0000-000000000001';
+      const artifactOwner = createMockUser(ownerId, 'Owner One');
       let versionQueryEntries = 0;
       let grantDirectOnRetry = false;
 
@@ -846,10 +874,11 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
         ProviderType: 'Database',
       };
       const mockRunViewFn = vi.fn().mockImplementation(async (params: { EntityName: string }) => {
+        await Promise.resolve();
         if (params.EntityName === 'MJ: Artifacts') {
           return {
             Success: true,
-            Results: [{ ID: recursiveArtId, UserID: '00000000-0000-0000-0000-000000000001', DelegateEntityID: null, DelegateRecordID: null }],
+            Results: [{ ID: recursiveArtId, UserID: ownerId, DelegateEntityID: null, DelegateRecordID: null }],
           };
         }
         if (params.EntityName === 'MJ: Artifact Permissions') {
@@ -862,11 +891,6 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
         }
         if (params.EntityName === 'MJ: Artifact Versions') {
           versionQueryEntries++;
-          // Simulate ArtifactVersionPostRunViewHook re-entering ResolvePermissions when queryActor fell back to `viewer`
-          const nested = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
-          expect(nested.CanRead).toBe(false);
-          expect(nested.Source).toBe('Denied');
-          expect(nested.Reason).toContain('Recursive artifact permission resolution detected');
           return { Success: true, Results: [] };
         }
         return { Success: true, Results: [] };
@@ -875,12 +899,21 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       vi.spyOn(rvInstance, 'RunView').mockImplementation(mockRunViewFn);
       const fromProviderSpy = vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(rvInstance);
       try {
+        // 1. Concurrent owner calls all resolve 'Owner'
+        const [c1, c2, c3] = await Promise.all([
+          ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, artifactOwner),
+          ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, artifactOwner),
+          ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, artifactOwner),
+        ]);
+        expect([c1.Source, c2.Source, c3.Source]).toEqual(['Owner', 'Owner', 'Owner']);
+
+        // 2. Non-owner with GetSystemUser() === null fails closed without querying MJ: Artifact Versions as user
         const outerResult = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
-        expect(versionQueryEntries).toBe(1);
+        expect(versionQueryEntries).toBe(0);
         expect(outerResult.CanRead).toBe(false);
         expect(outerResult.Source).toBe('Denied');
 
-        // Verify _inFlightResolutions was cleaned up in finally so subsequent calls succeed
+        // 3. Direct grant still succeeds cleanly
         grantDirectOnRetry = true;
         const retryResult = await ArtifactPermissionEngine.Instance.ResolvePermissions(dbProvider, recursiveArtId, viewer);
         expect(retryResult.CanRead).toBe(true);

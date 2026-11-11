@@ -2,12 +2,26 @@ import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
 import type { IMetadataProvider } from '@memberjunction/core';
 import {
+  COLLAB_SECRET_UNCONFIGURED_CODE,
   DocumentCollaborationService,
   ExtractAnchoredCommentMentions,
+  MAX_RECONNECT_ATTEMPTS,
 } from './document-collaboration.service';
 
 describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3, Blocker 7)', () => {
   const service = new DocumentCollaborationService();
+
+  function mockGqlProvider(shape: {
+    CurrentUser?: { ID: string };
+    ConfigData?: { URL?: string };
+    ExecuteGQL: (
+      query: string,
+      variables?: Record<string, string | number | boolean | null>,
+    ) => Promise<Record<string, object> | null>;
+  }): IMetadataProvider {
+    const base = Object.create(null) as IMetadataProvider;
+    return Object.assign(base, shape);
+  }
 
   it('Blocker 7: ComputeLineDiff handles ["a"] vs ["b"], ["a", "b"] vs ["b"], 50-row workbook JSON (4 changed lines), and 20k lines in < 50ms', () => {
     const ab = service.ComputeLineDiff('a', 'b');
@@ -41,7 +55,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
   });
 
   it('Blocker 1: preserves reverse-proxy path prefix (/api-prefix) when deriving WS URL from GraphQL URL and honors ticketPayload.wsUrl', async () => {
-    const proxyProvider = {
+    const proxyProvider = mockGqlProvider({
       ConfigData: {
         URL: 'https://example.com/api-prefix/graphql',
       },
@@ -54,7 +68,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
           CanEdit: true,
         },
       }),
-    } as unknown as IMetadataProvider;
+    });
 
     const proxyEndpoint = await service.ResolveCollaborationEndpoint('art-proxy-1', null, proxyProvider);
     expect(proxyEndpoint.Mode).toBe('connect');
@@ -62,7 +76,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       'wss://example.com/api-prefix/collaboration/yjs?artifactId=art-proxy-1&ticket=tkt_proxy_1',
     );
 
-    const explicitWsUrlProvider = {
+    const explicitWsUrlProvider = mockGqlProvider({
       ConfigData: {
         URL: 'https://example.com/api-prefix/graphql',
       },
@@ -75,7 +89,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
           CanEdit: true,
         },
       }),
-    } as unknown as IMetadataProvider;
+    });
 
     const explicitEndpoint = await service.ResolveCollaborationEndpoint(
       'art-proxy-2',
@@ -89,12 +103,12 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
   });
 
   it('Blocker 1: never seeds Y.Text locally when session.Transport === "websocket" and handles "room-reset" by replacing session.YDoc', async () => {
-    const failingTicketProvider = {
+    const failingTicketProvider = mockGqlProvider({
       ConfigData: { URL: 'https://example.com/graphql' },
       ExecuteGQL: async () => {
         throw new Error('Transient network error');
       },
-    } as unknown as IMetadataProvider;
+    });
 
     const wsSession = service.CreateSession(
       'art-ws-1',
@@ -142,7 +156,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
   });
 
   it('Blocker 1 & Delegate Permissions: ResolvePermissionsFromServer fails closed on GraphQL error and IsFrozenSnapshotVerified renders strictly from VerifyFrozenSnapshotOnServer', async () => {
-    const delegateProvider = {
+    const delegateProvider = mockGqlProvider({
       CurrentUser: { ID: 'u-space-member' },
       ExecuteGQL: async (query: string) => {
         if (query.includes('ResolveArtifactPermissions')) {
@@ -160,7 +174,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
         }
         return null;
       },
-    } as unknown as IMetadataProvider;
+    });
 
     const perms = await service.ResolvePermissionsFromServer('art-delegated-1', delegateProvider);
     expect(perms?.CanRead).toBe(true);
@@ -168,12 +182,12 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(perms?.Source).toBe('Delegate');
 
     // GraphQL error / scope rejection MUST fail closed rather than falling back to browser engine
-    const failingGraphQLProvider = {
+    const failingGraphQLProvider = mockGqlProvider({
       CurrentUser: { ID: 'u-owner' },
       ExecuteGQL: async () => {
         throw new Error('API key scope rejected');
       },
-    } as unknown as IMetadataProvider;
+    });
     const deniedPerms = await service.ResolvePermissionsFromServer('art-delegated-1', failingGraphQLProvider);
     expect(deniedPerms?.CanRead).toBe(false);
     expect(deniedPerms?.CanEdit).toBe(false);
@@ -199,7 +213,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     // Format-matching hmac-sha256 string MUST NOT verify without server confirmation (no regex fallback!)
     expect(service.IsFrozenSnapshotVerified(forgedHmacBlock)).toBe(false);
 
-    const verifyingServerProvider = {
+    const verifyingServerProvider = mockGqlProvider({
       ExecuteGQL: async (query: string) => {
         if (query.includes('VerifyFrozenBlockSnapshot')) {
           return {
@@ -211,7 +225,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
         }
         return null;
       },
-    } as unknown as IMetadataProvider;
+    });
 
     const serverVerified = await service.VerifyFrozenSnapshotOnServer(forgedHmacBlock, verifyingServerProvider);
     expect(serverVerified).toBe(true);
@@ -228,14 +242,6 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       }),
     ).toBe(false);
   });
-
-  function mockGqlProvider(shape: {
-    ConfigData?: { URL?: string };
-    ExecuteGQL: (query: string, variables?: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  }): IMetadataProvider {
-    const base = Object.create(null) as IMetadataProvider;
-    return Object.assign(base, shape);
-  }
 
   it('C1: ExtractAnchoredCommentMentions ignores email addresses while matching real @handles', () => {
     const sample =
@@ -672,5 +678,128 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
       anchorQuote: 'target quote',
       conversationId: 'conv-thread-42',
     });
+  });
+
+  it('R7: flapping WebSocket that opens and closes before initial sync still caps at MAX_RECONNECT_ATTEMPTS, and structured ErrorCode sets LiveSyncUnavailable', async () => {
+    vi.useFakeTimers();
+    const prevWebSocket = Reflect.get(globalThis, 'WebSocket');
+
+    class FlappingSocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+
+      public static instances: FlappingSocket[] = [];
+      public readonly url: string;
+      public readyState = FlappingSocket.CONNECTING;
+      public binaryType = 'blob';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((evt: MessageEvent) => void) | null = null;
+      public onclose: ((evt: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        FlappingSocket.instances.push(this);
+      }
+
+      public send(_data: Uint8Array): void {
+        // no-op
+      }
+
+      public close(): void {
+        this.readyState = FlappingSocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'WebSocket', FlappingSocket);
+
+    try {
+      let ticketNum = 0;
+      const flappingProvider = mockGqlProvider({
+        ConfigData: { URL: 'https://example.com/graphql' },
+        ExecuteGQL: async () => ({
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: `flap-ticket-${++ticketNum}`,
+            WsPath: '/collaboration/yjs',
+            CanRead: true,
+            CanEdit: true,
+          },
+        }),
+      });
+
+      const flapSession = service.CreateSession(
+        'art-flap-1',
+        '# Flapping Room',
+        { id: 'u1', name: 'Alice' },
+        true,
+        true,
+      );
+      await flapSession.Connect(null, flappingProvider);
+
+      for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+        const sock = FlappingSocket.instances[attempt];
+        expect(sock).toBeDefined();
+        sock.readyState = FlappingSocket.OPEN;
+        sock.onopen?.();
+        // Server crashes before sending syncStep2!
+        sock.readyState = FlappingSocket.CLOSED;
+        sock.onclose?.({ code: 1011 } as CloseEvent);
+        if (attempt < MAX_RECONNECT_ATTEMPTS) {
+          expect(flapSession.HasPendingReconnect).toBe(true);
+          await vi.advanceTimersByTimeAsync(31000);
+        }
+      }
+
+      expect(flapSession.ReconnectAttempts).toBe(MAX_RECONNECT_ATTEMPTS);
+      expect(flapSession.HasPendingReconnect).toBe(false);
+      expect(flapSession.IsReconnectExhausted).toBe(true);
+      expect(flapSession.Status).toBe('error');
+      expect(flapSession.LiveSyncUnavailable).toBe(false);
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(FlappingSocket.instances).toHaveLength(1 + MAX_RECONNECT_ATTEMPTS);
+      flapSession.Destroy();
+
+      // Structured ErrorCode check on ResolveCollaborationEndpoint directly
+      const codeEndpoint = await service.ResolveCollaborationEndpoint(
+        'art-code-1',
+        null,
+        mockGqlProvider({
+          ConfigData: { URL: 'https://example.com/graphql' },
+          ExecuteGQL: async () => ({
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              CanRead: true,
+              CanEdit: true,
+              ErrorCode: COLLAB_SECRET_UNCONFIGURED_CODE,
+              ErrorMessage: 'Live collaboration disabled',
+            },
+          }),
+        }),
+      );
+      expect(codeEndpoint.LiveSyncUnavailable).toBe(true);
+
+      const nonSecretTicketEndpoint = await service.ResolveCollaborationEndpoint(
+        'art-non-secret-1',
+        null,
+        mockGqlProvider({
+          ConfigData: { URL: 'https://example.com/graphql' },
+          ExecuteGQL: async () => ({
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              CanRead: true,
+              CanEdit: true,
+              ErrorMessage: 'Auth ticket provider not configured',
+            },
+          }),
+        }),
+      );
+      expect(nonSecretTicketEndpoint.LiveSyncUnavailable).toBe(false);
+    } finally {
+      Reflect.set(globalThis, 'WebSocket', prevWebSocket);
+      vi.useRealTimers();
+    }
   });
 });

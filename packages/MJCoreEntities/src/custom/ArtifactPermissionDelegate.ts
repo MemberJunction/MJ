@@ -232,7 +232,6 @@ export class ParentArtifactPermissionDelegate extends BaseArtifactPermissionDele
 export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEngine> {
     private readonly _delegatesByEntityKey = new Map<string, IArtifactPermissionDelegate>();
     private readonly _changeListeners = new Set<ArtifactPermissionChangeListener>();
-    private readonly _inFlightResolutions = new Set<string>();
 
     protected constructor() {
         super();
@@ -373,11 +372,6 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             return cachedPromise;
         }
 
-        if (this._inFlightResolutions.has(memoKey)) {
-            return this.buildDenied(normalizedArtifactId, 'Recursive artifact permission resolution detected.');
-        }
-
-        this._inFlightResolutions.add(memoKey);
         const resolutionPromise = this.resolvePermissionsInternal(
             activeProvider,
             normalizedArtifactId,
@@ -385,9 +379,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             depth,
             visited,
             activeMemo
-        ).finally(() => {
-            this._inFlightResolutions.delete(memoKey);
-        });
+        );
         activeMemo.set(memoKey, resolutionPromise);
         return resolutionPromise;
     }
@@ -692,13 +684,23 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         user: UserInfo
     ): Promise<CollectionPermissionRowProjection[]> {
         try {
-            // On Database providers, run the version/collection membership lookup as the system user
-            // so `ArtifactVersionPostRunViewHook` does not recurse back into `ResolvePermissions`
-            // while resolving collection-shared grants for `user` (`B3`).
-            const queryActor =
-                provider.ProviderType === 'Database'
-                    ? ((await WellKnownUserSource.Instance.GetSystemUser(provider)) ?? user)
-                    : user;
+            // On Database providers, run the version/collection membership lookup strictly as the system
+            // user so `ArtifactVersionPostRunViewHook` does not recurse back into `ResolvePermissions`
+            // while resolving collection-shared grants for `user` (`B3`, `R7-2`). If `GetSystemUser()`
+            // is unavailable on a Database provider, fail closed on this inner collection lookup rather
+            // than falling back to `user` (which would recurse) or using a process-wide set (which denies
+            // concurrent parallel resolutions for the same artifact/user).
+            let queryActor: UserInfo = user;
+            if (provider.ProviderType === 'Database') {
+                const systemUser = await WellKnownUserSource.Instance.GetSystemUser(provider);
+                if (!systemUser) {
+                    LogError(
+                        `ArtifactPermissionEngine.loadCollectionPermissionRows skipped collection lookup for artifact '${artifactId}': system user is unavailable on Database provider.`
+                    );
+                    return [];
+                }
+                queryActor = systemUser;
+            }
             const rv = RunView.FromMetadataProvider(provider);
             const safeArtifactId = EscapeSQLString(artifactId);
             const safeUserId = EscapeSQLString(user.ID);

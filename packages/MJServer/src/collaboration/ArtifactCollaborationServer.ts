@@ -61,6 +61,37 @@ export const WS_CLOSE_UNAUTHORIZED = 4401;
 export const WS_CLOSE_FORBIDDEN = 4403;
 export const WS_CLOSE_BAD_REQUEST = 4400;
 
+/** Machine-readable GraphQL `ErrorCode` returned when `MJ_ARTIFACT_COLLAB_HMAC_SECRET` is unset or < 32 bytes. */
+export const COLLAB_SECRET_UNCONFIGURED_CODE = 'COLLAB_SECRET_UNCONFIGURED';
+
+/**
+ * Typed error thrown by {@link ArtifactCollaborationServer.IssueTicket} when the collaboration
+ * ticket HMAC secret (`MJ_ARTIFACT_COLLAB_HMAC_SECRET` / `MJ_COLLABORATION_TICKET_SECRET`) is
+ * unset or shorter than 32 UTF-8 bytes.
+ */
+export class CollaborationSecretUnconfiguredError extends Error {
+    public readonly ErrorCode = COLLAB_SECRET_UNCONFIGURED_CODE;
+
+    public constructor(message: string) {
+        super(message);
+        this.name = 'CollaborationSecretUnconfiguredError';
+    }
+}
+
+/** Rejected incoming/agent hunk recorded when a live edit wins a 3-way merge conflict (`R7-5`). */
+export interface RejectedAgentMergeHunk {
+    BaseText: string;
+    LiveText: string;
+    RejectedIncomingText: string;
+}
+
+/** Detailed 3-way merge outcome returned by {@link ArtifactCollaborationServer.MergeConcurrentDocumentEditsDetailed} (`R7-5`). */
+export interface ConcurrentDocumentMergeResult {
+    MergedText: string;
+    HadConflict: boolean;
+    RejectedAgentHunks: RejectedAgentMergeHunk[];
+}
+
 /** Default TTL (seconds) for single-use WebSocket upgrade tickets. */
 export const DEFAULT_COLLABORATION_TICKET_TTL_SECONDS = 60;
 
@@ -176,6 +207,10 @@ export interface CollaborationRoom {
     LastReconciledBaselineText?: string | null;
     /** Server-memory-only pre-out-of-band Yjs snapshot for reconnect deduplication (never stored inside `Doc.getMap('meta')`). */
     PreOutOfBandDocState?: Uint8Array | null;
+    /** State vector captured at the most recent version compaction/seed for incremental CRDT delta broadcasts (`R7-6`). */
+    LastCompactedStateVector?: Uint8Array | null;
+    /** Pending conflict notice from cold room hydration delivered to the first attaching client (`R7-5`). */
+    PendingHydrateConflict?: { VersionID: string; RejectedHunkCount: number; RoomEpoch: string } | null;
     /** Monotonic lineage token updated whenever an out-of-band version or reset mutates the room. */
     RoomEpoch: string;
     /** Serialized per-room flush promise queue so concurrent `FlushWorkingState` calls never interleave. */
@@ -210,9 +245,10 @@ export interface CollaborationPermissionStatusFrame {
  * JSON payload sent inside a {@link YJS_MESSAGE_CONTROL} frame (`type = 2`).
  */
 export interface CollaborationControlFrame {
-    action: 'save-version' | 'version-saved' | 'readonly-rejected' | 'room-reset';
+    action: 'save-version' | 'version-saved' | 'readonly-rejected' | 'room-reset' | 'merge-conflict';
     versionId?: string;
     versionNumber?: number;
+    rejectedHunkCount?: number;
     roomEpoch?: string;
     payload?: string;
     message?: string;
@@ -302,11 +338,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
+    private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
     private static readonly _compactedStateVectors = new Map<
         string,
         {
             OriginServerID: string;
             SavedStateVectorB64: string;
+            SavedSnapshotB64?: string;
             VersionID: string;
             ContentHash: string;
         }
@@ -499,7 +537,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const secret = this.getTicketHmacSecret();
         if (!secret) {
-            throw new Error(
+            throw new CollaborationSecretUnconfiguredError(
                 'Collaboration ticket signing secret (MJ_ARTIFACT_COLLAB_HMAC_SECRET, >= 32 bytes) must be configured before issuing WebSocket collaboration tickets.'
             );
         }
@@ -1060,12 +1098,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 this.reconcileOutOfBandVersionIntoRoom(room, latest, {
                     originServerId: tracked?.OriginServerID,
                     savedStateVectorB64: tracked?.SavedStateVectorB64,
+                    savedSnapshotB64: tracked?.SavedSnapshotB64,
                     savedContentHash: latestHash
                 });
             }
 
             const currentContent = this.extractRoomSerializedContent(room.Doc);
-            const savedStateVectorB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
+            const preMetaStateVectorB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
             const contentHash = createHash('sha256').update(currentContent, 'utf8').digest('hex');
 
             if (latest && (latest.ContentHash === contentHash || latest.Content === currentContent)) {
@@ -1080,8 +1119,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     meta.set('versionId', latest.ID);
                     meta.set('baseVersionNumber', latest.VersionNumber);
                     meta.set('baseVersionId', latest.ID);
-                    meta.set('baseContent', currentContent);
+                    if (meta.has('baseContent')) {
+                        meta.delete('baseContent');
+                    }
                 }, 'version-meta');
+                room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
                 if (room.DirtyWorkingState) {
                     await this.FlushWorkingState(artifactId, contextUser);
                 }
@@ -1139,21 +1181,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             if (saved) {
-                this.recordCompactedStateVector(
-                    room.ArtifactID,
-                    versionEntity.ID,
-                    versionEntity.VersionNumber,
-                    savedStateVectorB64,
-                    contentHash
-                );
+                const prevCompactedSv = room.LastCompactedStateVector ?? null;
                 room.DirtyVersion = false;
                 room.CompactionRetryCount = 0;
                 room.BaseVersionID = versionEntity.ID;
                 room.BaseVersionNumber = versionEntity.VersionNumber;
                 room.BaseVersionText = currentContent;
                 const versionVectorMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionEntity.VersionNumber}`;
+                const preMetaSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
                 const versionVectorMetaValue = JSON.stringify({
-                    sv: savedStateVectorB64,
+                    sv: preMetaStateVectorB64,
+                    snap: preMetaSnapshotB64,
                     versionId: versionEntity.ID,
                     contentHash
                 });
@@ -1163,10 +1201,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     meta.set('versionId', versionEntity.ID);
                     meta.set('baseVersionNumber', versionEntity.VersionNumber);
                     meta.set('baseVersionId', versionEntity.ID);
-                    meta.set('baseContent', currentContent);
+                    if (meta.has('baseContent')) {
+                        meta.delete('baseContent');
+                    }
                     meta.set(versionVectorMetaKey, versionVectorMetaValue);
                     meta.set('roomEpoch', room.RoomEpoch);
                 }, 'version-meta');
+
+                const postMetaStateVector = Y.encodeStateVector(room.Doc);
+                const savedStateVectorB64 = BytesToBase64(postMetaStateVector);
+                const savedSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
+                const deltaUpdate = prevCompactedSv
+                    ? this.encodeSafeDeltaUpdate(room.Doc, prevCompactedSv)
+                    : Y.encodeStateAsUpdate(room.Doc);
+                const prevStateVectorB64 = prevCompactedSv ? BytesToBase64(prevCompactedSv) : undefined;
+                room.LastCompactedStateVector = postMetaStateVector;
+
+                this.recordCompactedStateVector(
+                    room.ArtifactID,
+                    versionEntity.ID,
+                    versionEntity.VersionNumber,
+                    savedStateVectorB64,
+                    contentHash,
+                    savedSnapshotB64
+                );
 
                 // Flush working state AFTER saving the version and updating `meta` so the working state
                 // timestamp is never older than the version and includes the updated `versionNumber`/`versionId`.
@@ -1179,14 +1237,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     roomEpoch: room.RoomEpoch
                 });
 
-                const fullDocUpdate = Y.encodeStateAsUpdate(room.Doc);
                 const savedDocUpdateB64 =
-                    fullDocUpdate.byteLength <= ArtifactCollaborationServer.MAX_INLINE_RELAY_DOC_UPDATE_BYTES
-                        ? BytesToBase64(fullDocUpdate)
+                    deltaUpdate.byteLength <= ArtifactCollaborationServer.MAX_INLINE_RELAY_DOC_UPDATE_BYTES
+                        ? BytesToBase64(deltaUpdate)
                         : undefined;
                 const versionSavedRelayPayload = JSON.stringify({
                     savedStateVectorB64,
+                    savedSnapshotB64,
                     savedContentHash: contentHash,
+                    ...(prevStateVectorB64 ? { prevStateVectorB64 } : {}),
                     ...(savedDocUpdateB64 ? { savedDocUpdateB64 } : {})
                 });
 
@@ -1269,13 +1328,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             room.BaseVersionText === newContent &&
             room.LastReconciledBaselineText === previousContent;
 
+        let mutationMergeResult: ConcurrentDocumentMergeResult | null = null;
+        let isStructuredSlideOrSheet = false;
+
         if (existing !== newContent && !alreadyReconciledFromSameBaseline) {
             room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
             const nextEpoch = `epoch-${Date.now()}-${randomBytes(4).toString('hex')}`;
             room.RoomEpoch = nextEpoch;
             room.Doc.transact(() => {
                 room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
-                this.applyMinimalTextDiff(yText, yText.toString(), newContent, previousContent);
+                mutationMergeResult = this.applyMinimalTextDiff(
+                    yText,
+                    yText.toString(),
+                    newContent,
+                    previousContent
+                );
                 this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
                     preserveConcurrentAdditions: true,
                     baselineContent: previousContent
@@ -1284,10 +1351,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     preserveConcurrentAdditions: true,
                     baselineContent: previousContent
                 });
-                if (
+                isStructuredSlideOrSheet =
                     room.Doc.getMap('slidesById').size > 0 ||
-                    room.Doc.getMap('worksheetsById').size > 0
-                ) {
+                    room.Doc.getMap('worksheetsById').size > 0;
+                if (isStructuredSlideOrSheet) {
                     const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
                     this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
                 }
@@ -1298,9 +1365,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         const mergedContent = this.extractRoomSerializedContent(room.Doc);
+        const resolvedMerge = mutationMergeResult as ConcurrentDocumentMergeResult | null;
 
         if (saveVersion) {
             const compacted = await this.CompactRoomToArtifactVersion(artifactId, user);
+            if (!isStructuredSlideOrSheet && resolvedMerge?.HadConflict) {
+                this.broadcastControlFrame(room, {
+                    action: 'merge-conflict',
+                    versionId: compacted.VersionID ?? room.BaseVersionID ?? undefined,
+                    rejectedHunkCount: resolvedMerge.RejectedAgentHunks.length,
+                    roomEpoch: room.RoomEpoch
+                });
+            }
             const postCompactContent = this.extractRoomSerializedContent(room.Doc);
             if (room.Connections.size === 0 && !this._shuttingDown) {
                 this.scheduleIdleRoomDisposal(room);
@@ -1314,6 +1390,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         await this.FlushWorkingState(artifactId, user);
+        if (!isStructuredSlideOrSheet && resolvedMerge?.HadConflict) {
+            this.broadcastControlFrame(room, {
+                action: 'merge-conflict',
+                versionId: room.BaseVersionID ?? undefined,
+                rejectedHunkCount: resolvedMerge.RejectedAgentHunks.length,
+                roomEpoch: room.RoomEpoch
+            });
+        }
         if (room.Connections.size === 0 && !this._shuttingDown) {
             this.scheduleIdleRoomDisposal(room);
         }
@@ -1454,6 +1538,121 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
+    /**
+     * Returns `true` when `doc` satisfies BOTH the insert `StateVector` AND the full `DeleteSet`
+     * encoded in `snapshotBytes` (`R7-6`). Because `DoesDocSatisfySnapshot` inspects the CRDT
+     * `DeleteSet` directly, lost pure deletes from peer nodes are detected even when the local room
+     * has its own concurrent unsaved edits (`room.DirtyVersion === true`, `M5e`).
+     */
+    public DoesDocSatisfySnapshot(doc: Y.Doc, snapshotBytes: Uint8Array): boolean {
+        if (!snapshotBytes || snapshotBytes.byteLength === 0) {
+            return false;
+        }
+        try {
+            const targetSnap = Y.decodeSnapshot(snapshotBytes);
+            const localSnap = Y.snapshot(doc);
+
+            for (const [clientId, requiredClock] of targetSnap.sv.entries()) {
+                if (requiredClock > 0 && (localSnap.sv.get(clientId) ?? 0) < requiredClock) {
+                    return false;
+                }
+            }
+
+            for (const [clientId, requiredDeletes] of targetSnap.ds.clients.entries()) {
+                if (!requiredDeletes || requiredDeletes.length === 0) {
+                    continue;
+                }
+                const localDeletes = localSnap.ds.clients.get(clientId);
+                if (!localDeletes || localDeletes.length === 0) {
+                    const hasNonEmptyRange = requiredDeletes.some((r) => r.len > 0);
+                    if (hasNonEmptyRange) {
+                        return false;
+                    }
+                    continue;
+                }
+
+                // Coalesce local deleted intervals into sorted disjoint [start, end) ranges
+                const sortedLocal = [...localDeletes]
+                    .filter((item) => item.len > 0)
+                    .sort((a, b) => a.clock - b.clock);
+                const coalesced: Array<{ start: number; end: number }> = [];
+                for (const item of sortedLocal) {
+                    const start = item.clock;
+                    const end = item.clock + item.len;
+                    const prev = coalesced[coalesced.length - 1];
+                    if (prev && prev.end >= start) {
+                        if (end > prev.end) {
+                            prev.end = end;
+                        }
+                    } else {
+                        coalesced.push({ start, end });
+                    }
+                }
+
+                for (const req of requiredDeletes) {
+                    if (req.len <= 0) {
+                        continue;
+                    }
+                    const reqStart = req.clock;
+                    const reqEnd = req.clock + req.len;
+                    const covered = coalesced.some((seg) => seg.start <= reqStart && seg.end >= reqEnd);
+                    if (!covered) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        } catch (err) {
+            LogError(
+                `ArtifactCollaborationServer.DoesDocSatisfySnapshot failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            return false;
+        }
+    }
+
+    private doesDocSatisfySnapshot(doc: Y.Doc, snapshotBytes: Uint8Array): boolean {
+        return this.DoesDocSatisfySnapshot(doc, snapshotBytes);
+    }
+
+    private encodeSafeDeltaUpdate(doc: Y.Doc, stateVectorBytes: Uint8Array): Uint8Array {
+        try {
+            return Y.encodeStateAsUpdate(doc, stateVectorBytes);
+        } catch {
+            return Y.encodeStateAsUpdate(doc);
+        }
+    }
+
+    private decodeStrictBase64Bytes(raw: string): Uint8Array | null {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+            return new Uint8Array(0);
+        }
+        if (trimmed.length % 4 === 1) {
+            return null;
+        }
+        const isStdBase64 =
+            trimmed.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(trimmed);
+        const isUrlSafeBase64 = /^[A-Za-z0-9\-_]+={0,2}$/.test(trimmed);
+        if (!isStdBase64 && !isUrlSafeBase64) {
+            return null;
+        }
+        let normalized = trimmed.replace(/-/g, () => '+').replace(/_/g, () => '/');
+        while (normalized.length % 4 !== 0) {
+            normalized += '=';
+        }
+        if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+            return null;
+        }
+        try {
+            return Base64ToBytes(normalized);
+        } catch {
+            return null;
+        }
+    }
+
     private computeSha256Hex(content: string): string {
         return createHash('sha256').update(content, 'utf8').digest('hex');
     }
@@ -1463,7 +1662,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         versionId: string | undefined,
         versionNumber: number,
         savedStateVectorB64: string,
-        contentHash: string
+        contentHash: string,
+        savedSnapshotB64?: string
     ): void {
         if (!savedStateVectorB64 || !versionId || !versionId.trim()) {
             return;
@@ -1471,6 +1671,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const entry = {
             OriginServerID: this._serverInstanceId,
             SavedStateVectorB64: savedStateVectorB64,
+            SavedSnapshotB64: savedSnapshotB64,
             VersionID: versionId.trim(),
             ContentHash: contentHash
         };
@@ -1491,7 +1692,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         versionId: string,
         versionNumber: number,
         expectedContentHash: string
-    ): { OriginServerID: string; SavedStateVectorB64: string; VersionID: string; ContentHash: string } | undefined {
+    ):
+        | {
+              OriginServerID: string;
+              SavedStateVectorB64: string;
+              SavedSnapshotB64?: string;
+              VersionID: string;
+              ContentHash: string;
+          }
+        | undefined {
         const map = ArtifactCollaborationServer._compactedStateVectors;
         const byId = map.get(`ver:${NormalizeUUID(versionId)}`);
         if (
@@ -1533,6 +1742,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             try {
                 const parsed = JSON.parse(trimmed) as {
                     sv?: string;
+                    snap?: string;
                     versionId?: string;
                     contentHash?: string;
                 };
@@ -1541,7 +1751,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         parsed.versionId &&
                         UUIDsEqual(parsed.versionId, versionId) &&
                         parsed.contentHash === expectedContentHash &&
-                        this.DoesDocContainStateVector(doc, Base64ToBytes(parsed.sv))
+                        this.DoesDocContainStateVector(doc, Base64ToBytes(parsed.sv)) &&
+                        (!parsed.snap || this.doesDocSatisfySnapshot(doc, Base64ToBytes(parsed.snap)))
                 );
             } catch (err) {
                 LogError(
@@ -1553,13 +1764,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         }
         if (typeof raw === 'object') {
-            const obj = raw as { sv?: string; versionId?: string; contentHash?: string };
+            const obj = raw as { sv?: string; snap?: string; versionId?: string; contentHash?: string };
             return Boolean(
                 obj.sv &&
                     obj.versionId &&
                     UUIDsEqual(obj.versionId, versionId) &&
                     obj.contentHash === expectedContentHash &&
-                    this.DoesDocContainStateVector(doc, Base64ToBytes(obj.sv))
+                    this.DoesDocContainStateVector(doc, Base64ToBytes(obj.sv)) &&
+                    (!obj.snap || this.doesDocSatisfySnapshot(doc, Base64ToBytes(obj.snap)))
             );
         }
         return false;
@@ -1567,6 +1779,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private parseVersionSavedRelayPayload(payloadBase64: string | undefined): {
         savedStateVectorB64?: string;
+        prevStateVectorB64?: string;
+        savedSnapshotB64?: string;
         savedDocUpdateB64?: string;
         savedContentHash?: string;
     } {
@@ -1581,6 +1795,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             try {
                 const parsed = JSON.parse(trimmed) as {
                     savedStateVectorB64?: string;
+                    prevStateVectorB64?: string;
+                    savedSnapshotB64?: string;
                     savedDocUpdateB64?: string;
                     savedContentHash?: string;
                 };
@@ -1588,6 +1804,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedStateVectorB64:
                         typeof parsed.savedStateVectorB64 === 'string' && parsed.savedStateVectorB64
                             ? parsed.savedStateVectorB64
+                            : undefined,
+                    prevStateVectorB64:
+                        typeof parsed.prevStateVectorB64 === 'string' && parsed.prevStateVectorB64
+                            ? parsed.prevStateVectorB64
+                            : undefined,
+                    savedSnapshotB64:
+                        typeof parsed.savedSnapshotB64 === 'string' && parsed.savedSnapshotB64
+                            ? parsed.savedSnapshotB64
                             : undefined,
                     savedDocUpdateB64:
                         typeof parsed.savedDocUpdateB64 === 'string' && parsed.savedDocUpdateB64
@@ -1611,22 +1835,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     private parseSyncStateRelayPayload(payloadBase64: string | undefined): {
-        updateBytes: Uint8Array;
+        updateBytes: Uint8Array | null;
         savedContentHash?: string;
     } {
         if (!payloadBase64) {
-            return { updateBytes: new Uint8Array(0) };
+            return { updateBytes: null };
         }
         const trimmed = payloadBase64.trim();
+        if (!trimmed) {
+            return { updateBytes: null };
+        }
         if (trimmed.startsWith('{')) {
             try {
                 const parsed = JSON.parse(trimmed) as {
                     savedDocUpdateB64?: string;
                     savedContentHash?: string;
                 };
-                const updateBytes = parsed.savedDocUpdateB64
-                    ? Base64ToBytes(parsed.savedDocUpdateB64)
-                    : new Uint8Array(0);
+                if (!parsed.savedDocUpdateB64 || typeof parsed.savedDocUpdateB64 !== 'string') {
+                    return { updateBytes: null };
+                }
+                const updateBytes = this.decodeStrictBase64Bytes(parsed.savedDocUpdateB64);
                 return {
                     updateBytes,
                     savedContentHash:
@@ -1638,10 +1866,67 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         err instanceof Error ? err.message : String(err)
                     }`
                 );
-                return { updateBytes: new Uint8Array(0) };
+                return { updateBytes: null };
             }
         }
-        return { updateBytes: Base64ToBytes(trimmed) };
+        return { updateBytes: this.decodeStrictBase64Bytes(trimmed) };
+    }
+
+    private async tryCatchUpRoomFromPersistedWorkingState(
+        room: CollaborationRoom,
+        savedStateVectorB64?: string,
+        savedSnapshotB64?: string
+    ): Promise<boolean> {
+        const provider = this.activeProvider();
+        const queryUser = UserCache.Instance.GetSystemUser() ?? room.LastModifiedByUser;
+        if (!provider || !queryUser) {
+            return false;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const res = await rv.RunView<WorkingStateProjection>(
+                {
+                    EntityName: 'MJ: Artifact Working States',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
+                    Fields: ['ID', 'ArtifactID', 'YjsState'],
+                    IncludeBinaryFields: true,
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                queryUser
+            );
+            const workingRow = res.Success ? res.Results?.[0] : undefined;
+            if (!workingRow?.YjsState) {
+                return false;
+            }
+            const stateBytes = DecodeWorkingStateBytes(workingRow.YjsState);
+            if (stateBytes.byteLength === 0) {
+                return false;
+            }
+            Y.applyUpdate(room.Doc, stateBytes, 'collab-relay');
+
+            const svBytes = savedStateVectorB64
+                ? this.decodeStrictBase64Bytes(savedStateVectorB64)
+                : null;
+            const snapBytes = savedSnapshotB64
+                ? this.decodeStrictBase64Bytes(savedSnapshotB64)
+                : null;
+            const svSatisfied =
+                !savedStateVectorB64 ||
+                Boolean(svBytes && this.DoesDocContainStateVector(room.Doc, svBytes));
+            const snapSatisfied =
+                !savedSnapshotB64 ||
+                Boolean(snapBytes && this.doesDocSatisfySnapshot(room.Doc, snapBytes));
+            return svSatisfied && snapSatisfied;
+        } catch (err) {
+            LogError(
+                `ArtifactCollaborationServer.tryCatchUpRoomFromPersistedWorkingState failed for '${room.ArtifactID}': ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            return false;
+        }
     }
 
     private createPendingSyncWaiter(
@@ -1792,6 +2077,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             {
                                 originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
                                 savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
+                                savedSnapshotB64: tracked?.SavedSnapshotB64,
                                 savedContentHash: expectedHash
                             }
                         );
@@ -1813,6 +2099,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             previousContent?: string;
             originServerId?: string;
             savedStateVectorB64?: string;
+            savedSnapshotB64?: string;
             savedContentHash?: string;
             crdtSynced?: boolean;
         }
@@ -1845,11 +2132,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const effectiveVectorB64 = relayHashMatches
             ? options?.savedStateVectorB64 ?? trackedVerified?.SavedStateVectorB64
             : trackedVerified?.SavedStateVectorB64;
+        const effectiveSnapshotB64 = relayHashMatches
+            ? options?.savedSnapshotB64 ?? trackedVerified?.SavedSnapshotB64
+            : trackedVerified?.SavedSnapshotB64;
+
+        const snapshotSatisfied =
+            !effectiveSnapshotB64 ||
+            this.doesDocSatisfySnapshot(room.Doc, Base64ToBytes(effectiveSnapshotB64));
 
         const alreadyContainsCompactedOps = Boolean(
             (options?.crdtSynced && relayHashMatches) ||
                 (effectiveVectorB64 &&
-                    this.DoesDocContainStateVector(room.Doc, Base64ToBytes(effectiveVectorB64))) ||
+                    this.DoesDocContainStateVector(room.Doc, Base64ToBytes(effectiveVectorB64)) &&
+                    snapshotSatisfied) ||
                 this.doesDocMetaMatchVersionStateVector(
                     room.Doc,
                     room.ArtifactID,
@@ -1859,19 +2154,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 )
         );
 
-        const setBaseMeta = (recordVectorB64?: string): void => {
+        const setBaseMeta = (recordVectorB64?: string, recordSnapshotB64?: string): void => {
             const meta = room.Doc.getMap('meta');
             meta.set('roomEpoch', nextEpoch);
             meta.set('versionNumber', version.VersionNumber);
             meta.set('versionId', version.ID);
             meta.set('baseVersionNumber', version.VersionNumber);
             meta.set('baseVersionId', version.ID);
-            meta.set('baseContent', targetText);
+            if (meta.has('baseContent')) {
+                meta.delete('baseContent');
+            }
             if (recordVectorB64) {
                 meta.set(
                     `art:${NormalizeUUID(room.ArtifactID)}:v:${version.VersionNumber}`,
                     JSON.stringify({
                         sv: recordVectorB64,
+                        ...(recordSnapshotB64 ? { snap: recordSnapshotB64 } : {}),
                         versionId: version.ID,
                         contentHash: targetContentHash
                     })
@@ -1879,20 +2177,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         };
 
+        let oobMergeResult: ConcurrentDocumentMergeResult | null = null;
+        let isStructuredSlideOrSheet = false;
+
         if (alreadyContainsCompactedOps) {
             // Room CRDT state already includes every Yjs operation (including DeleteSet when CRDT-synced)
             // that went into `version`. Advance base version metadata without running a redundant text merge
             // so concurrent live typing is never duplicated or clobbered (`R5-3`, `R6-7`).
             const recordedSvB64 = effectiveVectorB64 ?? BytesToBase64(Y.encodeStateVector(room.Doc));
             room.Doc.transact(() => {
-                setBaseMeta(recordedSvB64);
+                setBaseMeta(recordedSvB64, effectiveSnapshotB64);
             }, 'server-oob-version');
             room.DirtyVersion = liveText !== targetText;
+            if (!room.DirtyVersion) {
+                room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
+            } else if (effectiveVectorB64) {
+                const decodedSv = this.decodeStrictBase64Bytes(effectiveVectorB64);
+                room.LastCompactedStateVector = decodedSv && decodedSv.byteLength > 0 ? decodedSv : null;
+            }
         } else if (liveText === targetText) {
             room.Doc.transact(() => {
                 setBaseMeta();
             }, 'server-oob-version');
             room.DirtyVersion = false;
+            room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
         } else if (liveText === baselineText) {
             room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
             room.Doc.transact(() => {
@@ -1906,10 +2214,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 setBaseMeta();
             }, 'server-oob-version');
             room.DirtyVersion = false;
+            room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
         } else if (baselineText !== targetText) {
             room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
             room.Doc.transact(() => {
-                this.applyMinimalTextDiff(yText, yText.toString(), targetText, baselineText);
+                oobMergeResult = this.applyMinimalTextDiff(
+                    yText,
+                    yText.toString(),
+                    targetText,
+                    baselineText
+                );
                 this.syncSlideDeckStructuresIfPresent(room.Doc, targetText, {
                     preserveConcurrentAdditions: true,
                     baselineContent: baselineText
@@ -1923,10 +2237,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         baselineContent: baselineText
                     }
                 );
-                if (
+                isStructuredSlideOrSheet =
                     room.Doc.getMap('slidesById').size > 0 ||
-                    room.Doc.getMap('worksheetsById').size > 0
-                ) {
+                    room.Doc.getMap('worksheetsById').size > 0;
+                if (isStructuredSlideOrSheet) {
                     const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
                     this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
                 }
@@ -1934,12 +2248,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }, 'server-oob-version');
             const mergedText = this.extractRoomSerializedContent(room.Doc);
             room.DirtyVersion = mergedText !== targetText;
+            room.LastCompactedStateVector = room.DirtyVersion ? null : Y.encodeStateVector(room.Doc);
         } else {
             // liveText !== baselineText && baselineText === targetText: preserve live edits untouched
             room.Doc.transact(() => {
                 setBaseMeta();
             }, 'server-oob-version');
             room.DirtyVersion = true;
+            room.LastCompactedStateVector = null;
         }
 
         room.LastReconciledBaselineText = baselineText;
@@ -1955,6 +2271,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             versionNumber: version.VersionNumber,
             roomEpoch: room.RoomEpoch
         });
+
+        const resolvedOobMerge = oobMergeResult as ConcurrentDocumentMergeResult | null;
+        if (!isStructuredSlideOrSheet && resolvedOobMerge?.HadConflict) {
+            this.broadcastControlFrame(room, {
+                action: 'merge-conflict',
+                versionId: version.ID,
+                rejectedHunkCount: resolvedOobMerge.RejectedAgentHunks.length,
+                roomEpoch: room.RoomEpoch
+            });
+        }
     }
 
     private async checkAndReconcileLatestDatabaseVersion(
@@ -1964,6 +2290,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             originServerId?: string;
             relayVersionId?: string;
             savedStateVectorB64?: string;
+            savedSnapshotB64?: string;
             savedContentHash?: string;
             crdtSynced?: boolean;
         }
@@ -2005,6 +2332,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     ? {
                           originServerId: options?.originServerId,
                           savedStateVectorB64: options?.savedStateVectorB64,
+                          savedSnapshotB64: options?.savedSnapshotB64,
                           savedContentHash: options?.savedContentHash,
                           crdtSynced: options?.crdtSynced
                       }
@@ -2392,6 +2720,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             BaseVersionID: null,
             BaseVersionNumber: 0,
             BaseVersionText: '',
+            LastCompactedStateVector: null,
+            PendingHydrateConflict: null,
             RoomEpoch: `epoch-init-${artifactId}`,
             FlushQueue: Promise.resolve(true),
             WorkingStateTimer: null,
@@ -2421,14 +2751,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 await this.FlushWorkingState(room.ArtifactID, contextUser);
                 try {
                     const hydratedState = Y.encodeStateAsUpdate(room.Doc);
-                    const hydratedHash = this.computeSha256Hex(this.extractRoomSerializedContent(room.Doc));
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
                         MessageType: 'sync-state',
-                        PayloadBase64: JSON.stringify({
-                            savedDocUpdateB64: BytesToBase64(hydratedState),
-                            savedContentHash: hydratedHash
-                        })
+                        PayloadBase64: BytesToBase64(hydratedState)
                     });
                 } catch (hydrateRelayErr) {
                     LogError(
@@ -2618,8 +2944,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         seedMeta.set('versionId', versionRow.ID);
                         seedMeta.set('baseVersionNumber', versionRow.VersionNumber);
                         seedMeta.set('baseVersionId', versionRow.ID);
+                    } else {
+                        seedMeta.set('baseContent', '');
                     }
-                    seedMeta.set('baseContent', versionTargetText);
                     seedMeta.set('roomEpoch', nextEpoch);
                 }, 'seed');
                 const seedBytes = Y.encodeStateAsUpdate(seedDoc);
@@ -2636,8 +2963,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         seedMeta.set('versionId', versionRow.ID);
                         seedMeta.set('baseVersionNumber', versionRow.VersionNumber);
                         seedMeta.set('baseVersionId', versionRow.ID);
+                        if (seedMeta.has('baseContent')) {
+                            seedMeta.delete('baseContent');
+                        }
+                    } else {
+                        seedMeta.set('baseContent', '');
                     }
-                    seedMeta.set('baseContent', '');
                     seedMeta.set('roomEpoch', nextEpoch);
                 }, 'hydrate');
             } else if (appliedWorkingState && versionNewerThanWorkingState && versionRow) {
@@ -2649,12 +2980,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     versionRow.VersionNumber,
                     versionContentHash
                 );
+                const hydrateSnapshotSatisfied =
+                    !trackedHydrate?.SavedSnapshotB64 ||
+                    this.doesDocSatisfySnapshot(
+                        room.Doc,
+                        Base64ToBytes(trackedHydrate.SavedSnapshotB64)
+                    );
                 const alreadyContainsVersionOps = Boolean(
                     (trackedHydrate?.SavedStateVectorB64 &&
                         this.DoesDocContainStateVector(
                             room.Doc,
                             Base64ToBytes(trackedHydrate.SavedStateVectorB64)
-                        )) ||
+                        ) &&
+                        hydrateSnapshotSatisfied) ||
                         this.doesDocMetaMatchVersionStateVector(
                             room.Doc,
                             room.ArtifactID,
@@ -2704,11 +3042,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
                 const nextEpoch = `epoch-${versionRow.ID}-${versionRow.VersionNumber}`;
                 room.RoomEpoch = nextEpoch;
+                let hydrateMergeResult: ConcurrentDocumentMergeResult | null = null;
+                let isStructuredSlideOrSheet = false;
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
                     meta.set('roomEpoch', nextEpoch);
                     if (!alreadyContainsVersionOps && currentSerialized !== versionTargetText) {
-                        this.applyMinimalTextDiff(yText, yText.toString(), versionTargetText, baseVersionText);
+                        hydrateMergeResult = this.applyMinimalTextDiff(
+                            yText,
+                            yText.toString(),
+                            versionTargetText,
+                            baseVersionText
+                        );
                         const mergeOpts =
                             baseVersionText !== undefined
                                 ? { preserveConcurrentAdditions: true, baselineContent: baseVersionText }
@@ -2720,10 +3065,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             versionRow.Configuration ?? null,
                             mergeOpts
                         );
-                        if (
-                            baseVersionText !== undefined &&
-                            (room.Doc.getMap('slidesById').size > 0 || room.Doc.getMap('worksheetsById').size > 0)
-                        ) {
+                        isStructuredSlideOrSheet =
+                            room.Doc.getMap('slidesById').size > 0 ||
+                            room.Doc.getMap('worksheetsById').size > 0;
+                        if (baseVersionText !== undefined && isStructuredSlideOrSheet) {
                             const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
                             this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
                         }
@@ -2732,8 +3077,27 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     meta.set('versionId', versionRow.ID);
                     meta.set('baseVersionNumber', versionRow.VersionNumber);
                     meta.set('baseVersionId', versionRow.ID);
-                    meta.set('baseContent', versionTargetText);
+                    if (meta.has('baseContent')) {
+                        meta.delete('baseContent');
+                    }
                 }, 'hydrate');
+                const resolvedHydrateMerge = hydrateMergeResult as ConcurrentDocumentMergeResult | null;
+                if (!isStructuredSlideOrSheet && resolvedHydrateMerge?.HadConflict) {
+                    if (room.Connections.size > 0) {
+                        this.broadcastControlFrame(room, {
+                            action: 'merge-conflict',
+                            versionId: versionRow.ID,
+                            rejectedHunkCount: resolvedHydrateMerge.RejectedAgentHunks.length,
+                            roomEpoch: room.RoomEpoch
+                        });
+                    } else {
+                        room.PendingHydrateConflict = {
+                            VersionID: versionRow.ID,
+                            RejectedHunkCount: resolvedHydrateMerge.RejectedAgentHunks.length,
+                            RoomEpoch: room.RoomEpoch
+                        };
+                    }
+                }
                 if (this.extractRoomSerializedContent(room.Doc) !== versionTargetText) {
                     room.DirtyVersion = true;
                 }
@@ -2748,7 +3112,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     meta.set('versionId', versionRow.ID);
                     meta.set('baseVersionNumber', versionRow.VersionNumber);
                     meta.set('baseVersionId', versionRow.ID);
-                    meta.set('baseContent', versionTargetText);
+                    if (meta.has('baseContent')) {
+                        meta.delete('baseContent');
+                        seededOrUpdatedWorkingState = true;
+                    }
                     if (!existingEpoch) {
                         meta.set('roomEpoch', nextEpoch);
                     }
@@ -2759,8 +3126,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionID = versionRow.ID;
                 room.BaseVersionNumber = versionRow.VersionNumber;
                 room.BaseVersionText = versionTargetText;
+                const postHydrateText = this.extractRoomSerializedContent(room.Doc);
+                room.LastCompactedStateVector =
+                    postHydrateText === versionTargetText ? Y.encodeStateVector(room.Doc) : null;
             } else {
                 room.BaseVersionText = this.extractRoomSerializedContent(room.Doc);
+                room.LastCompactedStateVector = null;
             }
 
             return { overwriteStaleWorkingState: seededOrUpdatedWorkingState };
@@ -2807,6 +3178,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             versionNumber: versionNumber,
             roomEpoch: roomEpoch
         });
+
+        if (room.PendingHydrateConflict && room.PendingHydrateConflict.RoomEpoch === room.RoomEpoch) {
+            const pendingConflict = room.PendingHydrateConflict;
+            room.PendingHydrateConflict = null;
+            this.sendControlFrame(ws, {
+                action: 'merge-conflict',
+                versionId: pendingConflict.VersionID,
+                rejectedHunkCount: pendingConflict.RejectedHunkCount,
+                roomEpoch: pendingConflict.RoomEpoch
+            });
+        }
 
         // 2. Send Yjs Sync Step 1 + Sync Step 2 (full current state so client is immediately synchronized)
         const syncStep1Encoder = encoding.createEncoder();
@@ -3157,18 +3539,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Y.applyUpdate(room.Doc, updateBytes, 'relay');
             }
         } else if (msg.MessageType === 'sync-request') {
-            // Always broadcast full Y.Doc state (including DeleteSet) + content hash on sync-state
-            const fullUpdate = Y.encodeStateAsUpdate(room.Doc);
-            if (fullUpdate.byteLength > 0) {
-                const currentHash = this.computeSha256Hex(this.extractRoomSerializedContent(room.Doc));
+            const reqSvBytes = msg.PayloadBase64 ? this.decodeStrictBase64Bytes(msg.PayloadBase64) : null;
+            const diffUpdate =
+                reqSvBytes && reqSvBytes.byteLength > 0
+                    ? this.encodeSafeDeltaUpdate(room.Doc, reqSvBytes)
+                    : Y.encodeStateAsUpdate(room.Doc);
+            if (diffUpdate.byteLength > 0) {
                 try {
                     await this._relay.PublishToRoom({
                         ArtifactID: room.ArtifactID,
                         MessageType: 'sync-state',
-                        PayloadBase64: JSON.stringify({
-                            savedDocUpdateB64: BytesToBase64(fullUpdate),
-                            savedContentHash: currentHash
-                        })
+                        PayloadBase64: BytesToBase64(diffUpdate)
                     });
                 } catch (err) {
                     LogError(
@@ -3180,10 +3561,18 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         } else if (msg.MessageType === 'sync-state' && msg.PayloadBase64) {
             const parsedSync = this.parseSyncStateRelayPayload(msg.PayloadBase64);
-            if (parsedSync.updateBytes.byteLength > 0) {
-                Y.applyUpdate(room.Doc, parsedSync.updateBytes, 'collab-relay');
+            if (parsedSync.updateBytes && parsedSync.updateBytes.byteLength > 0) {
+                try {
+                    Y.applyUpdate(room.Doc, parsedSync.updateBytes, 'collab-relay');
+                    this.resolvePendingSyncWaiters(room.ArtifactID, true);
+                } catch (err) {
+                    LogError(
+                        `ArtifactCollaborationServer sync-state Y.applyUpdate failed for '${room.ArtifactID}': ${
+                            err instanceof Error ? err.message : String(err)
+                        }`
+                    );
+                }
             }
-            this.resolvePendingSyncWaiters(room.ArtifactID, true);
         } else if (msg.MessageType === 'awareness' && msg.PayloadBase64) {
             const awarenessBytes = Base64ToBytes(msg.PayloadBase64);
             if (awarenessBytes.byteLength > 0) {
@@ -3195,19 +3584,55 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const relayPayload = this.parseVersionSavedRelayPayload(msg.PayloadBase64);
             let crdtSynced = false;
 
-            if (relayPayload.savedDocUpdateB64) {
-                const updateBytes = Base64ToBytes(relayPayload.savedDocUpdateB64);
-                if (updateBytes.byteLength > 0) {
-                    Y.applyUpdate(room.Doc, updateBytes, 'collab-relay');
+            const prevSvBytes = relayPayload.prevStateVectorB64
+                ? this.decodeStrictBase64Bytes(relayPayload.prevStateVectorB64)
+                : null;
+            const canApplyInlineDelta = Boolean(
+                relayPayload.savedDocUpdateB64 &&
+                    (!relayPayload.prevStateVectorB64 ||
+                        (prevSvBytes && this.DoesDocContainStateVector(room.Doc, prevSvBytes)))
+            );
+
+            if (canApplyInlineDelta && relayPayload.savedDocUpdateB64) {
+                const updateBytes = this.decodeStrictBase64Bytes(relayPayload.savedDocUpdateB64);
+                if (updateBytes && updateBytes.byteLength > 0) {
+                    try {
+                        Y.applyUpdate(room.Doc, updateBytes, 'collab-relay');
+                        crdtSynced = true;
+                    } catch (err) {
+                        LogError(
+                            `ArtifactCollaborationServer version-saved inline update failed for '${room.ArtifactID}': ${
+                                err instanceof Error ? err.message : String(err)
+                            }`
+                        );
+                    }
+                } else if (updateBytes && updateBytes.byteLength === 0) {
+                    crdtSynced = true;
                 }
-                crdtSynced = true;
-            } else {
+
+                if (crdtSynced && relayPayload.savedSnapshotB64) {
+                    const snapBytes = this.decodeStrictBase64Bytes(relayPayload.savedSnapshotB64);
+                    if (!snapBytes || !this.doesDocSatisfySnapshot(room.Doc, snapBytes)) {
+                        crdtSynced = false;
+                    }
+                }
+            }
+
+            if (!crdtSynced) {
+                const targetSvBytes = relayPayload.savedStateVectorB64
+                    ? this.decodeStrictBase64Bytes(relayPayload.savedStateVectorB64)
+                    : null;
+                const targetSnapBytes = relayPayload.savedSnapshotB64
+                    ? this.decodeStrictBase64Bytes(relayPayload.savedSnapshotB64)
+                    : null;
+
                 const missingStateVector = Boolean(
                     relayPayload.savedStateVectorB64 &&
-                        !this.DoesDocContainStateVector(
-                            room.Doc,
-                            Base64ToBytes(relayPayload.savedStateVectorB64)
-                        )
+                        (!targetSvBytes || !this.DoesDocContainStateVector(room.Doc, targetSvBytes))
+                );
+                const missingSnapshotDeletes = Boolean(
+                    relayPayload.savedSnapshotB64 &&
+                        (!targetSnapBytes || !this.doesDocSatisfySnapshot(room.Doc, targetSnapBytes))
                 );
                 const cleanRoomHashDiffers = Boolean(
                     relayPayload.savedContentHash &&
@@ -3215,8 +3640,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         this.computeSha256Hex(this.extractRoomSerializedContent(room.Doc)) !==
                             relayPayload.savedContentHash
                 );
-                if (missingStateVector || cleanRoomHashDiffers) {
-                    const syncWaiter = this.createPendingSyncWaiter(room.ArtifactID, 300);
+
+                if (missingStateVector || missingSnapshotDeletes || cleanRoomHashDiffers) {
+                    const syncWaiter = this.createPendingSyncWaiter(
+                        room.ArtifactID,
+                        ArtifactCollaborationServer.SYNC_WAIT_TIMEOUT_MS
+                    );
                     try {
                         await this._relay.PublishToRoom({
                             ArtifactID: room.ArtifactID,
@@ -3232,6 +3661,26 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         );
                     }
                     crdtSynced = await syncWaiter.promise;
+
+                    if (crdtSynced) {
+                        const svOk =
+                            !relayPayload.savedStateVectorB64 ||
+                            Boolean(targetSvBytes && this.DoesDocContainStateVector(room.Doc, targetSvBytes));
+                        const snapOk =
+                            !relayPayload.savedSnapshotB64 ||
+                            Boolean(targetSnapBytes && this.doesDocSatisfySnapshot(room.Doc, targetSnapBytes));
+                        if (!svOk || !snapOk) {
+                            crdtSynced = false;
+                        }
+                    }
+
+                    if (!crdtSynced) {
+                        crdtSynced = await this.tryCatchUpRoomFromPersistedWorkingState(
+                            room,
+                            relayPayload.savedStateVectorB64,
+                            relayPayload.savedSnapshotB64
+                        );
+                    }
                 }
             }
 
@@ -3241,11 +3690,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     originServerId: msg.OriginInstanceID,
                     relayVersionId: msg.VersionID,
                     savedStateVectorB64: relayPayload.savedStateVectorB64,
+                    savedSnapshotB64: relayPayload.savedSnapshotB64,
                     savedContentHash: relayPayload.savedContentHash,
                     crdtSynced
                 });
             } else {
                 room.DirtyVersion = false;
+                room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
                 this.broadcastControlFrame(room, {
                     action: 'version-saved',
                     versionId: msg.VersionID,
@@ -3357,6 +3808,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private teardownRoomResources(room: CollaborationRoom): void {
         room.PreOutOfBandDocState = null;
+        room.LastCompactedStateVector = null;
+        room.PendingHydrateConflict = null;
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
             room.IdleDisposeTimer = null;
@@ -3440,28 +3893,56 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     }
 
     /**
-     * Performs a 3-way logical-line merge of concurrent `liveDocText` (human) and `incomingText`
-     * (agent / out-of-band DB version) against `baseText` (`R6-4`, `R6-7`).
-     *
-     * Tokenizes into newline-terminated logical lines (`[^\n]*\n|[^\n]+`, with zero phantom trailing
-     * `''` anchor) and aligns by line body so pure human insertions at the start or end of a 1-line
-     * document (with or without a trailing `\n`) and human edits overlapping full agent rewrites
-     * survive cleanly without resurrecting stale `baseText` lines.
+     * Performs a 3-way merge of concurrent `liveDocText` (human) and `incomingText`
+     * (agent / out-of-band DB version) against `baseText`, returning `.MergedText` (`R6-4`, `R6-7`, `R7-5`).
      */
     public MergeConcurrentDocumentEdits(
         baseText: string,
         liveDocText: string,
         incomingText: string
     ): string {
+        return this.MergeConcurrentDocumentEditsDetailed(baseText, liveDocText, incomingText).MergedText;
+    }
+
+    /**
+     * Performs a 3-way merge of concurrent `liveDocText` (human) and `incomingText`
+     * (agent / out-of-band DB version) against `baseText` with detailed conflict reporting (`R7-5`).
+     *
+     * Rules:
+     * 1. **Structured JSON / Whiteboard payloads**: Never merged line-by-line. Plain JSON objects use
+     *    a recursive 3-way key-level structural merge (live edit wins on conflicting scalar/array keys);
+     *    top-level JSON arrays or object/array mismatches resolve to `liveDocText` (`HadConflict: true`),
+     *    guaranteeing 100% valid JSON.
+     * 2. **Text / Markdown payloads**:
+     *    - Pure insertions (`oldStart === oldEnd`) are never conflicts (`HadConflict: false`); both
+     *      sides' edits and inserted paragraphs are preserved in order.
+     *    - Partial human edits inside a 1:1 line-preserving agent rewrite (`R2`) rebase positionally
+     *      onto the agent's lines while recording any overwritten agent lines in `RejectedAgentHunks`.
+     *    - All other overlapping conflict clusters (`A9`, `A11`, `A2`, `S2`, `A14`) follow a single
+     *      consistent rule: **live edit wins** (`humanClusterTokens` emitted, zero duplicate lines) and
+     *      the rejected `agentClusterTokens` slice is recorded in `RejectedAgentHunks` (`HadConflict: true`).
+     */
+    public MergeConcurrentDocumentEditsDetailed(
+        baseText: string,
+        liveDocText: string,
+        incomingText: string
+    ): ConcurrentDocumentMergeResult {
         if (liveDocText === baseText) {
-            return incomingText;
+            return { MergedText: incomingText, HadConflict: false, RejectedAgentHunks: [] };
         }
         if (incomingText === baseText) {
-            return liveDocText;
+            return { MergedText: liveDocText, HadConflict: false, RejectedAgentHunks: [] };
         }
         if (liveDocText === incomingText) {
-            return incomingText;
+            return { MergedText: incomingText, HadConflict: false, RejectedAgentHunks: [] };
         }
+
+        const structuredMerge = this.tryMergeStructuredJsonEdits(baseText, liveDocText, incomingText);
+        if (structuredMerge !== null) {
+            return structuredMerge;
+        }
+
+        const rejectedHunks: RejectedAgentMergeHunk[] = [];
 
         const baseTokens = this.tokenizeLogicalLines(baseText);
         const liveTokens = this.tokenizeLogicalLines(liveDocText);
@@ -3650,50 +4131,113 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     (acc, hk) => acc + (hk.oldEnd - hk.oldStart),
                     0
                 );
+                const humanOnlyPureInsertions = clusterH.every((hk) => hk.oldStart === hk.oldEnd);
+                const agentOnlyPureInsertions = clusterA.every((ak) => ak.oldStart === ak.oldEnd);
+                const isOneToOneAgentRewrite =
+                    clusterA.length === 1 &&
+                    clusterA[0].oldStart === clusterStart &&
+                    clusterA[0].oldEnd === clusterEnd &&
+                    agentClusterTokens.length === clusterSpan;
 
                 if (humanJoined === agentJoined) {
                     for (const tok of humanClusterTokens) {
                         emitLine(tok.raw);
                     }
-                } else if (
-                    clusterA.length === 1 &&
-                    clusterA[0].oldStart === clusterStart &&
-                    clusterA[0].oldEnd === clusterEnd &&
-                    agentClusterTokens.length === clusterSpan &&
-                    humanTouchedSpan < clusterSpan
-                ) {
-                    // 1:1 line-preserving agent rewrite (e.g. R2): rebase human's hunks positionally
-                    // onto `agentClusterTokens` so human edits survive in place and zero base lines revive.
+                } else if (humanOnlyPureInsertions) {
+                    // Pure human insertions inside an agent-edited cluster (e.g. WD2/WD3): NOT a conflict!
+                    if (isOneToOneAgentRewrite) {
+                        const rebased = applyClusterHunks(clusterH, liveTokens, agentClusterTokens);
+                        for (const tok of rebased) {
+                            emitLine(tok.raw);
+                        }
+                    } else {
+                        for (const hk of clusterH) {
+                            if (hk.oldStart === clusterStart) {
+                                for (let k = hk.newStart; k < hk.newEnd; k++) {
+                                    emitLine(liveTokens[k].raw);
+                                }
+                            }
+                        }
+                        for (const tok of agentClusterTokens) {
+                            emitLine(tok.raw);
+                        }
+                        for (const hk of clusterH) {
+                            if (hk.oldStart > clusterStart) {
+                                for (let k = hk.newStart; k < hk.newEnd; k++) {
+                                    emitLine(liveTokens[k].raw);
+                                }
+                            }
+                        }
+                    }
+                } else if (agentOnlyPureInsertions) {
+                    // Pure agent insertions inside a human-edited cluster: NOT a conflict!
+                    const isOneToOneHumanRewrite =
+                        clusterH.length === 1 &&
+                        clusterH[0].oldStart === clusterStart &&
+                        clusterH[0].oldEnd === clusterEnd &&
+                        humanClusterTokens.length === clusterSpan;
+                    if (isOneToOneHumanRewrite) {
+                        const rebased = applyClusterHunks(clusterA, incomingTokens, humanClusterTokens);
+                        for (const tok of rebased) {
+                            emitLine(tok.raw);
+                        }
+                    } else {
+                        for (const ak of clusterA) {
+                            if (ak.oldStart === clusterStart) {
+                                for (let k = ak.newStart; k < ak.newEnd; k++) {
+                                    emitLine(incomingTokens[k].raw);
+                                }
+                            }
+                        }
+                        for (const tok of humanClusterTokens) {
+                            emitLine(tok.raw);
+                        }
+                        for (const ak of clusterA) {
+                            if (ak.oldStart > clusterStart) {
+                                for (let k = ak.newStart; k < ak.newEnd; k++) {
+                                    emitLine(incomingTokens[k].raw);
+                                }
+                            }
+                        }
+                    }
+                } else if (isOneToOneAgentRewrite && humanTouchedSpan < clusterSpan) {
+                    // 1:1 line-preserving agent rewrite with partial human touch (e.g. R2): rebase human's
+                    // hunks positionally onto `agentClusterTokens` AND record any overwritten agent lines!
                     const rebased = applyClusterHunks(clusterH, liveTokens, agentClusterTokens);
                     for (const tok of rebased) {
                         emitLine(tok.raw);
                     }
-                } else if (clusterSpan < baseTokens.length && humanTouchedSpan === clusterSpan) {
-                    // Localized conflict on the same line/sub-span of a larger doc: keep human's edit.
-                    for (const tok of humanClusterTokens) {
-                        emitLine(tok.raw);
-                    }
-                } else {
-                    // Whole-doc or line-count-changing rewrite overlapping human edits: emit agent's
-                    // replacement and preserve any non-blank human-authored lines not in base or agent.
-                    for (const tok of agentClusterTokens) {
-                        emitLine(tok.raw);
-                    }
-                    const baseBodySet = new Set(baseClusterSlice.map((t) => t.body));
-                    const agentBodySet = new Set(agentClusterTokens.map((t) => t.body));
                     for (const hk of clusterH) {
-                        for (let k = hk.newStart; k < hk.newEnd; k++) {
-                            const hTok = liveTokens[k];
-                            if (
-                                hTok.body.trim().length > 0 &&
-                                !baseBodySet.has(hTok.body) &&
-                                !agentBodySet.has(hTok.body)
-                            ) {
-                                emitLine(hTok.raw);
-                                agentBodySet.add(hTok.body);
+                        if (hk.oldEnd > hk.oldStart) {
+                            const baseSlice = baseTokens.slice(hk.oldStart, hk.oldEnd);
+                            const agentSlice = agentClusterTokens.slice(
+                                hk.oldStart - clusterStart,
+                                hk.oldEnd - clusterStart
+                            );
+                            const liveSlice = liveTokens.slice(hk.newStart, hk.newEnd);
+                            const baseBodyJoin = baseSlice.map((t) => t.body).join('\n');
+                            const agentBodyJoin = agentSlice.map((t) => t.body).join('\n');
+                            const liveBodyJoin = liveSlice.map((t) => t.body).join('\n');
+                            if (agentBodyJoin !== baseBodyJoin && agentBodyJoin !== liveBodyJoin) {
+                                rejectedHunks.push({
+                                    BaseText: baseSlice.map((t) => t.raw).join(''),
+                                    LiveText: liveSlice.map((t) => t.raw).join(''),
+                                    RejectedIncomingText: agentSlice.map((t) => t.raw).join('')
+                                });
                             }
                         }
                     }
+                } else {
+                    // Consistent conflict rule across A9, A11, A2, S2, A14: live edit wins on conflicting
+                    // modified clusters (never append duplicate human lines after agent lines!) and record conflict.
+                    for (const tok of humanClusterTokens) {
+                        emitLine(tok.raw);
+                    }
+                    rejectedHunks.push({
+                        BaseText: baseClusterSlice.map((t) => t.raw).join(''),
+                        LiveText: humanClusterTokens.map((t) => t.raw).join(''),
+                        RejectedIncomingText: agentClusterTokens.map((t) => t.raw).join('')
+                    });
                 }
             }
 
@@ -3708,33 +4252,222 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             basePos = clusterEnd;
         }
 
-        return emitted.join('');
+        return {
+            MergedText: emitted.join(''),
+            HadConflict: rejectedHunks.length > 0,
+            RejectedAgentHunks: rejectedHunks
+        };
+    }
+
+    private tryMergeStructuredJsonEdits(
+        baseText: string,
+        liveDocText: string,
+        incomingText: string
+    ): ConcurrentDocumentMergeResult | null {
+        type JsonPrimitive = string | number | boolean | null;
+        type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+        interface JsonObject {
+            [key: string]: JsonValue;
+        }
+
+        const liveTrim = liveDocText.trim();
+        const incomingTrim = incomingText.trim();
+        const baseTrim = baseText.trim();
+
+        const looksLikeStructuredJson = (trimmed: string): boolean =>
+            trimmed.startsWith('{') || trimmed.startsWith('[');
+
+        if (
+            !looksLikeStructuredJson(liveTrim) ||
+            !looksLikeStructuredJson(incomingTrim) ||
+            (baseTrim.length > 0 && !looksLikeStructuredJson(baseTrim))
+        ) {
+            return null;
+        }
+
+        let liveVal: JsonValue;
+        let incomingVal: JsonValue;
+        let baseVal: JsonValue;
+        try {
+            liveVal = JSON.parse(liveTrim) as JsonValue;
+            incomingVal = JSON.parse(incomingTrim) as JsonValue;
+            baseVal = baseTrim.length === 0 ? {} : (JSON.parse(baseTrim) as JsonValue);
+        } catch {
+            return null;
+        }
+
+        const isStructuredContainer = (val: JsonValue): val is JsonObject | JsonValue[] =>
+            typeof val === 'object' && val !== null;
+        if (
+            !isStructuredContainer(liveVal) ||
+            !isStructuredContainer(incomingVal) ||
+            !isStructuredContainer(baseVal)
+        ) {
+            return null;
+        }
+
+        const isPlainObject = (val: JsonValue): val is JsonObject =>
+            typeof val === 'object' && val !== null && !Array.isArray(val);
+
+        if (!isPlainObject(liveVal) || !isPlainObject(incomingVal) || !isPlainObject(baseVal)) {
+            // Top-level JSON array or object/array mismatch: live edit wins cleanly to preserve valid JSON!
+            return {
+                MergedText: liveDocText,
+                HadConflict: true,
+                RejectedAgentHunks: [
+                    {
+                        BaseText: baseText,
+                        LiveText: liveDocText,
+                        RejectedIncomingText: incomingText
+                    }
+                ]
+            };
+        }
+
+        const canonicalStringify = (val: JsonValue): string => {
+            if (Array.isArray(val)) {
+                return `[${val.map(canonicalStringify).join(',')}]`;
+            }
+            if (isPlainObject(val)) {
+                const sortedKeys = Object.keys(val).sort();
+                return `{${sortedKeys
+                    .map((k) => `${JSON.stringify(k)}:${canonicalStringify(val[k])}`)
+                    .join(',')}}`;
+            }
+            return JSON.stringify(val);
+        };
+
+        const valuesEqual = (
+            a: JsonValue | undefined,
+            hasA: boolean,
+            b: JsonValue | undefined,
+            hasB: boolean
+        ): boolean => {
+            if (!hasA && !hasB) {
+                return true;
+            }
+            if (hasA !== hasB) {
+                return false;
+            }
+            return canonicalStringify(a as JsonValue) === canonicalStringify(b as JsonValue);
+        };
+
+        const rejectedHunks: RejectedAgentMergeHunk[] = [];
+        const hasOwn = (obj: JsonObject, key: string): boolean =>
+            Object.prototype.hasOwnProperty.call(obj, key);
+
+        const mergePlainObjects = (
+            baseObj: JsonObject,
+            liveObj: JsonObject,
+            incObj: JsonObject
+        ): JsonObject => {
+            const orderedKeys: string[] = [];
+            const seen = new Set<string>();
+            for (const k of Object.keys(liveObj)) {
+                if (!seen.has(k)) {
+                    seen.add(k);
+                    orderedKeys.push(k);
+                }
+            }
+            for (const k of Object.keys(incObj)) {
+                if (!seen.has(k)) {
+                    seen.add(k);
+                    orderedKeys.push(k);
+                }
+            }
+            for (const k of Object.keys(baseObj)) {
+                if (!seen.has(k)) {
+                    seen.add(k);
+                    orderedKeys.push(k);
+                }
+            }
+
+            const merged: JsonObject = {};
+            for (const k of orderedKeys) {
+                const inBase = hasOwn(baseObj, k);
+                const inLive = hasOwn(liveObj, k);
+                const inInc = hasOwn(incObj, k);
+
+                const liveUnchanged = valuesEqual(liveObj[k], inLive, baseObj[k], inBase);
+                const incUnchanged = valuesEqual(incObj[k], inInc, baseObj[k], inBase);
+
+                if (liveUnchanged) {
+                    if (inInc) {
+                        merged[k] = incObj[k];
+                    }
+                } else if (incUnchanged) {
+                    if (inLive) {
+                        merged[k] = liveObj[k];
+                    }
+                } else if (valuesEqual(liveObj[k], inLive, incObj[k], inInc)) {
+                    if (inLive) {
+                        merged[k] = liveObj[k];
+                    }
+                } else if (inLive && inInc && isPlainObject(liveObj[k]) && isPlainObject(incObj[k])) {
+                    const nestedBase =
+                        inBase && isPlainObject(baseObj[k]) ? (baseObj[k] as JsonObject) : {};
+                    merged[k] = mergePlainObjects(
+                        nestedBase,
+                        liveObj[k] as JsonObject,
+                        incObj[k] as JsonObject
+                    );
+                } else {
+                    if (inLive) {
+                        merged[k] = liveObj[k];
+                    }
+                    rejectedHunks.push({
+                        BaseText: inBase ? JSON.stringify({ [k]: baseObj[k] }) : '',
+                        LiveText: inLive ? JSON.stringify({ [k]: liveObj[k] }) : '',
+                        RejectedIncomingText: inInc ? JSON.stringify({ [k]: incObj[k] }) : ''
+                    });
+                }
+            }
+            return merged;
+        };
+
+        const mergedRoot = mergePlainObjects(baseVal, liveVal, incomingVal);
+        const prettyFormatted = liveTrim.includes('\n');
+        const trailingNewline = liveDocText.endsWith('\r\n')
+            ? '\r\n'
+            : liveDocText.endsWith('\n')
+              ? '\n'
+              : '';
+        const serialized =
+            (prettyFormatted ? JSON.stringify(mergedRoot, null, 2) : JSON.stringify(mergedRoot)) +
+            trailingNewline;
+
+        return {
+            MergedText: serialized,
+            HadConflict: rejectedHunks.length > 0,
+            RejectedAgentHunks: rejectedHunks
+        };
     }
 
     /**
      * Transitions `yText` from `currentText` (`yText.toString()`) to `targetText` (or the 3-way merged
      * result when `baselineText` is provided) using minimal prefix/suffix/hunk Yjs CRDT operations so
-     * untouched paragraphs retain their Yjs item IDs (`clientID, clock`) (`Blocker 1`, `Blocker 2`, `R6-4`).
+     * untouched paragraphs retain their Yjs item IDs (`clientID, clock`) (`Blocker 1`, `Blocker 2`, `R6-4`, `R7-5`).
      */
     private applyMinimalTextDiff(
         yText: Y.Text,
         currentText: string,
         targetText: string,
         baselineText?: string
-    ): void {
-        const resolvedTarget =
+    ): ConcurrentDocumentMergeResult | null {
+        const mergeResult =
             typeof baselineText === 'string'
-                ? this.MergeConcurrentDocumentEdits(baselineText, currentText, targetText)
-                : targetText;
+                ? this.MergeConcurrentDocumentEditsDetailed(baselineText, currentText, targetText)
+                : null;
+        const resolvedTarget = mergeResult ? mergeResult.MergedText : targetText;
         if (currentText === resolvedTarget) {
-            return;
+            return mergeResult;
         }
 
         const oldLines = this.splitTextIntoLineTokens(currentText);
         const newLines = this.splitTextIntoLineTokens(resolvedTarget);
         const hunks = this.computeLineReplacementHunks(oldLines, newLines);
         if (hunks.length === 0) {
-            return;
+            return mergeResult;
         }
 
         const oldLineOffsets: number[] = new Array<number>(oldLines.length + 1);
@@ -3756,6 +4489,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 yText.insert(refined.start, refined.insertText);
             }
         }
+        return mergeResult;
     }
 
     private tokenizeLogicalLines(text: string): Array<{ raw: string; body: string; eol: string }> {

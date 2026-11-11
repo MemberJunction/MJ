@@ -1,11 +1,14 @@
+import vm from 'node:vm';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import {
     CompileSafeUserRegex,
     FormatCellAddress,
+    GetSafeRegexSandboxExecutor,
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    RegisterSafeRegexSandboxExecutor,
     SafeRegexSearchDetailed,
     SpreadsheetCalculatedColumnSpec,
     SpreadsheetCellFormatType,
@@ -28,6 +31,42 @@ const SEARCH_MATCH_LIMIT = 100;
 const TOOL_REGEX_BUDGET_MS = 50;
 const PER_CELL_REGEX_MAX_MS = 15;
 const MAX_REGEX_INPUT_BYTES = 65_536;
+const MAX_REPORTED_UNSEARCHABLE_CELLS = 25;
+const REGEX_METACHAR_PATTERN = /[\\^$.|?*+()[\]{}]/;
+
+const VM_SHEET_REGEX_STATE: { rx: RegExp; s: string } = { rx: /(?:)/, s: '' };
+const VM_SHEET_REGEX_CONTEXT = vm.createContext(VM_SHEET_REGEX_STATE);
+const VM_SHEET_REGEX_SCRIPT = new vm.Script('rx.test(s)');
+
+function ensureNodeVmSafeRegexExecutorRegistered(): void {
+    if (GetSafeRegexSandboxExecutor()) {
+        return;
+    }
+    RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
+        regex.lastIndex = 0;
+        VM_SHEET_REGEX_STATE.rx = regex;
+        VM_SHEET_REGEX_STATE.s = input;
+        try {
+            const matched = Boolean(
+                VM_SHEET_REGEX_SCRIPT.runInContext(VM_SHEET_REGEX_CONTEXT, {
+                    timeout: Math.max(1, Math.ceil(maxDurationMs))
+                })
+            );
+            return { Matched: matched, TimedOut: false };
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
+            if (errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out')) {
+                return { Matched: false, TimedOut: true };
+            }
+            throw err;
+        } finally {
+            VM_SHEET_REGEX_STATE.s = '';
+        }
+    });
+}
+
+ensureNodeVmSafeRegexExecutorRegistered();
 
 export interface UnsearchableSpreadsheetCell {
     sheet: string;
@@ -305,20 +344,20 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'search_cells',
                 description:
-                    'Case-insensitive plain-text search (default) or regex search (when use_regex is true) across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
+                    'Case-insensitive regular expression search (default, with fast plain-text path when query has no regex metacharacters) or literal substring search (when use_regex is false) across all cells. Optionally scope to a single sheet. Returns up to 100 matches.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'Case-insensitive substring or regex pattern to search for' },
+                        query: { type: 'string', description: 'Case-insensitive regex pattern or plain-text substring to search for' },
                         sheet: { type: 'string', description: 'Optional sheet name or SheetID to limit search scope' },
                         use_regex: {
                             type: 'boolean',
                             description:
-                                'Optional (default false): set true to evaluate query as a regular expression; leave false for fast plain-text search with no 64 KB cap.'
+                                'Optional (default true): evaluate query as a regular expression; set false for literal plain-text search with no 64 KB cap.'
                         },
                         useRegex: {
                             type: 'boolean',
-                            description: 'Alias for use_regex (default false).'
+                            description: 'Alias for use_regex (default true).'
                         }
                     },
                     required: ['query']
@@ -1020,6 +1059,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         workbook: WorkbookSpec,
         input: Record<string, unknown>
     ): ArtifactToolResult {
+        ensureNodeVmSafeRegexExecutorRegistered();
         const engine = SpreadsheetEngine.Instance;
         engine.EvaluateWorkbook(workbook);
         const query = typeof input.query === 'string' ? input.query : '';
@@ -1027,23 +1067,32 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             return this.errorResult('Parameter "query" is required.');
         }
 
-        const useRegex = input.use_regex === true || input.useRegex === true;
+        const explicitLiteral = input.use_regex === false || input.useRegex === false;
+        const explicitRegex = input.use_regex === true || input.useRegex === true;
+        const hasRegexMeta = REGEX_METACHAR_PATTERN.test(query);
+
         let regex: RegExp | null = null;
-        if (useRegex) {
+        if (!explicitLiteral && (explicitRegex || hasRegexMeta)) {
             if (query.length > 256) {
                 return this.errorResult('Unsafe or overly complex regular expression rejected');
             }
+            let validSyntax = true;
             try {
                 new RegExp(query, 'i');
             } catch {
-                return this.errorResult(`Invalid regex pattern: "${query}".`);
+                if (explicitRegex) {
+                    return this.errorResult(`Invalid regex pattern: "${query}".`);
+                }
+                validSyntax = false;
             }
-            regex = CompileSafeUserRegex(query, 'i');
-            if (!regex || !IsSafeUserRegex(query, 'i')) {
-                return this.errorResult('Unsafe or overly complex regular expression rejected');
+            if (validSyntax) {
+                regex = CompileSafeUserRegex(query, 'i');
+                if (!regex || !IsSafeUserRegex(query, 'i')) {
+                    return this.errorResult('Unsafe or overly complex regular expression rejected');
+                }
             }
         }
-        const literalNeedle = useRegex ? '' : query.toLowerCase();
+        const literalNeedle = regex ? '' : query.toLowerCase();
 
         const sheetScope = input.sheet ?? input.sheetName;
         let targetSheets: WorksheetSpec[];
@@ -1059,7 +1108,29 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
 
         const matches: Array<{ sheet: string; cell: string; value: string }> = [];
         const unsearchableCells: UnsearchableSpreadsheetCell[] = [];
-        const regexDeadline = useRegex ? performance.now() + TOOL_REGEX_BUDGET_MS : 0;
+        let tooLongCount = 0;
+        let timeoutCount = 0;
+        let budgetExpired = false;
+        const regexDeadline = regex ? performance.now() + TOOL_REGEX_BUDGET_MS : 0;
+
+        const recordUnsearchableCell = (
+            sheetName: string,
+            cellAddr: string,
+            reason: UnsearchableSpreadsheetCell['reason']
+        ): void => {
+            if (reason === 'exceeds_64kb_regex_limit') {
+                tooLongCount++;
+            } else {
+                timeoutCount++;
+            }
+            if (unsearchableCells.length < MAX_REPORTED_UNSEARCHABLE_CELLS) {
+                unsearchableCells.push({
+                    sheet: sheetName,
+                    cell: cellAddr,
+                    reason
+                });
+            }
+        };
 
         for (const ws of targetSheets) {
             if (matches.length >= SEARCH_MATCH_LIMIT) break;
@@ -1090,13 +1161,15 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     continue;
                 }
 
+                if (budgetExpired) {
+                    recordUnsearchableCell(ws.Name, cell.Address, 'regex_timeout');
+                    continue;
+                }
+
                 const remainingMs = regexDeadline - performance.now();
                 if (remainingMs <= 0) {
-                    unsearchableCells.push({
-                        sheet: ws.Name,
-                        cell: cell.Address,
-                        reason: 'regex_timeout'
-                    });
+                    budgetExpired = true;
+                    recordUnsearchableCell(ws.Name, cell.Address, 'regex_timeout');
                     continue;
                 }
 
@@ -1115,30 +1188,19 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                     continue;
                 }
                 if (res1.InputTooLong) {
-                    unsearchableCells.push({
-                        sheet: ws.Name,
-                        cell: cell.Address,
-                        reason: 'exceeds_64kb_regex_limit'
-                    });
+                    recordUnsearchableCell(ws.Name, cell.Address, 'exceeds_64kb_regex_limit');
                     continue;
                 }
                 if (res1.TimedOut) {
-                    unsearchableCells.push({
-                        sheet: ws.Name,
-                        cell: cell.Address,
-                        reason: 'regex_timeout'
-                    });
+                    recordUnsearchableCell(ws.Name, cell.Address, 'regex_timeout');
                     continue;
                 }
 
                 if (rawStr !== text) {
                     const remainingMs2 = regexDeadline - performance.now();
                     if (remainingMs2 <= 0) {
-                        unsearchableCells.push({
-                            sheet: ws.Name,
-                            cell: cell.Address,
-                            reason: 'regex_timeout'
-                        });
+                        budgetExpired = true;
+                        recordUnsearchableCell(ws.Name, cell.Address, 'regex_timeout');
                         continue;
                     }
                     const res2 = SafeRegexSearchDetailed(
@@ -1154,25 +1216,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                             value: text
                         });
                     } else if (res2.InputTooLong) {
-                        unsearchableCells.push({
-                            sheet: ws.Name,
-                            cell: cell.Address,
-                            reason: 'exceeds_64kb_regex_limit'
-                        });
+                        recordUnsearchableCell(ws.Name, cell.Address, 'exceeds_64kb_regex_limit');
                     } else if (res2.TimedOut) {
-                        unsearchableCells.push({
-                            sheet: ws.Name,
-                            cell: cell.Address,
-                            reason: 'regex_timeout'
-                        });
+                        recordUnsearchableCell(ws.Name, cell.Address, 'regex_timeout');
                     }
                 }
             }
         }
 
+        const unsearchableCount = tooLongCount + timeoutCount;
         const warnings: string[] = [];
-        const tooLongCount = unsearchableCells.filter((u) => u.reason === 'exceeds_64kb_regex_limit').length;
-        const timeoutCount = unsearchableCells.filter((u) => u.reason === 'regex_timeout').length;
         if (tooLongCount > 0) {
             warnings.push(
                 `${tooLongCount} cell(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily large cells.`
@@ -1183,10 +1236,16 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 `${timeoutCount} cell(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
             );
         }
+        if (unsearchableCount > unsearchableCells.length) {
+            warnings.push(
+                `Showing first ${unsearchableCells.length} of ${unsearchableCount} unsearchable cell(s) in unsearchableCells.`
+            );
+        }
 
         return this.successResult({
             matches,
-            unsearchableCount: unsearchableCells.length,
+            ...(unsearchableCount > 0 ? { partial: true, timedOut: timeoutCount > 0 } : {}),
+            unsearchableCount,
             unsearchableCells,
             warnings
         });

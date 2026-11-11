@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { deflateRawSync } from 'node:zlib';
-import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import {
     ColumnIndexToLetter,
     ColumnLetterToIndex,
@@ -10,6 +10,7 @@ import {
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    RegisterSafeRegexSandboxExecutor,
     SafeRegexSearchDetailed,
     SafeRegexTest,
     SpreadsheetEngine,
@@ -1858,5 +1859,277 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(ValidateExtraFilter("'M' < @@VERSION")).toMatchObject({ Valid: false, AccessDenied: true });
         expect(ValidateExtraFilter("'dbo' = USER_NAME")).toMatchObject({ Valid: false, AccessDenied: true });
         expect(ValidateExtraFilter("'x' = SUSER_SNAME")).toMatchObject({ Valid: false, AccessDenied: true });
+    });
+
+    it('R7-3: SafeRegexSearchDetailed evaluates whole strings without windowing or anchor rewrites (< 25ms on 64 KB adversarial inputs and 100% accurate across >256-char spans & boundaries)', () => {
+        // 1. All 7 AN-BC accuracy cases (false-negative spans >256 chars + false-positive window boundaries)
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('"[^"]*"')!, `prefix "${'q'.repeat(400)}" suffix`).Matched).toBe(true);
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('start\\d+end')!, `start${'7'.repeat(350)}end`).Matched).toBe(true);
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('<b>[^<]*</b>')!, `<b>${'x'.repeat(350)}</b>`).Matched).toBe(true);
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('total:\\s*\\d+')!, `total:${' '.repeat(300)}42`).Matched).toBe(true);
+
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('\\bzz')!, `${'y'.repeat(128)}zz${'y'.repeat(200)}`).Matched).toBe(false);
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('(\\d+$)')!, `${'9'.repeat(300)}x`).Matched).toBe(false);
+        expect(SafeRegexSearchDetailed(CompileSafeUserRegex('foo$|bar')!, `${'a'.repeat(253)}foo${'z'.repeat(100)}`).Matched).toBe(false);
+
+        // 2. 64 KB adversarial inputs finish in < 25ms without windowing
+        const t0 = performance.now();
+        const adv1 = SafeRegexSearchDetailed(CompileSafeUserRegex('\\d+y')!, '1'.repeat(65_536), 20, 65_536);
+        const adv2 = SafeRegexSearchDetailed(CompileSafeUserRegex('(a|b)+c')!, 'a'.repeat(65_536), 20, 65_536);
+        const adv3 = SafeRegexSearchDetailed(CompileSafeUserRegex('\\s*\\w+\\s*$')!, `${' '.repeat(32_768)}${'a'.repeat(32_767)}!`, 20, 65_536);
+        const elapsedAdv = performance.now() - t0;
+        expect(elapsedAdv).toBeLessThan(25);
+        expect(adv1.Matched).toBe(false);
+        expect(adv1.InputTooLong || adv1.TimedOut).toBe(true);
+        expect(adv2.Matched).toBe(false);
+        expect(adv2.InputTooLong || adv2.TimedOut).toBe(true);
+        expect(adv3.Matched).toBe(false);
+        expect(adv3.InputTooLong || adv3.TimedOut).toBe(true);
+
+        // 3. Registered SafeRegexSandboxExecutor runs whole strings > 4 KB cleanly
+        RegisterSafeRegexSandboxExecutor((rx, s) => ({ Matched: rx.test(s), TimedOut: false }));
+        try {
+            const longQuote = `head "${'z'.repeat(16_000)}" tail`;
+            const sandboxRes = SafeRegexSearchDetailed(CompileSafeUserRegex('"[^"]*"')!, longQuote, 20, 65_536);
+            expect(sandboxRes).toEqual({ Matched: true, TimedOut: false, InputTooLong: false });
+        } finally {
+            RegisterSafeRegexSandboxExecutor(null);
+        }
+    });
+
+    it('R7-4: filling 4,000 rows one by one and 200 columns avoids quadratic grow scans (< 500ms)', () => {
+        const wb = engine.CreateEmptyWorkbook('LinearGrowPerf', ['Sheet1'], 25, 10);
+        const s = wb.Worksheets[0];
+        const t0 = performance.now();
+        for (let r = 1; r <= 4_000; r++) {
+            engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r }, false);
+        }
+        for (let c = 1; c <= 200; c++) {
+            engine.SetCell(wb, s.SheetID, `${ColumnIndexToLetter(c)}1`, { Value: c * 10 }, false);
+        }
+        engine.EvaluateWorkbook(wb);
+        const elapsed = performance.now() - t0;
+
+        expect(s.Rows.length).toBe(4_000);
+        expect(s.Columns.length).toBe(200);
+        expect(s.Cells['A4000']?.ComputedValue).toBe(4_000);
+        expect(s.Cells[`${ColumnIndexToLetter(200)}1`]?.ComputedValue).toBe(2_000);
+        expect(elapsed).toBeLessThan(500);
+    });
+
+    it('R7-7: unimplemented dynamic and scalar Excel functions propagate sentinel across ALL wrappers and dependent cells (#NAME? and omit <v> on export/patch)', () => {
+        const wb = engine.CreateEmptyWorkbook('UnimplAllFunctions', ['Sheet1'], 10, 8);
+        const s = wb.Worksheets[0];
+        for (let r = 1; r <= 5; r++) {
+            engine.SetCell(wb, s.SheetID, `A${r}`, { Value: r }, false);
+            engine.SetCell(wb, s.SheetID, `B${r}`, { Value: r * 10 }, false);
+        }
+        engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(wb, s.SheetID, 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
+        engine.SetCell(wb, s.SheetID, 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
+        engine.SetCell(wb, s.SheetID, 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
+
+        for (const addr of ['C1', 'C2', 'C3', 'C4', 'C5', 'D5']) {
+            expect(s.Cells[addr]?.ComputedValue).toBe('#NAME?');
+        }
+
+        const decoder = new TextDecoder();
+        const exportedBytes = engine.ExportToXlsxBytes(wb, false);
+        const exportedXml = decoder.decode(engine.ExtractZipArchive(exportedBytes).get('xl/worksheets/sheet1.xml')!);
+        for (const addr of ['C1', 'C2', 'C3', 'C4', 'C5', 'D5']) {
+            const m = new RegExp(`<c r="${addr}"[^>]*>[\\s\\S]*?<\\/c>`).exec(exportedXml);
+            expect(m).not.toBeNull();
+            expect(m![0]).not.toContain('<v>');
+        }
+
+        // Verify PatchXlsxBytes also omits <v> for all 6 cells
+        const seedWb = engine.CreateEmptyWorkbook('PatchSeedR77', ['Sheet1'], 10, 8);
+        engine.SetCell(seedWb, 'Sheet1', 'A1', { Value: 1 }, true);
+        const seedBytes = engine.ExportToXlsxBytes(seedWb, false);
+        const imported = engine.ImportFromXlsxBytes(seedBytes);
+        for (let r = 1; r <= 5; r++) {
+            engine.SetCell(imported, 'Sheet1', `A${r}`, { Value: r }, false);
+            engine.SetCell(imported, 'Sheet1', `B${r}`, { Value: r * 10 }, false);
+        }
+        engine.SetCell(imported, 'Sheet1', 'C1', { Formula: '=IFERROR(MATCH(1, SORT(A1:A5), 0), 0)' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C2', { Formula: '=COUNTIFS(UNIQUE(A1:A5), ">1")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C3', { Formula: '=XLOOKUP(1, SORT(A1:A5), SORT(A1:A5), "none")' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C4', { Formula: '=IFERROR(LARGE(B1:B5, 2), 0)' }, false);
+        engine.SetCell(imported, 'Sheet1', 'C5', { Formula: '=LARGE(B1:B5, 2)' }, false);
+        engine.SetCell(imported, 'Sheet1', 'D5', { Formula: '=IFERROR(C5, 99)' }, true);
+
+        const patchedBytes = engine.PatchXlsxBytes(seedBytes, imported);
+        const patchedXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
+        for (const addr of ['C1', 'C2', 'C3', 'C4', 'C5', 'D5']) {
+            const m = new RegExp(`<c r="${addr}"[^>]*>[\\s\\S]*?<\\/c>`).exec(patchedXml);
+            expect(m).not.toBeNull();
+            expect(m![0]).not.toContain('<v>');
+        }
+    });
+
+    it('R7-8: PatchXlsxBytes clears stale dynamic-array spill children (I7=2, I8=3) when spill anchor I6 is edited from SEQUENCE(3) to SEQUENCE(5)', () => {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        const baseWb = engine.CreateEmptyWorkbook('SpillClearTest', ['Sheet1'], 12, 10);
+        engine.SetCell(baseWb, 'Sheet1', 'A1', { Value: 100 }, true);
+        const baseZip = engine.ExtractZipArchive(engine.ExportToXlsxBytes(baseWb, false));
+
+        // Craft an Excel-saved dynamic-array spill block I6:I8 (cm="1", ref="I6:I8", I6=1, I7=2, I8=3)
+        baseZip.set(
+            'xl/metadata.xml',
+            encoder.encode(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                    '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">' +
+                    '<metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>' +
+                    '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>' +
+                    '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+                    '</metadata>'
+            )
+        );
+        const origSheetXml = decoder.decode(baseZip.get('xl/worksheets/sheet1.xml')!);
+        const withSpillXml = origSheetXml.replace(
+            /<\/sheetData>/,
+            () =>
+                '<row r="6"><c r="I6" cm="1" t="n"><f t="array" ref="I6:I8">_xlfn.SEQUENCE(3)</f><v>1</v></c></row>' +
+                '<row r="7"><c r="I7" t="n"><v>2</v></c></row>' +
+                '<row r="8"><c r="I8" t="n"><v>3</v></c></row>' +
+                '</sheetData>'
+        );
+        baseZip.set('xl/worksheets/sheet1.xml', encoder.encode(withSpillXml));
+        const seedXlsx = engine.BuildZipArchive(
+            Array.from(baseZip.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+
+        const imported = engine.ImportFromXlsxBytes(seedXlsx);
+        engine.SetCell(imported, 'Sheet1', 'I6', { Formula: '=SEQUENCE(5)' }, true);
+        const patchedBytes = engine.PatchXlsxBytes(seedXlsx, imported);
+        const patchedSheetXml = decoder.decode(engine.ExtractZipArchive(patchedBytes).get('xl/worksheets/sheet1.xml')!);
+
+        expect(patchedSheetXml).toContain('<c r="I6" cm="1"><f t="array" ref="I6">_xlfn.SEQUENCE(5)</f></c>');
+        expect(patchedSheetXml).not.toContain('<v>2</v>');
+        expect(patchedSheetXml).not.toContain('<v>3</v>');
+    });
+
+    it('R7-9: ValidateExtraFilter & =MJ.VIEW allow User, APP_NAME, DB_NAME, [First Name], and N\'...\' Unicode literals while blocking SYSTEM_USER, APP_NAME(), and @@VERSION', async () => {
+        expect(ValidateExtraFilter("User = 'bob'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "User = 'bob'"
+        });
+        expect(ValidateExtraFilter("APP_NAME = 'CRM'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "APP_NAME = 'CRM'"
+        });
+        expect(ValidateExtraFilter("DB_NAME = 'Prod'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "DB_NAME = 'Prod'"
+        });
+        expect(ValidateExtraFilter("Name = N'Renée'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "Name = N'Renée'"
+        });
+        expect(ValidateExtraFilter("[First Name] = N'Ada'")).toEqual({
+            Valid: true,
+            NormalizedFilter: "[First Name] = N'Ada'"
+        });
+
+        expect(ValidateExtraFilter("'sa' = SYSTEM_USER")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("APP_NAME() = 'x'")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("Name = @@VERSION")).toMatchObject({ Valid: false, AccessDenied: true });
+
+        // End-to-end =MJ.VIEW("AppDeployments", "(default)", "APP_NAME='CRM'")
+        const viewer = createMockUser('u-r79', 'Viewer R79');
+        const deployEntity = new EntityInfo({
+            ID: 'ent-dep',
+            Name: 'AppDeployments',
+            BaseView: 'vwAppDeployments',
+            AllowUserSearchAPI: true,
+            IncludeInAPI: true,
+            Fields: [
+                new EntityFieldInfo({ ID: 'f1', Name: 'ID', Type: 'uniqueidentifier', TSType: EntityFieldTSType.String, DefaultInView: false }),
+                new EntityFieldInfo({ ID: 'f2', Name: 'APP_NAME', Type: 'nvarchar', TSType: EntityFieldTSType.String, DefaultInView: true }),
+                new EntityFieldInfo({ ID: 'f3', Name: 'User', Type: 'nvarchar', TSType: EntityFieldTSType.String, DefaultInView: true }),
+                new EntityFieldInfo({ ID: 'f4', Name: 'First Name', Type: 'nvarchar', TSType: EntityFieldTSType.String, DefaultInView: true })
+            ]
+        });
+        const baseUserPerm = deployEntity.GetUserPermisions(viewer);
+        baseUserPerm.CanRead = true;
+        vi.spyOn(deployEntity, 'GetUserPermisions').mockReturnValue(baseUserPerm);
+        const mockProvider: IMetadataProvider = Object.assign({}, Metadata.Provider, {
+            Entities: [deployEntity],
+            Queries: [],
+            RunView: vi.fn().mockResolvedValue({
+                Success: true,
+                Results: [{ APP_NAME: 'CRM', User: 'bob', 'First Name': 'Ada' }],
+                TotalRowCount: 1
+            })
+        });
+
+        const wb = engine.CreateEmptyWorkbook('MjViewR79', ['Sheet1'], 10, 5);
+        engine.SetCell(wb, 'Sheet1', 'A1', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "APP_NAME=\'CRM\'")' }, false);
+        engine.SetCell(wb, 'Sheet1', 'A2', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "[First Name]=N\'Ada\'")' }, false);
+        await engine.EvaluateMjCustomFunctions(wb, viewer, mockProvider, { BypassCache: true });
+        expect(wb.Worksheets[0].Cells['A1']?.AccessDenied).toBeFalsy();
+        expect(wb.Worksheets[0].Cells['A1']?.ComputedValue).toBe('CRM');
+        expect(wb.Worksheets[0].Cells['A2']?.AccessDenied).toBeFalsy();
+        expect(wb.Worksheets[0].Cells['A2']?.ComputedValue).toBe('CRM');
+    });
+
+    it('Item 7: sparse whole-row & whole-column COUNTIFS, MATCH, and VLOOKUP complete in < 50ms total', () => {
+        const wb = engine.CreateEmptyWorkbook('SparseWholeRangeLookups', ['Sheet1'], 25, 10);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'C1', { Value: 15 }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 'ok' }, false);
+        engine.SetCell(wb, s.SheetID, 'A10', { Value: 25 }, false);
+        engine.SetCell(wb, s.SheetID, 'B10', { Value: 'ok' }, false);
+        engine.SetCell(wb, s.SheetID, 'A500000', { Value: 'needle' }, false);
+        engine.SetCell(wb, s.SheetID, 'B500000', { Value: 42 }, false);
+
+        const t0 = performance.now();
+        const rRowCountIfs = engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(1:1, ">0", 2:2, "ok")');
+        const rColCountIfs = engine.EvaluateFormulaExpression(wb, s.SheetID, '=COUNTIFS(A:A, ">0", B:B, "ok")');
+        const rMatch = engine.EvaluateFormulaExpression(wb, s.SheetID, '=MATCH("needle", A:A, 0)');
+        const rVlookup = engine.EvaluateFormulaExpression(wb, s.SheetID, '=VLOOKUP("needle", A:B, 2, FALSE)');
+        const elapsed = performance.now() - t0;
+
+        expect(rRowCountIfs).toBe(1);
+        expect(rColCountIfs).toBe(1);
+        expect(rMatch).toBe(500_000);
+        expect(rVlookup).toBe(42);
+        expect(elapsed).toBeLessThan(50);
+    });
+
+    it('VM sandbox safety: SafeRegexSearchDetailed and ExportToXlsxBytes work when TextEncoder, TextDecoder, and Buffer are undefined', async () => {
+        const savedBuffer = globalThis.Buffer;
+        const savedTextEncoder = globalThis.TextEncoder;
+        const savedTextDecoder = globalThis.TextDecoder;
+        try {
+            Reflect.set(globalThis, 'Buffer', undefined);
+            Reflect.set(globalThis, 'TextEncoder', undefined);
+            Reflect.set(globalThis, 'TextDecoder', undefined);
+
+            // 23,000 3-byte Euro symbols = 69,000 UTF-8 bytes (> 65,536 maxInputBytes)
+            const overLimitUtf8 = '€'.repeat(23_000);
+            const rx = CompileSafeUserRegex('^€+$');
+            expect(rx).not.toBeNull();
+            const overRes = SafeRegexSearchDetailed(rx!, overLimitUtf8, 20, 65536);
+            expect(overRes).toEqual({ Matched: false, TimedOut: false, InputTooLong: true });
+
+            const underLimitUtf8 = `Renée — ${'€'.repeat(30)}`;
+            const matchRx = CompileSafeUserRegex('Renée');
+            expect(matchRx).not.toBeNull();
+            expect(SafeRegexSearchDetailed(matchRx!, underLimitUtf8, 20, 65536).Matched).toBe(true);
+
+            const wb = engine.CreateEmptyWorkbook('BareVmUtf8', ['Sheet1'], 5, 5);
+            engine.SetCell(wb, 'Sheet1', 'A1', { Value: 'Hello 🌍 Renée' }, true);
+            const xlsxBytes = await engine.ExportToXlsxBytes(wb);
+            const reimported = await engine.ImportFromXlsxBytes(xlsxBytes, 'BareVmUtf8');
+            expect(reimported.Worksheets[0].Cells['A1']?.RawValue).toBe('Hello 🌍 Renée');
+        } finally {
+            Reflect.set(globalThis, 'Buffer', savedBuffer);
+            Reflect.set(globalThis, 'TextEncoder', savedTextEncoder);
+            Reflect.set(globalThis, 'TextDecoder', savedTextDecoder);
+        }
     });
 });

@@ -85,7 +85,24 @@ interface EnvironmentScopedArtifactIdRow {
   UserID?: string | null;
 }
 
-const MAX_CONCURRENT_PERMISSION_PAGES = 5;
+interface ScopedWorkspaceRecords {
+  artifacts: MJArtifactEntity[];
+  versions: VersionSummaryRow[];
+  collections: MJCollectionEntity[];
+  collectionLinks: CollectionArtifactLinkRow[];
+  artifactPerms: ArtifactPermissionSummaryRow[];
+  collectionPerms: MJCollectionPermissionEntity[];
+}
+
+interface InitialScopedWorkspaceLoadResult {
+  scoped: ScopedWorkspaceRecords;
+  ownedTotal: number;
+  ownedArtNormIds: Set<string>;
+  checkedDirectSharedNormIds: Set<string>;
+  remainingPermOffsets: number[];
+}
+
+const PERMISSION_PAGE_BATCH_SIZE = 4;
 
 const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
@@ -262,14 +279,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   private ownedArtifactOffset = 0;
   private directSharedArtifactOffset = 0;
   private allDirectSharedArtIds: string[] = [];
-  private cachedWorkspaceRecords: {
-    artifacts: MJArtifactEntity[];
-    versions: VersionSummaryRow[];
-    collections: MJCollectionEntity[];
-    collectionLinks: CollectionArtifactLinkRow[];
-    artifactPerms: ArtifactPermissionSummaryRow[];
-    collectionPerms: MJCollectionPermissionEntity[];
-  } | null = null;
+  private cachedWorkspaceRecords: ScopedWorkspaceRecords | null = null;
+  private reloadGeneration = 0;
   private isDestroyed = false;
 
   private readonly cdr = inject(ChangeDetectorRef);
@@ -301,7 +312,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public ngOnDestroy(): void {
     this.isDestroyed = true;
-    this.RefreshViewerSubject.complete();
+    this.reloadGeneration = (this.reloadGeneration ?? 0) + 1;
+    this.RefreshViewerSubject?.complete();
   }
 
   // ===========================================================================
@@ -1018,30 +1030,45 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return;
     }
 
+    const generation = (this.reloadGeneration ?? 0) + 1;
+    this.reloadGeneration = generation;
+
     this.IsLoading = true;
+    this.IsLoadingMore = false;
     this.LoadError = null;
     this.LoadMoreError = null;
+    let emittedInitialCompletion = false;
+
     try {
       const md = this.ProviderToUse;
 
       await ArtifactMetadataEngine.Instance.Config(false, user, md);
+      if (this.isReloadStale(generation)) {
+        return;
+      }
       const artifactTypes = ArtifactMetadataEngine.Instance.ArtifactTypes;
 
       const rv = RunView.FromMetadataProvider(md);
-      const scoped = await this.loadScopedWorkspaceRecords(rv, user);
-      this.cachedWorkspaceRecords = scoped;
+      const initial = await this.loadInitialScopedWorkspaceRecords(rv, user);
+      if (this.isReloadStale(generation)) {
+        return;
+      }
+      this.cachedWorkspaceRecords = initial.scoped;
 
       await this.loadConnectedDrives();
+      if (this.isReloadStale(generation)) {
+        return;
+      }
 
       this.hydrateWorkspaceViewModels({
         user,
         artifactTypes,
-        artifacts: scoped.artifacts,
-        versions: scoped.versions,
-        collections: scoped.collections,
-        collectionLinks: scoped.collectionLinks,
-        artifactPerms: scoped.artifactPerms,
-        collectionPerms: scoped.collectionPerms,
+        artifacts: initial.scoped.artifacts,
+        versions: initial.scoped.versions,
+        collections: initial.scoped.collections,
+        collectionLinks: initial.scoped.collectionLinks,
+        artifactPerms: initial.scoped.artifactPerms,
+        collectionPerms: initial.scoped.collectionPerms,
       });
 
       if (this.pendingExternalParams) {
@@ -1049,14 +1076,42 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         this.pendingExternalParams = null;
         this.applyRouteParamsInternal(pending);
       }
-    } catch (err) {
-      this.LoadError = err instanceof Error ? err.message : 'Failed to load Library items.';
-    } finally {
+
+      const hasRemainingPermissionPages = initial.remainingPermOffsets.length > 0;
+
+      // Unblock first render as soon as Page 0 owned + shared items are hydrated
       this.IsLoading = false;
+      this.IsLoadingMore = hasRemainingPermissionPages;
+      emittedInitialCompletion = true;
       this.LoadComplete.emit();
       this.emitWorkspaceState();
-      if (!this.isDestroyed) {
-        this.cdr.detectChanges();
+      this.notifyViewCheck();
+
+      if (hasRemainingPermissionPages) {
+        await this.loadRemainingSharedPermissionPages({
+          rv,
+          user,
+          artifactTypes,
+          generation,
+          remainingPermOffsets: initial.remainingPermOffsets,
+          ownedTotal: initial.ownedTotal,
+          ownedArtNormIds: initial.ownedArtNormIds,
+          checkedDirectSharedNormIds: initial.checkedDirectSharedNormIds,
+        });
+      }
+    } catch (err) {
+      if (!this.isReloadStale(generation)) {
+        this.LoadError = err instanceof Error ? err.message : 'Failed to load Library items.';
+      }
+    } finally {
+      if (!this.isReloadStale(generation)) {
+        this.IsLoading = false;
+        this.IsLoadingMore = false;
+        if (!emittedInitialCompletion) {
+          this.LoadComplete.emit();
+        }
+        this.emitWorkspaceState();
+        this.notifyViewCheck();
       }
     }
   }
@@ -1084,7 +1139,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
       const envFilter = `EnvironmentID='${safeEnvId}'`;
       const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
-      const pageSize = Math.max(1, this.ArtifactPageSize);
+      const pageSize = Math.max(1, this.ArtifactPageSize || 200);
 
       const hasRemainingDirectShared =
         Array.isArray(this.allDirectSharedArtIds) &&
@@ -1191,7 +1246,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           this.LoadedArtifactCount,
           nextArtRes.TotalRowCount + loadedSharedCount + unpagedDirectCount,
         );
-      } else if (unpagedDirectCount === 0 && nextOwnedArtifacts.length < this.ArtifactPageSize) {
+      } else if (unpagedDirectCount === 0 && nextOwnedArtifacts.length < pageSize) {
         this.TotalArtifactCount = this.LoadedArtifactCount;
       }
 
@@ -1212,9 +1267,18 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } finally {
       this.IsLoadingMore = false;
       this.emitWorkspaceState();
-      if (!this.isDestroyed) {
-        this.cdr.detectChanges();
-      }
+      this.notifyViewCheck();
+    }
+  }
+
+  private isReloadStale(generation: number): boolean {
+    return Boolean(this.isDestroyed) || generation !== (this.reloadGeneration ?? 0);
+  }
+
+  private notifyViewCheck(): void {
+    if (!this.isDestroyed) {
+      this.cdr?.markForCheck?.();
+      this.cdr?.detectChanges?.();
     }
   }
 
@@ -1229,43 +1293,25 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
   }
 
-  private fetchArtifactPermissionPage(
-    rv: RunView,
-    params: RunViewParams,
-    user: UserInfo,
-  ): Promise<{ Success?: boolean; ErrorMessage?: string; Results?: ArtifactPermissionSummaryRow[] }> {
-    if (typeof rv.RunView === 'function') {
-      return rv.RunView<ArtifactPermissionSummaryRow>(params, user);
-    }
-    return rv.RunViews([params], user).then((batch) => batch[0] ?? { Success: false, Results: [] });
-  }
-
   /**
-   * Loads user-accessible `MJ: Artifacts`, `MJ: Artifact Versions` (excluding heavy `Content`),
-   * `MJ: Collections`, `MJ: Collection Artifacts`, and permission rows via 2-phase server-side
-   * scoped `rv.RunViews` batches — zero unscoped table reads and zero raw `__mj` schema names
-   * (100% SQL Server + PostgreSQL portable).
+   * Loads the first page of user-accessible `MJ: Artifacts`, `MJ: Artifact Versions` (excluding heavy
+   * `Content`), `MJ: Collections`, `MJ: Collection Artifacts`, and Page 0 of `MJ: Artifact Permissions`
+   * via server-side scoped `rv.RunViews` batches — unblocking first render immediately before streaming
+   * any remaining permission pages (`page >= 1`).
    */
-  private async loadScopedWorkspaceRecords(
+  private async loadInitialScopedWorkspaceRecords(
     rv: RunView,
     user: UserInfo,
-  ): Promise<{
-    artifacts: MJArtifactEntity[];
-    versions: VersionSummaryRow[];
-    collections: MJCollectionEntity[];
-    collectionLinks: CollectionArtifactLinkRow[];
-    artifactPerms: ArtifactPermissionSummaryRow[];
-    collectionPerms: MJCollectionPermissionEntity[];
-  }> {
+  ): Promise<InitialScopedWorkspaceLoadResult> {
     const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
     const safeUserId = EscapeSQLString(user.ID);
     const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
     const currentUserNorm = NormalizeUUID(user.ID);
     const envFilter = `EnvironmentID='${safeEnvId}'`;
     const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
-    const pageSize = Math.max(1, this.ArtifactPageSize);
+    const pageSize = Math.max(1, this.ArtifactPageSize || 200);
 
-    // Batch 1: First page of owned artifacts, first bounded page of lightweight artifact permission rows,
+    // Batch 1: First page of owned artifacts, Page 0 of lightweight artifact permission rows,
     // owned collections, and user collection grants
     const batch1Results = await rv.RunViews(
       [
@@ -1312,50 +1358,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const artifactPerms: ArtifactPermissionSummaryRow[] = [...firstPagePerms];
     const totalPermRows =
       typeof artPermRes?.TotalRowCount === 'number' ? artPermRes.TotalRowCount : firstPagePerms.length;
+    const remainingPermOffsets: number[] = [];
     if (firstPagePerms.length > 0 && totalPermRows > firstPagePerms.length) {
-      const remainingOffsets: number[] = [];
       for (let startRow = firstPagePerms.length; startRow < totalPermRows; startRow += pageSize) {
-        remainingOffsets.push(startRow);
-      }
-      for (
-        let windowIdx = 0;
-        windowIdx < remainingOffsets.length;
-        windowIdx += MAX_CONCURRENT_PERMISSION_PAGES
-      ) {
-        const offsetWindow = remainingOffsets.slice(
-          windowIdx,
-          windowIdx + MAX_CONCURRENT_PERMISSION_PAGES,
-        );
-        const pageResults = await Promise.all(
-          offsetWindow.map((startRow) =>
-            this.fetchArtifactPermissionPage(
-              rv,
-              {
-                EntityName: 'MJ: Artifact Permissions',
-                ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
-                Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
-                OrderBy: '__mj_CreatedAt DESC',
-                StartRow: startRow,
-                MaxRows: pageSize,
-                SkipTotalRowCount: true,
-                ResultType: 'simple',
-              },
-              user,
-            ),
-          ),
-        );
-        this.assertRunViewsSucceeded(pageResults);
-        let receivedAnyRow = false;
-        for (const pageRes of pageResults) {
-          const rows = (pageRes.Results ?? []) as ArtifactPermissionSummaryRow[];
-          if (rows.length > 0) {
-            receivedAnyRow = true;
-            artifactPerms.push(...rows);
-          }
-        }
-        if (!receivedAnyRow) {
-          break;
-        }
+        remainingPermOffsets.push(startRow);
       }
     }
 
@@ -1372,6 +1378,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         .filter((ap) => ap.CanRead && !ownedArtNormIds.has(NormalizeUUID(ap.ArtifactID)))
         .map((ap) => ap.ArtifactID),
     );
+    const checkedDirectSharedNormIds = new Set(
+      candidateDirectSharedArtIds.map((id) => NormalizeUUID(id)),
+    );
     const firstPageDirectSharedArtIds = candidateDirectSharedArtIds.slice(0, pageSize);
     const remainingCandidateDirectSharedIds = candidateDirectSharedArtIds.slice(pageSize);
 
@@ -1385,8 +1394,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ...sharedColIds,
     ]);
 
-    // Batch 2: Shared collections, collection-artifact links, first bounded page of directly shared artifacts,
-    // and lightweight environment-scoped ID verification for any unpaged direct share candidates
+    // Batch 2: Shared collections, collection-artifact links, Page 0 of directly shared artifacts,
+    // and lightweight environment-scoped ID verification for any excess Page 0 direct share candidates
     const batch2Queries: RunViewParams[] = [];
     const sharedColIndices: number[] = [];
     const colLinksIndices: number[] = [];
@@ -1621,13 +1630,300 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     );
 
     return {
-      artifacts: allArtifacts,
-      versions: allVersions,
-      collections: allCollections,
-      collectionLinks,
-      artifactPerms,
-      collectionPerms,
+      scoped: {
+        artifacts: allArtifacts,
+        versions: allVersions,
+        collections: allCollections,
+        collectionLinks,
+        artifactPerms,
+        collectionPerms,
+      },
+      ownedTotal,
+      ownedArtNormIds,
+      checkedDirectSharedNormIds,
+      remainingPermOffsets,
     };
+  }
+
+  /**
+   * Streams remaining `MJ: Artifact Permissions` pages (`page >= 1`) in bounded `rv.RunViews(...)`
+   * batch windows (`PERMISSION_PAGE_BATCH_SIZE = 4`) AFTER Page 0 has already rendered.
+   */
+  private async loadRemainingSharedPermissionPages(params: {
+    rv: RunView;
+    user: UserInfo;
+    artifactTypes: MJArtifactTypeEntity[];
+    generation: number;
+    remainingPermOffsets: ReadonlyArray<number>;
+    ownedTotal: number;
+    ownedArtNormIds: Set<string>;
+    checkedDirectSharedNormIds: Set<string>;
+  }): Promise<void> {
+    const {
+      rv,
+      user,
+      artifactTypes,
+      generation,
+      remainingPermOffsets,
+      ownedTotal,
+      ownedArtNormIds,
+      checkedDirectSharedNormIds,
+    } = params;
+
+    const safeEnvId = EscapeSQLString(this.EffectiveEnvironmentId);
+    const safeUserId = EscapeSQLString(user.ID);
+    const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
+    const currentUserNorm = NormalizeUUID(user.ID);
+    const envFilter = `EnvironmentID='${safeEnvId}'`;
+    const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
+    const pageSize = Math.max(1, this.ArtifactPageSize || 200);
+
+    try {
+      for (
+        let windowIdx = 0;
+        windowIdx < remainingPermOffsets.length;
+        windowIdx += PERMISSION_PAGE_BATCH_SIZE
+      ) {
+        if (this.isReloadStale(generation)) {
+          return;
+        }
+
+        const offsetWindow = remainingPermOffsets.slice(
+          windowIdx,
+          windowIdx + PERMISSION_PAGE_BATCH_SIZE,
+        );
+        const permBatchQueries: RunViewParams[] = offsetWindow.map((startRow) => ({
+          EntityName: 'MJ: Artifact Permissions',
+          ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
+          Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
+          OrderBy: '__mj_CreatedAt DESC',
+          StartRow: startRow,
+          MaxRows: pageSize,
+          SkipTotalRowCount: true,
+          ResultType: 'simple',
+        }));
+
+        const permBatchResults = await rv.RunViews(permBatchQueries, user);
+        if (this.isReloadStale(generation)) {
+          return;
+        }
+        this.assertRunViewsSucceeded(permBatchResults);
+
+        const batchPerms: ArtifactPermissionSummaryRow[] = [];
+        for (const pageRes of permBatchResults) {
+          const rows = (pageRes?.Results ?? []) as ArtifactPermissionSummaryRow[];
+          if (rows.length > 0) {
+            batchPerms.push(...rows);
+          }
+        }
+        if (batchPerms.length === 0) {
+          break;
+        }
+
+        const cached = this.cachedWorkspaceRecords;
+        if (!cached) {
+          return;
+        }
+
+        const mergedPerms = this.dedupeEntitiesById([...cached.artifactPerms, ...batchPerms]);
+        const loadedArtNormSet = new Set(cached.artifacts.map((a) => NormalizeUUID(a.ID)));
+        const existingDirectNormSet = new Set(
+          this.allDirectSharedArtIds.map((id) => NormalizeUUID(id)),
+        );
+
+        const touchesLoadedArtifact = batchPerms.some((ap) =>
+          loadedArtNormSet.has(NormalizeUUID(ap.ArtifactID)),
+        );
+
+        const newCandidateSharedIds: string[] = [];
+        for (const ap of batchPerms) {
+          if (!ap.CanRead || !ap.ArtifactID) {
+            continue;
+          }
+          const normArtId = NormalizeUUID(ap.ArtifactID);
+          if (ownedArtNormIds.has(normArtId) || checkedDirectSharedNormIds.has(normArtId)) {
+            continue;
+          }
+          checkedDirectSharedNormIds.add(normArtId);
+          newCandidateSharedIds.push(ap.ArtifactID);
+        }
+
+        let hydratedNewArtifacts: MJArtifactEntity[] = [];
+        let hydratedNewVersions: VersionSummaryRow[] = [];
+        const verifiedUnpagedIds: string[] = [];
+
+        if (newCandidateSharedIds.length > 0) {
+          const envCheckQueries: RunViewParams[] = this.chunkIds(newCandidateSharedIds).map(
+            (chunk) => ({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
+              Fields: ['ID', 'EnvironmentID', 'UserID'],
+              OrderBy: '__mj_UpdatedAt DESC',
+              IgnoreMaxRows: true,
+              SkipTotalRowCount: true,
+              ResultType: 'simple',
+            }),
+          );
+          const envCheckResults = await rv.RunViews(envCheckQueries, user);
+          if (this.isReloadStale(generation)) {
+            return;
+          }
+          this.assertRunViewsSucceeded(envCheckResults);
+
+          const validSharedIds: string[] = [];
+          for (const checkRes of envCheckResults) {
+            if (checkRes?.Results) {
+              for (const row of checkRes.Results as EnvironmentScopedArtifactIdRow[]) {
+                const inTargetEnv =
+                  !row.EnvironmentID || NormalizeUUID(row.EnvironmentID) === targetEnvNorm;
+                const notOwnedByCurrent =
+                  !row.UserID || NormalizeUUID(row.UserID) !== currentUserNorm;
+                if (row.ID && inTargetEnv && notOwnedByCurrent) {
+                  validSharedIds.push(row.ID);
+                }
+              }
+            }
+          }
+
+          const dedupedValidIds = this.uniqueIds(validSharedIds).filter((id) => {
+            const norm = NormalizeUUID(id);
+            return !loadedArtNormSet.has(norm) && !existingDirectNormSet.has(norm);
+          });
+
+          // If Page 0 yielded zero visible items (e.g., all Page 0 shares belonged to another environment),
+          // hydrate up to one page immediately so the workspace is not left empty.
+          if (cached.artifacts.length === 0 && dedupedValidIds.length > 0) {
+            const hydrateSlice = dedupedValidIds.slice(0, pageSize);
+            const unpagedRemainder = dedupedValidIds.slice(pageSize);
+
+            const hydrateQueries: RunViewParams[] = [];
+            const artQueryIndices: number[] = [];
+            const verQueryIndices: number[] = [];
+
+            for (const chunk of this.chunkIds(hydrateSlice)) {
+              artQueryIndices.push(hydrateQueries.length);
+              hydrateQueries.push({
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
+                OrderBy: '__mj_UpdatedAt DESC',
+                StartRow: 0,
+                MaxRows: chunk.length,
+                ResultType: 'entity_object',
+              });
+            }
+            for (const verQuery of this.buildScopedArtifactVersionQueries(hydrateSlice)) {
+              verQueryIndices.push(hydrateQueries.length);
+              hydrateQueries.push(verQuery);
+            }
+
+            const hydrateBatch = await rv.RunViews(hydrateQueries, user);
+            if (this.isReloadStale(generation)) {
+              return;
+            }
+            this.assertRunViewsSucceeded(hydrateBatch);
+
+            for (const idx of artQueryIndices) {
+              if (hydrateBatch[idx]?.Results) {
+                for (const art of hydrateBatch[idx].Results as MJArtifactEntity[]) {
+                  const inTargetEnv =
+                    !art.EnvironmentID || NormalizeUUID(art.EnvironmentID) === targetEnvNorm;
+                  const notOwnedByCurrent =
+                    !art.UserID || NormalizeUUID(art.UserID) !== currentUserNorm;
+                  if (inTargetEnv && notOwnedByCurrent) {
+                    hydratedNewArtifacts.push(art);
+                  }
+                }
+              }
+            }
+            for (const idx of verQueryIndices) {
+              if (hydrateBatch[idx]?.Results) {
+                hydratedNewVersions.push(...(hydrateBatch[idx].Results as VersionSummaryRow[]));
+              }
+            }
+
+            hydratedNewArtifacts = this.dedupeEntitiesById(hydratedNewArtifacts);
+            hydratedNewVersions = this.dedupeEntitiesById(hydratedNewVersions);
+
+            const hydratedIds = this.uniqueIds(hydratedNewArtifacts.map((a) => a.ID));
+            this.allDirectSharedArtIds = [
+              ...this.allDirectSharedArtIds.slice(0, this.directSharedArtifactOffset),
+              ...hydratedIds,
+              ...this.allDirectSharedArtIds.slice(this.directSharedArtifactOffset),
+              ...unpagedRemainder,
+            ];
+            this.directSharedArtifactOffset += hydratedIds.length;
+          } else {
+            verifiedUnpagedIds.push(...dedupedValidIds);
+          }
+        }
+
+        if (verifiedUnpagedIds.length > 0) {
+          this.allDirectSharedArtIds = [...this.allDirectSharedArtIds, ...verifiedUnpagedIds];
+        }
+
+        const latestCached = this.cachedWorkspaceRecords;
+        if (!latestCached || this.isReloadStale(generation)) {
+          return;
+        }
+
+        const updatedArtifacts =
+          hydratedNewArtifacts.length > 0
+            ? this.dedupeEntitiesById([...latestCached.artifacts, ...hydratedNewArtifacts])
+            : latestCached.artifacts;
+        if (hydratedNewArtifacts.length > 0) {
+          updatedArtifacts.sort((a, b) => {
+            const aTime = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+            const bTime = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+            return bTime - aTime;
+          });
+        }
+        const updatedVersions =
+          hydratedNewVersions.length > 0
+            ? this.dedupeEntitiesById([...latestCached.versions, ...hydratedNewVersions])
+            : latestCached.versions;
+
+        this.cachedWorkspaceRecords = {
+          ...latestCached,
+          artifacts: updatedArtifacts,
+          versions: updatedVersions,
+          artifactPerms: mergedPerms,
+        };
+
+        this.LoadedArtifactCount = updatedArtifacts.length;
+        const loadedSharedDelta = Math.max(0, updatedArtifacts.length - this.ownedArtifactOffset);
+        const unpagedDirectCount = Math.max(
+          0,
+          this.allDirectSharedArtIds.length - this.directSharedArtifactOffset,
+        );
+        this.TotalArtifactCount = Math.max(
+          this.LoadedArtifactCount,
+          ownedTotal + loadedSharedDelta + unpagedDirectCount,
+        );
+
+        if (hydratedNewArtifacts.length > 0 || touchesLoadedArtifact) {
+          this.hydrateWorkspaceViewModels({
+            user,
+            artifactTypes,
+            artifacts: updatedArtifacts,
+            versions: updatedVersions,
+            collections: latestCached.collections,
+            collectionLinks: latestCached.collectionLinks,
+            artifactPerms: mergedPerms,
+            collectionPerms: latestCached.collectionPerms,
+          });
+        }
+
+        this.emitWorkspaceState();
+        this.notifyViewCheck();
+      }
+    } catch (err) {
+      if (!this.isReloadStale(generation)) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to load shared Library permissions.';
+        this.LoadMoreError = msg;
+        this.notifications?.CreateSimpleNotification(msg, 'error', 4000);
+      }
+    }
   }
 
   /**

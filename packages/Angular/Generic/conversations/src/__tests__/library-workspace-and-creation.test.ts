@@ -863,50 +863,43 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
 
   it('uses server-side scoped RunViews batches (excluding heavy Content) and notifies on Delete/Save failures', async () => {
     const { component } = buildWorkspaceComponent();
-    const runViewsCalls: Array<Array<{ EntityName: string; ExtraFilter?: string; Fields?: string[] }>> = [];
+    const runViewsCalls: RunViewParams[][] = [];
 
-    const mockRunViews = vi.fn(async (queries: Array<{ EntityName: string; ExtraFilter?: string; Fields?: string[] }>) => {
+    const mockRunViews = vi.fn(async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
       runViewsCalls.push(queries);
-      return queries.map((q) => {
-        if (q.EntityName === 'MJ: Artifacts' && q.ExtraFilter?.includes('UserID=')) {
-          return {
-            Success: true,
-            Results: [
-              {
-                ID: 'art-owned-1',
-                Name: 'Owned Doc',
-                TypeID: ARTIFACT_TYPES[0].ID,
-                UserID: TEST_USER.ID,
-                __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
-              },
-            ],
-          };
+      return queries.map((q): RunViewResult => {
+        const filterStr = typeof q.ExtraFilter === 'string' ? q.ExtraFilter : '';
+        if (q.EntityName === 'MJ: Artifacts' && filterStr.includes('UserID=')) {
+          return okRunViewResult([
+            {
+              ID: 'art-owned-1',
+              Name: 'Owned Doc',
+              TypeID: ARTIFACT_TYPES[0].ID,
+              UserID: TEST_USER.ID,
+              __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+            },
+          ]);
         }
         if (q.EntityName === 'MJ: Artifact Versions') {
-          return {
-            Success: true,
-            Results: [
-              {
-                ID: 'ver-owned-1',
-                ArtifactID: 'art-owned-1',
-                VersionNumber: 1,
-                Name: 'Owned Doc',
-                Description: null,
-                ContentMode: 'Text',
-                MimeType: 'text/markdown',
-                FileName: null,
-                __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
-              },
-            ],
-          };
+          return okRunViewResult([
+            {
+              ID: 'ver-owned-1',
+              ArtifactID: 'art-owned-1',
+              VersionNumber: 1,
+              Name: 'Owned Doc',
+              Description: null,
+              ContentMode: 'Text',
+              MimeType: 'text/markdown',
+              FileName: null,
+              __mj_UpdatedAt: new Date('2026-11-09T15:00:00Z'),
+            },
+          ]);
         }
-        return { Success: true, Results: [] };
+        return okRunViewResult([], 0);
       });
     });
 
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunViews: mockRunViews,
-    } as unknown as RunView);
+    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(mockRunViews);
     vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
@@ -917,18 +910,18 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       collectionPermByColId: new Map(),
       collectionLinksByCollectionAndVersion: new Map([['col-1:ver-1', 'link-1']]),
     });
+    const mockFailingProvider = Object.assign(Object.create(null) as IMetadataProvider, {
+      CurrentUser: TEST_USER,
+      GetEntityObject: vi.fn(async () => ({
+        Load: vi.fn(async () => true),
+        Delete: vi.fn(async () => false),
+        Save: vi.fn(async () => false),
+        LatestResult: { Message: 'Permission denied' },
+      })),
+    });
     Object.defineProperty(component, 'ProviderToUse', {
       configurable: true,
-      get: () =>
-        ({
-          CurrentUser: TEST_USER,
-          GetEntityObject: vi.fn(async () => ({
-            Load: vi.fn(async () => true),
-            Delete: vi.fn(async () => false),
-            Save: vi.fn(async () => false),
-            LatestResult: { Message: 'Permission denied' },
-          })),
-        }) as unknown as IMetadataProvider,
+      get: () => mockFailingProvider,
     });
 
     await component.ReloadWorkspaceData();
@@ -937,7 +930,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     // Batch 1 scopes MJ: Artifacts and MJ: Collections by UserID/OwnerID with zero raw __mj schema references
     for (const batch of runViewsCalls) {
       for (const q of batch) {
-        expect(q.ExtraFilter ?? '').not.toContain('__mj.');
+        expect(extraFilterAsString(q.ExtraFilter)).not.toContain('__mj.');
         if (q.EntityName === 'MJ: Artifact Versions') {
           expect(q.Fields).toBeDefined();
           expect(q.Fields).not.toContain('Content');
@@ -953,10 +946,8 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     component.TotalArtifactCount = 2;
     expect(component.HasMoreArtifacts).toBe(true);
     mockRunViews.mockImplementationOnce(async () => [
-      {
-        Success: true,
-        TotalRowCount: 2,
-        Results: [
+      okRunViewResult(
+        [
           {
             ID: 'art-owned-2',
             Name: 'Page 2 Doc',
@@ -965,26 +956,24 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
             __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
           },
         ],
-      },
+        2,
+      ),
     ]);
     mockRunViews.mockImplementationOnce(async () => [
-      {
-        Success: true,
-        Results: [
-          {
-            ID: 'ver-owned-2',
-            ArtifactID: 'art-owned-2',
-            VersionNumber: 1,
-            Name: 'Page 2 Doc',
-            Description: null,
-            ContentMode: 'Text',
-            MimeType: 'text/markdown',
-            FileName: null,
-            __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
-          },
-        ],
-      },
-      { Success: true, Results: [] },
+      okRunViewResult([
+        {
+          ID: 'ver-owned-2',
+          ArtifactID: 'art-owned-2',
+          VersionNumber: 1,
+          Name: 'Page 2 Doc',
+          Description: null,
+          ContentMode: 'Text',
+          MimeType: 'text/markdown',
+          FileName: null,
+          __mj_UpdatedAt: new Date('2026-11-08T15:00:00Z'),
+        },
+      ]),
+      okRunViewResult([], 0),
     ]);
     await component.LoadMoreArtifacts();
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1', 'art-owned-2']);
@@ -995,7 +984,15 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     component.TotalArtifactCount = 3;
     expect(component.HasMoreArtifacts).toBe(true);
     mockRunViews.mockImplementationOnce(async () => [
-      { Success: false, ErrorMessage: 'Transient paging failure', Results: [] },
+      {
+        Success: false,
+        TotalRowCount: 0,
+        RowCount: 0,
+        ExecutionTime: 1,
+        ErrorMessage: 'Transient paging failure',
+        UserViewRunID: '',
+        Results: [],
+      },
     ]);
     await component.LoadMoreArtifacts();
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-owned-1', 'art-owned-2']);
@@ -1006,24 +1003,35 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     // Verify per-artifact latest version query uses ROW_NUMBER() OVER (PARTITION BY [ArtifactID] ...) = 1 and IgnoreMaxRows
     const allQueries = runViewsCalls.flat();
     const latestVerQueries = allQueries.filter(
-      (q) => q.EntityName === 'MJ: Artifact Versions' && (q.ExtraFilter ?? '').includes('ROW_NUMBER() OVER'),
+      (q) =>
+        q.EntityName === 'MJ: Artifact Versions' &&
+        extraFilterAsString(q.ExtraFilter).includes('ROW_NUMBER() OVER'),
     );
     expect(latestVerQueries.length).toBeGreaterThan(0);
 
     // Verify failed initial/full ReloadWorkspaceData sets LoadError instead of silently returning []
     mockRunViews.mockImplementationOnce(async () => [
-      { Success: false, ErrorMessage: 'Database connection timeout', Results: [] },
-      { Success: true, Results: [] },
-      { Success: true, Results: [] },
-      { Success: true, Results: [] },
+      {
+        Success: false,
+        TotalRowCount: 0,
+        RowCount: 0,
+        ExecutionTime: 1,
+        ErrorMessage: 'Database connection timeout',
+        UserViewRunID: '',
+        Results: [],
+      },
+      okRunViewResult([], 0),
+      okRunViewResult([], 0),
+      okRunViewResult([], 0),
     ]);
     await component.ReloadWorkspaceData();
     expect(component.LoadError).toBe('Database connection timeout');
 
     // Verify Delete() and Save() failure notifications
-    (component as unknown as { collectionLinksByCollectionAndVersion: Map<string, string> }).collectionLinksByCollectionAndVersion.set(
-      'col-1:ver-1',
-      'link-1',
+    Reflect.set(
+      component,
+      'collectionLinksByCollectionAndVersion',
+      new Map<string, string>([['col-1:ver-1', 'link-1']]),
     );
     component.SelectedCollectionId = 'col-1';
     await component.RemoveItemFromCurrentCollection({
@@ -1043,9 +1051,15 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
         CollectionIds: [],
       },
     ];
+    const mockDropEvent = Object.assign(Object.create(null) as DragEvent, {
+      preventDefault: vi.fn(),
+      dataTransfer: Object.assign(Object.create(null) as DataTransfer, {
+        getData: () => 'item-doc-1',
+      }),
+    });
     await component.OnCollectionDrop(
       { Id: 'col-2', Name: 'Target', CanEdit: true } as LibraryCollectionNode,
-      { preventDefault: vi.fn(), dataTransfer: { getData: () => 'item-doc-1' } } as unknown as DragEvent,
+      mockDropEvent,
     );
     expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('Permission denied'), 'error', 4000);
   });
@@ -1126,21 +1140,18 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       .mockRejectedValueOnce(new RemoteDriveFileExistsError('Exports/Roadmap.md', 'Roadmap.md'))
       .mockResolvedValueOnce({ ObjectPath: 'Exports/Roadmap.md', ByteLength: 24, MimeType: 'text/markdown' });
 
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
-      RunView: vi.fn(async () => ({
-        Success: true,
-        Results: [
-          {
-            ID: 'ver-2-id',
-            ArtifactID: 'item-doc-1',
-            VersionNumber: 2,
-            ContentMode: 'Text',
-            Content: '# Version 2 Snapshot',
-            Configuration: null,
-          },
-        ],
-      })),
-    } as unknown as RunView);
+    vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue(
+      okRunViewResult([
+        {
+          ID: 'ver-2-id',
+          ArtifactID: 'item-doc-1',
+          VersionNumber: 2,
+          ContentMode: 'Text',
+          Content: '# Version 2 Snapshot',
+          Configuration: null,
+        },
+      ]),
+    );
 
     Object.assign(dialog as object, {
       IsOpen: true,
@@ -1169,9 +1180,10 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       notifications: { CreateSimpleNotification: vi.fn() },
       cdr: { detectChanges: vi.fn() },
     });
+    const mockDialogProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
     Object.defineProperty(dialog, 'ProviderToUse', {
       configurable: true,
-      get: () => ({ CurrentUser: TEST_USER }) as unknown as IMetadataProvider,
+      get: () => mockDialogProvider as IMetadataProvider,
     });
 
     // First export attempt hits collision -> surfaces PendingOverwritePath instead of generic error
@@ -1245,7 +1257,15 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     };
   }
 
-  it('fetches remaining MJ: Artifact Permissions pages concurrently via Promise.all in bounded windows', async () => {
+  function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+    let resolveFn: () => void = () => undefined;
+    const promise = new Promise<void>((res) => {
+      resolveFn = res;
+    });
+    return { promise, resolve: () => resolveFn() };
+  }
+
+  it('batches remaining MJ: Artifact Permissions pages via rv.RunViews in bounded windows and unblocks first render after Page 0', async () => {
     const { component } = buildWorkspaceComponent();
     component.ArtifactPageSize = 2;
     component.EnvironmentId = 'env-default';
@@ -1259,68 +1279,85 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       CanShare: false,
     }));
 
-    let inFlightPermPages = 0;
-    let maxConcurrentPermPages = 0;
-    const requestedPermOffsets: number[] = [];
+    const singleRunViewSpy = vi.spyOn(RunView.prototype, 'RunView');
+    const permBatchOffsetWindows: number[][] = [];
 
-    vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params: RunViewParams): Promise<RunViewResult> => {
-      if (params.EntityName === 'MJ: Artifact Permissions') {
-        inFlightPermPages++;
-        maxConcurrentPermPages = Math.max(maxConcurrentPermPages, inFlightPermPages);
-        const startRow = params.StartRow ?? 0;
-        const maxRows = params.MaxRows ?? 2;
-        requestedPermOffsets.push(startRow);
-        expect(params.SkipTotalRowCount).toBe(true);
-        await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 15));
-        inFlightPermPages--;
-        return okRunViewResult(allPermRows.slice(startRow, startRow + maxRows), allPermRows.length);
-      }
-      return okRunViewResult([], 0);
-    });
+    const firstRemainingPermBatchStarted = createDeferred();
+    const firstRemainingPermBatchGate = createDeferred();
 
-    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(async (queries: RunViewParams[]): Promise<RunViewResult[]> =>
-      queries.map((q): RunViewResult => {
-        const filterStr = extraFilterAsString(q.ExtraFilter);
-        if (q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) === 0) {
-          return okRunViewResult(allPermRows.slice(0, 2), allPermRows.length);
-        }
-        if (q.EntityName === 'MJ: Artifacts' && filterStr.includes('ID IN (')) {
-          const matched = allPermRows
-            .filter((p) => filterStr.includes(`'${p.ArtifactID}'`))
-            .map((p, idx) => ({
-              ID: p.ArtifactID,
-              Name: `Shared Doc ${p.ArtifactID}`,
-              TypeID: ARTIFACT_TYPES[0].ID,
-              EnvironmentID: 'env-default',
-              UserID: '22222222-2222-4222-8222-222222222222',
-              __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
-            }));
-          return okRunViewResult(matched, matched.length);
-        }
-        if (q.EntityName === 'MJ: Artifact Versions') {
-          return okRunViewResult(
-            ['art-shared-1', 'art-shared-2'].map((artId, idx) => ({
-              ID: `ver-${artId}`,
-              ArtifactID: artId,
-              VersionNumber: 1,
-              Name: `Shared Doc ${artId}`,
-              Description: null,
-              ContentMode: 'Text',
-              MimeType: 'text/markdown',
-              FileName: null,
-              __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
-            })),
+    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(
+      async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
+        const isRemainingPermBatch =
+          queries.length > 0 &&
+          queries.every(
+            (q) => q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) > 0,
           );
+        if (isRemainingPermBatch) {
+          const offsets = queries.map((q) => q.StartRow ?? 0);
+          permBatchOffsetWindows.push(offsets);
+          for (const q of queries) {
+            expect(q.SkipTotalRowCount).toBe(true);
+            expect(q.MaxRows).toBe(2);
+          }
+          if (permBatchOffsetWindows.length === 1) {
+            firstRemainingPermBatchStarted.resolve();
+            await firstRemainingPermBatchGate.promise;
+          }
+          return queries.map((q) => {
+            const startRow = q.StartRow ?? 0;
+            const maxRows = q.MaxRows ?? 2;
+            return okRunViewResult(
+              allPermRows.slice(startRow, startRow + maxRows),
+              allPermRows.length,
+            );
+          });
         }
-        return okRunViewResult([], 0);
-      }),
+
+        return queries.map((q): RunViewResult => {
+          const filterStr = extraFilterAsString(q.ExtraFilter);
+          if (q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) === 0) {
+            return okRunViewResult(allPermRows.slice(0, 2), allPermRows.length);
+          }
+          if (q.EntityName === 'MJ: Artifacts' && filterStr.includes('ID IN (')) {
+            const matched = allPermRows
+              .filter((p) => filterStr.includes(`'${p.ArtifactID}'`))
+              .map((p, idx) => ({
+                ID: p.ArtifactID,
+                Name: `Shared Doc ${p.ArtifactID}`,
+                TypeID: ARTIFACT_TYPES[0].ID,
+                EnvironmentID: 'env-default',
+                UserID: '22222222-2222-4222-8222-222222222222',
+                __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
+              }));
+            return okRunViewResult(matched, matched.length);
+          }
+          if (q.EntityName === 'MJ: Artifact Versions') {
+            return okRunViewResult(
+              ['art-shared-1', 'art-shared-2'].map((artId, idx) => ({
+                ID: `ver-${artId}`,
+                ArtifactID: artId,
+                VersionNumber: 1,
+                Name: `Shared Doc ${artId}`,
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date(Date.UTC(2026, 10, 9, 12, 0, idx)),
+              })),
+            );
+          }
+          return okRunViewResult([], 0);
+        });
+      },
     );
 
     vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
     vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
 
+    const loadCompleteSpy = vi.fn();
     const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
     Object.assign(component as object, {
+      LoadComplete: { emit: loadCompleteSpy },
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
       collectionPermByColId: new Map(),
       collectionLinksByCollectionAndVersion: new Map(),
@@ -1330,16 +1367,35 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       get: () => mockProvider as IMetadataProvider,
     });
 
-    await component.ReloadWorkspaceData();
+    const reloadPromise = component.ReloadWorkspaceData();
+    await firstRemainingPermBatchStarted.promise;
 
-    // 14 total rows with pageSize=2 => 6 remaining pages (offsets 2,4,6,8,10,12):
-    // window 1 runs 5 pages concurrently via Promise.all, window 2 runs the 6th page
+    // BEFORE remaining permission pages resolve, first render is ALREADY unblocked with Page 0 items!
+    expect(component.IsLoading).toBe(false);
+    expect(component.IsLoadingMore).toBe(true);
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
+    expect(component.FilteredItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
+    expect(loadCompleteSpy).toHaveBeenCalledTimes(1);
+    expect(singleRunViewSpy).not.toHaveBeenCalled();
+
+    firstRemainingPermBatchGate.resolve();
+    await reloadPromise;
+
+    // 14 total rows with pageSize=2 => 6 remaining pages (offsets 2,4,6,8,10,12)
+    // batched cleanly via rv.RunViews in bounded windows of 4: [[2, 4, 6, 8], [10, 12]], zero rv.RunView calls!
+    expect(singleRunViewSpy).not.toHaveBeenCalled();
+    expect(permBatchOffsetWindows).toEqual([
+      [2, 4, 6, 8],
+      [10, 12],
+    ]);
+    expect(component.IsLoading).toBe(false);
+    expect(component.IsLoadingMore).toBe(false);
     expect(component.LoadError).toBeNull();
-    expect(requestedPermOffsets).toEqual([2, 4, 6, 8, 10, 12]);
-    expect(maxConcurrentPermPages).toBe(5);
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
     expect(component.LoadedArtifactCount).toBe(2);
     expect(component.TotalArtifactCount).toBe(14);
+    expect(component.HasMoreArtifacts).toBe(true);
+    expect(loadCompleteSpy).toHaveBeenCalledTimes(1);
   });
 
   it('excludes shared artifacts from other environments in TotalArtifactCount and paging', async () => {
@@ -1401,15 +1457,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     }));
 
     const recordedArtifactFilters: string[] = [];
-
-    vi.spyOn(RunView.prototype, 'RunView').mockImplementation(async (params: RunViewParams): Promise<RunViewResult> => {
-      if (params.EntityName === 'MJ: Artifact Permissions') {
-        const startRow = params.StartRow ?? 0;
-        const maxRows = params.MaxRows ?? 2;
-        return okRunViewResult(permRows.slice(startRow, startRow + maxRows), permRows.length);
-      }
-      return okRunViewResult([], 0);
-    });
+    const singleRunViewSpy = vi.spyOn(RunView.prototype, 'RunView');
     vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(async (queries: RunViewParams[]): Promise<RunViewResult[]> =>
       queries.map((q): RunViewResult => {
         const filterStr = extraFilterAsString(q.ExtraFilter);
@@ -1501,6 +1549,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
 
     await component.ReloadWorkspaceData();
     expect(component.LoadError).toBeNull();
+    expect(singleRunViewSpy).not.toHaveBeenCalled();
 
     // Every MJ: Artifacts query scopes to EnvironmentID='env-alpha' with cross-DB-safe SQL
     expect(recordedArtifactFilters.length).toBeGreaterThanOrEqual(3);
@@ -1528,6 +1577,98 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.LoadedArtifactCount).toBe(3);
     expect(component.TotalArtifactCount).toBe(3);
     expect(component.HasMoreArtifacts).toBe(false);
+    expect(singleRunViewSpy).not.toHaveBeenCalled();
+  });
+
+  it('discards stale background permission-page batches after ngOnDestroy', async () => {
+    const { component } = buildWorkspaceComponent();
+    component.ArtifactPageSize = 1;
+    component.EnvironmentId = 'env-default';
+
+    const permRows = [
+      { ID: 'p1', ArtifactID: 'art-s1', UserID: TEST_USER.ID, CanRead: true, CanEdit: false, CanShare: false },
+      { ID: 'p2', ArtifactID: 'art-s2', UserID: TEST_USER.ID, CanRead: true, CanEdit: false, CanShare: false },
+    ];
+
+    const tailStarted = createDeferred();
+    const tailGate = createDeferred();
+
+    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(
+      async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
+        if (queries.every((q) => q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) > 0)) {
+          tailStarted.resolve();
+          await tailGate.promise;
+          return [okRunViewResult([permRows[1]], permRows.length)];
+        }
+        return queries.map((q): RunViewResult => {
+          const filterStr = extraFilterAsString(q.ExtraFilter);
+          if (q.EntityName === 'MJ: Artifact Permissions') {
+            return okRunViewResult([permRows[0]], permRows.length);
+          }
+          if (q.EntityName === 'MJ: Artifacts' && filterStr.includes('ID IN (')) {
+            return okRunViewResult([
+              {
+                ID: 'art-s1',
+                Name: 'Shared One',
+                TypeID: ARTIFACT_TYPES[0].ID,
+                EnvironmentID: 'env-default',
+                UserID: '22222222-2222-4222-8222-222222222222',
+                __mj_UpdatedAt: new Date('2026-11-09T12:00:00Z'),
+              },
+            ]);
+          }
+          if (q.EntityName === 'MJ: Artifact Versions') {
+            return okRunViewResult([
+              {
+                ID: 'ver-s1',
+                ArtifactID: 'art-s1',
+                VersionNumber: 1,
+                Name: 'Shared One',
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-09T12:00:00Z'),
+              },
+            ]);
+          }
+          return okRunViewResult([], 0);
+        });
+      },
+    );
+
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const detectChangesSpy = vi.fn();
+    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    Object.assign(component as object, {
+      cdr: { detectChanges: detectChangesSpy },
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map(),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () => mockProvider as IMetadataProvider,
+    });
+
+    const reloadPromise = component.ReloadWorkspaceData();
+    await tailStarted.promise;
+
+    expect(component.IsLoading).toBe(false);
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-s1']);
+    expect(component.TotalArtifactCount).toBe(1);
+
+    detectChangesSpy.mockClear();
+    component.ngOnDestroy();
+
+    tailGate.resolve();
+    await reloadPromise;
+
+    // Stale tail batch ignored after ngOnDestroy — TotalArtifactCount not mutated, detectChanges not called
+    expect(component.TotalArtifactCount).toBe(1);
+    expect(detectChangesSpy).not.toHaveBeenCalled();
   });
 
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {
