@@ -281,7 +281,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['concurrency-conflict-client', ConcurrencyConflictClientChecks, 5], // CC1-CC5 optimistic concurrency across two GraphQL sessions (IT158)
         ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
-        ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
+        ['ciphertext-cache', CiphertextCacheChecks, 7], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller; CT5-CT6 a peer's cache event leaves CredentialEngine plaintext (IT161)
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
@@ -376,7 +376,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'cache-immutability': 15,
         'calendar-event-links': 2,
         'chief-of-staff': 8,
-        'ciphertext-cache': 5,
+        'ciphertext-cache': 7,
         'class-resolution': 5,
         'client-cache': 26,
         'cloudflare-clef': 6,
@@ -660,6 +660,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ciphertext-cache.CT2',
         'ciphertext-cache.CT3',
         'ciphertext-cache.CT4',
+        'ciphertext-cache.CT5',
+        'ciphertext-cache.CT6',
         'client-cache.C10',
         'client-cache.C14',
         'concurrency-conflict-client.CC1',
