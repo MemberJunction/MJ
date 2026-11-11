@@ -50,6 +50,13 @@ import type {
     VideoSpecValidationOptions,
 } from '../index.js';
 
+/**
+ * Wall-clock ceiling for the "pathological input in linear time" checks. They guard against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 // ---------------------------------------------------------------------------
 // Stage Fixture Builders
 // ---------------------------------------------------------------------------
@@ -518,12 +525,12 @@ describe('IsNumericLiteralToken and ExtractNumericLiteralTokens', () => {
         const bangAttack = '!'.repeat(50_000) + 'x';
         const t0 = performance.now();
         expect(IsNumericLiteralToken(bangAttack)).toBe(false);
-        expect(performance.now() - t0).toBeLessThan(200);
+        expect(performance.now() - t0).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
         const zeroAttack = '0'.repeat(50_000) + 'x';
         const t1 = performance.now();
         expect(ExtractNumericLiteralTokens(zeroAttack)).toEqual(['0'.repeat(50_000) + 'x']);
-        expect(performance.now() - t1).toBeLessThan(200);
+        expect(performance.now() - t1).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     });
 });
 
