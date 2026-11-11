@@ -10,3 +10,8 @@ export * from './probes/QueueWorkerHeartbeatProbe';
 export * from './probes/AiProviderReadinessProbe';
 export * from './probes/OpenAppFleetStatusProbe';
 export * from './probes/EventLoopLagProbe';
+export * from './telemetry/TelemetrySchemaDsl';
+export * from './telemetry/RouteScrubber';
+export * from './telemetry/LocalTelemetrySignalBridge';
+export * from './telemetry/BaseTelemetrySink';
+export * from './telemetry/ShareLayerPackager';
