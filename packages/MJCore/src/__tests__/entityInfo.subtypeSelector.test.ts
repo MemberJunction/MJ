@@ -74,4 +74,71 @@ describe('EntityInfo.SubtypeSelectorConfig', () => {
     it('is null when no selector is declared', () => {
         expect(withSelector(null).SubtypeSelectorConfig).toBeNull();
     });
+
+    it('parses AutoEnsureOnSave, OnSubtypeChange, Driver, FoldIntoForm, and UIDriver when declared', () => {
+        const errors = spyOnErrors();
+        const info = withSelector(
+            JSON.stringify({
+                Path: 'TypeID.ExtensionEntity',
+                UseForLoadedRecords: true,
+                AutoEnsureOnSave: true,
+                OnSubtypeChange: 'Replace',
+                Driver: { Path: ' TypeID.DriverClass ', BaseClass: ' ConversationTypeDriver ' },
+                FoldIntoForm: true,
+                UIDriver: { Path: ' TypeID.UIDriverClass ' },
+            })
+        );
+
+        expect(info.SubtypeSelectorConfig).toEqual({
+            Path: 'TypeID.ExtensionEntity',
+            UseForLoadedRecords: true,
+            AutoEnsureOnSave: true,
+            OnSubtypeChange: 'Replace',
+            Driver: { Path: 'TypeID.DriverClass', BaseClass: 'ConversationTypeDriver' },
+            FoldIntoForm: true,
+            UIDriver: { Path: 'TypeID.UIDriverClass' },
+        });
+        expect(errors).not.toHaveBeenCalled();
+        errors.mockRestore();
+    });
+
+    it('logs and falls back to safe defaults for malformed extension options', () => {
+        const errors = spyOnErrors();
+        const info = withSelector(
+            JSON.stringify({
+                Path: 'TypeID.ExtensionEntity',
+                AutoEnsureOnSave: 'yes',
+                OnSubtypeChange: 'DropEverything',
+                Driver: { Path: '' },
+                FoldIntoForm: 1,
+                UIDriver: 'NotAnObject',
+            })
+        );
+
+        expect(info.SubtypeSelectorConfig).toEqual({
+            Path: 'TypeID.ExtensionEntity',
+            UseForLoadedRecords: false,
+            AutoEnsureOnSave: false,
+            OnSubtypeChange: 'Refuse',
+            FoldIntoForm: false,
+        });
+        expect(errors).toHaveBeenCalledTimes(5);
+        errors.mockRestore();
+    });
+
+    it('re-parses SubtypeSelectorConfig automatically when SubtypeSelector JSON string changes', () => {
+        const info = withSelector(JSON.stringify({ Path: 'TypeID.ExtensionEntity' }));
+        expect(info.SubtypeSelectorConfig?.AutoEnsureOnSave).toBeUndefined();
+
+        info.SubtypeSelector = JSON.stringify({
+            Path: 'TypeID.ExtensionEntity',
+            AutoEnsureOnSave: true,
+            OnSubtypeChange: 'Refuse',
+        });
+        expect(info.SubtypeSelectorConfig?.AutoEnsureOnSave).toBe(true);
+        expect(info.SubtypeSelectorConfig?.OnSubtypeChange).toBe('Refuse');
+
+        info.SubtypeSelector = null;
+        expect(info.SubtypeSelectorConfig).toBeNull();
+    });
 });

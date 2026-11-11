@@ -112,10 +112,10 @@ function join(dir: string, members: CandidateRepo[]): PrebundleExcludeRecord[] {
 }
 
 describe('CollectLinkedScopes', () => {
-  it('returns the other members\' scopes, skipping the shell repo, @memberjunction and unscoped names', () => {
+  it('returns the other members\' scopes, skipping the shell repo and unscoped names', () => {
     const { Parent, Mj } = setUp();
     const other = member(Parent, 'other', [pkgInfo('packages/A', '@acme/a'), pkgInfo('packages/B', 'plain-name'), pkgInfo('packages/C', '@memberjunction/x')]);
-    expect(CollectLinkedScopes([Mj, bizapps(Parent), other], 'MJ')).toEqual(['@acme/*', '@mj-biz-apps/*']);
+    expect(CollectLinkedScopes([Mj, bizapps(Parent), other], 'MJ')).toEqual(['@acme/*', '@memberjunction/*', '@mj-biz-apps/*']);
   });
 });
 
@@ -193,6 +193,24 @@ describe('join and clean', () => {
     join(Parent, [Mj, bizapps(Parent)]);
     expect(join(Parent, [Mj])).toEqual([]);
     expect(readAngular(Parent)).toBe(EXPLORER_ANGULAR_JSON);
+  });
+
+  it('adds @memberjunction/* to a distribution app that links MJ in, and clean takes it back out', () => {
+    // A distribution app's angular.json keeps an empty exclude list: its MJ packages come from npm.
+    const appAngular = EXPLORER_ANGULAR_JSON.replace('"@memberjunction/*"', '').replace(/"exclude": \[\s*\]/, '"exclude": []');
+    const dir = CreateFixtureParent({ 'client-app': { Files: { 'apps/MJExplorer/angular.json': appAngular } } });
+    parent = dir;
+    const app = member(dir, 'client-app', [pkgInfo('apps/MJExplorer', EXPLORER_PACKAGE.name ?? '', EXPLORER_PACKAGE)]);
+    const mj = member(dir, 'MJ', [pkgInfo('packages/MJCore', '@memberjunction/core')]);
+    const appRel = 'client-app/apps/MJExplorer/angular.json';
+    const readApp = (): string => readFileSync(path.join(dir, ...appRel.split('/')), 'utf8');
+
+    const records = join(dir, [app, mj]);
+    expect(records).toEqual([{ file: appRel, project: 'MJExplorer', entries: ['@memberjunction/*'] }]);
+    expect(excludeOf(readApp())).toEqual(['@memberjunction/*']);
+
+    RevertPrebundleExcludes(dir, PrebundleRecordsOf(ReadSentinel(dir)), false);
+    expect(readApp()).toBe(appAngular);
   });
 
   it('leaves the file untouched when no member links another scope', () => {

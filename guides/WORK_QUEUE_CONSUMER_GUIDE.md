@@ -189,6 +189,14 @@ plus `InFlight`** — including in-flight matters, because scalers subtract runn
 Pending-only count starves the queue. Give the scaler a SELECT-only login. The recipe (scaler query, KEDA `ScaledJob`, exit codes) is in
 `packages/WorkQueue/engine/README.md` under "Container-job workers".
 
+### The provider a handler gets
+
+`this.Provider` is the handler's own for the delivery: it must not be shared with a delivery running in parallel,
+because a provider carries transaction state and two handlers' transactions would interleave. MJAPI mints one per
+delivery; `mj queue work --concurrency N` does the same for N > 1 (`IndependentProviderSource`). A host that supplies
+its own `WorkQueueProviderSource` and mints providers implements `ReleaseProvider`, which the host calls once the
+delivery settles, including when the handler throws. Do not keep the provider past `Handle`.
+
 ## 9. Operator-facing habits
 
 - Put enough in `Attributes` for filters and triage (`eventType`, `tenant`), and nothing sensitive: attributes are

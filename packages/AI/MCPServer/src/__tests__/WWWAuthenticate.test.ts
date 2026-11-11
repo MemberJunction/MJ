@@ -50,6 +50,14 @@ describe('buildWWWAuthenticateHeader()', () => {
         expect(header).toContain('error_description="Token \\"abc\\" is invalid"');
     });
 
+    it('should escape backslashes before quotes in error_description', () => {
+        const header = BuildWWWAuthenticateHeader({
+            error: 'invalid_token',
+            errorDescription: 'path C:\\x\\ "y"',
+        });
+        expect(header).toContain('error_description="path C:\\\\x\\\\ \\"y\\""');
+    });
+
     it('should use custom resourceMetadataUrl', () => {
         const header = BuildWWWAuthenticateHeader({
             resourceMetadataUrl: 'https://api.example.com',

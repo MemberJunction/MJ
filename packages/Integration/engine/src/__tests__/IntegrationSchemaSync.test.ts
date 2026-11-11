@@ -457,6 +457,25 @@ describe('decideTypeOverlay — silence keeps the declaration (§ no fabrication
         expect(DecideTypeOverlay('nvarchar(MAX)', undefined).value).toBe('nvarchar(MAX)');
         expect(DecideTypeOverlay('nvarchar(MAX)', '').value).toBe('nvarchar(MAX)');
     });
+
+    it('maps numeric, date, boolean, and uuid source types to native MJ catalog types instead of nvarchar', () => {
+        expect(DecideTypeOverlay(null, 'integer').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'int').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'bigint').value).toBe('bigint');
+        expect(DecideTypeOverlay(null, 'decimal').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'currency').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'number').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'percent').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'float').value).toBe('float');
+        expect(DecideTypeOverlay(null, 'double').value).toBe('float');
+        expect(DecideTypeOverlay(null, 'boolean').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'bit').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'date').value).toBe('date');
+        expect(DecideTypeOverlay(null, 'datetime').value).toBe('datetimeoffset');
+        expect(DecideTypeOverlay(null, 'datetimeoffset').value).toBe('datetimeoffset');
+        expect(DecideTypeOverlay(null, 'uuid').value).toBe('uniqueidentifier');
+        expect(DecideTypeOverlay(null, 'uniqueidentifier').value).toBe('uniqueidentifier');
+    });
 });
 
 describe('decideNullabilityOverlay — both-silent keeps the declaration', () => {
@@ -487,5 +506,30 @@ describe('decideNullabilityOverlay — both-silent keeps the declaration', () =>
     it('defaults to permissive only when there is no declaration to keep', () => {
         expect(DecideNullabilityOverlay(null, undefined, undefined)).toEqual({ value: true, winner: 'Declared' });
         expect(DecideNullabilityOverlay(undefined, undefined, undefined).value).toBe(true);
+    });
+});
+
+// #3527 / decision actions.2 A: declared numbers persist typed; an existing string column is not flipped.
+describe('DecideTypeOverlay — typed numeric columns (#3527)', () => {
+    it('a new field declared integer / decimal / float persists typed', () => {
+        expect(DecideTypeOverlay(null, 'integer').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'bigint').value).toBe('bigint');
+        expect(DecideTypeOverlay(null, 'decimal').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'currency').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'float').value).toBe('float');
+    });
+
+    it("'long' persists as bigint", () => {
+        expect(DecideTypeOverlay(null, 'long').value).toBe('bigint');
+    });
+
+    it('an existing nvarchar column is not retyped to a number on re-discovery', () => {
+        expect(DecideTypeOverlay('nvarchar', 'integer')).toEqual({ value: 'nvarchar', winner: 'Declared' });
+        expect(DecideTypeOverlay('nvarchar', 'decimal')).toEqual({ value: 'nvarchar', winner: 'Declared' });
+    });
+
+    it('booleans and dates keep their typed mapping', () => {
+        expect(DecideTypeOverlay(null, 'boolean').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'datetime').value).toBe('datetimeoffset');
     });
 });

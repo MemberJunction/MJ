@@ -1125,6 +1125,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Field Suggestions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFieldSuggestions"
+        SectionName="Field Suggestions"
+        Icon="fa fa-comment-dots"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFieldSuggestions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Field Suggestions','AIPromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Field Suggestions','AIPromptRunID')"
+                [AllowLoad]="IsSectionExpanded('mJFieldSuggestions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFieldSuggestions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

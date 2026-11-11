@@ -1,11 +1,11 @@
-import { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
 import {
-  CompositeFilterDescriptor,
-  FilterFieldInfo,
-  FilterFieldType,
+  EntityFieldInfo,
+  EntityInfo,
   IsCompositeFilter,
-  IsSimpleFilter
-} from '@memberjunction/ng-filter-builder';
+  IsSimpleFilter,
+  type CompositeFilterDescriptor
+} from '@memberjunction/core';
+import { FilterFieldInfo, FilterFieldType } from '@memberjunction/ng-filter-builder';
 
 /**
  * The lower-cased field names a filter references anywhere in its tree.

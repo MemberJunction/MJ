@@ -10,7 +10,8 @@ import { ResourceData, type MJListDetailEntity, type MJListEntity, type MJMLMode
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
-import { AtRiskRules, type AtRiskRow } from '@memberjunction/predictive-studio-core';
+import { AtRiskRules, TRAINING_RUN_RESULTS_SCHEMA, type AtRiskRow, type GateDecision, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
@@ -89,13 +90,57 @@ const model = {
   __mj_UpdatedAt: new Date('2026-10-01T00:00:00Z'),
 } as unknown as MJMLModelEntity;
 
+const SHIPPED: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
+const NO_SIGNAL: GateDecision = { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null };
+const KEEP_GLM: GateDecision = { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null };
+
+/** The `ValidationResults` a unit training run stores, with this gate decision measured on 1,205 holdout rows. */
+function storedResults(decision: GateDecision): string {
+  const gate: StoredGateRecord = {
+    evaluationProtocolId: 'EP-1', margin: 0, primaryMetric: 'log-loss', holdoutRows: 1205,
+    intervals: { modelName: 'xgb', modelVsDummy: { value: 0.0177, lower: 0.0098, upper: 0.0254 }, modelVsBestSimple: null, memberVsDummy: {}, memberScores: {}, deliveredMember: null },
+    guards: { taskKind: 'binary', holdoutClassCounts: { '0': 900, '1': 305 }, modelAucInterval: { level: 0.95, lower: 0.6, upper: 0.7 }, minMinorityClassRows: 20 },
+    transcribed: decision, decision, guardRefusal: null,
+    reason: { code: decision.outcome === 'no-signal' ? 'nothing-beats-dummy' : 'only-model-beats-dummy', text: decision.outcome === 'no-signal' ? 'Nothing beats the flat guess.' : 'The model beats the flat guess.' },
+    incumbentDiff: null, sliceCoverage: { missingSubgroups: [], missingPeriods: [], slicesWithoutInterval: 0 },
+  };
+  return JSON.stringify({
+    schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed',
+    unitResolution: { rowsRead: 1205, censoredRowsExcluded: 0, labelKnownRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 1205, dataCutoff: '2026-07-30' },
+    trainer: null, trainerRequest: null, carve: null, gate,
+  });
+}
+
+/**
+ * A run that kept the GLM while its finalist `lr-tuned` was a logistic-regression candidate (the request names its
+ * driver); the comparison between them is not 0 [0, 0].
+ */
+function keptGlmResults(): string {
+  const parsed: { gate: StoredGateRecord } & Record<string, unknown> = JSON.parse(storedResults(KEEP_GLM));
+  parsed.gate = {
+    ...parsed.gate,
+    intervals: { ...parsed.gate.intervals, modelName: 'lr-tuned', modelVsBestSimple: { value: 0.004, lower: -0.001, upper: 0.009 }, memberVsDummy: { glm: { value: 0.0239, lower: 0.011, upper: 0.036 } }, memberScores: { glm: 0.3652 } },
+  };
+  parsed['trainerRequest'] = {
+    evaluationProtocolId: 'EP-1', seed: 7, threads: 1, timeoutSeconds: 600, maxRetries: 0,
+    candidates: [{ name: 'lr-tuned', algorithmId: 'A-1', driverKey: 'logistic_regression', hyperparameters: {} }],
+  };
+  return JSON.stringify(parsed);
+}
+
 /** The engine members the workspace reads. `LoadRunDetails` must never be called: the grid reads the run. */
-function fakeEngine() {
+function fakeEngine(validationResults: string | null = storedResults(SHIPPED), lineage: string | null = null) {
+  const published = { ...model, Lineage: lineage } as MJMLModelEntity;
   return {
     Config: vi.fn(async () => undefined),
-    Models: [model],
+    Models: [published],
     Sessions: [],
-    PublishedModels: [model],
+    PublishedModels: [published],
+    // newest first, as the engine loads them: the older run of the same model must not be the one the card reads
+    TrainingRuns: [
+      { ID: 'run-new', ResultingModelID: MODEL_ID.toLowerCase(), ValidationResults: validationResults },
+      { ID: 'run-old', ResultingModelID: MODEL_ID, ValidationResults: storedResults(NO_SIGNAL) },
+    ],
     Pipelines: [{ ID: 'P1', TargetEntityID: ENTITY_ID } as unknown as MJMLTrainingPipelineEntity],
     ModelDisplayName: () => 'Who will renew?',
     LoadRecentRunsForModel: vi.fn(async () => [{ ID: 'run-1' }]),
@@ -125,8 +170,8 @@ const settle = async (fixture: ComponentFixture<PSPredictionsResourceComponent>)
   fixture.detectChanges();
 };
 
-async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] })) {
-  const engine = fakeEngine();
+async function renderCatalog(provider: IMetadataProvider, validationResults?: string | null, lineage: string | null = null) {
+  const engine = fakeEngine(validationResults, lineage);
   vi.spyOn(PredictiveStudioEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as PredictiveStudioEngine);
   const fixture = RenderComponentFixture(PSPredictionsResourceComponent, {
     imports: [MJButtonDirective, PageHeaderInteriorStub, PageBodyInteriorStub, SplitStub, SplitAreaStub, LoadingStub, GridStub],
@@ -139,11 +184,17 @@ async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider(
     },
   });
   await settle(fixture);
-  const resource = fixture.componentInstance;
+  return { fixture, resource: fixture.componentInstance, engine };
+}
+
+async function renderWorkspace(provider: IMetadataProvider = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] })) {
+  const { fixture, resource, engine } = await renderCatalog(provider);
   resource.Open(resource.Cards[0]);
   await settle(fixture);
   return { fixture, resource, engine };
 }
+
+const defaultProvider = (): IMetadataProvider => CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
 
 /** The grid stub the workspace rendered, or null. */
 const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): GridStub | null => {
@@ -152,6 +203,94 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 };
 
 afterEach(() => vi.restoreAllMocks());
+
+/** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
+interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup: object | null; LatestResult: { CompleteMessage: string }; Save: () => Promise<boolean> }
+
+/**
+ * A provider whose List saves and whose List Details join one transaction group the test controls: `submit` decides the
+ * group's outcome and `queues(i)` whether the i-th detail's save queues it.
+ */
+function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boolean = () => true) {
+  const Details: ListDetailDouble[] = [];
+  const Submit = vi.fn(submit);
+  const Group = { Submit };
+  const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
+  const Provider = {
+    ...base,
+    CreateTransactionGroup: vi.fn(async () => Group),
+    GetEntityObject: vi.fn(async (entityName: string) => {
+      if (entityName === 'MJ: Lists') return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
+      const i = Details.length;
+      const d: ListDetailDouble = { ListID: '', RecordID: '', TransactionGroup: null, LatestResult: { CompleteMessage: `detail ${i} refused` }, Save: async () => queues(i) };
+      Details.push(d);
+      return d as unknown as MJListDetailEntity;
+    }),
+  } as unknown as IMetadataProvider;
+  return { Provider, Group, Submit, Details };
+}
+
+/** Loads 250 records at or above the list's risk floor (plus 10 below it) and sends them to a list. */
+async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent): Promise<void> {
+  const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
+  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
+  await settle(fixture);
+  await resource.SendToList();
+  fixture.detectChanges();
+}
+
+describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate decision', () => {
+  it("a shipped model's card shows the outcome title and the comparison with the flat guess, and opens", async () => {
+    const { fixture } = await renderCatalog(defaultProvider());
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('Ships — the model beats the flat guess');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-ships');
+    expect(card?.querySelector('.ps-biz-card-line')?.textContent?.trim()).toBe('Beats the flat guess by 0.0177 [0.0098, 0.0254] (log-loss).');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).not.toBeNull();
+  });
+
+  it('the workspace banner shows the title, the headline, the stored reason and the holdout the decision was measured on', async () => {
+    const { fixture } = await renderWorkspace();
+    const banner = Query(fixture, '[data-testid="ps-trust-banner"]');
+    expect(banner?.className).toContain('trust-ships');
+    expect(banner?.querySelector('.ps-trust-grade')?.textContent?.trim()).toBe('Ships — the model beats the flat guess');
+    expect(banner?.querySelector('.ps-trust-line')?.textContent?.trim()).toBe('Beats the flat guess by 0.0177 [0.0098, 0.0254] (log-loss).');
+    expect(banner?.querySelector('.ps-trust-explain')?.textContent?.trim()).toBe('The model beats the flat guess.');
+    expect(banner?.querySelector('.ps-trust-evidence')?.textContent?.trim()).toBe('Checked against 1,205 past records it had never seen.');
+    expect(banner?.querySelector('.fa-star')).toBeNull();
+  });
+
+  it("reads the model's lineage: a kept GLM fitted with the finalist's driver makes no lost-comparison claim", async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), keptGlmResults(), JSON.stringify({ shippedMember: 'glm', shippedDriver: 'logistic_regression' }));
+    expect(Query(fixture, '[data-testid="ps-prediction-card"] .ps-biz-card-line')?.textContent?.trim())
+      .toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss).');
+  });
+
+  it('without the shipped driver in the lineage, the same kept GLM keeps the lost-comparison claim', async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), keptGlmResults(), null);
+    expect(Query(fixture, '[data-testid="ps-prediction-card"] .ps-biz-card-line')?.textContent?.trim())
+      .toBe('A simple baseline (glm) beats the flat guess by 0.0239 [0.0110, 0.0360] (log-loss); the trained model did not beat it.');
+  });
+
+  it('a published model whose run stores no-signal does not open, and says why', async () => {
+    const { fixture } = await renderCatalog(defaultProvider(), storedResults(NO_SIGNAL));
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('No signal — not usable');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-none');
+    expect(card?.querySelector('.ps-biz-card-line')?.textContent?.trim()).toBe('Nothing beats the flat guess.');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
+  });
+
+  it('a published model whose run stores no gate decision is not evaluated and does not open', async () => {
+    const { fixture, resource } = await renderCatalog(defaultProvider(), null);
+    const card = Query(fixture, '[data-testid="ps-prediction-card"]');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.textContent?.trim()).toBe('Not evaluated yet');
+    expect(card?.querySelector('[data-testid="ps-trust-badge"]')?.className).toContain('trust-unmeasured');
+    expect(card?.querySelector('[data-testid="ps-open-prediction"]')).toBeNull();
+    resource.Open(resource.Cards[0]);
+    expect(resource.View).toBe('catalog');
+  });
+});
 
 describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   it('passes the resolved latest run to the grid and takes its rows from RowsLoaded, never reading the run itself', async () => {
@@ -188,24 +327,51 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   });
 
   it('reports how many of the qualifying records "Send to a list" added', async () => {
-    const saved = { list: 0, details: 0 };
-    const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
-    const provider = {
-      ...base,
-      GetEntityObject: vi.fn(async (entityName: string) =>
-        entityName === 'MJ: Lists'
-          ? ({ ID: 'L1', Name: '', Save: async () => ++saved.list > 0 } as unknown as MJListEntity)
-          : ({ Save: async () => ++saved.details > 0 } as unknown as MJListDetailEntity),
-      ),
-    } as unknown as IMetadataProvider;
-    const { fixture, resource } = await renderWorkspace(provider);
-    // 250 records at or above the list's risk floor, plus 10 below it.
-    const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
-    await settle(fixture);
-    await resource.SendToList();
-    fixture.detectChanges();
-    expect(saved.details).toBe(200);
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(lists.Details.length).toBe(200);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 200 of 250 at-risk records (highest risk first)');
+  });
+
+  it('queues every member on one transaction group and submits it once, so the adds take one round trip', async () => {
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect([lists.Submit.mock.calls.length, lists.Details.every((d) => d.TransactionGroup === lists.Group)]).toEqual([1, true]);
+  });
+
+  it('counts nothing added when the batch fails, naming the first error', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lists = listProvider(async () => false);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: detail 0 refused)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: detail 0 refused')]);
+  });
+
+  it('counts a member refused before it joined the batch as failed, and the rest as added', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const lists = listProvider(async () => true, (i) => i !== 3);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 199 of 200 records');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('1 failed to add (first error: detail 3 refused)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 1/200 adds failed. First: detail 3 refused')]);
+  });
+});
+
+describe('PSPredictionsResourceComponent (DOM) — the co-pilot agent lookup', () => {
+  it("loads the AI engine through the workspace's provider", async () => {
+    const provider = defaultProvider();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const config = vi.spyOn(AIEngineBase.Instance, 'Config').mockResolvedValue(undefined);
+    const { resource } = await renderCatalog(provider);
+    // the lookup every co-pilot entry point runs; called directly so the chat area (not stubbed here) stays closed
+    await resource['ensureModelDevAgentResolved']();
+    expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
+    // the stubbed engine holds no agents, so the lookup logs that chat falls back to default routing
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("'Model Development Agent' not found")]);
   });
 });

@@ -59,6 +59,9 @@ describe('WakeGateEvaluator — default watermark collector', () => {
         const params: RunViewParams[] = runViews.mock.calls[0][0];
         expect(params[1].MaxRows).toBe(1);
         expect(params[1].SkipTotalRowCount).toBeUndefined();
+        // The delta read carries the per-evaluation watermark, so it must not be cached (#5260).
+        expect(params[0].ExtraFilter).toContain('__mj_UpdatedAt >');
+        expect(params[0].BypassCache).toBe(true);
 
         const snapshot = result.watermarks['requests'];
         expect(snapshot.totalMatchingCount).toBe(42);

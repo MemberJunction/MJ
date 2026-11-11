@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { HIERARCHY_FORM_PANELS } from './HierarchyPanels/hierarchy-form-panels';
-import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent, MJSectionPickerComponent, MJAccordionSectionsComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -113,6 +113,7 @@ import { LoadDiagnosticSenderRegistrationToolbarActions } from "./DiagnosticSend
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { EntityFieldSecurityPanelComponent } from "../panels/field-security/entity-field-security-panel.component";
 import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
@@ -204,6 +205,7 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
         EntityCloneConfigEditorComponent,
+        EntityFieldSecurityPanelComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
         BrandKitAssetsPanelComponent,
@@ -230,6 +232,8 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         MJEmptyStateComponent,
         MJAlertComponent,
         MJTabNavComponent,
+        MJSectionPickerComponent,
+        MJAccordionSectionsComponent,
         MJButtonDirective,
         MJAccordionModule,
         MJDropdownComponent,

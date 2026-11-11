@@ -10,6 +10,8 @@ import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { TOOLBAR_PINS_SETTING_KEY, TOOLBAR_VISIBILITY_SETTING_KEY } from './form-toolbar.component';
 import type { RecordNavigationEvent } from '../types/navigation-events';
+import { MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
+import { By } from '@angular/platform-browser';
 
 /**
  * DOM coverage for <mj-form-toolbar> — the action bar CodeGen renders on every entity form (~6× direct,
@@ -37,7 +39,7 @@ class BottomSheetStub { @Input() Visible = false; @Input() Title = ''; @Output()
 
 const renderRaw = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(MjFormToolbarComponent, {
-    imports: [BottomSheetStub],
+    imports: [BottomSheetStub, MJConfirmDialogComponent],
     declarations: [MjFormToolbarComponent],
     inputs: {
       Record: RECORD,
@@ -173,8 +175,9 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const out = capture(f.componentInstance.DeleteRequested);
       btn(f, 'button[title="Delete this Record"]')!.click();
       f.detectChanges();
-      const confirm = btn(f, '.mj-dialog .mj-forms-btn--danger');
-      expect(confirm).not.toBeNull();
+      // the confirm action is the dialog's first action button (MJ confirm-first order)
+      const confirm = btn(f, 'mj-confirm-dialog .mj-dialog-actions button');
+      expect(confirm?.textContent?.trim()).toBe('Delete');
       confirm!.click();
       expect(out.length).toBe(1);
     });
@@ -248,16 +251,61 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(out.length).toBe(1);
     });
 
-    it('routes Discard through a confirm dialog when there are unsaved changes', () => {
+    /** The shared confirm the toolbar opens (mj-confirm-dialog: a bottom sheet on phones). */
+    const confirmDialog = (f: Fx, title = 'Discard Changes?') =>
+      f.debugElement.queryAll(By.directive(MJConfirmDialogComponent))
+        .map((d) => d.componentInstance as MJConfirmDialogComponent)
+        .find((d) => d.Title === title)!;
+
+    it('routes Discard through the shared confirm dialog when there are unsaved changes', () => {
       const f = render({ EditMode: true, IsDirty: true });
       const out = capture(f.componentInstance.CancelRequested);
       btn(f, 'button[title="Discard Changes"]')!.click();
       f.detectChanges();
       // dirty → confirmation dialog instead of an immediate cancel
       expect(out.length).toBe(0);
-      const confirm = btn(f, '.mj-dialog .mj-forms-btn--danger');
-      expect(confirm).not.toBeNull();
-      confirm!.click();
+      const dlg = confirmDialog(f);
+      expect(dlg.Visible).toBe(true);
+      expect([dlg.Title, dlg.Type, dlg.ConfirmText, dlg.CancelText]).toEqual(['Discard Changes?', 'danger', 'Discard Changes', 'Keep Editing']);
+      dlg.Confirmed.emit();
+      f.detectChanges();
+      expect(out.length).toBe(1);
+      expect(confirmDialog(f).Visible).toBe(false);
+    });
+
+    it('words the Discard message by count, and plainly when no named field changed', () => {
+      const f = render({ EditMode: true, IsDirty: true });
+      const names = (n: string[]) => Object.defineProperty(f.componentInstance, 'DirtyFieldDisplayNames', { get: () => n, configurable: true });
+      names(['Name']);
+      expect(f.componentInstance.DiscardMessage).toBe('You have 1 unsaved change. Are you sure you want to discard it?');
+      names(['Name', 'Status']);
+      expect(f.componentInstance.DiscardMessage).toBe('You have 2 unsaved changes. Are you sure you want to discard them?');
+      names([]);
+      expect(f.componentInstance.DiscardMessage).toBe('You have unsaved changes. Are you sure you want to discard them?');
+    });
+
+    it('keeps editing when the Discard confirm is dismissed', () => {
+      const f = render({ EditMode: true, IsDirty: true });
+      const out = capture(f.componentInstance.CancelRequested);
+      btn(f, 'button[title="Discard Changes"]')!.click();
+      f.detectChanges();
+      confirmDialog(f).Cancelled.emit();
+      f.detectChanges();
+      expect(out.length).toBe(0);
+      expect(confirmDialog(f).Visible).toBe(false);
+    });
+
+    it('routes Delete through the shared confirm dialog', () => {
+      const f = render();
+      const out = capture(f.componentInstance.DeleteRequested);
+      f.componentInstance.OnDeleteClick();
+      f.detectChanges();
+      const dlg = confirmDialog(f, 'Confirm Deletion');
+      expect(dlg.Visible).toBe(true);
+      expect([dlg.Title, dlg.Type, dlg.ConfirmText]).toEqual(['Confirm Deletion', 'danger', 'Delete']);
+      expect(out.length).toBe(0);
+      dlg.Confirmed.emit();
+      f.detectChanges();
       expect(out.length).toBe(1);
     });
   });
@@ -630,7 +678,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       };
       const f = renderComponentFixture(MjFormToolbarComponent, {
         declarations: [MjFormToolbarComponent],
-        imports: [RecordCloneSlideInComponent],
+        imports: [RecordCloneSlideInComponent, MJConfirmDialogComponent],
         providers: [{ provide: RecordCloneService, useValue: service }],
         inputs: { Record: CLONE_RECORD, EntityInfo: CLONE_ENTITY, UserCanEdit: true, Config: CLONE_ON, ...inputs },
       });

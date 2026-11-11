@@ -112,7 +112,7 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
 /** One `MJ: Entity Form Contributions` row as a registration, through {@link ContributionSpecToRegistration}. */
 export function MetadataContributionToRegistration(row: MJEntityFormContributionEntity): FormContributionRegistration {
     return {
-        ...ContributionSpecToRegistration(row.Entity, contributionRowSpec(row), row.ComponentID),
+        ...ContributionSpecToRegistration(row.Entity ?? '', contributionRowSpec(row), row.ComponentID),
         Priority: row.Precedence ?? 0,
         RowID: row.ID,
         Scope: row.Scope,

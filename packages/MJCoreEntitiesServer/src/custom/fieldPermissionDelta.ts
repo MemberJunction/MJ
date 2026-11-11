@@ -12,6 +12,16 @@ export type FieldPermissionSnapshotRow = {
 };
 
 /**
+ * The part of an existing `MJ: Entity Field Permissions` row the delta reads: which (field, role)
+ * pair it covers and its ID (for deletion).
+ */
+export type ExistingFieldPermissionRow = {
+    ID: string;
+    EntityFieldID: string;
+    RoleID: string;
+};
+
+/**
  * What reconciliation must write to bring an entity's field-permission rows back in line with
  * its fields and its entity-level permissions.
  *
@@ -69,11 +79,17 @@ type RoleEntityAccessForFieldVerbs = {
  * everything, so the snapshot grants them `Allow` here and the save-time guards refuse any
  * later `Deny` aimed at them. Access the server relies on is therefore visible in the data
  * rather than implied by an exemption in code.
+ *
+ * **Existing rows come from metadata unless `existingRows` is given.** Metadata is a cache: a row
+ * deleted outside this process (raw SQL, another server) still shows there, so the delta would
+ * skip inserting it and the field would end up denied to everyone. Callers that cannot afford
+ * that pass the rows they just read from the database.
  */
-export function ComputeFieldPermissionDelta(entity: EntityInfo): FieldPermissionDelta {
+export function ComputeFieldPermissionDelta(entity: EntityInfo, existingRows?: ExistingFieldPermissionRow[]): FieldPermissionDelta {
     const accessByRoleID = buildRoleEntityAccessMap(entity);
     const rolesWithEntityPermission = buildRolesWithAnyEntityPermission(entity);
     const restrictableFields = entity.Fields.filter(isRestrictable);
+    const rowsFor = existingRows ? rowsByFieldFrom(existingRows) : rowsFromMetadata;
 
     // The two halves ask DIFFERENT questions of the same permission rows, and must not share an
     // answer. Creating a snapshot row is a grant, so it is offered only to roles that can actually
@@ -81,8 +97,8 @@ export function ComputeFieldPermissionDelta(entity: EntityInfo): FieldPermission
     // so it is justified only when the row can no longer influence any decision — which turns on
     // whether the role relates to the entity at all, never on the strength of that relationship.
     return {
-        ToInsert: computeMissingRows(restrictableFields, accessByRoleID),
-        ToDelete: computeOrphanRowIDs(entity, rolesWithEntityPermission),
+        ToInsert: computeMissingRows(restrictableFields, accessByRoleID, rowsFor),
+        ToDelete: computeOrphanRowIDs(entity, rolesWithEntityPermission, rowsFor),
     };
 }
 
@@ -176,11 +192,12 @@ function foldPermissionInto(bucket: Map<string, RoleEntityAccessForFieldVerbs>, 
  */
 function computeMissingRows(
     fields: EntityFieldInfo[],
-    accessByRoleID: Map<string, RoleEntityAccessForFieldVerbs>
+    accessByRoleID: Map<string, RoleEntityAccessForFieldVerbs>,
+    rowsFor: ExistingRowsForField
 ): FieldPermissionSnapshotRow[] {
     const missing: FieldPermissionSnapshotRow[] = [];
     for (const field of fields) {
-        const existingRoleIDs = new Set(field.FieldPermissions.map(fp => normalizeID(fp.RoleID)).filter(Boolean));
+        const existingRoleIDs = new Set(rowsFor(field).map(fp => normalizeID(fp.RoleID)).filter(Boolean));
         for (const [roleID, access] of accessByRoleID) {
             if (existingRoleIDs.has(roleID)) {
                 continue;
@@ -226,11 +243,11 @@ function computeMissingRows(
  * own. Deleting them silently restored access an administrator had explicitly denied, and
  * `computeMissingRows` only ever writes `Allow`, so it never came back.
  */
-function computeOrphanRowIDs(entity: EntityInfo, rolesWithEntityPermission: Set<string>): string[] {
+function computeOrphanRowIDs(entity: EntityInfo, rolesWithEntityPermission: Set<string>, rowsFor: ExistingRowsForField): string[] {
     const orphans: string[] = [];
     for (const field of entity.Fields) {
         const fieldIsRestrictable = isRestrictable(field);
-        for (const permission of field.FieldPermissions) {
+        for (const permission of rowsFor(field)) {
             const roleID = normalizeID(permission.RoleID);
             if (!fieldIsRestrictable || !roleID || !rolesWithEntityPermission.has(roleID)) {
                 orphans.push(permission.ID);
@@ -238,6 +255,26 @@ function computeOrphanRowIDs(entity: EntityInfo, rolesWithEntityPermission: Set<
         }
     }
     return orphans;
+}
+
+/** The existing permission rows of one field. */
+type ExistingRowsForField = (field: EntityFieldInfo) => ReadonlyArray<{ ID: string; RoleID: string }>;
+
+/** Existing rows as metadata holds them. */
+function rowsFromMetadata(field: EntityFieldInfo): ReadonlyArray<{ ID: string; RoleID: string }> {
+    return field.FieldPermissions;
+}
+
+/** Existing rows from a list read off the database, grouped by field. */
+function rowsByFieldFrom(rows: ExistingFieldPermissionRow[]): ExistingRowsForField {
+    const byField = new Map<string, ExistingFieldPermissionRow[]>();
+    for (const row of rows) {
+        const fieldID = normalizeID(row.EntityFieldID);
+        const bucket = byField.get(fieldID) ?? [];
+        bucket.push(row);
+        byField.set(fieldID, bucket);
+    }
+    return field => byField.get(normalizeID(field.ID)) ?? [];
 }
 
 /**

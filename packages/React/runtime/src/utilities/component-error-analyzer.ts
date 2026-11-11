@@ -280,13 +280,38 @@ export class ComponentErrorAnalyzer {
   }
 
   /**
+   * The text of the first non-empty `(at …)` group, up to the next `)`. Same result as
+   * `/\(at ([^)]+)\)/`, found by index: that regex rescans to the next `)` from every `(at `, which is
+   * quadratic on a message full of unclosed groups (CodeQL js/polynomial-redos). The next `)` is
+   * remembered across openings.
+   */
+  private static extractAtLocation(error: string): string | undefined {
+    let close = -1;
+    let open = error.indexOf('(at ');
+    while (open !== -1) {
+      const start = open + 4;
+      if (close < start) {
+        close = error.indexOf(')', start);
+        if (close === -1) {
+          return undefined;
+        }
+      }
+      if (close > start) {
+        return error.slice(start, close);
+      }
+      open = error.indexOf('(at ', open + 1);
+    }
+    return undefined;
+  }
+
+  /**
    * Extract additional context from error
    */
   private static extractContext(error: string): string | undefined {
     // Extract file names or additional context
-    const fileMatch = error.match(/\(at ([^)]+)\)/);
-    if (fileMatch) {
-      return fileMatch[1];
+    const location = this.extractAtLocation(error);
+    if (location !== undefined) {
+      return location;
     }
     
     // Extract "created by" information

@@ -153,6 +153,12 @@
       }
     </div>
 
+    <!-- Phone: the strip becomes one button that opens the Sections sheet (Timeline, Details) -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
+
     <!-- Tabs -->
     <div class="tabs">
       <mj-tab-nav [Tabs]="Tabs" [ActiveKey]="ActiveTab" (TabChange)="ChangeTab($event)"></mj-tab-nav>
@@ -162,8 +168,8 @@
     <div class="content-area">
       <!-- Timeline Tab -->
       @if (activeTab === 'timeline') {
-        <div class="tab-content" style="height: 100%;">
-          <as-split direction="horizontal" style="height: 100%;">
+        <div class="tab-content timeline-tab" style="height: 100%;">
+          <as-split [direction]="TimelineSplitDirection" style="height: 100%;">
             <!-- Timeline Pane -->
             <as-split-area [size]="selectedTimelineItem ? 55 : 100">
               <mj-ai-agent-run-timeline
@@ -189,6 +195,13 @@
               </as-split-area>
             }
           </as-split>
+          <!-- Phone only: the desktop-only views are named, with a link to open the run there -->
+          <div class="phone-desktop-note">
+            <span>Visualization and Analytics are desktop views for this run.</span>
+            <button mjButton variant="flat" size="sm" type="button" (click)="CopyPageLink()">
+              <i class="fas fa-link" aria-hidden="true"></i> Copy link
+            </button>
+          </div>
         </div>
       }
 

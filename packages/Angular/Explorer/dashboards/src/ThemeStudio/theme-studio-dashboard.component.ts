@@ -1167,7 +1167,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   public InsertChromeSelector(selector: string): void {
     const view = this.cssCm?.view;
     if (!view) {
-      const prefix = this.CustomCss.trim() ? `${this.CustomCss.replace(/\s+$/, '')}\n\n` : '';
+      const prefix = this.CustomCss.trim() ? `${this.CustomCss.trimEnd()}\n\n` : '';
       this.OnCssEditorChange(`${prefix}${selector} {\n  \n}`);
       return;
     }

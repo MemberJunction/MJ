@@ -1310,6 +1310,39 @@ describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
     expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item').length).toBe(0);
   });
 
+  const stubIndicators = (f: ReturnType<typeof renderMobile>, key: string, counts: { DirtyCount?: number; ErrorCount?: number; WarningCount?: number }) => {
+    const original = f.componentInstance.ChromeGroupIndicators.bind(f.componentInstance);
+    vi.spyOn(f.componentInstance, 'ChromeGroupIndicators').mockImplementation((group) =>
+      group.Key === key ? { ...original(group), DirtyCount: 0, ErrorCount: 0, WarningCount: 0, ...counts } : original(group));
+    f.componentInstance['cdr'].markForCheck();
+    f.detectChanges();
+  };
+
+  it('the picker reports whether its sheet is open', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    expect(picker(f)?.getAttribute('aria-expanded')).toBe('false');
+    picker(f)!.click();
+    f.detectChanges();
+    expect(picker(f)?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('names the active section\'s status in the picker\'s accessible name, which replaces its content', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'payments' });
+    stubIndicators(f, 'payments', { DirtyCount: 1, ErrorCount: 2 });
+    expect(picker(f)?.getAttribute('aria-label')).toBe('Change section — Payments, 1 unsaved change, 2 errors');
+  });
+
+  it('orders a sheet row\'s indicators like the picker: unsaved dot, then error or warning', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    stubIndicators(f, 'payments', { DirtyCount: 1, WarningCount: 3 });
+    picker(f)!.click();
+    f.detectChanges();
+    const row = sheetRows(f)[1];
+    expect(Array.from(row.children).map((c) => c.className.split(' ')[0]).filter((c) => c.startsWith('mj-forms-chrome-rail-'))).toEqual([
+      'mj-forms-chrome-rail-dirty', 'mj-forms-chrome-rail-warning',
+    ]);
+  });
+
   it('picker click opens the sheet; sheet lists first-class groups then More children under a heading', () => {
     const f = renderMobile({ mobile: true, activeGroup: 'details' });
     expect(f.componentInstance.SectionSheetOpen).toBe(false);

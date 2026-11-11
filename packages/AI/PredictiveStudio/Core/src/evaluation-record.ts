@@ -5,7 +5,7 @@
  * by the trust verdict. Pure; no dependencies beyond the pipeline spec types.
  */
 import type { MajorityBaselineRule, ValidationStrategy } from './pipeline-spec';
-import type { ImportanceKind } from './sidecar-contract';
+import { IMPORTANCE_KINDS, type ImportanceKind } from './sidecar-contract';
 
 /** How a model's stored numbers were measured; training writes it into `MLModel.Lineage` under `evaluation`. */
 export interface EvaluationRecord {
@@ -55,17 +55,19 @@ export class EvaluationLineage {
    * The record training writes for a pipeline's validation strategy. `ValidationOutOfSample` is required: it is the
    * flag that lets validation `Metrics` count toward trust, so it never defaults to true. Pass `MajorityBaselineRule`
    * when the caller has already parsed it with {@link ParseMajorityBaselineRule}; otherwise it is parsed here, which
-   * throws `InvalidMajorityBaselineRuleError` for an unknown value.
+   * throws `InvalidMajorityBaselineRuleError` for an unknown value. A declared time index withholds trust
+   * ({@link NotEvaluatedAsForecast}) unless `HoldoutRespectsTime` says the model was tested on later periods than it
+   * trained on (a date-carved or rolling-origin holdout).
    */
   public static Build(
     validation: ValidationStrategy,
-    options: { ValidationOutOfSample: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule },
+    options: { ValidationOutOfSample: boolean; ImportanceKind?: ImportanceKind | null; MajorityBaselineRule?: MajorityBaselineRule; HoldoutRespectsTime?: boolean },
   ): EvaluationRecord {
     const timeIndex = validation.TimeIndexColumn?.trim() || null;
     return {
       ValidationOutOfSample: options.ValidationOutOfSample,
       TimeIndexColumn: timeIndex,
-      WithheldReason: timeIndex ? EvaluationLineage.NotEvaluatedAsForecast : null,
+      WithheldReason: timeIndex && options.HoldoutRespectsTime !== true ? EvaluationLineage.NotEvaluatedAsForecast : null,
       MajorityBaselineRule: options.MajorityBaselineRule || EvaluationLineage.ParseMajorityBaselineRule(validation.MajorityBaselineRule),
       ImportanceKind: options.ImportanceKind || null,
     };
@@ -95,7 +97,8 @@ export class EvaluationLineage {
   }
 
   private static isImportanceKind(value: unknown): value is ImportanceKind {
-    return value === 'coefficient' || value === 'split_or_impurity' || value === 'none';
+    // A stored kind outside IMPORTANCE_KINDS reads as null.
+    return typeof value === 'string' && (IMPORTANCE_KINDS as ReadonlyArray<string>).includes(value);
   }
 
   private static isMajorityBaselineRule(value: string): value is MajorityBaselineRule {

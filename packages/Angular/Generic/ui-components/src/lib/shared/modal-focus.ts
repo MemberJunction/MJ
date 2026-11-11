@@ -33,14 +33,15 @@ export function IsTabStop(el: HTMLElement): boolean {
 }
 
 /**
- * display:none and [hidden] hide the whole subtree. visibility is inherited, and a child can set
- * visible again, so that check is only on the element itself.
+ * display:none, [hidden] and [inert] (a collapsed accordion body) take the whole subtree out of
+ * focus. visibility is inherited, and a child can set visible again, so that check is only on the
+ * element itself.
  */
 export function IsVisibleStop(el: HTMLElement): boolean {
   if (getComputedStyle(el).visibility === 'hidden') return false;
   let current: HTMLElement | null = el;
   while (current) {
-    if (current.hasAttribute('hidden')) return false;
+    if (current.hasAttribute('hidden') || current.hasAttribute('inert')) return false;
     if (getComputedStyle(current).display === 'none') return false;
     current = current.parentElement;
   }
@@ -74,6 +75,9 @@ export function FirstEnabledElement(nodes: NodeListOf<HTMLElement> | HTMLElement
     if (skip?.(el)) continue;
     if (IsDisabledElement(el)) continue;
     if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
+    // A hidden or inert element is skipped: `.focus()` on one is a silent no-op, which would leave
+    // focus outside the modal.
+    if (!IsVisibleStop(el)) continue;
     return el;
   }
   return null;

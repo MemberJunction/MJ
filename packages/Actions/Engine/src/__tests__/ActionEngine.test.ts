@@ -222,7 +222,7 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
 // ============================================================================
 // Now import the modules under test
 // ============================================================================
-import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../generic/ActionEngine';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer, ENGINE_RESULT_CODES } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -287,6 +287,8 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Input validation failed');
+            // #4690: the log row carries why the action did not run, not NULL.
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.InputValidationFailed);
             expect(validateSpy).toHaveBeenCalledWith(params);
         });
 
@@ -378,6 +380,7 @@ describe('ActionEngineServer', () => {
             // an error, and callers must not treat it as a failure to retry.
             expect(result.Success).toBe(true);
             expect(result.Message).toBe(ACTION_PREVENTED_BY_FILTER_MESSAGE);
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.PreventedByFilter);
         });
 
         it('runs a deferral in place of the action, but only after filters pass', async () => {
@@ -1494,6 +1497,7 @@ describe('ActionEngineServer', () => {
             expect(result.Success).toBe(false);
             expect(result.Message).toMatch(/MaxExecutionTimeMS \(50ms\)/);
             expect(result.Message).toContain('Times Out');
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.Timeout);
         });
 
         it('returns Success=false with the upstream reason when the caller aborts via params.AbortSignal', async () => {
@@ -1514,6 +1518,7 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(false);
             expect(result.Message).toBe('user-initiated cancel');
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.Aborted);
         });
 
         it('does not corrupt caller-visible params after the run', async () => {

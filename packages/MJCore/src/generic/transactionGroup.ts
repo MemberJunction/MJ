@@ -244,6 +244,21 @@ export abstract class TransactionGroupBase {
     }
 
     private _preprocessingItems: TransactionPreprocessingItem[] = [];
+    private _inTransactionAfterSaveHooks = new Map<BaseEntity, Array<(result: unknown) => Promise<void>>>();
+
+    /**
+     * Enlists an async hook (such as a `SubtypeSelector.Driver` `AfterSave` callback) to be awaited
+     * inside the open group transaction after item SQL execution and PK hydration, before
+     * `CommitGroupTransaction()` commits. If the hook throws, the group transaction rolls back.
+     */
+    public RegisterInTransactionAfterSave(entity: BaseEntity, hook: (result: unknown) => Promise<void>): void {
+        let list = this._inTransactionAfterSaveHooks.get(entity);
+        if (!list) {
+            list = [];
+            this._inTransactionAfterSaveHooks.set(entity, list);
+        }
+        list.push(hook);
+    }
     /**
      * If an entity object needs to conduct any type of asynchronous preprocessing before a transaction is submitted, it must notify its transaction group
      * that it is doing so with this method. This causes the TransactionGroup to wait for all preprocessing to be completed before submitting the transaction.
@@ -404,6 +419,7 @@ export abstract class TransactionGroupBase {
             return false;
         }
         finally {
+            this._inTransactionAfterSaveHooks.clear();
             CrossEntityPolicyEngine.Instance.ClearTransactionGroupScope(this);
         }
     }
@@ -471,6 +487,19 @@ export abstract class TransactionGroupBase {
             for (const result of results) {
                 const effectiveSuccess = groupSucceeded && result.Success;
                 await result.Transaction.CallBack(result.Result, effectiveSuccess);
+            }
+            if (groupSucceeded) {
+                for (const result of results) {
+                    if (!result.Success || result.Transaction.OperationType === 'Delete') {
+                        continue;
+                    }
+                    const hooks = this._inTransactionAfterSaveHooks.get(result.Transaction.BaseEntity);
+                    if (hooks) {
+                        for (const hook of hooks) {
+                            await hook(result.Result);
+                        }
+                    }
+                }
             }
             this.notifyTransactionStatus(groupSucceeded, results);
             completed = true;

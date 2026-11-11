@@ -29,7 +29,6 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
 /**
  * mj-dialog — Modal dialog component using native `<dialog>` element.
  *
- * Replaces `<kendo-dialog>`.
  *
  * Supports both explicit width/height and size presets.
  * Content is projected, with an optional `<mj-dialog-actions>` for the footer.
@@ -63,8 +62,10 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
   standalone: true,
   template: `
     @if (Visible) {
-      <div class="mj-dialog-backdrop" (click)="OnBackdropClick($event)">
+      <div class="mj-dialog-backdrop" [class.mj-dialog-backdrop--sheet]="PhoneMode === 'sheet'" (click)="OnBackdropClick($event)">
         <div class="mj-dialog-container"
+          [class.mj-dialog-container--sheet]="PhoneMode === 'sheet'"
+          [class.mj-dialog-container--full]="PhoneMode === 'full'"
           [attr.role]="Role"
           aria-modal="true"
           tabindex="-1"
@@ -201,6 +202,18 @@ export class MJDialogComponent implements OnDestroy {
 
   get dialogId(): number {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     return this.DialogId;
+  }
+
+  /**
+   * How the dialog presents on a phone (dialog.scss applies it under 768px; desktop is unchanged).
+   * `sheet`: a bottom sheet sized to its content, for every alert dialog and for `sm` / `auto`
+   * dialogs without an explicit `Width`. `full`: full-screen with the title and actions pinned,
+   * for `md` / `lg` / `xl` and any dialog given a `Width` (it was laid out for a desktop width).
+   */
+  get PhoneMode(): 'sheet' | 'full' {
+    if (this.Role === 'alertdialog') return 'sheet';
+    if (this.Width) return 'full';
+    return this.Size === 'sm' || this.Size === 'auto' ? 'sheet' : 'full';
   }
 
   get ResolvedWidth(): string {
@@ -368,7 +381,6 @@ export class MJDialogComponent implements OnDestroy {
 /**
  * mj-dialog-titlebar — Custom titlebar content for mj-dialog.
  *
- * Replaces `<kendo-dialog-titlebar>`.
  *
  * @example
  * ```html
@@ -390,7 +402,6 @@ export class MJDialogTitlebarComponent {}
 /**
  * mj-dialog-actions — Footer action bar for mj-dialog.
  *
- * Replaces `<kendo-dialog-actions>`.
  *
  * @example
  * ```html
