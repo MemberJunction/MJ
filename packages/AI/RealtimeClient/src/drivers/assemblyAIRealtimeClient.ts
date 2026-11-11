@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, RealtimeContextNoteOptions, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientReconnectContext, RealtimeClientState } from '../generic/baseRealtimeClient';
 import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
@@ -197,8 +197,8 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
     /** The server-authored base system prompt (from the SessionConfig pact). */
     private initialBasePrompt = '';
     private basePrompt = '';
-    /** Accumulated {@link SendContextNote} texts, re-sent with the full prompt each time. */
-    private contextNotes: string[] = [];
+    /** Accumulated {@link SendContextNote} entries since the latest seed, re-sent with the full prompt each time. */
+    private contextNotes: Array<{ Text: string; StateKey?: string; Ephemeral?: boolean }> = [];
     /** Last connected session config — retained so Reconnect can re-establish the session. */
     private activeConfig: ClientRealtimeSessionConfig | null = null;
 
@@ -383,17 +383,19 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         const nextInitialBasePrompt = typeof sessionObject['system_prompt'] === 'string'
             ? sessionObject['system_prompt']
             : this.initialBasePrompt;
-        let nextBasePrompt = nextInitialBasePrompt;
-        if (!useNativeResume && context.Seed.Entries.length > 0) {
-            const seedNote = RenderRealtimeMemorySeedAsContextNote(context.Seed);
-            if (seedNote) {
-                nextBasePrompt = nextBasePrompt ? `${nextBasePrompt}\n\n${seedNote}` : seedNote;
-            }
-        }
+        const notesAtAttemptStart = new Set(this.contextNotes);
+        const seedNote =
+            !useNativeResume && context.Seed.Entries.length > 0
+                ? RenderRealtimeMemorySeedAsContextNote(context.Seed)
+                : null;
+        const nextBasePrompt = seedNote
+            ? (nextInitialBasePrompt ? `${nextInitialBasePrompt}\n\n${seedNote}` : seedNote)
+            : nextInitialBasePrompt;
+        const carryOverNotes = seedNote ? [] : this.contextNotes.filter((n) => !n.Ephemeral);
         sessionObject['system_prompt'] =
-            this.contextNotes.length === 0
+            carryOverNotes.length === 0
                 ? nextBasePrompt
-                : [nextBasePrompt, ...this.contextNotes].filter((s) => s.length > 0).join('\n\n');
+                : `${nextBasePrompt}\n\n## Background updates\n${carryOverNotes.map((n) => `- ${n.Text}`).join('\n')}`;
 
         let openSocket: (() => void) | null = null;
         let failOpen: ((error: Error) => void) | null = null;
@@ -505,6 +507,8 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
                 this.callsFromBeforeReseed.add(callID);
             }
         }
+        const arrivedDuringAttempt = this.contextNotes.filter((n) => !notesAtAttemptStart.has(n));
+        this.contextNotes = seedNote ? arrivedDuringAttempt : [...carryOverNotes, ...arrivedDuringAttempt];
         this.initialBasePrompt = nextInitialBasePrompt;
         this.basePrompt = nextBasePrompt;
         this.connectUrl = nextConnectUrl;
@@ -585,13 +589,31 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
      * `session.update`. A config write never triggers or disturbs generation, so it is sent
      * immediately even while a reply is in flight (no queueing applies).
      */
-    public SendContextNote(text: string): void {
-        if (!this.socket || !this.socketOpen) {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        if ((!this.socket || !this.socketOpen) && !this.IsReconnecting) {
             return;
         }
-        this.ConversationMemory.Record({ Kind: 'note', Text: text });
-        this.contextNotes.push(text);
-        this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
+        const stateKey = options?.StateKey?.trim();
+        if (stateKey) {
+            const storedText = options?.MemoryText ?? text;
+            this.contextNotes = this.contextNotes.filter((n) => n.StateKey !== stateKey);
+            if (storedText.trim().length > 0 && !options?.Ephemeral) {
+                this.contextNotes.push({ Text: storedText, StateKey: stateKey });
+            }
+        } else if (options?.Ephemeral) {
+            this.contextNotes = this.contextNotes.filter((n) => !n.Ephemeral);
+            this.contextNotes.push({ Text: text, Ephemeral: true });
+        } else {
+            this.contextNotes.push({ Text: text });
+        }
+        if (this.socket && this.socketOpen) {
+            this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
+        } else if (this.IsReconnecting) {
+            this.queuedSends.push(() =>
+                this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } })
+            );
+        }
     }
 
     /**
@@ -1099,7 +1121,7 @@ export class AssemblyAIRealtimeClient extends BaseRealtimeClient {
         if (this.contextNotes.length === 0) {
             return this.basePrompt;
         }
-        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n}`).join('\n')}`;
+        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n.Text}`).join('\n')}`;
     }
 
     /** JSON-serializes and sends one client frame (no-op once the socket is gone). */

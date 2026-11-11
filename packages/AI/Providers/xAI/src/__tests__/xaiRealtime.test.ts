@@ -1090,10 +1090,12 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 /** Driver whose every connection is a fresh fake: the first opens on its own, later ones answer only what a test fires. */
 class ReconnectingxAIRealtime extends xAIRealtime {
     public readonly Connections: FakeConnection[] = [];
-    protected override createConnection(): IxAIRealtimeConnection {
+    public readonly ResumptionHandlesUsed: Array<string | undefined> = [];
+    protected override createConnection(_model: string, resumptionHandle?: string): IxAIRealtimeConnection {
         const conn = new FakeConnection();
         conn.AutoSessionCreated = this.Connections.length === 0;
         this.Connections.push(conn);
+        this.ResumptionHandlesUsed.push(resumptionHandle);
         return conn;
     }
 }
@@ -1103,16 +1105,18 @@ describe('xAIRealtime reconnect keeps the frames that come with session.created'
         ({ type: 'conversation.created', event_id: 'e', conversation: { id, object: 'realtime.conversation' } }) as RealtimeServerEvent;
 
     it.each([
-        ['a native resumption', true],
-        ['a reseed', false],
-    ])('records the conversation.created that arrives with the new connection\'s session.created, after %s', async (_move, firstConversationKnown) => {
+        ['an explicit native resumption', true],
+        ['a default lossless reseed', false],
+    ])('records the conversation.created that arrives with the new connection\'s session.created, after %s', async (_move, explicitNative) => {
         const driver = new ReconnectingxAIRealtime('xai-key');
-        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        const session = (await driver.StartSession({
+            Model: 'grok-voice',
+            SystemPrompt: 'sys',
+            ...(explicitNative ? { Config: { trustNativeResumption: true } } : {}),
+        })) as xAIRealtimeSession;
         await session.WaitForConfigApplied();
-        if (firstConversationKnown) {
-            driver.Connections[0].Fire(conversationCreated('conv_1'));
-            expect(session.ResumptionHandle).toBe('conv_1');
-        }
+        driver.Connections[0].Fire(conversationCreated('conv_1'));
+        expect(session.ResumptionHandle).toBe('conv_1');
 
         const reconnect = session.TriggerReconnect('connection-lost');
         const second = driver.Connections[1];
@@ -1121,7 +1125,66 @@ describe('xAIRealtime reconnect keeps the frames that come with session.created'
         second.Fire(conversationCreated('conv_2'));
         expect(await reconnect).toBe(true);
 
+        expect(driver.ResumptionHandlesUsed[1]).toBe(explicitNative ? 'conv_1' : undefined);
         expect(session.ResumptionHandle).toBe('conv_2');
+        await session.Close();
+    });
+
+    it('defaults TrustsNativeResumption to false across server and client-direct xAI sessions and preserves full memory across drop + subsequent reconnects', async () => {
+        const driver = new ReconnectingxAIRealtime('xai-key');
+        expect(driver.TrustsNativeResumption).toBe(false);
+
+        const cd = new ClientDirectTestablexAI('k');
+        const minted = await cd.CreateClientSession({ Model: 'grok-voice', SystemPrompt: 'sys' });
+        expect(minted.TrustNativeResumption).toBe(false);
+
+        const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
+        expect(session.TrustsNativeResumption).toBe(false);
+        await session.WaitForConfigApplied();
+
+        // Initial conversation conv_1 receives spoken turns, screen context notes, and ephemeral progress
+        driver.Connections[0].Fire(conversationCreated('conv_1'));
+        driver.Connections[0].Fire({
+            type: 'conversation.item.input_audio_transcription.completed',
+            transcript: 'Remember my launch code is 7788.',
+            content_index: 0,
+            event_id: 'e_u1',
+            item_id: 'item_u1',
+        } as RealtimeServerEvent);
+        driver.Connections[0].Fire({
+            type: 'response.output_audio_transcript.done',
+            transcript: 'Noted — launch code 7788.',
+            content_index: 0,
+            event_id: 'e_a1',
+            item_id: 'item_a1',
+            output_index: 0,
+            response_id: 'r1',
+        } as RealtimeServerEvent);
+        session.SendContextNote('[app-context]\nlocation: Explorer › Old Screen', { StateKey: 'app-context' });
+        session.SendContextNote('[app-context]\nlocation: Explorer › Current Screen', { StateKey: 'app-context' });
+        session.SendContextNote('[delegated-agent progress] running step 1', { Ephemeral: true });
+
+        // Network drop -> recovers onto conv_2 via text seeding (NOT ?conversation_id=conv_1)
+        const r1 = session.TriggerReconnect('connection-lost');
+        driver.Connections[1].Fire({ type: 'session.created', event_id: 's2' } as RealtimeServerEvent);
+        driver.Connections[1].Fire(conversationCreated('conv_2'));
+        expect(await r1).toBe(true);
+
+        // Next planned reconnect -> recovers onto conv_3 via text seeding (NOT ?conversation_id=conv_2)
+        const r2 = session.TriggerReconnect('duration-expiry');
+        driver.Connections[2].Fire({ type: 'session.created', event_id: 's3' } as RealtimeServerEvent);
+        driver.Connections[2].Fire(conversationCreated('conv_3'));
+        expect(await r2).toBe(true);
+
+        expect(driver.ResumptionHandlesUsed).toEqual([undefined, undefined, undefined]);
+        for (const conn of [driver.Connections[1], driver.Connections[2]]) {
+            const seededText = JSON.stringify(conn.Sent.filter((e) => e.type === 'conversation.item.create'));
+            expect(seededText).toContain('Remember my launch code is 7788.');
+            expect(seededText).toContain('Noted — launch code 7788.');
+            expect(seededText).toContain('Current Screen');
+            expect(seededText).not.toContain('Old Screen');
+            expect(seededText).not.toContain('delegated-agent progress');
+        }
         await session.Close();
     });
 });

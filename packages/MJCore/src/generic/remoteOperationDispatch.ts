@@ -84,6 +84,9 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
             () => op.ExecuteServer(input, context),
         );
     }
+    // A client's own request: what it saves reads as the caller's own act (`ServerOperationScopeManager.IsInDirectClientCrud`),
+    // which decides, for one, who reviewed a task-graph Human step. Correct for the client dispatchers that call this; server
+    // code must not call it to act on a person's behalf, or the person would be credited with what the code did.
     return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() =>
         op.ExecuteServer(input, context),
     );
