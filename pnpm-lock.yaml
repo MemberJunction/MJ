@@ -4678,6 +4678,9 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.3.0-edge.0
         version: link:../Explorer/shared
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.3.0-edge.0
+        version: link:../Generic/shared
       '@memberjunction/rubrics-base':
         specifier: 6.3.0-edge.0
         version: link:../../Rubrics/Base
@@ -4788,6 +4791,9 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.3.0-edge.0
         version: link:../Explorer/shared
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.3.0-edge.0
+        version: link:../Generic/shared
       '@memberjunction/rubrics-base':
         specifier: 6.3.0-edge.0
         version: link:../../Rubrics/Base
@@ -9948,6 +9954,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.0
         version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.3.0-edge.0
+        version: link:../../../GraphQLDataProvider
       '@memberjunction/ng-base-types':
         specifier: 6.3.0-edge.0
         version: link:../base-types

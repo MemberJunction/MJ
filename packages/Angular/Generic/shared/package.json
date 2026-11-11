@@ -38,6 +38,7 @@
     "@memberjunction/ng-base-types": "6.3.0-edge.0",
     "@memberjunction/core-entities": "6.3.0-edge.0",
     "@memberjunction/global": "6.3.0-edge.0",
+    "@memberjunction/graphql-dataprovider": "6.3.0-edge.0",
     "@memberjunction/theme-engine": "6.3.0-edge.0",
     "dompurify": "^3.3.0",
     "tslib": "^2.8.1"
