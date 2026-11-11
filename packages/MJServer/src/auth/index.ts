@@ -251,28 +251,40 @@ export const VerifyUserRecord = async (
 ): Promise<UserInfo | undefined> => {
   if (!email) return undefined;
 
-  // Collect ALL matches rather than taking .find()'s first hit. Two User rows can share an email
-  // case-insensitively (see the duplicate-provisioning path below), and .find() then resolved to
-  // whichever row happened to sit earlier in UserCache.Instance.Users — i.e. database row order.
-  // That order changes when the cache is rebuilt, so an MJAPI restart silently moved a user onto a
-  // different record: their conversations, artifacts, items shared with them and their profile
-  // picture (UserImageURL lives on the User row) all vanished at once, and came back if the order
-  // flipped again. Observed in production 2026-09-15. Resolution must not depend on row order.
-  const emailMatches = UserCache.Instance.Users.filter((u) => {
-    if (!u.Email || u.Email.trim() === '') {
-      // this condition should never occur. If it doesn throw a console error including the user id
-      // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
-      console.error(`SYSTEM METADATA ISSUE: User ${u.ID} has no email address`);
-      return false;
-    } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
-  });
+  let emailMatches: readonly UserInfo[];
+  const cacheInstance = UserCache.Instance;
+  if (cacheInstance && typeof cacheInstance.UsersByEmail === 'function') {
+    for (const blankId of cacheInstance.BlankEmailUserIDs) {
+      console.error(`SYSTEM METADATA ISSUE: User ${blankId} has no email address`);
+    }
+    // O(1) lookup via pre-indexed, ID-sorted email buckets on UserCache so resolution never depends
+    // on database row order (see production duplicate-email incident 2026-09-15).
+    emailMatches = cacheInstance.UsersByEmail(email);
+  } else {
+    // Fallback for unit-test mocks that stub only UserCache.Users / UserCache.Instance.Users
+    const fallbackUsers = cacheInstance?.Users ?? UserCache.Users ?? [];
+    const normalizedTarget = email.trim().toLowerCase();
+    const mutableMatches: UserInfo[] = [];
+    for (const candidate of fallbackUsers) {
+      if (!candidate.Email) {
+        console.error(`SYSTEM METADATA ISSUE: User ${candidate.ID} has no email address`);
+        continue;
+      }
+      if (candidate.Email.trim().toLowerCase() === normalizedTarget) {
+        mutableMatches.push(candidate);
+      }
+    }
+    if (mutableMatches.length > 1) {
+      mutableMatches.sort((a, b) => a.ID.localeCompare(b.ID));
+    }
+    emailMatches = mutableMatches;
+  }
 
   if (emailMatches.length > 1) {
     // Deterministic tie-break by ID so every process and every restart agrees, and a LOUD error
     // because this is a data problem an operator has to resolve — silently picking a row is what
     // made it look like data loss to the customer. Sorting by ID is arbitrary but stable; the point
     // is that it never changes, not that it picks the "right" one.
-    emailMatches.sort((a, b) => a.ID.localeCompare(b.ID));
     LogError(
       `AMBIGUOUS LOGIN: ${emailMatches.length} User records share the email '${email}' ` +
         `(case-insensitively): ${emailMatches.map((u) => `${u.ID} (${u.Email})`).join(', ')}. ` +
@@ -345,7 +357,11 @@ export const VerifyUserRecord = async (
           });
 
           user = new UserInfo(Metadata.Provider, initData); // global-provider-ok: same JWT-validation context — no per-request provider yet
-          UserCache.Instance.Users.push(user);
+          if (UserCache.Instance && typeof UserCache.Instance.AddOrUpdateUser === 'function') {
+            UserCache.Instance.AddOrUpdateUser(user);
+          } else {
+            (UserCache.Instance?.Users ?? UserCache.Users)?.push(user);
+          }
           console.warn(`   >>> New user ${email} created successfully!`);
         }
       } else if (emailDomain.length === 0) {
