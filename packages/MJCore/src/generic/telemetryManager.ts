@@ -423,6 +423,21 @@ export interface MemorySnapshot {
 }
 
 /**
+ * Lifecycle phase an {@link TelemetryEventCallback} is notified for: `'start'` when an event is
+ * created (via {@link TelemetryManager.StartEvent}), `'end'` when it completes (via
+ * {@link TelemetryManager.EndEvent} or {@link TelemetryManager.RecordEvent}).
+ */
+export type TelemetryEventLifecycleType = 'start' | 'end';
+
+/**
+ * Callback signature for {@link TelemetryManager.OnEvent}. Invoked synchronously; must never throw
+ * in a way that should disrupt the producer — `OnEvent` already catches and swallows exceptions,
+ * but implementations should still avoid relying on that as a substitute for their own error
+ * handling.
+ */
+export type TelemetryEventCallback = (event: TelemetryEvent, type: TelemetryEventLifecycleType) => void;
+
+/**
  * A single telemetry event
  */
 export interface TelemetryEvent<T extends TelemetryParamsUnion = TelemetryParamsUnion> {
@@ -897,6 +912,14 @@ const DEFAULT_SETTINGS: TelemetrySettings = {
 
 const SENSITIVE_TELEMETRY_KEYS = /(?:token|password|secret|authorization|apikey|api_key|connectionstring|connection_string)/i;
 
+/**
+ * Sanitizes telemetry params by redacting values whose key looks sensitive (credentials, secrets,
+ * auth tokens, connection strings). Only **string** values are redacted — numeric fields that
+ * happen to match the `token` substring (e.g. `TelemetryAIParams.inputTokens` /
+ * `outputTokens`) are genuine usage counts, not credential material, and must survive untouched so
+ * `mj.ai.tokens` OTel counters and cost-tracking analyzers keep working. A real bearer token or
+ * API key is always a string, never a number, so this distinction never under-redacts.
+ */
 function sanitizeTelemetryParams<T extends TelemetryParamsUnion>(params: T): T {
     if (!params || typeof params !== 'object') {
         return params;
@@ -904,7 +927,7 @@ function sanitizeTelemetryParams<T extends TelemetryParamsUnion>(params: T): T {
     let cloned: Record<string, unknown> | null = null;
     const record = params as unknown as Record<string, unknown>;
     for (const key of Object.keys(record)) {
-        if (SENSITIVE_TELEMETRY_KEYS.test(key) && record[key] != null) {
+        if (SENSITIVE_TELEMETRY_KEYS.test(key) && record[key] != null && typeof record[key] === 'string') {
             if (!cloned) {
                 cloned = { ...record };
             }
@@ -944,13 +967,23 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
-    private _listeners: Set<(event: TelemetryEvent) => void> = new Set();
+    private _listeners: Set<TelemetryEventCallback> = new Set();
 
     /**
-     * Subscribe to completed telemetry events in real time (zero-polling flight recorder hook).
+     * Subscribe to telemetry events as they start and complete (zero-polling flight recorder /
+     * OpenTelemetry span-bridge hook). The callback fires synchronously with `'start'` when an
+     * event is created via {@link StartEvent} and with `'end'` when it completes via
+     * {@link EndEvent} or is recorded directly via {@link RecordEvent} (which has no real "start"
+     * moment, so it fires both in immediate succession to keep span pairs balanced for observers
+     * that track open spans by event id).
+     *
+     * Exceptions thrown by `listener` are caught and swallowed — an observer must never disrupt
+     * the producer it is observing. Notification is skipped entirely while diagnostic capture is
+     * suppressed ({@link IsDiagnosticCaptureSuppressed}).
+     *
      * @returns Unsubscribe function.
      */
-    public OnEvent(listener: (event: TelemetryEvent) => void): () => void {
+    public OnEvent(listener: TelemetryEventCallback): () => void {
         this._listeners.add(listener);
         return () => {
             this._listeners.delete(listener);
@@ -968,13 +1001,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return 0;
     }
 
-    private notifyEventListeners(event: TelemetryEvent): void {
+    private notifyEventListeners(event: TelemetryEvent, type: TelemetryEventLifecycleType): void {
         if (this._listeners.size === 0 || IsDiagnosticCaptureSuppressed()) {
             return;
         }
         for (const listener of this._listeners) {
             try {
-                listener(event);
+                listener(event, type);
             } catch {
                 // Listeners must never disrupt telemetry recording
             }
@@ -1180,6 +1213,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         }
 
         this._activeEvents.set(event.id, event);
+        this.notifyEventListeners(event, 'start');
         return event.id;
     }
 
@@ -1218,7 +1252,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
-        this.notifyEventListeners(event);
+        this.notifyEventListeners(event, 'end');
 
         return event;
     }
@@ -1349,7 +1383,11 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         this.updatePattern(event);
         this.runAnalyzers(event);
         this.trimIfNeeded();
-        this.notifyEventListeners(event);
+        // RecordEvent has no real "start" moment (the event is already complete), but both
+        // lifecycle phases fire in immediate succession so OTel-style span bridges that track
+        // open spans by event id see a balanced start/end pair rather than an orphaned 'end'.
+        this.notifyEventListeners(event, 'start');
+        this.notifyEventListeners(event, 'end');
     }
 
     // ========== PATTERN DETECTION ==========
