@@ -10290,6 +10290,9 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     *
     * Winner selection (deterministic, mirrors `EntityInfo.NameField`'s runtime
     * preference and the v5.41 metadata backfill):
+    *  0. **Pinned** — a flagged field pinned with `AutoUpdateIsNameField=0` wins, eligible or
+    *     not (a virtual name field such as `MJ: Employees.FirstLast` is a legitimate pin). With
+    *     several pinned, the literal `Name` wins, else the first in field order (#6554).
     *  1. **Stability** — if exactly one currently-flagged field is still eligible, it
     *     stays the winner regardless of what the LLM proposes. An already-valid single
     *     name field never drifts.
@@ -10306,7 +10309,9 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
     * Every NON-winner with `IsNameField=1` and `AutoUpdateIsNameField=1` is CLEARED, so
     * historical accumulation self-heals on the next analysis pass. Fields pinned with
     * `AutoUpdateIsNameField=0` are never touched in either direction — the user owns
-    * them, and `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime.
+    * them. Because a pin always wins (step 0), an auto-flagged field beside a pin is
+    * cleared rather than left as a second name field (#6554); two pins are left alone
+    * and reported by the integrity check.
     */
    protected applyNameFieldUpdates(
       sqlStatements: string[],
@@ -10357,7 +10362,7 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
 
    /**
     * Picks the single IsNameField winner for an entity per the rules documented on
-    * {@link applyNameFieldUpdates}: stable current winner → deterministic repair
+    * {@link applyNameFieldUpdates}: a pinned flag → stable current winner → deterministic repair
     * (literal `Name`, then field order) → first eligible LLM candidate → PRESERVE an
     * existing type-safe flag rather than clearing it with nothing to put in its place.
     * Returns null only when every flagged field is actively WRONG (a PK, a non-text
@@ -10369,6 +10374,13 @@ VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)
       fields: Array<Record<string, unknown>>,
       rankedCandidates: string[]
    ): Record<string, unknown> | null {
+      // 0. PINNED — a user-pinned flag wins even when it is not eligible here (a virtual or
+      //    view-only name field). Ignoring it let the pass flag a second field the clear loop
+      //    then could not reconcile, leaving two name fields (#6554).
+      const pinnedFlagged = fields.filter(f => f.IsNameField && !f.AutoUpdateIsNameField);
+      if (pinnedFlagged.length > 0) {
+         return this.preferLiteralNameField(pinnedFlagged);
+      }
       const eligibleFlagged = fields.filter(f => f.IsNameField && this.isFieldEligibleForNameField(f));
       if (eligibleFlagged.length === 1) {
          return eligibleFlagged[0];

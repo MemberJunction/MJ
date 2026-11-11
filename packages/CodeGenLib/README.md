@@ -640,7 +640,7 @@ flowchart TD
 - **Stability** — an entity that already has exactly one valid `IsNameField` keeps it; AI proposals never move an established winner.
 - **Repair** — when multiple fields are flagged (historical accumulation), the field literally named `Name` wins, else the first eligible flagged field in sequence order. All other auto-updatable flags are cleared.
 - **Fresh pick** — when nothing valid is flagged, the first *eligible* AI candidate wins.
-- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen; `EntityInfo.NameField`'s literal-`Name` preference arbitrates at runtime if a pinned conflict exists.
+- **Pinning** — fields with `AutoUpdateIsNameField = 0` are never set or cleared by CodeGen, and a pinned flagged field always wins, even one that is not eligible (a virtual name field). Any auto-flagged second field beside a pin is cleared on the next analysis pass. With several pinned, the literal `Name` wins, else the first in sequence order; the integrity check warns about any entity with more than one `IsNameField = 1`.
 
 Why this matters: with multiple flags, the FK-name pick silently drifted between CodeGen runs as flags accumulated (observed: a related entity's name column flipping from one field to another, reshaping every view that joins to it).
 
