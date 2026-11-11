@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema } from './ExpressionHelpers.js';
 
 /**
  * Hand-written PG equivalents for complex triggers that use SQL Server-specific
@@ -68,7 +68,25 @@ export class TriggerRule implements IConversionRule {
   BypassSqlglot = true;
   BypassJustification = 'T-SQL CREATE TRIGGER (AFTER/INSTEAD OF, INSERTED/DELETED virtual tables) → PG trigger function + CREATE TRIGGER pair. Different execution model entirely; sqlglot cannot produce the required two-statement PG output.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, originalSQL: string, _context: ConversionContext): string {
+    const normalized = sql.replace(/\bCREATE\s+OR\s+ALTER\s+TRIGGER\b/i, 'CREATE TRIGGER');
+    const schema = RoutineSchema(normalized);
+    // In an Open App schema only CodeGen's `__mj_UpdatedAt` trigger is converted: its shape is
+    // fixed. Generic conversion of a hand-written business trigger (inserted/deleted joins,
+    // THROW, table variables) emits PL/pgSQL that does not compile, so those are left for a
+    // person to author, as a counted gap (issue #5364 items 7 and 8).
+    if (schema && schema.toLowerCase() !== '__mj') {
+      if (!/__mj_UpdatedAt/i.test(normalized)) {
+        return NeedsHandAuthoring('trigger', `hand-written trigger in schema ${schema}`, originalSQL);
+      }
+      const converted = ConvertInRoutineSchema(normalized, (aliased) => this.convertCoreSchemaTrigger(aliased));
+      return converted ?? NeedsHandAuthoring('trigger', 'references the core schema by its literal name', originalSQL);
+    }
+    return this.convertCoreSchemaTrigger(normalized);
+  }
+
+  /** Convert a trigger created in MJ core's `__mj` schema (the shape every pattern below assumes). */
+  private convertCoreSchemaTrigger(sql: string): string {
     // Extract trigger components with regex
     // Pattern: CREATE TRIGGER [schema].[name] ON [schema].[table] AFTER event(s) AS BEGIN body END
     let m = sql.match(
@@ -81,7 +99,9 @@ export class TriggerRule implements IConversionRule {
       );
     }
     if (!m) {
-      return `-- SKIPPED: trigger (auto-conversion not supported)\n-- ${sql.slice(0, 200)}\n`;
+      // Every line commented: a multi-line slice with only its first line prefixed left the rest
+      // of the trigger as live T-SQL in the PostgreSQL output (issue #5364 item 7).
+      return `-- SKIPPED: trigger (auto-conversion not supported)\n-- ${sql.slice(0, 200).replace(/\n/g, '\n-- ')}\n`;
     }
 
     const triggerName = m[1];
