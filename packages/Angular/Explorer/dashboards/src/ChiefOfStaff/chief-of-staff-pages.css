@@ -3,6 +3,28 @@
     height: 100%;
 }
 
+.cos-agent-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 240px;
+}
+
+.cos-agent-picker__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    white-space: nowrap;
+}
+
+.cos-agent-picker mj-dropdown {
+    flex: 1;
+    min-width: 170px;
+}
+
 .cos-loading {
     display: flex;
     align-items: center;

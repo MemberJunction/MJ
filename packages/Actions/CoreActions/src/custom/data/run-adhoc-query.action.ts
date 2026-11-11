@@ -6,6 +6,7 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentDataPolicyGuard } from '../crud/agent-data-policy-guard';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
@@ -118,6 +119,15 @@ export class RunAdhocQueryAction extends BaseAction {
                 return this.authorizationRefusal(refusal);
             }
 
+            const agentPolicyGuard = await AgentDataPolicyGuard.EvaluateAdhocQuery(
+                params,
+                normalizedQuery,
+                readOnlyProvider
+            );
+            if ('Blocked' in agentPolicyGuard) {
+                return agentPolicyGuard.Blocked;
+            }
+
             try {
                 // Execute on the read-only login through the provider's ad-hoc read path, which renders
                 // the SQL, requires a single read statement, and applies the row limit and timeout in
@@ -132,7 +142,10 @@ export class RunAdhocQueryAction extends BaseAction {
                 if (!queryResult.Success) {
                     return this.queryFailure(queryResult.ErrorMessage, timeout);
                 }
-                const results = queryResult.Results;
+                const results = AgentDataPolicyGuard.MaskRows(
+                    (queryResult.Results || []) as Record<string, unknown>[],
+                    agentPolicyGuard.Allowed.DeniedFieldPatterns
+                );
 
                 const executionTimeMs = Date.now() - queryStartTime;
 

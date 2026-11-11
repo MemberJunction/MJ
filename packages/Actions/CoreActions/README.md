@@ -82,6 +82,8 @@ Several abstract base classes reduce duplication across related actions:
 | `BaseFileStorageAction` | `files/base-file-storage.action.ts` | Common storage-provider resolution for all `File Storage: *` actions |
 | `BaseFileHandlerAction` | `utilities/base-file-handler.ts` | Multi-source file loading (Storage, URL, direct data) |
 | `BaseUserScopedCommunicationAction` | `ai/user-scoped-communication.action.ts` | Mailbox security gate and provider resolution for the Chief of Staff `* My *` email/calendar actions; pins every mailbox operation to `ContextUser.Email` |
+| `BaseFindSkillsAction` | `ai/base-find-skills.action.ts` | Shared hybrid vector + lexical search over `MJ: AI Skills` with agent permission filtering (`GetSkillsForAgent`) and auto-activation gating |
+| `BaseGitHubAction` | `github/base-github.action.ts` | Shared credential resolution (`GitHubCredentialResolver`), repository allowlist enforcement, protected-branch guardrails, and resilient Octokit client access for all `GitHub: *` actions |
 
 ### Generated Actions
 
@@ -135,9 +137,9 @@ no MJ action for it. Deployments that already have Custom Search access can keep
 
 All 100+ actions organized by category. Each action is registered with `@RegisterClass(BaseAction, "<name>")`.
 
-### AI (8 actions)
+### AI & Skill Discovery (11 actions)
 
-Actions for prompt execution, agent discovery, image generation, and content summarization.
+Actions for prompt execution, agent discovery, action discovery, skill discovery, image generation, and content summarization.
 
 | Registration Name | Class | Description |
 |---|---|---|
@@ -145,10 +147,34 @@ Actions for prompt execution, agent discovery, image generation, and content sum
 | `SummarizeContentAction` | `SummarizeContentAction` | Summarize text content using AI |
 | `Find Candidate Agents` | `FindCandidateAgentsAction` | Discover AI agents suitable for a task |
 | `Find Candidate Actions` | `FindCandidateActionsAction` | Discover actions suitable for a task |
+| `Find Candidate Skills` | `FindCandidateSkillsAction` | Hybrid vector + lexical search over `MJ: AI Skills` for large skill catalogs, with agent permission and auto-activation filtering |
 | `Find Best Agent` | `FindBestAgentAction` | Select the single best agent for a task |
 | `Find Best Action` | `FindBestActionAction` | Select the single best action for a task |
+| `Find Best Skill` | `FindBestSkillAction` | Select the single best AI Skill for a task |
+| `Get Skill Details` | `GetSkillDetailsAction` | Progressive-disclosure inspector returning full `Instructions`, bundled `Actions`, bundled `SubAgents`, and portable `SKILL.md` for a skill |
 | `Load Agent Spec` | `LoadAgentSpecAction` | Load full specification for an AI agent |
 | `Generate Image` | `GenerateImageAction` | Generate images using AI models |
+
+### GitHub (14 actions)
+
+Compound, LLM-ergonomic actions for repository discovery, code search, issue/PR triage, atomic multi-file Git Data API commits, PR creation/review/merge, and GitHub Actions CI/CD diagnostics. All extend `BaseGitHubAction` and resolve credentials through `GitHubCredentialResolver` (supporting **GitHub App** short-lived repo-scoped installation tokens, **GitHub PAT**, **3LO per-user OAuth** `UserOAuth3LO:GitHub:<userId>` when `UseUserDelegatedAuth = true`, and environment variable fallback).
+
+| Registration Name | Class | Description |
+|---|---|---|
+| `GitHub: Get Repository Context` | `GitHubGetRepositoryContextAction` | Read-only preflight: default branch, recent commits, open PRs, latest workflow status, and recursive file tree |
+| `GitHub: Search Code` | `GitHubSearchCodeAction` | Search code, filenames, or symbols across a repository or organization with path/extension filters |
+| `GitHub: Read File Content` | `GitHubReadFileContentAction` | Read one or more files at a branch/tag/commit ref with optional line-range slicing (`StartLine`/`EndLine`) |
+| `GitHub: List Issues and PRs` | `GitHubListIssuesAndPRsAction` | Search and filter issues and pull requests by state, labels, author, assignee, or query string |
+| `GitHub: Get Issue or PR Details` | `GitHubGetIssueOrPRDetailsAction` | Retrieve full metadata, conversation comments, review threads, changed files, and check-run status for an issue or PR |
+| `GitHub: Create or Update Issue` | `GitHubCreateOrUpdateIssueAction` | Create a new GitHub issue or update an existing issue's title, body, state, labels, and assignees |
+| `GitHub: Add Issue or PR Comment` | `GitHubAddIssueOrPRCommentAction` | Post a Markdown comment on an issue or pull request |
+| `GitHub: Commit Files and Create PR` | `GitHubCommitFilesAndCreatePRAction` | **Compound atomic workflow**: create/reset branch from base, commit multiple file additions/modifications/deletions via Git Data API (with automatic `createBlob` fallback for files > 1MB), and open or update a Pull Request (defaults to Draft per credential policy) |
+| `GitHub: Commit Files to Branch` | `GitHubCommitFilesToBranchAction` | Atomically commit multiple file additions, modifications, or deletions to an existing non-protected branch |
+| `GitHub: Submit PR Review` | `GitHubSubmitPRReviewAction` | Submit a structured pull request review (`COMMENT`, `APPROVE`, or `REQUEST_CHANGES`) with inline file/line review comments |
+| `GitHub: Merge Pull Request` | `GitHubMergePullRequestAction` | Merge a pull request (`squash`, `merge`, or `rebase`). Enforces the **App-Token-Never-Merges** guardrail (`APP_TOKEN_MERGE_FORBIDDEN`) unless a human PAT or 3LO user token is used |
+| `GitHub: Get Workflow Runs and Logs` | `GitHubGetWorkflowRunsAndLogsAction` | List recent GitHub Actions workflow runs and extract failed job steps and error log tails for CI debugging |
+| `GitHub: Trigger Workflow Dispatch` | `GitHubTriggerWorkflowDispatchAction` | Trigger a `workflow_dispatch` event on a GitHub Actions workflow with typed inputs |
+| `GitHub: Re-run Failed Workflow` | `GitHubRerunFailedWorkflowAction` | Re-run failed jobs (or all jobs) for a GitHub Actions workflow run |
 
 ### Chief of Staff / agent governance (8 actions)
 

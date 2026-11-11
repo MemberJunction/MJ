@@ -17,22 +17,43 @@ import {
 import { BaseEntity, IMetadataProvider, LogError, RunView } from '@memberjunction/core';
 import {
     AnchoredCommentRollup,
+    COMMENT_TYPE_CODES,
     ConversationAnchorMetadata,
     ConversationAnchorType,
+    ConversationEngine,
+    MJCommentEntity,
     MJConversationDetailEntity,
     MJConversationEntity,
+    MJFieldSuggestionEntity,
     ParseConversationAnchorMetadata,
     UserInfoEngine
 } from '@memberjunction/core-entities';
-import { EscapeHTML, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { EscapeHTML, EscapeSQLString, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subscription } from 'rxjs';
+import { EntitySubtypeUIDriverBase } from '../subtype-ui-driver/entity-subtype-ui-driver';
 import { FormNavigationEvent } from '../types/navigation-events';
+import type { CommentCardDriverContext } from './comment-card-driver-host.component';
+import { FieldSuggestionCardComponent } from './field-suggestion-card.component';
 import {
     FormCommentAnchorNavigationRequest,
     FormCommentAnchorTarget,
     FormRecordCommentsCoordinatorService
 } from './form-record-comments-coordinator.service';
+
+// Ensure built-in comment subtype UI drivers are never tree-shaken before ClassFactory registration
+const _BUILTIN_COMMENT_CARD_DRIVERS = [FieldSuggestionCardComponent];
+void _BUILTIN_COMMENT_CARD_DRIVERS;
+
+/**
+ * Filter pill descriptor for filtering the Notes & suggestions panel by `MJ: Comment Types`.
+ */
+export interface RecordCommentTypeFilterOption {
+    Code: string;
+    Label: string;
+    Icon: string | null;
+    Count: number;
+}
 
 /**
  * Candidate user or AI agent shown in the `@mention` autocomplete menu inside the comment composer.
@@ -72,6 +93,13 @@ export type RecordCommentMessageSegment =
  */
 export interface RecordCommentThreadView {
     Conversation: MJConversationEntity;
+    Comment: MJCommentEntity | null;
+    FieldSuggestion: MJFieldSuggestionEntity | null;
+    CommentTypeCode: string;
+    UIDriverClass: string | null;
+    DriverContext: CommentCardDriverContext | null;
+    IsFieldSuggestion: boolean;
+    ShowReplyComposer: boolean;
     Metadata: ConversationAnchorMetadata | null;
     AnchorType: ConversationAnchorType;
     AnchorKey: string | null;
@@ -137,6 +165,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     public NewThreadMessage = '';
     public IsSubmittingNewThread = false;
     public ReplyDraftByConversationId = new Map<string, string>();
+    public ExpandedDiscussionIds = new Set<string>();
     public SubmittingReplyConversationId: string | null = null;
     public ResolvingConversationId: string | null = null;
     public ErrorBannerMessage: string | null = null;
@@ -237,7 +266,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         if (entityInfo.AllowRecordComments === false) return false;
         const user = this.Coordinator?.CurrentUser ?? this.ProviderToUse?.CurrentUser;
         if (!user) return true;
-        return entityInfo.CanUserComment(user);
+        return typeof entityInfo.CanUserComment === 'function' ? entityInfo.CanUserComment(user) : true;
     }
 
     @HostListener('document:keydown.escape', ['$event'])
@@ -349,6 +378,12 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         return this.Coordinator?.DrawerStatusFilter ?? 'open';
     }
 
+    public get TypeFilter(): string {
+        return this.Mode === 'popover'
+            ? (this.Coordinator?.PopoverTypeFilter ?? 'all')
+            : (this.Coordinator?.DrawerTypeFilter ?? 'all');
+    }
+
     public get TargetFilter(): FormCommentAnchorTarget | null {
         return this.Mode === 'popover'
             ? this.PopoverTarget
@@ -367,29 +402,102 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         return this.Coordinator?.IsLoading ?? false;
     }
 
+    /**
+     * Type filter pills (`All`, `Notes`, `Suggestions`, plus any custom `MJ: Comment Types`
+     * enabled on the entity or present on the record's anchored threads).
+     */
+    public get AvailableTypeFilters(): RecordCommentTypeFilterOption[] {
+        const coordinator = this.Coordinator;
+        const candidates = coordinator ? this.getStatusAndTargetFilteredConversations(coordinator) : [];
+        const countsByCode = new Map<string, number>();
+        for (const conv of candidates) {
+            const code = coordinator!.GetCommentTypeCodeForConversation(conv.ID);
+            countsByCode.set(code, (countsByCode.get(code) ?? 0) + 1);
+        }
+
+        const noteCount = countsByCode.get(COMMENT_TYPE_CODES.COMMENT) ?? 0;
+        const suggestionCount = countsByCode.get(COMMENT_TYPE_CODES.FIELD_SUGGESTION) ?? 0;
+        const options: RecordCommentTypeFilterOption[] = [
+            { Code: 'all', Label: 'All', Icon: null, Count: candidates.length },
+            {
+                Code: COMMENT_TYPE_CODES.COMMENT,
+                Label: 'Notes',
+                Icon: 'fa-regular fa-comment-dots',
+                Count: noteCount
+            },
+            {
+                Code: COMMENT_TYPE_CODES.FIELD_SUGGESTION,
+                Label: 'Suggestions',
+                Icon: 'fa-solid fa-wand-magic-sparkles',
+                Count: suggestionCount
+            }
+        ];
+
+        // Append any custom registered comment types present on threads or configured on the entity
+        const knownCodes = new Set<string>(['ALL', COMMENT_TYPE_CODES.COMMENT, COMMENT_TYPE_CODES.FIELD_SUGGESTION]);
+        for (const [code, count] of countsByCode.entries()) {
+            if (knownCodes.has(code)) continue;
+            knownCodes.add(code);
+            const ct =
+                typeof ConversationEngine.Instance.CommentTypeByCode === 'function'
+                    ? ConversationEngine.Instance.CommentTypeByCode(code)
+                    : undefined;
+            options.push({
+                Code: code,
+                Label: ct?.Name ?? code,
+                Icon: 'fa-regular fa-comment',
+                Count: count
+            });
+        }
+
+        return options;
+    }
+
+    public get ShowPopoverTypeFilters(): boolean {
+        if (this.Mode !== 'popover') return false;
+        const filters = this.AvailableTypeFilters;
+        const nonZeroSpecific = filters.filter((f) => f.Code !== 'all' && f.Count > 0);
+        return nonZeroSpecific.length > 1 || this.TypeFilter !== 'all';
+    }
+
     public get VisibleThreads(): RecordCommentThreadView[] {
         const coordinator = this.Coordinator;
         if (!coordinator) return [];
 
-        const statusFilter = this.Mode === 'popover' ? 'open' : this.StatusFilter;
-        const targetFilter = this.TargetFilter;
+        const activeTypeFilter = (this.TypeFilter || 'all').trim().toUpperCase();
+        const filteredConvs = this.getStatusAndTargetFilteredConversations(coordinator);
 
         const out: RecordCommentThreadView[] = [];
+        for (const conv of filteredConvs) {
+            const typeCode = coordinator.GetCommentTypeCodeForConversation(conv.ID);
+            if (activeTypeFilter !== 'ALL' && typeCode !== activeTypeFilter) {
+                continue;
+            }
+            const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
+            out.push(this.buildThreadView(conv, meta, coordinator.GetDetailsForConversation(conv.ID)));
+        }
+
+        return out;
+    }
+
+    private getStatusAndTargetFilteredConversations(
+        coordinator: FormRecordCommentsCoordinatorService
+    ): MJConversationEntity[] {
+        const statusFilter = this.Mode === 'popover' ? 'open' : this.StatusFilter;
+        const targetFilter = this.TargetFilter;
+        const out: MJConversationEntity[] = [];
         for (const conv of coordinator.Conversations) {
             if (!conv.AnchorType) continue;
             if (statusFilter === 'open' && conv.IsResolved) continue;
             if (statusFilter === 'resolved' && !conv.IsResolved) continue;
-
-            const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
             if (targetFilter) {
+                const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
                 if (!this.matchesTargetFilter(conv, meta, targetFilter)) {
                     continue;
                 }
             }
-
-            out.push(this.buildThreadView(conv, meta, coordinator.GetDetailsForConversation(conv.ID)));
+            out.push(conv);
         }
-
         return out;
     }
 
@@ -425,12 +533,52 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         this.Coordinator?.SetDrawerStatusFilter(status);
     }
 
+    public OnTypeFilterChange(typeCode: string): void {
+        if (this.Mode === 'popover') {
+            this.Coordinator?.SetPopoverTypeFilter(typeCode);
+        } else {
+            this.Coordinator?.SetDrawerTypeFilter(typeCode);
+        }
+    }
+
+    public OnDiscussThread(conversationId: string): void {
+        if (!this.ExpandedDiscussionIds) {
+            this.ExpandedDiscussionIds = new Set<string>();
+        }
+        this.ExpandedDiscussionIds.add(NormalizeUUID(conversationId));
+        this.cdr?.markForCheck();
+        const inputId =
+            this.Mode === 'popover'
+                ? `mj-popover-reply-${conversationId}`
+                : `mj-reply-${conversationId}`;
+        setTimeout(() => {
+            const hostEl: HTMLElement | null = this.hostRef?.nativeElement ?? null;
+            const scopedMatch = hostEl
+                ? Array.from(hostEl.querySelectorAll('textarea')).find(
+                      (node: HTMLTextAreaElement) => node.id === inputId
+                  )
+                : undefined;
+            const el =
+                scopedMatch ??
+                (typeof document !== 'undefined'
+                    ? (document.getElementById(inputId) as HTMLTextAreaElement | null)
+                    : null);
+            el?.focus();
+        }, 20);
+    }
+
+    public OnDriverRecordMutated(): void {
+        this.cdr?.markForCheck();
+    }
+
     public OnClearTargetFilter(): void {
         this.Coordinator?.SetDrawerTargetFilter(null);
     }
 
     public OnSwitchPopoverToDrawer(): void {
+        const activeType = this.Coordinator?.PopoverTypeFilter ?? 'all';
         this.IsPopoverExpanded = false;
+        this.Coordinator?.SetDrawerTypeFilter(activeType);
         this.Coordinator?.SetDrawerOpen(true, null);
     }
 
@@ -895,25 +1043,79 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         const icon = this.resolveAnchorIcon(anchorType);
         const sectionGroup = this.resolveSectionGroup(anchorType, anchorKey, meta);
 
+        const coordinator = this.Coordinator ?? null;
+        const comment = coordinator?.GetCommentForConversation(conv.ID) ?? null;
+        const suggestion = coordinator?.GetSuggestionForConversation(conv.ID) ?? null;
+        const commentTypeCode =
+            coordinator?.GetCommentTypeCodeForConversation(conv.ID) ?? COMMENT_TYPE_CODES.COMMENT;
+        const commentType = coordinator?.GetCommentTypeForConversation(conv.ID) ?? null;
+        const isFieldSuggestion =
+            commentTypeCode === COMMENT_TYPE_CODES.FIELD_SUGGESTION || suggestion !== null;
+
         const quotedValue = meta?.quotedValue ?? null;
         let currentLiveValue: string | null = null;
         let hasValueChanged = false;
 
-        if (anchorType === 'Field' && (anchorKey || meta?.fieldName) && this.Record) {
-            const fieldName = (anchorKey || meta?.fieldName || '').trim();
-            const field = this.Record.Fields.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
+        const targetFieldName =
+            anchorType === 'Field' ? (anchorKey || meta?.fieldName || '').trim() : '';
+        if (targetFieldName && this.Record) {
+            const field = this.Record.Fields.find(
+                (f) => f.Name.toLowerCase() === targetFieldName.toLowerCase()
+            );
             if (field) {
-                currentLiveValue = field.Value != null && String(field.Value).trim() !== ''
-                    ? String(field.Value).trim()
-                    : '(empty)';
+                currentLiveValue =
+                    field.Value != null && String(field.Value).trim() !== ''
+                        ? String(field.Value).trim()
+                        : '(empty)';
                 if (quotedValue != null && quotedValue.trim() !== currentLiveValue) {
                     hasValueChanged = true;
                 }
             }
         }
 
+        const candidateDriverKey =
+            commentType?.UIDriverClass?.trim() ||
+            (isFieldSuggestion ? 'FieldSuggestionCardComponent' : null);
+        const uiDriverClass =
+            candidateDriverKey &&
+            MJGlobal.Instance.ClassFactory.GetRegistration(
+                EntitySubtypeUIDriverBase,
+                candidateDriverKey
+            )?.SubClass
+                ? candidateDriverKey
+                : null;
+
+        const normId = NormalizeUUID(conv.ID);
+        const hasDraft = (this.ReplyDraftByConversationId?.get(normId) ?? '').trim().length > 0;
+        const isDiscussionExpanded = Boolean(this.ExpandedDiscussionIds?.has(normId));
+        const showReplyComposer =
+            !isFieldSuggestion || messages.length > 0 || hasDraft || isDiscussionExpanded;
+
+        const driverContext: CommentCardDriverContext | null = uiDriverClass
+            ? {
+                  Coordinator: coordinator,
+                  Conversation: conv,
+                  AnchorBadgeLabel: badgeLabel,
+                  CurrentLiveValue: currentLiveValue,
+                  CanUserUpdateTargetField: this.canUserUpdateTargetField(targetFieldName || null),
+                  CanUserDiscuss: this.CanUserPostComments,
+                  OnDiscuss: () => this.OnDiscussThread(conv.ID),
+                  OnError: (msg: string) => {
+                      this.ErrorBannerMessage = msg;
+                      this.cdr?.markForCheck();
+                  }
+              }
+            : null;
+
         return {
             Conversation: conv,
+            Comment: comment,
+            FieldSuggestion: suggestion,
+            CommentTypeCode: commentTypeCode,
+            UIDriverClass: uiDriverClass,
+            DriverContext: driverContext,
+            IsFieldSuggestion: isFieldSuggestion,
+            ShowReplyComposer: showReplyComposer,
             Metadata: meta,
             AnchorType: anchorType,
             AnchorKey: anchorKey,
@@ -928,6 +1130,32 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             RestrictedFields: meta?.restrictedFields ?? [],
             Messages: messages
         };
+    }
+
+    private canUserUpdateTargetField(fieldName: string | null): boolean {
+        const entityInfo = this.Record?.EntityInfo;
+        if (!entityInfo) {
+            return true;
+        }
+        if (entityInfo.AllowUpdateAPI === false) {
+            return false;
+        }
+        const user = this.Coordinator?.CurrentUser ?? this.ProviderToUse?.CurrentUser ?? null;
+        if (!user) {
+            return true;
+        }
+        if (typeof entityInfo.GetUserPermisions === 'function') {
+            const perms = entityInfo.GetUserPermisions(user);
+            if (perms && perms.CanUpdate === false) {
+                return false;
+            }
+        }
+        if (fieldName && typeof entityInfo.IsFieldUpdatableByUser === 'function') {
+            if (!entityInfo.IsFieldUpdatableByUser(fieldName, user)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private resolveSectionGroup(

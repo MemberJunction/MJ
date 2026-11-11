@@ -108,7 +108,7 @@ export class DelegationNarrator {
         if (!session || this.activeDelegations === 0) {
             return; // session gone / delegation already finished — stale event
         }
-        session.SendContextNote?.(`[delegated-agent progress] ${progress.message}`);
+        session.SendContextNote?.(`[delegated-agent progress] ${progress.message}`, { Ephemeral: true });
         if (!session.RequestSpokenUpdate) {
             return; // provider can't voice an instructed one-off update — context note only
         }

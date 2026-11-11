@@ -1898,7 +1898,10 @@
       "DriverClass": "CreateJotFormAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-plus-circle",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -2170,7 +2173,10 @@
       "DriverClass": "UpdateJotFormAction",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-pen-to-square"
+      "IconClass": "fa-solid fa-pen-to-square",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

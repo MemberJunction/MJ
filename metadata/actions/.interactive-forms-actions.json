@@ -953,7 +953,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-circle-check",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1171,7 +1174,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rotate-left",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [

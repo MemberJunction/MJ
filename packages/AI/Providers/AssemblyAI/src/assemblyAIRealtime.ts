@@ -14,6 +14,7 @@ import {
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeReconnectContext,
+    type RealtimeContextNoteOptions,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
     type RealtimeTranscript,
@@ -552,8 +553,8 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
     private readonly initialBasePrompt: string;
     /** The active base system prompt (with latest reconnect seed folded in) — context notes append to it. */
     private basePrompt: string;
-    /** Accumulated {@link SendContextNote} texts since the latest seed, re-sent with the full prompt each time. */
-    private contextNotes: string[] = [];
+    /** Accumulated {@link SendContextNote} entries since the latest seed, re-sent with the full prompt each time. */
+    private contextNotes: Array<{ Text: string; StateKey?: string; Ephemeral?: boolean }> = [];
 
     /**
      * Whether an agent reply is currently in flight (`reply.started` / first `reply.audio`
@@ -800,12 +801,25 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
      * disturbs generation and is sent immediately even mid-reply. The model has the notes
      * available the next time it speaks.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
         this.conversationMemory.Record({
             Kind: 'note',
             Text: text,
+            ...options,
         });
-        this.contextNotes.push(text);
+        const stateKey = options?.StateKey?.trim();
+        if (stateKey) {
+            const storedText = options?.MemoryText ?? text;
+            this.contextNotes = this.contextNotes.filter((n) => n.StateKey !== stateKey);
+            if (storedText.trim().length > 0 && !options?.Ephemeral) {
+                this.contextNotes.push({ Text: storedText, StateKey: stateKey });
+            }
+        } else if (options?.Ephemeral) {
+            this.contextNotes = this.contextNotes.filter((n) => !n.Ephemeral);
+            this.contextNotes.push({ Text: text, Ephemeral: true });
+        } else {
+            this.contextNotes.push({ Text: text });
+        }
         this.sendFrame({ type: 'session.update', session: { system_prompt: this.composePromptWithNotes() } });
     }
 
@@ -847,11 +861,11 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
                 ? RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed)
                 : null;
         const nextBasePrompt = seedNote ? `${this.initialBasePrompt}\n\n${seedNote}` : this.basePrompt;
-        const nextContextNotes = seedNote ? [] : [...this.contextNotes];
+        const nextContextNotes = seedNote ? [] : this.contextNotes.filter((n) => !n.Ephemeral);
         const nextSystemPrompt =
             nextContextNotes.length === 0
                 ? nextBasePrompt
-                : `${nextBasePrompt}\n\n## Background updates\n${nextContextNotes.map((n) => `- ${n}`).join('\n')}`;
+                : `${nextBasePrompt}\n\n## Background updates\n${nextContextNotes.map((n) => `- ${n.Text}`).join('\n')}`;
         const nextSessionObject: JSONObject = { ...this.sessionObject, system_prompt: nextSystemPrompt };
         delete nextSessionObject['greeting'];
 
@@ -1136,7 +1150,7 @@ export class AssemblyAIRealtimeSession extends BaseRealtimeSession implements IR
         if (this.contextNotes.length === 0) {
             return this.basePrompt;
         }
-        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n}`).join('\n')}`;
+        return `${this.basePrompt}\n\n## Background updates\n${this.contextNotes.map((n) => `- ${n.Text}`).join('\n')}`;
     }
 
     /** JSON-serializes and sends one client frame (throws if the socket was never attached). */

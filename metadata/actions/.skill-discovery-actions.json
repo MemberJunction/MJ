@@ -1,0 +1,346 @@
+[
+  {
+    "fields": {
+      "Name": "Find Candidate Skills",
+      "Description": "Finds the most relevant AI Skills for a given task using hybrid semantic + full-text search (backed by the 'AI Skills Search' EntityDocument) with automatic lexical fallback. Returns top N matching skills hydrated with their bundled ActionNames and SubAgentNames so agents can discover and activate the right skill from catalogs of hundreds or thousands of skills.",
+      "DriverClass": "Find Candidate Skills",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-wand-magic-sparkles"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TaskDescription",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural-language description of the task or capability to find relevant skills for",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9011"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of candidate skills to return (default: 10, max: 50)",
+            "IsRequired": false,
+            "DefaultValue": "10",
+            "ValueSchema": {
+              "type": "integer"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9012"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinimumSimilarityScore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum similarity score 0-1 (default: 0.35)",
+            "IsRequired": false,
+            "DefaultValue": "0.35",
+            "ValueSchema": {
+              "type": "number"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9013"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Category",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional skill category filter (case-insensitive)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9014"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional Agent UUID to restrict results to skills eligible for that agent",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9015"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeRequestedOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When AgentID is specified, whether to include RequestedOnly skills in addition to Auto-activatable skills (default: false)",
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "ValueSchema": {
+              "type": "boolean"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9016"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchedSkills",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of matched skills with similarity scores and bundled ActionNames/SubAgentNames",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9017"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of matched skills returned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9018"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BestSkill",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Top-scoring matched skill (when MatchCount > 0)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9019"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Find Best Skill",
+      "Description": "Finds the top-matching AI Skill(s) for a given task using hybrid semantic + full-text search with automatic lexical fallback (defaults MaxResults to 3 and populates BestSkill).",
+      "DriverClass": "Find Best Skill",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bullseye"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TaskDescription",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural-language description of the task or capability to find the best skill for",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9021"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of top skills to return (default: 3)",
+            "IsRequired": false,
+            "DefaultValue": "3",
+            "ValueSchema": {
+              "type": "integer"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9022"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinimumSimilarityScore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum similarity score 0-1 (default: 0.35)",
+            "IsRequired": false,
+            "DefaultValue": "0.35",
+            "ValueSchema": {
+              "type": "number"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9023"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BestSkill",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Highest-scoring matched skill with bundled ActionNames and SubAgentNames",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9024"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchedSkills",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Top matched skills array",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9025"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of matched skills returned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9026"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Skill Details",
+      "Description": "Retrieves full metadata, bundled actions, bundled sub-agents, and markdown instructions for a specific AI Skill by SkillID or SkillName. Enables progressive disclosure so agents can inspect a skill before activating it.",
+      "DriverClass": "Get Skill Details",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-info"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkillID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the AI Skill to inspect (provide either SkillID or SkillName)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9031"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkillName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI Skill to inspect (provide either SkillID or SkillName)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9032"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeInstructions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to include the full markdown Instructions body in the response (default: true)",
+            "IsRequired": false,
+            "DefaultValue": "true",
+            "ValueSchema": {
+              "type": "boolean"
+            }
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9033"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkillDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Detailed AI Skill object including BundledActions, BundledSubAgents, and Instructions",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9034"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3C8E9A12-4F51-4B8E-9C14-2A6D7E8F9003"
+    }
+  }
+]

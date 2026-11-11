@@ -245,16 +245,26 @@ class LossTestXAIClient extends xAIRealtimeClient {
     }
 }
 
-async function connectXAI(): Promise<LossTestXAIClient> {
+async function connectXAI(options?: { TrustNativeResumption?: boolean }): Promise<LossTestXAIClient> {
     const client = new LossTestXAIClient();
     let minted = 1;
-    client.SetTokenRefreshCallback(vi.fn().mockImplementation(async () => freshCredential(`tok-xai-${++minted}`)));
+    client.SetTokenRefreshCallback(
+        vi.fn().mockImplementation(async () => ({
+            ...freshCredential(`tok-xai-${++minted}`),
+            ...(options?.TrustNativeResumption !== undefined
+                ? { TrustNativeResumption: options.TrustNativeResumption }
+                : {}),
+        }))
+    );
     const connecting = client.Connect(
         {
             Provider: 'xai',
             Model: 'grok-voice-latest',
             EphemeralToken: 'tok-xai-1',
             ExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+            ...(options?.TrustNativeResumption !== undefined
+                ? { TrustNativeResumption: options.TrustNativeResumption }
+                : {}),
             SessionConfig: { instructions: 'Grok prompt' },
         },
         new FakeMediaStream([new FakeTrack()]) as unknown as MediaStream
@@ -429,8 +439,26 @@ describe('transport loss during a live call (#6462 F6)', () => {
     });
 
     describe('xAIRealtimeClient (websocket)', () => {
-        it('reconnects with connection-lost and resumes natively when the live socket closes', async () => {
+        it('reconnects with connection-lost and seeds prior turns by default when the live socket closes', async () => {
             const client = await connectXAI();
+            const { states, errors } = collect(client);
+            const lost = client.Socket;
+
+            lost.onclose?.();
+            await vi.advanceTimersByTimeAsync(10);
+
+            expect(errors).toEqual([]);
+            expect(client.Sockets).toHaveLength(2);
+            expect(client.Socket.Url).not.toContain('conversation_id=');
+            expect(client.Socket.SentTypes()[0]).toBe('session.update');
+            expect(client.Socket.Sent.join('\n')).toContain('Hello Grok.');
+            expect(client.Socket.Sent.join('\n')).toContain('Hello human.');
+            expect(states).toEqual(['connecting', 'listening']);
+            await client.Disconnect();
+        });
+
+        it('reconnects with connection-lost and resumes natively when TrustNativeResumption: true is explicitly configured', async () => {
+            const client = await connectXAI({ TrustNativeResumption: true });
             const { states, errors } = collect(client);
             const lost = client.Socket;
 
@@ -750,7 +778,7 @@ describe('OpenAI-protocol reconnect state (#6462 review round 6)', () => {
         });
 
         it('xAI native resumption: re-requests a cut-off answer on the resumed connection', async () => {
-            const client = await connectXAI();
+            const client = await connectXAI({ TrustNativeResumption: true });
             answerInFlight((e) => client.Socket.onmessage?.(JSON.stringify(e)));
 
             const swap = client.TriggerReconnect('duration-expiry');
@@ -1048,7 +1076,7 @@ describe('a loss of the old transport while a planned move runs (#6462 review wa
     });
 
     it('xAI native resumption: a question the old socket heard while the attempt opened is answered on the resumed connection', async () => {
-        const client = await connectXAI();
+        const client = await connectXAI({ TrustNativeResumption: true });
         const old = client.Socket;
         client.HoldSockets = true;
 

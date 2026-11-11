@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "GitHub",
+      "Description": "First-class GitHub repository, code search, atomic multi-file Git Data API commit, Pull Request, issue triage, and GitHub Actions CI diagnostic actions.",
+      "ParentID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9E42F16A-750B-4B74-A426-845F9B7A21E0"
+    },
+    "sync": {
+      "lastModified": "2026-11-05T14:00:00.000Z",
+      "checksum": "f7c8e9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9"
+    }
+  }
+]

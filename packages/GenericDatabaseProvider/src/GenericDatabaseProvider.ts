@@ -8256,6 +8256,70 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * Evaluates an arbitrary SQL `whereClause` against an entity's pending in-memory field values
+     * using the same typed synthetic-row subquery (`SELECT CASE WHEN (...) THEN 1 ELSE 0 END`)
+     * used by Create/Update RLS post-image enforcement, without taking or blocking on table locks.
+     *
+     * When `dirtyOnlyOptimization` is `true` and `whereClause` decomposes cleanly into simple
+     * column comparisons whose referenced columns are all clean on `entity`, returns `true`
+     * without a database round-trip (safe only when the pre-image was already verified).
+     */
+    public async EvaluateSyntheticRowWhereClause(
+        entity: BaseEntity,
+        whereClause: string,
+        user: UserInfo,
+        dirtyOnlyOptimization: boolean = false
+    ): Promise<boolean> {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) {
+            return true;
+        }
+        const parentFieldNames = entity.EntityInfo?.ParentEntityFieldNames;
+        const nonIsaVirtualNames = new Set(
+            (entity.EntityInfo?.Fields ?? [])
+                .filter(f => f.IsVirtual && !parentFieldNames?.has(f.Name))
+                .map(f => f.Name.trim().toLowerCase())
+        );
+        if (nonIsaVirtualNames.size > 0) {
+            const matchedVirtual = ClientClauseScreen.ExtractStatementIdentifierTokens(trimmed, this.Dialect).filter(
+                tok => nonIsaVirtualNames.has(tok.trim().toLowerCase())
+            );
+            if (matchedVirtual.length > 0) {
+                LogError(
+                    `EvaluateSyntheticRowWhereClause refused for entity '${entity.EntityInfo?.Name}': write-side whereClause references non-IS-A virtual view column(s) [${matchedVirtual.join(', ')}]`
+                );
+                return false;
+            }
+        }
+        if (dirtyOnlyOptimization) {
+            const referencedColumns = this.TryExtractSimpleFilterColumns(trimmed);
+            if (referencedColumns) {
+                const dirtyNames = new Set(
+                    entity.Fields.filter(f => f.Dirty).map(f => f.Name.trim().toLowerCase())
+                );
+                const touchesFilterColumn = referencedColumns.some(c => dirtyNames.has(c));
+                if (!touchesFilterColumn) {
+                    return true;
+                }
+            }
+        }
+        const projections = this.BuildRLSSyntheticRowProjections(entity, entity.EntityInfo, true);
+        const sql = `SELECT CASE WHEN (${trimmed}) THEN 1 ELSE 0 END AS pass FROM (SELECT ${projections}) AS newrow`;
+        try {
+            const result = await this.ExecuteSQL<Record<string, number | string | boolean | null>>(
+                sql,
+                undefined,
+                undefined,
+                user
+            );
+            return Boolean(result && result.length > 0 && Number(result[0]['pass']) === 1);
+        } catch (err) {
+            LogError(`EvaluateSyntheticRowWhereClause failed for entity '${entity.EntityInfo?.Name}': ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    /**
      * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
      * references. Returns the columns ONLY when the whole clause is a conjunction of simple
      * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,
@@ -8294,10 +8358,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * `CAST(NULL AS <sqltype>)` using the field's metadata-resolved type. An unresolvable
      * type fails the save (throw) rather than emitting an untyped NULL.
      */
-    protected BuildRLSSyntheticRowProjections(entity: BaseEntity, entityInfo: EntityInfo): string {
+    protected BuildRLSSyntheticRowProjections(
+        entity: BaseEntity,
+        entityInfo: EntityInfo,
+        includeISAParentFields: boolean = false
+    ): string {
         const parts: string[] = [];
+        const parentFieldNames = includeISAParentFields ? entityInfo.ParentEntityFieldNames : undefined;
         for (const field of entityInfo.Fields) {
-            if (field.IsVirtual) continue;
+            if (field.IsVirtual && !parentFieldNames?.has(field.Name)) continue;
             const val = entity.Get(field.Name);
             parts.push(`${this.renderRLSProjectionValue(field, val)} AS ${this.QuoteIdentifier(field.Name)}`);
         }
@@ -8397,6 +8466,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     public BuildParameterPlaceholder(index: number): string {
         return `$${index + 1}`;
+    }
+
+    /** An ItemFilter that is exactly `1=0` (spacing aside): the caller wants no rows from the item. */
+    private static readonly _noRowItemFilter = /^\s*1\s*=\s*0\s*$/;
+
+    /** Whether a dataset ItemFilter asks for no rows at all, so the item needs no read. */
+    private static isNoRowItemFilter(filter: string | undefined): boolean {
+        return !!filter && GenericDatabaseProvider._noRowItemFilter.test(filter);
     }
 
     /**
@@ -8525,7 +8602,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
      * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
-     * item runs no SQL and fails the dataset.
+     * item runs no SQL and fails the dataset. An item whose ItemFilter is exactly `1=0` runs no SQL
+     * either: it returns an empty, successful result.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -8571,6 +8649,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const errorResults: DatasetItemResultType[] = [];
         const cachedResults: DatasetItemResultType[] = [];
+        // Items the caller asked for with a no-row ItemFilter: answered without a read.
+        const noRowResults: DatasetItemResultType[] = [];
         const uncachedQueries: string[] = [];
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
@@ -8634,6 +8714,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     LatestUpdateDate: undefined,
                     Status: scope.Refusal,
                     Success: false,
+                });
+                continue;
+            }
+            // An ItemFilter of exactly `1=0` asks for no rows, whatever the stored WhereClause or the
+            // caller's row filter add to it, so the item is answered without a read. The scoped
+            // metadata reload (ProviderBase.TryPartialMetadataReload) sends it for every item it does
+            // not reload; each used to run its own empty SELECT, one pool connection apiece.
+            if (GenericDatabaseProvider.isNoRowItemFilter(itemFilters?.find(f => f?.ItemCode === code)?.Filter)) {
+                noRowResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: this.computeLatestUpdateDate([], String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt'), item),
+                    Success: true,
                 });
                 continue;
             }
@@ -8906,11 +9001,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             });
         }
 
-        // Merge results: errors + cached + SQL (maintain original item order via code matching)
+        // Merge results: errors + no-row + cached + SQL (maintain original item order via code matching)
         const results: DatasetItemResultType[] = [];
         for (const item of items) {
             const code = String(item['Code']);
             const found = errorResults.find(r => r.Code === code)
+                ?? noRowResults.find(r => r.Code === code)
                 ?? cachedResults.find(r => r.Code === code)
                 ?? sqlResults.find(r => r.Code === code);
             if (found) results.push(found);

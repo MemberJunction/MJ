@@ -283,8 +283,9 @@ describe('Fix 2 — fixed-name temp tables cannot pick up a stale cached plan', 
         it('still materializes all four catalog views (the reason the temp tables exist at all)', () => {
             expect(body).toContain('INSERT INTO _uef_cols SELECT * FROM __mj."vwSQLColumnsAndEntityFields";');
             expect(body).toContain('INSERT INTO _uef_fk SELECT * FROM __mj."vwForeignKeys";');
-            expect(body).toContain('INSERT INTO _uef_pk SELECT * FROM __mj."vwTablePrimaryKeys";');
-            expect(body).toContain('INSERT INTO _uef_uk SELECT * FROM __mj."vwTableUniqueKeys";');
+            // _uef_pk / _uef_uk load a projection of their view (#4536: KeyColumnCount, single-column unique keys)
+            expect(body).toMatch(/INSERT INTO _uef_pk\s+SELECT p\.\*,[\s\S]*?FROM __mj\."vwTablePrimaryKeys" p;/);
+            expect(body).toMatch(/INSERT INTO _uef_uk\s+SELECT DISTINCT[\s\S]*?FROM __mj\."vwTableUniqueKeys" u\s/);
         });
 
         it('releases storage at the end by TRUNCATE, keeping the relations (and OIDs) alive', () => {

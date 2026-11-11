@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJAIAgentRequestEntity,
@@ -152,28 +152,31 @@ export abstract class BaseUserScopedCommunicationAction extends BaseAction {
             return { agentId: null, policy: null };
         }
 
-        const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
-            agent.ID,
-            contextUser.ID,
-            contextUser
-        );
-        return { agentId: agent.ID, policy };
+        const engine = AgentUserPolicyEngine.Instance;
+        const lookup = await engine.ResolvePolicyForAgentAndUser(agent.ID, contextUser.ID, contextUser, {
+            provider: params.Provider,
+        });
+        if (lookup.status === 'error') {
+            throw new Error(`Failed to verify user communication policy: ${lookup.errorMessage}`);
+        }
+        return { agentId: agent.ID, policy: lookup.policy };
     }
 
     protected async findUserUtilityMailbox(
         contextUser: UserInfo,
-        agentId: string | null
+        agentId: string | null,
+        provider?: IMetadataProvider
     ): Promise<MJAIBridgeAgentIdentityEntity | null> {
         try {
-            const rv = new RunView();
-            const safeUserId = contextUser.ID.replace(/'/g, "''");
+            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+            const safeUserId = EscapeSQLString(contextUser.ID);
             const filterParts = [
                 `UserID='${safeUserId}'`,
                 `IdentityType='Email'`,
                 `IsActive=1`,
             ];
             if (agentId) {
-                const safeAgentId = agentId.replace(/'/g, "''");
+                const safeAgentId = EscapeSQLString(agentId);
                 filterParts.push(`AgentID='${safeAgentId}'`);
             }
             const res = await rv.RunView<MJAIBridgeAgentIdentityEntity>(

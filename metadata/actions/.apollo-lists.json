@@ -193,7 +193,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1475,7 +1478,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
@@ -1799,7 +1805,10 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-rocket",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data Enrichment",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "relatedEntities": {
       "MJ: Action Params": [
