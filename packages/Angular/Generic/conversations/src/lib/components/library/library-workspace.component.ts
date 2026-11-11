@@ -191,6 +191,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   @Input() public ArtifactPageSize = 200;
   public IsLoading = true;
   public IsLoadingMore = false;
+  public IsStreamingSharedPermissions = false;
   public LoadError: string | null = null;
   public LoadMoreError: string | null = null;
   public LoadedArtifactCount = 0;
@@ -312,8 +313,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public ngOnDestroy(): void {
     this.isDestroyed = true;
-    this.reloadGeneration = (this.reloadGeneration ?? 0) + 1;
-    this.RefreshViewerSubject?.complete();
+    this.reloadGeneration = this.reloadGeneration + 1;
+    this.IsLoadingMore = false;
+    this.IsStreamingSharedPermissions = false;
+    this.RefreshViewerSubject.complete();
   }
 
   // ===========================================================================
@@ -330,6 +333,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public get HasMoreArtifacts(): boolean {
     return this.LoadedArtifactCount < this.TotalArtifactCount;
+  }
+
+  public get IsLoadingMoreArtifacts(): boolean {
+    return this.IsLoadingMore;
+  }
+
+  public get CanLoadMore(): boolean {
+    return this.HasMoreArtifacts && !this.IsLoading && !this.IsLoadingMore;
   }
 
   public get HubTabs(): TabConfig[] {
@@ -1030,11 +1041,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return;
     }
 
-    const generation = (this.reloadGeneration ?? 0) + 1;
+    const generation = this.reloadGeneration + 1;
     this.reloadGeneration = generation;
 
     this.IsLoading = true;
     this.IsLoadingMore = false;
+    this.IsStreamingSharedPermissions = false;
     this.LoadError = null;
     this.LoadMoreError = null;
     let emittedInitialCompletion = false;
@@ -1081,7 +1093,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
       // Unblock first render as soon as Page 0 owned + shared items are hydrated
       this.IsLoading = false;
-      this.IsLoadingMore = hasRemainingPermissionPages;
+      this.IsStreamingSharedPermissions = hasRemainingPermissionPages;
       emittedInitialCompletion = true;
       this.LoadComplete.emit();
       this.emitWorkspaceState();
@@ -1106,7 +1118,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } finally {
       if (!this.isReloadStale(generation)) {
         this.IsLoading = false;
-        this.IsLoadingMore = false;
+        this.IsStreamingSharedPermissions = false;
         if (!emittedInitialCompletion) {
           this.LoadComplete.emit();
         }
@@ -1121,7 +1133,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
    * version rows without re-querying all collections or truncating large libraries.
    */
   public async LoadMoreArtifacts(): Promise<void> {
-    if (!this.HasMoreArtifacts || this.IsLoading || this.IsLoadingMore) {
+    if (!this.CanLoadMore) {
       return;
     }
     const user = this.EffectiveUser;
@@ -1129,6 +1141,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       return;
     }
 
+    const generation = this.reloadGeneration;
+    const ownedOffsetSnapshot = this.ownedArtifactOffset;
+    const directOffsetSnapshot = this.directSharedArtifactOffset;
     this.IsLoadingMore = true;
     this.LoadMoreError = null;
     try {
@@ -1139,24 +1154,21 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       const targetEnvNorm = NormalizeUUID(this.EffectiveEnvironmentId);
       const envFilter = `EnvironmentID='${safeEnvId}'`;
       const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
-      const pageSize = Math.max(1, this.ArtifactPageSize || 200);
+      const pageSize = this.ArtifactPageSize > 0 ? this.ArtifactPageSize : 200;
 
       const hasRemainingDirectShared =
         Array.isArray(this.allDirectSharedArtIds) &&
-        this.directSharedArtifactOffset < this.allDirectSharedArtIds.length;
+        directOffsetSnapshot < this.allDirectSharedArtIds.length;
       const nextDirectSlice = hasRemainingDirectShared
-        ? this.allDirectSharedArtIds.slice(
-            this.directSharedArtifactOffset,
-            this.directSharedArtifactOffset + pageSize,
-          )
+        ? this.allDirectSharedArtIds.slice(directOffsetSnapshot, directOffsetSnapshot + pageSize)
         : [];
 
       const pageQueries: RunViewParams[] = [
         {
           EntityName: 'MJ: Artifacts',
           ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID='${safeUserId}'`,
-          OrderBy: '__mj_UpdatedAt DESC',
-          StartRow: this.ownedArtifactOffset,
+          OrderBy: '__mj_UpdatedAt DESC, ID DESC',
+          StartRow: ownedOffsetSnapshot,
           MaxRows: pageSize,
           ResultType: 'entity_object',
         },
@@ -1165,7 +1177,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         pageQueries.push({
           EntityName: 'MJ: Artifacts',
           ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
-          OrderBy: '__mj_UpdatedAt DESC',
+          OrderBy: '__mj_UpdatedAt DESC, ID DESC',
           StartRow: 0,
           MaxRows: chunk.length,
           ResultType: 'entity_object',
@@ -1173,6 +1185,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       }
 
       const pageBatch = await rv.RunViews(pageQueries, user);
+      if (this.isReloadStale(generation)) {
+        return;
+      }
       this.assertRunViewsSucceeded(pageBatch);
       const [nextArtRes, ...directArtResList] = pageBatch;
       const nextOwnedArtifacts = ((nextArtRes?.Results ?? []) as MJArtifactEntity[]).filter(
@@ -1195,16 +1210,15 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         return;
       }
 
-      this.ownedArtifactOffset += nextOwnedArtifacts.length;
-      if (nextDirectSlice.length > 0) {
-        this.directSharedArtifactOffset += nextDirectSlice.length;
-      }
       const newArtIds = this.uniqueIds(nextArtifacts.map((a) => a.ID));
       let nextVersions: VersionSummaryRow[] = [];
 
       if (newArtIds.length > 0) {
         const verQueries = this.buildScopedArtifactVersionQueries(newArtIds);
         const verBatch = await rv.RunViews(verQueries, user);
+        if (this.isReloadStale(generation)) {
+          return;
+        }
         this.assertRunViewsSucceeded(verBatch);
         const collected: VersionSummaryRow[] = [];
         for (const res of verBatch) {
@@ -1213,6 +1227,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           }
         }
         nextVersions = this.dedupeEntitiesById(collected);
+      }
+
+      this.ownedArtifactOffset = Math.max(
+        this.ownedArtifactOffset,
+        ownedOffsetSnapshot + nextOwnedArtifacts.length,
+      );
+      if (nextDirectSlice.length > 0) {
+        this.directSharedArtifactOffset = Math.max(
+          this.directSharedArtifactOffset,
+          directOffsetSnapshot + nextDirectSlice.length,
+        );
       }
 
       const prev = this.cachedWorkspaceRecords ?? {
@@ -1261,24 +1286,28 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         collectionPerms: prev.collectionPerms,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load additional Library items.';
-      this.LoadMoreError = msg;
-      this.notifications?.CreateSimpleNotification(msg, 'error', 4000);
+      if (!this.isReloadStale(generation)) {
+        const msg = err instanceof Error ? err.message : 'Failed to load additional Library items.';
+        this.LoadMoreError = msg;
+        this.notifications.CreateSimpleNotification(msg, 'error', 4000);
+      }
     } finally {
-      this.IsLoadingMore = false;
-      this.emitWorkspaceState();
-      this.notifyViewCheck();
+      if (!this.isReloadStale(generation)) {
+        this.IsLoadingMore = false;
+        this.emitWorkspaceState();
+        this.notifyViewCheck();
+      }
     }
   }
 
   private isReloadStale(generation: number): boolean {
-    return Boolean(this.isDestroyed) || generation !== (this.reloadGeneration ?? 0);
+    return Boolean(this.isDestroyed) || generation !== this.reloadGeneration;
   }
 
   private notifyViewCheck(): void {
     if (!this.isDestroyed) {
-      this.cdr?.markForCheck?.();
-      this.cdr?.detectChanges?.();
+      this.cdr.markForCheck();
+      this.cdr.detectChanges();
     }
   }
 
@@ -1309,7 +1338,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const currentUserNorm = NormalizeUUID(user.ID);
     const envFilter = `EnvironmentID='${safeEnvId}'`;
     const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
-    const pageSize = Math.max(1, this.ArtifactPageSize || 200);
+    const pageSize = this.ArtifactPageSize > 0 ? this.ArtifactPageSize : 200;
 
     // Batch 1: First page of owned artifacts, Page 0 of lightweight artifact permission rows,
     // owned collections, and user collection grants
@@ -1318,7 +1347,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         {
           EntityName: 'MJ: Artifacts',
           ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID='${safeUserId}'`,
-          OrderBy: '__mj_UpdatedAt DESC',
+          OrderBy: '__mj_UpdatedAt DESC, ID DESC',
           StartRow: 0,
           MaxRows: pageSize,
           ResultType: 'entity_object',
@@ -1327,7 +1356,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           EntityName: 'MJ: Artifact Permissions',
           ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
           Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
-          OrderBy: '__mj_CreatedAt DESC',
+          OrderBy: '__mj_CreatedAt DESC, ID DESC',
           StartRow: 0,
           MaxRows: pageSize,
           ResultType: 'simple',
@@ -1430,7 +1459,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       batch2Queries.push({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
-        OrderBy: '__mj_UpdatedAt DESC',
+        OrderBy: '__mj_UpdatedAt DESC, ID DESC',
         StartRow: 0,
         MaxRows: chunk.length,
         ResultType: 'entity_object',
@@ -1676,7 +1705,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const currentUserNorm = NormalizeUUID(user.ID);
     const envFilter = `EnvironmentID='${safeEnvId}'`;
     const visibleFilter = `(Visibility IS NULL OR Visibility <> 'System Only')`;
-    const pageSize = Math.max(1, this.ArtifactPageSize || 200);
+    const pageSize = this.ArtifactPageSize > 0 ? this.ArtifactPageSize : 200;
 
     try {
       for (
@@ -1696,7 +1725,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           EntityName: 'MJ: Artifact Permissions',
           ExtraFilter: `UserID='${safeUserId}' AND CanRead=1`,
           Fields: ARTIFACT_PERMISSION_SUMMARY_FIELDS,
-          OrderBy: '__mj_CreatedAt DESC',
+          OrderBy: '__mj_CreatedAt DESC, ID DESC',
           StartRow: startRow,
           MaxRows: pageSize,
           SkipTotalRowCount: true,
@@ -1725,7 +1754,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           return;
         }
 
-        const mergedPerms = this.dedupeEntitiesById([...cached.artifactPerms, ...batchPerms]);
         const loadedArtNormSet = new Set(cached.artifacts.map((a) => NormalizeUUID(a.ID)));
         const existingDirectNormSet = new Set(
           this.allDirectSharedArtIds.map((id) => NormalizeUUID(id)),
@@ -1792,7 +1820,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
           // If Page 0 yielded zero visible items (e.g., all Page 0 shares belonged to another environment),
           // hydrate up to one page immediately so the workspace is not left empty.
-          if (cached.artifacts.length === 0 && dedupedValidIds.length > 0) {
+          if ((this.cachedWorkspaceRecords?.artifacts.length ?? 0) === 0 && dedupedValidIds.length > 0) {
             const hydrateSlice = dedupedValidIds.slice(0, pageSize);
             const unpagedRemainder = dedupedValidIds.slice(pageSize);
 
@@ -1805,7 +1833,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
               hydrateQueries.push({
                 EntityName: 'MJ: Artifacts',
                 ExtraFilter: `${envFilter} AND ${visibleFilter} AND UserID <> '${safeUserId}' AND ID IN (${this.sqlUuidInList(chunk)})`,
-                OrderBy: '__mj_UpdatedAt DESC',
+                OrderBy: '__mj_UpdatedAt DESC, ID DESC',
                 StartRow: 0,
                 MaxRows: chunk.length,
                 ResultType: 'entity_object',
@@ -1866,6 +1894,17 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           return;
         }
 
+        const latestMergedPerms = this.dedupeEntitiesById([
+          ...latestCached.artifactPerms,
+          ...batchPerms,
+        ]);
+        const latestLoadedArtNormSet = new Set(
+          latestCached.artifacts.map((a) => NormalizeUUID(a.ID)),
+        );
+        const latestTouchesLoadedArtifact =
+          touchesLoadedArtifact ||
+          batchPerms.some((ap) => latestLoadedArtNormSet.has(NormalizeUUID(ap.ArtifactID)));
+
         const updatedArtifacts =
           hydratedNewArtifacts.length > 0
             ? this.dedupeEntitiesById([...latestCached.artifacts, ...hydratedNewArtifacts])
@@ -1886,7 +1925,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           ...latestCached,
           artifacts: updatedArtifacts,
           versions: updatedVersions,
-          artifactPerms: mergedPerms,
+          artifactPerms: latestMergedPerms,
         };
 
         this.LoadedArtifactCount = updatedArtifacts.length;
@@ -1900,7 +1939,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
           ownedTotal + loadedSharedDelta + unpagedDirectCount,
         );
 
-        if (hydratedNewArtifacts.length > 0 || touchesLoadedArtifact) {
+        if (hydratedNewArtifacts.length > 0 || latestTouchesLoadedArtifact) {
           this.hydrateWorkspaceViewModels({
             user,
             artifactTypes,
@@ -1908,7 +1947,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
             versions: updatedVersions,
             collections: latestCached.collections,
             collectionLinks: latestCached.collectionLinks,
-            artifactPerms: mergedPerms,
+            artifactPerms: latestMergedPerms,
             collectionPerms: latestCached.collectionPerms,
           });
         }
@@ -1921,7 +1960,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         const msg =
           err instanceof Error ? err.message : 'Failed to load shared Library permissions.';
         this.LoadMoreError = msg;
-        this.notifications?.CreateSimpleNotification(msg, 'error', 4000);
+        this.notifications.CreateSimpleNotification(msg, 'error', 4000);
       }
     }
   }

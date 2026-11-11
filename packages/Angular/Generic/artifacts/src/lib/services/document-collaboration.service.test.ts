@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as Y from 'yjs';
+import * as encoding from 'lib0/encoding';
 import type { IMetadataProvider } from '@memberjunction/core';
 import {
   COLLAB_SECRET_UNCONFIGURED_CODE,
   DocumentCollaborationService,
   ExtractAnchoredCommentMentions,
   MAX_RECONNECT_ATTEMPTS,
+  MERGE_CONFLICT_WARNING_MESSAGE,
+  type CollaborationMergeConflictEvent,
+  type CollaborationNotificationSink,
 } from './document-collaboration.service';
 
 describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3, Blocker 7)', () => {
@@ -800,6 +804,358 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     } finally {
       Reflect.set(globalThis, 'WebSocket', prevWebSocket);
       vi.useRealTimers();
+    }
+  });
+
+  it('R8-10: reconnect exhaustion sets recoverable error, online + visibilitychange(visible) reset counter and Retry(), COLLAB_SECRET_UNCONFIGURED does not auto-loop, and ngOnDestroy removes listeners', async () => {
+    vi.useFakeTimers();
+    const prevWebSocket = globalThis.WebSocket;
+    const prevWindow = Reflect.get(globalThis, 'window');
+    const prevDocument = Reflect.get(globalThis, 'document');
+
+    const windowListeners = new Map<string, Set<() => void>>();
+    const documentListeners = new Map<string, Set<() => void>>();
+
+    const mockWindow = {
+      location: { origin: 'https://example.com', hostname: 'example.com' },
+      addEventListener: vi.fn((type: string, listener: () => void) => {
+        const set = windowListeners.get(type) ?? new Set<() => void>();
+        set.add(listener);
+        windowListeners.set(type, set);
+      }),
+      removeEventListener: vi.fn((type: string, listener: () => void) => {
+        windowListeners.get(type)?.delete(listener);
+      }),
+    };
+
+    const mockDocument = {
+      visibilityState: 'hidden',
+      addEventListener: vi.fn((type: string, listener: () => void) => {
+        const set = documentListeners.get(type) ?? new Set<() => void>();
+        set.add(listener);
+        documentListeners.set(type, set);
+      }),
+      removeEventListener: vi.fn((type: string, listener: () => void) => {
+        documentListeners.get(type)?.delete(listener);
+      }),
+    };
+
+    class RecoverySocket {
+      public static readonly CONNECTING = 0;
+      public static readonly OPEN = 1;
+      public static readonly CLOSING = 2;
+      public static readonly CLOSED = 3;
+      public static instances: RecoverySocket[] = [];
+
+      public readyState = RecoverySocket.CONNECTING;
+      public binaryType = 'arraybuffer';
+      public url: string;
+      public onopen: (() => void) | null = null;
+      public onmessage: ((event: MessageEvent) => void) | null = null;
+      public onclose: ((event: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        RecoverySocket.instances.push(this);
+      }
+
+      public send(_data: Uint8Array): void {
+        // no-op
+      }
+
+      public close(): void {
+        this.readyState = RecoverySocket.CLOSED;
+      }
+    }
+
+    Reflect.set(globalThis, 'window', mockWindow);
+    Reflect.set(globalThis, 'document', mockDocument);
+    Reflect.set(globalThis, 'WebSocket', RecoverySocket);
+
+    const recoveryService = new DocumentCollaborationService();
+    const retrySpy = vi.spyOn(recoveryService, 'Retry');
+
+    try {
+      let ticketCounter = 0;
+      const transientProvider = mockGqlProvider({
+        ConfigData: { URL: 'https://example.com/graphql' },
+        ExecuteGQL: async () => ({
+          MintArtifactCollaborationTicket: {
+            Success: true,
+            Ticket: `rec-ticket-${++ticketCounter}`,
+            WsPath: '/collaboration/yjs',
+            CanRead: true,
+            CanEdit: true,
+          },
+        }),
+      });
+
+      const session = recoveryService.CreateSession(
+        'art-r8-recover',
+        '# Outage Doc',
+        { id: 'u1', name: 'Alice' },
+        true,
+        true,
+      );
+      await session.Connect(null, transientProvider);
+
+      for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+        const sock = RecoverySocket.instances[attempt];
+        expect(sock).toBeDefined();
+        sock.readyState = RecoverySocket.CLOSED;
+        sock.onclose?.({ code: 1006 } as CloseEvent);
+        if (attempt < MAX_RECONNECT_ATTEMPTS) {
+          await vi.advanceTimersByTimeAsync(31_000);
+        }
+      }
+
+      expect(session.Status).toBe('error');
+      expect(session.Recoverable).toBe(true);
+      expect(session.ReconnectAttempts).toBe(MAX_RECONNECT_ATTEMPTS);
+
+      // 1. Regaining network connectivity ('online') resets attempts to 0 and invokes Retry(artifactId)
+      const countBeforeOnline = RecoverySocket.instances.length;
+      for (const listener of Array.from(windowListeners.get('online') ?? [])) {
+        listener();
+      }
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(retrySpy).toHaveBeenCalledWith('art-r8-recover');
+      expect(session.ReconnectAttempts).toBe(0);
+      expect(RecoverySocket.instances.length).toBe(countBeforeOnline + 1);
+      const onlineSocket = RecoverySocket.instances[RecoverySocket.instances.length - 1];
+      onlineSocket.readyState = RecoverySocket.OPEN;
+      onlineSocket.onopen?.();
+      expect(session.Status).toBe('connected');
+
+      // 2. Exhaust reconnect cap again while backgrounded, then fire visibilitychange -> 'visible'
+      const baseIndex = RecoverySocket.instances.length - 1;
+      for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+        const sock = RecoverySocket.instances[baseIndex + attempt];
+        expect(sock).toBeDefined();
+        sock.readyState = RecoverySocket.CLOSED;
+        sock.onclose?.({ code: 1006 } as CloseEvent);
+        if (attempt < MAX_RECONNECT_ATTEMPTS) {
+          await vi.advanceTimersByTimeAsync(31_000);
+        }
+      }
+      expect(session.Status).toBe('error');
+      expect(session.ReconnectAttempts).toBe(MAX_RECONNECT_ATTEMPTS);
+
+      retrySpy.mockClear();
+      // While hidden, visibilitychange must NOT retry
+      mockDocument.visibilityState = 'hidden';
+      for (const listener of Array.from(documentListeners.get('visibilitychange') ?? [])) {
+        listener();
+      }
+      await Promise.resolve();
+      expect(retrySpy).not.toHaveBeenCalled();
+
+      // Transitioning to 'visible' resets attempts to 0 and reconnects
+      mockDocument.visibilityState = 'visible';
+      for (const listener of Array.from(documentListeners.get('visibilitychange') ?? [])) {
+        listener();
+      }
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(retrySpy).toHaveBeenCalledWith('art-r8-recover');
+      expect(session.ReconnectAttempts).toBe(0);
+      const visibleSocket = RecoverySocket.instances[RecoverySocket.instances.length - 1];
+      visibleSocket.readyState = RecoverySocket.OPEN;
+      visibleSocket.onopen?.();
+      expect(session.Status).toBe('connected');
+      session.Destroy();
+
+      // 3. COLLAB_SECRET_UNCONFIGURED must have Recoverable === false and MUST NOT auto-loop on visibilitychange/online
+      let unconfiguredCalls = 0;
+      const unconfiguredProvider = mockGqlProvider({
+        ConfigData: { URL: 'https://example.com/graphql' },
+        ExecuteGQL: async () => {
+          unconfiguredCalls++;
+          return {
+            MintArtifactCollaborationTicket: {
+              Success: false,
+              CanRead: true,
+              CanEdit: true,
+              ErrorCode: COLLAB_SECRET_UNCONFIGURED_CODE,
+              ErrorMessage: 'Signing secret missing',
+            },
+          };
+        },
+      });
+
+      const unconfSession = recoveryService.CreateSession(
+        'art-r8-unconfigured',
+        '# Unconfigured Doc',
+        { id: 'u1', name: 'Alice' },
+        true,
+        true,
+      );
+      await unconfSession.Connect(null, unconfiguredProvider);
+      expect(unconfSession.LiveSyncUnavailable).toBe(true);
+      expect(unconfSession.Recoverable).toBe(false);
+      expect(unconfiguredCalls).toBe(1);
+
+      retrySpy.mockClear();
+      mockDocument.visibilityState = 'visible';
+      for (const listener of Array.from(documentListeners.get('visibilitychange') ?? [])) {
+        listener();
+      }
+      for (const listener of Array.from(windowListeners.get('online') ?? [])) {
+        listener();
+      }
+      await Promise.resolve();
+      expect(retrySpy).not.toHaveBeenCalled();
+      expect(unconfiguredCalls).toBe(1);
+
+      // Explicit user Retry(artifactId) click still re-attempts cleanly
+      const manualRetried = await recoveryService.Retry('art-r8-unconfigured');
+      expect(manualRetried).toBe(true);
+      expect(unconfiguredCalls).toBe(2);
+      unconfSession.Destroy();
+
+      // 4. ngOnDestroy cleanly detaches window and document listeners
+      recoveryService.ngOnDestroy();
+      expect(mockWindow.removeEventListener).toHaveBeenCalledWith('online', expect.any(Function));
+      expect(mockDocument.removeEventListener).toHaveBeenCalledWith(
+        'visibilitychange',
+        expect.any(Function),
+      );
+      expect(windowListeners.get('online')?.size ?? 0).toBe(0);
+      expect(documentListeners.get('visibilitychange')?.size ?? 0).toBe(0);
+    } finally {
+      Reflect.set(globalThis, 'WebSocket', prevWebSocket);
+      if (prevWindow === undefined) {
+        Reflect.deleteProperty(globalThis, 'window');
+      } else {
+        Reflect.set(globalThis, 'window', prevWindow);
+      }
+      if (prevDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document');
+      } else {
+        Reflect.set(globalThis, 'document', prevDocument);
+      }
+      vi.useRealTimers();
+    }
+  });
+
+  it('R8-2: handles binary MSG_CONTROL and JSON merge-conflict frames, emits MergeConflict$/MergeConflicts$, and surfaces warning toast once per event', async () => {
+    const prevWebSocket = globalThis.WebSocket;
+
+    class ConflictSocket {
+      public static readonly OPEN = 1;
+      public static latest: ConflictSocket | null = null;
+      public readyState = ConflictSocket.OPEN;
+      public binaryType = 'arraybuffer';
+      public onopen: (() => void) | null = null;
+      public onmessage: ((event: MessageEvent) => void) | null = null;
+      public onclose: ((event: CloseEvent) => void) | null = null;
+      public onerror: (() => void) | null = null;
+      constructor(_url: string) {
+        ConflictSocket.latest = this;
+      }
+      public send(_data: Uint8Array): void {}
+      public close(): void {}
+    }
+
+    Reflect.set(globalThis, 'WebSocket', ConflictSocket);
+
+    const createNotificationSpy = vi.fn();
+    const mockNotifier: CollaborationNotificationSink = {
+      CreateSimpleNotification: createNotificationSpy,
+    };
+
+    const conflictService = new DocumentCollaborationService();
+    conflictService.SetNotificationSink(mockNotifier);
+    const serviceEvents: CollaborationMergeConflictEvent[] = [];
+    const sessionEvents: CollaborationMergeConflictEvent[] = [];
+
+    const subService = conflictService.MergeConflicts$.subscribe((evt) => {
+      serviceEvents.push(evt);
+    });
+
+    try {
+      const session = conflictService.CreateSession(
+        'art-conflict-1',
+        '# Shared Spec',
+        { id: 'u1', name: 'Alice' },
+        true,
+        true,
+      );
+      const subSession = session.MergeConflict$.subscribe((evt) => {
+        sessionEvents.push(evt);
+      });
+
+      await session.Connect('wss://example.com/collaboration/yjs?ticket=test-1');
+      ConflictSocket.latest?.onopen?.();
+
+      // 1. Binary MSG_CONTROL (type = 2) frame with server's merge-conflict payload
+      const encoder = encoding.createEncoder();
+      encoding.writeVarUint(encoder, 2);
+      encoding.writeVarString(
+        encoder,
+        JSON.stringify({
+          type: 'control',
+          action: 'merge-conflict',
+          artifactId: 'art-conflict-1',
+          versionId: 'ver-9',
+          versionNumber: 9,
+          rejectedHunksCount: 3,
+          source: 'agent-commit',
+          timestamp: '2026-11-11T12:00:00.000Z',
+        }),
+      );
+      session.ApplyBinaryFrame(encoding.toUint8Array(encoder));
+
+      expect(sessionEvents).toHaveLength(1);
+      expect(serviceEvents).toHaveLength(1);
+      expect(sessionEvents[0]).toEqual({
+        ArtifactID: 'art-conflict-1',
+        VersionID: 'ver-9',
+        VersionNumber: 9,
+        RejectedHunksCount: 3,
+        Source: 'agent-commit',
+        RoomEpoch: undefined,
+        Timestamp: '2026-11-11T12:00:00.000Z',
+      });
+      expect(createNotificationSpy).toHaveBeenCalledTimes(1);
+      expect(createNotificationSpy).toHaveBeenCalledWith(
+        MERGE_CONFLICT_WARNING_MESSAGE,
+        'warning',
+        5000,
+      );
+
+      // Re-invoking NotifyMergeConflictToastOnce with the same event reference must NOT duplicate toast
+      expect(conflictService.NotifyMergeConflictToastOnce(sessionEvents[0], mockNotifier)).toBe(
+        false,
+      );
+      expect(createNotificationSpy).toHaveBeenCalledTimes(1);
+
+      // 2. String JSON control frame via ws.onmessage with rejectedHunkCount (singular server variant)
+      ConflictSocket.latest?.onmessage?.({
+        data: JSON.stringify({
+          type: 'merge-conflict',
+          versionNumber: 10,
+          rejectedHunkCount: 1,
+        }),
+      } as MessageEvent);
+
+      expect(sessionEvents).toHaveLength(2);
+      expect(serviceEvents).toHaveLength(2);
+      expect(sessionEvents[1].ArtifactID).toBe('art-conflict-1');
+      expect(sessionEvents[1].VersionNumber).toBe(10);
+      expect(sessionEvents[1].RejectedHunksCount).toBe(1);
+      expect(createNotificationSpy).toHaveBeenCalledTimes(2);
+
+      subSession.unsubscribe();
+      session.Destroy();
+    } finally {
+      subService.unsubscribe();
+      conflictService.ngOnDestroy();
+      Reflect.set(globalThis, 'WebSocket', prevWebSocket);
     }
   });
 });

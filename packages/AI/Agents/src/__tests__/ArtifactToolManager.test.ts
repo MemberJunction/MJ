@@ -9,7 +9,7 @@ import {
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ArtifactMetadataEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, MJEventType, MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 
 // Side-effect imports — force the @RegisterClass decorators on the production
@@ -1200,6 +1200,174 @@ describe('ArtifactToolManager', () => {
             } finally {
                 configSpy.mockRestore();
                 resolveSpy.mockRestore();
+            }
+        });
+
+        it('R8-2d: reconciles live room mergedContent before persisting Version, sets AlreadyAppliedToRoom, and reports rejectedEditsCount + conflictWarning', async () => {
+            const artifactUuid = 'aaaa1111-2222-4333-8444-777777777777';
+            const initialMarkdown = '# Heading One\n\nParagraph Two';
+            const persistedVersions: Array<{ ID: string; VersionNumber: number; Content: string }> = [];
+
+            const user = new UserInfo();
+            user.ID = '11111111-2222-4333-8444-888888888888';
+            user.Name = 'Agent Runner';
+            user.IsActive = true;
+
+            const mockProvider: Pick<IMetadataProvider, 'GetEntityObject'> & {
+                RunView: (params: { EntityName: string }) => Promise<{
+                    Success: boolean;
+                    Results: Array<Record<string, string | number | boolean | null>>;
+                }>;
+            } = {
+                RunView: async (params: { EntityName: string }) => {
+                    if (params.EntityName === 'MJ: Artifacts') {
+                        return {
+                            Success: true,
+                            Results: [
+                                {
+                                    ID: artifactUuid,
+                                    Name: 'LiveDoc.md',
+                                    UserID: user.ID,
+                                    DelegateEntityID: null,
+                                    DelegateRecordID: null,
+                                },
+                            ],
+                        };
+                    }
+                    if (params.EntityName === 'MJ: Artifact Versions') {
+                        const latest =
+                            persistedVersions.length > 0
+                                ? persistedVersions[persistedVersions.length - 1]
+                                : { ID: 'ver-1', VersionNumber: 1 };
+                        return {
+                            Success: true,
+                            Results: [{ ID: latest.ID, VersionNumber: latest.VersionNumber, ContentMode: 'Text' }],
+                        };
+                    }
+                    return { Success: true, Results: [] };
+                },
+                GetEntityObject: (async () => {
+                    const draft = {
+                        ID: '',
+                        ArtifactID: '',
+                        VersionNumber: 0,
+                        UserID: '',
+                        Name: '' as string | null,
+                        Comments: '' as string | null,
+                        ContentHash: '' as string | null,
+                        ContentMode: 'Text' as const,
+                        FileID: null as string | null,
+                        Content: null as string | null,
+                        Configuration: null as string | null,
+                        NewRecord: () => undefined,
+                        Save: async () => {
+                            draft.ID = `ver-${draft.VersionNumber}`;
+                            persistedVersions.push({
+                                ID: draft.ID,
+                                VersionNumber: draft.VersionNumber,
+                                Content: draft.Content ?? '',
+                            });
+                            return true;
+                        },
+                    };
+                    return draft;
+                }) as IMetadataProvider['GetEntityObject'],
+            };
+
+            const observedHookEvents: ArtifactLiveMutationEvent[] = [];
+            const observedGlobalEvents: Array<Record<string, string | number | boolean | null | undefined>> = [];
+            const sub = MJGlobal.Instance.GetEventListener(false).subscribe((evt) => {
+                if (evt.event === MJEventType.ComponentEvent && evt.eventCode === 'ArtifactCollaboration.LiveContentMutation') {
+                    observedGlobalEvents.push(evt.args as Record<string, string | number | boolean | null | undefined>);
+                }
+            });
+
+            SetArtifactLiveMutationHook(async (evt) => {
+                observedHookEvents.push(evt);
+                return {
+                    mergedContent: '# Live Human Heading\n\nParagraph Two',
+                    hadConflict: true,
+                    rejectedHunksCount: 1,
+                    rejectedAgentHunks: [
+                        {
+                            BaseLines: ['# Heading One'],
+                            LiveLines: ['# Live Human Heading'],
+                            RejectedAgentLines: ['# Agent Proposed Heading'],
+                        },
+                    ],
+                };
+            });
+
+            try {
+                manager.Initialize(
+                    [
+                        {
+                            name: 'LiveDoc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-1',
+                            versionNumber: 1,
+                            content: initialMarkdown,
+                        },
+                    ],
+                    { contextUser: user, provider: mockProvider as IMetadataProvider },
+                );
+
+                const blocksCall = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'get_blocks',
+                    input: {},
+                });
+                const initialBlocksData = blocksCall.result.data as {
+                    revisionHash: string;
+                    blocks: Array<{ blockId: string }>;
+                };
+
+                const mutRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: {
+                        blockId: initialBlocksData.blocks[0].blockId,
+                        markdown: '# Agent Proposed Heading',
+                        expectedRevisionHash: initialBlocksData.revisionHash,
+                    },
+                });
+
+                expect(mutRes.result.success).toBe(true);
+                const mutData = mutRes.result.data as {
+                    persisted: boolean;
+                    rejectedEditsCount?: number;
+                    conflictWarning?: string;
+                    warnings?: string[];
+                };
+                expect(mutData.persisted).toBe(true);
+                expect(mutData.rejectedEditsCount).toBe(1);
+                expect(mutData.conflictWarning).toBe('1 edit not applied because of concurrent edits');
+                expect(mutData.warnings).toContain('1 edit not applied because of concurrent edits');
+
+                // Hook received previousContent so 3-way merge has the exact base!
+                expect(observedHookEvents).toHaveLength(1);
+                expect(observedHookEvents[0]?.previousContent).toBe(initialMarkdown);
+
+                // Persisted MJ: Artifact Versions record MUST store mergedContent (never diverging from live room!)
+                expect(persistedVersions).toHaveLength(1);
+                expect(persistedVersions[0]?.Content).toBe('# Live Human Heading\n\nParagraph Two');
+
+                // In-memory entry also holds mergedContent
+                const readAfter = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'get_lines',
+                    input: { start: 0, count: 5 },
+                });
+                expect(JSON.stringify(readAfter.result.data)).toContain('# Live Human Heading');
+
+                // Global mutation event marks AlreadyAppliedToRoom: true so collaboration server skips double-apply
+                expect(observedGlobalEvents).toHaveLength(1);
+                expect(observedGlobalEvents[0]?.AlreadyAppliedToRoom).toBe(true);
+                expect(observedGlobalEvents[0]?.NewContent).toBe('# Live Human Heading\n\nParagraph Two');
+            } finally {
+                sub.unsubscribe();
             }
         });
     });

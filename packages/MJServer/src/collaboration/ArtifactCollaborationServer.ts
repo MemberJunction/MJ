@@ -14,6 +14,7 @@ import {
     BaseSingleton,
     BytesToBase64,
     EscapeSQLString,
+    GetGlobalObjectStore,
     MJEventType,
     MJGlobal,
     NormalizeUUID,
@@ -46,6 +47,15 @@ export const ARTIFACT_COLLABORATION_WS_PATH = '/collaboration/yjs';
 
 /** Optional `MJGlobal` event code for decoupled server-side live artifact mutations. */
 export const ARTIFACT_LIVE_MUTATION_EVENT_CODE = 'ArtifactCollaboration.LiveContentMutation';
+
+/** Global store key shared with `ArtifactToolManager` (`SetArtifactLiveMutationHook`). */
+const ARTIFACT_LIVE_MUTATION_HOOK_KEY = '___MJ_ARTIFACT_LIVE_MUTATION_HOOK___';
+
+/** Prefix matching authoritative version restores (`R8-2e`). */
+const RESTORE_VERSION_PREFIX_RE = /^Restored from\b/i;
+
+/** Max inline snapshot length (chars) embedded inside `Y.Doc.getMap('meta')` (`R8-1`). */
+const MAX_META_INLINE_SNAPSHOT_B64_CHARS = 2048;
 
 /** `MJGlobal` event code emitted by `MJArtifactVersionEntityServer.Save()` on every version save. */
 export const ARTIFACT_VERSION_SAVED_EVENT_CODE = 'MJ_ARTIFACT_VERSION_SAVED';
@@ -305,8 +315,40 @@ interface VersionRowProjection {
     Content?: string | null;
     Configuration?: string | null;
     ContentHash?: string | null;
+    Description?: string | null;
+    Comments?: string | null;
     __mj_CreatedAt?: Date | string | null;
     __mj_UpdatedAt?: Date | string | null;
+}
+
+interface RegisteredLiveMutationEvent {
+    artifactId: string;
+    alphaId: string;
+    versionId?: string;
+    versionNumber?: number;
+    previousContent?: string;
+    updatedContent: string;
+    xlsxBase64?: string;
+    tool: string;
+    contextUser?: UserInfo;
+    agentRunId?: string;
+    agentName?: string;
+}
+
+interface RegisteredLiveMutationHookResult {
+    mergedContent?: string;
+    hadConflict?: boolean;
+    rejectedHunksCount?: number;
+    rejectedAgentHunks?: Array<{
+        BaseLines: string[];
+        LiveLines: string[];
+        RejectedAgentLines: string[];
+    }>;
+}
+
+interface PendingSyncWaiterEntry {
+    settle: (synced: boolean) => void;
+    isSatisfied?: () => boolean;
 }
 
 interface ArtifactDelegateProjection {
@@ -337,6 +379,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     });
 
     private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
     private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
     private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
     private static readonly _compactedStateVectors = new Map<
@@ -349,6 +392,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             ContentHash: string;
         }
     >();
+    private static readonly _compactedVectorKeysByArtifact = new Map<
+        string,
+        Array<{ verKey: string; artKey: string }>
+    >();
 
     private readonly _serverInstanceId = `collab-${randomUUID()}`;
     private readonly _rooms = new Map<string, CollaborationRoom>();
@@ -356,7 +403,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private readonly _tickets = new Map<string, StoredCollaborationTicket>();
     private readonly _consumedTickets = new Map<string, number>();
     private readonly _inFlightCompactionVersionIds = new Set<string>();
-    private readonly _pendingSyncWaiters = new Map<string, Set<(synced: boolean) => void>>();
+    private readonly _pendingSyncWaiters = new Map<string, Set<PendingSyncWaiterEntry>>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
     private _dataSources: DataSourceInfo[] = [];
@@ -366,6 +413,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private _ticketReplayStore: TicketReplayStore | null = null;
     private _unsubscribePermissionEngine: (() => void) | null = null;
     private _globalMutationSub: { unsubscribe: () => void } | null = null;
+    private _ownedLiveMutationHook:
+        | ((evt: RegisteredLiveMutationEvent) => Promise<RegisteredLiveMutationHookResult | void>)
+        | null = null;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _idleRoomTtlMs: number = DEFAULT_IDLE_ROOM_TTL_MS;
     private _heartbeatIntervalMs: number = DEFAULT_COLLABORATION_HEARTBEAT_MS;
@@ -445,6 +495,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     public SetRoomRelay(relay: IYjsRoomRelay): void {
         this._relay = relay;
         this.ensurePermissionListenerRegistered();
+        if (!this._shuttingDown) {
+            this.ensureGlobalMutationListenerRegistered();
+        }
     }
 
     /** Returns the currently active {@link IYjsRoomRelay}. */
@@ -457,6 +510,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public SetMetadataProviderOverride(provider: IMetadataProvider | null): void {
         this._providerOverride = provider;
+        if (provider && !this._shuttingDown) {
+            this.ensureGlobalMutationListenerRegistered();
+        }
     }
 
     /**
@@ -533,6 +589,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     public IssueTicket(params: IssueCollaborationTicketParams): IssuedCollaborationTicket {
         this.ensureShutdownRegistered();
         this.ensurePermissionListenerRegistered();
+        this.ensureGlobalMutationListenerRegistered();
         this.pruneExpiredTickets();
 
         const secret = this.getTicketHmacSecret();
@@ -788,6 +845,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         this.ensureShutdownRegistered();
         this.ensurePermissionListenerRegistered();
+        this.ensureGlobalMutationListenerRegistered();
         this.ensureHeartbeatStarted();
 
         void this.handleAuthenticatedUpgrade(req, socket, head, parsedUrl).catch((err) => {
@@ -941,7 +999,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * All flushes for a room are serialized through `room.FlushQueue` so an older debounced
      * flush can never overwrite a newer post-version flush (`Blocker 2`, `Item 7`).
      */
-    public async FlushWorkingState(artifactId: string, contextUser: UserInfo): Promise<boolean> {
+    public async FlushWorkingState(
+        artifactId: string,
+        contextUser: UserInfo,
+        options?: { guardNewerPersistedVersion?: boolean }
+    ): Promise<boolean> {
         this.ensureShutdownRegistered();
         const key = (artifactId ?? '').trim().toLowerCase();
         const room = this._rooms.get(key);
@@ -969,7 +1031,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const stateBytes = Y.encodeStateAsUpdate(room.Doc);
                 const stateBase64 = BytesToBase64(stateBytes);
                 const rv = RunView.FromMetadataProvider(provider);
-                const existingRes = await rv.RunView<Record<string, unknown>>(
+                const existingRes = await rv.RunView<Record<string, string | number | Uint8Array | Date | null>>(
                     {
                         EntityName: 'MJ: Artifact Working States',
                         ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
@@ -981,12 +1043,41 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     persistenceUser
                 );
 
+                const existingRow =
+                    existingRes.Success && existingRes.Results && existingRes.Results.length > 0
+                        ? existingRes.Results[0]
+                        : undefined;
+
+                if (options?.guardNewerPersistedVersion && existingRow?.['YjsState']) {
+                    const existingStateBytes = DecodeWorkingStateBytes(existingRow['YjsState']);
+                    if (existingStateBytes.byteLength > 0) {
+                        const probeDoc = new Y.Doc();
+                        try {
+                            Y.applyUpdate(probeDoc, existingStateBytes, 'probe');
+                            const probeMeta = probeDoc.getMap('meta');
+                            const persistedVersionNum = Number(
+                                probeMeta.get('baseVersionNumber') ?? probeMeta.get('versionNumber') ?? 0
+                            );
+                            const localMeta = room.Doc.getMap('meta');
+                            const localVersionNum = Math.max(
+                                room.BaseVersionNumber,
+                                Number(localMeta.get('baseVersionNumber') ?? localMeta.get('versionNumber') ?? 0)
+                            );
+                            if (Number.isFinite(persistedVersionNum) && persistedVersionNum > localVersionNum) {
+                                return false;
+                            }
+                        } finally {
+                            probeDoc.destroy();
+                        }
+                    }
+                }
+
                 const entity = await provider.GetEntityObject<MJArtifactWorkingStateEntity>(
                     'MJ: Artifact Working States',
                     persistenceUser
                 );
-                if (existingRes.Success && existingRes.Results && existingRes.Results.length > 0) {
-                    await entity.LoadFromData(normalizeWorkingStateRowForEntity(existingRes.Results[0]));
+                if (existingRow) {
+                    await entity.LoadFromData(normalizeWorkingStateRowForEntity(existingRow));
                 } else {
                     entity.NewRecord();
                     entity.ArtifactID = room.ArtifactID;
@@ -1063,12 +1154,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Content?: string | null;
                 Configuration?: string | null;
                 ContentHash?: string | null;
+                Description?: string | null;
+                Comments?: string | null;
             }>(
                 {
                     EntityName: 'MJ: Artifact Versions',
                     ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
                     OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', 'ContentHash'],
+                    Fields: [
+                        'ID',
+                        'VersionNumber',
+                        'Content',
+                        'Configuration',
+                        'ContentHash',
+                        'Description',
+                        'Comments'
+                    ],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -1113,6 +1214,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.BaseVersionID = latest.ID;
                 room.BaseVersionNumber = latest.VersionNumber;
                 room.BaseVersionText = currentContent;
+                const keepMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${latest.VersionNumber}`;
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
                     meta.set('versionNumber', latest.VersionNumber);
@@ -1122,6 +1224,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (meta.has('baseContent')) {
                         meta.delete('baseContent');
                     }
+                    this.pruneArtifactVersionMetaKeys(meta, meta.has(keepMetaKey) ? keepMetaKey : undefined);
                 }, 'version-meta');
                 room.LastCompactedStateVector = Y.encodeStateVector(room.Doc);
                 if (room.DirtyWorkingState) {
@@ -1191,8 +1294,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 const preMetaSnapshotB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
                 const versionVectorMetaValue = JSON.stringify({
                     sv: preMetaStateVectorB64,
-                    snap: preMetaSnapshotB64,
+                    ...(preMetaSnapshotB64.length < MAX_META_INLINE_SNAPSHOT_B64_CHARS
+                        ? { snap: preMetaSnapshotB64 }
+                        : {}),
                     versionId: versionEntity.ID,
+                    versionNumber: versionEntity.VersionNumber,
                     contentHash
                 });
                 room.Doc.transact(() => {
@@ -1205,6 +1311,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         meta.delete('baseContent');
                     }
                     meta.set(versionVectorMetaKey, versionVectorMetaValue);
+                    this.pruneArtifactVersionMetaKeys(meta, versionVectorMetaKey);
                     meta.set('roomEpoch', room.RoomEpoch);
                 }, 'version-meta');
 
@@ -1298,9 +1405,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         newContent: string,
         user: UserInfo,
         saveVersion: boolean = true,
-        previousContent?: string
-    ): Promise<{ Success: boolean; VersionID?: string; VersionNumber?: number; MergedContent?: string }> {
+        previousContent?: string,
+        options?: { isRestore?: boolean }
+    ): Promise<{
+        Success: boolean;
+        VersionID?: string;
+        VersionNumber?: number;
+        MergedContent?: string;
+        HadConflict?: boolean;
+        RejectedAgentHunks?: Array<{
+            BaseLines: string[];
+            LiveLines: string[];
+            RejectedAgentLines: string[];
+        }>;
+    }> {
         this.ensureShutdownRegistered();
+        this.ensureGlobalMutationListenerRegistered();
         const provider = this.activeProvider();
         if (!provider || !user) {
             return { Success: false };
@@ -1319,9 +1439,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return { Success: false };
         }
 
+        const isRestore = options?.isRestore === true;
         const yText = room.Doc.getText('content');
         const existing = this.extractRoomSerializedContent(room.Doc);
         const alreadyReconciledFromSameBaseline =
+            !isRestore &&
             !saveVersion &&
             typeof previousContent === 'string' &&
             previousContent !== newContent &&
@@ -1331,34 +1453,45 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         let mutationMergeResult: ConcurrentDocumentMergeResult | null = null;
         let isStructuredSlideOrSheet = false;
 
-        if (existing !== newContent && !alreadyReconciledFromSameBaseline) {
+        if ((isRestore || existing !== newContent) && !alreadyReconciledFromSameBaseline) {
             room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
-            const nextEpoch = `epoch-${Date.now()}-${randomBytes(4).toString('hex')}`;
+            const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${Date.now()}-${randomBytes(4).toString('hex')}`;
             room.RoomEpoch = nextEpoch;
             room.Doc.transact(() => {
                 room.Doc.getMap('meta').set('roomEpoch', nextEpoch);
-                mutationMergeResult = this.applyMinimalTextDiff(
-                    yText,
-                    yText.toString(),
-                    newContent,
-                    previousContent
-                );
-                this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
-                    preserveConcurrentAdditions: true,
-                    baselineContent: previousContent
-                });
-                this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
-                    preserveConcurrentAdditions: true,
-                    baselineContent: previousContent
-                });
-                isStructuredSlideOrSheet =
-                    room.Doc.getMap('slidesById').size > 0 ||
-                    room.Doc.getMap('worksheetsById').size > 0;
-                if (isStructuredSlideOrSheet) {
-                    const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
-                    this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+                if (isRestore) {
+                    if (yText.length > 0) {
+                        yText.delete(0, yText.length);
+                    }
+                    if (newContent.length > 0) {
+                        yText.insert(0, newContent);
+                    }
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
+                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null);
+                } else {
+                    mutationMergeResult = this.applyMinimalTextDiff(
+                        yText,
+                        yText.toString(),
+                        newContent,
+                        previousContent
+                    );
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, newContent, {
+                        preserveConcurrentAdditions: true,
+                        baselineContent: previousContent
+                    });
+                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent, null, {
+                        preserveConcurrentAdditions: true,
+                        baselineContent: previousContent
+                    });
+                    isStructuredSlideOrSheet =
+                        room.Doc.getMap('slidesById').size > 0 ||
+                        room.Doc.getMap('worksheetsById').size > 0;
+                    if (isStructuredSlideOrSheet) {
+                        const mergedSerialized = this.extractRoomSerializedContent(room.Doc);
+                        this.applyMinimalTextDiff(yText, yText.toString(), mergedSerialized);
+                    }
                 }
-            }, 'server-agent');
+            }, isRestore ? 'server-restore' : 'server-agent');
             room.LastModifiedByUser = user;
             room.DirtyWorkingState = true;
             room.DirtyVersion = true;
@@ -1366,10 +1499,38 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const mergedContent = this.extractRoomSerializedContent(room.Doc);
         const resolvedMerge = mutationMergeResult as ConcurrentDocumentMergeResult | null;
+        const hadConflict = Boolean(!isRestore && !isStructuredSlideOrSheet && resolvedMerge?.HadConflict);
+        const rejectedLineHunks =
+            !isRestore && resolvedMerge
+                ? resolvedMerge.RejectedAgentHunks.map((h) => ({
+                      BaseLines: this.splitLogicalLineStrings(h.BaseText),
+                      LiveLines: this.splitLogicalLineStrings(h.LiveText),
+                      RejectedAgentLines: this.splitLogicalLineStrings(h.RejectedIncomingText)
+                  }))
+                : [];
 
         if (saveVersion) {
+            const preCompactVersionId = room.BaseVersionID;
             const compacted = await this.CompactRoomToArtifactVersion(artifactId, user);
-            if (!isStructuredSlideOrSheet && resolvedMerge?.HadConflict) {
+            if (isRestore) {
+                const effectiveVerId = compacted.VersionID ?? room.BaseVersionID ?? undefined;
+                const effectiveVerNum = compacted.VersionNumber ?? (room.BaseVersionNumber || undefined);
+                this.broadcastControlFrame(room, {
+                    action: 'room-reset',
+                    payload: BytesToBase64(Y.encodeStateAsUpdate(room.Doc)),
+                    roomEpoch: room.RoomEpoch,
+                    versionId: effectiveVerId,
+                    versionNumber: effectiveVerNum
+                });
+                if (effectiveVerId && UUIDsEqual(effectiveVerId, preCompactVersionId)) {
+                    this.broadcastControlFrame(room, {
+                        action: 'version-saved',
+                        versionId: effectiveVerId,
+                        versionNumber: effectiveVerNum,
+                        roomEpoch: room.RoomEpoch
+                    });
+                }
+            } else if (hadConflict && resolvedMerge) {
                 this.broadcastControlFrame(room, {
                     action: 'merge-conflict',
                     versionId: compacted.VersionID ?? room.BaseVersionID ?? undefined,
@@ -1385,12 +1546,44 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Success: compacted.Saved,
                 VersionID: compacted.VersionID,
                 VersionNumber: compacted.VersionNumber,
-                MergedContent: postCompactContent
+                MergedContent: postCompactContent,
+                HadConflict: hadConflict,
+                RejectedAgentHunks: rejectedLineHunks
             };
         }
 
+        if (isRestore) {
+            room.DirtyVersion = false;
+            room.BaseVersionText = mergedContent;
+            const postRestoreSv = Y.encodeStateVector(room.Doc);
+            room.LastCompactedStateVector = postRestoreSv;
+            if (room.BaseVersionID) {
+                this.recordCompactedStateVector(
+                    room.ArtifactID,
+                    room.BaseVersionID,
+                    room.BaseVersionNumber,
+                    BytesToBase64(postRestoreSv),
+                    this.computeSha256Hex(mergedContent),
+                    BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)))
+                );
+            }
+        }
         await this.FlushWorkingState(artifactId, user);
-        if (!isStructuredSlideOrSheet && resolvedMerge?.HadConflict) {
+        if (isRestore) {
+            this.broadcastControlFrame(room, {
+                action: 'room-reset',
+                payload: BytesToBase64(Y.encodeStateAsUpdate(room.Doc)),
+                roomEpoch: room.RoomEpoch,
+                versionId: room.BaseVersionID ?? undefined,
+                versionNumber: room.BaseVersionNumber || undefined
+            });
+            this.broadcastControlFrame(room, {
+                action: 'version-saved',
+                versionId: room.BaseVersionID ?? undefined,
+                versionNumber: room.BaseVersionNumber || undefined,
+                roomEpoch: room.RoomEpoch
+            });
+        } else if (hadConflict && resolvedMerge) {
             this.broadcastControlFrame(room, {
                 action: 'merge-conflict',
                 versionId: room.BaseVersionID ?? undefined,
@@ -1401,7 +1594,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (room.Connections.size === 0 && !this._shuttingDown) {
             this.scheduleIdleRoomDisposal(room);
         }
-        return { Success: true, MergedContent: mergedContent };
+        return {
+            Success: true,
+            MergedContent: mergedContent,
+            HadConflict: hadConflict,
+            RejectedAgentHunks: rejectedLineHunks
+        };
     }
 
     /**
@@ -1415,6 +1613,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
         this.ensureShutdownRegistered();
         this.ensurePermissionListenerRegistered();
+        this.ensureGlobalMutationListenerRegistered();
 
         const existing = this._rooms.get(key);
         if (existing) {
@@ -1498,12 +1697,23 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._consumedTickets.clear();
         this._inFlightCompactionVersionIds.clear();
         for (const waiters of this._pendingSyncWaiters.values()) {
-            for (const resolve of waiters) {
-                resolve(false);
+            for (const waiter of waiters) {
+                waiter.settle(false);
             }
         }
         this._pendingSyncWaiters.clear();
         this._pendingUpgradesByArtifact.clear();
+        if (this._globalMutationSub) {
+            this._globalMutationSub.unsubscribe();
+            this._globalMutationSub = null;
+        }
+        if (this._ownedLiveMutationHook) {
+            const store = GetGlobalObjectStore();
+            if (store && store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] === this._ownedLiveMutationHook) {
+                delete store[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
+            }
+            this._ownedLiveMutationHook = null;
+        }
         await this._relay.Shutdown();
     }
 
@@ -1558,25 +1768,31 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
-            for (const [clientId, requiredDeletes] of targetSnap.ds.clients.entries()) {
-                if (!requiredDeletes || requiredDeletes.length === 0) {
-                    continue;
-                }
-                const localDeletes = localSnap.ds.clients.get(clientId);
-                if (!localDeletes || localDeletes.length === 0) {
-                    const hasNonEmptyRange = requiredDeletes.some((r) => r.len > 0);
-                    if (hasNonEmptyRange) {
-                        return false;
+            const coalesceRanges = (
+                items: ReadonlyArray<{ clock: number; len: number }>
+            ): Array<{ start: number; end: number }> => {
+                const nonEmpty: Array<{ clock: number; len: number }> = [];
+                let isSorted = true;
+                let prevClock = -Infinity;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.len > 0) {
+                        if (item.clock < prevClock) {
+                            isSorted = false;
+                        }
+                        prevClock = item.clock;
+                        nonEmpty.push(item);
                     }
-                    continue;
                 }
-
-                // Coalesce local deleted intervals into sorted disjoint [start, end) ranges
-                const sortedLocal = [...localDeletes]
-                    .filter((item) => item.len > 0)
-                    .sort((a, b) => a.clock - b.clock);
+                if (nonEmpty.length === 0) {
+                    return [];
+                }
+                if (!isSorted) {
+                    nonEmpty.sort((a, b) => a.clock - b.clock);
+                }
                 const coalesced: Array<{ start: number; end: number }> = [];
-                for (const item of sortedLocal) {
+                for (let i = 0; i < nonEmpty.length; i++) {
+                    const item = nonEmpty[i];
                     const start = item.clock;
                     const end = item.clock + item.len;
                     const prev = coalesced[coalesced.length - 1];
@@ -1588,15 +1804,38 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         coalesced.push({ start, end });
                     }
                 }
+                return coalesced;
+            };
 
-                for (const req of requiredDeletes) {
-                    if (req.len <= 0) {
-                        continue;
+            for (const [clientId, requiredDeletes] of targetSnap.ds.clients.entries()) {
+                if (!requiredDeletes || requiredDeletes.length === 0) {
+                    continue;
+                }
+                const reqRanges = coalesceRanges(requiredDeletes);
+                if (reqRanges.length === 0) {
+                    continue;
+                }
+                const localDeletes = localSnap.ds.clients.get(clientId);
+                if (!localDeletes || localDeletes.length === 0) {
+                    return false;
+                }
+                const localRanges = coalesceRanges(localDeletes);
+                if (localRanges.length === 0) {
+                    return false;
+                }
+
+                // Linear O(N + M) two-pointer containment walk across sorted disjoint intervals (`R8-11`)
+                let li = 0;
+                for (let ri = 0; ri < reqRanges.length; ri++) {
+                    const req = reqRanges[ri];
+                    while (li < localRanges.length && localRanges[li].end < req.start) {
+                        li++;
                     }
-                    const reqStart = req.clock;
-                    const reqEnd = req.clock + req.len;
-                    const covered = coalesced.some((seg) => seg.start <= reqStart && seg.end >= reqEnd);
-                    if (!covered) {
+                    if (li >= localRanges.length) {
+                        return false;
+                    }
+                    const loc = localRanges[li];
+                    if (loc.start > req.start || loc.end < req.end) {
                         return false;
                     }
                 }
@@ -1613,14 +1852,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
-    private doesDocSatisfySnapshot(doc: Y.Doc, snapshotBytes: Uint8Array): boolean {
-        return this.DoesDocSatisfySnapshot(doc, snapshotBytes);
-    }
-
     private encodeSafeDeltaUpdate(doc: Y.Doc, stateVectorBytes: Uint8Array): Uint8Array {
         try {
             return Y.encodeStateAsUpdate(doc, stateVectorBytes);
-        } catch {
+        } catch (err) {
+            LogError(
+                `ArtifactCollaborationServer.encodeSafeDeltaUpdate failed encoding delta update, falling back to full state: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
             return Y.encodeStateAsUpdate(doc);
         }
     }
@@ -1676,14 +1916,101 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             ContentHash: contentHash
         };
         const map = ArtifactCollaborationServer._compactedStateVectors;
-        map.set(`ver:${NormalizeUUID(versionId)}`, entry);
-        map.set(`art:${NormalizeUUID(artifactId)}:v:${versionNumber}`, entry);
+        const normArtId = NormalizeUUID(artifactId);
+        const verKey = `ver:${NormalizeUUID(versionId)}`;
+        const artKey = `art:${normArtId}:v:${versionNumber}`;
+        map.set(verKey, entry);
+        map.set(artKey, entry);
+
+        const perArtifactMap = ArtifactCollaborationServer._compactedVectorKeysByArtifact;
+        const existingPerArtifact = perArtifactMap.get(normArtId) ?? [];
+        const filteredPerArtifact = existingPerArtifact.filter(
+            (item) => item.verKey !== verKey && item.artKey !== artKey
+        );
+        filteredPerArtifact.push({ verKey, artKey });
+        while (
+            filteredPerArtifact.length >
+            ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT
+        ) {
+            const evicted = filteredPerArtifact.shift();
+            if (!evicted) {
+                break;
+            }
+            map.delete(evicted.verKey);
+            map.delete(evicted.artKey);
+        }
+        perArtifactMap.set(normArtId, filteredPerArtifact);
+
         while (map.size > ArtifactCollaborationServer.MAX_TRACKED_COMPACTED_VECTORS) {
             const oldestKey = map.keys().next().value;
             if (oldestKey === undefined) {
                 break;
             }
             map.delete(oldestKey);
+        }
+    }
+
+    private pruneArtifactVersionMetaKeys(
+        meta: ReturnType<Y.Doc['getMap']>,
+        keepKey?: string
+    ): void {
+        for (const k of Array.from(meta.keys())) {
+            if (k.startsWith('art:') && k !== keepKey) {
+                meta.delete(k);
+            }
+        }
+    }
+
+    private isAuthoritativeRestoreVersion(
+        version?: { Description?: string | null; Comments?: string | null } | null,
+        explicitIsRestore?: boolean
+    ): boolean {
+        if (explicitIsRestore === true) {
+            return true;
+        }
+        if (!version) {
+            return false;
+        }
+        const desc = typeof version.Description === 'string' ? version.Description.trim() : '';
+        if (desc && RESTORE_VERSION_PREFIX_RE.test(desc)) {
+            return true;
+        }
+        const comments = typeof version.Comments === 'string' ? version.Comments.trim() : '';
+        if (comments && RESTORE_VERSION_PREFIX_RE.test(comments)) {
+            return true;
+        }
+        return false;
+    }
+
+    private splitLogicalLineStrings(text: string): string[] {
+        return this.tokenizeLogicalLines(text).map((t) => t.body);
+    }
+
+    private async hasPersistedWorkingState(
+        artifactId: string,
+        contextUser?: UserInfo
+    ): Promise<boolean> {
+        const provider = this.activeProvider();
+        const queryUser = UserCache.Instance.GetSystemUser() ?? contextUser;
+        if (!provider || !queryUser) {
+            return false;
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const res = await rv.RunView<{ ID: string }>(
+                {
+                    EntityName: 'MJ: Artifact Working States',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                queryUser
+            );
+            return Boolean(res.Success && res.Results && res.Results.length > 0);
+        } catch {
+            return false;
         }
     }
 
@@ -1752,7 +2079,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         UUIDsEqual(parsed.versionId, versionId) &&
                         parsed.contentHash === expectedContentHash &&
                         this.DoesDocContainStateVector(doc, Base64ToBytes(parsed.sv)) &&
-                        (!parsed.snap || this.doesDocSatisfySnapshot(doc, Base64ToBytes(parsed.snap)))
+                        (!parsed.snap || this.DoesDocSatisfySnapshot(doc, Base64ToBytes(parsed.snap)))
                 );
             } catch (err) {
                 LogError(
@@ -1771,7 +2098,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     UUIDsEqual(obj.versionId, versionId) &&
                     obj.contentHash === expectedContentHash &&
                     this.DoesDocContainStateVector(doc, Base64ToBytes(obj.sv)) &&
-                    (!obj.snap || this.doesDocSatisfySnapshot(doc, Base64ToBytes(obj.snap)))
+                    (!obj.snap || this.DoesDocSatisfySnapshot(doc, Base64ToBytes(obj.snap)))
             );
         }
         return false;
@@ -1783,6 +2110,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         savedSnapshotB64?: string;
         savedDocUpdateB64?: string;
         savedContentHash?: string;
+        isRestore?: boolean;
     } {
         if (!payloadBase64) {
             return {};
@@ -1799,6 +2127,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedSnapshotB64?: string;
                     savedDocUpdateB64?: string;
                     savedContentHash?: string;
+                    isRestore?: boolean;
                 };
                 return {
                     savedStateVectorB64:
@@ -1820,7 +2149,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedContentHash:
                         typeof parsed.savedContentHash === 'string' && parsed.savedContentHash
                             ? parsed.savedContentHash
-                            : undefined
+                            : undefined,
+                    isRestore: parsed.isRestore === true ? true : undefined
                 };
             } catch (err) {
                 LogError(
@@ -1917,7 +2247,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 Boolean(svBytes && this.DoesDocContainStateVector(room.Doc, svBytes));
             const snapSatisfied =
                 !savedSnapshotB64 ||
-                Boolean(snapBytes && this.doesDocSatisfySnapshot(room.Doc, snapBytes));
+                Boolean(snapBytes && this.DoesDocSatisfySnapshot(room.Doc, snapBytes));
             return svSatisfied && snapSatisfied;
         } catch (err) {
             LogError(
@@ -1931,10 +2261,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private createPendingSyncWaiter(
         artifactId: string,
-        timeoutMs: number
+        timeoutMs: number,
+        isSatisfied?: () => boolean
     ): { promise: Promise<boolean>; cancel: () => void } {
         const key = NormalizeUUID(artifactId);
-        let settleFn: ((synced: boolean) => void) | null = null;
+        let waiterEntry: PendingSyncWaiterEntry | null = null;
         let settled = false;
         let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1943,10 +2274,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 clearTimeout(timer);
                 timer = null;
             }
-            if (settleFn) {
+            if (waiterEntry) {
                 const set = this._pendingSyncWaiters.get(key);
                 if (set) {
-                    set.delete(settleFn);
+                    set.delete(waiterEntry);
                     if (set.size === 0) {
                         this._pendingSyncWaiters.delete(key);
                     }
@@ -1955,7 +2286,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         };
 
         const promise = new Promise<boolean>((resolve) => {
-            settleFn = (synced: boolean) => {
+            const settleFn = (synced: boolean): void => {
                 if (settled) {
                     return;
                 }
@@ -1963,25 +2294,25 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 cleanup();
                 resolve(synced);
             };
+            waiterEntry = {
+                settle: settleFn,
+                isSatisfied
+            };
             let set = this._pendingSyncWaiters.get(key);
             if (!set) {
                 set = new Set();
                 this._pendingSyncWaiters.set(key, set);
             }
-            set.add(settleFn);
+            set.add(waiterEntry);
             timer = setTimeout(() => {
-                if (settleFn) {
-                    settleFn(false);
-                }
+                settleFn(false);
             }, timeoutMs);
         });
 
         return {
             promise,
             cancel: () => {
-                if (settleFn) {
-                    settleFn(false);
-                }
+                waiterEntry?.settle(false);
             }
         };
     }
@@ -1992,8 +2323,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!set || set.size === 0) {
             return;
         }
-        for (const fn of Array.from(set)) {
-            fn(synced);
+        for (const entry of Array.from(set)) {
+            if (synced && entry.isSatisfied && !entry.isSatisfied()) {
+                continue;
+            }
+            entry.settle(synced);
         }
     }
 
@@ -2012,7 +2346,59 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
     }
 
+    private ensureLiveMutationHookRegistered(): void {
+        if (this._shuttingDown) {
+            return;
+        }
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        const existingHook = store[ARTIFACT_LIVE_MUTATION_HOOK_KEY];
+        if (existingHook !== undefined && existingHook !== this._ownedLiveMutationHook) {
+            // Respect a custom hook explicitly installed via SetArtifactLiveMutationHook (e.g., unit tests).
+            return;
+        }
+        if (!this._ownedLiveMutationHook) {
+            this._ownedLiveMutationHook = async (
+                evt: RegisteredLiveMutationEvent
+            ): Promise<RegisteredLiveMutationHookResult | void> => {
+                if (this._shuttingDown || !evt?.artifactId) {
+                    return undefined;
+                }
+                const hasLiveState =
+                    this.HasActiveRoom(evt.artifactId) ||
+                    (await this.hasPersistedWorkingState(evt.artifactId, evt.contextUser));
+                if (!hasLiveState) {
+                    return undefined;
+                }
+                const actor = evt.contextUser ?? UserCache.Instance.GetSystemUser();
+                if (!actor) {
+                    return undefined;
+                }
+                const res = await this.ApplyServerContentMutation(
+                    evt.artifactId,
+                    evt.updatedContent,
+                    actor,
+                    false,
+                    evt.previousContent
+                );
+                if (!res.Success) {
+                    return undefined;
+                }
+                return {
+                    mergedContent: res.MergedContent,
+                    hadConflict: Boolean(res.HadConflict),
+                    rejectedHunksCount: res.RejectedAgentHunks?.length ?? 0,
+                    rejectedAgentHunks: res.RejectedAgentHunks
+                };
+            };
+        }
+        store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] = this._ownedLiveMutationHook;
+    }
+
     private ensureGlobalMutationListenerRegistered(): void {
+        this.ensureLiveMutationHookRegistered();
         if (this._globalMutationSub) {
             return;
         }
@@ -2027,7 +2413,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     PreviousContent?: string;
                     User?: UserInfo;
                     SaveVersion?: boolean;
+                    AlreadyAppliedToRoom?: boolean;
                 };
+                if (payload.AlreadyAppliedToRoom === true) {
+                    return;
+                }
                 if (payload.ArtifactID && typeof payload.NewContent === 'string' && payload.User) {
                     void this.ApplyServerContentMutation(
                         payload.ArtifactID,
@@ -2045,6 +2435,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     VersionNumber?: number;
                     Content?: string | null;
                     Configuration?: string | null;
+                    Description?: string | null;
+                    Comments?: string | null;
+                    IsRestore?: boolean;
                     OriginServerID?: string;
                     SavedStateVectorB64?: string;
                     SavedContentHash?: string;
@@ -2072,13 +2465,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 ID: eventVersionId,
                                 VersionNumber: payload.VersionNumber,
                                 Content: payload.Content,
-                                Configuration: payload.Configuration
+                                Configuration: payload.Configuration,
+                                Description: payload.Description,
+                                Comments: payload.Comments
                             },
                             {
                                 originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
                                 savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
                                 savedSnapshotB64: tracked?.SavedSnapshotB64,
-                                savedContentHash: expectedHash
+                                savedContentHash: expectedHash,
+                                isRestore: payload.IsRestore
                             }
                         );
                     }
@@ -2094,6 +2490,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             VersionNumber: number;
             Content?: string | null;
             Configuration?: string | null;
+            Description?: string | null;
+            Comments?: string | null;
         },
         options?: {
             previousContent?: string;
@@ -2102,6 +2500,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             savedSnapshotB64?: string;
             savedContentHash?: string;
             crdtSynced?: boolean;
+            isRestore?: boolean;
         }
     ): void {
         if (UUIDsEqual(room.BaseVersionID, version.ID)) {
@@ -2113,12 +2512,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         ) {
             return;
         }
+        const isRestore = this.isAuthoritativeRestoreVersion(version, options?.isRestore);
         const targetText = version.Content || version.Configuration || '';
         const targetContentHash = this.computeSha256Hex(targetText);
         const yText = room.Doc.getText('content');
         const liveText = this.extractRoomSerializedContent(room.Doc);
         const baselineText = options?.previousContent ?? room.BaseVersionText;
-        const nextEpoch = `epoch-${version.ID}-${version.VersionNumber}`;
+        const nextEpoch = `epoch-${isRestore ? 'restore-' : ''}${version.ID}-${version.VersionNumber}`;
         room.RoomEpoch = nextEpoch;
 
         const trackedVerified = this.lookupVerifiedCompactedStateVector(
@@ -2138,20 +2538,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         const snapshotSatisfied =
             !effectiveSnapshotB64 ||
-            this.doesDocSatisfySnapshot(room.Doc, Base64ToBytes(effectiveSnapshotB64));
+            this.DoesDocSatisfySnapshot(room.Doc, Base64ToBytes(effectiveSnapshotB64));
 
         const alreadyContainsCompactedOps = Boolean(
-            (options?.crdtSynced && relayHashMatches) ||
-                (effectiveVectorB64 &&
-                    this.DoesDocContainStateVector(room.Doc, Base64ToBytes(effectiveVectorB64)) &&
-                    snapshotSatisfied) ||
-                this.doesDocMetaMatchVersionStateVector(
-                    room.Doc,
-                    room.ArtifactID,
-                    version.ID,
-                    version.VersionNumber,
-                    targetContentHash
-                )
+            !isRestore &&
+                ((options?.crdtSynced && relayHashMatches) ||
+                    (effectiveVectorB64 &&
+                        this.DoesDocContainStateVector(room.Doc, Base64ToBytes(effectiveVectorB64)) &&
+                        snapshotSatisfied) ||
+                    this.doesDocMetaMatchVersionStateVector(
+                        room.Doc,
+                        room.ArtifactID,
+                        version.ID,
+                        version.VersionNumber,
+                        targetContentHash
+                    ))
         );
 
         const setBaseMeta = (recordVectorB64?: string, recordSnapshotB64?: string): void => {
@@ -2164,18 +2565,85 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (meta.has('baseContent')) {
                 meta.delete('baseContent');
             }
+            const versionVectorMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${version.VersionNumber}`;
             if (recordVectorB64) {
                 meta.set(
-                    `art:${NormalizeUUID(room.ArtifactID)}:v:${version.VersionNumber}`,
+                    versionVectorMetaKey,
                     JSON.stringify({
                         sv: recordVectorB64,
-                        ...(recordSnapshotB64 ? { snap: recordSnapshotB64 } : {}),
+                        ...(recordSnapshotB64 && recordSnapshotB64.length < MAX_META_INLINE_SNAPSHOT_B64_CHARS
+                            ? { snap: recordSnapshotB64 }
+                            : {}),
                         versionId: version.ID,
+                        versionNumber: version.VersionNumber,
                         contentHash: targetContentHash
                     })
                 );
+                this.pruneArtifactVersionMetaKeys(meta, versionVectorMetaKey);
+            } else {
+                this.pruneArtifactVersionMetaKeys(
+                    meta,
+                    meta.has(versionVectorMetaKey) ? versionVectorMetaKey : undefined
+                );
             }
         };
+
+        if (isRestore) {
+            // Authoritative Restore (`R8-2e` / `R1`): snap room content and connected clients to restored version
+            // rather than 3-way merging with live-edit-wins, even when a human is mid-word.
+            room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
+            const preMetaSvB64 = BytesToBase64(Y.encodeStateVector(room.Doc));
+            room.Doc.transact(() => {
+                if (yText.length > 0) {
+                    yText.delete(0, yText.length);
+                }
+                if (targetText.length > 0) {
+                    yText.insert(0, targetText);
+                }
+                this.syncSlideDeckStructuresIfPresent(room.Doc, targetText);
+                this.syncSpreadsheetStructuresIfPresent(
+                    room.Doc,
+                    version.Content ?? '',
+                    version.Configuration ?? null
+                );
+                setBaseMeta(preMetaSvB64);
+            }, 'server-restore');
+
+            const postRestoreSv = Y.encodeStateVector(room.Doc);
+            const postRestoreSvB64 = BytesToBase64(postRestoreSv);
+            const postRestoreSnapB64 = BytesToBase64(Y.encodeSnapshot(Y.snapshot(room.Doc)));
+            room.DirtyVersion = false;
+            room.LastCompactedStateVector = postRestoreSv;
+            room.LastReconciledBaselineText = targetText;
+            room.BaseVersionID = version.ID;
+            room.BaseVersionNumber = version.VersionNumber;
+            room.BaseVersionText = targetText;
+            this.recordCompactedStateVector(
+                room.ArtifactID,
+                version.ID,
+                version.VersionNumber,
+                postRestoreSvB64,
+                targetContentHash,
+                postRestoreSnapB64
+            );
+            room.DirtyWorkingState = true;
+            this.scheduleWorkingStateFlush(room);
+
+            this.broadcastControlFrame(room, {
+                action: 'room-reset',
+                payload: BytesToBase64(Y.encodeStateAsUpdate(room.Doc)),
+                roomEpoch: room.RoomEpoch,
+                versionId: version.ID,
+                versionNumber: version.VersionNumber
+            });
+            this.broadcastControlFrame(room, {
+                action: 'version-saved',
+                versionId: version.ID,
+                versionNumber: version.VersionNumber,
+                roomEpoch: room.RoomEpoch
+            });
+            return;
+        }
 
         let oobMergeResult: ConcurrentDocumentMergeResult | null = null;
         let isStructuredSlideOrSheet = false;
@@ -2293,6 +2761,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             savedSnapshotB64?: string;
             savedContentHash?: string;
             crdtSynced?: boolean;
+            isRestore?: boolean;
         }
     ): Promise<void> {
         const provider = this.activeProvider();
@@ -2307,12 +2776,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 VersionNumber: number;
                 Content?: string | null;
                 Configuration?: string | null;
+                Description?: string | null;
+                Comments?: string | null;
             }>(
                 {
                     EntityName: 'MJ: Artifact Versions',
                     ExtraFilter: `ArtifactID='${EscapeSQLString(room.ArtifactID)}'`,
                     OrderBy: 'VersionNumber DESC',
-                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
+                    Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', 'Description', 'Comments'],
                     MaxRows: 1,
                     SkipTotalRowCount: true,
                     ResultType: 'simple'
@@ -2334,7 +2805,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                           savedStateVectorB64: options?.savedStateVectorB64,
                           savedSnapshotB64: options?.savedSnapshotB64,
                           savedContentHash: options?.savedContentHash,
-                          crdtSynced: options?.crdtSynced
+                          crdtSynced: options?.crdtSynced,
+                          isRestore: options?.isRestore
                       }
                     : {
                           originServerId: options?.originServerId
@@ -2822,7 +3294,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         EntityName: 'MJ: Artifact Versions',
                         ExtraFilter: `ArtifactID='${safeId}'`,
                         OrderBy: 'VersionNumber DESC',
-                        Fields: ['ID', 'VersionNumber', 'Content', 'Configuration', '__mj_CreatedAt', '__mj_UpdatedAt'],
+                        Fields: [
+                            'ID',
+                            'VersionNumber',
+                            'Content',
+                            'Configuration',
+                            'Description',
+                            'Comments',
+                            '__mj_CreatedAt',
+                            '__mj_UpdatedAt'
+                        ],
                         MaxRows: 1,
                         SkipTotalRowCount: true,
                         ResultType: 'simple'
@@ -2972,6 +3453,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     seedMeta.set('roomEpoch', nextEpoch);
                 }, 'hydrate');
             } else if (appliedWorkingState && versionNewerThanWorkingState && versionRow) {
+                const isHydrateRestore = this.isAuthoritativeRestoreVersion(versionRow);
                 const currentSerialized = this.extractRoomSerializedContent(room.Doc);
                 const versionContentHash = this.computeSha256Hex(versionTargetText);
                 const trackedHydrate = this.lookupVerifiedCompactedStateVector(
@@ -2982,28 +3464,30 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 );
                 const hydrateSnapshotSatisfied =
                     !trackedHydrate?.SavedSnapshotB64 ||
-                    this.doesDocSatisfySnapshot(
+                    this.DoesDocSatisfySnapshot(
                         room.Doc,
                         Base64ToBytes(trackedHydrate.SavedSnapshotB64)
                     );
                 const alreadyContainsVersionOps = Boolean(
-                    (trackedHydrate?.SavedStateVectorB64 &&
-                        this.DoesDocContainStateVector(
-                            room.Doc,
-                            Base64ToBytes(trackedHydrate.SavedStateVectorB64)
-                        ) &&
-                        hydrateSnapshotSatisfied) ||
-                        this.doesDocMetaMatchVersionStateVector(
-                            room.Doc,
-                            room.ArtifactID,
-                            versionRow.ID,
-                            versionRow.VersionNumber,
-                            versionContentHash
-                        )
+                    !isHydrateRestore &&
+                        ((trackedHydrate?.SavedStateVectorB64 &&
+                            this.DoesDocContainStateVector(
+                                room.Doc,
+                                Base64ToBytes(trackedHydrate.SavedStateVectorB64)
+                            ) &&
+                            hydrateSnapshotSatisfied) ||
+                            this.doesDocMetaMatchVersionStateVector(
+                                room.Doc,
+                                room.ArtifactID,
+                                versionRow.ID,
+                                versionRow.VersionNumber,
+                                versionContentHash
+                            ))
                 );
 
                 let baseVersionText: string | undefined = hasMetaBaseContent ? metaBaseContent : undefined;
                 if (
+                    !isHydrateRestore &&
                     baseVersionText === undefined &&
                     !alreadyContainsVersionOps &&
                     (workingVersionId !== undefined ||
@@ -3040,14 +3524,28 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
 
                 room.PreOutOfBandDocState = Y.encodeStateAsUpdate(room.Doc);
-                const nextEpoch = `epoch-${versionRow.ID}-${versionRow.VersionNumber}`;
+                const nextEpoch = `epoch-${isHydrateRestore ? 'restore-' : ''}${versionRow.ID}-${versionRow.VersionNumber}`;
                 room.RoomEpoch = nextEpoch;
                 let hydrateMergeResult: ConcurrentDocumentMergeResult | null = null;
                 let isStructuredSlideOrSheet = false;
+                const keepHydrateMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionRow.VersionNumber}`;
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
                     meta.set('roomEpoch', nextEpoch);
-                    if (!alreadyContainsVersionOps && currentSerialized !== versionTargetText) {
+                    if (isHydrateRestore) {
+                        if (yText.length > 0) {
+                            yText.delete(0, yText.length);
+                        }
+                        if (versionTargetText.length > 0) {
+                            yText.insert(0, versionTargetText);
+                        }
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText);
+                        this.syncSpreadsheetStructuresIfPresent(
+                            room.Doc,
+                            versionRow.Content ?? '',
+                            versionRow.Configuration ?? null
+                        );
+                    } else if (!alreadyContainsVersionOps && currentSerialized !== versionTargetText) {
                         hydrateMergeResult = this.applyMinimalTextDiff(
                             yText,
                             yText.toString(),
@@ -3080,9 +3578,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (meta.has('baseContent')) {
                         meta.delete('baseContent');
                     }
+                    this.pruneArtifactVersionMetaKeys(
+                        meta,
+                        meta.has(keepHydrateMetaKey) ? keepHydrateMetaKey : undefined
+                    );
                 }, 'hydrate');
                 const resolvedHydrateMerge = hydrateMergeResult as ConcurrentDocumentMergeResult | null;
-                if (!isStructuredSlideOrSheet && resolvedHydrateMerge?.HadConflict) {
+                if (!isHydrateRestore && !isStructuredSlideOrSheet && resolvedHydrateMerge?.HadConflict) {
                     if (room.Connections.size > 0) {
                         this.broadcastControlFrame(room, {
                             action: 'merge-conflict',
@@ -3098,14 +3600,17 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         };
                     }
                 }
-                if (this.extractRoomSerializedContent(room.Doc) !== versionTargetText) {
+                if (!isHydrateRestore && this.extractRoomSerializedContent(room.Doc) !== versionTargetText) {
                     room.DirtyVersion = true;
+                } else {
+                    room.DirtyVersion = false;
                 }
                 seededOrUpdatedWorkingState = true;
             } else if (versionRow) {
                 const existingEpoch = room.Doc.getMap('meta').get('roomEpoch') as string | undefined;
                 const nextEpoch = existingEpoch || `epoch-${versionRow.ID}`;
                 room.RoomEpoch = nextEpoch;
+                const keepHydrateMetaKey = `art:${NormalizeUUID(room.ArtifactID)}:v:${versionRow.VersionNumber}`;
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
                     meta.set('versionNumber', versionRow.VersionNumber);
@@ -3114,6 +3619,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     meta.set('baseVersionId', versionRow.ID);
                     if (meta.has('baseContent')) {
                         meta.delete('baseContent');
+                        seededOrUpdatedWorkingState = true;
+                    }
+                    const artKeys = Array.from(meta.keys()).filter((k) => k.startsWith('art:'));
+                    if (artKeys.length > 1 || (artKeys.length === 1 && artKeys[0] !== keepHydrateMetaKey)) {
+                        this.pruneArtifactVersionMetaKeys(
+                            meta,
+                            meta.has(keepHydrateMetaKey) ? keepHydrateMetaKey : undefined
+                        );
                         seededOrUpdatedWorkingState = true;
                     }
                     if (!existingEpoch) {
@@ -3612,7 +4125,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
                 if (crdtSynced && relayPayload.savedSnapshotB64) {
                     const snapBytes = this.decodeStrictBase64Bytes(relayPayload.savedSnapshotB64);
-                    if (!snapBytes || !this.doesDocSatisfySnapshot(room.Doc, snapBytes)) {
+                    if (!snapBytes || !this.DoesDocSatisfySnapshot(room.Doc, snapBytes)) {
                         crdtSynced = false;
                     }
                 }
@@ -3632,7 +4145,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 );
                 const missingSnapshotDeletes = Boolean(
                     relayPayload.savedSnapshotB64 &&
-                        (!targetSnapBytes || !this.doesDocSatisfySnapshot(room.Doc, targetSnapBytes))
+                        (!targetSnapBytes || !this.DoesDocSatisfySnapshot(room.Doc, targetSnapBytes))
                 );
                 const cleanRoomHashDiffers = Boolean(
                     relayPayload.savedContentHash &&
@@ -3642,9 +4155,25 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 );
 
                 if (missingStateVector || missingSnapshotDeletes || cleanRoomHashDiffers) {
+                    const isTargetSatisfied = (): boolean => {
+                        const svOk =
+                            !relayPayload.savedStateVectorB64 ||
+                            Boolean(targetSvBytes && this.DoesDocContainStateVector(room.Doc, targetSvBytes));
+                        const snapOk =
+                            !relayPayload.savedSnapshotB64 ||
+                            Boolean(targetSnapBytes && this.DoesDocSatisfySnapshot(room.Doc, targetSnapBytes));
+                        const hashOk =
+                            !cleanRoomHashDiffers ||
+                            !relayPayload.savedContentHash ||
+                            room.DirtyVersion ||
+                            this.computeSha256Hex(this.extractRoomSerializedContent(room.Doc)) ===
+                                relayPayload.savedContentHash;
+                        return svOk && snapOk && hashOk;
+                    };
                     const syncWaiter = this.createPendingSyncWaiter(
                         room.ArtifactID,
-                        ArtifactCollaborationServer.SYNC_WAIT_TIMEOUT_MS
+                        ArtifactCollaborationServer.SYNC_WAIT_TIMEOUT_MS,
+                        isTargetSatisfied
                     );
                     try {
                         await this._relay.PublishToRoom({
@@ -3668,7 +4197,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             Boolean(targetSvBytes && this.DoesDocContainStateVector(room.Doc, targetSvBytes));
                         const snapOk =
                             !relayPayload.savedSnapshotB64 ||
-                            Boolean(targetSnapBytes && this.doesDocSatisfySnapshot(room.Doc, targetSnapBytes));
+                            Boolean(targetSnapBytes && this.DoesDocSatisfySnapshot(room.Doc, targetSnapBytes));
                         if (!svOk || !snapOk) {
                             crdtSynced = false;
                         }
@@ -3692,7 +4221,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     savedStateVectorB64: relayPayload.savedStateVectorB64,
                     savedSnapshotB64: relayPayload.savedSnapshotB64,
                     savedContentHash: relayPayload.savedContentHash,
-                    crdtSynced
+                    crdtSynced,
+                    isRestore: relayPayload.isRestore
                 });
             } else {
                 room.DirtyVersion = false;
@@ -3847,7 +4377,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         room.WorkingStateTimer = setTimeout(() => {
             room.WorkingStateTimer = null;
             if (room.DirtyWorkingState && room.LastModifiedByUser) {
-                void this.FlushWorkingState(room.ArtifactID, room.LastModifiedByUser);
+                void this.FlushWorkingState(room.ArtifactID, room.LastModifiedByUser, {
+                    guardNewerPersistedVersion: true
+                });
             }
         }, WORKING_STATE_FLUSH_DEBOUNCE_MS);
         (room.WorkingStateTimer as { unref?: () => void }).unref?.();
@@ -4200,25 +4732,369 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             }
                         }
                     }
-                } else if (isOneToOneAgentRewrite && humanTouchedSpan < clusterSpan) {
-                    // 1:1 line-preserving agent rewrite with partial human touch (e.g. R2): rebase human's
-                    // hunks positionally onto `agentClusterTokens` AND record any overwritten agent lines!
-                    const rebased = applyClusterHunks(clusterH, liveTokens, agentClusterTokens);
-                    for (const tok of rebased) {
+                } else {
+                    // Fine-grained base-line sub-splitting (`R8-2a`):
+                    // 1. Align `base` -> `incoming` into minimal line/paragraph segments across `[clusterStart, clusterEnd)`.
+                    // 2. Group segments spanned by multi-line human hunks so human replacements stay indivisible.
+                    // 3. Apply `incoming` on human-untouched sub-spans; keep `live` (live-edit-wins) ONLY on
+                    //    minimal sub-spans modified by `live`, coalescing adjacent conflicted sub-spans (`A9`)
+                    //    and reporting ONLY minimal rejected sub-hunks in `RejectedAgentHunks`.
+                    interface BaseAgentSegment {
+                        bStart: number;
+                        bEnd: number;
+                        aStart: number;
+                        aEnd: number;
+                    }
+
+                    const extractLineWordSet = (lineBody: string): Set<string> => {
+                        const words = lineBody.toLowerCase().match(/[a-z0-9]+/g);
+                        const set = new Set<string>();
+                        if (words) {
+                            for (const w of words) {
+                                if (w.length >= 2 || /^\d+$/.test(w)) {
+                                    set.add(w);
+                                }
+                            }
+                        }
+                        return set;
+                    };
+
+                    const headingLevel = (lineBody: string): number => {
+                        const m = lineBody.match(/^\s*(#{1,6})\s+\S/);
+                        return m ? m[1].length : 0;
+                    };
+
+                    const computeLineAnchorScore = (baseBody: string, incBody: string): number => {
+                        const bTrim = baseBody.trim();
+                        const aTrim = incBody.trim();
+                        if (bTrim === '' && aTrim === '') {
+                            return 1.0;
+                        }
+                        if (bTrim === '' || aTrim === '') {
+                            return 0;
+                        }
+                        const bHead = headingLevel(bTrim);
+                        const aHead = headingLevel(aTrim);
+                        const bWords = extractLineWordSet(bTrim);
+                        const aWords = extractLineWordSet(aTrim);
+                        let shared = 0;
+                        for (const w of bWords) {
+                            if (aWords.has(w)) {
+                                shared++;
+                            }
+                        }
+                        const dice =
+                            bWords.size > 0 && aWords.size > 0
+                                ? (2 * shared) / (bWords.size + aWords.size)
+                                : 0;
+                        if (bHead > 0 && bHead === aHead && (shared >= 1 || dice >= 0.35)) {
+                            return Math.max(0.85, dice);
+                        }
+                        if (dice >= 0.5) {
+                            return dice;
+                        }
+                        return 0;
+                    };
+
+                    const emitGapSegments = (
+                        outSegs: BaseAgentSegment[],
+                        b0: number,
+                        b1: number,
+                        a0: number,
+                        a1: number
+                    ): void => {
+                        const bLen = b1 - b0;
+                        const aLen = a1 - a0;
+                        if (bLen === 0 && aLen === 0) {
+                            return;
+                        }
+                        if (bLen === 0) {
+                            outSegs.push({ bStart: b0, bEnd: b0, aStart: a0, aEnd: a1 });
+                            return;
+                        }
+                        if (aLen === 0) {
+                            for (let i = 0; i < bLen; i++) {
+                                outSegs.push({ bStart: b0 + i, bEnd: b0 + i + 1, aStart: a0, aEnd: a0 });
+                            }
+                            return;
+                        }
+                        if (bLen === aLen) {
+                            for (let i = 0; i < bLen; i++) {
+                                outSegs.push({
+                                    bStart: b0 + i,
+                                    bEnd: b0 + i + 1,
+                                    aStart: a0 + i,
+                                    aEnd: a0 + i + 1
+                                });
+                            }
+                            return;
+                        }
+                        outSegs.push({ bStart: b0, bEnd: b1, aStart: a0, aEnd: a1 });
+                    };
+
+                    const splitAgentReplacementHunk = (
+                        outSegs: BaseAgentSegment[],
+                        b0: number,
+                        b1: number,
+                        a0: number,
+                        a1: number
+                    ): void => {
+                        const bLen = b1 - b0;
+                        const aLen = a1 - a0;
+                        if (bLen <= 1 || aLen <= 1 || bLen === aLen || bLen * aLen > 40_000) {
+                            emitGapSegments(outSegs, b0, b1, a0, a1);
+                            return;
+                        }
+
+                        // Weighted monotonic DP over blank-line, heading, and word-overlap anchors
+                        const cols = aLen + 1;
+                        const dp = new Float64Array((bLen + 1) * cols);
+                        const choice = new Uint8Array((bLen + 1) * cols); // 1: skip b, 2: skip a, 3: match
+                        for (let bi = bLen - 1; bi >= 0; bi--) {
+                            for (let aj = aLen - 1; aj >= 0; aj--) {
+                                const idx = bi * cols + aj;
+                                const skipB = dp[(bi + 1) * cols + aj];
+                                const skipA = dp[bi * cols + (aj + 1)];
+                                let best = skipB >= skipA ? skipB : skipA;
+                                let bestChoice = skipB >= skipA ? 1 : 2;
+                                const score = computeLineAnchorScore(
+                                    baseTokens[b0 + bi].body,
+                                    incomingTokens[a0 + aj].body
+                                );
+                                if (score > 0) {
+                                    const candidate = score + dp[(bi + 1) * cols + (aj + 1)];
+                                    if (candidate > best + 1e-9) {
+                                        best = candidate;
+                                        bestChoice = 3;
+                                    }
+                                }
+                                dp[idx] = best;
+                                choice[idx] = bestChoice;
+                            }
+                        }
+
+                        const anchors: Array<{ bi: number; aj: number }> = [];
+                        let cBi = 0;
+                        let cAj = 0;
+                        while (cBi < bLen && cAj < aLen) {
+                            const ch = choice[cBi * cols + cAj];
+                            if (ch === 3) {
+                                anchors.push({ bi: cBi, aj: cAj });
+                                cBi++;
+                                cAj++;
+                            } else if (ch === 1) {
+                                cBi++;
+                            } else {
+                                cAj++;
+                            }
+                        }
+
+                        if (anchors.length === 0) {
+                            outSegs.push({ bStart: b0, bEnd: b1, aStart: a0, aEnd: a1 });
+                            return;
+                        }
+
+                        let prevB = b0;
+                        let prevA = a0;
+                        for (const anc of anchors) {
+                            const targetB = b0 + anc.bi;
+                            const targetA = a0 + anc.aj;
+                            emitGapSegments(outSegs, prevB, targetB, prevA, targetA);
+                            outSegs.push({
+                                bStart: targetB,
+                                bEnd: targetB + 1,
+                                aStart: targetA,
+                                aEnd: targetA + 1
+                            });
+                            prevB = targetB + 1;
+                            prevA = targetA + 1;
+                        }
+                        emitGapSegments(outSegs, prevB, b1, prevA, a1);
+                    };
+
+                    const rawSegs: BaseAgentSegment[] = [];
+                    let walkB = clusterStart;
+                    let walkA = clusterStart + agentDelta;
+                    let walkAIdx = 0;
+                    while (walkB < clusterEnd || walkAIdx < clusterA.length) {
+                        const ak = walkAIdx < clusterA.length ? clusterA[walkAIdx] : undefined;
+                        if (ak && ak.oldStart === walkB) {
+                            splitAgentReplacementHunk(rawSegs, ak.oldStart, ak.oldEnd, ak.newStart, ak.newEnd);
+                            walkB = ak.oldEnd;
+                            walkA = ak.newEnd;
+                            walkAIdx++;
+                        } else if (walkB < clusterEnd) {
+                            rawSegs.push({
+                                bStart: walkB,
+                                bEnd: walkB + 1,
+                                aStart: walkA,
+                                aEnd: walkA + 1
+                            });
+                            walkB++;
+                            walkA++;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Merge adjacent segments whenever a multi-line human modification hunk crosses their boundary
+                    const crossesHumanHunk = (boundary: number): boolean =>
+                        clusterH.some(
+                            (hk) => hk.oldEnd > hk.oldStart && hk.oldStart < boundary && boundary < hk.oldEnd
+                        );
+
+                    const groupedSegs: BaseAgentSegment[] = [];
+                    for (const seg of rawSegs) {
+                        if (groupedSegs.length === 0) {
+                            groupedSegs.push({ ...seg });
+                            continue;
+                        }
+                        const prev = groupedSegs[groupedSegs.length - 1];
+                        const zeroLenInsideHumanHunk =
+                            seg.bStart === seg.bEnd && crossesHumanHunk(seg.bStart);
+                        const prevZeroLenInsideHumanHunk =
+                            prev.bStart === prev.bEnd && crossesHumanHunk(prev.bEnd);
+                        if (
+                            crossesHumanHunk(prev.bEnd) ||
+                            zeroLenInsideHumanHunk ||
+                            prevZeroLenInsideHumanHunk
+                        ) {
+                            prev.bEnd = seg.bEnd;
+                            prev.aEnd = seg.aEnd;
+                        } else {
+                            groupedSegs.push({ ...seg });
+                        }
+                    }
+
+                    const pureHumanByBoundary: Array<Array<{ raw: string; body: string; eol: string }>> =
+                        Array.from({ length: clusterSpan + 1 }, () => []);
+                    for (const hk of clusterH) {
+                        if (hk.oldStart === hk.oldEnd) {
+                            const slot = hk.oldStart - clusterStart;
+                            if (slot >= 0 && slot <= clusterSpan) {
+                                for (let k = hk.newStart; k < hk.newEnd; k++) {
+                                    pureHumanByBoundary[slot].push(liveTokens[k]);
+                                }
+                            }
+                        }
+                    }
+
+                    const liveIndexForUnchangedBase = (bIdx: number): number => {
+                        let shift = liveDelta;
+                        for (const hk of clusterH) {
+                            if (hk.oldEnd <= bIdx) {
+                                shift += hk.newEnd - hk.newStart - (hk.oldEnd - hk.oldStart);
+                            }
+                        }
+                        return bIdx + shift;
+                    };
+
+                    const extractLiveSliceForBaseSpan = (
+                        bSpanStart: number,
+                        bSpanEnd: number
+                    ): Array<{ raw: string; body: string; eol: string }> => {
+                        const out: Array<{ raw: string; body: string; eol: string }> = [];
+                        let p = bSpanStart;
+                        while (p < bSpanEnd) {
+                            if (p > bSpanStart) {
+                                const internalPure = pureHumanByBoundary[p - clusterStart];
+                                for (const tok of internalPure) {
+                                    out.push(tok);
+                                }
+                            }
+                            const modHk = clusterH.find(
+                                (hk) => hk.oldEnd > hk.oldStart && hk.oldStart === p
+                            );
+                            if (modHk) {
+                                for (let k = modHk.newStart; k < modHk.newEnd; k++) {
+                                    out.push(liveTokens[k]);
+                                }
+                                p = modHk.oldEnd;
+                            } else {
+                                const aligned = liveTokens[liveIndexForUnchangedBase(p)];
+                                if (aligned) {
+                                    out.push(aligned);
+                                } else {
+                                    out.push(baseTokens[p]);
+                                }
+                                p++;
+                            }
+                        }
+                        return out;
+                    };
+
+                    interface EvaluatedGroup {
+                        bStart: number;
+                        bEnd: number;
+                        aStart: number;
+                        aEnd: number;
+                        humanModified: boolean;
+                        isConflicted: boolean;
+                    }
+
+                    const evalGroups: EvaluatedGroup[] = groupedSegs.map((g) => {
+                        const humanModified = clusterH.some(
+                            (hk) =>
+                                hk.oldEnd > hk.oldStart &&
+                                hk.oldStart < g.bEnd &&
+                                hk.oldEnd > g.bStart
+                        );
+                        if (!humanModified) {
+                            return { ...g, humanModified: false, isConflicted: false };
+                        }
+                        const baseSlice = baseTokens.slice(g.bStart, g.bEnd);
+                        const agentSlice = incomingTokens.slice(g.aStart, g.aEnd);
+                        const liveSlice = extractLiveSliceForBaseSpan(g.bStart, g.bEnd);
+                        const agentUnchanged =
+                            agentSlice.length === baseSlice.length &&
+                            agentSlice.every((t, i) => t.body === baseSlice[i].body);
+                        const sameAsLive =
+                            agentSlice.length === liveSlice.length &&
+                            agentSlice.every((t, i) => t.body === liveSlice[i].body);
+                        return {
+                            ...g,
+                            humanModified: true,
+                            isConflicted: !agentUnchanged && !sameAsLive
+                        };
+                    });
+
+                    // Coalesce adjacent conflicted groups (`A9`)
+                    const coalescedGroups: EvaluatedGroup[] = [];
+                    for (const eg of evalGroups) {
+                        const prev = coalescedGroups[coalescedGroups.length - 1];
+                        if (prev && prev.isConflicted && eg.isConflicted && prev.bEnd === eg.bStart) {
+                            prev.bEnd = eg.bEnd;
+                            prev.aEnd = eg.aEnd;
+                        } else {
+                            coalescedGroups.push({ ...eg });
+                        }
+                    }
+
+                    // Emit pure human insertions at clusterStart boundary before first group
+                    for (const tok of pureHumanByBoundary[0]) {
                         emitLine(tok.raw);
                     }
-                    for (const hk of clusterH) {
-                        if (hk.oldEnd > hk.oldStart) {
-                            const baseSlice = baseTokens.slice(hk.oldStart, hk.oldEnd);
-                            const agentSlice = agentClusterTokens.slice(
-                                hk.oldStart - clusterStart,
-                                hk.oldEnd - clusterStart
-                            );
-                            const liveSlice = liveTokens.slice(hk.newStart, hk.newEnd);
-                            const baseBodyJoin = baseSlice.map((t) => t.body).join('\n');
-                            const agentBodyJoin = agentSlice.map((t) => t.body).join('\n');
-                            const liveBodyJoin = liveSlice.map((t) => t.body).join('\n');
-                            if (agentBodyJoin !== baseBodyJoin && agentBodyJoin !== liveBodyJoin) {
+
+                    for (let gi = 0; gi < coalescedGroups.length; gi++) {
+                        const grp = coalescedGroups[gi];
+                        if (!grp.humanModified) {
+                            for (let k = grp.aStart; k < grp.aEnd; k++) {
+                                emitLine(incomingTokens[k].raw);
+                            }
+                            // Emit any pure human insertions strictly inside an unconflicted multi-line group
+                            for (let b = grp.bStart + 1; b < grp.bEnd; b++) {
+                                for (const tok of pureHumanByBoundary[b - clusterStart]) {
+                                    emitLine(tok.raw);
+                                }
+                            }
+                        } else {
+                            const liveSlice = extractLiveSliceForBaseSpan(grp.bStart, grp.bEnd);
+                            for (const tok of liveSlice) {
+                                emitLine(tok.raw);
+                            }
+                            if (grp.isConflicted) {
+                                const baseSlice = baseTokens.slice(grp.bStart, grp.bEnd);
+                                const agentSlice = incomingTokens.slice(grp.aStart, grp.aEnd);
                                 rejectedHunks.push({
                                     BaseText: baseSlice.map((t) => t.raw).join(''),
                                     LiveText: liveSlice.map((t) => t.raw).join(''),
@@ -4226,18 +5102,27 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 });
                             }
                         }
+
+                        // Emit pure human insertions at grp.bEnd boundary unless next group shares the same bStart === bEnd
+                        const nextGrp = coalescedGroups[gi + 1];
+                        if (!nextGrp || grp.bEnd > grp.bStart || nextGrp.bStart > grp.bEnd) {
+                            const boundaryIdx = grp.bEnd - clusterStart;
+                            if (
+                                boundaryIdx > 0 &&
+                                boundaryIdx <= clusterSpan &&
+                                (!nextGrp || nextGrp.bStart === grp.bEnd)
+                            ) {
+                                // Only emit once per distinct boundary index
+                                const alreadyEmittedZeroSpan =
+                                    grp.bStart === grp.bEnd && gi > 0 && coalescedGroups[gi - 1].bEnd === grp.bEnd;
+                                if (!alreadyEmittedZeroSpan) {
+                                    for (const tok of pureHumanByBoundary[boundaryIdx]) {
+                                        emitLine(tok.raw);
+                                    }
+                                }
+                            }
+                        }
                     }
-                } else {
-                    // Consistent conflict rule across A9, A11, A2, S2, A14: live edit wins on conflicting
-                    // modified clusters (never append duplicate human lines after agent lines!) and record conflict.
-                    for (const tok of humanClusterTokens) {
-                        emitLine(tok.raw);
-                    }
-                    rejectedHunks.push({
-                        BaseText: baseClusterSlice.map((t) => t.raw).join(''),
-                        LiveText: humanClusterTokens.map((t) => t.raw).join(''),
-                        RejectedIncomingText: agentClusterTokens.map((t) => t.raw).join('')
-                    });
                 }
             }
 
@@ -4264,10 +5149,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         liveDocText: string,
         incomingText: string
     ): ConcurrentDocumentMergeResult | null {
-        type JsonPrimitive = string | number | boolean | null;
-        type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
-        interface JsonObject {
-            [key: string]: JsonValue;
+        if (liveDocText === baseText) {
+            return { MergedText: incomingText, HadConflict: false, RejectedAgentHunks: [] };
+        }
+        if (incomingText === baseText) {
+            return { MergedText: liveDocText, HadConflict: false, RejectedAgentHunks: [] };
+        }
+        if (liveDocText === incomingText) {
+            return { MergedText: liveDocText, HadConflict: false, RejectedAgentHunks: [] };
         }
 
         const liveTrim = liveDocText.trim();
@@ -4285,31 +5174,324 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             return null;
         }
 
-        let liveVal: JsonValue;
-        let incomingVal: JsonValue;
-        let baseVal: JsonValue;
-        try {
-            liveVal = JSON.parse(liveTrim) as JsonValue;
-            incomingVal = JSON.parse(incomingTrim) as JsonValue;
-            baseVal = baseTrim.length === 0 ? {} : (JSON.parse(baseTrim) as JsonValue);
-        } catch {
-            return null;
+        interface JsonAstEntry {
+            key: string;
+            rawKey: string;
+            value: JsonAstNode;
         }
 
-        const isStructuredContainer = (val: JsonValue): val is JsonObject | JsonValue[] =>
-            typeof val === 'object' && val !== null;
+        type JsonAstNode =
+            | {
+                  kind: 'object';
+                  raw: string;
+                  entries: JsonAstEntry[];
+                  byKey: Map<string, JsonAstEntry>;
+              }
+            | {
+                  kind: 'array';
+                  raw: string;
+                  items: JsonAstNode[];
+              }
+            | {
+                  kind: 'primitive';
+                  raw: string;
+                  primitiveType: 'string' | 'number' | 'boolean' | 'null';
+                  stringValue?: string;
+              };
+
+        const parseLosslessJsonAst = (source: string): JsonAstNode | null => {
+            let pos = 0;
+            const len = source.length;
+
+            const isWs = (ch: number): boolean =>
+                ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d;
+
+            const skipWs = (): void => {
+                while (pos < len && isWs(source.charCodeAt(pos))) {
+                    pos++;
+                }
+            };
+
+            const parseStringToken = (): { raw: string; decoded: string } | null => {
+                if (pos >= len || source.charCodeAt(pos) !== 0x22) {
+                    return null;
+                }
+                const start = pos;
+                pos++; // '"'
+                let decoded = '';
+                while (pos < len) {
+                    const ch = source.charCodeAt(pos);
+                    if (ch === 0x22) {
+                        pos++;
+                        return { raw: source.slice(start, pos), decoded };
+                    }
+                    if (ch < 0x20) {
+                        return null;
+                    }
+                    if (ch === 0x5c) {
+                        pos++;
+                        if (pos >= len) {
+                            return null;
+                        }
+                        const esc = source.charCodeAt(pos);
+                        pos++;
+                        switch (esc) {
+                            case 0x22:
+                                decoded += '"';
+                                break;
+                            case 0x5c:
+                                decoded += '\\';
+                                break;
+                            case 0x2f:
+                                decoded += '/';
+                                break;
+                            case 0x62:
+                                decoded += '\b';
+                                break;
+                            case 0x66:
+                                decoded += '\f';
+                                break;
+                            case 0x6e:
+                                decoded += '\n';
+                                break;
+                            case 0x72:
+                                decoded += '\r';
+                                break;
+                            case 0x74:
+                                decoded += '\t';
+                                break;
+                            case 0x75: {
+                                if (pos + 4 > len) {
+                                    return null;
+                                }
+                                const hex = source.slice(pos, pos + 4);
+                                if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+                                    return null;
+                                }
+                                decoded += String.fromCharCode(parseInt(hex, 16));
+                                pos += 4;
+                                break;
+                            }
+                            default:
+                                return null;
+                        }
+                    } else {
+                        decoded += source[pos];
+                        pos++;
+                    }
+                }
+                return null;
+            };
+
+            const parseNumberToken = (): JsonAstNode | null => {
+                const start = pos;
+                if (pos < len && source.charCodeAt(pos) === 0x2d) {
+                    pos++;
+                }
+                if (pos >= len) {
+                    return null;
+                }
+                const firstDigit = source.charCodeAt(pos);
+                if (firstDigit === 0x30) {
+                    pos++;
+                } else if (firstDigit >= 0x31 && firstDigit <= 0x39) {
+                    pos++;
+                    while (pos < len && source.charCodeAt(pos) >= 0x30 && source.charCodeAt(pos) <= 0x39) {
+                        pos++;
+                    }
+                } else {
+                    return null;
+                }
+                if (pos < len && source.charCodeAt(pos) === 0x2e) {
+                    pos++;
+                    const fracStart = pos;
+                    while (pos < len && source.charCodeAt(pos) >= 0x30 && source.charCodeAt(pos) <= 0x39) {
+                        pos++;
+                    }
+                    if (pos === fracStart) {
+                        return null;
+                    }
+                }
+                if (pos < len && (source.charCodeAt(pos) === 0x65 || source.charCodeAt(pos) === 0x45)) {
+                    pos++;
+                    if (
+                        pos < len &&
+                        (source.charCodeAt(pos) === 0x2b || source.charCodeAt(pos) === 0x2d)
+                    ) {
+                        pos++;
+                    }
+                    const expStart = pos;
+                    while (pos < len && source.charCodeAt(pos) >= 0x30 && source.charCodeAt(pos) <= 0x39) {
+                        pos++;
+                    }
+                    if (pos === expStart) {
+                        return null;
+                    }
+                }
+                return {
+                    kind: 'primitive',
+                    raw: source.slice(start, pos),
+                    primitiveType: 'number'
+                };
+            };
+
+            const parseValue = (): JsonAstNode | null => {
+                skipWs();
+                if (pos >= len) {
+                    return null;
+                }
+                const ch = source.charCodeAt(pos);
+                if (ch === 0x7b) {
+                    // '{'
+                    const start = pos;
+                    pos++;
+                    skipWs();
+                    const entries: JsonAstEntry[] = [];
+                    const byKey = new Map<string, JsonAstEntry>();
+                    if (pos < len && source.charCodeAt(pos) === 0x7d) {
+                        pos++;
+                        return { kind: 'object', raw: source.slice(start, pos), entries, byKey };
+                    }
+                    while (pos < len) {
+                        skipWs();
+                        const keyTok = parseStringToken();
+                        if (!keyTok) {
+                            return null;
+                        }
+                        skipWs();
+                        if (pos >= len || source.charCodeAt(pos) !== 0x3a) {
+                            return null;
+                        }
+                        pos++; // ':'
+                        const valNode = parseValue();
+                        if (!valNode) {
+                            return null;
+                        }
+                        const entry: JsonAstEntry = {
+                            key: keyTok.decoded,
+                            rawKey: keyTok.raw,
+                            value: valNode
+                        };
+                        if (byKey.has(entry.key)) {
+                            const existingIdx = entries.findIndex((e) => e.key === entry.key);
+                            if (existingIdx >= 0) {
+                                entries[existingIdx] = entry;
+                            }
+                        } else {
+                            entries.push(entry);
+                        }
+                        byKey.set(entry.key, entry);
+                        skipWs();
+                        if (pos >= len) {
+                            return null;
+                        }
+                        const sep = source.charCodeAt(pos);
+                        if (sep === 0x2c) {
+                            pos++;
+                            continue;
+                        }
+                        if (sep === 0x7d) {
+                            pos++;
+                            return { kind: 'object', raw: source.slice(start, pos), entries, byKey };
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+                if (ch === 0x5b) {
+                    // '['
+                    const start = pos;
+                    pos++;
+                    skipWs();
+                    const items: JsonAstNode[] = [];
+                    if (pos < len && source.charCodeAt(pos) === 0x5d) {
+                        pos++;
+                        return { kind: 'array', raw: source.slice(start, pos), items };
+                    }
+                    while (pos < len) {
+                        const item = parseValue();
+                        if (!item) {
+                            return null;
+                        }
+                        items.push(item);
+                        skipWs();
+                        if (pos >= len) {
+                            return null;
+                        }
+                        const sep = source.charCodeAt(pos);
+                        if (sep === 0x2c) {
+                            pos++;
+                            continue;
+                        }
+                        if (sep === 0x5d) {
+                            pos++;
+                            return { kind: 'array', raw: source.slice(start, pos), items };
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+                if (ch === 0x22) {
+                    const strTok = parseStringToken();
+                    if (!strTok) {
+                        return null;
+                    }
+                    return {
+                        kind: 'primitive',
+                        raw: strTok.raw,
+                        primitiveType: 'string',
+                        stringValue: strTok.decoded
+                    };
+                }
+                if (ch === 0x2d || (ch >= 0x30 && ch <= 0x39)) {
+                    return parseNumberToken();
+                }
+                if (source.startsWith('true', pos)) {
+                    pos += 4;
+                    return { kind: 'primitive', raw: 'true', primitiveType: 'boolean' };
+                }
+                if (source.startsWith('false', pos)) {
+                    pos += 5;
+                    return { kind: 'primitive', raw: 'false', primitiveType: 'boolean' };
+                }
+                if (source.startsWith('null', pos)) {
+                    pos += 4;
+                    return { kind: 'primitive', raw: 'null', primitiveType: 'null' };
+                }
+                return null;
+            };
+
+            const root = parseValue();
+            if (!root) {
+                return null;
+            }
+            skipWs();
+            return pos === len ? root : null;
+        };
+
+        const liveAst = parseLosslessJsonAst(liveTrim);
+        const incAst = parseLosslessJsonAst(incomingTrim);
+        const baseAst =
+            baseTrim.length === 0
+                ? ({
+                      kind: 'object',
+                      raw: '{}',
+                      entries: [],
+                      byKey: new Map<string, JsonAstEntry>()
+                  } as JsonAstNode)
+                : parseLosslessJsonAst(baseTrim);
+
+        if (!liveAst || !incAst || !baseAst) {
+            return null;
+        }
         if (
-            !isStructuredContainer(liveVal) ||
-            !isStructuredContainer(incomingVal) ||
-            !isStructuredContainer(baseVal)
+            liveAst.kind === 'primitive' ||
+            incAst.kind === 'primitive' ||
+            baseAst.kind === 'primitive'
         ) {
             return null;
         }
-
-        const isPlainObject = (val: JsonValue): val is JsonObject =>
-            typeof val === 'object' && val !== null && !Array.isArray(val);
-
-        if (!isPlainObject(liveVal) || !isPlainObject(incomingVal) || !isPlainObject(baseVal)) {
+        if (liveAst.kind !== 'object' || incAst.kind !== 'object' || baseAst.kind !== 'object') {
             // Top-level JSON array or object/array mismatch: live edit wins cleanly to preserve valid JSON!
             return {
                 MergedText: liveDocText,
@@ -4324,117 +5506,402 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             };
         }
 
-        const canonicalStringify = (val: JsonValue): string => {
-            if (Array.isArray(val)) {
-                return `[${val.map(canonicalStringify).join(',')}]`;
-            }
-            if (isPlainObject(val)) {
-                const sortedKeys = Object.keys(val).sort();
-                return `{${sortedKeys
-                    .map((k) => `${JSON.stringify(k)}:${canonicalStringify(val[k])}`)
-                    .join(',')}}`;
-            }
-            return JSON.stringify(val);
-        };
-
-        const valuesEqual = (
-            a: JsonValue | undefined,
-            hasA: boolean,
-            b: JsonValue | undefined,
-            hasB: boolean
-        ): boolean => {
-            if (!hasA && !hasB) {
+        const numbersSemanticallyEqual = (rawA: string, rawB: string): boolean => {
+            if (rawA === rawB) {
                 return true;
             }
-            if (hasA !== hasB) {
+            const intRe = /^-?\d+$/;
+            if (intRe.test(rawA) && intRe.test(rawB)) {
+                try {
+                    return BigInt(rawA) === BigInt(rawB);
+                } catch {
+                    return false;
+                }
+            }
+            if (rawA.replace(/^-/, '').length > 15 || rawB.replace(/^-/, '').length > 15) {
                 return false;
             }
-            return canonicalStringify(a as JsonValue) === canonicalStringify(b as JsonValue);
+            const numA = Number(rawA);
+            const numB = Number(rawB);
+            return Number.isFinite(numA) && Number.isFinite(numB) && numA === numB;
         };
 
-        const rejectedHunks: RejectedAgentMergeHunk[] = [];
-        const hasOwn = (obj: JsonObject, key: string): boolean =>
-            Object.prototype.hasOwnProperty.call(obj, key);
-
-        const mergePlainObjects = (
-            baseObj: JsonObject,
-            liveObj: JsonObject,
-            incObj: JsonObject
-        ): JsonObject => {
-            const orderedKeys: string[] = [];
-            const seen = new Set<string>();
-            for (const k of Object.keys(liveObj)) {
-                if (!seen.has(k)) {
-                    seen.add(k);
-                    orderedKeys.push(k);
-                }
+        const nodesEqual = (a: JsonAstNode | undefined, b: JsonAstNode | undefined): boolean => {
+            if (!a && !b) {
+                return true;
             }
-            for (const k of Object.keys(incObj)) {
-                if (!seen.has(k)) {
-                    seen.add(k);
-                    orderedKeys.push(k);
-                }
+            if (!a || !b || a.kind !== b.kind) {
+                return false;
             }
-            for (const k of Object.keys(baseObj)) {
-                if (!seen.has(k)) {
-                    seen.add(k);
-                    orderedKeys.push(k);
-                }
+            if (a.raw === b.raw) {
+                return true;
             }
-
-            const merged: JsonObject = {};
-            for (const k of orderedKeys) {
-                const inBase = hasOwn(baseObj, k);
-                const inLive = hasOwn(liveObj, k);
-                const inInc = hasOwn(incObj, k);
-
-                const liveUnchanged = valuesEqual(liveObj[k], inLive, baseObj[k], inBase);
-                const incUnchanged = valuesEqual(incObj[k], inInc, baseObj[k], inBase);
-
-                if (liveUnchanged) {
-                    if (inInc) {
-                        merged[k] = incObj[k];
-                    }
-                } else if (incUnchanged) {
-                    if (inLive) {
-                        merged[k] = liveObj[k];
-                    }
-                } else if (valuesEqual(liveObj[k], inLive, incObj[k], inInc)) {
-                    if (inLive) {
-                        merged[k] = liveObj[k];
-                    }
-                } else if (inLive && inInc && isPlainObject(liveObj[k]) && isPlainObject(incObj[k])) {
-                    const nestedBase =
-                        inBase && isPlainObject(baseObj[k]) ? (baseObj[k] as JsonObject) : {};
-                    merged[k] = mergePlainObjects(
-                        nestedBase,
-                        liveObj[k] as JsonObject,
-                        incObj[k] as JsonObject
-                    );
-                } else {
-                    if (inLive) {
-                        merged[k] = liveObj[k];
-                    }
-                    rejectedHunks.push({
-                        BaseText: inBase ? JSON.stringify({ [k]: baseObj[k] }) : '',
-                        LiveText: inLive ? JSON.stringify({ [k]: liveObj[k] }) : '',
-                        RejectedIncomingText: inInc ? JSON.stringify({ [k]: incObj[k] }) : ''
-                    });
+            if (a.kind === 'primitive' && b.kind === 'primitive') {
+                if (a.primitiveType !== b.primitiveType) {
+                    return false;
                 }
+                if (a.primitiveType === 'string') {
+                    return a.stringValue === b.stringValue;
+                }
+                if (a.primitiveType === 'number') {
+                    return numbersSemanticallyEqual(a.raw, b.raw);
+                }
+                return a.raw === b.raw;
             }
-            return merged;
+            if (a.kind === 'array' && b.kind === 'array') {
+                if (a.items.length !== b.items.length) {
+                    return false;
+                }
+                for (let i = 0; i < a.items.length; i++) {
+                    if (!nodesEqual(a.items[i], b.items[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (a.kind === 'object' && b.kind === 'object') {
+                if (a.byKey.size !== b.byKey.size) {
+                    return false;
+                }
+                for (const [k, entryA] of a.byKey.entries()) {
+                    const entryB = b.byKey.get(k);
+                    if (!entryB || !nodesEqual(entryA.value, entryB.value)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
         };
 
-        const mergedRoot = mergePlainObjects(baseVal, liveVal, incomingVal);
+        // Detect indentation unit and newline conventions from `liveDocText` (fallback `baseText`)
+        const styleRef = liveTrim.includes('\n')
+            ? liveDocText
+            : baseTrim.includes('\n')
+              ? baseText
+              : liveDocText;
         const prettyFormatted = liveTrim.includes('\n');
+        const lineSep = styleRef.includes('\r\n') ? '\r\n' : '\n';
+        let indentUnit = '  ';
+        if (prettyFormatted) {
+            const indentMatches = Array.from(styleRef.matchAll(/\r?\n([ \t]+)\S/g));
+            let minIndent: string | null = null;
+            for (const m of indentMatches) {
+                const candidate = m[1];
+                if (candidate && (minIndent === null || candidate.length < minIndent.length)) {
+                    minIndent = candidate;
+                }
+            }
+            if (minIndent) {
+                indentUnit = minIndent;
+            }
+        }
+        const compactColon = !prettyFormatted && /"\s*:\s+/.test(liveTrim) ? ': ' : ':';
+        const compactComma = !prettyFormatted && /,\s+"/.test(liveTrim) ? ', ' : ',';
         const trailingNewline = liveDocText.endsWith('\r\n')
             ? '\r\n'
             : liveDocText.endsWith('\n')
               ? '\n'
               : '';
-        const serialized =
-            (prettyFormatted ? JSON.stringify(mergedRoot, null, 2) : JSON.stringify(mergedRoot)) +
-            trailingNewline;
+
+        const serializeAstNode = (node: JsonAstNode, depth: number): string => {
+            if (node.kind === 'primitive') {
+                return node.raw;
+            }
+            if (node.kind === 'array') {
+                if (node.items.length === 0) {
+                    return '[]';
+                }
+                if (!prettyFormatted) {
+                    return `[${node.items.map((it) => serializeAstNode(it, depth + 1)).join(compactComma)}]`;
+                }
+                const childPad = indentUnit.repeat(depth + 1);
+                const closePad = indentUnit.repeat(depth);
+                const rendered = node.items.map(
+                    (it) => `${childPad}${serializeAstNode(it, depth + 1)}`
+                );
+                return `[${lineSep}${rendered.join(`,${lineSep}`)}${lineSep}${closePad}]`;
+            }
+            if (node.entries.length === 0) {
+                return '{}';
+            }
+            if (!prettyFormatted) {
+                return `{${node.entries
+                    .map((e) => `${e.rawKey}${compactColon}${serializeAstNode(e.value, depth + 1)}`)
+                    .join(compactComma)}}`;
+            }
+            const childPad = indentUnit.repeat(depth + 1);
+            const closePad = indentUnit.repeat(depth);
+            const rendered = node.entries.map(
+                (e) => `${childPad}${e.rawKey}: ${serializeAstNode(e.value, depth + 1)}`
+            );
+            return `{${lineSep}${rendered.join(`,${lineSep}`)}${lineSep}${closePad}}`;
+        };
+
+        const emptyObjectNode: Extract<JsonAstNode, { kind: 'object' }> = {
+            kind: 'object',
+            raw: '{}',
+            entries: [],
+            byKey: new Map<string, JsonAstEntry>()
+        };
+
+        const extractArrayItemId = (
+            node: JsonAstNode
+        ): { idKey: string; obj: Extract<JsonAstNode, { kind: 'object' }> } | null => {
+            if (node.kind !== 'object') {
+                return null;
+            }
+            const idEntry = node.byKey.get('id') ?? node.byKey.get('ID');
+            if (!idEntry || idEntry.value.kind !== 'primitive') {
+                return null;
+            }
+            if (idEntry.value.primitiveType === 'string' && idEntry.value.stringValue) {
+                return { idKey: `s:${idEntry.value.stringValue}`, obj: node };
+            }
+            if (idEntry.value.primitiveType === 'number') {
+                return { idKey: `n:${idEntry.value.raw}`, obj: node };
+            }
+            return null;
+        };
+
+        const indexArrayById = (
+            items: JsonAstNode[]
+        ): Map<string, Extract<JsonAstNode, { kind: 'object' }>> | null => {
+            const map = new Map<string, Extract<JsonAstNode, { kind: 'object' }>>();
+            for (const item of items) {
+                const extracted = extractArrayItemId(item);
+                if (!extracted || map.has(extracted.idKey)) {
+                    return null;
+                }
+                map.set(extracted.idKey, extracted.obj);
+            }
+            return map;
+        };
+
+        const rejectedHunks: RejectedAgentMergeHunk[] = [];
+
+        const mergeIdKeyedArrays = (
+            baseItems: JsonAstNode[],
+            liveItems: JsonAstNode[],
+            incItems: JsonAstNode[]
+        ): Extract<JsonAstNode, { kind: 'array' }> | null => {
+            if (baseItems.length === 0 && liveItems.length === 0 && incItems.length === 0) {
+                return { kind: 'array', raw: '[]', items: [] };
+            }
+            const baseMap = indexArrayById(baseItems);
+            const liveMap = indexArrayById(liveItems);
+            const incMap = indexArrayById(incItems);
+            if (!baseMap || !liveMap || !incMap) {
+                return null;
+            }
+
+            const orderedIds: string[] = [];
+            const seenIds = new Set<string>();
+            for (const id of liveMap.keys()) {
+                seenIds.add(id);
+                orderedIds.push(id);
+            }
+            for (const id of incMap.keys()) {
+                if (!seenIds.has(id)) {
+                    seenIds.add(id);
+                    orderedIds.push(id);
+                }
+            }
+
+            const mergedItems: JsonAstNode[] = [];
+            for (const id of orderedIds) {
+                const baseObj = baseMap.get(id);
+                const liveObj = liveMap.get(id);
+                const incObj = incMap.get(id);
+
+                if (liveObj && incObj) {
+                    if (!baseObj) {
+                        if (nodesEqual(liveObj, incObj)) {
+                            mergedItems.push(liveObj);
+                        } else {
+                            mergedItems.push(mergeObjectNodes(emptyObjectNode, liveObj, incObj));
+                        }
+                    } else if (nodesEqual(liveObj, baseObj)) {
+                        mergedItems.push(incObj);
+                    } else if (nodesEqual(incObj, baseObj)) {
+                        mergedItems.push(liveObj);
+                    } else if (nodesEqual(liveObj, incObj)) {
+                        mergedItems.push(liveObj);
+                    } else {
+                        mergedItems.push(mergeObjectNodes(baseObj, liveObj, incObj));
+                    }
+                } else if (liveObj && !incObj) {
+                    if (!baseObj) {
+                        // Added concurrently in live
+                        mergedItems.push(liveObj);
+                    } else if (nodesEqual(liveObj, baseObj)) {
+                        // Deleted in incoming while untouched in live -> honor deletion
+                    } else {
+                        // Modified in live while deleted in incoming -> live edit wins
+                        mergedItems.push(liveObj);
+                        rejectedHunks.push({
+                            BaseText: baseObj.raw,
+                            LiveText: liveObj.raw,
+                            RejectedIncomingText: ''
+                        });
+                    }
+                } else if (!liveObj && incObj) {
+                    if (!baseObj) {
+                        // Added concurrently in incoming
+                        mergedItems.push(incObj);
+                    } else if (nodesEqual(incObj, baseObj)) {
+                        // Deleted in live while untouched in incoming -> honor deletion
+                    } else {
+                        // Deleted in live while modified in incoming -> live deletion wins
+                        rejectedHunks.push({
+                            BaseText: baseObj.raw,
+                            LiveText: '',
+                            RejectedIncomingText: incObj.raw
+                        });
+                    }
+                }
+            }
+
+            return {
+                kind: 'array',
+                raw: '',
+                items: mergedItems
+            };
+        };
+
+        const mergeObjectNodes = (
+            baseObj: Extract<JsonAstNode, { kind: 'object' }>,
+            liveObj: Extract<JsonAstNode, { kind: 'object' }>,
+            incObj: Extract<JsonAstNode, { kind: 'object' }>
+        ): Extract<JsonAstNode, { kind: 'object' }> => {
+            const orderedKeys: string[] = [];
+            const seen = new Set<string>();
+            for (const e of liveObj.entries) {
+                if (!seen.has(e.key)) {
+                    seen.add(e.key);
+                    orderedKeys.push(e.key);
+                }
+            }
+            for (const e of incObj.entries) {
+                if (!seen.has(e.key)) {
+                    seen.add(e.key);
+                    orderedKeys.push(e.key);
+                }
+            }
+            for (const e of baseObj.entries) {
+                if (!seen.has(e.key)) {
+                    seen.add(e.key);
+                    orderedKeys.push(e.key);
+                }
+            }
+
+            const entries: JsonAstEntry[] = [];
+            const byKey = new Map<string, JsonAstEntry>();
+
+            for (const k of orderedKeys) {
+                const baseEntry = baseObj.byKey.get(k);
+                const liveEntry = liveObj.byKey.get(k);
+                const incEntry = incObj.byKey.get(k);
+
+                const liveUnchanged = nodesEqual(liveEntry?.value, baseEntry?.value);
+                const incUnchanged = nodesEqual(incEntry?.value, baseEntry?.value);
+
+                if (liveUnchanged && incUnchanged) {
+                    if (liveEntry) {
+                        entries.push(liveEntry);
+                        byKey.set(k, liveEntry);
+                    }
+                } else if (liveUnchanged) {
+                    if (incEntry) {
+                        const chosenEntry: JsonAstEntry = {
+                            key: k,
+                            rawKey: liveEntry?.rawKey ?? incEntry.rawKey,
+                            value: incEntry.value
+                        };
+                        entries.push(chosenEntry);
+                        byKey.set(k, chosenEntry);
+                    }
+                } else if (incUnchanged) {
+                    if (liveEntry) {
+                        entries.push(liveEntry);
+                        byKey.set(k, liveEntry);
+                    }
+                } else if (nodesEqual(liveEntry?.value, incEntry?.value)) {
+                    if (liveEntry) {
+                        entries.push(liveEntry);
+                        byKey.set(k, liveEntry);
+                    }
+                } else if (
+                    liveEntry?.value.kind === 'object' &&
+                    incEntry?.value.kind === 'object'
+                ) {
+                    const nestedBase =
+                        baseEntry?.value.kind === 'object' ? baseEntry.value : emptyObjectNode;
+                    const mergedChild = mergeObjectNodes(
+                        nestedBase,
+                        liveEntry.value,
+                        incEntry.value
+                    );
+                    const mergedEntry: JsonAstEntry = {
+                        key: k,
+                        rawKey: liveEntry.rawKey,
+                        value: mergedChild
+                    };
+                    entries.push(mergedEntry);
+                    byKey.set(k, mergedEntry);
+                } else if (
+                    liveEntry?.value.kind === 'array' &&
+                    incEntry?.value.kind === 'array'
+                ) {
+                    const baseItems =
+                        baseEntry?.value.kind === 'array' ? baseEntry.value.items : [];
+                    const idMerged = mergeIdKeyedArrays(
+                        baseItems,
+                        liveEntry.value.items,
+                        incEntry.value.items
+                    );
+                    if (idMerged) {
+                        const mergedEntry: JsonAstEntry = {
+                            key: k,
+                            rawKey: liveEntry.rawKey,
+                            value: idMerged
+                        };
+                        entries.push(mergedEntry);
+                        byKey.set(k, mergedEntry);
+                    } else {
+                        entries.push(liveEntry);
+                        byKey.set(k, liveEntry);
+                        rejectedHunks.push({
+                            BaseText: baseEntry ? `{${baseEntry.rawKey}:${baseEntry.value.raw}}` : '',
+                            LiveText: `{${liveEntry.rawKey}:${liveEntry.value.raw}}`,
+                            RejectedIncomingText: `{${incEntry.rawKey}:${incEntry.value.raw}}`
+                        });
+                    }
+                } else {
+                    if (liveEntry) {
+                        entries.push(liveEntry);
+                        byKey.set(k, liveEntry);
+                    }
+                    rejectedHunks.push({
+                        BaseText: baseEntry ? `{${baseEntry.rawKey}:${baseEntry.value.raw}}` : '',
+                        LiveText: liveEntry ? `{${liveEntry.rawKey}:${liveEntry.value.raw}}` : '',
+                        RejectedIncomingText: incEntry
+                            ? `{${incEntry.rawKey}:${incEntry.value.raw}}`
+                            : ''
+                    });
+                }
+            }
+
+            return {
+                kind: 'object',
+                raw: '',
+                entries,
+                byKey
+            };
+        };
+
+        const mergedRoot = mergeObjectNodes(baseAst, liveAst, incAst);
+        const serialized = serializeAstNode(mergedRoot, 0) + trailingNewline;
 
         return {
             MergedText: serialized,

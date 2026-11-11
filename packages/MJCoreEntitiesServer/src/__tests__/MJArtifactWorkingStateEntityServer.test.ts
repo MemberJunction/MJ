@@ -585,4 +585,30 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
 
         providerSpy.mockRestore();
     });
+
+    it('skips PreRunView and PostRunView permission hooks when params are marked via MarkInternalArtifactPermissionQuery', async () => {
+        const resolveSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions');
+        const internalParams: RunViewParams = {
+            EntityName: 'MJ: Artifact Working States',
+            Fields: ['ID'],
+            ResultType: 'simple'
+        };
+        ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(internalParams);
+        const clonedParams: RunViewParams = { ...internalParams };
+
+        ArtifactWorkingStatePreRunViewHook(clonedParams, devUser);
+        expect(clonedParams.Fields).toEqual(['ID']);
+
+        const rawResults: RunViewResult = {
+            Success: true,
+            Results: [{ ID: 'ws-internal-1' }],
+            RowCount: 1,
+            TotalRowCount: 1,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        };
+        const postRes = await ArtifactWorkingStatePostRunViewHook(clonedParams, rawResults, devUser);
+        expect(postRes.Results).toHaveLength(1);
+        expect(resolveSpy).not.toHaveBeenCalled();
+    });
 });

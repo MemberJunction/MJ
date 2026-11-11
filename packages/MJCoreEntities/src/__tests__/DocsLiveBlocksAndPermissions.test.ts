@@ -10,6 +10,8 @@ import {
 import {
   DocumentLiveBlockEngine,
   BaseDocumentBlock,
+  DecodeDocumentUtf8Fallback,
+  EncodeDocumentUtf8Fallback,
   LoadDocumentLiveBlocks,
   type DocumentBlockSpec,
 } from '../custom/DocumentLiveBlockEngine';
@@ -834,8 +836,8 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = 'SYSTEM_USER and @@VERSION'", mockEntity, deniedLower).Valid,
     ).toBe(true);
 
-    // R7-9: Entity fields named User, APP_NAME, DB_NAME, bracketed [First Name], and Unicode N'...' literals are allowed,
-    // while niladic SYSTEM_USER, function calls APP_NAME(), and @@VERSION remain blocked!
+    // R7-9 & R8-5: Entity fields named APP_NAME, DB_NAME, bracketed [First Name], bracketed [User], and Unicode N'...' literals are allowed,
+    // while unbracketed niladic principals (USER, CURRENT_USER, SESSION_USER, SYSTEM_USER), function calls APP_NAME(), and @@VERSION are blocked!
     const r79Entity = new EntityInfo({
       ID: 'e-r79',
       Name: 'AppDeployments',
@@ -849,14 +851,48 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
         new EntityFieldInfo({ ID: 'f6', Name: 'First Name', Type: 'nvarchar', TSType: EntityFieldTSType.String }),
       ],
     });
-    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("User = 'bob'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("User = 'bob'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[User] = 'bob'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter('Name = User', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter('USER', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("CURRENT_USER = 'dbo'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("SESSION_USER = 'dbo'", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('User ASC', r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('[User] ASC', r79Entity).Valid).toBe(true);
+    // Bracketed [User] is rejected when the entity does NOT have a 'User' field
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[User] = 'bob'", mockEntity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateOrderBy('[User] ASC', mockEntity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("APP_NAME = 'CRM'", r79Entity).Valid).toBe(true);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("DB_NAME = 'Prod'", r79Entity).Valid).toBe(true);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = N'Renée'", r79Entity).Valid).toBe(true);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("[First Name] = N'Ada'", r79Entity).Valid).toBe(true);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = N'Zoë'", r79Entity).Valid).toBe(true);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("'sa' = SYSTEM_USER", r79Entity).Valid).toBe(false);
+    expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("USER_NAME() = 'dbo'", r79Entity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("APP_NAME() = 'x'", r79Entity).Valid).toBe(false);
     expect(DocumentLiveBlockEngine.Instance.ValidateExtraFilter("Name = @@VERSION", r79Entity).Valid).toBe(false);
+
+    // WHATWG UTF-8 fallback parity against native TextEncoder / TextDecoder
+    const nativeEnc = new TextEncoder();
+    const nativeDec = new TextDecoder('utf-8', { fatal: false });
+    for (const s of ['', 'ASCII 123!', 'Zoë — €99', 'Launch 🚀✨', '\uD800', '\uDC00', 'A\uD83DB', '\uDC01\uD800']) {
+      expect(Array.from(EncodeDocumentUtf8Fallback(s))).toEqual(Array.from(nativeEnc.encode(s)));
+    }
+    for (const seq of [
+      [],
+      [0x41, 0x42, 0x43],
+      [0xc3, 0x41],
+      [0xc0, 0xaf],
+      [0xe0, 0x80, 0xaf],
+      [0xed, 0xa0, 0x80],
+      [0xf4, 0x90, 0x80, 0x80],
+      [0xe2, 0x82],
+      [0xf0, 0x9f, 0x9a],
+      Array.from(nativeEnc.encode('Zoë 🚀')),
+    ]) {
+      const u8 = new Uint8Array(seq);
+      expect(DecodeDocumentUtf8Fallback(u8)).toBe(nativeDec.decode(u8));
+    }
 
     // R7-2: Concurrent ResolvePermissions calls for the artifact owner ALL return 'Owner', and on a Database provider
     // when GetSystemUser() returns null, loadCollectionPermissionRows fails closed (0 MJ: Artifact Versions queries)

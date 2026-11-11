@@ -1,5 +1,5 @@
-import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Discrete permission actions supported on an `MJ: Artifacts` record.
@@ -148,6 +148,38 @@ interface CollectionPermissionRowProjection {
 }
 
 const MAX_DELEGATE_DEPTH = 8;
+const INTERNAL_PERMISSION_QUERY_PARAMS_STORE_KEY = '___MJ_INTERNAL_ARTIFACT_PERMISSION_QUERY_PARAMS___';
+const INTERNAL_PERMISSION_QUERY_SYMBOL_STORE_KEY = '___MJ_INTERNAL_ARTIFACT_PERMISSION_QUERY_SYMBOL___';
+const FALLBACK_INTERNAL_PERMISSION_QUERY_WEAK_SET = new WeakSet<object>();
+const FALLBACK_INTERNAL_PERMISSION_QUERY_SYMBOL = Symbol('MJInternalArtifactPermissionQuery');
+
+function getInternalPermissionQueryWeakSet(): WeakSet<object> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[INTERNAL_PERMISSION_QUERY_PARAMS_STORE_KEY];
+        if (existing instanceof WeakSet) {
+            return existing;
+        }
+        const created = new WeakSet<object>();
+        store[INTERNAL_PERMISSION_QUERY_PARAMS_STORE_KEY] = created;
+        return created;
+    }
+    return FALLBACK_INTERNAL_PERMISSION_QUERY_WEAK_SET;
+}
+
+function getInternalPermissionQueryMarkerSymbol(): symbol {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[INTERNAL_PERMISSION_QUERY_SYMBOL_STORE_KEY];
+        if (typeof existing === 'symbol') {
+            return existing;
+        }
+        const created = Symbol('MJInternalArtifactPermissionQuery');
+        store[INTERNAL_PERMISSION_QUERY_SYMBOL_STORE_KEY] = created;
+        return created;
+    }
+    return FALLBACK_INTERNAL_PERMISSION_QUERY_SYMBOL;
+}
 
 function normalizeDecision(decision: DelegatePermissionDecision): 'Allow' | 'Deny' | 'Defer' {
     if (decision === true || decision === 'Allow') {
@@ -240,6 +272,50 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     /** Returns the process-wide singleton instance of {@link ArtifactPermissionEngine}. */
     public static get Instance(): ArtifactPermissionEngine {
         return super.getInstance<ArtifactPermissionEngine>();
+    }
+
+    /**
+     * Marks a {@link RunViewParams} object as an internal permission-resolution lookup so
+     * server-side `MJ: Artifact Versions` / `MJ: Artifact Working States` `RunView` hooks skip
+     * recursive permission evaluation even when `ProviderBase.RunView` shallow-clones `params`
+     * (`{ ...params }`) or a custom `WellKnownUserSource` returns a user not matched by
+     * `isServerSystemUser`.
+     */
+    public static MarkInternalArtifactPermissionQuery(params: RunViewParams): void {
+        if (!params || typeof params !== 'object') {
+            return;
+        }
+        const weakSet = getInternalPermissionQueryWeakSet();
+        weakSet.add(params);
+        const token = Object.freeze({});
+        weakSet.add(token);
+        Object.defineProperty(params, getInternalPermissionQueryMarkerSymbol(), {
+            value: token,
+            enumerable: true,
+            configurable: true,
+            writable: false
+        });
+    }
+
+    /**
+     * Returns `true` when `params` (or a shallow `{ ...params }` clone produced by `ProviderBase.RunView`)
+     * was marked by {@link MarkInternalArtifactPermissionQuery}.
+     */
+    public static IsInternalArtifactPermissionQuery(params: object | null | undefined): boolean {
+        if (!params || typeof params !== 'object') {
+            return false;
+        }
+        const weakSet = getInternalPermissionQueryWeakSet();
+        if (weakSet.has(params)) {
+            return true;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(params, getInternalPermissionQueryMarkerSymbol());
+        return Boolean(
+            descriptor &&
+                typeof descriptor.value === 'object' &&
+                descriptor.value !== null &&
+                weakSet.has(descriptor.value)
+        );
     }
 
     /**
@@ -628,17 +704,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         try {
             const rv = RunView.FromMetadataProvider(provider);
             const safeId = EscapeSQLString(artifactId);
-            const result = await rv.RunView<ArtifactRowProjection>(
-                {
-                    EntityName: 'MJ: Artifacts',
-                    ExtraFilter: `ID='${safeId}'`,
-                    Fields: ['ID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                },
-                user
-            );
+            const artifactParams: RunViewParams = {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID='${safeId}'`,
+                Fields: ['ID', 'UserID', 'DelegateEntityID', 'DelegateRecordID'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(artifactParams);
+            const result = await rv.RunView<ArtifactRowProjection>(artifactParams, user);
             if (!result.Success || !result.Results || result.Results.length === 0) {
                 return null;
             }
@@ -658,17 +733,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             const rv = RunView.FromMetadataProvider(provider);
             const safeArtifactId = EscapeSQLString(artifactId);
             const safeUserId = EscapeSQLString(user.ID);
-            const result = await rv.RunView<ArtifactPermissionRowProjection>(
-                {
-                    EntityName: 'MJ: Artifact Permissions',
-                    ExtraFilter: `ArtifactID='${safeArtifactId}' AND UserID='${safeUserId}'`,
-                    Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-                    MaxRows: 500,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                },
-                user
-            );
+            const directParams: RunViewParams = {
+                EntityName: 'MJ: Artifact Permissions',
+                ExtraFilter: `ArtifactID='${safeArtifactId}' AND UserID='${safeUserId}'`,
+                Fields: ['ID', 'ArtifactID', 'UserID', 'CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                MaxRows: 500,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(directParams);
+            const result = await rv.RunView<ArtifactPermissionRowProjection>(directParams, user);
             return result.Success ? result.Results ?? [] : [];
         } catch (err) {
             LogError(
@@ -704,17 +778,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             const rv = RunView.FromMetadataProvider(provider);
             const safeArtifactId = EscapeSQLString(artifactId);
             const safeUserId = EscapeSQLString(user.ID);
-            const versionsResult = await rv.RunView<{ ID: string }>(
-                {
-                    EntityName: 'MJ: Artifact Versions',
-                    ExtraFilter: `ArtifactID='${safeArtifactId}'`,
-                    Fields: ['ID'],
-                    MaxRows: 500,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                },
-                queryActor
-            );
+            const versionsParams: RunViewParams = {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${safeArtifactId}'`,
+                Fields: ['ID'],
+                MaxRows: 500,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(versionsParams);
+            const versionsResult = await rv.RunView<{ ID: string }>(versionsParams, queryActor);
             const versionIds = Array.from(
                 new Set((versionsResult.Success ? versionsResult.Results ?? [] : []).map((v) => v.ID).filter(Boolean))
             );
@@ -722,17 +795,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 return [];
             }
             const versionInList = versionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-            const colResult = await rv.RunView<CollectionArtifactRowProjection>(
-                {
-                    EntityName: 'MJ: Collection Artifacts',
-                    ExtraFilter: `ArtifactVersionID IN (${versionInList})`,
-                    Fields: ['CollectionID'],
-                    MaxRows: 500,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                },
-                queryActor
-            );
+            const colParams: RunViewParams = {
+                EntityName: 'MJ: Collection Artifacts',
+                ExtraFilter: `ArtifactVersionID IN (${versionInList})`,
+                Fields: ['CollectionID'],
+                MaxRows: 500,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(colParams);
+            const colResult = await rv.RunView<CollectionArtifactRowProjection>(colParams, queryActor);
             const collectionIds = Array.from(
                 new Set((colResult.Success ? colResult.Results ?? [] : []).map((r) => r.CollectionID).filter(Boolean))
             );
@@ -740,19 +812,23 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 return [];
             }
             const inList = collectionIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-            const permResult = await rv.RunView<CollectionPermissionRowProjection>(
-                {
-                    EntityName: 'MJ: Collection Permissions',
-                    ExtraFilter: `CollectionID IN (${inList}) AND UserID='${safeUserId}'`,
-                    Fields: ['CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
-                    MaxRows: 500,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple'
-                },
-                queryActor
-            );
+            const permParams: RunViewParams = {
+                EntityName: 'MJ: Collection Permissions',
+                ExtraFilter: `CollectionID IN (${inList}) AND UserID='${safeUserId}'`,
+                Fields: ['CanRead', 'CanEdit', 'CanDelete', 'CanShare'],
+                MaxRows: 500,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(permParams);
+            const permResult = await rv.RunView<CollectionPermissionRowProjection>(permParams, queryActor);
             return permResult.Success ? permResult.Results ?? [] : [];
-        } catch {
+        } catch (err) {
+            LogError(
+                `ArtifactPermissionEngine.loadCollectionPermissionRows error for artifact '${artifactId}' (user '${user.ID}'): ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
             return [];
         }
     }

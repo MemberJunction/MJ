@@ -28,7 +28,9 @@ import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
   ExtractAnchoredCommentMentions,
+  MERGE_CONFLICT_WARNING_MESSAGE,
   type CollaborationConnectionStatus,
+  type CollaborationMergeConflictEvent,
   type CollaboratorPresence,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
@@ -194,10 +196,23 @@ export interface DocsPermissionEntry {
             [class.mj-docs-presence-pill--readonly]="
               CollaborationStatus === 'readonly' || CollaborationStatus === 'revoked'
             "
+            [class.mj-docs-presence-pill--error]="CollaborationStatus === 'error'"
+            [attr.data-status]="CollaborationStatus"
             data-testid="collaboration-presence-pill"
           >
             <span class="mj-docs-presence-dot"></span>
             <span>{{ GetCollaborationStatusLabel() }}</span>
+            @if (CollaborationStatus === 'error') {
+              <button
+                type="button"
+                class="mj-docs-collab-retry-btn"
+                aria-label="Retry live collaboration sync"
+                data-testid="docs-collab-retry-btn"
+                (click)="RetryLiveCollaboration()"
+              >
+                Retry
+              </button>
+            }
             @if (Collaborators.length > 0) {
               <div class="mj-docs-avatar-stack">
                 @for (peer of Collaborators; track peer.ClientID) {
@@ -2244,6 +2259,33 @@ export interface DocsPermissionEntry {
 
       .mj-docs-presence-pill--readonly .mj-docs-presence-dot {
         background: var(--mj-status-warning);
+      }
+
+      .mj-docs-presence-pill--error {
+        background: var(--mj-status-error-bg);
+        border-color: var(--mj-status-error-border);
+        color: var(--mj-status-error-text);
+      }
+
+      .mj-docs-presence-pill--error .mj-docs-presence-dot {
+        background: var(--mj-status-error);
+      }
+
+      .mj-docs-collab-retry-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--mj-status-error-border);
+        background: var(--mj-bg-surface);
+        color: var(--mj-status-error-text);
+      }
+
+      .mj-docs-collab-retry-btn:hover {
+        background: var(--mj-bg-surface-hover);
       }
 
       .mj-docs-avatar-stack {
@@ -7529,9 +7571,22 @@ export class MarkdownArtifactViewerComponent
         return 'Read-Only';
       case 'revoked':
         return 'Access Revoked';
+      case 'error':
+        return 'Live sync disconnected';
+      case 'disconnected':
+        return 'Disconnected';
       default:
         return this.CanUserEdit ? 'Ready · Collaborative' : 'Read-Only';
     }
+  }
+
+  public RetryLiveCollaboration(): void {
+    const artifactId =
+      this.session?.ArtifactID ||
+      this.artifactVersion?.ArtifactID ||
+      this.artifactVersion?.ID ||
+      'local-doc';
+    void this.collabService.Retry(artifactId);
   }
 
   public GetInitials(name: string): string {
@@ -7570,6 +7625,20 @@ export class MarkdownArtifactViewerComponent
   private notifyError(message: string): void {
     this.StatusBannerMessage = message;
     this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.cdr.markForCheck();
+  }
+
+  private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
+    this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
+    if (typeof this.collabService.NotifyMergeConflictToastOnce === 'function') {
+      this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
+    } else {
+      this.notificationService?.CreateSimpleNotification?.(
+        MERGE_CONFLICT_WARNING_MESSAGE,
+        'warning',
+        5000,
+      );
+    }
     this.cdr.markForCheck();
   }
 
@@ -7726,6 +7795,17 @@ export class MarkdownArtifactViewerComponent
         this.cdr.markForCheck();
       }),
     );
+
+    if (this.session.MergeConflict$) {
+      this.sessionSubs.push(
+        this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+          if (this.isComponentDestroyed) {
+            return;
+          }
+          this.handleCollaborationMergeConflict(conflictEvt);
+        }),
+      );
+    }
 
     if (hasRemoteBackend) {
       void this.session.Connect(this.CollaborationWsUrl, provider);

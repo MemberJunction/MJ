@@ -662,15 +662,15 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     expect(unsafeAltSheetRegex.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
 
     const docLib = new DocumentToolLibrary();
-    const unsafeDocGrep = await docLib.InvokeTool('grep', { pattern: '(a+)+$' }, '# Heading\n\nBody text');
+    const unsafeDocGrep = await docLib.InvokeTool('grep', { pattern: '(a+)+$', use_regex: true }, '# Heading\n\nBody text');
     expect(unsafeDocGrep.success).toBe(false);
     expect(unsafeDocGrep.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
 
-    const unsafeAltDocGrep = await docLib.InvokeTool('grep', { pattern: '(a|a)*$' }, '# Heading\n\nBody text');
+    const unsafeAltDocGrep = await docLib.InvokeTool('grep', { pattern: '(a|a)*$', use_regex: true }, '# Heading\n\nBody text');
     expect(unsafeAltDocGrep.success).toBe(false);
     expect(unsafeAltDocGrep.errorMessage).toContain('Unsafe or overly complex regular expression rejected');
 
-    // Plain literals like "C++" work via literal fallback in search_blocks, grep, and search_cells (Round 3 Item 19)
+    // Plain literals like "C++" work via default literal search in search_blocks, grep, and search_cells (Round 3 Item 19 & R8-7)
     const cppDoc = '# Languages\n\nWe support TypeScript, Rust, and C++ runtimes.';
     const cppSearchBlocks = await docLib.InvokeTool('search_blocks', { query: 'C++' }, cppDoc);
     expect(cppSearchBlocks.success).toBe(true);
@@ -678,7 +678,9 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
 
     const cppGrep = await docLib.InvokeTool('grep', { pattern: 'C++' }, cppDoc);
     expect(cppGrep.success).toBe(true);
-    expect((cppGrep.data as Array<{ text: string }>)).toHaveLength(1);
+    expect((cppGrep.data as { matches: Array<{ text: string }>; matchCount: number; partial: boolean }).matches).toHaveLength(1);
+    expect((cppGrep.data as { matchCount: number; partial: boolean }).matchCount).toBe(1);
+    expect((cppGrep.data as { partial: boolean }).partial).toBe(false);
 
     const cppSheetWrite = await sheetLib.InvokeTool(
       'write_cells',
@@ -733,5 +735,108 @@ describe('SpreadsheetToolLibrary (Wave 3 — MJ Sheets § 3.6 & § 6)', () => {
     const sheet1 = exportedWb.getWorksheet('Sheet 1');
     expect(sheet1?.getCell('A1').formula).toBe("'Assumptions 2026'!B2+1");
     expect(sheet1?.getCell('A1').result).toBe(42);
+  });
+
+  it('R8-7: $100 and [DRAFT] default to literal search (default false), case_sensitive works in grep, and grep always returns a stable data shape', async () => {
+    const docLib = new DocumentToolLibrary();
+
+    // Confirm zero stale "default true" descriptions remain across DocumentToolLibrary and SpreadsheetToolLibrary
+    for (const tool of [...docLib.GetToolList(), ...sheetLib.GetToolList()]) {
+      const serializedTool = JSON.stringify(tool);
+      expect(serializedTool).not.toContain('default true');
+    }
+
+    const docText = [
+      '# Pricing Notes',
+      '',
+      'Currency symbol alone: $',
+      '',
+      'Bare number: 100',
+      '',
+      'Single letters: D and R and A and F and T',
+      '',
+      'Exact price tier: $100 per seat',
+      '',
+      'Status banner: [DRAFT] proposal',
+      '',
+      'Lowercase tag: [draft] internal',
+    ].join('\n');
+
+    // 1. grep without use_regex treats $100 and [DRAFT] strictly as literals (case-insensitive by default)
+    const grepDollar = await docLib.InvokeTool('grep', { pattern: '$100' }, docText);
+    expect(grepDollar.success).toBe(true);
+    const grepDollarData = grepDollar.data as {
+      matches: Array<{ lineNumber: number; text: string }>;
+      matchCount: number;
+      partial: boolean;
+      timedOut: boolean;
+      unsearchableCount: number;
+      warnings: string[];
+    };
+    expect(grepDollarData.matchCount).toBe(1);
+    expect(grepDollarData.matches).toHaveLength(1);
+    expect(grepDollarData.matches[0].text).toBe('Exact price tier: $100 per seat');
+    expect(grepDollarData.partial).toBe(false);
+    expect(grepDollarData.timedOut).toBe(false);
+    expect(grepDollarData.unsearchableCount).toBe(0);
+    expect(grepDollarData.warnings).toEqual([]);
+
+    const grepDraftDefault = await docLib.InvokeTool('grep', { pattern: '[DRAFT]' }, docText);
+    expect(grepDraftDefault.success).toBe(true);
+    const grepDraftDefaultData = grepDraftDefault.data as typeof grepDollarData;
+    expect(grepDraftDefaultData.matchCount).toBe(2);
+    expect(grepDraftDefaultData.matches.map((m) => m.text)).toEqual([
+      'Status banner: [DRAFT] proposal',
+      'Lowercase tag: [draft] internal',
+    ]);
+
+    // Case-sensitive literal grep matches only exact uppercase [DRAFT]
+    const grepDraftCaseSensitive = await docLib.InvokeTool(
+      'grep',
+      { pattern: '[DRAFT]', case_sensitive: true },
+      docText,
+    );
+    expect(grepDraftCaseSensitive.success).toBe(true);
+    const grepDraftCsData = grepDraftCaseSensitive.data as typeof grepDollarData;
+    expect(grepDraftCsData.matchCount).toBe(1);
+    expect(grepDraftCsData.matches[0].text).toBe('Status banner: [DRAFT] proposal');
+
+    // 2. search_blocks without use_regex treats $100 and [DRAFT] strictly as literals
+    const blocksDollar = await docLib.InvokeTool('search_blocks', { query: '$100' }, docText);
+    expect(blocksDollar.success).toBe(true);
+    expect((blocksDollar.data as { matchCount: number }).matchCount).toBe(1);
+
+    const blocksDraft = await docLib.InvokeTool('search_blocks', { query: '[DRAFT]' }, docText);
+    expect(blocksDraft.success).toBe(true);
+    expect((blocksDraft.data as { matchCount: number }).matchCount).toBe(2);
+
+    // 3. search_cells without use_regex treats $100 and [DRAFT] strictly as literals
+    const writeSheet = await sheetLib.InvokeTool(
+      'write_cells',
+      {
+        cells: [
+          { address: 'A1', value: '$' },
+          { address: 'A2', value: '100' },
+          { address: 'A3', value: 'D' },
+          { address: 'A4', value: 'R' },
+          { address: 'A5', value: 'A' },
+          { address: 'A6', value: 'F' },
+          { address: 'A7', value: 'T' },
+          { address: 'B1', value: 'Tier $100 plan' },
+          { address: 'B2', value: '[DRAFT] budget' },
+        ],
+      },
+      '',
+    );
+    expect(writeSheet.success).toBe(true);
+    const literalSheetJson = (writeSheet.data as { updatedContent: string }).updatedContent;
+
+    const cellsDollar = await sheetLib.InvokeTool('search_cells', { query: '$100' }, literalSheetJson);
+    expect(cellsDollar.success).toBe(true);
+    expect((cellsDollar.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B1']);
+
+    const cellsDraft = await sheetLib.InvokeTool('search_cells', { query: '[DRAFT]' }, literalSheetJson);
+    expect(cellsDraft.success).toBe(true);
+    expect((cellsDraft.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B2']);
   });
 });

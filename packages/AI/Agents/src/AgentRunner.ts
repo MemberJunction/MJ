@@ -2375,7 +2375,7 @@ export class AgentRunner {
                                     EntityName: 'MJ: Conversation Details',
                                     ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
                                     Fields: ['UserID', 'User'],
-                                    OrderBy: '__mj_CreatedAt ASC',
+                                    OrderBy: '__mj_CreatedAt ASC, ID ASC',
                                     MaxRows: participantPageSize,
                                     StartRow: startRow,
                                     SkipTotalRowCount: true,
@@ -2395,6 +2395,13 @@ export class AgentRunner {
                             collected.push(...rows);
                             if (rows.length < participantPageSize) {
                                 break;
+                            }
+                            if (page === maxParticipantPages - 1 && rows.length === participantPageSize) {
+                                LogError(
+                                    `Participant paging reached the ${maxParticipantPages}-page (${
+                                        maxParticipantPages * participantPageSize
+                                    }-row) safety cap for conversation ${convId} while sharing forked artifact ${newArtifactId}.`
+                                );
                             }
                             startRow += rows.length;
                         }

@@ -851,9 +851,33 @@ export class DocumentCollaborationResolver extends ResolverBase {
                     ErrorMessage: 'Failed to apply agent edit to collaboration room.'
                 };
             }
-            const editReply =
-                extracted.Reply ||
-                `Applied edit to anchored selection (saved as Version ${mutated.VersionNumber ?? ''}).`.trim();
+            const resolvedMergedContent = mutated.MergedContent ?? nextContent;
+            const rejectedCount = mutated.RejectedAgentHunks?.length ?? 0;
+            let editReply: string;
+            if (rejectedCount > 0) {
+                const conflictSummary = `${rejectedCount} edit${
+                    rejectedCount === 1 ? '' : 's'
+                } not applied because of concurrent edits.`;
+                const allAgentEditsRejected =
+                    resolvedMergedContent === currentContent ||
+                    !resolvedMergedContent.includes(proposedReplacement);
+                if (allAgentEditsRejected) {
+                    editReply = extracted.Reply
+                        ? `${extracted.Reply} (${conflictSummary})`
+                        : conflictSummary;
+                } else {
+                    const partialBase =
+                        extracted.Reply ||
+                        `Partially applied edit to anchored selection (saved as Version ${
+                            mutated.VersionNumber ?? ''
+                        }).`.trim();
+                    editReply = `${partialBase} (${conflictSummary})`;
+                }
+            } else {
+                editReply =
+                    extracted.Reply ||
+                    `Applied edit to anchored selection (saved as Version ${mutated.VersionNumber ?? ''}).`.trim();
+            }
             await this.persistAnchoredAgentReplyIfThreadExists(
                 provider,
                 user,
@@ -868,7 +892,7 @@ export class DocumentCollaborationResolver extends ResolverBase {
                 AgentHandle: normalizedHandle,
                 AgentMode: normalizedMode,
                 ReplyBody: editReply,
-                UpdatedContent: mutated.MergedContent ?? nextContent,
+                UpdatedContent: resolvedMergedContent,
                 VersionID: mutated.VersionID,
                 VersionNumber: mutated.VersionNumber
             };

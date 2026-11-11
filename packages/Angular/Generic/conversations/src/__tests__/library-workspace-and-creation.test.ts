@@ -1,6 +1,7 @@
 import '@angular/compiler';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { Subject } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
@@ -655,11 +656,22 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       CategoryFilter: 'all',
       OwnershipFilter: 'all',
       FilterPanelValues: { category: 'all', ownership: 'all' },
+      ArtifactPageSize: 200,
       IsLoading: false,
+      IsLoadingMore: false,
+      IsStreamingSharedPermissions: false,
+      LoadedArtifactCount: 0,
+      TotalArtifactCount: 0,
       LoadError: null,
+      LoadMoreError: null,
       ExpandedCollectionIds: new Set<string>(),
       StarredArtifactIds: new Set<string>(),
-      cdr: { detectChanges: vi.fn() },
+      RefreshViewerSubject: new Subject<{ artifactId: string; versionNumber: number }>(),
+      reloadGeneration: 0,
+      ownedArtifactOffset: 0,
+      directSharedArtifactOffset: 0,
+      allDirectSharedArtIds: [],
+      cdr: { markForCheck: vi.fn(), detectChanges: vi.fn() },
       notifications: { CreateSimpleNotification: vi.fn() },
       confirmService: { ConfirmDelete: vi.fn(async () => true) },
       isDestroyed: false,
@@ -1296,6 +1308,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
           const offsets = queries.map((q) => q.StartRow ?? 0);
           permBatchOffsetWindows.push(offsets);
           for (const q of queries) {
+            expect(q.OrderBy).toBe('__mj_CreatedAt DESC, ID DESC');
             expect(q.SkipTotalRowCount).toBe(true);
             expect(q.MaxRows).toBe(2);
           }
@@ -1316,6 +1329,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
         return queries.map((q): RunViewResult => {
           const filterStr = extraFilterAsString(q.ExtraFilter);
           if (q.EntityName === 'MJ: Artifact Permissions' && (q.StartRow ?? 0) === 0) {
+            expect(q.OrderBy).toBe('__mj_CreatedAt DESC, ID DESC');
             return okRunViewResult(allPermRows.slice(0, 2), allPermRows.length);
           }
           if (q.EntityName === 'MJ: Artifacts' && filterStr.includes('ID IN (')) {
@@ -1370,9 +1384,12 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     const reloadPromise = component.ReloadWorkspaceData();
     await firstRemainingPermBatchStarted.promise;
 
-    // BEFORE remaining permission pages resolve, first render is ALREADY unblocked with Page 0 items!
+    // BEFORE remaining permission pages resolve, first render is ALREADY unblocked with Page 0 items,
+    // and Load More is NOT stuck disabled by background Stage-2 permission streaming!
     expect(component.IsLoading).toBe(false);
-    expect(component.IsLoadingMore).toBe(true);
+    expect(component.IsLoadingMore).toBe(false);
+    expect(component.IsLoadingMoreArtifacts).toBe(false);
+    expect(component.IsStreamingSharedPermissions).toBe(true);
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
     expect(component.FilteredItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
     expect(loadCompleteSpy).toHaveBeenCalledTimes(1);
@@ -1390,6 +1407,8 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     ]);
     expect(component.IsLoading).toBe(false);
     expect(component.IsLoadingMore).toBe(false);
+    expect(component.IsStreamingSharedPermissions).toBe(false);
+    expect(component.CanLoadMore).toBe(true);
     expect(component.LoadError).toBeNull();
     expect(component.AllItems.map((i) => i.Id)).toEqual(['art-shared-2', 'art-shared-1']);
     expect(component.LoadedArtifactCount).toBe(2);
@@ -1643,7 +1662,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     const detectChangesSpy = vi.fn();
     const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
     Object.assign(component as object, {
-      cdr: { detectChanges: detectChangesSpy },
+      cdr: { markForCheck: vi.fn(), detectChanges: detectChangesSpy },
       iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
       collectionPermByColId: new Map(),
       collectionLinksByCollectionAndVersion: new Map(),
@@ -1669,6 +1688,144 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     // Stale tail batch ignored after ngOnDestroy — TotalArtifactCount not mutated, detectChanges not called
     expect(component.TotalArtifactCount).toBe(1);
     expect(detectChangesSpy).not.toHaveBeenCalled();
+  });
+
+  it('discards LoadMoreArtifacts results without mutating AllItems, HasMoreArtifacts, or IsLoadingMore when reloadGeneration increments mid-flight', async () => {
+    const { component } = buildWorkspaceComponent();
+    component.ArtifactPageSize = 1;
+    component.EnvironmentId = 'env-default';
+
+    const loadMoreStarted = createDeferred();
+    const loadMoreGate = createDeferred();
+    let activeMode: 'initial-two-pages' | 'fresh-single-item' = 'initial-two-pages';
+
+    vi.spyOn(RunView.prototype, 'RunViews').mockImplementation(
+      async (queries: RunViewParams[]): Promise<RunViewResult[]> => {
+        const isPagedOwnedLoadMore =
+          queries.length === 1 &&
+          queries[0].EntityName === 'MJ: Artifacts' &&
+          (queries[0].StartRow ?? 0) === 1;
+        if (isPagedOwnedLoadMore) {
+          expect(queries[0].OrderBy).toBe('__mj_UpdatedAt DESC, ID DESC');
+          loadMoreStarted.resolve();
+          await loadMoreGate.promise;
+          return [
+            okRunViewResult(
+              [
+                {
+                  ID: 'art-stale-page-2',
+                  Name: 'Stale Page 2 Doc',
+                  TypeID: ARTIFACT_TYPES[0].ID,
+                  EnvironmentID: 'env-default',
+                  UserID: TEST_USER.ID,
+                  __mj_UpdatedAt: new Date('2026-11-09T11:00:00Z'),
+                },
+              ],
+              2,
+            ),
+          ];
+        }
+
+        return queries.map((q): RunViewResult => {
+          const filterStr = extraFilterAsString(q.ExtraFilter);
+          if (q.EntityName === 'MJ: Artifacts' && filterStr.includes(`UserID='${TEST_USER.ID}'`)) {
+            if (activeMode === 'initial-two-pages') {
+              return okRunViewResult(
+                [
+                  {
+                    ID: 'art-page-1',
+                    Name: 'Initial Page 1 Doc',
+                    TypeID: ARTIFACT_TYPES[0].ID,
+                    EnvironmentID: 'env-default',
+                    UserID: TEST_USER.ID,
+                    __mj_UpdatedAt: new Date('2026-11-09T14:00:00Z'),
+                  },
+                ],
+                2,
+              );
+            }
+            return okRunViewResult(
+              [
+                {
+                  ID: 'art-fresh-reload',
+                  Name: 'Fresh Reload Doc',
+                  TypeID: ARTIFACT_TYPES[0].ID,
+                  EnvironmentID: 'env-default',
+                  UserID: TEST_USER.ID,
+                  __mj_UpdatedAt: new Date('2026-11-09T16:00:00Z'),
+                },
+              ],
+              1,
+            );
+          }
+
+          if (q.EntityName === 'MJ: Artifact Versions') {
+            const ids = ['art-page-1', 'art-stale-page-2', 'art-fresh-reload'].filter((id) =>
+              filterStr.includes(`'${id}'`),
+            );
+            return okRunViewResult(
+              ids.map((id) => ({
+                ID: `ver-${id}`,
+                ArtifactID: id,
+                VersionNumber: 1,
+                Name: `Doc ${id}`,
+                Description: null,
+                ContentMode: 'Text',
+                MimeType: 'text/markdown',
+                FileName: null,
+                __mj_UpdatedAt: new Date('2026-11-09T16:00:00Z'),
+              })),
+            );
+          }
+
+          return okRunViewResult([], 0);
+        });
+      },
+    );
+
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'ArtifactTypes', 'get').mockReturnValue(ARTIFACT_TYPES);
+
+    const mockProvider: Partial<IMetadataProvider> = { CurrentUser: TEST_USER };
+    Object.assign(component as object, {
+      LoadComplete: { emit: vi.fn() },
+      iconService: { GetArtifactIcon: () => 'fa-solid fa-file-lines' },
+      collectionPermByColId: new Map(),
+      collectionLinksByCollectionAndVersion: new Map(),
+    });
+    Object.defineProperty(component, 'ProviderToUse', {
+      configurable: true,
+      get: () => mockProvider as IMetadataProvider,
+    });
+
+    await component.ReloadWorkspaceData();
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-page-1']);
+    expect(component.HasMoreArtifacts).toBe(true);
+    expect(component.CanLoadMore).toBe(true);
+
+    // Start LoadMoreArtifacts() and pause it mid-flight
+    const inFlightLoadMore = component.LoadMoreArtifacts();
+    await loadMoreStarted.promise;
+    expect(component.IsLoadingMore).toBe(true);
+    expect(component.IsLoadingMoreArtifacts).toBe(true);
+
+    // Trigger a fresh ReloadWorkspaceData(), incrementing reloadGeneration while LoadMoreArtifacts is awaiting
+    activeMode = 'fresh-single-item';
+    await component.ReloadWorkspaceData();
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-fresh-reload']);
+    expect(component.HasMoreArtifacts).toBe(false);
+    expect(component.IsLoadingMore).toBe(false);
+
+    // Release the stale LoadMoreArtifacts response and verify zero state mutation
+    loadMoreGate.resolve();
+    await inFlightLoadMore;
+
+    expect(component.AllItems.map((i) => i.Id)).toEqual(['art-fresh-reload']);
+    expect(component.LoadedArtifactCount).toBe(1);
+    expect(component.TotalArtifactCount).toBe(1);
+    expect(component.HasMoreArtifacts).toBe(false);
+    expect(component.IsLoadingMore).toBe(false);
+    expect(component.IsLoadingMoreArtifacts).toBe(false);
   });
 
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {

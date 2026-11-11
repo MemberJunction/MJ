@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { SpreadsheetEngine } from '@memberjunction/core-entities';
 import { DocumentToolLibrary } from '../artifact-tools/DocumentToolLibrary';
 import { SpreadsheetToolLibrary } from '../artifact-tools/SpreadsheetToolLibrary';
 
@@ -44,7 +45,8 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(safeCells.success).toBe(true);
         expect((safeCells.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['A2']);
         expect(safeGrep.success).toBe(true);
-        expect(safeGrep.data as Array<{ lineNumber: number }>).toHaveLength(1);
+        expect((safeGrep.data as { matches: Array<{ lineNumber: number }>; matchCount: number; partial: boolean }).matches).toHaveLength(1);
+        expect((safeGrep.data as { partial: boolean }).partial).toBe(false);
         expect(safeBlocks.success).toBe(true);
         expect((safeBlocks.data as { matchCount: number }).matchCount).toBe(1);
         expect(safeElapsed).toBeLessThan(20);
@@ -112,7 +114,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(byAddr.get('B3')?.computedValue).toBe(true);
     });
 
-    it('R6-6: plain-text search finds matches in > 64 KB blocks/cells without regex caps, while use_regex=true enforces cumulative 50ms budget and reports unsearchable items + warnings', async () => {
+    it('R6-6: plain-text search finds matches in > 64 KB blocks/cells without regex caps, while use_regex=true enforces cumulative 150ms budget and reports unsearchable items + warnings', async () => {
         // 1. 105 KB block & 105 KB cell containing 'revenue' near the end
         const large105kb = `${'padding text '.repeat(8200)}annual revenue grew 42% YoY`;
         expect(Buffer.byteLength(large105kb, 'utf8')).toBeGreaterThan(105_000);
@@ -204,7 +206,7 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(resBlocksAsData.unsearchableCount).toBeGreaterThan(0);
         expect(resBlocksAsData.unsearchableBlocks.some((u) => u.reason === 'regex_timeout')).toBe(true);
         expect(resBlocksAsData.warnings.length).toBeGreaterThan(0);
-        expect(resBlocksAsData.warnings[0]).toContain('50ms');
+        expect(resBlocksAsData.warnings[0]).toContain('150ms');
 
         const tBlocks2 = performance.now();
         const resBlocksSpaces = await docLib.InvokeTool(
@@ -271,19 +273,31 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(resCellsData.warnings.length).toBeGreaterThan(0);
     });
 
-    it('R7-3: default regex search without use_regex, whole-line node:vm grep across 20x16KB lines, non-silent 105KB grep warnings, and <5KB capped unsearchableCells on 10k cells', async () => {
-        // 1. Regex sent without use_regex matches in both search_blocks and search_cells (including >256-char spans)
+    it('R7-3 & R8-7: opt-in use_regex=true regex search (literal default false), whole-line node:vm grep across 20x16KB lines with stable data shape, non-silent 105KB grep warnings, and <5KB capped unsearchableCells on 10k cells', async () => {
+        // 1. Regex requires use_regex: true; omitted or false treats metacharacters literally (R8-7)
         const quote400 = `"${'q'.repeat(400)}"`;
         const docWithRegexTargets = `# Invoice Log\n\nOrder INV-2026 shipped.\n\nLong quote: ${quote400}`;
-        const defaultBlockRegex = await docLib.InvokeTool('search_blocks', { query: 'INV-\\d{4}' }, docWithRegexTargets);
-        expect(defaultBlockRegex.success).toBe(true);
-        expect((defaultBlockRegex.data as { matchCount: number }).matchCount).toBe(1);
+        const optInBlockRegex = await docLib.InvokeTool(
+            'search_blocks',
+            { query: 'INV-\\d{4}', use_regex: true },
+            docWithRegexTargets
+        );
+        expect(optInBlockRegex.success).toBe(true);
+        expect((optInBlockRegex.data as { matchCount: number }).matchCount).toBe(1);
 
-        const span400BlockRegex = await docLib.InvokeTool('search_blocks', { query: '"[^"]*"' }, docWithRegexTargets);
+        const span400BlockRegex = await docLib.InvokeTool(
+            'search_blocks',
+            { query: '"[^"]*"', use_regex: true },
+            docWithRegexTargets
+        );
         expect(span400BlockRegex.success).toBe(true);
         expect((span400BlockRegex.data as { matchCount: number }).matchCount).toBe(1);
 
-        // Explicit use_regex: false treats metacharacters literally
+        // Omitted use_regex (default false) and explicit use_regex: false both treat metacharacters literally
+        const defaultLiteralBlock = await docLib.InvokeTool('search_blocks', { query: 'INV-\\d{4}' }, docWithRegexTargets);
+        expect(defaultLiteralBlock.success).toBe(true);
+        expect((defaultLiteralBlock.data as { matchCount: number }).matchCount).toBe(0);
+
         const explicitLiteralBlock = await docLib.InvokeTool(
             'search_blocks',
             { query: 'INV-\\d{4}', use_regex: false },
@@ -306,13 +320,25 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(seedRegexSheet.success).toBe(true);
         const regexSheetJson = (seedRegexSheet.data as { updatedContent: string }).updatedContent;
 
-        const defaultCellRegex = await sheetLib.InvokeTool('search_cells', { query: 'INV-\\d{4}' }, regexSheetJson);
-        expect(defaultCellRegex.success).toBe(true);
-        expect((defaultCellRegex.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B2']);
+        const optInCellRegex = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: 'INV-\\d{4}', use_regex: true },
+            regexSheetJson
+        );
+        expect(optInCellRegex.success).toBe(true);
+        expect((optInCellRegex.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['B2']);
 
-        const span400CellRegex = await sheetLib.InvokeTool('search_cells', { query: '"[^"]*"' }, regexSheetJson);
+        const span400CellRegex = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: '"[^"]*"', use_regex: true },
+            regexSheetJson
+        );
         expect(span400CellRegex.success).toBe(true);
         expect((span400CellRegex.data as { matches: Array<{ cell: string }> }).matches.map((m) => m.cell)).toEqual(['C3']);
+
+        const defaultLiteralCell = await sheetLib.InvokeTool('search_cells', { query: 'INV-\\d{4}' }, regexSheetJson);
+        expect(defaultLiteralCell.success).toBe(true);
+        expect((defaultLiteralCell.data as { matches: Array<{ cell: string }> }).matches).toHaveLength(0);
 
         const explicitLiteralCell = await sheetLib.InvokeTool(
             'search_cells',
@@ -322,24 +348,39 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
         expect(explicitLiteralCell.success).toBe(true);
         expect((explicitLiteralCell.data as { matches: Array<{ cell: string }> }).matches).toHaveLength(0);
 
-        // 2. grep on 20 lines of 16 KB with a match on line 19 (0-based index 18) finds the match via whole-line node:vm
+        // 2. grep on 20 lines of 16 KB with a match on line 19 (0-based index 18) finds the match via whole-line node:vm with stable data shape
         const line16kFiller = `${'x'.repeat(16_000)} tail`;
         const line19Match = `${'x'.repeat(15_500)} start${'7'.repeat(400)}end`;
         const twenty16kLines = Array.from({ length: 20 }, (_, idx) => (idx === 18 ? line19Match : line16kFiller)).join('\n');
 
         const grep20Start = performance.now();
-        const grep20Res = await docLib.InvokeTool('grep', { pattern: 'start\\d+end' }, twenty16kLines);
+        const grep20Res = await docLib.InvokeTool('grep', { pattern: 'start\\d+end', use_regex: true }, twenty16kLines);
         const grep20Elapsed = performance.now() - grep20Start;
         expect(grep20Res.success).toBe(true);
-        expect(Array.isArray(grep20Res.data)).toBe(true);
-        const grep20Matches = grep20Res.data as Array<{ lineNumber: number; text: string }>;
-        expect(grep20Matches).toHaveLength(1);
-        expect(grep20Matches[0].lineNumber).toBe(18);
+        const grep20Data = grep20Res.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            warnings: string[];
+        };
+        expect(grep20Data.matchCount).toBe(1);
+        expect(grep20Data.matches).toHaveLength(1);
+        expect(grep20Data.matches[0].lineNumber).toBe(18);
+        expect(grep20Data.partial).toBe(false);
+        expect(grep20Data.timedOut).toBe(false);
+        expect(grep20Data.unsearchableCount).toBe(0);
+        expect(grep20Data.warnings).toEqual([]);
         expect(grep20Elapsed).toBeLessThan(100);
 
         // 3. grep on a 105 KB line with regex reports partial: true, unsearchableCount: 1, warnings (never silent [])
         const line105kb = `${'z'.repeat(106_000)} INV-7777`;
-        const grep105Res = await docLib.InvokeTool('grep', { pattern: 'INV-\\d{4}' }, `Header\n${line105kb}`);
+        const grep105Res = await docLib.InvokeTool(
+            'grep',
+            { pattern: 'INV-\\d{4}', use_regex: true },
+            `Header\n${line105kb}`
+        );
         expect(grep105Res.success).toBe(true);
         const grep105Data = grep105Res.data as {
             matches: Array<{ lineNumber: number; text: string }>;
@@ -388,5 +429,212 @@ describe('SpreadsheetToolLibrary & DocumentToolLibrary (Round 4 — E6, E8, D1)'
 
         const serializedBytes = Buffer.byteLength(JSON.stringify(search10kRes), 'utf8');
         expect(serializedBytes).toBeLessThan(5_000);
+    });
+
+    it('R8-6: batched node:vm regex searches 10,000x300-char cells (match at row 9,000) in <150ms, searches all 400x2KB grep lines with partial=false, and preempts (a|b)+c on 20x16KB in <150ms', async () => {
+        const engine = SpreadsheetEngine.Instance;
+
+        // Warm up JIT on batched regex path so cold-start V8 compile isn't counted
+        const warmWb = engine.CreateEmptyWorkbook('Warm', ['Sheet1'], 2, 2);
+        engine.SetCell(warmWb, 'Sheet1', 'A1', { Value: 'warmup refund approved text' }, true);
+        await sheetLib.InvokeTool(
+            'search_cells',
+            { query: 'refund.*approved', use_regex: true },
+            engine.SerializeWorkbook(warmWb)
+        );
+
+        // 1. 10,000 cells of 300 chars with match at row 9,000 -> finds A9000 with partial: false in < 150 ms
+        const filler300 = `${'customer billing note — account reviewed and verified — '.repeat(5)}status: standard`;
+        expect(filler300.length).toBeGreaterThanOrEqual(290);
+        const match300 = `${'customer billing note — account reviewed and verified — '.repeat(4)}ticket #9000: refund #8821 approved by finance`;
+
+        const wb10k300 = engine.CreateEmptyWorkbook('BatchRegex10k', ['Sheet1'], 10_000, 1);
+        const ws = wb10k300.Worksheets[0];
+        for (let r = 1; r <= 10_000; r++) {
+            const addr = `A${r}`;
+            const val = r === 9_000 ? match300 : filler300;
+            ws.Cells[addr] = {
+                Address: addr,
+                RowID: ws.Rows[r - 1].RowID,
+                ColumnID: ws.Columns[0].ColumnID,
+                RawValue: val,
+                ComputedValue: val,
+                DisplayValue: val
+            };
+        }
+        const wb10k300Json = engine.SerializeWorkbook(wb10k300);
+
+        const tSearchStart = performance.now();
+        const searchRes = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: 'refund.*approved', use_regex: true },
+            wb10k300Json
+        );
+        const searchElapsedMs = performance.now() - tSearchStart;
+
+        expect(searchRes.success).toBe(true);
+        const searchData = searchRes.data as {
+            matches: Array<{ sheet: string; cell: string; value: string }>;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            warnings: string[];
+        };
+        expect(searchData.partial).toBe(false);
+        expect(searchData.timedOut).toBe(false);
+        expect(searchData.unsearchableCount).toBe(0);
+        expect(searchData.matches).toHaveLength(1);
+        expect(searchData.matches[0].cell).toBe('A9000');
+        expect(searchElapsedMs).toBeLessThan(150);
+
+        // 2. grep across 400 lines of 2 KB searches all 400 lines with partial: false, unsearchableCount: 0
+        const line2kb = `${'operational audit log entry — normal transaction event — '.repeat(35)}ok`;
+        expect(line2kb.length).toBeGreaterThanOrEqual(1_950);
+        const match2kb = `${'operational audit log entry — normal transaction event — '.repeat(34)}escalation: refund TX-389 approved`;
+        const doc400x2k = Array.from({ length: 400 }, (_, idx) => (idx === 388 ? match2kb : line2kb)).join('\n');
+
+        const tGrepStart = performance.now();
+        const grepRes = await docLib.InvokeTool(
+            'grep',
+            { pattern: 'refund.*approved', use_regex: true },
+            doc400x2k
+        );
+        const grepElapsedMs = performance.now() - tGrepStart;
+
+        expect(grepRes.success).toBe(true);
+        const grepData = grepRes.data as {
+            matches: Array<{ lineNumber: number; text: string }>;
+            matchCount: number;
+            partial: boolean;
+            timedOut: boolean;
+            unsearchableCount: number;
+            warnings: string[];
+        };
+        expect(grepData.partial).toBe(false);
+        expect(grepData.timedOut).toBe(false);
+        expect(grepData.unsearchableCount).toBe(0);
+        expect(grepData.warnings).toEqual([]);
+        expect(grepData.matchCount).toBe(1);
+        expect(grepData.matches[0].lineNumber).toBe(388);
+        expect(grepElapsedMs).toBeLessThan(150);
+
+        // 3. Adversarial (a|b)+c on 20 x 16 KB 'a' blocks/cells preempts cleanly in < 150 ms with partial: true, timedOut: true
+        const block16kA = 'a'.repeat(16_384);
+        const advCellsWb = engine.CreateEmptyWorkbook('Adv20x16k', ['Sheet1'], 20, 1);
+        for (let r = 1; r <= 20; r++) {
+            engine.SetCell(advCellsWb, 'Sheet1', `A${r}`, { Value: block16kA }, false);
+        }
+        engine.EvaluateWorkbook(advCellsWb);
+        const advCellsJson = engine.SerializeWorkbook(advCellsWb);
+
+        const tAdvCells = performance.now();
+        const advCellsRes = await sheetLib.InvokeTool(
+            'search_cells',
+            { query: '(a|b)+c', use_regex: true },
+            advCellsJson
+        );
+        const advCellsMs = performance.now() - tAdvCells;
+        expect(advCellsRes.success).toBe(true);
+        expect(advCellsMs).toBeLessThan(150);
+        expect((advCellsRes.data as { partial: boolean; timedOut: boolean }).partial).toBe(true);
+        expect((advCellsRes.data as { partial: boolean; timedOut: boolean }).timedOut).toBe(true);
+    });
+
+    it('R8-8: write_cells and clear_range clear stale modern spill (cm) and legacy CSE array (no cm) child cells in memory and across repeated .xlsx patches', async () => {
+        const engine = SpreadsheetEngine.Instance;
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        const buildSeedArrayBuffer = (includeCm: boolean): Buffer => {
+            const baseWb = engine.CreateEmptyWorkbook('ToolArraySeed', ['Sheet1'], 12, 12);
+            engine.SetCell(baseWb, 'Sheet1', 'B2', { Value: 10 }, false);
+            engine.SetCell(baseWb, 'Sheet1', 'B3', { Value: 20 }, false);
+            engine.SetCell(baseWb, 'Sheet1', 'B4', { Value: 30 }, true);
+            const baseZip = engine.ExtractZipArchive(engine.ExportToXlsxBytes(baseWb, false));
+            if (includeCm) {
+                baseZip.set(
+                    'xl/metadata.xml',
+                    encoder.encode(
+                        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                            '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">' +
+                            '<metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>' +
+                            '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>' +
+                            '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+                            '</metadata>'
+                    )
+                );
+            }
+            const origXml = decoder.decode(baseZip.get('xl/worksheets/sheet1.xml')!);
+            const cmToken = includeCm ? ' cm="1"' : '';
+            const formulaBody = includeCm ? '_xlfn.SEQUENCE(3)' : 'B2:B4*2';
+            const injectedXml = origXml.replace(
+                /<\/sheetData>/,
+                () =>
+                    '<row r="1"><c r="K1" t="n"><f>I7</f><v>2</v></c></row>' +
+                    `<row r="6"><c r="I6"${cmToken} t="n"><f t="array" ref="I6:I8">${formulaBody}</f><v>1</v></c></row>` +
+                    '<row r="7"><c r="I7" t="n"><v>2</v></c></row>' +
+                    '<row r="8"><c r="I8" t="n"><v>3</v></c></row>' +
+                    '</sheetData>'
+            );
+            baseZip.set('xl/worksheets/sheet1.xml', encoder.encode(injectedXml));
+            return Buffer.from(
+                engine.BuildZipArchive(
+                    Array.from(baseZip.entries()).map(([Name, Data]) => ({ Name, Data }))
+                )
+            );
+        };
+
+        for (const includeCm of [true, false]) {
+            const seedBuffer = buildSeedArrayBuffer(includeCm);
+
+            // Turn 1: write_cells overwrites anchor I6 -> I7 & I8 cleared in memory (K1=I7 -> 0) and in patched .xlsx
+            const writeTurn1 = await sheetLib.InvokeTool(
+                'write_cells',
+                { sheet: 'Sheet1', cells: [{ address: 'I6', value: 500 }] },
+                seedBuffer
+            );
+            expect(writeTurn1.success).toBe(true);
+            const turn1Data = writeTurn1.data as { updatedContent: string; xlsxBase64: string };
+
+            const readK1 = await sheetLib.InvokeTool('read_range', { sheet: 'Sheet1', range: 'K1' }, turn1Data.updatedContent);
+            expect(readK1.success).toBe(true);
+            expect((readK1.data as { cell: { computedValue: number } }).cell.computedValue).toBe(0);
+
+            const turn1Buf = Buffer.from(turn1Data.xlsxBase64, 'base64');
+
+            // Turn 2: second write_cells on the already-patched .xlsx Buffer -> I7 & I8 STILL do not reappear!
+            const writeTurn2 = await sheetLib.InvokeTool(
+                'write_cells',
+                { sheet: 'Sheet1', cells: [{ address: 'A1', value: 'Second patch' }] },
+                turn1Buf
+            );
+            expect(writeTurn2.success).toBe(true);
+            const turn2Data = writeTurn2.data as { xlsxBase64: string };
+            const turn2SheetXml = decoder.decode(
+                engine.ExtractZipArchive(new Uint8Array(Buffer.from(turn2Data.xlsxBase64, 'base64'))).get('xl/worksheets/sheet1.xml')!
+            );
+            expect(turn2SheetXml).not.toContain('r="I7"');
+            expect(turn2SheetXml).not.toContain('r="I8"');
+
+            // Also verify clear_range on I6 clears I7 & I8 in memory and .xlsx
+            const clearRes = await sheetLib.InvokeTool(
+                'clear_range',
+                { sheet: 'Sheet1', range: 'I6' },
+                seedBuffer
+            );
+            expect(clearRes.success).toBe(true);
+            const clearData = clearRes.data as { updatedContent: string; xlsxBase64: string };
+            const readAfterClear = await sheetLib.InvokeTool(
+                'read_range',
+                { sheet: 'Sheet1', range: 'K1' },
+                clearData.updatedContent
+            );
+            expect((readAfterClear.data as { cell: { computedValue: number } }).cell.computedValue).toBe(0);
+            const clearSheetXml = decoder.decode(
+                engine.ExtractZipArchive(new Uint8Array(Buffer.from(clearData.xlsxBase64, 'base64'))).get('xl/worksheets/sheet1.xml')!
+            );
+            expect(clearSheetXml).not.toContain('r="I7"');
+            expect(clearSheetXml).not.toContain('r="I8"');
+        }
     });
 });

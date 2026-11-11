@@ -904,9 +904,9 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
             provider
         );
 
-        // Participant RunView uses paginated MaxRows: 500, OrderBy: '__mj_CreatedAt ASC', and SkipTotalRowCount: true
+        // Participant RunView uses paginated MaxRows: 500, OrderBy: '__mj_CreatedAt ASC, ID ASC', and SkipTotalRowCount: true
         expect(capturedParticipantParams?.MaxRows).toBe(500);
-        expect(capturedParticipantParams?.OrderBy).toBe('__mj_CreatedAt ASC');
+        expect(capturedParticipantParams?.OrderBy).toBe('__mj_CreatedAt ASC, ID ASC');
         expect(capturedParticipantParams?.Fields).toEqual(['UserID', 'User']);
         expect(capturedParticipantParams?.SkipTotalRowCount).toBe(true);
 
@@ -1391,13 +1391,13 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
             {
                 StartRow: 0,
                 MaxRows: 500,
-                OrderBy: '__mj_CreatedAt ASC',
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
                 Fields: ['UserID', 'User'],
             },
             {
                 StartRow: 500,
                 MaxRows: 500,
-                OrderBy: '__mj_CreatedAt ASC',
+                OrderBy: '__mj_CreatedAt ASC, ID ASC',
                 Fields: ['UserID', 'User'],
             },
         ]);
@@ -1409,5 +1409,153 @@ describe('AgentRunner — Shared conversation artifact vetting & read visibility
         expect(grantedNormIds).toEqual(
             [userA.ID.toLowerCase(), participant250.ID.toLowerCase(), participant505.ID.toLowerCase()].sort()
         );
+    });
+
+    it('logs an error with conversation ID and artifact ID when participant paging hits the 100-page (50,000-row) safety cap (Round 8)', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const cappedArtifactId = 'aaaaaaaa-bbbb-4ccc-8ddd-500005000050';
+        const fullPage = Array.from({ length: 500 }, () => ({ UserID: userB.ID, User: 'User B' }));
+        let pageCalls = 0;
+
+        const provider = asMetadataProvider({
+            RunView: async (params: RunViewParams) => {
+                if (params.EntityName === 'MJ: Artifacts') {
+                    return {
+                        Success: true,
+                        Results: [
+                            {
+                                ID: SOURCE_ARTIFACT_ID,
+                                UserID: userA.ID,
+                                User: 'User A',
+                                DelegateEntityID: null,
+                                DelegateRecordID: null,
+                            },
+                        ],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Conversation Details') {
+                    const filterStr = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
+                    if (filterStr.includes('ConversationID=')) {
+                        pageCalls++;
+                        return {
+                            Success: true,
+                            Results: fullPage,
+                            RowCount: fullPage.length,
+                            TotalRowCount: 50000,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        };
+                    }
+                    return {
+                        Success: true,
+                        Results: [{ ID: CONVERSATION_DETAIL_ID, ConversationID: CONVERSATION_ID }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                if (params.EntityName === 'MJ: Conversations') {
+                    return {
+                        Success: true,
+                        Results: [{ ID: CONVERSATION_ID, UserID: userB.ID, User: 'User B' }],
+                        RowCount: 1,
+                        TotalRowCount: 1,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                    };
+                }
+                return {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: '',
+                    UserViewRunID: '',
+                };
+            },
+            GetEntityObject: async (entityName: string) => {
+                if (entityName === 'MJ: Artifacts') {
+                    const hdr: MockArtifactHeaderDraft = {
+                        ID: cappedArtifactId,
+                        Name: '',
+                        Description: null,
+                        Comments: null,
+                        TypeID: '',
+                        UserID: '',
+                        EnvironmentID: '',
+                        Visibility: 'Always',
+                        LatestResult: null,
+                        NewRecord: () => undefined,
+                        Load: async () => true,
+                        Save: async () => true,
+                    };
+                    return hdr;
+                }
+                if (entityName === 'MJ: Artifact Permissions') {
+                    const perm: MockArtifactPermissionDraft = {
+                        ID: 'perm-cap-1',
+                        ArtifactID: '',
+                        UserID: '',
+                        CanRead: false,
+                        CanEdit: false,
+                        CanDelete: false,
+                        CanShare: false,
+                        SharedByUserID: null,
+                        LatestResult: null,
+                        NewRecord: () => undefined,
+                        Save: async () => true,
+                    };
+                    return perm;
+                }
+                const ver: MockArtifactVersionDraft = {
+                    ID: 'ffffffff-1111-4222-8333-500005000050',
+                    ArtifactID: '',
+                    VersionNumber: 0,
+                    Content: null,
+                    Comments: null,
+                    Name: null,
+                    Description: null,
+                    UserID: '',
+                    LatestResult: null,
+                    NewRecord: () => undefined,
+                    Save: async () => true,
+                };
+                return ver;
+            },
+        });
+
+        vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions').mockImplementation(async (_p, artifactId) => ({
+            ArtifactID: artifactId,
+            CanRead: true,
+            CanEdit: false,
+            CanDelete: false,
+            CanShare: false,
+            Source: 'direct',
+        }));
+
+        const runner = new VettingTestableAgentRunner(provider);
+        await runner.ProcessAgentArtifacts(
+            makeExecuteResult(),
+            CONVERSATION_DETAIL_ID,
+            SOURCE_ARTIFACT_ID,
+            userB,
+            provider
+        );
+
+        expect(pageCalls).toBe(100);
+        const loggedMessages = errorSpy.mock.calls.map((args) => args.map(String).join(' ')).join('\n');
+        expect(loggedMessages).toContain(CONVERSATION_ID);
+        expect(loggedMessages).toContain(cappedArtifactId);
+        expect(loggedMessages).toContain('50000');
     });
 });

@@ -9,50 +9,98 @@ import {
     DocumentBlockMode,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    GetSafeRegexBatchSandboxExecutor,
     GetSafeRegexSandboxExecutor,
     IsSafeUserRegex,
+    RegisterSafeRegexBatchSandboxExecutor,
     RegisterSafeRegexSandboxExecutor,
-    SafeRegexSearchDetailed
+    SafeRegexSearchBatchDetailed
 } from '@memberjunction/core-entities';
 
-const TOOL_REGEX_BUDGET_MS = 50;
-const GREP_REGEX_BUDGET_MS = 75;
-const PER_BLOCK_REGEX_MAX_MS = 15;
-const PER_LINE_REGEX_MAX_MS = 15;
+const TOOL_REGEX_BUDGET_MS = 150;
+const GREP_REGEX_BUDGET_MS = 150;
+const BATCH_REGEX_MAX_MS = 40;
+const MAX_BATCH_ITEMS = 512;
+const MAX_BATCH_CHARS = 262_144;
 const MAX_REGEX_INPUT_BYTES = 65_536;
+const MAX_SAFE_UTF16_UNITS_FOR_64KB = 21_845;
 const MAX_REPORTED_UNSEARCHABLE_BLOCKS = 25;
-const REGEX_METACHAR_PATTERN = /[\\^$.|?*+()[\]{}]/;
 
 const VM_REGEX_STATE: { rx: RegExp; s: string } = { rx: /(?:)/, s: '' };
 const VM_REGEX_CONTEXT = vm.createContext(VM_REGEX_STATE);
 const VM_REGEX_SCRIPT = new vm.Script('rx.test(s)');
 
+const VM_BATCH_REGEX_STATE: { rx: RegExp; items: readonly string[] } = { rx: /(?:)/, items: [] };
+const VM_BATCH_REGEX_CONTEXT = vm.createContext(VM_BATCH_REGEX_STATE);
+const VM_BATCH_REGEX_SCRIPT = new vm.Script(
+    '{ const out = new Array(items.length); for (let i = 0; i < items.length; i++) { rx.lastIndex = 0; out[i] = rx.test(items[i]); } out; }'
+);
+
+function isVmTimeoutError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
+    return errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out');
+}
+
 function ensureNodeVmSafeRegexExecutorRegistered(): void {
-    if (GetSafeRegexSandboxExecutor()) {
-        return;
-    }
-    RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
-        regex.lastIndex = 0;
-        VM_REGEX_STATE.rx = regex;
-        VM_REGEX_STATE.s = input;
-        try {
-            const matched = Boolean(
-                VM_REGEX_SCRIPT.runInContext(VM_REGEX_CONTEXT, {
-                    timeout: Math.max(1, Math.ceil(maxDurationMs))
-                })
-            );
-            return { Matched: matched, TimedOut: false };
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            const errCode = err instanceof Error && 'code' in err && typeof err.code === 'string' ? err.code : '';
-            if (errCode === 'ERR_SCRIPT_EXECUTION_TIMEOUT' || msg.includes('Script execution timed out')) {
-                return { Matched: false, TimedOut: true };
+    if (!GetSafeRegexSandboxExecutor()) {
+        RegisterSafeRegexSandboxExecutor((regex: RegExp, input: string, maxDurationMs: number) => {
+            regex.lastIndex = 0;
+            VM_REGEX_STATE.rx = regex;
+            VM_REGEX_STATE.s = input;
+            try {
+                const matched = Boolean(
+                    VM_REGEX_SCRIPT.runInContext(VM_REGEX_CONTEXT, {
+                        timeout: Math.max(1, Math.ceil(maxDurationMs))
+                    })
+                );
+                return { Matched: matched, TimedOut: false };
+            } catch (err) {
+                if (isVmTimeoutError(err)) {
+                    return { Matched: false, TimedOut: true };
+                }
+                throw err;
+            } finally {
+                VM_REGEX_STATE.s = '';
             }
-            throw err;
-        } finally {
-            VM_REGEX_STATE.s = '';
-        }
-    });
+        });
+    }
+
+    if (!GetSafeRegexBatchSandboxExecutor()) {
+        RegisterSafeRegexBatchSandboxExecutor(
+            (regex: RegExp, inputs: readonly string[], maxDurationMs: number) => {
+                regex.lastIndex = 0;
+                VM_BATCH_REGEX_STATE.rx = regex;
+                VM_BATCH_REGEX_STATE.items = inputs;
+                try {
+                    const rawOut = VM_BATCH_REGEX_SCRIPT.runInContext(VM_BATCH_REGEX_CONTEXT, {
+                        timeout: Math.max(1, Math.ceil(maxDurationMs))
+                    });
+                    const matches = Array.isArray(rawOut)
+                        ? rawOut.map(Boolean)
+                        : new Array<boolean>(inputs.length).fill(false);
+                    return { Matches: matches, TimedOut: false };
+                } catch (err) {
+                    if (isVmTimeoutError(err)) {
+                        return {
+                            Matches: new Array<boolean>(inputs.length).fill(false),
+                            TimedOut: true
+                        };
+                    }
+                    throw err;
+                } finally {
+                    VM_BATCH_REGEX_STATE.items = [];
+                }
+            }
+        );
+    }
+}
+
+function exceedsRegexInputBytes(text: string): boolean {
+    if (text.length <= MAX_SAFE_UTF16_UNITS_FOR_64KB) {
+        return false;
+    }
+    return Buffer.byteLength(text, 'utf8') > MAX_REGEX_INPUT_BYTES;
 }
 
 ensureNodeVmSafeRegexExecutorRegistered();
@@ -166,19 +214,22 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'search_blocks',
                 description:
-                    'Searches logical blocks in the document by regular expression (default, with fast plain-text path when query has no regex metacharacters) or literal substring (when use_regex is false).',
+                    'Searches logical blocks in the document by case-insensitive literal substring (default false for use_regex) or by regular expression when use_regex is true.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        query: { type: 'string', description: 'Case-insensitive regex pattern or plain-text substring to find.' },
+                        query: {
+                            type: 'string',
+                            description: 'Plain-text literal substring (default) or case-insensitive regex pattern (when use_regex is true) to find.'
+                        },
                         use_regex: {
                             type: 'boolean',
                             description:
-                                'Optional (default true): evaluate query as a regular expression; set false for literal substring matching with no 64 KB cap.'
+                                'Optional (default false): set true to evaluate query as a regular expression; defaults to false for literal substring matching with no 64 KB cap.'
                         },
                         useRegex: {
                             type: 'boolean',
-                            description: 'Alias for use_regex (default true).'
+                            description: 'Alias for use_regex (default false).'
                         }
                     },
                     required: ['query']
@@ -186,19 +237,33 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             },
             {
                 name: 'grep',
-                description: 'Search for regex or literal matches in the text. Returns matching lines with line numbers.',
+                description:
+                    'Search lines in the document by case-insensitive literal substring (default false for use_regex) or by regular expression when use_regex is true. Returns a stable result object with matching lines and line numbers.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        pattern: { type: 'string', description: 'Regex pattern (or literal text when use_regex/useRegex is false) to search for.' },
-                        flags: { type: 'string', description: 'Optional regex flags (e.g., "i" for case-insensitive).' },
+                        pattern: {
+                            type: 'string',
+                            description: 'Literal text substring (default) or regex pattern (when use_regex/useRegex is true) to search for.'
+                        },
+                        flags: { type: 'string', description: 'Optional regex flags when use_regex is true (e.g., "i" for case-insensitive).' },
+                        case_sensitive: {
+                            type: 'boolean',
+                            description: 'Optional (default false): set true for case-sensitive matching.'
+                        },
+                        caseSensitive: {
+                            type: 'boolean',
+                            description: 'Alias for case_sensitive (default false).'
+                        },
                         use_regex: {
                             type: 'boolean',
-                            description: 'Optional: set false to match pattern as a literal substring instead of a regular expression.'
+                            description:
+                                'Optional (default false): set true to evaluate pattern as a regular expression instead of a literal substring.'
                         },
                         useRegex: {
                             type: 'boolean',
-                            description: 'Optional: set false to match pattern as a literal substring instead of a regular expression.'
+                            description:
+                                'Alias for use_regex (default false): set true to evaluate pattern as a regular expression instead of a literal substring.'
                         }
                     },
                     required: ['pattern']
@@ -716,12 +781,10 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         if (!query) {
             return { success: false, data: null, errorMessage: 'search_blocks requires a non-empty query.' };
         }
-        const explicitLiteral = input.use_regex === false || input.useRegex === false;
         const explicitRegex = input.use_regex === true || input.useRegex === true;
-        const hasRegexMeta = REGEX_METACHAR_PATTERN.test(query);
         const blocks = this.ParseLogicalBlocks(content);
 
-        const runLiteralSearch = (): ArtifactToolResult => {
+        if (!explicitRegex) {
             const needle = query.toLowerCase();
             const literalMatches = blocks.filter((b) => b.rawMarkdown.toLowerCase().includes(needle));
             return {
@@ -730,15 +793,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     revisionHash: this.ComputeRevisionHash(content),
                     matchCount: literalMatches.length,
                     matches: literalMatches,
+                    partial: false,
+                    timedOut: false,
                     unsearchableCount: 0,
                     unsearchableBlocks: [],
                     warnings: []
                 }
             };
-        };
-
-        if (explicitLiteral || (!explicitRegex && !hasRegexMeta)) {
-            return runLiteralSearch();
         }
 
         if (query.length > 256) {
@@ -752,9 +813,6 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         try {
             new RegExp(query, 'i');
         } catch (err) {
-            if (!explicitRegex) {
-                return runLiteralSearch();
-            }
             return {
                 success: false,
                 data: null,
@@ -797,31 +855,76 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             }
         };
 
-        for (const block of blocks) {
+        let pendingBlocks: ParsedMarkdownLogicalBlock[] = [];
+        let pendingTexts: string[] = [];
+        let pendingChars = 0;
+
+        const flushBlockBatch = (): void => {
+            if (pendingBlocks.length === 0) return;
             if (budgetExpired) {
-                recordUnsearchableBlock(block, 'regex_timeout');
-                continue;
+                for (const b of pendingBlocks) {
+                    recordUnsearchableBlock(b, 'regex_timeout');
+                }
+                pendingBlocks = [];
+                pendingTexts = [];
+                pendingChars = 0;
+                return;
             }
             const remainingMs = regexDeadline - performance.now();
             if (remainingMs <= 0) {
                 budgetExpired = true;
+                for (const b of pendingBlocks) {
+                    recordUnsearchableBlock(b, 'regex_timeout');
+                }
+                pendingBlocks = [];
+                pendingTexts = [];
+                pendingChars = 0;
+                return;
+            }
+
+            const batchRes = SafeRegexSearchBatchDetailed(
+                activeRegex,
+                pendingTexts,
+                Math.min(BATCH_REGEX_MAX_MS, remainingMs),
+                MAX_REGEX_INPUT_BYTES
+            );
+            if (batchRes.TimedOut) {
+                budgetExpired = true;
+                for (const b of pendingBlocks) {
+                    recordUnsearchableBlock(b, 'regex_timeout');
+                }
+            } else {
+                for (let k = 0; k < pendingBlocks.length; k++) {
+                    if (batchRes.Matches[k]) {
+                        matches.push(pendingBlocks[k]);
+                    } else if (batchRes.InputTooLong[k]) {
+                        recordUnsearchableBlock(pendingBlocks[k], 'exceeds_64kb_regex_limit');
+                    }
+                }
+            }
+            pendingBlocks = [];
+            pendingTexts = [];
+            pendingChars = 0;
+        };
+
+        for (const block of blocks) {
+            if (exceedsRegexInputBytes(block.rawMarkdown)) {
+                flushBlockBatch();
+                recordUnsearchableBlock(block, 'exceeds_64kb_regex_limit');
+                continue;
+            }
+            if (budgetExpired) {
                 recordUnsearchableBlock(block, 'regex_timeout');
                 continue;
             }
-            const res = SafeRegexSearchDetailed(
-                activeRegex,
-                block.rawMarkdown,
-                Math.min(PER_BLOCK_REGEX_MAX_MS, remainingMs),
-                MAX_REGEX_INPUT_BYTES
-            );
-            if (res.Matched) {
-                matches.push(block);
-            } else if (res.InputTooLong) {
-                recordUnsearchableBlock(block, 'exceeds_64kb_regex_limit');
-            } else if (res.TimedOut) {
-                recordUnsearchableBlock(block, 'regex_timeout');
+            pendingBlocks.push(block);
+            pendingTexts.push(block.rawMarkdown);
+            pendingChars += block.rawMarkdown.length;
+            if (pendingBlocks.length >= MAX_BATCH_ITEMS || pendingChars >= MAX_BATCH_CHARS) {
+                flushBlockBatch();
             }
         }
+        flushBlockBatch();
 
         const unsearchableCount = tooLongCount + timeoutCount;
         const warnings: string[] = [];
@@ -847,7 +950,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 revisionHash: this.ComputeRevisionHash(content),
                 matchCount: matches.length,
                 matches,
-                ...(unsearchableCount > 0 ? { partial: true, timedOut: timeoutCount > 0 } : {}),
+                partial: unsearchableCount > 0,
+                timedOut: timeoutCount > 0,
                 unsearchableCount,
                 unsearchableBlocks,
                 warnings
@@ -863,21 +967,31 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         }
         const flags = input.flags != null ? String(input.flags) : undefined;
         const lines = content.split('\n');
-        const explicitLiteral = input.useRegex === false || input.use_regex === false;
         const explicitRegex = input.useRegex === true || input.use_regex === true;
-        const hasRegexMeta = REGEX_METACHAR_PATTERN.test(patternStr);
+        const explicitCaseSensitive = input.case_sensitive === true || input.caseSensitive === true;
+        const explicitCaseInsensitive = input.case_sensitive === false || input.caseSensitive === false;
 
-        if (explicitLiteral || (!explicitRegex && !hasRegexMeta)) {
-            const caseInsensitive = Boolean(flags?.includes('i'));
-            const needle = caseInsensitive ? patternStr.toLowerCase() : patternStr;
+        if (!explicitRegex) {
+            const caseSensitive = explicitCaseSensitive;
+            const needle = caseSensitive ? patternStr : patternStr.toLowerCase();
             const matches: Array<{ lineNumber: number; text: string }> = [];
             for (let i = 0; i < lines.length; i++) {
-                const hay = caseInsensitive ? lines[i].toLowerCase() : lines[i];
+                const hay = caseSensitive ? lines[i] : lines[i].toLowerCase();
                 if (hay.includes(needle)) {
                     matches.push({ lineNumber: i, text: lines[i] });
                 }
             }
-            return { success: true, data: matches };
+            return {
+                success: true,
+                data: {
+                    matches,
+                    matchCount: matches.length,
+                    partial: false,
+                    timedOut: false,
+                    unsearchableCount: 0,
+                    warnings: []
+                }
+            };
         }
 
         if (patternStr.length > 256) {
@@ -888,32 +1002,26 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             };
         }
 
-        const cleanFlags = flags ? flags.replace(/[gy]/g, () => '') : undefined;
+        let cleanFlags = flags ? flags.replace(/[gy]/g, () => '') : '';
+        if (explicitCaseSensitive) {
+            cleanFlags = cleanFlags.replace(/i/g, () => '');
+        } else if (explicitCaseInsensitive && !cleanFlags.includes('i')) {
+            cleanFlags += 'i';
+        }
+        const effectiveFlags = cleanFlags.length > 0 ? cleanFlags : undefined;
+
         try {
-            new RegExp(patternStr, cleanFlags);
+            new RegExp(patternStr, effectiveFlags);
         } catch (err) {
-            if (explicitRegex) {
-                return {
-                    success: false,
-                    data: null,
-                    errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
-                };
-            }
-            // Literal fallback for plain strings like "C++" when useRegex was not explicitly true
-            const caseInsensitive = Boolean(flags?.includes('i'));
-            const needle = caseInsensitive ? patternStr.toLowerCase() : patternStr;
-            const matches: Array<{ lineNumber: number; text: string }> = [];
-            for (let i = 0; i < lines.length; i++) {
-                const hay = caseInsensitive ? lines[i].toLowerCase() : lines[i];
-                if (hay.includes(needle)) {
-                    matches.push({ lineNumber: i, text: lines[i] });
-                }
-            }
-            return { success: true, data: matches };
+            return {
+                success: false,
+                data: null,
+                errorMessage: `Invalid regular expression: ${err instanceof Error ? err.message : String(err)}`
+            };
         }
 
-        const safeRegex = CompileSafeUserRegex(patternStr, cleanFlags);
-        if (!safeRegex || !IsSafeUserRegex(patternStr, cleanFlags)) {
+        const safeRegex = CompileSafeUserRegex(patternStr, effectiveFlags);
+        if (!safeRegex || !IsSafeUserRegex(patternStr, effectiveFlags)) {
             return {
                 success: false,
                 data: null,
@@ -925,33 +1033,77 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         let tooLongCount = 0;
         let timeoutCount = 0;
         let budgetSkippedCount = 0;
+        let budgetExpired = false;
         const regexDeadline = performance.now() + GREP_REGEX_BUDGET_MS;
-        for (let i = 0; i < lines.length; i++) {
+
+        let pendingLineNums: number[] = [];
+        let pendingTexts: string[] = [];
+        let pendingChars = 0;
+
+        const flushLineBatch = (): void => {
+            if (pendingLineNums.length === 0) return;
+            if (budgetExpired) {
+                budgetSkippedCount += pendingLineNums.length;
+                pendingLineNums = [];
+                pendingTexts = [];
+                pendingChars = 0;
+                return;
+            }
             const remainingMs = regexDeadline - performance.now();
             if (remainingMs <= 0) {
-                budgetSkippedCount += lines.length - i;
-                break;
+                budgetExpired = true;
+                budgetSkippedCount += pendingLineNums.length;
+                pendingLineNums = [];
+                pendingTexts = [];
+                pendingChars = 0;
+                return;
             }
-            const res = SafeRegexSearchDetailed(
+            const batchRes = SafeRegexSearchBatchDetailed(
                 safeRegex,
-                lines[i],
-                Math.min(PER_LINE_REGEX_MAX_MS, remainingMs),
+                pendingTexts,
+                Math.min(BATCH_REGEX_MAX_MS, remainingMs),
                 MAX_REGEX_INPUT_BYTES
             );
-            if (res.Matched) {
-                matches.push({ lineNumber: i, text: lines[i] });
-            } else if (res.InputTooLong) {
+            if (batchRes.TimedOut) {
+                budgetExpired = true;
+                timeoutCount += pendingLineNums.length;
+            } else {
+                for (let k = 0; k < pendingLineNums.length; k++) {
+                    if (batchRes.Matches[k]) {
+                        matches.push({ lineNumber: pendingLineNums[k], text: pendingTexts[k] });
+                    } else if (batchRes.InputTooLong[k]) {
+                        tooLongCount++;
+                    }
+                }
+            }
+            pendingLineNums = [];
+            pendingTexts = [];
+            pendingChars = 0;
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (exceedsRegexInputBytes(line)) {
+                flushLineBatch();
                 tooLongCount++;
-            } else if (res.TimedOut) {
-                timeoutCount++;
+                continue;
+            }
+            if (budgetExpired) {
+                budgetSkippedCount++;
+                continue;
+            }
+            pendingLineNums.push(i);
+            pendingTexts.push(line);
+            pendingChars += line.length;
+            if (pendingLineNums.length >= MAX_BATCH_ITEMS || pendingChars >= MAX_BATCH_CHARS) {
+                flushLineBatch();
             }
         }
+        flushLineBatch();
 
         const unsearchableCount = tooLongCount + timeoutCount + budgetSkippedCount;
         const timedOut = timeoutCount > 0 || budgetSkippedCount > 0;
-        if (unsearchableCount === 0 && !timedOut) {
-            return { success: true, data: matches };
-        }
+        const partial = unsearchableCount > 0 || timedOut;
 
         const warnings: string[] = [];
         if (tooLongCount > 0) {
@@ -970,7 +1122,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             data: {
                 matches,
                 matchCount: matches.length,
-                partial: true,
+                partial,
                 timedOut,
                 unsearchableCount,
                 warnings

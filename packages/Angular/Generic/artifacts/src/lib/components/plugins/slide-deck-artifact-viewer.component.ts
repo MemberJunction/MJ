@@ -45,8 +45,10 @@ import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
   ExtractAnchoredCommentMentions,
+  MERGE_CONFLICT_WARNING_MESSAGE,
   type CollaboratorPresence,
   type CollaborationConnectionStatus,
+  type CollaborationMergeConflictEvent,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
   type VerifiedArtifactPermissions,
@@ -231,27 +233,25 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
 
         <!-- Right-side Collaboration, Export & Comments Controls -->
         <div class="mj-slides-toolbar-group">
-          <span
+          <div
             class="mj-slides-collab-pill"
             [attr.data-status]="ConnectionStatus"
             data-testid="slides-collab-status"
           >
             <span class="mj-slides-status-dot"></span>
-            @switch (ConnectionStatus) {
-              @case ('connected') {
-                <span>Live Sync</span>
-              }
-              @case ('readonly') {
-                <span>Read-Only</span>
-              }
-              @case ('revoked') {
-                <span>Access Revoked</span>
-              }
-              @default {
-                <span>Saved Locally</span>
-              }
+            <span>{{ GetCollaborationStatusLabel() }}</span>
+            @if (ConnectionStatus === 'error') {
+              <button
+                type="button"
+                class="mj-slides-collab-retry-btn"
+                aria-label="Retry live collaboration sync"
+                data-testid="slides-collab-retry-btn"
+                (click)="RetryLiveCollaboration()"
+              >
+                Retry
+              </button>
             }
-          </span>
+          </div>
 
           <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
             @for (peer of Collaborators; track peer.ClientID) {
@@ -1312,6 +1312,29 @@ export type SlideRightDrawerTab = 'none' | 'theme' | 'comments';
       }
       .mj-slides-collab-pill[data-status='revoked'] .mj-slides-status-dot {
         background: var(--mj-status-error);
+      }
+      .mj-slides-collab-pill[data-status='error'] {
+        background: var(--mj-status-error-bg);
+        border-color: var(--mj-status-error-border);
+        color: var(--mj-status-error-text);
+      }
+      .mj-slides-collab-pill[data-status='error'] .mj-slides-status-dot {
+        background: var(--mj-status-error);
+      }
+      .mj-slides-collab-retry-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--mj-status-error-border);
+        background: var(--mj-bg-surface);
+        color: var(--mj-status-error-text);
+      }
+      .mj-slides-collab-retry-btn:hover {
+        background: var(--mj-bg-surface-hover);
       }
       .mj-slides-collaborators {
         display: inline-flex;
@@ -3263,6 +3286,48 @@ export class SlideDeckArtifactViewerComponent
       .join('');
   }
 
+  public GetCollaborationStatusLabel(): string {
+    switch (this.ConnectionStatus) {
+      case 'connected':
+        return 'Live Sync';
+      case 'connecting':
+        return 'Connecting…';
+      case 'readonly':
+        return 'Read-Only';
+      case 'revoked':
+        return 'Access Revoked';
+      case 'error':
+        return 'Live sync disconnected';
+      case 'disconnected':
+        return 'Disconnected';
+      default:
+        return 'Saved Locally';
+    }
+  }
+
+  public RetryLiveCollaboration(): void {
+    const artifactId =
+      this.session?.ArtifactID ||
+      this.artifactVersion?.ArtifactID ||
+      this.artifactVersion?.ID ||
+      'slide-deck-default';
+    void this.collabService.Retry(artifactId);
+  }
+
+  private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
+    this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
+    if (typeof this.collabService.NotifyMergeConflictToastOnce === 'function') {
+      this.collabService.NotifyMergeConflictToastOnce(event, this.notificationService);
+    } else {
+      this.notificationService?.CreateSimpleNotification?.(
+        MERGE_CONFLICT_WARNING_MESSAGE,
+        'warning',
+        5000,
+      );
+    }
+    this.cdr.markForCheck();
+  }
+
   private formatInlineBoldAndCode(text: string): string {
     const escaped = EscapeHtml(text);
     return escaped
@@ -3442,6 +3507,17 @@ export class SlideDeckArtifactViewerComponent
         this.cdr.markForCheck();
       }),
     );
+
+    if (this.session.MergeConflict$) {
+      this.subs.push(
+        this.session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+          if (this.isComponentDestroyed) {
+            return;
+          }
+          this.handleCollaborationMergeConflict(conflictEvt);
+        }),
+      );
+    }
 
     if (hasRemoteBackend) {
       void this.session.Connect(this.CollaborationWsUrl, provider);

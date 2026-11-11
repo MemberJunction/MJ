@@ -1346,7 +1346,7 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
 
     /**
      * Validates an `EntityView` `ExtraFilter` predicate against SQL injection, disallowed SQL globals/functions
-     * (on either side of an operator), and optional entity/FLS field allowlists.
+     * (on either side of an operator), reserved niladic SQL keywords (`R8-5`), and optional entity/FLS field allowlists.
      */
     public ValidateExtraFilter(
         extraFilter: string,
@@ -1354,6 +1354,18 @@ export class DocumentLiveBlockEngine extends BaseSingleton<DocumentLiveBlockEngi
         deniedFields: ReadonlySet<string> = new Set<string>()
     ): { Valid: boolean; ErrorMessage?: string } {
         return validateEntityViewExtraFilter(extraFilter, entityInfo, deniedFields);
+    }
+
+    /**
+     * Validates an `EntityView` `OrderBy` clause against SQL injection, reserved unbracketed niladic SQL keywords
+     * (`USER`, `CURRENT_USER`, `SESSION_USER`, `SYSTEM_USER`), and entity/FLS field allowlists (`R8-5`).
+     */
+    public ValidateOrderBy(
+        orderBy: string,
+        entityInfo: EntityInfo,
+        deniedFields: ReadonlySet<string> = new Set<string>()
+    ): { Valid: boolean; ErrorMessage?: string } {
+        return validateEntityViewOrderBy(orderBy, entityInfo, deniedFields);
     }
 }
 
@@ -1476,34 +1488,34 @@ export function ComputeFrozenSnapshotHash(
 
 const MIN_FROZEN_SNAPSHOT_SECRET_BYTES = 32;
 
-function utf8EncodeBytes(str: string): Uint8Array {
-    if (typeof TextEncoder !== 'undefined') {
-        return new TextEncoder().encode(str);
-    }
-    if (typeof Buffer !== 'undefined') {
-        return new Uint8Array(Buffer.from(str, 'utf8'));
-    }
+/**
+ * Pure-ECMAScript WHATWG-compliant UTF-8 encoder fallback for bare VMs without `TextEncoder` or `Buffer`.
+ * Replaces any lone high or low UTF-16 surrogate with `0xEF 0xBF 0xBD` (`U+FFFD`).
+ */
+export function EncodeDocumentUtf8Fallback(str: string): Uint8Array {
     const out: number[] = [];
     for (let i = 0; i < str.length; i++) {
-        let code = str.charCodeAt(i);
+        const code = str.charCodeAt(i);
         if (code < 0x80) {
             out.push(code);
         } else if (code < 0x800) {
             out.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-        } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < str.length) {
-            const next = str.charCodeAt(i + 1);
-            if (next >= 0xdc00 && next <= 0xdfff) {
-                code = 0x10000 + (((code & 0x3ff) << 10) | (next & 0x3ff));
-                out.push(
-                    0xf0 | (code >> 18),
-                    0x80 | ((code >> 12) & 0x3f),
-                    0x80 | ((code >> 6) & 0x3f),
-                    0x80 | (code & 0x3f)
-                );
-                i++;
-            } else {
-                out.push(0xef, 0xbf, 0xbd);
+        } else if (code >= 0xd800 && code <= 0xdbff) {
+            if (i + 1 < str.length) {
+                const next = str.charCodeAt(i + 1);
+                if (next >= 0xdc00 && next <= 0xdfff) {
+                    const cp = 0x10000 + (((code & 0x3ff) << 10) | (next & 0x3ff));
+                    out.push(
+                        0xf0 | (cp >> 18),
+                        0x80 | ((cp >> 12) & 0x3f),
+                        0x80 | ((cp >> 6) & 0x3f),
+                        0x80 | (cp & 0x3f)
+                    );
+                    i++;
+                    continue;
+                }
             }
+            out.push(0xef, 0xbf, 0xbd);
         } else if (code >= 0xdc00 && code <= 0xdfff) {
             out.push(0xef, 0xbf, 0xbd);
         } else {
@@ -1511,6 +1523,85 @@ function utf8EncodeBytes(str: string): Uint8Array {
         }
     }
     return new Uint8Array(out);
+}
+
+/**
+ * Pure-ECMAScript WHATWG §8.1.1 UTF-8 decoder fallback (`fatal: false`) for bare VMs without `TextDecoder` or `Buffer`.
+ * Validates continuation bytes, rejects overlongs, UTF-16 surrogates, and `> U+10FFFF`, emitting `\uFFFD` per
+ * invalid maximal subpart without consuming valid follow bytes.
+ */
+export function DecodeDocumentUtf8Fallback(bytes: Uint8Array): string {
+    const chunks: string[] = [];
+    let chunk = '';
+    let codePoint = 0;
+    let bytesSeen = 0;
+    let bytesNeeded = 0;
+    let lowerBoundary = 0x80;
+    let upperBoundary = 0xbf;
+
+    for (let i = 0; i < bytes.length; i++) {
+        const byte = bytes[i];
+        if (bytesNeeded === 0) {
+            if (byte <= 0x7f) {
+                chunk += String.fromCharCode(byte);
+            } else if (byte >= 0xc2 && byte <= 0xdf) {
+                bytesNeeded = 1;
+                codePoint = byte & 0x1f;
+            } else if (byte >= 0xe0 && byte <= 0xef) {
+                if (byte === 0xe0) lowerBoundary = 0xa0;
+                else if (byte === 0xed) upperBoundary = 0x9f;
+                bytesNeeded = 2;
+                codePoint = byte & 0x0f;
+            } else if (byte >= 0xf0 && byte <= 0xf4) {
+                if (byte === 0xf0) lowerBoundary = 0x90;
+                else if (byte === 0xf4) upperBoundary = 0x8f;
+                bytesNeeded = 3;
+                codePoint = byte & 0x07;
+            } else {
+                chunk += '\ufffd';
+            }
+        } else if (byte < lowerBoundary || byte > upperBoundary) {
+            codePoint = 0;
+            bytesNeeded = 0;
+            bytesSeen = 0;
+            lowerBoundary = 0x80;
+            upperBoundary = 0xbf;
+            chunk += '\ufffd';
+            i--;
+        } else {
+            lowerBoundary = 0x80;
+            upperBoundary = 0xbf;
+            codePoint = (codePoint << 6) | (byte & 0x3f);
+            bytesSeen++;
+            if (bytesSeen === bytesNeeded) {
+                chunk += codePoint <= 0xffff ? String.fromCharCode(codePoint) : String.fromCodePoint(codePoint);
+                codePoint = 0;
+                bytesNeeded = 0;
+                bytesSeen = 0;
+            }
+        }
+        if (chunk.length >= 8192) {
+            chunks.push(chunk);
+            chunk = '';
+        }
+    }
+    if (bytesNeeded !== 0) {
+        chunk += '\ufffd';
+    }
+    if (chunk.length > 0) {
+        chunks.push(chunk);
+    }
+    return chunks.join('');
+}
+
+function utf8EncodeBytes(str: string): Uint8Array {
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(str);
+    }
+    if (typeof Buffer !== 'undefined') {
+        return new Uint8Array(Buffer.from(str, 'utf8'));
+    }
+    return EncodeDocumentUtf8Fallback(str);
 }
 
 function resolveFrozenSnapshotSigningSecret(explicitSecret?: string): string | null {
@@ -1690,6 +1781,13 @@ function clampBlockMaxRows(rawMaxRows?: number): number {
     return Math.min(500, Math.max(1, Math.floor(rawMaxRows)));
 }
 
+const NILADIC_SQL_PRINCIPAL_KEYWORDS: ReadonlySet<string> = new Set([
+    'user',
+    'current_user',
+    'session_user',
+    'system_user'
+]);
+
 function validateEntityViewOrderBy(
     orderBy: string,
     entityInfo: EntityInfo,
@@ -1706,8 +1804,15 @@ function validateEntityViewOrderBy(
         if (!match) {
             return { Valid: false, ErrorMessage: `Invalid OrderBy clause '${clause}'.` };
         }
-        const rawField = match[1] ? match[1].replace(/\]\]/g, () => ']') : match[2];
+        const isBracketed = match[1] !== undefined;
+        const rawField = isBracketed ? match[1].replace(/\]\]/g, () => ']') : match[2];
         const fieldName = rawField.trim().toLowerCase();
+        if (!isBracketed && NILADIC_SQL_PRINCIPAL_KEYWORDS.has(fieldName)) {
+            return {
+                Valid: false,
+                ErrorMessage: `Reserved SQL niladic keyword '${rawField}' must be bracketed (e.g. '[${rawField}]') in OrderBy.`
+            };
+        }
         if (!allowedFieldNames.has(fieldName) || deniedFields.has(fieldName)) {
             return {
                 Valid: false,
@@ -1861,7 +1966,6 @@ function validateEntityViewExtraFilter(
         'true',
         'false'
     ]);
-    const niladicSqlKeywords = new Set(['system_user', 'current_user', 'session_user', 'user']);
     const allowedFieldNames = entityInfo
         ? new Set(entityInfo.Fields.map((f) => f.Name.trim().toLowerCase()))
         : null;
@@ -1895,13 +1999,17 @@ function validateEntityViewExtraFilter(
         const token = rawIdent.trim().toLowerCase();
         if (!isBracketed && token === '__str__') continue;
         if (!isBracketed && allowedSqlPredicateKeywords.has(token)) continue;
-        if (!isBracketed && niladicSqlKeywords.has(token)) {
-            if (!allowedFieldNames || !allowedFieldNames.has(token)) {
-                return {
-                    Valid: false,
-                    ErrorMessage: 'Disallowed SQL system globals and functions (e.g. SYSTEM_USER) are not permitted in ExtraFilter.'
-                };
-            }
+        if (!isBracketed && NILADIC_SQL_PRINCIPAL_KEYWORDS.has(token)) {
+            return {
+                Valid: false,
+                ErrorMessage: `Disallowed unbracketed SQL niladic keyword '${rawIdent}' in ExtraFilter; bracket entity columns as '[${rawIdent}]'.`
+            };
+        }
+        if (isBracketed && NILADIC_SQL_PRINCIPAL_KEYWORDS.has(token) && (!allowedFieldNames || !allowedFieldNames.has(token))) {
+            return {
+                Valid: false,
+                ErrorMessage: `Bracketed niladic keyword '[${rawIdent}]' is only permitted when '${rawIdent}' exists on ${entityInfo?.Name ?? 'entity'}.`
+            };
         }
         if (!isBracketed && !allowedFieldNames && standaloneDisallowedBuiltinTokens.has(token)) {
             return {

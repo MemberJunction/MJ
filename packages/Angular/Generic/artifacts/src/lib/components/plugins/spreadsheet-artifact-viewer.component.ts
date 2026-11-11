@@ -50,8 +50,10 @@ import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
   ExtractAnchoredCommentMentions,
+  MERGE_CONFLICT_WARNING_MESSAGE,
   type CollaboratorPresence,
   type CollaborationConnectionStatus,
+  type CollaborationMergeConflictEvent,
   type DocumentAnchoredThread,
   type DocumentDiffResult,
   type VerifiedArtifactPermissions,
@@ -362,27 +364,25 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             <span>Comments ({{ OpenThreadCount }})</span>
           </button>
 
-          <span
+          <div
             class="mj-sheets-collab-badge"
             [attr.data-status]="ConnectionStatus"
             data-testid="sheets-collab-status"
           >
             <span class="mj-sheets-collab-dot"></span>
-            @switch (ConnectionStatus) {
-              @case ('connected') {
-                <span>Live Sync</span>
-              }
-              @case ('readonly') {
-                <span>Read-Only</span>
-              }
-              @case ('revoked') {
-                <span>Access Revoked</span>
-              }
-              @default {
-                <span>Saved Locally</span>
-              }
+            <span>{{ GetCollaborationStatusLabel() }}</span>
+            @if (ConnectionStatus === 'error') {
+              <button
+                type="button"
+                class="mj-sheets-collab-retry-btn"
+                aria-label="Retry live collaboration sync"
+                data-testid="sheets-collab-retry-btn"
+                (click)="RetryLiveCollaboration()"
+              >
+                Retry
+              </button>
             }
-          </span>
+          </div>
 
           @if (Collaborators.length > 0) {
             <div class="mj-sheets-presence-strip" data-testid="sheets-presence-strip">
@@ -1377,6 +1377,33 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 
       .mj-sheets-collab-badge[data-status='revoked'] .mj-sheets-collab-dot {
         background: var(--mj-status-error);
+      }
+
+      .mj-sheets-collab-badge[data-status='error'] {
+        background: var(--mj-status-error-bg);
+        border-color: var(--mj-status-error-border);
+        color: var(--mj-status-error-text);
+      }
+
+      .mj-sheets-collab-badge[data-status='error'] .mj-sheets-collab-dot {
+        background: var(--mj-status-error);
+      }
+
+      .mj-sheets-collab-retry-btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        border: 1px solid var(--mj-status-error-border);
+        background: var(--mj-bg-surface);
+        color: var(--mj-status-error-text);
+      }
+
+      .mj-sheets-collab-retry-btn:hover {
+        background: var(--mj-bg-surface-hover);
       }
 
       .mj-sheets-presence-strip {
@@ -2665,6 +2692,15 @@ export class SpreadsheetArtifactViewerComponent
         this.cdr.markForCheck();
       }),
     );
+
+    if (session.MergeConflict$) {
+      this.subs.push(
+        session.MergeConflict$.subscribe((conflictEvt: CollaborationMergeConflictEvent) => {
+          if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+          this.handleCollaborationMergeConflict(conflictEvt);
+        }),
+      );
+    }
 
     if (hasRemoteBackend) {
       void session.Connect(this.CollaborationWsUrl, provider);
@@ -4113,5 +4149,47 @@ export class SpreadsheetArtifactViewerComponent
       .join('')
       .slice(0, 2)
       .toUpperCase();
+  }
+
+  public GetCollaborationStatusLabel(): string {
+    switch (this.ConnectionStatus) {
+      case 'connected':
+        return 'Live Sync';
+      case 'connecting':
+        return 'Connecting…';
+      case 'readonly':
+        return 'Read-Only';
+      case 'revoked':
+        return 'Access Revoked';
+      case 'error':
+        return 'Live sync disconnected';
+      case 'disconnected':
+        return 'Disconnected';
+      default:
+        return 'Saved Locally';
+    }
+  }
+
+  public RetryLiveCollaboration(): void {
+    const artifactId =
+      this.CollaborationSession?.ArtifactID ||
+      this.artifactVersion?.ArtifactID ||
+      this.artifactVersion?.ID ||
+      this.Workbook.WorkbookID;
+    void this.collaborationService.Retry(artifactId);
+  }
+
+  private handleCollaborationMergeConflict(event: CollaborationMergeConflictEvent): void {
+    this.StatusBannerMessage = MERGE_CONFLICT_WARNING_MESSAGE;
+    if (typeof this.collaborationService.NotifyMergeConflictToastOnce === 'function') {
+      this.collaborationService.NotifyMergeConflictToastOnce(event, this.notificationService);
+    } else {
+      this.notificationService?.CreateSimpleNotification?.(
+        MERGE_CONFLICT_WARNING_MESSAGE,
+        'warning',
+        5000,
+      );
+    }
+    this.cdr.markForCheck();
   }
 }

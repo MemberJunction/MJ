@@ -20,10 +20,12 @@ import {
 } from '@memberjunction/core';
 import { ArtifactPermissionEngine } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { GetGlobalObjectStore, UUIDsEqual } from '@memberjunction/global';
+import { GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
+    ARTIFACT_VERSION_SAVED_EVENT_CODE,
     ArtifactVersionPostRunViewHook,
     ArtifactVersionPreRunViewHook,
+    ArtifactVersionSavedEventPayload,
     CalculateContentSizeBytes,
     EnsureArtifactVersionReadHookRegistered,
     MJArtifactVersionEntityServer
@@ -1344,5 +1346,171 @@ describe('R5-1 & R5-2: Concurrency security, fail-closed lookups, and TrustLocal
         expect((netHookResult.Results[0] as MockVersionRow).Content).toBe('Hybrid process content');
 
         providerGetterSpy.mockRestore();
+    });
+
+    it('never recurses infinitely when custom WellKnownUserSource GetSystemUser is NOT matched by isServerSystemUser (Round 8 recursion guard)', async () => {
+        const sharedReaderId = '44444444-4444-4444-8444-444444444444';
+        const collectionId = '66666666-6666-4666-8666-666666666666';
+        const customServiceActorId = '77777777-7777-4777-8777-777777777777';
+        let versionQueryCount = 0;
+
+        const provider = new TestServerVersionProvider(async (params) => {
+            if (params.EntityName === 'MJ: Artifact Versions') {
+                versionQueryCount++;
+                if (versionQueryCount > 10) {
+                    throw new Error('Infinite recursion detected on MJ: Artifact Versions RunView');
+                }
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: targetVersionId,
+                            ArtifactID: targetArtifactId,
+                            VersionNumber: 1,
+                            Content: 'Collection-shared content',
+                            __mj_UpdatedAt: '2026-11-10T12:00:00.000Z'
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifacts') {
+                return {
+                    Success: true,
+                    Results: [
+                        {
+                            ID: targetArtifactId,
+                            UserID: ownerUserId,
+                            DelegateEntityID: null,
+                            DelegateRecordID: null
+                        }
+                    ],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Artifact Permissions') {
+                return {
+                    Success: true,
+                    Results: [],
+                    RowCount: 0,
+                    TotalRowCount: 0,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Collection Artifacts') {
+                return {
+                    Success: true,
+                    Results: [{ CollectionID: collectionId }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            if (params.EntityName === 'MJ: Collection Permissions') {
+                return {
+                    Success: true,
+                    Results: [{ CanRead: true, CanEdit: false, CanDelete: false, CanShare: false }],
+                    RowCount: 1,
+                    TotalRowCount: 1,
+                    ExecutionTime: 1,
+                    ErrorMessage: ''
+                };
+            }
+            return {
+                Success: true,
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 1,
+                ErrorMessage: ''
+            };
+        });
+
+        const cachedSysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        const customServiceActor = makeRoleUser(customServiceActorId, 'custom-wellknown@example.com', provider);
+        const sharedReader = makeRoleUser(sharedReaderId, 'shared@example.com', provider);
+
+        // UserCache knows cachedSysUser, while WellKnownUserSource returns customServiceActor AND IsSystemUser returns false!
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(cachedSysUser);
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(customServiceActor);
+        vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockReturnValue(false);
+
+        const result = await provider.RunView<MockVersionRow>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${targetArtifactId}'`,
+                Fields: ['ID', 'Content'],
+                ResultType: 'simple'
+            },
+            sharedReader
+        );
+
+        expect(result.Success).toBe(true);
+        expect(result.Results).toHaveLength(1);
+        expect(result.Results[0]?.Content).toBe('Collection-shared content');
+        // 1 outer caller RunView + 1 inner loadCollectionPermissionRows RunView (which skips recursive hook!)
+        expect(versionQueryCount).toBe(2);
+    });
+
+    it('includes Description, Comments, and IsRestore on ARTIFACT_VERSION_SAVED_EVENT_CODE payload when saving a restored version (R8-2e)', async () => {
+        const provider = new TestServerVersionProvider(async () => ({
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: ''
+        }));
+        const sysUser = makeRoleUser(systemUserId, 'sys@example.com', provider);
+        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+        vi.spyOn(MJArtifactVersionEntityServer.prototype, 'ExtractAndSaveAttributes').mockResolvedValue(undefined);
+        const superSaveSpy = vi
+            .spyOn(Object.getPrototypeOf(MJArtifactVersionEntityServer.prototype), 'Save')
+            .mockResolvedValue(true);
+
+        const capturedEvents: ArtifactVersionSavedEventPayload[] = [];
+        const sub = MJGlobal.Instance.GetEventListener(false).subscribe((evt) => {
+            if (evt.event === MJEventType.ComponentEvent && evt.eventCode === ARTIFACT_VERSION_SAVED_EVENT_CODE) {
+                capturedEvents.push(evt.args as ArtifactVersionSavedEventPayload);
+            }
+        });
+
+        try {
+            const entity = Object.create(MJArtifactVersionEntityServer.prototype) as MJArtifactVersionEntityServer;
+            Object.defineProperty(entity, 'IsSaved', { value: false, writable: true });
+            Object.defineProperty(entity, 'ID', { value: targetVersionId, writable: true });
+            Object.defineProperty(entity, 'ArtifactID', { value: targetArtifactId, writable: true });
+            Object.defineProperty(entity, 'VersionNumber', { value: 4, writable: true });
+            Object.defineProperty(entity, 'Content', { value: '# Restored Doc\n', writable: true });
+            Object.defineProperty(entity, 'ContentHash', { value: '', writable: true });
+            Object.defineProperty(entity, 'ContentSizeBytes', { value: 0, writable: true });
+            Object.defineProperty(entity, 'Description', { value: 'Restored from v2', writable: true });
+            Object.defineProperty(entity, 'Comments', { value: null, writable: true });
+            Object.defineProperty(entity, 'UserID', { value: sysUser.ID, writable: true });
+            Object.defineProperty(entity, 'ContextCurrentUser', { value: sysUser, writable: true });
+            Object.defineProperty(entity, 'ProviderToUse', { value: provider, configurable: true });
+            Object.defineProperty(entity, 'GetFieldByName', {
+                value: () => ({ Dirty: true, OldValue: '# Old\n' }),
+                configurable: true
+            });
+
+            const saved = await entity.Save();
+            expect(saved).toBe(true);
+            expect(capturedEvents).toHaveLength(1);
+            expect(capturedEvents[0]?.Description).toBe('Restored from v2');
+            expect(capturedEvents[0]?.PreviousContent).toBe('# Old\n');
+            expect(capturedEvents[0]?.IsRestore).toBe(true);
+        } finally {
+            sub.unsubscribe();
+            superSaveSpy.mockRestore();
+        }
     });
 });

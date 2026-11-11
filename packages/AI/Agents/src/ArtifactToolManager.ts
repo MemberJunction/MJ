@@ -35,6 +35,8 @@ export interface ArtifactLiveMutationEvent {
   versionId?: string;
   /** Newly persisted sequential `VersionNumber`, if persisted. */
   versionNumber?: number;
+  /** Content snapshot prior to this tool mutation, used as the 3-way merge base against live rooms (`R8-2d`). */
+  previousContent?: string;
   /** Updated serialized artifact content (`Markdown`, `SlideDeckSpec` JSON, `WorkbookSpec` JSON, etc.). */
   updatedContent: string;
   /** Optional base64-encoded `.xlsx` binary when produced by `SpreadsheetToolLibrary`. */
@@ -50,10 +52,27 @@ export interface ArtifactLiveMutationEvent {
 }
 
 /**
- * Callback registered by collaboration hosts (e.g. `ArtifactCollaborationServer`) to broadcast
- * live agent mutations to connected Yjs rooms (`A4`).
+ * Optional reconciliation outcome returned by {@link ArtifactLiveMutationHook} when merging an agent
+ * mutation into a live Yjs room or persisted working state (`R8-2d`).
  */
-export type ArtifactLiveMutationHook = (event: ArtifactLiveMutationEvent) => void | Promise<void>;
+export interface ArtifactLiveMutationHookResult {
+  mergedContent?: string;
+  hadConflict?: boolean;
+  rejectedHunksCount?: number;
+  rejectedAgentHunks?: Array<{
+    BaseLines: string[];
+    LiveLines: string[];
+    RejectedAgentLines: string[];
+  }>;
+}
+
+/**
+ * Callback registered by collaboration hosts (e.g. `ArtifactCollaborationServer`) to broadcast
+ * and reconcile live agent mutations against connected Yjs rooms (`A4`, `R8-2d`).
+ */
+export type ArtifactLiveMutationHook = (
+  event: ArtifactLiveMutationEvent,
+) => void | ArtifactLiveMutationHookResult | Promise<void | ArtifactLiveMutationHookResult>;
 
 /**
  * Registers (or clears when `null`) the process-wide {@link ArtifactLiveMutationHook}
@@ -935,6 +954,7 @@ export class ArtifactToolManager {
         let xlsxBase64 = typeof rawData.xlsxBase64 === 'string' ? rawData.xlsxBase64 : undefined;
 
         const previousContent = targetEntry.content;
+        const previousContentStr = typeof previousContent === 'string' ? previousContent : undefined;
         const previousOriginalXlsxBytes = targetEntry.originalXlsxBytes;
 
         // If the spreadsheet started from an uploaded .xlsx binary, patch the original ZIP bytes in-place (fail closed on error)
@@ -965,15 +985,71 @@ export class ArtifactToolManager {
           }
         }
 
-        // 1. Update in-memory entry.content so sequential tool calls see the new content & revisionHash
-        targetEntry.content = updatedContent;
+        // 1. Reconcile against live Yjs collaboration room via registered hook BEFORE persisting Version
+        //    so persisted MJ: Artifact Versions and targetEntry.content never diverge from the live room (`R8-2d`).
+        const hook = GetArtifactLiveMutationHook();
+        const activeAgentRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
+        const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
+        let hookResult: ArtifactLiveMutationHookResult | void = undefined;
+        let hookInvokedBeforePersist = false;
 
-        // 2. Persist a single MJ: Artifact Versions record per agent run when artifactId, contextUser, and provider are available
+        const willPersist = Boolean(targetEntry.artifactId && this.contextUser && this.provider);
+        const prospectiveVersionNumber = willPersist
+          ? targetEntry.agentRunVersionEntity && targetEntry.agentRunVersionId
+            ? (targetEntry.currentVersionNumber ?? targetEntry.versionNumber ?? 1)
+            : (targetEntry.currentVersionNumber ?? targetEntry.versionNumber ?? 0) + 1
+          : targetEntry.versionNumber;
+
+        if (hook && targetEntry.artifactId && targetEntry.contentMode !== 'File') {
+          hookInvokedBeforePersist = true;
+          try {
+            hookResult = await hook({
+              artifactId: targetEntry.artifactId,
+              alphaId: targetEntry.alphaId,
+              versionId: targetEntry.agentRunVersionId ?? targetEntry.versionId,
+              versionNumber: prospectiveVersionNumber,
+              previousContent: previousContentStr,
+              updatedContent,
+              xlsxBase64,
+              tool: call.tool,
+              contextUser: this.contextUser,
+              agentRunId: activeAgentRunId,
+              agentName: activeAgentName,
+            });
+          } catch (hookErr) {
+            LogError(
+              `ArtifactToolManager: live mutation hook failed for artifact '${targetEntry.artifactId}': ${
+                hookErr instanceof Error ? hookErr.message : String(hookErr)
+              }`,
+            );
+          }
+        }
+
+        let effectiveContent =
+          hookResult && typeof hookResult === 'object' && typeof hookResult.mergedContent === 'string'
+            ? hookResult.mergedContent
+            : updatedContent;
+
+        if (effectiveContent !== updatedContent && previousOriginalXlsxBytes) {
+          try {
+            const mergedWorkbook = SpreadsheetEngine.Instance.ParseWorkbook(effectiveContent);
+            const mergedBytes = XlsxOpenXmlAdapter.Instance.PatchXlsxBytes(previousOriginalXlsxBytes, mergedWorkbook);
+            targetEntry.originalXlsxBytes = mergedBytes;
+            xlsxBase64 = Buffer.from(mergedBytes).toString('base64');
+          } catch {
+            // Retain previously patched xlsx bytes if merged text cannot re-patch
+          }
+        }
+
+        // 2. Update in-memory entry.content so sequential tool calls see the reconciled content & revisionHash
+        targetEntry.content = effectiveContent;
+
+        // 3. Persist a single MJ: Artifact Versions record per agent run when artifactId, contextUser, and provider are available
         let persisted = false;
         if (targetEntry.artifactId && this.contextUser && this.provider) {
           const persistOutcome = await this.persistArtifactVersionMutation(
             targetEntry,
-            updatedContent,
+            effectiveContent,
             xlsxBase64,
             call.tool,
           );
@@ -999,28 +1075,44 @@ export class ArtifactToolManager {
           persisted = true;
         }
 
-        // 3. Notify live Yjs collaboration rooms via registered hook and MJGlobal event
-        const hook = GetArtifactLiveMutationHook();
-        const activeAgentRunId = this.agentRunId ?? this.getAgentRun?.()?.ID;
-        const activeAgentName = this.agentName ?? this.getAgentRun?.()?.Agent ?? undefined;
-        if (hook && targetEntry.artifactId) {
+        // 3b. For File-mode artifacts (where storage upload succeeded first), invoke hook after persist and reconcile if needed
+        if (hook && targetEntry.artifactId && !hookInvokedBeforePersist) {
           try {
-            await hook({
+            hookResult = await hook({
               artifactId: targetEntry.artifactId,
               alphaId: targetEntry.alphaId,
               versionId: targetEntry.versionId,
               versionNumber: targetEntry.versionNumber,
-              updatedContent,
+              previousContent: previousContentStr,
+              updatedContent: effectiveContent,
               xlsxBase64,
               tool: call.tool,
               contextUser: this.contextUser,
               agentRunId: activeAgentRunId,
               agentName: activeAgentName,
             });
+            if (
+              hookResult &&
+              typeof hookResult === 'object' &&
+              typeof hookResult.mergedContent === 'string' &&
+              hookResult.mergedContent !== effectiveContent
+            ) {
+              effectiveContent = hookResult.mergedContent;
+              targetEntry.content = effectiveContent;
+              if (this.contextUser && this.provider) {
+                await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+              }
+            }
           } catch (hookErr) {
-            LogError(`ArtifactToolManager: live mutation hook failed for artifact '${targetEntry.artifactId}': ${(hookErr as Error).message}`);
+            LogError(
+              `ArtifactToolManager: live mutation hook failed for artifact '${targetEntry.artifactId}': ${
+                hookErr instanceof Error ? hookErr.message : String(hookErr)
+              }`,
+            );
           }
         }
+
+        const alreadyAppliedToRoom = Boolean(hookResult && typeof hookResult === 'object');
         if (targetEntry.artifactId && this.contextUser) {
           try {
             MJGlobal.Instance.RaiseEvent({
@@ -1029,11 +1121,12 @@ export class ArtifactToolManager {
               eventCode: ARTIFACT_LIVE_MUTATION_EVENT_CODE,
               args: {
                 ArtifactID: targetEntry.artifactId,
-                NewContent: updatedContent,
+                NewContent: effectiveContent,
                 PreviousContent: previousContent,
                 ToolName: call.tool,
                 User: this.contextUser,
                 SaveVersion: false,
+                ...(alreadyAppliedToRoom ? { AlreadyAppliedToRoom: true } : {}),
               },
             });
           } catch {
@@ -1046,6 +1139,27 @@ export class ArtifactToolManager {
         for (const [k, v] of Object.entries(rawData)) {
           if (k === 'updatedContent' || k === 'xlsxBase64') continue;
           sanitizedData[k] = v;
+        }
+        if (
+          effectiveContent !== updatedContent &&
+          'revisionHash' in sanitizedData &&
+          'ComputeRevisionHash' in targetEntry.library &&
+          typeof targetEntry.library.ComputeRevisionHash === 'function'
+        ) {
+          sanitizedData.revisionHash = targetEntry.library.ComputeRevisionHash(effectiveContent);
+        }
+        const rejectedCount =
+          hookResult && typeof hookResult === 'object'
+            ? (hookResult.rejectedHunksCount ?? hookResult.rejectedAgentHunks?.length ?? 0)
+            : 0;
+        if (rejectedCount > 0) {
+          const conflictWarning = `${rejectedCount} edit${rejectedCount === 1 ? '' : 's'} not applied because of concurrent edits`;
+          sanitizedData.rejectedEditsCount = rejectedCount;
+          sanitizedData.conflictWarning = conflictWarning;
+          const existingWarnings = Array.isArray(sanitizedData.warnings)
+            ? sanitizedData.warnings.filter((w): w is string => typeof w === 'string')
+            : [];
+          sanitizedData.warnings = [...existingWarnings, conflictWarning];
         }
         sanitizedData.persisted = persisted;
         if (targetEntry.versionNumber !== undefined) {

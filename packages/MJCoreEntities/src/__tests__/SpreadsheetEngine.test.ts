@@ -5,12 +5,16 @@ import {
     ColumnIndexToLetter,
     ColumnLetterToIndex,
     CompileSafeUserRegex,
+    DecodeUtf8Fallback,
     DocumentFrozenSnapshot,
+    EncodeUtf8Fallback,
     FormatCellAddress,
     IsSafeUserRegex,
     ParseCellAddress,
     ParseRangeAddress,
+    RegisterSafeRegexBatchSandboxExecutor,
     RegisterSafeRegexSandboxExecutor,
+    SafeRegexSearchBatchDetailed,
     SafeRegexSearchDetailed,
     SafeRegexTest,
     SpreadsheetEngine,
@@ -2012,10 +2016,12 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(patchedSheetXml).not.toContain('<v>3</v>');
     });
 
-    it('R7-9: ValidateExtraFilter & =MJ.VIEW allow User, APP_NAME, DB_NAME, [First Name], and N\'...\' Unicode literals while blocking SYSTEM_USER, APP_NAME(), and @@VERSION', async () => {
-        expect(ValidateExtraFilter("User = 'bob'")).toEqual({
+    it('R7-9 & R8-5: ValidateExtraFilter & =MJ.VIEW require bracketed [User] while allowing APP_NAME, DB_NAME, [First Name], and N\'...\' Unicode literals and blocking unbracketed USER/SYSTEM_USER, APP_NAME(), and @@VERSION', async () => {
+        expect(ValidateExtraFilter("User = 'bob'")).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter('Name = User')).toMatchObject({ Valid: false, AccessDenied: true });
+        expect(ValidateExtraFilter("[User] = 'bob'")).toEqual({
             Valid: true,
-            NormalizedFilter: "User = 'bob'"
+            NormalizedFilter: "[User] = 'bob'"
         });
         expect(ValidateExtraFilter("APP_NAME = 'CRM'")).toEqual({
             Valid: true,
@@ -2069,11 +2075,16 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const wb = engine.CreateEmptyWorkbook('MjViewR79', ['Sheet1'], 10, 5);
         engine.SetCell(wb, 'Sheet1', 'A1', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "APP_NAME=\'CRM\'")' }, false);
         engine.SetCell(wb, 'Sheet1', 'A2', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "[First Name]=N\'Ada\'")' }, false);
+        engine.SetCell(wb, 'Sheet1', 'A3', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "[User]=\'bob\'")' }, false);
+        engine.SetCell(wb, 'Sheet1', 'A4', { Formula: '=MJ.VIEW("AppDeployments", "(default)", "User=\'bob\'")' }, false);
         await engine.EvaluateMjCustomFunctions(wb, viewer, mockProvider, { BypassCache: true });
         expect(wb.Worksheets[0].Cells['A1']?.AccessDenied).toBeFalsy();
         expect(wb.Worksheets[0].Cells['A1']?.ComputedValue).toBe('CRM');
         expect(wb.Worksheets[0].Cells['A2']?.AccessDenied).toBeFalsy();
         expect(wb.Worksheets[0].Cells['A2']?.ComputedValue).toBe('CRM');
+        expect(wb.Worksheets[0].Cells['A3']?.AccessDenied).toBeFalsy();
+        expect(wb.Worksheets[0].Cells['A3']?.ComputedValue).toBe('CRM');
+        expect(wb.Worksheets[0].Cells['A4']?.AccessDenied).toBe(true);
     });
 
     it('Item 7: sparse whole-row & whole-column COUNTIFS, MATCH, and VLOOKUP complete in < 50ms total', () => {
@@ -2130,6 +2141,342 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
             Reflect.set(globalThis, 'Buffer', savedBuffer);
             Reflect.set(globalThis, 'TextEncoder', savedTextEncoder);
             Reflect.set(globalThis, 'TextDecoder', savedTextDecoder);
+        }
+    });
+
+    it('R8-3: O(1) incremental virtual-ID promotion & fast large-sheet import/re-import (< 400ms 4k forward-ref fill, < 2000ms 7.5k x 4 round-trip, < 2500ms 15k x 600 import, and 10k x 6 metadata round-trip)', () => {
+        // 1. B1=SUM(A2:A4000) followed by filling A2..A4000 one-by-one completes in < 400ms and evaluates to exact sum
+        const wbFill = engine.CreateEmptyWorkbook('ForwardRefFill4k', ['Sheet1'], 20, 6);
+        const sFill = wbFill.Worksheets[0];
+        const tFill0 = performance.now();
+        engine.SetCell(wbFill, sFill.SheetID, 'B1', { Formula: '=SUM(A2:A4000)' }, true);
+        expect(sFill.Cells['B1']?.ComputedValue).toBe(0);
+        for (let r = 2; r <= 4_000; r++) {
+            engine.SetCell(wbFill, sFill.SheetID, `A${r}`, { Value: r }, false);
+        }
+        engine.EvaluateWorkbook(wbFill);
+        const fillElapsed = performance.now() - tFill0;
+
+        const expectedSum = (4_000 * 4_001) / 2 - 1;
+        expect(sFill.Cells['B1']?.ComputedValue).toBe(expectedSum);
+        expect(sFill.Cells['B1']?.FormulaStable).toContain(`${sFill.SheetID}-row-4000`);
+        expect(fillElapsed).toBeLessThan(400);
+
+        // 2. Importing & re-importing a 7,500-row x 4-col exported workbook with F2=SUM(A1:A7500) completes in < 2,000ms
+        const wb7500 = engine.CreateEmptyWorkbook('Export7500x4', ['Data'], 7_500, 6);
+        const s7500 = wb7500.Worksheets[0];
+        for (let r = 1; r <= 7_500; r++) {
+            engine.SetCell(wb7500, s7500.SheetID, `A${r}`, { Value: r }, false);
+            engine.SetCell(wb7500, s7500.SheetID, `B${r}`, { Value: r * 2 }, false);
+            engine.SetCell(wb7500, s7500.SheetID, `C${r}`, { Value: `k-${r}` }, false);
+            engine.SetCell(wb7500, s7500.SheetID, `D${r}`, { Value: r % 2 === 0 }, false);
+        }
+        engine.SetCell(wb7500, s7500.SheetID, 'F2', { Formula: '=SUM(A1:A7500)' }, true);
+        const expected7500Sum = (7_500 * 7_501) / 2;
+        expect(s7500.Cells['F2']?.ComputedValue).toBe(expected7500Sum);
+
+        const exported7500Bytes = engine.ExportToXlsxBytes(wb7500, true);
+        const tImp0 = performance.now();
+        const imported1 = engine.ImportFromXlsxBytes(exported7500Bytes);
+        const reExportedBytes = engine.ExportToXlsxBytes(imported1, true);
+        const imported2 = engine.ImportFromXlsxBytes(reExportedBytes);
+        const impElapsed = performance.now() - tImp0;
+
+        expect(imported1.Worksheets[0].Cells['F2']?.ComputedValue).toBe(expected7500Sum);
+        expect(imported2.Worksheets[0].Cells['F2']?.ComputedValue).toBe(expected7500Sum);
+        expect(imported2.Worksheets[0].Cells['C7500']?.ComputedValue).toBe('k-7500');
+        expect(impElapsed).toBeLessThan(2_000);
+
+        // 3. Importing a 15,000 x 600 sparse/sized sheet completes in < 2,500ms
+        const wb15k = engine.CreateEmptyWorkbook('Sized15kx600', ['Grid'], 20, 12);
+        const col600 = ColumnIndexToLetter(600);
+        engine.SetCell(wb15k, 'Grid', 'A1', { Value: 'Origin' }, false);
+        engine.SetCell(wb15k, 'Grid', 'Z5000', { Value: 5000 }, false);
+        engine.SetCell(wb15k, 'Grid', `${col600}15000`, { Value: 15_600 }, true);
+        const base15kZip = engine.ExtractZipArchive(engine.ExportToXlsxBytes(wb15k, false));
+        const enc = new TextEncoder();
+        const dec = new TextDecoder();
+        // Inject 15,000 sized <row> tags + <col min="1" max="600"> + <dimension ref="A1:WC15000"/> to simulate openpyxl sized sheet
+        const emptySizedRows: string[] = [
+            '<row r="1"><c r="A1" t="inlineStr"><is><t>Origin</t></is></c></row>'
+        ];
+        for (let r = 2; r <= 14_999; r++) {
+            if (r === 5000) {
+                emptySizedRows.push('<row r="5000"><c r="Z5000" t="n"><v>5000</v></c></row>');
+            } else {
+                emptySizedRows.push(`<row r="${r}"/>`);
+            }
+        }
+        emptySizedRows.push(`<row r="15000"><c r="${col600}15000" t="n"><v>15600</v></c></row>`);
+        const sizedSheetXml = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+            `<dimension ref="A1:${col600}15000"/>`,
+            '<cols><col min="1" max="600" width="14" customWidth="1"/></cols>',
+            `<sheetData>${emptySizedRows.join('')}</sheetData>`,
+            '</worksheet>'
+        ].join('');
+        base15kZip.set('xl/worksheets/sheet1.xml', enc.encode(sizedSheetXml));
+        const sized15kBytes = engine.BuildZipArchive(
+            Array.from(base15kZip.entries()).map(([Name, Data]) => ({ Name, Data }))
+        );
+
+        const t15k = performance.now();
+        const imp15k = engine.ImportFromXlsxBytes(sized15kBytes);
+        const elapsed15k = performance.now() - t15k;
+
+        expect(imp15k.Worksheets[0].Cells[`${col600}15000`]?.ComputedValue).toBe(15_600);
+        expect(imp15k.Worksheets[0].Cells['Z5000']?.ComputedValue).toBe(5000);
+        expect(elapsed15k).toBeLessThan(2_500);
+        expect(dec.decode(base15kZip.get('xl/worksheets/sheet1.xml')!)).toContain(`A1:${col600}15000`);
+
+        // 4. 10,000-row x 6-col round-trip ExportToXlsxBytes -> ImportFromXlsxBytes with _mj_sheets_meta succeeds cleanly
+        const wb10k6 = engine.CreateEmptyWorkbook('RoundTrip10kx6', ['Ledger'], 10_000, 6);
+        const s10k6 = wb10k6.Worksheets[0];
+        for (let r = 1; r <= 10_000; r++) {
+            const rStr = String(r);
+            s10k6.Cells[`A${rStr}`] = {
+                RowID: s10k6.Rows[r - 1].RowID,
+                ColumnID: s10k6.Columns[0].ColumnID,
+                Address: `A${rStr}`,
+                RawValue: r,
+                Formula: null,
+                FormulaStable: null,
+                ComputedValue: r,
+                DisplayValue: rStr
+            };
+            for (let c = 2; c <= 6; c++) {
+                const colLet = ColumnIndexToLetter(c);
+                const val = r * c;
+                s10k6.Cells[`${colLet}${rStr}`] = {
+                    RowID: s10k6.Rows[r - 1].RowID,
+                    ColumnID: s10k6.Columns[c - 1].ColumnID,
+                    Address: `${colLet}${rStr}`,
+                    RawValue: val,
+                    Formula: null,
+                    FormulaStable: null,
+                    ComputedValue: val,
+                    DisplayValue: String(val)
+                };
+            }
+        }
+        const xlsx10k6 = engine.ExportToXlsxBytes(wb10k6, true);
+        const reimp10k6 = engine.ImportFromXlsxBytes(xlsx10k6);
+        expect(reimp10k6.Title).toBe('RoundTrip10kx6');
+        expect(reimp10k6.Worksheets[0].Cells['F10000']?.ComputedValue).toBe(60_000);
+    });
+
+    it('R8-4: implements NA() and scopes unimplemented-function sentinel taint ONLY to selected/aggregated cells across dense (20 rows) and sparse (3,000 rows) ranges', () => {
+        const wbSmall = engine.CreateEmptyWorkbook('TaintScope20', ['Sheet1'], 30, 6);
+        const sSmall = wbSmall.Worksheets[0];
+        engine.SetCell(wbSmall, sSmall.SheetID, 'C1', { Value: 1 }, false);
+        engine.SetCell(wbSmall, sSmall.SheetID, 'C2', { Value: 2 }, false);
+        engine.SetCell(wbSmall, sSmall.SheetID, 'C3', { Value: 3 }, false);
+        expect(engine.EvaluateFormulaExpression(wbSmall, sSmall.SheetID, '=NA()')).toBe('#N/A');
+        expect(engine.EvaluateFormulaExpression(wbSmall, sSmall.SheetID, '=NA(1)')).toBe('#VALUE!');
+        expect(engine.EvaluateFormulaExpression(wbSmall, sSmall.SheetID, '=ISNA(NA())')).toBe(true);
+        expect(engine.EvaluateFormulaExpression(wbSmall, sSmall.SheetID, '=ISNA(42)')).toBe(false);
+
+        const verifyRangeBehavior = (rowCount: number): void => {
+            const wb = engine.CreateEmptyWorkbook(`TaintScope_${rowCount}`, ['Sheet1'], rowCount + 5, 8);
+            const s = wb.Worksheets[0];
+            engine.SetCell(wb, s.SheetID, 'C1', { Value: 10 }, false);
+            engine.SetCell(wb, s.SheetID, 'C2', { Value: 20 }, false);
+            engine.SetCell(wb, s.SheetID, 'C3', { Value: 30 }, false);
+            for (let r = 1; r <= rowCount; r++) {
+                engine.SetCell(wb, s.SheetID, `A${r}`, { Value: `k${r}` }, false);
+                if (r === 4) {
+                    engine.SetCell(wb, s.SheetID, 'B4', { Formula: '=NA()' }, false);
+                } else if (r === 5) {
+                    engine.SetCell(wb, s.SheetID, 'B5', { Formula: '=LARGE(C1:C3, 1)' }, false);
+                } else {
+                    engine.SetCell(wb, s.SheetID, `B${r}`, { Value: r }, false);
+                }
+            }
+            engine.SetCell(wb, s.SheetID, 'D1', { Formula: `=VLOOKUP("k10", A1:B${rowCount}, 2, FALSE)` }, false);
+            engine.SetCell(wb, s.SheetID, 'D2', { Formula: `=VLOOKUP("k4", A1:B${rowCount}, 2, FALSE)` }, false);
+            engine.SetCell(wb, s.SheetID, 'D3', { Formula: `=IFNA(VLOOKUP("k4", A1:B${rowCount}, 2, FALSE), "missing")` }, false);
+            engine.SetCell(wb, s.SheetID, 'D4', { Formula: `=VLOOKUP("k5", A1:B${rowCount}, 2, FALSE)` }, false);
+            engine.SetCell(wb, s.SheetID, 'D5', { Formula: `=IFERROR(VLOOKUP("k5", A1:B${rowCount}, 2, FALSE), "fallback")` }, false);
+            engine.SetCell(wb, s.SheetID, 'E1', { Formula: `=MATCH("k10", A1:A${rowCount}, 0)` }, false);
+            engine.SetCell(wb, s.SheetID, 'E2', { Formula: `=IFERROR(MATCH("k10", A1:A${rowCount}, 0), "none")` }, false);
+            engine.SetCell(wb, s.SheetID, 'E3', { Formula: `=XLOOKUP("k10", A1:A${rowCount}, B1:B${rowCount}, "nf")` }, false);
+            engine.SetCell(wb, s.SheetID, 'E4', { Formula: `=INDEX(A1:B${rowCount}, 10, 2)` }, false);
+            engine.SetCell(wb, s.SheetID, 'E5', { Formula: `=SUMIF(A1:A${rowCount}, "k10", B1:B${rowCount})` }, false);
+            engine.SetCell(wb, s.SheetID, 'E6', { Formula: `=SUMIFS(B1:B${rowCount}, A1:A${rowCount}, "k10")` }, false);
+            engine.SetCell(wb, s.SheetID, 'E7', { Formula: `=COUNTIF(A1:A${rowCount}, "k10")` }, false);
+            engine.SetCell(wb, s.SheetID, 'E8', { Formula: `=COUNTIFS(A1:A${rowCount}, "k10")` }, true);
+
+            expect(s.Cells['B4']?.ComputedValue).toBe('#N/A');
+            expect(s.Cells['B5']?.ComputedValue).toBe('#NAME?');
+            expect(s.Cells['D1']?.ComputedValue).toBe(10);
+            expect(s.Cells['D2']?.ComputedValue).toBe('#N/A');
+            expect(s.Cells['D3']?.ComputedValue).toBe('missing');
+            expect(s.Cells['D4']?.ComputedValue).toBe('#NAME?');
+            expect(s.Cells['D5']?.ComputedValue).toBe('#NAME?');
+            expect(s.Cells['E1']?.ComputedValue).toBe(10);
+            expect(s.Cells['E2']?.ComputedValue).toBe(10);
+            expect(s.Cells['E3']?.ComputedValue).toBe(10);
+            expect(s.Cells['E4']?.ComputedValue).toBe(10);
+            expect(s.Cells['E5']?.ComputedValue).toBe(10);
+            expect(s.Cells['E6']?.ComputedValue).toBe(10);
+            expect(s.Cells['E7']?.ComputedValue).toBe(1);
+            expect(s.Cells['E8']?.ComputedValue).toBe(1);
+
+            if (rowCount === 20) {
+                const expXml = new TextDecoder().decode(
+                    engine.ExtractZipArchive(engine.ExportToXlsxBytes(wb, false)).get('xl/worksheets/sheet1.xml')!
+                );
+                // D2 (=NA() via VLOOKUP("k4",...)) writes standard Excel error <v>#N/A</v>, while D4/D5 (unimplemented B5) omit <v>!
+                expect(expXml).toMatch(/<c r="D2"[^>]*t="e"><f>[^<]*<\/f><v>#N\/A<\/v><\/c>/);
+                for (const unimplAddr of ['B5', 'D4', 'D5']) {
+                    const m = new RegExp(`<c r="${unimplAddr}"[^>]*>[\\s\\S]*?<\\/c>`).exec(expXml);
+                    expect(m).not.toBeNull();
+                    expect(m![0]).not.toContain('<v>');
+                }
+            }
+        };
+
+        verifyRangeBehavior(20);
+        verifyRangeBehavior(3_000);
+    });
+
+    it('R8-8: clears stale modern spill (with cm) and legacy CSE array (without cm) child cells in memory, on ExportToXlsxBytes, and across repeated PatchXlsxBytes', () => {
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        const buildSeedArrayXlsx = (includeCm: boolean): Uint8Array => {
+            const baseWb = engine.CreateEmptyWorkbook('ArrayCleanupSeed', ['Sheet1'], 12, 12);
+            engine.SetCell(baseWb, 'Sheet1', 'B2', { Value: 10 }, false);
+            engine.SetCell(baseWb, 'Sheet1', 'B3', { Value: 20 }, false);
+            engine.SetCell(baseWb, 'Sheet1', 'B4', { Value: 30 }, true);
+            const baseZip = engine.ExtractZipArchive(engine.ExportToXlsxBytes(baseWb, false));
+            if (includeCm) {
+                baseZip.set(
+                    'xl/metadata.xml',
+                    encoder.encode(
+                        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                            '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">' +
+                            '<metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>' +
+                            '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>' +
+                            '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+                            '</metadata>'
+                    )
+                );
+            }
+            const origXml = decoder.decode(baseZip.get('xl/worksheets/sheet1.xml')!);
+            const cmToken = includeCm ? ' cm="1"' : '';
+            const formulaBody = includeCm ? '_xlfn.SEQUENCE(3)' : 'B2:B4*2';
+            const injectedXml = origXml.replace(
+                /<\/sheetData>/,
+                () =>
+                    '<row r="1"><c r="K1" t="n"><f>I7</f><v>2</v></c></row>' +
+                    `<row r="6"><c r="I6"${cmToken} t="n"><f t="array" ref="I6:I8">${formulaBody}</f><v>1</v></c></row>` +
+                    '<row r="7"><c r="I7" t="n"><v>2</v></c></row>' +
+                    '<row r="8"><c r="I8" t="n"><v>3</v></c></row>' +
+                    '</sheetData>'
+            );
+            baseZip.set('xl/worksheets/sheet1.xml', encoder.encode(injectedXml));
+            return engine.BuildZipArchive(
+                Array.from(baseZip.entries()).map(([Name, Data]) => ({ Name, Data }))
+            );
+        };
+
+        for (const includeCm of [true, false]) {
+            const seedBytes = buildSeedArrayXlsx(includeCm);
+            const wb = engine.ImportFromXlsxBytes(seedBytes);
+            const ws = wb.Worksheets[0];
+            expect(ws.Cells['K1']?.ComputedValue).toBe(2);
+
+            // Edit anchor I6 -> I7 and I8 are immediately cleared in memory so K1=I7 evaluates to 0!
+            engine.SetCell(wb, 'Sheet1', 'I6', { Value: 99 }, true);
+            expect(ws.Cells['I7']).toBeUndefined();
+            expect(ws.Cells['I8']).toBeUndefined();
+            expect(ws.Cells['K1']?.ComputedValue).toBe(0);
+
+            // ExportToXlsxBytes writes NO I7 or I8 constants
+            const expXml = decoder.decode(
+                engine.ExtractZipArchive(engine.ExportToXlsxBytes(wb, false)).get('xl/worksheets/sheet1.xml')!
+            );
+            expect(expXml).not.toContain('r="I7"');
+            expect(expXml).not.toContain('r="I8"');
+
+            // Repeated PatchXlsxBytes -> PatchXlsxBytes writes NO I7 or I8 constants
+            const patched1 = engine.PatchXlsxBytes(seedBytes, wb);
+            const patched2 = engine.PatchXlsxBytes(patched1, wb);
+            const xml1 = decoder.decode(engine.ExtractZipArchive(patched1).get('xl/worksheets/sheet1.xml')!);
+            const xml2 = decoder.decode(engine.ExtractZipArchive(patched2).get('xl/worksheets/sheet1.xml')!);
+            expect(xml1).not.toContain('r="I7"');
+            expect(xml1).not.toContain('r="I8"');
+            expect(xml2).not.toContain('r="I7"');
+            expect(xml2).not.toContain('r="I8"');
+
+            // Also verify ClearRange on I6 clears I7 and I8
+            const wbClear = engine.ImportFromXlsxBytes(seedBytes);
+            engine.ClearRange(wbClear, 'Sheet1', 'I6', true);
+            expect(wbClear.Worksheets[0].Cells['I6']).toBeUndefined();
+            expect(wbClear.Worksheets[0].Cells['I7']).toBeUndefined();
+            expect(wbClear.Worksheets[0].Cells['I8']).toBeUndefined();
+            expect(wbClear.Worksheets[0].Cells['K1']?.ComputedValue).toBe(0);
+        }
+    });
+
+    it('WHATWG UTF-8 fallback & SafeRegexSearchBatchDetailed match native TextEncoder/TextDecoder and batch sandbox contracts', () => {
+        const nativeEnc = new TextEncoder();
+        const nativeDec = new TextDecoder('utf-8', { fatal: false });
+
+        const encodeCases = [
+            '',
+            'Plain ASCII 0123456789',
+            'Zoë — €1,250.00',
+            'Ship 🚀🌟🎉 now',
+            '\uD800',
+            '\uDBFF',
+            '\uDC00',
+            '\uDFFF',
+            'lead\uD83Dtail',
+            '\uDC00\uD800'
+        ];
+        for (const str of encodeCases) {
+            expect(Array.from(EncodeUtf8Fallback(str))).toEqual(Array.from(nativeEnc.encode(str)));
+        }
+
+        const decodeCases: number[][] = [
+            [],
+            [0x41, 0x42, 0x43],
+            [0xc3, 0x41], // invalid 2-byte followed by ASCII 'A' -> "\uFFFDA"
+            [0xc0, 0xaf], // overlong 2-byte '/' -> "\uFFFD\uFFFD"
+            [0xe0, 0x80, 0xaf], // overlong 3-byte -> "\uFFFD\uFFFD\uFFFD"
+            [0xed, 0xa0, 0x80], // UTF-16 surrogate -> "\uFFFD\uFFFD\uFFFD"
+            [0xf4, 0x90, 0x80, 0x80], // > U+10FFFF -> "\uFFFD\uFFFD\uFFFD\uFFFD"
+            [0xf0, 0x80, 0x80, 0xaf], // overlong 4-byte -> "\uFFFD\uFFFD\uFFFD\uFFFD"
+            [0xe2, 0x82], // truncated 3-byte
+            [0xf0, 0x9f, 0x9a], // truncated 4-byte
+            Array.from(nativeEnc.encode('Zoë 🚀'))
+        ];
+        for (const bytes of decodeCases) {
+            const u8 = new Uint8Array(bytes);
+            expect(DecodeUtf8Fallback(u8)).toBe(nativeDec.decode(u8));
+        }
+
+        expect(DecodeUtf8Fallback(new Uint8Array([0xc3, 0x41]))).toBe('\uFFFDA');
+        expect(DecodeUtf8Fallback(new Uint8Array([0xc0, 0xaf]))).toBe('\uFFFD\uFFFD');
+
+        // Verify SafeRegexSearchBatchDetailed with registered batch executor
+        RegisterSafeRegexBatchSandboxExecutor((rx, items) => ({
+            Matches: items.map((s) => rx.test(s)),
+            TimedOut: false
+        }));
+        try {
+            const rx = CompileSafeUserRegex('refund.*approved', 'i')!;
+            const batchOut = SafeRegexSearchBatchDetailed(rx, ['no match', 'Refund #42 approved today', '€'.repeat(23_000)], 40, 65_536);
+            expect(batchOut).toEqual({
+                Matches: [false, true, false],
+                InputTooLong: [false, false, true],
+                TimedOut: false
+            });
+        } finally {
+            RegisterSafeRegexBatchSandboxExecutor(null);
         }
     });
 });

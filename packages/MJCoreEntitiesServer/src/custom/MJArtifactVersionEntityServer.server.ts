@@ -46,11 +46,35 @@ export interface ArtifactVersionSavedEventPayload {
     VersionNumber: number;
     Content: string;
     PreviousContent?: string | null;
+    Description?: string | null;
+    Comments?: string | null;
+    IsRestore?: boolean;
     UpdatedByUserID?: string;
     OriginServerID?: string;
     SavedStateVectorB64?: string;
     SavedDocUpdateB64?: string;
     SavedContentHash?: string;
+}
+
+const RESTORE_VERSION_PREFIX_RE = /^Restored from\b/i;
+
+function isRestoreVersionText(value: string | null | undefined): boolean {
+    return typeof value === 'string' && RESTORE_VERSION_PREFIX_RE.test(value.trim());
+}
+
+function readSafeOptionalVersionText(
+    entity: MJArtifactVersionEntity,
+    fieldName: 'Description' | 'Comments'
+): string | null {
+    const own = Object.getOwnPropertyDescriptor(entity, fieldName);
+    if (own && 'value' in own) {
+        return typeof own.value === 'string' ? own.value : null;
+    }
+    const field = Array.isArray(entity.Fields) ? entity.Fields.find((f) => f?.Name === fieldName) : undefined;
+    if (field && 'TSType' in field) {
+        return entity[fieldName];
+    }
+    return typeof field?.Value === 'string' ? field.Value : null;
 }
 
 type ExtractedAttributeItem = Parameters<typeof ArtifactExtractor.SerializeForStorage>[0][number];
@@ -175,6 +199,7 @@ async function fetchVersionArtifactIdsByIds(
             ResultType: 'simple'
         };
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.add(lookupParams);
+        ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(lookupParams);
         const res = await rv.RunView<{ ID?: string; ArtifactID?: string }>(
             lookupParams,
             systemUser
@@ -233,6 +258,7 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
     if (
         !params ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions' ||
         isServerSystemUser(contextUser) ||
         (!contextUser && provider !== null && provider.ProviderType !== 'Database')
@@ -263,6 +289,7 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
     if (
         !results?.Success ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
+        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions'
     ) {
         return results;
@@ -568,12 +595,19 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         // or persisted working states reconcile out-of-band version writes (REST save, Restore, Library edit).
         if (saveResult && contentDirty && typeof this.Content === 'string' && this.ArtifactID) {
             try {
+                const descriptionValue = readSafeOptionalVersionText(this, 'Description');
+                const commentsValue = readSafeOptionalVersionText(this, 'Comments');
+                const isRestore =
+                    isRestoreVersionText(descriptionValue) || isRestoreVersionText(commentsValue);
                 const payload: ArtifactVersionSavedEventPayload = {
                     ArtifactID: this.ArtifactID,
                     VersionID: this.ID,
                     VersionNumber: this.VersionNumber,
                     Content: this.Content,
                     PreviousContent: previousContentValue,
+                    Description: descriptionValue,
+                    Comments: commentsValue,
+                    IsRestore: isRestore,
                     UpdatedByUserID: this.UserID || this.ContextCurrentUser?.ID
                 };
                 MJGlobal.Instance.RaiseEvent({

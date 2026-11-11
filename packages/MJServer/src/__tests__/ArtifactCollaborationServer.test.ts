@@ -16,7 +16,7 @@ import {
 import { AIEngine } from '@memberjunction/aiengine';
 import { EntityInfo, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Base64ToBytes, BytesToBase64, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { Base64ToBytes, BytesToBase64, GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
@@ -79,6 +79,7 @@ vi.mock('type-graphql', () => {
 
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
+    ARTIFACT_LIVE_MUTATION_EVENT_CODE,
     ARTIFACT_VERSION_SAVED_EVENT_CODE,
     ArtifactCollaborationServer,
     COLLAB_SECRET_UNCONFIGURED_CODE,
@@ -118,6 +119,8 @@ interface MockStoredVersion {
     Content: string;
     ContentHash: string;
     UserID: string;
+    Description?: string;
+    Comments?: string;
     __mj_CreatedAt?: string;
     __mj_UpdatedAt?: string;
 }
@@ -384,6 +387,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                                 Content: this.Content,
                                 ContentHash: this.ContentHash,
                                 UserID: this.UserID,
+                                Description: this.Description,
+                                Comments: this.Comments,
                                 __mj_CreatedAt: now,
                                 __mj_UpdatedAt: now
                             });
@@ -4341,7 +4346,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(JSON.parse(a15Delete.MergedText)).toEqual({ a: 1, c: 30, d: 4 });
         expect(a15Delete.HadConflict).toBe(false);
 
-        // Concurrent Whiteboard JSON merges: nested appState keys merge cleanly while conflicting elements array picks live
+        // Concurrent Whiteboard JSON merges: nested appState keys AND ID-keyed elements merge cleanly (`R8-9`),
+        // while conflicting edits to the same element property pick live (`HadConflict: true`).
         const wbBase = JSON.stringify({
             elements: [{ id: 'rect-1', x: 10, y: 20 }],
             appState: { viewBackgroundColor: '#ffffff', gridSize: 20 }
@@ -4360,7 +4366,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             appState: Record<string, string | number>;
         };
         expect(wbParsed.elements).toEqual([
-            { id: 'rect-1', x: 50, y: 20 },
+            { id: 'rect-1', x: 50, y: 99 },
             { id: 'arrow-human', x: 0, y: 0 }
         ]);
         expect(wbParsed.appState).toEqual({
@@ -4368,7 +4374,25 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             gridSize: 40,
             zoom: 1.5
         });
-        expect(wbMerged.HadConflict).toBe(true);
+        expect(wbMerged.HadConflict).toBe(false);
+
+        const wbConflictingIncoming = JSON.stringify({
+            elements: [{ id: 'rect-1', x: 99, y: 99 }],
+            appState: { viewBackgroundColor: '#ffffff', gridSize: 40 }
+        });
+        const wbConflictMerged = server.MergeConcurrentDocumentEditsDetailed(
+            wbBase,
+            wbLive,
+            wbConflictingIncoming
+        );
+        const wbConflictParsed = JSON.parse(wbConflictMerged.MergedText) as {
+            elements: Array<{ id: string; x: number; y: number }>;
+        };
+        expect(wbConflictParsed.elements).toEqual([
+            { id: 'rect-1', x: 50, y: 99 },
+            { id: 'arrow-human', x: 0, y: 0 }
+        ]);
+        expect(wbConflictMerged.HadConflict).toBe(true);
 
         // Top-level JSON array -> live edit wins cleanly, valid JSON, HadConflict: true
         const jsonArr = server.MergeConcurrentDocumentEditsDetailed(
@@ -4942,6 +4966,821 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             else process.env.MJ_ARTIFACT_COLLAB_HMAC_SECRET = prevCollab;
             if (prevTicket === undefined) delete process.env.MJ_COLLABORATION_TICKET_SECRET;
             else process.env.MJ_COLLABORATION_TICKET_SECRET = prevTicket;
+        }
+    });
+
+    it(
+        'R8-1: bounds Y.Doc meta map across 200 compactions on a 32 KB doc with a ~16 KB delete set (< 250 KB state, <= 1 art:* key)',
+        async () => {
+            const server = ArtifactCollaborationServer.Instance;
+            const benchArtifactId = 'e8010000-0000-4000-8000-000000000001';
+
+            // 32 KB initial document (32 lines * 1,037 chars = 33,184 bytes)
+            const initialLines: string[] = [];
+            for (let i = 0; i < 32; i++) {
+                initialLines.push(`Section-${String(i).padStart(2, '0')}: ${'abcd'.repeat(256)}\n`);
+            }
+            const initialDoc32Kb = initialLines.join('');
+            expect(Buffer.byteLength(initialDoc32Kb, 'utf8')).toBeGreaterThanOrEqual(32_768);
+
+            versions = [
+                {
+                    ID: 'ver-r8-1-base',
+                    ArtifactID: benchArtifactId,
+                    VersionNumber: 1,
+                    Content: initialDoc32Kb,
+                    ContentHash: 'hash-r8-1-base',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(benchArtifactId);
+
+            const room = await server.GetOrCreateRoom(benchArtifactId, editorUser);
+            expect(room).not.toBeNull();
+
+            // Perform edits that build up a >= 16 KB Yjs DeleteSet (5,000 disjoint 2-char deletes)
+            // plus replacement text so the live document remains >= 32 KB.
+            room!.Doc.transact(() => {
+                const yText = room!.Doc.getText('content');
+                for (let d = 4_999; d >= 0; d--) {
+                    const pos = d * 6;
+                    if (pos + 2 <= yText.length) {
+                        yText.delete(pos, 2);
+                    }
+                }
+                yText.insert(yText.length, `\nPadding: ${'xy'.repeat(5_000)}\n`);
+            }, 'r8-1-fragmented-deletes');
+
+            const snapSizeBefore = Y.encodeSnapshot(Y.snapshot(room!.Doc)).byteLength;
+            expect(snapSizeBefore).toBeGreaterThanOrEqual(15_000);
+
+            // Run 200 compactions, mutating a small header counter each iteration so every compaction saves a new version.
+            for (let c = 1; c <= 200; c++) {
+                room!.Doc.transact(() => {
+                    const yText = room!.Doc.getText('content');
+                    if (c > 1) {
+                        yText.delete(0, 8);
+                    }
+                    yText.insert(0, `v${String(c).padStart(6, '0')}:`);
+                }, `r8-1-edit-${c}`);
+                room!.DirtyVersion = true;
+
+                const compacted = await server.CompactRoomToArtifactVersion(benchArtifactId, editorUser);
+                expect(compacted.Saved).toBe(true);
+            }
+
+            const finalEncodedSize = Y.encodeStateAsUpdate(room!.Doc).byteLength;
+            const metaArtKeys = Array.from(room!.Doc.getMap('meta').keys()).filter((k) => k.startsWith('art:'));
+
+            expect(metaArtKeys.length).toBeLessThanOrEqual(1);
+            expect(finalEncodedSize).toBeLessThan(250_000);
+        },
+        30_000
+    );
+
+    it('R8-2a: MergeConcurrentDocumentEditsDetailed sub-splits coarse diff hunks (10-line rewrite + line 9 typo fix, and A3 human line delete + full rewrite)', () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        const base10 = Array.from({ length: 10 }, (_, idx) => `Line ${idx + 1}\n`).join('');
+
+        // 1. 10-line doc: agent rewrites lines 1-8 while human fixes typo on line 9 ->
+        // ALL 8 agent lines AND human's line 9 are kept, with ZERO rejected hunks!
+        const liveTypoLine9 = Array.from({ length: 10 }, (_, idx) =>
+            idx === 8 ? 'Line 9 (human typo fix)\n' : `Line ${idx + 1}\n`
+        ).join('');
+        const agentRewrite1To8 = Array.from({ length: 10 }, (_, idx) =>
+            idx < 8 ? `Agent rewritten line ${idx + 1}\n` : `Line ${idx + 1}\n`
+        ).join('');
+
+        const merged1To8 = server.MergeConcurrentDocumentEditsDetailed(
+            base10,
+            liveTypoLine9,
+            agentRewrite1To8
+        );
+        const expected1To8 = [
+            'Agent rewritten line 1',
+            'Agent rewritten line 2',
+            'Agent rewritten line 3',
+            'Agent rewritten line 4',
+            'Agent rewritten line 5',
+            'Agent rewritten line 6',
+            'Agent rewritten line 7',
+            'Agent rewritten line 8',
+            'Line 9 (human typo fix)',
+            'Line 10',
+            ''
+        ].join('\n');
+        expect(merged1To8.MergedText).toBe(expected1To8);
+        expect(merged1To8.HadConflict).toBe(false);
+        expect(merged1To8.RejectedAgentHunks).toHaveLength(0);
+
+        // 2. A3: 10-line doc where human deletes line 5 while agent rewrites lines 1-10 ->
+        // agent's 9 non-deleted lines (1..4, 6..10) are kept, line 5 stays deleted,
+        // and RejectedAgentHunks has length 1 reporting rejected line 5!
+        const liveDeletedLine5 = Array.from({ length: 10 }, (_, idx) => idx + 1)
+            .filter((n) => n !== 5)
+            .map((n) => `Line ${n}\n`)
+            .join('');
+        const agentRewriteAll10 = Array.from(
+            { length: 10 },
+            (_, idx) => `Agent line ${idx + 1}\n`
+        ).join('');
+
+        const mergedA3 = server.MergeConcurrentDocumentEditsDetailed(
+            base10,
+            liveDeletedLine5,
+            agentRewriteAll10
+        );
+        const expectedA3 = [
+            'Agent line 1',
+            'Agent line 2',
+            'Agent line 3',
+            'Agent line 4',
+            'Agent line 6',
+            'Agent line 7',
+            'Agent line 8',
+            'Agent line 9',
+            'Agent line 10',
+            ''
+        ].join('\n');
+        expect(mergedA3.MergedText).toBe(expectedA3);
+        expect(mergedA3.HadConflict).toBe(true);
+        expect(mergedA3.RejectedAgentHunks).toHaveLength(1);
+        expect(mergedA3.RejectedAgentHunks[0]?.BaseText).toBe('Line 5\n');
+        expect(mergedA3.RejectedAgentHunks[0]?.LiveText).toBe('');
+        expect(mergedA3.RejectedAgentHunks[0]?.RejectedIncomingText).toBe('Agent line 5\n');
+
+        // 3. Unequal-length paragraph/heading rewrite: agent expands section 1 (lines 1-8) while human fixes section 2 (line 9)
+        const paraBase = [
+            '## Overview',
+            'Draft overview sentence one.',
+            'Draft overview sentence two.',
+            '',
+            '## Risks',
+            'Risk item alpha.',
+            'Risk item beta.',
+            '',
+            '## Timeline',
+            'Launch in Q3 with tyop.'
+        ].join('\n') + '\n';
+        const paraLive = paraBase.replace('Launch in Q3 with tyop.', () => 'Launch in Q3 with typo fixed.');
+        const paraIncoming = [
+            '## Overview',
+            'Polished executive overview paragraph one.',
+            'Polished executive overview paragraph two.',
+            'Additional context bullet.',
+            '',
+            '## Risks',
+            'Mitigated risk item alpha.',
+            'Mitigated risk item beta.',
+            'Mitigated risk item gamma.',
+            '',
+            '## Timeline',
+            'Launch in Q3 with tyop.'
+        ].join('\n') + '\n';
+
+        const paraMerged = server.MergeConcurrentDocumentEditsDetailed(paraBase, paraLive, paraIncoming);
+        expect(paraMerged.MergedText).toContain('Additional context bullet.');
+        expect(paraMerged.MergedText).toContain('Mitigated risk item gamma.');
+        expect(paraMerged.MergedText).toContain('Launch in Q3 with typo fixed.');
+        expect(paraMerged.RejectedAgentHunks).toHaveLength(0);
+    });
+
+    it('R8-2b, R8-2c & R8-2d: reports conflicts from ApplyServerContentMutation, @mention edit replies, and global live mutation hook without room/version divergence', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const resolver = new DocumentCollaborationResolver();
+
+        // 1. R8-2b: ApplyServerContentMutation returns HadConflict + RejectedAgentHunks AND saves merged content to MJ: Artifact Versions
+        const artMutId = 'e8020000-0000-4000-8000-000000000002';
+        const baseDoc = 'Line 1\nLine 2\nLine 3\n';
+        versions = [
+            {
+                ID: 'ver-r82b-1',
+                ArtifactID: artMutId,
+                VersionNumber: 1,
+                Content: baseDoc,
+                ContentHash: 'hash-r82b-1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.delete(artMutId);
+
+        const room = await server.GetOrCreateRoom(artMutId, editorUser);
+        expect(room).not.toBeNull();
+        room!.Doc.transact(() => {
+            const yText = room!.Doc.getText('content');
+            const idx = yText.toString().indexOf('Line 2');
+            yText.delete(idx, 'Line 2'.length);
+            yText.insert(idx, 'Human 2');
+        }, 'human-r82b');
+
+        const mutRes = await server.ApplyServerContentMutation(
+            artMutId,
+            'Agent 1\nAgent 2\nAgent 3\n',
+            editorUser,
+            true,
+            baseDoc
+        );
+        expect(mutRes.Success).toBe(true);
+        expect(mutRes.HadConflict).toBe(true);
+        expect(mutRes.MergedContent).toBe('Agent 1\nHuman 2\nAgent 3\n');
+        expect(mutRes.RejectedAgentHunks).toEqual([
+            {
+                BaseLines: ['Line 2'],
+                LiveLines: ['Human 2'],
+                RejectedAgentLines: ['Agent 2']
+            }
+        ]);
+        // Saved version MUST store merged room content (never diverging from live room!)
+        const savedV2 = versions.find((v) => v.ArtifactID === artMutId && v.VersionNumber === 2);
+        expect(savedV2?.Content).toBe('Agent 1\nHuman 2\nAgent 3\n');
+        expect(await server.GetRoomContent(artMutId, editorUser)).toBe('Agent 1\nHuman 2\nAgent 3\n');
+
+        // 2. R8-2c: DocumentCollaborationResolver.ExecuteAnchoredCommentAgentMention reports rejected edits instead of claiming silent success
+        const mentionArtId = 'e8020000-0000-4000-8000-000000000003';
+        versions.push({
+            ID: 'ver-r82c-1',
+            ArtifactID: mentionArtId,
+            VersionNumber: 1,
+            Content: '# Plan\n\nTarget quote.\n',
+            ContentHash: 'hash-r82c-1',
+            UserID: editorUser.ID
+        });
+        const mentionRoom = await server.GetOrCreateRoom(mentionArtId, editorUser);
+        expect(mentionRoom).not.toBeNull();
+
+        const activeAgent: Partial<MJAIAgentEntityExtended> = {
+            ID: '99999999-1111-4222-8333-cccccccccccc',
+            Name: 'Copy Editor',
+            Status: 'Active'
+        };
+        const fakeRun: Partial<MJAIAgentRunEntityExtended> = {
+            ID: '88888888-1111-4222-8333-dddddddddddd',
+            AgentID: activeAgent.ID
+        };
+        const agentsSpy = vi
+            .spyOn(AIEngine.Instance, 'Agents', 'get')
+            .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const runConflictSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementationOnce(async () => {
+            // Concurrent co-author rewrites the exact anchored selection while the agent is thinking
+            mentionRoom!.Doc.transact(() => {
+                const yText = mentionRoom!.Doc.getText('content');
+                const idx = yText.toString().indexOf('Target quote.');
+                yText.delete(idx, 'Target quote.'.length);
+                yText.insert(idx, 'Human rewrote target quote.');
+            }, 'coauthor-conflict');
+
+            return {
+                success: true,
+                payload: {
+                    reply: '',
+                    replacement: 'Agent polished target quote.'
+                },
+                agentRun: fakeRun as MJAIAgentRunEntityExtended
+            };
+        });
+
+        const mentionCtx: AppContext = {
+            dataSource: {} as AppContext['dataSource'],
+            dataSources: [],
+            providers: [{ provider: createMockProvider(), type: 'Read-Write' }],
+            userPayload: {
+                userRecord: editorUser,
+                email: editorUser.Email,
+                sessionId: 'sess-r8-2c'
+            }
+        };
+
+        try {
+            const mentionRes = await resolver.ExecuteAnchoredCommentAgentMention(
+                mentionArtId,
+                'Copy Editor',
+                'edit',
+                '@copy-editor rewrite selection',
+                'Target quote.',
+                mentionCtx
+            );
+            expect(mentionRes.Success).toBe(true);
+            expect(mentionRes.UpdatedContent).toBe('# Plan\n\nHuman rewrote target quote.\n');
+            expect(mentionRes.ReplyBody).toContain('1 edit not applied because of concurrent edits.');
+            expect(mentionRes.ReplyBody).not.toContain('Applied edit to anchored selection');
+        } finally {
+            runConflictSpy.mockRestore();
+            canRunSpy.mockRestore();
+            agentsSpy.mockRestore();
+        }
+
+        // 3. R8-2d: Global live mutation hook ('___MJ_ARTIFACT_LIVE_MUTATION_HOOK___') reconciles active room edits
+        // and ARTIFACT_LIVE_MUTATION_EVENT_CODE skips AlreadyAppliedToRoom: true without double-applying
+        const hookArtId = 'e8020000-0000-4000-8000-000000000004';
+        const hookBase = 'First\nSecond\nThird\n';
+        versions.push({
+            ID: 'ver-r82d-1',
+            ArtifactID: hookArtId,
+            VersionNumber: 1,
+            Content: hookBase,
+            ContentHash: 'hash-r82d-1',
+            UserID: editorUser.ID
+        });
+        const hookRoom = await server.GetOrCreateRoom(hookArtId, editorUser);
+        expect(hookRoom).not.toBeNull();
+        hookRoom!.Doc.transact(() => {
+            const yText = hookRoom!.Doc.getText('content');
+            const idx = yText.toString().indexOf('Second');
+            yText.delete(idx, 'Second'.length);
+            yText.insert(idx, 'Human Second');
+        }, 'human-hook');
+
+        type RegisteredLiveHook = (evt: {
+            artifactId?: string;
+            updatedContent: string;
+            previousContent?: string;
+            contextUser: UserInfo;
+            toolName: string;
+            artifactHandle: string;
+        }) => Promise<{
+            mergedContent?: string;
+            hadConflict?: boolean;
+            rejectedHunksCount?: number;
+            rejectedAgentHunks?: Array<{
+                BaseLines: string[];
+                LiveLines: string[];
+                RejectedAgentLines: string[];
+            }>;
+        } | void>;
+
+        const globalStore = GetGlobalObjectStore();
+        const registeredHook = globalStore?.['___MJ_ARTIFACT_LIVE_MUTATION_HOOK___'] as
+            | RegisteredLiveHook
+            | undefined;
+        expect(typeof registeredHook).toBe('function');
+
+        const hookOut = await registeredHook!({
+            artifactId: hookArtId,
+            updatedContent: 'Agent First\nAgent Second\nAgent Third\n',
+            previousContent: hookBase,
+            contextUser: editorUser,
+            toolName: 'replace_section',
+            artifactHandle: 'doc-1'
+        });
+        expect(hookOut).toBeDefined();
+        if (hookOut) {
+            expect(hookOut.mergedContent).toBe('Agent First\nHuman Second\nAgent Third\n');
+            expect(hookOut.hadConflict).toBe(true);
+            expect(hookOut.rejectedHunksCount).toBe(1);
+            expect(hookOut.rejectedAgentHunks?.[0]?.RejectedAgentLines).toEqual(['Agent Second']);
+        }
+
+        const applySpy = vi.spyOn(server, 'ApplyServerContentMutation');
+        try {
+            MJGlobal.Instance.RaiseEvent({
+                component: server,
+                event: MJEventType.ComponentEvent,
+                eventCode: ARTIFACT_LIVE_MUTATION_EVENT_CODE,
+                args: {
+                    ArtifactID: hookArtId,
+                    UpdatedContent: 'Should be skipped because AlreadyAppliedToRoom is true\n',
+                    ContextUser: editorUser,
+                    AlreadyAppliedToRoom: true
+                }
+            });
+            await new Promise((r) => setTimeout(r, 20));
+            expect(applySpy).not.toHaveBeenCalled();
+            expect(await server.GetRoomContent(hookArtId, editorUser)).toBe(
+                'Agent First\nHuman Second\nAgent Third\n'
+            );
+        } finally {
+            applySpy.mockRestore();
+        }
+    });
+
+    it('R8-2e (R1): treats Version Restore ("Restored from ...") as authoritative across live rooms (mid-word human typing), ApplyServerContentMutation, and cold hydration', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const restoreArtId = 'e8020000-0000-4000-8000-000000000005';
+        const v1Clean = '# Product Spec\n\nCanonical v1 specification.\n';
+        const v2Draft = '# Product Spec\n\nExperimental v2 draft.\n';
+
+        versions = [
+            {
+                ID: 'ver-r1-1',
+                ArtifactID: restoreArtId,
+                VersionNumber: 1,
+                Content: v1Clean,
+                ContentHash: 'hash-r1-1',
+                UserID: editorUser.ID,
+                __mj_CreatedAt: new Date(Date.now() - 20_000).toISOString(),
+                __mj_UpdatedAt: new Date(Date.now() - 20_000).toISOString()
+            },
+            {
+                ID: 'ver-r1-2',
+                ArtifactID: restoreArtId,
+                VersionNumber: 2,
+                Content: v2Draft,
+                ContentHash: 'hash-r1-2',
+                UserID: editorUser.ID,
+                __mj_CreatedAt: new Date(Date.now() - 10_000).toISOString(),
+                __mj_UpdatedAt: new Date(Date.now() - 10_000).toISOString()
+            }
+        ];
+        workingStates.delete(restoreArtId);
+
+        const room = await server.GetOrCreateRoom(restoreArtId, editorUser);
+        expect(room).not.toBeNull();
+        const initialEpoch = room!.RoomEpoch;
+
+        // Connect a live WebSocket client to verify room-reset + version-saved frames arrive on authoritative Restore
+        const ws = new WsClient(
+            `ws://127.0.0.1:${wsPort}${ARTIFACT_COLLABORATION_WS_PATH}?artifactId=${restoreArtId}&testUserId=${editorUser.ID}`
+        );
+        const controlFrames: CollaborationControlFrame[] = [];
+        ws.on('message', (raw: Buffer) => {
+            const dec = decoding.createDecoder(new Uint8Array(raw));
+            const msgType = decoding.readVarUint(dec);
+            if (msgType === YJS_MESSAGE_CONTROL) {
+                const jsonStr = decoding.readVarString(dec);
+                controlFrames.push(JSON.parse(jsonStr) as CollaborationControlFrame);
+            }
+        });
+        await new Promise<void>((resolve, reject) => {
+            ws.once('open', () => resolve());
+            ws.once('error', reject);
+        });
+
+        try {
+            // Simulate human mid-word typing on top of v2 in the live room
+            room!.Doc.transact(() => {
+                const yText = room!.Doc.getText('content');
+                yText.insert(yText.length, '\nHuman typing mid-wo');
+            }, 'human-mid-word');
+            room!.DirtyVersion = true;
+
+            // Save v3 as a Version Restore ("Restored from Version 1") and emit ARTIFACT_VERSION_SAVED_EVENT_CODE
+            const nowIso = new Date().toISOString();
+            versions.push({
+                ID: 'ver-r1-3',
+                ArtifactID: restoreArtId,
+                VersionNumber: 3,
+                Content: v1Clean,
+                ContentHash: 'hash-r1-1',
+                Description: 'Restored from Version 1',
+                UserID: editorUser.ID,
+                __mj_CreatedAt: nowIso,
+                __mj_UpdatedAt: nowIso
+            });
+
+            MJGlobal.Instance.RaiseEvent({
+                component: server,
+                event: MJEventType.ComponentEvent,
+                eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                args: {
+                    ArtifactID: restoreArtId,
+                    VersionID: 'ver-r1-3',
+                    VersionNumber: 3,
+                    Content: v1Clean,
+                    PreviousContent: v2Draft,
+                    Description: 'Restored from Version 1',
+                    IsRestore: true,
+                    UpdatedByUserID: editorUser.ID
+                }
+            });
+
+            await new Promise((r) => setTimeout(r, 50));
+
+            // Room MUST snap authoritatively to v1Clean (dropping mid-word typing), advance RoomEpoch, and broadcast room-reset + version-saved
+            expect(await server.GetRoomContent(restoreArtId, editorUser)).toBe(v1Clean);
+            expect(room!.BaseVersionID).toBe('ver-r1-3');
+            expect(room!.BaseVersionNumber).toBe(3);
+            expect(room!.RoomEpoch).not.toBe(initialEpoch);
+            expect(controlFrames.some((f) => f.action === 'room-reset')).toBe(true);
+            expect(controlFrames.some((f) => f.action === 'version-saved' && f.versionNumber === 3)).toBe(true);
+        } finally {
+            ws.close();
+        }
+
+        // Also verify ApplyServerContentMutation(..., { isRestore: true }) snaps authoritatively
+        room!.Doc.transact(() => {
+            room!.Doc.getText('content').insert(0, 'Transient human edit\n');
+        }, 'human-transient');
+        const epochBeforeExplicitRestore = room!.RoomEpoch;
+        const explicitRestore = await server.ApplyServerContentMutation(
+            restoreArtId,
+            '# Explicit Restore\n',
+            editorUser,
+            false,
+            v1Clean,
+            { isRestore: true }
+        );
+        expect(explicitRestore.Success).toBe(true);
+        expect(explicitRestore.HadConflict).toBe(false);
+        expect(await server.GetRoomContent(restoreArtId, editorUser)).toBe('# Explicit Restore\n');
+        expect(room!.RoomEpoch).not.toBe(epochBeforeExplicitRestore);
+    });
+
+    it('R8-9: lossless JSON AST merge preserves 64-bit ints, 1.0, 1e3, \\u00e9, 4-space indentation, "__proto__", A15, and recursive ID-keyed Whiteboard pages[0].elements', () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. Lossless raw token & 4-space indentation preservation + "__proto__" safety
+        const baseLossless = [
+            '{',
+            '    "bigIntId": 12345678901234567890,',
+            '    "floatOne": 1.0,',
+            '    "sciNum": 1e3,',
+            '    "escapedAccents": "\\u00e9clair",',
+            '    "__proto__": {',
+            '        "safeTag": "preserved"',
+            '    },',
+            '    "humanField": "before-human",',
+            '    "agentField": "before-agent"',
+            '}'
+        ].join('\n') + '\n';
+
+        const liveLossless = baseLossless.replace('"before-human"', () => '"after-human"');
+        const incomingLossless = baseLossless.replace('"before-agent"', () => '"after-agent"');
+
+        const mergedLossless = server.MergeConcurrentDocumentEditsDetailed(
+            baseLossless,
+            liveLossless,
+            incomingLossless
+        );
+        expect(mergedLossless.HadConflict).toBe(false);
+        expect(mergedLossless.MergedText).toContain('    "bigIntId": 12345678901234567890,');
+        expect(mergedLossless.MergedText).toContain('    "floatOne": 1.0,');
+        expect(mergedLossless.MergedText).toContain('    "sciNum": 1e3,');
+        expect(mergedLossless.MergedText).toContain('    "escapedAccents": "\\u00e9clair",');
+        expect(mergedLossless.MergedText).toContain('    "__proto__": {');
+        expect(mergedLossless.MergedText).toContain('        "safeTag": "preserved"');
+        expect(mergedLossless.MergedText).toContain('    "humanField": "after-human",');
+        expect(mergedLossless.MergedText).toContain('    "agentField": "after-agent"');
+        expect(mergedLossless.MergedText.endsWith('\n')).toBe(true);
+
+        // 2. A15 compact JSON merge
+        const a15 = server.MergeConcurrentDocumentEditsDetailed(
+            '{"a":1,"b":2}',
+            '{"a":5,"b":2}',
+            '{"a":1,"b":3}'
+        );
+        expect(a15.HadConflict).toBe(false);
+        expect(JSON.parse(a15.MergedText)).toEqual({ a: 5, b: 3 });
+
+        // 3. Whiteboard pages[0].elements: human drags shape-1 while agent adds shape-3 -> BOTH preserved!
+        const wbPagesBase = JSON.stringify(
+            {
+                version: 1,
+                pages: [
+                    {
+                        id: 'page-1',
+                        name: 'Architecture',
+                        elements: [
+                            { id: 'shape-1', type: 'rect', x: 10, y: 20 },
+                            { id: 'shape-2', type: 'ellipse', x: 100, y: 100 }
+                        ]
+                    }
+                ]
+            },
+            null,
+            2
+        );
+        const wbPagesLive = JSON.stringify(
+            {
+                version: 1,
+                pages: [
+                    {
+                        id: 'page-1',
+                        name: 'Architecture',
+                        elements: [
+                            { id: 'shape-1', type: 'rect', x: 240, y: 85 },
+                            { id: 'shape-2', type: 'ellipse', x: 100, y: 100 }
+                        ]
+                    }
+                ]
+            },
+            null,
+            2
+        );
+        const wbPagesIncoming = JSON.stringify(
+            {
+                version: 1,
+                pages: [
+                    {
+                        id: 'page-1',
+                        name: 'Architecture',
+                        elements: [
+                            { id: 'shape-1', type: 'rect', x: 10, y: 20 },
+                            { id: 'shape-2', type: 'ellipse', x: 100, y: 100 },
+                            { id: 'shape-3', type: 'diamond', x: 400, y: 200 }
+                        ]
+                    }
+                ]
+            },
+            null,
+            2
+        );
+
+        const wbPagesMerged = server.MergeConcurrentDocumentEditsDetailed(
+            wbPagesBase,
+            wbPagesLive,
+            wbPagesIncoming
+        );
+        expect(wbPagesMerged.HadConflict).toBe(false);
+        const parsedWbPages = JSON.parse(wbPagesMerged.MergedText) as {
+            pages: Array<{
+                id: string;
+                elements: Array<{ id: string; type: string; x: number; y: number }>;
+            }>;
+        };
+        expect(parsedWbPages.pages[0]?.elements).toEqual([
+            { id: 'shape-1', type: 'rect', x: 240, y: 85 },
+            { id: 'shape-2', type: 'ellipse', x: 100, y: 100 },
+            { id: 'shape-3', type: 'diamond', x: 400, y: 200 }
+        ]);
+    });
+
+    it('R8-11 & Collab Hardening: DoesDocSatisfySnapshot checks 60,000 delete ranges in < 50 ms, logs encodeSafeDeltaUpdate fallback, filters stale sync-state waiters, and guards WorkingState flush against newer persisted versions', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // 1. R8-11: Linear O(N + M) DoesDocSatisfySnapshot over 60,000 disjoint delete ranges in < 50 ms
+        const heavyDoc = new Y.Doc();
+        heavyDoc.clientID = 424242;
+        const missingOneDoc = new Y.Doc();
+        try {
+            heavyDoc.transact(() => {
+                heavyDoc.getText('content').insert(0, 'ab'.repeat(60_000));
+            });
+            Y.applyUpdate(missingOneDoc, Y.encodeStateAsUpdate(heavyDoc));
+
+            heavyDoc.transact(() => {
+                const yText = heavyDoc.getText('content');
+                for (let i = 59_999; i >= 0; i--) {
+                    yText.delete(i * 2, 1);
+                }
+            });
+            missingOneDoc.transact(() => {
+                const yText = missingOneDoc.getText('content');
+                for (let i = 59_999; i >= 1; i--) {
+                    yText.delete(i * 2, 1);
+                }
+            });
+
+            const targetSnap = Y.snapshot(heavyDoc);
+            expect(targetSnap.ds.clients.get(424242)?.length).toBe(60_000);
+            const encodedSnap = Y.encodeSnapshot(targetSnap);
+
+            // Warm up JIT once
+            expect(server.DoesDocSatisfySnapshot(heavyDoc, encodedSnap)).toBe(true);
+
+            const t0 = performance.now();
+            const satisfied = server.DoesDocSatisfySnapshot(heavyDoc, encodedSnap);
+            const elapsedSatisfiedMs = performance.now() - t0;
+
+            const t1 = performance.now();
+            const notSatisfied = server.DoesDocSatisfySnapshot(missingOneDoc, encodedSnap);
+            const elapsedMissingMs = performance.now() - t1;
+
+            expect(satisfied).toBe(true);
+            expect(notSatisfied).toBe(false);
+            expect(elapsedSatisfiedMs).toBeLessThan(50);
+            expect(elapsedMissingMs).toBeLessThan(50);
+        } finally {
+            heavyDoc.destroy();
+            missingOneDoc.destroy();
+        }
+
+        // 2. Log encodeSafeDeltaUpdate fallback on corrupt state vector in sync-request relay
+        class HardeningNode1 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        class HardeningNode2 extends ArtifactCollaborationServer {
+            public constructor() {
+                super();
+            }
+        }
+        const bus = new InMemoryYjsRelayBus();
+        const relay1 = new InMemoryYjsRoomRelay(bus, 'r8-node-1');
+        const relay2 = new InMemoryYjsRoomRelay(bus, 'r8-node-2');
+        const relayStale = new InMemoryYjsRoomRelay(bus, 'r8-node-stale');
+        const node1 = new HardeningNode1();
+        const node2 = new HardeningNode2();
+        expect(node1).not.toBe(node2);
+        node1.SetMetadataProviderOverride(createMockProvider());
+        node2.SetMetadataProviderOverride(createMockProvider());
+        node1.SetRoomRelay(relay1);
+        node2.SetRoomRelay(relay2);
+
+        try {
+            const syncArtId = 'e8110000-0000-4000-8000-000000000006';
+            const largeBase = `Header\n${'Paragraph line content for >256KB relay test.\n'.repeat(6_000)}`;
+            versions = [
+                {
+                    ID: 'ver-r811-1',
+                    ArtifactID: syncArtId,
+                    VersionNumber: 1,
+                    Content: largeBase,
+                    ContentHash: 'hash-r811-1',
+                    UserID: editorUser.ID
+                }
+            ];
+            workingStates.delete(syncArtId);
+
+            const room1 = await node1.GetOrCreateRoom(syncArtId, editorUser);
+            const room2 = await node2.GetOrCreateRoom(syncArtId, secondEditorUser);
+            expect(room1).not.toBeNull();
+            expect(room2).not.toBeNull();
+
+            // Corrupt PayloadBase64 (truncated varint: 0x80) triggers encodeSafeDeltaUpdate catch -> LogError + full-state fallback
+            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            try {
+                await relay2.PublishToRoom({
+                    ArtifactID: syncArtId,
+                    MessageType: 'sync-request',
+                    OriginInstanceID: relay2.InstanceID,
+                    PayloadBase64: BytesToBase64(new Uint8Array([0x80]))
+                });
+                await new Promise((r) => setTimeout(r, 25));
+                expect(
+                    errSpy.mock.calls.some((call) =>
+                        call.some((arg) => String(arg).includes('encodeSafeDeltaUpdate failed'))
+                    )
+                ).toBe(true);
+            } finally {
+                errSpy.mockRestore();
+            }
+
+            // 3. Sync waiter target predicate: stale peer's empty sync-state does NOT prematurely settle waiter before authoritative sync-state
+            let staleReplied = false;
+            await relayStale.SubscribeRoom(syncArtId, async (msg: YjsRelayMessage) => {
+                if (msg.MessageType === 'sync-request' && !staleReplied) {
+                    staleReplied = true;
+                    const emptyDoc = new Y.Doc();
+                    const emptyStateB64 = BytesToBase64(Y.encodeStateAsUpdate(emptyDoc));
+                    emptyDoc.destroy();
+                    await relayStale.PublishToRoom({
+                        ArtifactID: syncArtId,
+                        MessageType: 'sync-state',
+                        OriginInstanceID: relayStale.InstanceID,
+                        PayloadBase64: emptyStateB64
+                    });
+                }
+            });
+
+            // Mutate room1 with origin 'relay' (simulating a dropped real-time sync-update packet) and >256 KB delta
+            // so CompactRoomToArtifactVersion omits inline savedDocUpdateB64 and node2 uses sync-request + target predicate!
+            const authoritativeDelta = `${'Authoritative Peer Edit.\n'.repeat(11_500)}`;
+            room1!.Doc.transact(() => {
+                room1!.Doc.getText('content').insert(0, authoritativeDelta);
+            }, 'relay');
+            room1!.DirtyVersion = true;
+            const compacted = await node1.CompactRoomToArtifactVersion(syncArtId, editorUser);
+            expect(compacted.Saved).toBe(true);
+
+            await new Promise((r) => setTimeout(r, 80));
+            expect(staleReplied).toBe(true);
+            expect((await node2.GetRoomContent(syncArtId, secondEditorUser)).startsWith('Authoritative Peer Edit.\n')).toBe(
+                true
+            );
+
+            // 4. Working-state flush guard: stale room (BaseVersionNumber=1) refuses to overwrite persisted working state at version 5
+            const guardArtId = 'e8110000-0000-4000-8000-000000000007';
+            versions.push({
+                ID: 'ver-guard-1',
+                ArtifactID: guardArtId,
+                VersionNumber: 1,
+                Content: 'Stale v1 content\n',
+                ContentHash: 'hash-guard-1',
+                UserID: editorUser.ID
+            });
+            const staleRoom = await server.GetOrCreateRoom(guardArtId, editorUser);
+            expect(staleRoom).not.toBeNull();
+            expect(staleRoom!.BaseVersionNumber).toBe(1);
+
+            const newerWsDoc = new Y.Doc();
+            newerWsDoc.getText('content').insert(0, 'Newer v5 working state\n');
+            newerWsDoc.getMap('meta').set('baseVersionNumber', 5);
+            newerWsDoc.getMap('meta').set('versionNumber', 5);
+            const newerYjsStateB64 = BytesToBase64(Y.encodeStateAsUpdate(newerWsDoc));
+            newerWsDoc.destroy();
+
+            workingStates.set(guardArtId, {
+                ID: 'ws-guard-5',
+                ArtifactID: guardArtId,
+                YjsState: newerYjsStateB64,
+                LastModifiedByUserID: secondEditorUser.ID,
+                __mj_UpdatedAt: new Date().toISOString()
+            });
+
+            const guardedFlush = await server.FlushWorkingState(guardArtId, editorUser, {
+                guardNewerPersistedVersion: true
+            });
+            expect(guardedFlush).toBe(false);
+            expect(workingStates.get(guardArtId)?.YjsState).toBe(newerYjsStateB64);
+        } finally {
+            await relayStale.Shutdown();
+            await node1.Shutdown();
+            await node2.Shutdown();
+            await relay1.Shutdown();
+            await relay2.Shutdown();
         }
     });
 });

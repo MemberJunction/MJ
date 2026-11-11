@@ -651,10 +651,28 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(info!.TrustServerCacheCompletely === false,
                 `precondition: TrustServerCacheCompletely=false (got ${info!.TrustServerCacheCompletely})`);
 
+            const AUDIT_LOG_CACHE_KEY_PREFIX = 'MJ: Audit Logs|';
+            let auditLogCacheReads = 0;
+            const origGetItem = ctx.Storage.GetItem.bind(ctx.Storage);
+            const origGetItems = ctx.Storage.GetItems.bind(ctx.Storage);
+            ctx.Storage.GetItem = <T>(key: string, category?: string): Promise<T | null> => {
+                if (category === 'RunViewCache' && key.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX)) {
+                    auditLogCacheReads++;
+                }
+                return origGetItem<T>(key, category);
+            };
+            ctx.Storage.GetItems = <T>(keys: string[], category?: string): Promise<Map<string, T | null>> => {
+                if (category === 'RunViewCache' && keys.some((k) => k.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX))) {
+                    auditLogCacheReads++;
+                }
+                return origGetItems<T>(keys, category);
+            };
+
             const originalAllowCaching = info!.AllowCaching;
             info!.AllowCaching = true;
             try {
                 ctx.Storage.ResetCounts();
+                auditLogCacheReads = 0;
                 const first = await rv.RunView({
                     EntityName: 'MJ: Audit Logs',
                     ExtraFilter: "'tag-s25' <> 'never'",
@@ -671,9 +689,14 @@ export const ServerCacheChecks: NamedCheck[] = [
                     ResultType: 'simple'
                 }, ctx.User);
                 Assert(second.Success, `second failed: ${second.ErrorMessage}`);
-                AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'Trust=0 entity must never write the server cache');
-                AssertEqual(ctx.Storage.GetCount('RunViewCache'), 0, 'Trust=0 entity must never read the server cache');
+                const auditLogCacheWrites = ctx.Storage.Writes.filter(
+                    (w) => w.Category === 'RunViewCache' && w.Key.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX)
+                ).length;
+                AssertEqual(auditLogCacheWrites, 0, 'Trust=0 entity must never write the server cache');
+                AssertEqual(auditLogCacheReads, 0, 'Trust=0 entity must never read the server cache');
             } finally {
+                ctx.Storage.GetItem = origGetItem;
+                ctx.Storage.GetItems = origGetItems;
                 info!.AllowCaching = originalAllowCaching;
             }
         }

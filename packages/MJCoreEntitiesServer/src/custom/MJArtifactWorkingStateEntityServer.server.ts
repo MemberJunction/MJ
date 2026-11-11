@@ -114,6 +114,7 @@ export const ArtifactWorkingStatePreRunViewHook: PreRunViewHook = (
     const provider = resolveMetadataProvider(hookProvider, contextUser);
     if (
         !params ||
+        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Working States' ||
         isServerSystemUser(contextUser) ||
         (!contextUser && provider !== null && provider.ProviderType !== 'Database')
@@ -146,7 +147,11 @@ export const ArtifactWorkingStatePostRunViewHook: PostRunViewHook = async (
     contextUser: UserInfo | undefined,
     hookProvider?: IMetadataProvider
 ): Promise<RunViewResult> => {
-    if (!results?.Success || resolveTargetEntityName(params) !== 'MJ: Artifact Working States') {
+    if (
+        !results?.Success ||
+        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
+        resolveTargetEntityName(params) !== 'MJ: Artifact Working States'
+    ) {
         return results;
     }
 

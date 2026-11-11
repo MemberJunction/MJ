@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subject, Observable } from 'rxjs';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
@@ -6,7 +6,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
 import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { GetGlobalObjectStore, SafeJSONParse } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
   ArtifactPermissionEngine,
@@ -173,6 +173,49 @@ const VERIFY_FROZEN_BLOCK_SNAPSHOT_QUERY = `
 const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000] as const;
 export const MAX_RECONNECT_ATTEMPTS = 10;
 export const COLLAB_SECRET_UNCONFIGURED_CODE = 'COLLAB_SECRET_UNCONFIGURED';
+export const MERGE_CONFLICT_WARNING_MESSAGE =
+  "Some agent edits weren't applied because you were editing the same text.";
+
+/**
+ * Strongly-typed event emitted when the collaboration server rejects one or more incoming
+ * agent edit hunks because concurrent live human edits touched the same region.
+ */
+export interface CollaborationMergeConflictEvent {
+  ArtifactID: string;
+  VersionID?: string;
+  VersionNumber?: number;
+  RejectedHunksCount: number;
+  Source?: string;
+  RoomEpoch?: string;
+  Timestamp: string;
+}
+
+/**
+ * Minimal structural contract for displaying non-blocking collaboration toast notifications.
+ */
+export interface CollaborationNotificationSink {
+  CreateSimpleNotification: (
+    message: string,
+    style?: 'none' | 'success' | 'error' | 'warning' | 'info',
+    hideAfter?: number,
+  ) => void;
+}
+
+interface CollaborationControlFramePayload {
+  type?: string;
+  action?: string;
+  payload?: string;
+  canEdit?: boolean;
+  canRead?: boolean;
+  artifactId?: string;
+  versionId?: string;
+  versionNumber?: number;
+  rejectedHunksCount?: number;
+  rejectedHunkCount?: number;
+  source?: string;
+  roomEpoch?: string;
+  timestamp?: string;
+}
 
 /**
  * Strict fallback check for thrown errors or legacy responses without `ErrorCode`.
@@ -539,6 +582,7 @@ export class DocumentCollaborationSession {
     | ((update: Uint8Array, origin: string | number | symbol | object | null | undefined) => void)
     | null = null;
   private destroyed = false;
+  private recoverable = true;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connectGeneration = 0;
@@ -549,11 +593,14 @@ export class DocumentCollaborationSession {
     wsUrlOverride?: string | null,
     provider?: IMetadataProvider | null,
   ) => Promise<ResolvedCollaborationEndpoint>;
+  private readonly onMergeConflict?: (event: CollaborationMergeConflictEvent) => void;
+  private readonly onDestroyed?: (session: DocumentCollaborationSession) => void;
 
   private readonly contentChanged$ = new Subject<string>();
   private readonly statusChanged$ = new Subject<CollaborationConnectionStatus>();
   private readonly collaboratorsChanged$ = new Subject<CollaboratorPresence[]>();
   private readonly versionSaved$ = new Subject<{ versionId: string; versionNumber: number }>();
+  private readonly mergeConflict$ = new Subject<CollaborationMergeConflictEvent>();
   private readonly liveSyncUnavailable$ = new BehaviorSubject<boolean>(false);
 
   public get YDoc(): Y.Doc {
@@ -629,6 +676,18 @@ export class DocumentCollaborationSession {
     return this.versionSaved$.asObservable();
   }
 
+  public get MergeConflict$(): Observable<CollaborationMergeConflictEvent> {
+    return this.mergeConflict$.asObservable();
+  }
+
+  public get Recoverable(): boolean {
+    return this.recoverable;
+  }
+
+  public ResetReconnectAttempts(): void {
+    this.reconnectAttempts = 0;
+  }
+
   public get Status(): CollaborationConnectionStatus {
     return this.status;
   }
@@ -667,7 +726,7 @@ export class DocumentCollaborationSession {
       this.setStatus('readonly');
     } else if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.setStatus(canEdit ? 'connected' : 'readonly');
-    } else if (!canEdit) {
+    } else if (!canEdit && this.status !== 'error') {
       this.setStatus('readonly');
     } else if (
       this.status !== 'connecting' &&
@@ -716,6 +775,8 @@ export class DocumentCollaborationSession {
       wsUrlOverride?: string | null,
       provider?: IMetadataProvider | null,
     ) => Promise<ResolvedCollaborationEndpoint>,
+    onMergeConflict?: (event: CollaborationMergeConflictEvent) => void,
+    onDestroyed?: (session: DocumentCollaborationSession) => void,
   ) {
     this.ArtifactID = artifactId;
     this.canEdit = canEdit;
@@ -724,6 +785,8 @@ export class DocumentCollaborationSession {
     this.initialSeedContent = initialContent ?? '';
     this.lastSyncedRemoteContent = this.initialSeedContent;
     this.endpointResolver = endpointResolver;
+    this.onMergeConflict = onMergeConflict;
+    this.onDestroyed = onDestroyed;
     this.Doc = new Y.Doc();
     this.ContentText = this.Doc.getText('content');
     if (initialContent && this.transport === 'local-only') {
@@ -960,6 +1023,7 @@ export class DocumentCollaborationSession {
         }
         if (resolved.Mode === 'revoked') {
           this.canEdit = false;
+          this.recoverable = false;
           this.clearReconnectTimer();
           this.setStatus('revoked');
           return;
@@ -967,10 +1031,12 @@ export class DocumentCollaborationSession {
         if (resolved.Mode === 'local' || !resolved.WsUrl) {
           if (resolved.LiveSyncUnavailable === true) {
             this.setLiveSyncUnavailable(true, resolved.LiveSyncErrorReason ?? '');
+            this.recoverable = false;
             this.clearReconnectTimer();
             this.setStatus('readonly');
             return;
           }
+          this.recoverable = true;
           this.setLiveSyncUnavailable(false);
           if (resolved.LiveSyncErrorReason) {
             this.liveSyncErrorReason = resolved.LiveSyncErrorReason;
@@ -990,6 +1056,7 @@ export class DocumentCollaborationSession {
         if (resolved.CanEdit === false) {
           this.canEdit = false;
         }
+        this.recoverable = true;
         this.setLiveSyncUnavailable(false);
         this.transport = 'websocket';
         targetWsUrl = resolved.WsUrl;
@@ -1000,6 +1067,7 @@ export class DocumentCollaborationSession {
         this.setStatus(this.canEdit ? 'local' : 'readonly');
         return;
       } else {
+        this.recoverable = true;
         this.transport = 'websocket';
       }
 
@@ -1019,6 +1087,7 @@ export class DocumentCollaborationSession {
           ws.close();
           return;
         }
+        this.recoverable = true;
         this.setLiveSyncUnavailable(false);
         this.clearReconnectTimer();
         this.setStatus(this.canEdit ? 'connected' : 'readonly');
@@ -1045,9 +1114,9 @@ export class DocumentCollaborationSession {
           return;
         }
         if (typeof event.data === 'string') {
-          const msg = SafeJSONParse<{ type?: string; action?: string; payload?: string }>(event.data);
-          if ((msg?.type === 'room-reset' || msg?.action === 'room-reset') && typeof msg.payload === 'string') {
-            this.ApplyRoomReset(msg.payload);
+          const msg = SafeJSONParse<CollaborationControlFramePayload>(event.data);
+          if (msg) {
+            this.handleControlPayload(msg);
           }
           return;
         }
@@ -1069,10 +1138,12 @@ export class DocumentCollaborationSession {
         }
         if (event.code === 4403) {
           this.canEdit = false;
+          this.recoverable = false;
           this.clearReconnectTimer();
           this.setStatus('revoked');
           return;
         }
+        this.recoverable = true;
         if (event.code === 4401) {
           this.clearReconnectTimer();
           this.setStatus(this.canEdit ? 'local' : 'readonly');
@@ -1089,6 +1160,7 @@ export class DocumentCollaborationSession {
       };
     } catch (err) {
       LogError(err);
+      this.recoverable = true;
       this.setStatus(this.canEdit ? 'local' : 'readonly');
       if (this.transport === 'websocket') {
         this.scheduleReconnect();
@@ -1106,6 +1178,7 @@ export class DocumentCollaborationSession {
     }
     this.clearReconnectTimer();
     this.reconnectAttempts = 0;
+    this.recoverable = true;
     const nextWsUrl = wsUrl !== undefined ? wsUrl : this.configuredWsUrlOverride;
     const nextProvider = provider !== undefined ? provider : this.configuredProvider;
     await this.Connect(nextWsUrl, nextProvider);
@@ -1462,9 +1535,11 @@ export class DocumentCollaborationSession {
     this.statusChanged$.complete();
     this.collaboratorsChanged$.complete();
     this.versionSaved$.complete();
+    this.mergeConflict$.complete();
     this.liveSyncUnavailable$.complete();
     this.Awareness.destroy();
     this.Doc.destroy();
+    this.onDestroyed?.(this);
   }
 
   /**
@@ -1541,43 +1616,76 @@ export class DocumentCollaborationSession {
       awarenessProtocol.applyAwarenessUpdate(this.Awareness, update, 'remote');
     } else if (msgType === MSG_CONTROL || msgType === MSG_PERMISSION_STATE) {
       const jsonStr = decoding.readVarString(decoder);
-      const parsed = SafeJSONParse<{
-        type?: string;
-        action?: string;
-        payload?: string;
-        canEdit?: boolean;
-        canRead?: boolean;
-        versionId?: string;
-        versionNumber?: number;
-      }>(jsonStr);
+      const parsed = SafeJSONParse<CollaborationControlFramePayload>(jsonStr);
       if (!parsed) {
         return;
       }
-      if ((parsed.type === 'room-reset' || parsed.action === 'room-reset') && typeof parsed.payload === 'string') {
-        this.ApplyRoomReset(parsed.payload);
-        return;
-      }
-      if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
-        this.versionSaved$.next({
-          versionId: parsed.versionId ?? '',
-          versionNumber: parsed.versionNumber,
-        });
-        return;
-      }
-      if (parsed.action === 'readonly-rejected') {
-        this.canEdit = false;
-        this.setStatus('readonly');
-      } else if (parsed.canRead === false) {
-        this.canEdit = false;
-        this.clearReconnectTimer();
-        this.setStatus('revoked');
-      } else if (parsed.canEdit === false) {
-        this.canEdit = false;
-        this.setStatus('readonly');
-      } else if (parsed.canEdit === true) {
-        this.canEdit = true;
-        this.setStatus('connected');
-      }
+      this.handleControlPayload(parsed);
+    }
+  }
+
+  private handleControlPayload(parsed: CollaborationControlFramePayload): void {
+    if ((parsed.type === 'room-reset' || parsed.action === 'room-reset') && typeof parsed.payload === 'string') {
+      this.ApplyRoomReset(parsed.payload);
+      return;
+    }
+    if (parsed.action === 'version-saved' && typeof parsed.versionNumber === 'number') {
+      this.versionSaved$.next({
+        versionId: parsed.versionId ?? '',
+        versionNumber: parsed.versionNumber,
+      });
+      return;
+    }
+    if (parsed.action === 'merge-conflict' || parsed.type === 'merge-conflict') {
+      this.emitMergeConflictFromPayload(parsed);
+      return;
+    }
+    if (parsed.action === 'readonly-rejected') {
+      this.canEdit = false;
+      this.setStatus('readonly');
+    } else if (
+      parsed.action === 'permission-revoked' ||
+      parsed.type === 'permission-revoked' ||
+      parsed.canRead === false
+    ) {
+      this.canEdit = false;
+      this.recoverable = false;
+      this.clearReconnectTimer();
+      this.setStatus('revoked');
+    } else if (parsed.canEdit === false) {
+      this.canEdit = false;
+      this.setStatus('readonly');
+    } else if (parsed.canEdit === true) {
+      this.canEdit = true;
+      this.setStatus('connected');
+    }
+  }
+
+  private emitMergeConflictFromPayload(parsed: CollaborationControlFramePayload): void {
+    const rejectedCount =
+      typeof parsed.rejectedHunksCount === 'number'
+        ? parsed.rejectedHunksCount
+        : typeof parsed.rejectedHunkCount === 'number'
+          ? parsed.rejectedHunkCount
+          : 0;
+    const conflictEvent: CollaborationMergeConflictEvent = {
+      ArtifactID:
+        typeof parsed.artifactId === 'string' && parsed.artifactId.trim().length > 0
+          ? parsed.artifactId
+          : this.ArtifactID,
+      VersionID: typeof parsed.versionId === 'string' ? parsed.versionId : undefined,
+      VersionNumber: typeof parsed.versionNumber === 'number' ? parsed.versionNumber : undefined,
+      RejectedHunksCount: rejectedCount,
+      Source: typeof parsed.source === 'string' ? parsed.source : undefined,
+      RoomEpoch: typeof parsed.roomEpoch === 'string' ? parsed.roomEpoch : undefined,
+      Timestamp:
+        typeof parsed.timestamp === 'string' && parsed.timestamp.trim().length > 0
+          ? parsed.timestamp
+          : new Date().toISOString(),
+    };
+    this.onMergeConflict?.(conflictEvent);
+    if (!this.destroyed) {
+      this.mergeConflict$.next(conflictEvent);
     }
   }
 
@@ -1587,6 +1695,7 @@ export class DocumentCollaborationSession {
     }
     this.clearReconnectTimer();
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.recoverable = true;
       this.setStatus('error');
       return;
     }
@@ -1983,9 +2092,149 @@ export class DocumentCollaborationSession {
 @Injectable({
   providedIn: 'root',
 })
-export class DocumentCollaborationService {
+export class DocumentCollaborationService implements OnDestroy {
   private readonly frozenSnapshotVerificationCache = new Map<string, boolean>();
   private readonly inFlightFrozenVerifications = new Map<string, Promise<boolean>>();
+  private readonly activeSessions = new Map<string, Set<DocumentCollaborationSession>>();
+  private readonly mergeConflicts$ = new Subject<CollaborationMergeConflictEvent>();
+  private readonly toastedMergeConflicts = new WeakSet<CollaborationMergeConflictEvent>();
+  private notificationSink: CollaborationNotificationSink | null = null;
+  private boundWindowTarget: Window | null = null;
+  private boundDocumentTarget: Document | null = null;
+  private serviceDestroyed = false;
+
+  private readonly handleWindowOnline = (): void => {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    for (const [artifactId, sessions] of Array.from(this.activeSessions.entries())) {
+      let shouldRetry = false;
+      for (const session of Array.from(sessions)) {
+        if (
+          !session.IsDestroyed &&
+          session.Transport === 'websocket' &&
+          session.Recoverable &&
+          !session.LiveSyncUnavailable &&
+          session.Status !== 'revoked' &&
+          (session.Status === 'error' ||
+            session.HasPendingReconnect ||
+            session.Status === 'disconnected')
+        ) {
+          session.ResetReconnectAttempts();
+          shouldRetry = true;
+        }
+      }
+      if (shouldRetry) {
+        void this.Retry(artifactId);
+      }
+    }
+  };
+
+  private readonly handleDocumentVisibilityChange = (): void => {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    if (typeof document === 'undefined' || document.visibilityState !== 'visible') {
+      return;
+    }
+    for (const [artifactId, sessions] of Array.from(this.activeSessions.entries())) {
+      let shouldRetry = false;
+      for (const session of Array.from(sessions)) {
+        if (
+          !session.IsDestroyed &&
+          session.Transport === 'websocket' &&
+          session.Status === 'error' &&
+          session.Recoverable &&
+          !session.LiveSyncUnavailable
+        ) {
+          session.ResetReconnectAttempts();
+          shouldRetry = true;
+        }
+      }
+      if (shouldRetry) {
+        void this.Retry(artifactId);
+      }
+    }
+  };
+
+  constructor() {
+    this.ensureBrowserRecoveryListenersBound();
+  }
+
+  public ngOnDestroy(): void {
+    this.serviceDestroyed = true;
+    this.unbindBrowserRecoveryListeners();
+    this.mergeConflicts$.complete();
+  }
+
+  /**
+   * Registers an explicit notification sink (used by unit tests or custom hosts) when the global
+   * `MJNotificationService` singleton is not mounted.
+   */
+  public SetNotificationSink(sink: CollaborationNotificationSink | null | undefined): void {
+    this.notificationSink = sink ?? null;
+  }
+
+  /**
+   * Stream of `merge-conflict` control events emitted across all active collaboration sessions.
+   */
+  public get MergeConflicts$(): Observable<CollaborationMergeConflictEvent> {
+    return this.mergeConflicts$.asObservable();
+  }
+
+  /**
+   * Surfaces the non-blocking merge-conflict warning toast at most once per conflict event.
+   */
+  public NotifyMergeConflictToastOnce(
+    event: CollaborationMergeConflictEvent,
+    fallbackNotifier?: CollaborationNotificationSink | null,
+  ): boolean {
+    if (this.toastedMergeConflicts.has(event)) {
+      return false;
+    }
+    const globalStore = GetGlobalObjectStore();
+    const globalCandidate = globalStore
+      ? (globalStore['___SINGLETON__MJNotificationService'] as
+          | CollaborationNotificationSink
+          | undefined)
+      : undefined;
+    const notifier: CollaborationNotificationSink | undefined =
+      this.notificationSink ?? fallbackNotifier ?? globalCandidate ?? undefined;
+    if (!notifier || typeof notifier.CreateSimpleNotification !== 'function') {
+      return false;
+    }
+    this.toastedMergeConflicts.add(event);
+    notifier.CreateSimpleNotification(MERGE_CONFLICT_WARNING_MESSAGE, 'warning', 5000);
+    return true;
+  }
+
+  /**
+   * Resets reconnect exhaustion and re-attempts WebSocket collaboration for active session(s)
+   * bound to `artifactId`.
+   */
+  public async Retry(
+    artifactId: string,
+    wsUrl?: string | null,
+    provider?: IMetadataProvider | null,
+  ): Promise<boolean> {
+    if (!artifactId) {
+      return false;
+    }
+    const sessions = this.activeSessions.get(artifactId);
+    if (!sessions || sessions.size === 0) {
+      return false;
+    }
+    const liveSessions = Array.from(sessions).filter((s) => !s.IsDestroyed);
+    if (liveSessions.length === 0) {
+      return false;
+    }
+    const nonConnected = liveSessions.filter((s) => s.Status !== 'connected');
+    const targets = nonConnected.length > 0 ? nonConnected : liveSessions;
+    for (const session of targets) {
+      await session.Retry(wsUrl, provider);
+    }
+    return true;
+  }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
       Command: '/heading-1',
@@ -2118,7 +2367,8 @@ export class DocumentCollaborationService {
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
   ): DocumentCollaborationSession {
-    return new DocumentCollaborationSession(
+    this.ensureBrowserRecoveryListenersBound();
+    const session = new DocumentCollaborationSession(
       artifactId,
       initialContent,
       user,
@@ -2126,7 +2376,89 @@ export class DocumentCollaborationService {
       deferInitialSeedForRemoteSync,
       (artId, wsOverride, provOverride) =>
         this.ResolveCollaborationEndpoint(artId, wsOverride, provOverride),
+      (conflictEvent) => this.handleSessionMergeConflict(conflictEvent),
+      (destroyedSession) => this.unregisterActiveSession(destroyedSession),
     );
+    this.registerActiveSession(session);
+    return session;
+  }
+
+  private registerActiveSession(session: DocumentCollaborationSession): void {
+    const existing = this.activeSessions.get(session.ArtifactID);
+    if (existing) {
+      existing.add(session);
+    } else {
+      this.activeSessions.set(session.ArtifactID, new Set([session]));
+    }
+  }
+
+  private unregisterActiveSession(session: DocumentCollaborationSession): void {
+    const existing = this.activeSessions.get(session.ArtifactID);
+    if (!existing) {
+      return;
+    }
+    existing.delete(session);
+    if (existing.size === 0) {
+      this.activeSessions.delete(session.ArtifactID);
+    }
+  }
+
+  private handleSessionMergeConflict(event: CollaborationMergeConflictEvent): void {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    this.NotifyMergeConflictToastOnce(event);
+    this.mergeConflicts$.next(event);
+  }
+
+  private ensureBrowserRecoveryListenersBound(): void {
+    if (this.serviceDestroyed) {
+      return;
+    }
+    if (
+      typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function' &&
+      typeof window.removeEventListener === 'function' &&
+      this.boundWindowTarget !== window
+    ) {
+      if (this.boundWindowTarget) {
+        this.boundWindowTarget.removeEventListener('online', this.handleWindowOnline);
+      }
+      this.boundWindowTarget = window;
+      window.addEventListener('online', this.handleWindowOnline);
+    }
+    if (
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function' &&
+      typeof document.removeEventListener === 'function' &&
+      this.boundDocumentTarget !== document
+    ) {
+      if (this.boundDocumentTarget) {
+        this.boundDocumentTarget.removeEventListener(
+          'visibilitychange',
+          this.handleDocumentVisibilityChange,
+        );
+      }
+      this.boundDocumentTarget = document;
+      document.addEventListener('visibilitychange', this.handleDocumentVisibilityChange);
+    }
+  }
+
+  private unbindBrowserRecoveryListeners(): void {
+    if (this.boundWindowTarget && typeof this.boundWindowTarget.removeEventListener === 'function') {
+      this.boundWindowTarget.removeEventListener('online', this.handleWindowOnline);
+    }
+    this.boundWindowTarget = null;
+    if (
+      this.boundDocumentTarget &&
+      typeof this.boundDocumentTarget.removeEventListener === 'function'
+    ) {
+      this.boundDocumentTarget.removeEventListener(
+        'visibilitychange',
+        this.handleDocumentVisibilityChange,
+      );
+    }
+    this.boundDocumentTarget = null;
   }
 
   /**
