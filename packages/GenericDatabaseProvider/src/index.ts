@@ -63,6 +63,8 @@ export { DescribeStatementFailure, DescribeStatementSuccess, BaseTypeOf } from '
 export type { DescribedColumn, DescribedColumnSource, DescribeStatementResult } from './describeStatement.js';
 export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQueryParameter, IsNamedQueryParameterList } from './typedQueryParameter.js';
 export type { TypedQueryParameterValue } from './typedQueryParameter.js';
+export { RowFilterParameterCollector } from './rowFilterParameters.js';
+export type { RowFilterBoundParameter } from './rowFilterParameters.js';
 export { StatementMemo } from './statementMemo.js';
 export { FindProjectionStars } from './fieldSecurity/projectionStars.js';
 export {
