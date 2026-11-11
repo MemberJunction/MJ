@@ -607,6 +607,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
                 // Load row count asynchronously (don't block UI)
                 this.loadRowCountAsync();
+                this.loadFieldPermissionCount();
 
                 // Load IS-A child entity counts asynchronously
                 if (this.IsParentType) {
@@ -1082,6 +1083,64 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             }
         } finally {
             this.IsSavingCloneConfig = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** How many `MJ: Entity Field Permissions` rows this entity has; null until loaded or when unreadable. */
+    public FieldPermissionCount: number | null = null;
+    public IsSavingFieldSecurity = false;
+    public FieldSecuritySaveError = '';
+
+    /** Sets the field-level security flag on the record; it is written when the user saves. */
+    public OnFieldSecurityChange(enabled: boolean): void {
+        if (!this.record) return;
+        this.record.EnableFieldLevelSecurity = enabled;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Saves the entity record and leaves edit mode. Turning field-level security on goes through
+     * the normal record save so the server writes the per-field permission rows with the flag.
+     */
+    public async SaveFieldSecurity(): Promise<void> {
+        this.IsSavingFieldSecurity = true;
+        this.FieldSecuritySaveError = '';
+        this.cdr.markForCheck();
+        try {
+            const saved = await this.SaveRecord(true);
+            if (!saved) {
+                this.FieldSecuritySaveError = this.record?.LatestResult?.CompleteMessage || 'The setting could not be saved.';
+            } else {
+                await this.loadFieldPermissionCount();
+            }
+        } finally {
+            this.IsSavingFieldSecurity = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Counts this entity's field permission rows, read fresh so a save just made shows up. */
+    private async loadFieldPermissionCount(): Promise<void> {
+        if (!this.entity) return;
+        if (this.entity.Fields.length === 0) {
+            this.FieldPermissionCount = 0;
+            this.cdr.markForCheck();
+            return;
+        }
+        try {
+            const fieldIDs = this.entity.Fields.map(f => `'${f.ID}'`).join(', ');
+            const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView({
+                EntityName: 'MJ: Entity Field Permissions',
+                ExtraFilter: `EntityFieldID IN (${fieldIDs})`,
+                ResultType: 'count_only',
+                BypassCache: true,
+            });
+            this.FieldPermissionCount = result.Success ? (result.TotalRowCount ?? 0) : null;
+        } catch (err) {
+            console.warn('Failed to count field permissions:', err);
+            this.FieldPermissionCount = null;
+        } finally {
             this.cdr.markForCheck();
         }
     }
