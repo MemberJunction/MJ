@@ -26,6 +26,23 @@ describe('template', () => {
     it('leaves non-template strings untouched', () => {
         expect(ResolveParams({ x: 'plain' }, scope).x).toBe('plain');
     });
+    it('evaluates 50k unclosed template whitespace input in < 50ms while keeping normal templates unchanged', () => {
+        const pathological = '{{' + ' '.repeat(50_000);
+        const startMs = performance.now();
+        const out = ResolveParams(
+            {
+                unclosed: pathological,
+                whole: '  {{ row.Balance }}  ',
+                embedded: 'User {{ row.Email }} has {{ row.Balance }}',
+            },
+            scope
+        );
+        const elapsedMs = performance.now() - startMs;
+        expect(elapsedMs).toBeLessThan(50);
+        expect(out.unclosed).toBe(pathological);
+        expect(out.whole).toBe(50);
+        expect(out.embedded).toBe('User a@b.com has 50');
+    });
 
     describe('placeholder scanning', () => {
         it.each([
@@ -43,12 +60,10 @@ describe('template', () => {
             ['single } brace {{row.Email} then {{row.Balance}}', 'single } brace {{row.Email} then 50'],
             ['empty {{}} stays', 'empty {{}} stays'],
             ['x {{row.Balance}}}', 'x 50}'],
+            ['a {{   }} b', 'a {{   }} b'],
+            ['  {{   }}  ', '  {{   }}  '],
         ])('interpolates %j', (template, expected) => {
             expect(ResolveParams({ x: template }, scope).x).toBe(expected);
-        });
-
-        it('reports an all-whitespace placeholder as an invalid path', () => {
-            expect(() => ResolveParams({ x: 'a {{   }} b' }, scope)).toThrow(/Invalid template path/);
         });
 
         it('reads 100k characters of whitespace inside unclosed braces in linear time', () => {

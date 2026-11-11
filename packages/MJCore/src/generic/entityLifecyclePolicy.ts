@@ -101,6 +101,12 @@ export interface IEntityLifecyclePolicy {
 }
 
 export const CLIENT_DIRECT_CRUD_BOUNDARY_KEY = '__MJ_CLIENT_DIRECT_CRUD__';
+/**
+ * The frame {@link ServerOperationScopeManager.RunAsServerWork} enters. It names no entities and no
+ * policy allows its key, so it grants no write authority; it only ends the client CRUD boundary
+ * around it, so the work inside does not read as the client's own request.
+ */
+export const SERVER_WORK_OPERATION_KEY = '__MJ_SERVER_WORK__';
 export const DOCUMENT_SEQUENCE_SQL_STORE_OPERATION_KEY = '__MJ_INTERNAL_DOCUMENT_SEQUENCE_SQL_STORE__';
 
 export interface ServerOperationScopeFrame {
@@ -262,6 +268,31 @@ export class ServerOperationScopeManager extends BaseSingleton<ServerOperationSc
             }
         }
         return boundaryIdx >= 0 ? all.slice(boundaryIdx + 1) : all;
+    }
+
+    /**
+     * Whether the code running now is a client's own CRUD request: inside a {@link RunInClientCrudBoundary}
+     * with no frame entered since, neither server authority nor {@link RunAsServerWork}. A save made here
+     * is the requesting user's own act; any other save is server code acting as that user.
+     */
+    public IsInDirectClientCrud(): boolean {
+        const all = this._tracker.GetActiveFrames();
+        const innermost = all[all.length - 1];
+        return innermost?.operationKey === CLIENT_DIRECT_CRUD_BOUNDARY_KEY || innermost?.source === 'ClientCrudBoundary';
+    }
+
+    /**
+     * Runs `fn` as server work: when called inside a client's own CRUD request ({@link IsInDirectClientCrud}),
+     * `fn` runs under a frame that grants nothing ({@link SERVER_WORK_OPERATION_KEY}), so saves it makes,
+     * and work it starts and leaves running, never read as the client's own. Agent runs and the task-graph
+     * dispatcher's passes run this way: the async scope follows them out of the request that started them.
+     * Elsewhere `fn` runs as is.
+     */
+    public RunAsServerWork<T>(fn: () => T): T {
+        if (!this.IsInDirectClientCrud()) {
+            return fn();
+        }
+        return this._tracker.RunInScope({ operationKey: SERVER_WORK_OPERATION_KEY, source: 'ServerEngine', allowedEntities: [] }, fn);
     }
 
     public IsOperationActive(

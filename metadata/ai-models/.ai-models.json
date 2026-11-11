@@ -19597,7 +19597,7 @@
           "ConnectionMaxSeconds": 7200,
           "SessionMaxSeconds": 3600,
           "ReconnectBufferSeconds": 10,
-          "TrustNativeResumption": true
+          "TrustNativeResumption": false
         }
       }
     },
@@ -23313,7 +23313,7 @@
           "ConnectionMaxSeconds": 7200,
           "SessionMaxSeconds": 3600,
           "ReconnectBufferSeconds": 10,
-          "TrustNativeResumption": true
+          "TrustNativeResumption": false
         }
       }
     },
@@ -29753,7 +29753,7 @@
           "ConnectionMaxSeconds": 7200,
           "SessionMaxSeconds": 3600,
           "ReconnectBufferSeconds": 10,
-          "TrustNativeResumption": true
+          "TrustNativeResumption": false
         }
       }
     },

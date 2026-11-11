@@ -90,6 +90,14 @@ export class SchemaBuilder {
             // fitting core subset + warn, rather than emit a doomed table. No-op on dialects with no
             // in-row limit (PostgreSQL/TOAST). Mutates config.Columns.
             output.Warnings.push(...this.capColumnsForRowSize(config, input.Platform));
+        }
+
+        // Resolve Soft FKs and Organic Keys onto all TargetTableConfigs BEFORE DDL generation so
+        // both new tables (CreateTable) and evolved tables (AlterTable) emit non-unique indexes
+        // on Soft PK, Soft FK, and Organic Key columns.
+        this.populateSoftFKsAndOrganicKeys(input);
+
+        for (const config of newConfigs) {
             const tableDef = this.convertToTableDefinition(config, input.Platform);
             // IfNotExists: integration Create-Tables must be idempotent — a physical table
             // may already exist with no MJ entity yet (e.g. a prior run created the table but
@@ -107,7 +115,12 @@ export class SchemaBuilder {
             if (diff.Warnings.length > 0) {
                 output.Warnings.push(...diff.Warnings);
             }
-            if (diff.AddedColumns.length === 0 && diff.ModifiedColumns.length === 0 && diff.RemovedColumns.length === 0) {
+            const hasIndexWork = (diff.AddedIndexes?.length ?? 0) > 0 && (
+                existing.Indexes !== undefined ||
+                diff.AddedColumns.length > 0 ||
+                diff.ModifiedColumns.length > 0
+            );
+            if (diff.AddedColumns.length === 0 && diff.ModifiedColumns.length === 0 && diff.RemovedColumns.length === 0 && !hasIndexWork) {
                 continue; // No changes
             }
 
@@ -292,8 +305,63 @@ export class SchemaBuilder {
             Description: config.Description,
             Columns: config.Columns.map(c => this.convertColumn(c)),
             SoftPrimaryKeys: config.PrimaryKeyFields,
+            ForeignKeys: (config.SoftForeignKeys ?? []).map(fk => ({
+                ColumnName: fk.FieldName,
+                ReferencedSchema: fk.TargetSchemaName,
+                ReferencedTable: fk.TargetTableName,
+                ReferencedColumn: fk.TargetFieldName,
+                IsSoft: true,
+            })),
+            OrganicKeys: config.OrganicKeyFields,
             AdditionalColumns: this.integrationSyncColumns(platform),
         };
+    }
+
+    /**
+     * Populate each TargetTableConfig's SoftForeignKeys (from SourceSchema relationships/FK fields)
+     * and OrganicKeyFields (from SourceObjectInfo fields marked IsUniqueKey && !IsPrimaryKey) prior
+     * to DDL generation so both CREATE TABLE and ALTER TABLE emit non-unique indexes for them.
+     */
+    private populateSoftFKsAndOrganicKeys(input: SchemaBuilderInput): void {
+        const resolvedFKs = this.softFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
+        for (const config of input.TargetConfigs) {
+            const existingFKs = config.SoftForeignKeys ?? [];
+            const seenFields = new Set(existingFKs.map(fk => fk.FieldName.toLowerCase()));
+            const mergedFKs = [...existingFKs];
+            for (const fk of resolvedFKs) {
+                if (
+                    fk.SchemaName.toLowerCase() === config.SchemaName.toLowerCase() &&
+                    fk.TableName.toLowerCase() === config.TableName.toLowerCase() &&
+                    !seenFields.has(fk.FieldName.toLowerCase())
+                ) {
+                    seenFields.add(fk.FieldName.toLowerCase());
+                    mergedFKs.push(fk);
+                }
+            }
+            config.SoftForeignKeys = mergedFKs;
+
+            const sourceObj = input.SourceSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
+            if (sourceObj) {
+                const existingOKs = config.OrganicKeyFields ?? [];
+                const seenTuples = new Set(existingOKs.map(t => t.map(c => c.toLowerCase()).join(',')));
+                const mergedOKs = [...existingOKs];
+                for (const field of sourceObj.Fields) {
+                    if (field.IsUniqueKey && !field.IsPrimaryKey) {
+                        const targetCol = config.Columns.find(c => c.SourceFieldName === field.Name);
+                        if (targetCol) {
+                            const key = targetCol.TargetColumnName.toLowerCase();
+                            if (!seenTuples.has(key)) {
+                                seenTuples.add(key);
+                                mergedOKs.push([targetCol.TargetColumnName]);
+                            }
+                        }
+                    }
+                }
+                if (mergedOKs.length > 0) {
+                    config.OrganicKeyFields = mergedOKs;
+                }
+            }
+        }
     }
 
     /** Convert a TargetColumnConfig to a generic ColumnDefinition. */
@@ -558,6 +626,9 @@ export class SchemaBuilder {
     ): SoftFKEntry[] {
         // From source relationships
         const fromSource = this.softFKEmitter.GenerateConfigEntries(input.SourceSchema, input.TargetConfigs);
+        const seen = new Set(
+            fromSource.map(fk => `${fk.SchemaName}.${fk.TableName}.${fk.FieldName}`.toLowerCase())
+        );
 
         // From evolution (new FK columns)
         for (const { config, existing } of evolutionConfigs) {
@@ -565,7 +636,13 @@ export class SchemaBuilder {
             if (!sourceObj) continue;
             const diff = this.evolution.DiffSchema(sourceObj, config, existing, input.Platform);
             const newFKs = this.evolution.GenerateEvolutionSoftFKUpdates(diff, config);
-            fromSource.push(...newFKs);
+            for (const fk of newFKs) {
+                const key = `${fk.SchemaName}.${fk.TableName}.${fk.FieldName}`.toLowerCase();
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    fromSource.push(fk);
+                }
+            }
         }
 
         return fromSource;

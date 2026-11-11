@@ -193,6 +193,13 @@ export interface RealtimeReconnectControllerOptions {
     /** Returns true when native resumption handles are trusted on the current session/topology. */
     TrustsNativeResumption?: () => boolean;
     /**
+     * Optional host network-reachability probe (for example `navigator.onLine !== false` in browsers).
+     * When `false` at the time a transport attempt fails, the controller treats the failure as local
+     * network unreachability rather than a server rejection of `ResumptionHandle`, preserving the
+     * handle so the first online attempt can still resume natively.
+     */
+    IsNetworkOnline?: () => boolean;
+    /**
      * Returns true when the provider emits a fresh resumable handle shortly after each `turnComplete`
      * (e.g. Gemini / Vertex AI Live), so a planned move (`goAway` or soft window) that occurs during a
      * turn should wait for that post-turn `RecordHandle(..., true)` (bounded by the deadline timer)
@@ -251,6 +258,8 @@ interface ActiveAttemptState {
  */
 export class RealtimeReconnectController {
     private _handle: string | null = null;
+    private _everHadHandle = false;
+    private _nativeLineageBroken = false;
     private _resumableNow = false;
     private _turnOpen = false;
     private _awaitingPostToolTurn = false;
@@ -299,6 +308,14 @@ export class RealtimeReconnectController {
     }
 
     /**
+     * True once a session that previously held a native resumption handle (or non-empty history) fell back to text
+     * seeding on a reconnect, latching subsequent reconnects in this call to seed mode so pre-fallback history is never lost.
+     */
+    public get IsNativeLineageBroken(): boolean {
+        return this._nativeLineageBroken;
+    }
+
+    /**
      * True while an in-place reconnect cycle is running, except while a planned move waits between attempts with the
      * call live again on its old connection (see {@link RealtimeReconnectControllerOptions.ReturnToOldConnection}).
      */
@@ -344,6 +361,7 @@ export class RealtimeReconnectController {
         const trustsNative = this.trustsNativeResumption();
         if (typeof handle === 'string' && handle.trim().length > 0) {
             this._handle = handle.trim();
+            this._everHadHandle = true;
             if (trustsNative) {
                 this._awaitingPostToolTurn = false;
                 this._toolResultSentDuringOpenTurn = false;
@@ -743,6 +761,8 @@ export class RealtimeReconnectController {
         this._toolResultSentDuringOpenTurn = false;
         this._resumableNow = false;
         this._handle = null;
+        this._everHadHandle = false;
+        this._nativeLineageBroken = false;
         this._connectionOpenedAtMs = null;
         this._connectionLimitAtMs = null;
         this._hardPointAtMs = null;
@@ -759,6 +779,9 @@ export class RealtimeReconnectController {
     }
 
     private trustsNativeResumption(): boolean {
+        if (this._nativeLineageBroken) {
+            return false;
+        }
         return this.options.TrustsNativeResumption ? this.options.TrustsNativeResumption() : false;
     }
 
@@ -871,6 +894,9 @@ export class RealtimeReconnectController {
                 this._hardPointAtMs = null;
                 this._announcedLastCallAtMs = null;
                 this._oldConnectionLost = false;
+                if (!canUseNative && (this._everHadHandle || (seed !== null && seed.Entries.length > 0))) {
+                    this._nativeLineageBroken = true;
+                }
                 this.options.OnReconnected?.(canUseNative);
                 return true;
             } catch (err) {
@@ -879,9 +905,11 @@ export class RealtimeReconnectController {
                 this.options.Log?.(
                     `[RealtimeReconnectController] attempt ${attempt} failed (${reason}): ${lastError.message}`
                 );
-                // Only a failed transport attempt says anything about the handle: one that failed in its preparation
-                // (a credential refresh) never offered it to the provider.
-                if (canUseNative && attemptState.TransportStarted) {
+                // Only an online failed transport attempt says anything about the handle: one that failed in its
+                // preparation (a credential refresh) or while the host network is offline never offered the handle
+                // to the provider, so the handle remains valid for the first online attempt.
+                const networkOffline = this.options.IsNetworkOnline?.() === false;
+                if (canUseNative && attemptState.TransportStarted && !networkOffline) {
                     forceSeedFallback = true;
                     this.InvalidateHandle();
                 }

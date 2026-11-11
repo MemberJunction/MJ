@@ -130,4 +130,18 @@ describe('ChiefOfStaffApprovalsComponent — moving between pages', () => {
 
     expect(openNavItemByName).toHaveBeenCalledWith('Governance', undefined, 'cos-app');
   });
+
+  it('preserves a non-default selected agent when moving between pages', () => {
+    const { component, openNavItemByName } = createComponent();
+    component.SelectedAgentName = 'Software Factory';
+
+    component.OpenPage('governance');
+
+    expect(openNavItemByName).toHaveBeenCalledWith(
+      'Governance',
+      { agent: 'Software Factory' },
+      'cos-app',
+      { queryParams: { agent: 'Software Factory' } },
+    );
+  });
 });

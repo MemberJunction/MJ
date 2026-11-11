@@ -211,6 +211,29 @@ function trimLineEndBlanks(text: string): string {
   return lines.join('\n');
 }
 
+/**
+ * Drop spaces and tabs before each newline, then collapse runs of three or more newlines to two.
+ * Same result as `.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')`, in linear time.
+ */
+function normalizeTrailingSpacesAndBlankLines(text: string): string {
+  const joined = trimLineEndBlanks(text);
+  let out = '';
+  let newlineRun = 0;
+  for (let i = 0; i < joined.length; i++) {
+    const ch = joined[i];
+    if (ch === '\n') {
+      newlineRun++;
+      if (newlineRun <= 2) {
+        out += ch;
+      }
+    } else {
+      newlineRun = 0;
+      out += ch;
+    }
+  }
+  return out;
+}
+
 interface LineSpan {
   startChar: number;
   endChar: number; // index of the trailing newline or end-of-source (exclusive content end)
@@ -324,7 +347,7 @@ function stripComments(source: string, mask: ScanMask, dropDocstrings: boolean):
     out += source[i];
   }
   // Collapse runs of blank lines left behind.
-  return trimLineEndBlanks(out).replace(/\n{3,}/g, '\n\n');
+  return normalizeTrailingSpacesAndBlankLines(out);
 }
 
 /** Conservative SQL reduction: optional comment strip + whitespace + long value-list collapse. */
@@ -339,7 +362,12 @@ function crushSql(source: string, options: ResolvedCodeOptions, legend: CrushLeg
   // Collapse long parenthesized value lists: VALUES (..),(..),(..)… and IN (a,b,c,…).
   let collapsedLists = 0;
   text = text.replace(/\b(VALUES)\b\s*((?:\([^()]*\)\s*,\s*){3,}\([^()]*\))/gi, (_m, kw: string, body: string) => {
-    const tuples = body.split(/\)\s*,\s*\(/).length;
+    let tuples = 0;
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] === '(') {
+        tuples++;
+      }
+    }
     collapsedLists++;
     const first = body.slice(0, body.indexOf(')') + 1);
     return `${kw} ${first} /* … ${tuples} value tuples elided */`;
@@ -349,7 +377,7 @@ function crushSql(source: string, options: ResolvedCodeOptions, legend: CrushLeg
   }
 
   // Normalize trailing whitespace and excessive blank lines.
-  return trimLineEndBlanks(text).replace(/\n{3,}/g, '\n\n');
+  return normalizeTrailingSpacesAndBlankLines(text);
 }
 
 /**

@@ -1137,5 +1137,149 @@ describe('RealtimeReconnectController', () => {
             expect(await resumption.TriggerReconnect('connection-lost')).toBe(false);
         });
     });
+
+    describe('offline handle preservation & sticky native-lineage fallback (Soham Finding #2)', () => {
+        it('preserves ResumptionHandle across offline transport failures so the first online attempt still resumes natively', async () => {
+            let online = false;
+            const contexts: RealtimeReconnectContext[] = [];
+            const h = new Harness([0, 1000, 3000], {
+                IsNetworkOnline: () => online,
+                Reconnect: async (ctx) => {
+                    contexts.push(ctx);
+                    h.Reconnects.push(ctx.ResumptionHandle);
+                    if (!online) {
+                        throw new Error('ERR_INTERNET_DISCONNECTED');
+                    }
+                },
+            });
+
+            h.Resumption.RecordHandle('conv_1', true);
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+
+            // Attempts 1, 2, 3 at 0s, 1s, 4s fail while offline — none of them offered conv_1 to the provider
+            await vi.advanceTimersByTimeAsync(4_500);
+            expect(h.Reconnects).toEqual(['conv_1', 'conv_1', 'conv_1']);
+            expect(h.Resumption.Handle).toBe('conv_1');
+
+            // At 6s, Wi-Fi reconnects; NotifyNetworkOnline wakes the pending 5s retry immediately
+            await vi.advanceTimersByTimeAsync(1_500);
+            online = true;
+            h.Resumption.NotifyNetworkOnline();
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(await result).toBe(true);
+            expect(h.Reconnects).toEqual(['conv_1', 'conv_1', 'conv_1', 'conv_1']);
+            expect(contexts.at(-1)?.UseNativeResumption).toBe(true);
+            expect(h.Resumption.IsNativeLineageBroken).toBe(false);
+        });
+
+        it('still falls back to seed when the first online attempt rejects the preserved handle', async () => {
+            let online = false;
+            let rejectFirstOnlineHandle = true;
+            const seedPayload = {
+                Entries: [{ Kind: 'user' as const, Text: 'Remember project 7788' }],
+                DroppedEntries: 0,
+                Chars: 21,
+            };
+            const contexts: RealtimeReconnectContext[] = [];
+            const h = new Harness([0, 1000, 3000], {
+                IsNetworkOnline: () => online,
+                BuildSeed: () => seedPayload,
+                Reconnect: async (ctx) => {
+                    contexts.push(ctx);
+                    h.Reconnects.push(ctx.ResumptionHandle);
+                    if (!online) {
+                        throw new Error('ERR_INTERNET_DISCONNECTED');
+                    }
+                    if (ctx.UseNativeResumption && rejectFirstOnlineHandle) {
+                        rejectFirstOnlineHandle = false;
+                        throw new Error('404 conversation conv_1 expired');
+                    }
+                },
+            });
+
+            h.Resumption.RecordHandle('conv_1', true);
+            const result = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(1_500); // Attempts 1 & 2 fail offline, preserving conv_1
+            online = true;
+            h.Resumption.NotifyNetworkOnline(); // Attempt 3 runs online with conv_1 and is rejected by server
+            await vi.advanceTimersByTimeAsync(5_000); // Attempt 4 runs online with seed fallback and succeeds
+
+            expect(await result).toBe(true);
+            expect(h.Reconnects).toEqual(['conv_1', 'conv_1', 'conv_1', null]);
+            expect(contexts[2].UseNativeResumption).toBe(true);
+            expect(contexts[3].UseNativeResumption).toBe(false);
+            expect(contexts[3].ConversationSeed).toEqual(seedPayload);
+            expect(h.Resumption.IsNativeLineageBroken).toBe(true);
+        });
+
+        it('latches subsequent reconnects to seed mode once a call falls back from native resumption to a new conversation', async () => {
+            const seedPayload = {
+                Entries: [
+                    { Kind: 'user' as const, Text: 'Pre-drop fact: code is ALPHA-9' },
+                    { Kind: 'assistant' as const, Text: 'Got it, ALPHA-9.' },
+                ],
+                DroppedEntries: 0,
+                Chars: 46,
+            };
+            const contexts: RealtimeReconnectContext[] = [];
+            const reconnectedModes: boolean[] = [];
+            const h = new Harness([0, 1000], {
+                BuildSeed: () => seedPayload,
+                OnReconnected: (usedNative) => {
+                    h.Reconnected++;
+                    reconnectedModes.push(usedNative);
+                },
+                Reconnect: async (ctx) => {
+                    contexts.push(ctx);
+                    h.Reconnects.push(ctx.ResumptionHandle);
+                    if (h.FailNext > 0) {
+                        h.FailNext--;
+                        throw new Error('conv_1 expired');
+                    }
+                },
+            });
+            h.RequiresPostTurn = false;
+
+            // Initial connection emits conv_1; network drop rejects conv_1 on Attempt 1 and recovers on Attempt 2 via seed
+            h.Resumption.RecordHandle('conv_1', true);
+            h.FailNext = 1;
+            const dropResult = h.Resumption.TriggerReconnect('connection-lost');
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(await dropResult).toBe(true);
+            expect(h.Resumption.IsNativeLineageBroken).toBe(true);
+            expect(reconnectedModes).toEqual([false]);
+
+            // Replacement connection emits conv_2 (`conversation.created`), which does NOT hold pre-drop native state
+            h.Resumption.RecordHandle('conv_2', true);
+
+            // Reconnect #2 (duration-expiry) and Reconnect #3 (connection-ending) MUST stay in seed mode!
+            const secondReconnect = h.Resumption.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(await secondReconnect).toBe(true);
+
+            h.Resumption.RecordHandle('conv_3', true);
+            const thirdReconnect = h.Resumption.TriggerReconnect('connection-ending');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(await thirdReconnect).toBe(true);
+
+            expect(h.Reconnects).toEqual(['conv_1', null, null, null]);
+            expect(contexts[2].UseNativeResumption).toBe(false);
+            expect(contexts[2].ConversationSeed).toEqual(seedPayload);
+            expect(contexts[3].UseNativeResumption).toBe(false);
+            expect(contexts[3].ConversationSeed).toEqual(seedPayload);
+            expect(reconnectedModes).toEqual([false, false, false]);
+
+            // Reset() for a brand-new call clears IsNativeLineageBroken so native resumption works again
+            h.Resumption.Reset();
+            expect(h.Resumption.IsNativeLineageBroken).toBe(false);
+            h.Resumption.RecordHandle('fresh_conv_1', true);
+            const freshCallReconnect = h.Resumption.TriggerReconnect('duration-expiry');
+            await vi.advanceTimersByTimeAsync(0);
+            expect(await freshCallReconnect).toBe(true);
+            expect(contexts.at(-1)?.UseNativeResumption).toBe(true);
+            expect(contexts.at(-1)?.ResumptionHandle).toBe('fresh_conv_1');
+        });
+    });
 });
 
