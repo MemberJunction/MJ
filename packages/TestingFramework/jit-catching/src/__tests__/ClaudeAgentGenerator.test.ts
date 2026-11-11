@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ClaudeAgentGenerator, FilterProcessWarnings, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { ClaudeAgentGenerator, FilterProcessWarnings, RunnerForModel, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
+import { GeminiRunner } from '../generator/GeminiRunner';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -76,6 +77,19 @@ function generator(root: string, script: (h: { WriteFile: (p: string, s: string)
     RunTestFactory: () => ({ Run: async () => ({ Ran: true, Status: status, TestName: null, Failure: null, DurationMs: 0 }), LastMutant: null }) as never });
   return gen;
 }
+
+describe('RunnerForModel', () => {
+  it('runs gemini-* models on the Gemini runner and the others on the Agent SDK', () => {
+    expect(RunnerForModel('gemini-3.8-flash')).toBe(GeminiRunner);
+    expect(RunnerForModel('claude-sonnet-5-5')).toBe(SdkRunner);
+  });
+  it('Generate without a Runner option runs a gemini model on the Gemini runner', async () => {
+    vi.stubEnv('GEMINI_API_KEY', ''); vi.stubEnv('ANTHROPIC_API_KEY', ''); const root = world();
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      RunTestFactory: () => ({ Run: async () => ({ Ran: true, Status: 'Pass', TestName: null, Failure: null, DurationMs: 0 }), LastMutant: null }) as never });
+    await expect(gen.Generate({ ...req(root), Model: 'gemini-x' })).rejects.toThrow('GEMINI_API_KEY is not set');
+  });
+});
 
 describe('ClaudeAgentGenerator write_test guard', () => {
   it('refuses a symlink planted at an allocated file and leaves its target untouched', async () => {

@@ -8,6 +8,8 @@ Requirements: Docker, `git`, `gh` (logged in), `ANTHROPIC_API_KEY`; for judges a
 Settings: `jit-catch.settings.json` in this folder.
 Runs write to `<repo>/.jit-catch/runs/<RunID>/`.
 
+Generator models: a `claude-*` model runs on the Claude Agent SDK with `ANTHROPIC_API_KEY`; a `gemini-*` model runs on the MJ Gemini provider with `GEMINI_API_KEY`. Every generator model needs an entry in the settings `Prices`.
+
 ## Commands
 
 Options in brackets are optional; the usage text in `src/cli.ts` shows which command takes `--settings` and `--store`.

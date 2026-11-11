@@ -14,6 +14,7 @@ import { RunTestTool, type LastMutantRecord, type RunTestInput, type RunTestOutp
 import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompts';
 import { AgentEnv, AssertApiKeySource, IsInside, ReadAllowed } from './AgentGuards';
 import { SessionError, UsageCounter, type Price } from './UsageCounter';
+import { GeminiRunner } from './GeminiRunner';
 
 export type AgentMessage =
     | { Type: 'result'; Usage: { InputTokens: number; OutputTokens: number; CacheReadTokens: number }; CostUSD: number; Turns: number; Subtype: string }
@@ -40,10 +41,9 @@ interface Session {
 
 const WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW;
 
-/** One Agent SDK session per (package, method[, risk]) that only writes tests and proves them with run_test (§8.2, §8.3). */
+/** One agent session per (package, method[, risk]) that only writes tests and proves them with run_test (§8.2, §8.3). */
 export class ClaudeAgentGenerator extends BaseTestGenerator {
-    private readonly runner: AgentRunner;
-    constructor(private readonly o: ClaudeAgentGeneratorOptions) { super(); this.runner = o.Runner ?? SdkRunner; }
+    constructor(private readonly o: ClaudeAgentGeneratorOptions) { super(); }
 
     public async Generate(r: GenerationRequest): Promise<GenerationResult> {
         const pkg = this.o.PackageMap.Get(r.Package); if (!pkg) throw new Error(`unknown package ${r.Package}`);
@@ -58,7 +58,7 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
             const ctx = buildContext(s);
             const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession, TokenBudget: r.Limits.TokensPerSession, BudgetUsd: r.Limits.UsdPerSession,
                 Price: this.o.Settings.Prices[r.Model] ?? null, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
-            for await (const m of this.runner(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
+            for await (const m of (this.o.Runner ?? RunnerForModel(r.Model))(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
                 if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; turns = m.Turns; }
                 else if (m.Type === 'assistant') s.Transcript.push(`ASSISTANT ${m.Text.slice(0, 500)}`);
             }
@@ -181,8 +181,8 @@ function writeTranscript(dir: string, path: string, text: string): void {
 function safeName(text: string): string { return text.replace(/[^A-Za-z0-9._-]/g, '_'); }
 
 const MutantSchema = z.object({ Edits: z.array(z.object({ File: z.string(), Find: z.string(), Replace: z.string() })).min(1) });
-const RunTestShape = { File: z.string(), Mutant: MutantSchema.optional() };
-const WriteTestShape = { File: z.string(), Source: z.string() };
+export const RunTestShape = { File: z.string(), Mutant: MutantSchema.optional() };
+export const WriteTestShape = { File: z.string(), Source: z.string() };
 
 /** The listener `FilterProcessWarnings` installed, while it is attached. */
 let warningFilter: ((w: Error & { code?: string }) => void) | null = null;
@@ -208,6 +208,9 @@ function warningsSilenced(): boolean {
     const options = process.env.NODE_OPTIONS?.split(/\s+/) ?? [];
     return process.execArgv.includes('--no-warnings') || options.includes('--no-warnings') || process.env.NODE_NO_WARNINGS === '1';
 }
+
+/** The runner for a generator model: `gemini-*` on the MJ Gemini provider, every other model on the Claude Agent SDK. */
+export function RunnerForModel(model: string): AgentRunner { return /^gemini-/i.test(model) ? GeminiRunner : SdkRunner; }
 
 /** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
 export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpSdkServerConfigWithInstance; Abort: AbortController; CanUseTool: CanUseTool; Env: Record<string, string> }): Options {
