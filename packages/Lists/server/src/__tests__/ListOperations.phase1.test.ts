@@ -274,7 +274,7 @@ describe('ListOperations — Phase 1', () => {
       const list = makeMockList();
       const view = makeMockUserView({
         whereClause: "Status='Active'",
-        customWhereClause: null,
+        customWhereClause: false,
         filterState: '{"someJson":true}',
       });
       mockGetEntityObject.mockImplementation((name: string) => {
@@ -477,6 +477,39 @@ describe('ListOperations — Phase 1', () => {
       expect(adhocCall?.ExtraFilter).toBe("Status='Active'");
       // No ViewID call should have happened (we're in snapshot mode, not live).
       expect(capturedRunViewCalls.some((c) => c.ViewID)).toBe(false);
+    });
+
+    // The snapshot stores the view's CustomWhereClause BIT as `customWhereClause`, so it is true or
+    // false, never filter text. The filter always comes from `whereClause`, with
+    // `smartFilterWhereClause` as a fallback for a snapshot whose `whereClause` is empty.
+    it.each([
+      { label: 'CustomWhereClause false', snapshot: { whereClause: "Status='Active'", customWhereClause: false }, expected: "Status='Active'" },
+      { label: 'CustomWhereClause true', snapshot: { whereClause: "Region='NE'", customWhereClause: true }, expected: "Region='NE'" },
+      { label: 'only a smart filter clause', snapshot: { whereClause: '', customWhereClause: false, smartFilterWhereClause: "Score > 5" }, expected: 'Score > 5' },
+    ])('refreshes from a real captured snapshot: $label', async ({ snapshot, expected }) => {
+      const list = makeMockList({
+        ID: 'list-snap-bit',
+        SourceViewID: 'view-1',
+        UseSnapshot: true,
+        SourceFilterSnapshot: JSON.stringify({ v: 1, sourceViewId: 'view-1', entityId: CONTACTS_ENTITY.ID, ...snapshot }),
+      });
+      const capturedRunViewCalls: Array<{ EntityName?: string; ExtraFilter?: string }> = [];
+      mockGetEntityObject.mockImplementation((name: string) => {
+        if (name === 'MJ: Lists') return list;
+        if (name === 'MJ: List Details') return makeMockListDetail();
+        throw new Error(`unexpected entity ${name}`);
+      });
+      mockRunViewImpl.mockImplementation(async (params: { EntityName?: string; ExtraFilter?: string }) => {
+        capturedRunViewCalls.push(params);
+        if (params.EntityName === 'Contacts') return { Success: true, Results: [{ ID: 'a' }], RowCount: 1 };
+        return { Success: true, Results: [], RowCount: 0 };
+      });
+
+      const ops = new ListOperations(CTX_USER as never);
+      const result = await ops.RefreshFromSource('list-snap-bit', 'Additive', { ConfirmDrops: false });
+
+      expect(result.Success).toBe(true);
+      expect(capturedRunViewCalls.find((c) => c.EntityName === 'Contacts')?.ExtraFilter).toBe(expected);
     });
 
     it('stamps LastRefreshedAt + LastRefreshedByUserID on success', async () => {
