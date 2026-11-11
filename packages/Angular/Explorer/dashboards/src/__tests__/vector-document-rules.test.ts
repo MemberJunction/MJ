@@ -73,7 +73,8 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
     GraphQLAIClient: class { async RunAIPrompt() { return { success: false, error: 'not used' }; } },
 }));
 vi.mock('@memberjunction/core-entities', () => ({
-    KnowledgeHubMetadataEngine: { Instance: { Config: async () => {} } },
+    // EntityDocuments is what the second-Search-document warning reads; tests push rows into it.
+    KnowledgeHubMetadataEngine: { Instance: { Config: async () => {}, EntityDocuments: [] as unknown[] } },
 }));
 
 // ── The in-memory metadata store the component reads and writes ──
@@ -218,7 +219,11 @@ import {
     SuggestionUseCaseForDocumentType,
     TemplateFieldCapRefusal,
     TemplateFieldNames,
+    FindOtherActiveSearchDocument,
+    SecondSearchDocumentWarning,
+    type EntityDocumentSummary,
 } from '../AI/components/vectors/vector-document-rules';
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { VectorManagementResourceComponent } from '../AI/components/vectors/vector-management-resource.component';
 
@@ -854,5 +859,114 @@ describe('SuggestedMatchThresholds', () => {
     it('refuses missing values', () => {
         expect(SuggestedMatchThresholds(undefined, 0.9)).toBeNull();
         expect(SuggestedMatchThresholds(0.7, null)).toBeNull();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One active Search document per entity (#5668)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function summaryDoc(overrides: Partial<EntityDocumentSummary> & { ID: string }): EntityDocumentSummary {
+    return {
+        Name: overrides.ID,
+        EntityID: 'E1',
+        Status: 'Active',
+        Type: 'Search',
+        __mj_CreatedAt: new Date('2026-01-01T00:00:00Z'),
+        ...overrides,
+    };
+}
+
+describe('FindOtherActiveSearchDocument', () => {
+    it('finds another active Search document for the same entity (UUIDs compared case-insensitively)', () => {
+        const docs = [summaryDoc({ ID: 'D1', EntityID: 'e1' })];
+        expect(FindOtherActiveSearchDocument(docs, 'E1', null)?.ID).toBe('D1');
+    });
+
+    it('ignores the document being saved', () => {
+        const docs = [summaryDoc({ ID: 'D1' })];
+        expect(FindOtherActiveSearchDocument(docs, 'E1', 'd1')).toBeNull();
+    });
+
+    it('ignores Inactive, Record Duplicate and other entities\' documents', () => {
+        const docs = [
+            summaryDoc({ ID: 'D1', Status: 'Inactive' }),
+            summaryDoc({ ID: 'D2', Type: 'Record Duplicate' }),
+            summaryDoc({ ID: 'D3', EntityID: 'E2' }),
+        ];
+        expect(FindOtherActiveSearchDocument(docs, 'E1', null)).toBeNull();
+    });
+
+    it('returns the oldest when there are several — the one search uses', () => {
+        const docs = [
+            summaryDoc({ ID: 'NEWER', __mj_CreatedAt: new Date('2026-03-01T00:00:00Z') }),
+            summaryDoc({ ID: 'OLDER', __mj_CreatedAt: new Date('2026-02-01T00:00:00Z') }),
+        ];
+        expect(FindOtherActiveSearchDocument(docs, 'E1', null)?.ID).toBe('OLDER');
+    });
+});
+
+describe('SecondSearchDocumentWarning', () => {
+    const existing = { Name: 'Members search', __mj_CreatedAt: new Date('2026-02-01T00:00:00Z') };
+
+    it('a new (or newer) document is told search keeps using the existing one', () => {
+        expect(SecondSearchDocumentWarning(existing, null)).toMatch(/keeps using "Members search"/);
+        expect(SecondSearchDocumentWarning(existing, new Date('2026-03-01T00:00:00Z'))).toMatch(/keeps using/);
+    });
+
+    it('an older document being re-activated is told search moves to it', () => {
+        expect(SecondSearchDocumentWarning(existing, new Date('2026-01-01T00:00:00Z'))).toMatch(/stop using "Members search"/);
+    });
+});
+
+describe('saving a second active Search document warns, and still saves', () => {
+    const engineDocs = (KnowledgeHubMetadataEngine.Instance as unknown as { EntityDocuments: EntityDocumentSummary[] }).EntityDocuments;
+
+    beforeEach(() => {
+        engineDocs.length = 0;
+        vi.mocked(MJNotificationService.Instance.CreateSimpleNotification).mockClear();
+    });
+
+    it('the edit panel warns when an Active Search document is saved next to another', async () => {
+        engineDocs.push(summaryDoc({ ID: 'OTHER', Name: 'Members search', EntityID: 'e1' }));
+        activeStore = newStore();
+        const stored = seedRow(activeStore, 'MJ: Entity Documents', {
+            ID: 'SELF', Name: 'Members search 2', EntityID: 'e1', Status: 'Inactive', TemplateID: null,
+            __mj_CreatedAt: new Date('2026-05-01T00:00:00Z'),
+        });
+        const store = activeStore;
+        const c = new VectorManagementResourceComponent();
+        c.Provider = {
+            CurrentUser: { ID: 'user-1' },
+            Entities: [],
+            // The edit path Load()s the document by ID; the fake row reads it from the store.
+            GetEntityObject: async (entityName: string): Promise<FakeRow> => {
+                const row = makeRow(store, entityName);
+                row['Load'] = async (id: string): Promise<boolean> => {
+                    const found = table(store, entityName).find((r) => r['ID'] === id);
+                    if (!found) return false;
+                    for (const f of ['ID', 'Name', 'EntityID', 'Status', 'TemplateID', '__mj_CreatedAt']) row[f] = found[f];
+                    return true;
+                };
+                return row;
+            },
+        } as unknown as typeof c.Provider;
+        c['LoadData'] = async (): Promise<void> => {};
+        c.EditDocID = String(stored['ID']);
+        c.EditDocName = 'Members search 2';
+        c.EditDocType = 'Search';
+        c.EditDocStatus = 'Active';
+
+        await c.SaveEditedDocument();
+
+        const calls = vi.mocked(MJNotificationService.Instance.CreateSimpleNotification).mock.calls;
+        const warning = calls.find(([, style]) => style === 'warning');
+        expect(warning?.[0]).toMatch(/keeps using "Members search"/);
+        expect(store.saves.some((sv) => sv.entityName === 'MJ: Entity Documents')).toBe(true);
+    });
+
+    it('no warning when the entity has no other active Search document', async () => {
+        engineDocs.push(summaryDoc({ ID: 'OTHER', EntityID: 'e1', Status: 'Inactive' }));
+        expect(FindOtherActiveSearchDocument(engineDocs, 'e1', 'SELF')).toBeNull();
     });
 });

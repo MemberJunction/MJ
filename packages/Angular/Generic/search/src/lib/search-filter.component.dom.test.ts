@@ -114,6 +114,13 @@ describe('SearchFilterComponent (DOM)', () => {
     expect(text(fixture, '.relevance-value')).toBe('25%');
   });
 
+  it('labels the slider as a similar-meaning cutoff and says text matches always show (#5123)', () => {
+    const fixture = render({ ShowRelevanceSlider: true, MinScorePercent: 30 });
+    expect(text(fixture, '.filter-relevance-help')).toContain('Exact text matches always show');
+    expect(fixture.nativeElement.textContent).toContain('Similar-meaning cutoff');
+    expect(fixture.nativeElement.textContent).not.toContain('Min Relevance');
+  });
+
   it('omits the relevance slider when ShowRelevanceSlider is false', () => {
     const fixture = render({ ShowRelevanceSlider: false });
     expect(query(fixture, 'input.relevance-range')).toBeNull();

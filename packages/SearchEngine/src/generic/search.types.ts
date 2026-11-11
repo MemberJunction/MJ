@@ -553,6 +553,12 @@ export interface SearchResultItem {
     /** Raw vector metadata as JSON string (contains all entity fields stored in vector DB) */
     RawMetadata?: string;
     /**
+     * Names of the searchable fields (`IncludeInUserSearchAPI`) whose text contained the query, from
+     * the keyword lane. Unset when no text lane matched the record. Lets a UI say how a result
+     * matched ("Text match · Email") instead of showing the rank-based `Score` as a percentage.
+     */
+    MatchedFields?: string[];
+    /**
      * Passage-level spans from a re-ranker that supports Context Focus (Cohere Rerank 5):
      * `[Start, End)` in Unicode code points of the text the re-ranker scored, with the span's text.
      */

@@ -41,29 +41,33 @@
                     </button>
                 </div>
 
-                <!-- Score Section -->
+                <!-- How it matched: chips instead of the rank-based score as a percentage (#5123) -->
                 <div class="detail-section">
                     <h3 class="detail-section-title">
                         <i class="fa-solid fa-chart-bar"></i>
-                        Relevance Score
+                        How it matched
                     </h3>
-                    <div class="score-overview">
-                        <div class="score-main" [class]="GetScoreClass(Result.Score)">
-                            <span class="score-main-value">{{ FormatScore(Result.Score) }}</span>
-                            <span class="score-main-label">Overall Score</span>
-                        </div>
-                        <div class="score-breakdown">
-                            @for (entry of GetScoreBreakdownEntries(); track entry.Label) {
-                                <div class="score-bar-row">
-                                    <span class="score-bar-label">{{ entry.Label }}</span>
-                                    <div class="score-bar-track">
-                                        <div class="score-bar-fill" [style.width]="GetScoreBarWidth(entry.Score)" [class]="GetScoreClass(entry.Score)"></div>
-                                    </div>
-                                    <span class="score-bar-value">{{ FormatScore(entry.Score) }}</span>
-                                </div>
-                            }
-                        </div>
+                    <div class="detail-match-chips">
+                        @for (chip of MatchChips; track chip.Kind) {
+                            <span [class]="'detail-match-chip detail-match-chip-' + chip.Kind" [title]="chip.Title">{{ chip.Label }}</span>
+                        }
                     </div>
+                    @if (GetScoreBreakdownEntries().length > 0) {
+                        <div class="score-technical">
+                            <span class="score-technical-label">Technical details: each search lane's raw score, on that lane's own scale</span>
+                            <div class="score-breakdown">
+                                @for (entry of GetScoreBreakdownEntries(); track entry.Label) {
+                                    <div class="score-bar-row">
+                                        <span class="score-bar-label">{{ entry.Label }}</span>
+                                        <div class="score-bar-track">
+                                            <div class="score-bar-fill" [style.width]="GetScoreBarWidth(entry.Score)"></div>
+                                        </div>
+                                        <span class="score-bar-value">{{ entry.Score.toFixed(3) }}</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Snippet Section -->

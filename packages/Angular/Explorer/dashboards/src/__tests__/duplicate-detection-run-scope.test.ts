@@ -22,6 +22,8 @@ import {
     GroupMatchesByDetail,
     PickDefaultEntityDocument,
     SelectCurrentRunForDocument,
+    RunSourceFields,
+    BuildRunSourceOptionsQuery,
 } from '../AI/components/duplicates/duplicate-detection-run-scope';
 
 const DOC_ORGS = 'D0C00001-0000-0000-0000-000000000001';
@@ -141,6 +143,11 @@ describe('SelectCurrentRunForDocument', () => {
     it('skips a newer list-scoped run, which holds a subset, in favour of the newest entity-wide one', () => {
         const withListRun = [...runs, run(RUN_NEWEST, DOC_ORGS, 'Complete', '2026-09-22T00:00:00Z', 'L0000000-0000-0000-0000-00000000000L')];
         expect(SelectCurrentRunForDocument(withListRun, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+    });
+
+    it('skips a newer view-scoped run, which holds a subset, like a list run (#5200)', () => {
+        const withViewRun = [...runs, { ...run(RUN_NEWEST, DOC_ORGS, 'Complete', '2026-09-22T00:00:00Z'), SourceViewID: 'V0000000-0000-0000-0000-00000000000V' }];
+        expect(SelectCurrentRunForDocument(withViewRun, DOC_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
     it('falls back to the newest run of any kind when every run failed or was list-scoped', () => {
@@ -283,5 +290,34 @@ describe('review rows for one run among several, each above the 1000-row cap', (
         const loadedNewRunDetails = (legacyDetails.Results as DetailRow[]).filter(d => d.DuplicateRunID === RUN_ORGS_NEW);
         expect(loadedNewRunDetails.length).toBeGreaterThan(900);
         expect(loadedNewRunDetails.filter(d => byDetail.has(d.ID))).toHaveLength(0);
+    });
+});
+
+// #5200: a run started from the board scans the whole entity, one list, or one saved view.
+describe('RunSourceFields', () => {
+    it('all records sets neither source', () => {
+        expect(RunSourceFields('all', 'ignored')).toEqual({ SourceListID: null, SourceViewID: null });
+    });
+
+    it('a list sets SourceListID only; a view sets SourceViewID only', () => {
+        expect(RunSourceFields('list', 'L1')).toEqual({ SourceListID: 'L1', SourceViewID: null });
+        expect(RunSourceFields('view', 'V1')).toEqual({ SourceListID: null, SourceViewID: 'V1' });
+    });
+
+    it('is null when a list or view scope has nothing picked, so the run is not started', () => {
+        expect(RunSourceFields('list', '')).toBeNull();
+        expect(RunSourceFields('view', null)).toBeNull();
+    });
+});
+
+describe('BuildRunSourceOptionsQuery', () => {
+    it('lists the entity\'s lists, or the user\'s own and shared views of the entity, by name', () => {
+        const lists = BuildRunSourceOptionsQuery('list', 'E1', 'U1');
+        expect(lists.EntityName).toBe('MJ: Lists');
+        expect(lists.ExtraFilter).toBe("EntityID='E1'");
+        const views = BuildRunSourceOptionsQuery('view', 'E1', 'U1');
+        expect(views.EntityName).toBe('MJ: User Views');
+        expect(views.ExtraFilter).toBe("EntityID='E1' AND (UserID='U1' OR IsShared=1)");
+        expect(views.OrderBy).toBe('Name');
     });
 });

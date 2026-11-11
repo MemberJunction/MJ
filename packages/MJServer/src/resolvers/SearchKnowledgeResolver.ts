@@ -22,6 +22,13 @@ export class SearchScoreBreakdown {
 
     @Field(() => Float, { nullable: true })
     Storage?: number;
+
+    @Field(() => Float, { nullable: true })
+    Tag?: number;
+
+    /** Set when a re-ranker ran; the result's Score is then this value. */
+    @Field(() => Float, { nullable: true })
+    ReRank?: number;
 }
 
 @ObjectType()
@@ -68,6 +75,10 @@ export class SearchKnowledgeResultItem {
     /** Raw vector metadata as JSON string — contains all entity fields stored in the vector DB */
     @Field({ nullable: true })
     RawMetadata?: string;
+
+    /** Searchable fields whose text contained the query (keyword lane); unset when no text lane matched. */
+    @Field(() => [String], { nullable: true })
+    MatchedFields?: string[];
 
     /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
     @Field()
@@ -477,6 +488,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 RecordName: r.RecordName,
                 MatchedAt: r.MatchedAt,
                 RawMetadata: r.RawMetadata,
+                MatchedFields: r.MatchedFields,
                 ProviderId: r.ProviderId,
                 ProviderLabel: r.ProviderLabel,
                 ProviderIcon: r.ProviderIcon,

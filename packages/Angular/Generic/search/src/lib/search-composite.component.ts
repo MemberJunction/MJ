@@ -118,14 +118,17 @@ export class SearchCompositeComponent implements OnInit, OnDestroy {
     public Query = '';
     public IsSuggestOpen = false;
 
-    /** The current min relevance percent from the suggest dropdown filter */
     /** Programmatically focus the search input (e.g. a host-owned Ctrl/Cmd+K chord). */
     public Focus(): void {
         this.SearchInputRef?.Focus();
     }
 
+    /**
+     * @deprecated The suggest dropdown filters by match type now, not by a relevance percentage, so
+     * there is no cutoff to carry into the results page; always 0, which leaves the page's default.
+     */
     public get MinRelevancePercent(): number {
-        return this.SearchSuggestRef?.MinRelevancePercent ?? 0;
+        return 0;
     }
     public PreviewResults: SearchResultItem[] = [];
     public RecentSearches: RecentSearch[] = [];

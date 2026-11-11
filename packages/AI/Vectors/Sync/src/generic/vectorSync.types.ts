@@ -79,6 +79,13 @@ export type VectorizeEntityResponse = {
     errorCount?: number;
     /** Wall-clock duration of this entity's vectorization, in milliseconds. */
     elapsedMs?: number;
+    /** Orphaned or duplicate Entity Record Documents removed after the run (see `pipeline.pruneOrphans`). */
+    prunedRecords?: number;
+    /**
+     * Why the orphan prune was skipped for permissions, when it was (the user cannot delete Entity
+     * Record Documents, or the run did not see every record). Undefined when it ran or was not due.
+     */
+    pruneSkippedReason?: string;
 }
 
 export type EmbeddingData = {

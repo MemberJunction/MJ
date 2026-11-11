@@ -25,6 +25,8 @@
  * @module @memberjunction/search-engine
  */
 
+import { VisiblePathSegment } from './ScopeValueEscaper';
+
 /**
  * Outcome of checking a scope's rendered filter value for a particular lane.
  *
@@ -148,11 +150,11 @@ export function CheckRenderedFolderPath(source: string | null | undefined, rende
 /** Why a rendered FolderPath's segments widen or escape the folder, or null when they do not. */
 function folderPathSegmentProblem(source: string, rendered: string): string | null {
     const segments = trimSeparatorsLike(source.trim(), rendered.trim()).split(/[/\\]/);
-    if (segments.some((segment) => segment.trim() === '..')) {
+    if (segments.some((segment) => VisiblePathSegment(segment) === '..')) {
         return 'the rendered FolderPath contains a ".." segment (path traversal)';
     }
     const templated = source.includes('{{') || source.includes('{%');
-    if (templated && segments.some((segment) => segment.trim() === '')) {
+    if (templated && segments.some((segment) => VisiblePathSegment(segment) === '')) {
         return 'the rendered FolderPath has an empty segment — a value it interpolates rendered nothing, which would widen the lane to the enclosing folder';
     }
     return null;

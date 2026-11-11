@@ -150,6 +150,8 @@ export interface SearchClientResultItem {
     ResultType: string;
     /** Raw metadata JSON from the search provider (e.g., storage account ID, file path) */
     RawMetadata?: string;
+    /** Searchable fields whose text contained the query (keyword lane); unset when no text lane matched. */
+    MatchedFields?: string[];
     /** ID of the SearchProvider metadata record that produced this result */
     ProviderId?: string;
     /** Display label from the SearchProvider metadata (e.g., "Database", "Semantic Search") */
@@ -170,6 +172,10 @@ export interface SearchScoreBreakdown {
     Entity?: number;
     /** Score contribution from file storage search */
     Storage?: number;
+    /** Score contribution from tag search */
+    Tag?: number;
+    /** Re-ranker relevance, set when a re-ranker ran; the result's Score is then this value */
+    ReRank?: number;
 }
 
 /**
@@ -208,6 +214,8 @@ interface ScoreBreakdownResponse {
     FullText?: number;
     Entity?: number;
     Storage?: number;
+    Tag?: number | null;
+    ReRank?: number | null;
 }
 
 /**
@@ -241,6 +249,7 @@ interface SearchResultItemResponse {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    MatchedFields?: string[] | null;
     ProviderId?: string;
     ProviderLabel?: string;
     ProviderIcon?: string;
@@ -438,12 +447,15 @@ export class GraphQLSearchClient {
                             FullText
                             Entity
                             Storage
+                            Tag
+                            ReRank
                         }
                         Tags
                         EntityIcon
                         RecordName
                         MatchedAt
                         RawMetadata
+                        MatchedFields
                         ProviderId
                         ProviderLabel
                         ProviderIcon
@@ -496,12 +508,15 @@ export class GraphQLSearchClient {
                             FullText
                             Entity
                             Storage
+                            Tag
+                            ReRank
                         }
                         Tags
                         EntityIcon
                         RecordName
                         MatchedAt
                         RawMetadata
+                        MatchedFields
                         ProviderId
                         ProviderLabel
                         ProviderIcon
@@ -675,7 +690,7 @@ export class GraphQLSearchClient {
                                 ProviderName
                                 DurationMs
                                 ResultCount
-                                Results { ID EntityName EntityDisplayName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
+                                Results { ID EntityName EntityDisplayName RecordID SourceType ResultType Title Snippet Score ScoreBreakdown { Vector FullText Entity Storage Tag ReRank } Tags EntityIcon RecordName MatchedAt MatchedFields ProviderId ProviderLabel ProviderIcon }
                                 SourceCounts { Vector FullText Entity Storage }
                                 ElapsedMs
                                 ErrorMessage
@@ -829,6 +844,7 @@ export class GraphQLSearchClient {
             RecordName: item.RecordName,
             MatchedAt: item.MatchedAt,
             RawMetadata: item.RawMetadata,
+            MatchedFields: item.MatchedFields ?? undefined,
             ProviderId: item.ProviderId,
             ProviderLabel: item.ProviderLabel,
             ProviderIcon: item.ProviderIcon,
@@ -851,6 +867,8 @@ export class GraphQLSearchClient {
         if (breakdown.FullText !== undefined) result.FullText = breakdown.FullText;
         if (breakdown.Entity !== undefined) result.Entity = breakdown.Entity;
         if (breakdown.Storage !== undefined) result.Storage = breakdown.Storage;
+        if (breakdown.Tag != null) result.Tag = breakdown.Tag;
+        if (breakdown.ReRank != null) result.ReRank = breakdown.ReRank;
         return result;
     }
 

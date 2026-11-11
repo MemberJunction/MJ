@@ -794,6 +794,9 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
                 // entity's UserViewMaxRows (1,000 for Entity Record Documents) and every vector
                 // past it is invisible to search and duplicate detection.
                 IgnoreMaxRows: true,
+                // The index cache owns these rows; through the RunView cache the server would widen
+                // Fields to every column (DocumentText included) and keep a second copy of the vectors.
+                BypassCache: true,
             }, contextUser);
 
             if (!r.Success) {

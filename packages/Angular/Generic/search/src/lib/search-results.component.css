@@ -361,47 +361,69 @@
     color: var(--mj-brand-primary);
 }
 
-.result-card-score {
+/* "How it matched" chips, replacing the old % badge */
+.result-card-match {
     flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    max-width: 14rem;
     margin-top: 0.2rem;
 }
 
-.score-circle {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    display: flex;
+.match-chip {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    /* Default: neutral gray */
-    background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
-    border: 2px solid color-mix(in srgb, var(--mj-text-muted) 25%, var(--mj-bg-surface));
-}
-.score-circle.score-high {
-    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
-    border-color: color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-bg-surface));
-}
-.score-circle.score-medium {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    border-color: color-mix(in srgb, var(--mj-status-warning) 40%, var(--mj-bg-surface));
-}
-.score-circle.score-low {
-    background: color-mix(in srgb, var(--mj-text-muted) 10%, var(--mj-bg-surface));
-    border-color: color-mix(in srgb, var(--mj-text-muted) 25%, var(--mj-bg-surface));
-}
-
-.score-value {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
     font-size: 0.7rem;
-    font-weight: 700;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 14rem;
+    border: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-sunken);
     color: var(--mj-text-secondary);
 }
-.score-high .score-value {
+.match-chip-name,
+.match-chip-text {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-status-success) 35%, var(--mj-bg-surface));
     color: var(--mj-status-success-text, var(--mj-status-success));
 }
-.score-medium .score-value {
-    color: var(--mj-status-warning-text, var(--mj-status-warning));
+.match-chip-meaning {
+    background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-status-info) 35%, var(--mj-bg-surface));
+    color: var(--mj-status-info-text, var(--mj-status-info));
 }
-.score-low .score-value {
+.match-chip-relevance {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
+
+/* Technical details in the expanded card */
+.detail-technical {
+    margin-top: 0.5rem;
+}
+.detail-technical-list {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.15rem 0.75rem;
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--mj-text-secondary);
+}
+.detail-technical-list dt {
+    color: var(--mj-text-muted);
+}
+.detail-technical-list dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+}
+.detail-technical-note {
     color: var(--mj-text-muted);
 }
 

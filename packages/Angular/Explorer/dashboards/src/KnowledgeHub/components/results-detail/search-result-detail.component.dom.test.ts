@@ -49,4 +49,19 @@ describe('SearchResultDetailComponent (DOM)', () => {
     (query(fixture, '.breadcrumb-back') as HTMLElement).click();
     expect(back.length).toBe(1);
   });
+
+  // #5123: no % circle; the section says how the result matched.
+  it('shows how the result matched instead of a percentage score', () => {
+    const fixture = render({ ...RESULT, ScoreBreakdown: { Entity: 0.6, Vector: 0.8123 }, MatchedFields: ['Title'] } as SearchResultItem);
+    const chips = Array.from(fixture.nativeElement.querySelectorAll('.detail-match-chips span')).map(e => (e as HTMLElement).textContent?.trim());
+    expect(chips).toEqual(['Text match · Title', 'Similar meaning']);
+    expect(query(fixture, '.score-main')).toBeNull();
+    expect(text(fixture, '.score-technical')).toContain('0.812');
+  });
+
+  it('shows a percentage only as the re-ranker relevance', () => {
+    const fixture = render({ ...RESULT, ScoreBreakdown: { Vector: 0.8, ReRank: 0.66 } } as SearchResultItem);
+    const chips = Array.from(fixture.nativeElement.querySelectorAll('.detail-match-chips span')).map(e => (e as HTMLElement).textContent?.trim());
+    expect(chips).toEqual(['Similar meaning', 'Relevance 66%']);
+  });
 });

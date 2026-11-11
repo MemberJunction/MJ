@@ -14,7 +14,7 @@
       </select>
       <button mjButton variant="primary" size="sm"
               (click)="RunDetection()"
-              [disabled]="IsDetecting || !SelectedEntityDocumentID">
+              [disabled]="IsDetecting || !SelectedEntityDocumentID || RunSourceMissing">
           @if (IsDetecting) {
               <i class="fa-solid fa-spinner fa-spin"></i> <span class="action-btn-label">Detecting…</span>
           } @else {
@@ -47,6 +47,33 @@
     <!-- Threshold Controls (when entity doc selected) -->
     @if (SelectedDocumentThresholds) {
         <div class="threshold-controls">
+            <div class="threshold-slider-group run-scope-group">
+                <label class="threshold-label" for="dupe-run-scope">
+                    <i class="fa-solid fa-filter"></i>
+                    Records
+                </label>
+                <select id="dupe-run-scope" class="mj-input run-scope-select"
+                        [ngModel]="RunRecordScope"
+                        (ngModelChange)="OnRunRecordScopeChanged($event)"
+                        [disabled]="IsDetecting">
+                    <option value="all">All records</option>
+                    <option value="list">A list</option>
+                    <option value="view">A saved view</option>
+                </select>
+                @if (RunRecordScope !== 'all') {
+                    <select class="mj-input run-scope-select"
+                            [(ngModel)]="RunSourceID"
+                            [disabled]="IsDetecting || IsLoadingRunSources">
+                        <option value="">
+                            {{ IsLoadingRunSources ? 'Loading…' : (RunSourceOptions.length ? 'Select ' + (RunRecordScope === 'list' ? 'a list' : 'a view') + '…' : 'None for this entity') }}
+                        </option>
+                        @for (option of RunSourceOptions; track option.ID) {
+                            <option [value]="option.ID">{{ option.Name }}</option>
+                        }
+                    </select>
+                }
+                <span class="threshold-hint">Which of {{ SelectedDocumentThresholds.EntityName }}'s records the next run checks</span>
+            </div>
             <div class="threshold-slider-group">
                 <label class="threshold-label">
                     <i class="fa-solid fa-adjust"></i>

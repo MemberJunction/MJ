@@ -127,6 +127,7 @@ The main class that orchestrates the entire vectorization process. Extends `Vect
 | `GetEntityDocumentByName(name, user)` | Retrieves an Entity Document by name |
 | `GetActiveEntityDocuments(entityNames?, entityDocumentType?)` | Gets Active Entity Documents of a given type (default `'Record Duplicate'`; pass `'Search'` for the search-tier pool), optionally filtered by entity name. Returns `[]` (no throw) when nothing matches |
 | `CreateDefaultEntityDocument(entityID, vectorDB, aiModel)` | Creates a default Entity Document when one does not exist |
+| `RemoveRecordVectors(entityID, recordIDs, contextUser)` | Removes the given records' Entity Record Documents and their vectors across all of the entity's documents |
 
 ### EntityDocumentCache
 
@@ -282,9 +283,25 @@ type VectorizeEntityParams = {
 { "recordFilter": { "extraFilter": "Status = 'Active'" } }
 ```
 
-Records the filter excludes keep any vectors already stored for them; sync does not remove those.
+Records the filter excludes lose their stored vectors on the next full run (see [Removing orphaned vectors](#removing-orphaned-vectors)).
 
 Keep the filter to plain comparisons (`=`, `<>`, `IN`, `IS NULL`, `AND`/`OR`) so it runs on both SQL Server and PostgreSQL. The PostgreSQL provider rewrites identifiers, `[brackets]`, boolean `= 0`/`= 1` and the T-SQL date functions, but passes other T-SQL (`ISNULL`, `LEN`, `+` concatenation) through unchanged, where it fails.
+
+### Removing orphaned vectors
+
+A full run (no `listID`, no `StartingOffset`, paging reached the last page) ends by removing the document's Entity Record Documents, and their vectors, for records it did not page: records that were deleted, re-keyed, or are now excluded by the record filter. It also removes duplicate rows for one record, keeping the newest. A run whose paging failed part-way removes nothing. The RecordIDs a run pages are held in memory; for a very large index, opt out per document:
+
+```json
+{ "pipeline": { "pruneOrphans": false } }
+```
+
+The prune runs only for a user who can delete `MJ: Entity Record Documents` with no row filter on those deletes, and whose reads of the source entity are not row-filtered (role row-level security or an API-key row filter); a filtered user's run pages only part of the entity, so every record outside the filter would look orphaned. It also needs every page to have been read as the run's user. Otherwise the run removes nothing and the response's `pruneSkippedReason` says why. Every removal of Entity Record Documents (the prune, the duplicate cleanup and the delete listener) goes through the same delete check, before any vector is deleted.
+
+The run's response carries `prunedRecords`. Vectors are deleted by their stored `VectorID` with the index's `ProviderConfig`; a read-only driver (`SimpleVectorServiceProvider`) only loses the rows, which is where it reads vectors from.
+
+Two runs of the same entity document in one process run one after the other, so they cannot both create a record's Entity Record Document. Runs on different servers are not serialized; the duplicate cleanup on the next run removes what they leave.
+
+`EntityVectorDeleteListener.Subscribe(resolveUser)` removes a record's vectors and Entity Record Documents as soon as the record is deleted (MJServer subscribes it at startup, running as the system user). It handles local deletes only, skips entities with no active entity document, and never throws; anything it misses is removed by the next full run.
 
 ### EntitySyncConfig
 

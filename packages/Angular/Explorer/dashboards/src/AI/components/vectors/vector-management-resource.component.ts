@@ -58,6 +58,8 @@ import {
     IsVectorizableEntity,
     SuggestedMatchThresholds,
     TemplateFieldCapRefusal,
+    FindOtherActiveSearchDocument,
+    SecondSearchDocumentWarning,
 } from './vector-document-rules';
 
 /** Flattened row for the entity sync table */
@@ -253,6 +255,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     ? await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.EditDocEntityName)
                     : null);
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
+            if (doc.Status === 'Active' && this.EditDocType.trim().toLowerCase() === 'search') {
+                this.warnIfSecondSearchDocument(doc.EntityID, doc.ID, doc.__mj_CreatedAt);
+            }
 
             const saved = await doc.Save();
             if (saved) {
@@ -1251,6 +1256,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 entityDoc.AbsoluteMatchThreshold = thresholds.Absolute;
             }
 
+            if (EntityDocumentTypeForUseCase(this.SuggestUseCase) === 'Search' && entityDoc.EntityID) {
+                this.warnIfSecondSearchDocument(
+                    entityDoc.EntityID,
+                    entityDoc.IsSaved ? entityDoc.ID : null,
+                    entityDoc.IsSaved ? entityDoc.__mj_CreatedAt : null
+                );
+            }
+
             const saved = await entityDoc.Save();
             if (saved) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -1577,6 +1590,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      * Populate required foreign key fields on an Entity Document before saving.
      * Throws if prerequisites are not met.
      */
+    /**
+     * Warns (does not block) when the document being saved as an active Search document is not the
+     * entity's only one: search reads just the oldest, so the other's vectors are never searched.
+     */
+    private warnIfSecondSearchDocument(entityID: string, selfID: string | null, selfCreatedAt: Date | null): void {
+        const other = FindOtherActiveSearchDocument(KnowledgeHubMetadataEngine.Instance.EntityDocuments, entityID, selfID);
+        if (other) {
+            MJNotificationService.Instance.CreateSimpleNotification(SecondSearchDocumentWarning(other, selfCreatedAt), 'warning', 8000);
+        }
+    }
+
     private async populateEntityDocumentFKs(entityDoc: MJEntityDocumentEntity): Promise<void> {
         if (!this.PrerequisitesMet) {
             const missing: string[] = [];

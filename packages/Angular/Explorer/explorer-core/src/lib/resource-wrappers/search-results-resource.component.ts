@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
+import { InstanceConfigEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import {
@@ -15,6 +15,13 @@ import {
     SearchResultSelectedEvent,
     StreamingProviderStatus,
     PassesSemanticFloor,
+    PassesMatchType,
+    HasNoExactMatches,
+    MatchTypeFilter,
+    MATCH_TYPE_FILTER_CATEGORY,
+    FALLBACK_MIN_SCORE_PERCENT,
+    MinScorePercentFromSetting,
+    MatchChipsFor,
 } from '@memberjunction/ng-search';
 import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
 
@@ -137,6 +144,13 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                         </div>
                     }
 
+                    @if (NoExactMatches) {
+                        <div class="search-no-exact-banner" role="status">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>No exact matches for “{{ CurrentQuery }}”. These results are similar in meaning.</span>
+                        </div>
+                    }
+
                     @if (ViewMode === 'cloud') {
                         <div class="search-cloud-wrapper">
                             @if (IsLoadingCloud) {
@@ -182,7 +196,7 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                     class="search-no-results-inline"
                                     Variant="no-results"
                                     Icon="fa-solid fa-filter-circle-xmark"
-                                    Title="No results match current filters. Try lowering the minimum relevance." />
+                                    Title="No results match current filters. Try lowering the similar-meaning cutoff." />
                             }
                         </div>
                     }
@@ -297,6 +311,21 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
             min-width: 0;
             overflow-y: auto;
         }
+        .search-no-exact-banner {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 12px 24px 0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+            border: 1px solid color-mix(in srgb, var(--mj-status-info) 30%, var(--mj-bg-surface));
+            color: var(--mj-text-primary);
+        }
+        .search-no-exact-banner i {
+            color: var(--mj-status-info);
+        }
         .search-results-body-wrapper {
             position: relative;
             flex: 1;
@@ -399,10 +428,14 @@ export class SearchResultsResource extends BaseResourceComponent {
     Filters: SearchFilter[] = [];
     ActiveFilters: Record<string, string[]> = {};
     FilteredResults: SearchResultItem[] = [];
-    MinScorePercent = 30;
+    MinScorePercent = FALLBACK_MIN_SCORE_PERCENT;
     /** The MinScore that was sent to the server on the last search. If the user
      *  slides below this, we need to re-query the server to get more results. */
-    ServerMinScorePercent = 30;
+    ServerMinScorePercent = FALLBACK_MIN_SCORE_PERCENT;
+    /** Where the similar-meaning cutoff starts and resets to: the `Search.DefaultMinScore` setting. */
+    DefaultMinScorePercent = FALLBACK_MIN_SCORE_PERCENT;
+    /** True when the last search found nothing as text (no keyword or full-text hits), so every result is a semantic look-alike. */
+    NoExactMatches = false;
 
     /** @deprecated Use {@link ServerMinScorePercent}. */
     get serverMinScorePercent() {
@@ -473,6 +506,10 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.CurrentQuery = config.SearchInput as string;
         }
 
+        // The cutoff starts at the instance's Search.DefaultMinScore setting, unless the caller passed one.
+        this.DefaultMinScorePercent = await this.loadDefaultMinScorePercent();
+        this.MinScorePercent = this.DefaultMinScorePercent;
+
         // Apply min relevance from the search bar dropdown if provided
         if (config?.MinRelevance != null) {
             const mr = Number(config.MinRelevance);
@@ -510,6 +547,16 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.NotifyLoadComplete();
     }
 
+    /** The `Search.DefaultMinScore` instance setting as a percent; the fallback when it cannot be read. */
+    private async loadDefaultMinScorePercent(): Promise<number> {
+        try {
+            await InstanceConfigEngine.Instance.Config(false, undefined, this.ProviderToUse);
+            return MinScorePercentFromSetting(InstanceConfigEngine.Instance.GetNumber('Search.DefaultMinScore', Number.NaN));
+        } catch {
+            return FALLBACK_MIN_SCORE_PERCENT;
+        }
+    }
+
     override ngOnDestroy(): void {
         this.currentStream?.unsubscribe();
         this.currentStream = null;
@@ -544,8 +591,8 @@ export class SearchResultsResource extends BaseResourceComponent {
 
     OnFiltersCleared(): void {
         this.ActiveFilters = {};
-        this.MinScorePercent = 30;
-        this.UpdateQueryParams({ minRelevance: '30' });
+        this.MinScorePercent = this.DefaultMinScorePercent;
+        this.UpdateQueryParams({ minRelevance: String(this.DefaultMinScorePercent) });
         this.applyClientFilters();
     }
 
@@ -592,7 +639,7 @@ export class SearchResultsResource extends BaseResourceComponent {
     async OnRefresh(): Promise<void> {
         if (this.CurrentQuery) {
             this.ActiveFilters = {};
-            this.MinScorePercent = 30;
+            this.MinScorePercent = this.DefaultMinScorePercent;
             this.ClientFilterText = '';
             await this.executeSearch(this.CurrentQuery);
         }
@@ -689,6 +736,7 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.ServerResultCount = this.allResults.length;
         this.TotalCount = response.TotalCount;
         this.ElapsedMs = response.ElapsedMs;
+        this.NoExactMatches = HasNoExactMatches(response.SourceCounts);
         this.Filters = response.Filters;
         this.FilteredResults = [...this.allResults];
 
@@ -713,6 +761,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         // Reset visible streaming state.
         this.StreamingProviders = [];
+        this.NoExactMatches = false;
         this.allResults = [];
         this.FilteredResults = [];
         this.ServerResultCount = 0;
@@ -738,6 +787,7 @@ export class SearchResultsResource extends BaseResourceComponent {
                     this.ServerResultCount = this.allResults.length;
                     this.TotalCount = event.Results.length;
                     this.ElapsedMs = event.ElapsedMs ?? this.ElapsedMs;
+                    this.NoExactMatches = HasNoExactMatches(event.SourceCounts);
                     this.Filters = this.searchService.BuildFilters(this.allResults);
                     this.applyClientFilters();
                     this.HasSearched = true;
@@ -827,8 +877,9 @@ export class SearchResultsResource extends BaseResourceComponent {
             if (!matchesEntity && !matchesFiles) return false;
         }
 
-        const sourceFilter = this.ActiveFilters['Source'];
-        if (sourceFilter?.length && !sourceFilter.includes(result.SourceType)) {
+        // Match type: a result passes when it matched in any selected way (exact text, similar meaning).
+        const matchTypeFilter = this.ActiveFilters[MATCH_TYPE_FILTER_CATEGORY];
+        if (matchTypeFilter?.length && !matchTypeFilter.some(type => isMatchTypeFilter(type) && PassesMatchType(result, type))) {
             return false;
         }
 
@@ -944,10 +995,12 @@ export class SearchResultsResource extends BaseResourceComponent {
                 Title: r.Title || r.RecordName,
                 EntityName: r.EntityName,
                 RecordID: r.RecordID,
-                Score: Math.round(r.Score * 100),
+                // How it matched (e.g. "Text match · Email", "Similar meaning"); the rank score is not a confidence.
+                HowMatched: MatchChipsFor(r).map(c => c.Label),
                 SourceType: r.SourceType,
                 Snippet: r.Snippet?.substring(0, 100)
             })),
+            NoExactMatches: this.NoExactMatches,
         });
     }
 
@@ -1027,11 +1080,11 @@ export class SearchResultsResource extends BaseResourceComponent {
             },
             {
                 Name: 'SetMinRelevance',
-                Description: 'Set the minimum relevance score filter (0-100 percent)',
+                Description: 'Set the similar-meaning cutoff (0-100 percent): hides results found only by meaning below this semantic similarity. Exact text matches always show.',
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        percent: { type: 'number', description: 'Minimum relevance percentage (0-100)' }
+                        percent: { type: 'number', description: 'Semantic similarity cutoff in percent (0-100)' }
                     },
                     required: ['percent']
                 },
@@ -1055,4 +1108,9 @@ export class SearchResultsResource extends BaseResourceComponent {
 
 export function LoadSearchResultsResource() {
     // Tree-shaking prevention
+}
+
+/** True for the values the "Match type" facet uses. */
+function isMatchTypeFilter(value: string): value is MatchTypeFilter {
+    return value === 'text' || value === 'meaning';
 }

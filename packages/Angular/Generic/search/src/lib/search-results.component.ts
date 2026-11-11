@@ -14,7 +14,7 @@ import {
     ChangeDetectorRef,
     inject
 } from '@angular/core';
-import { SearchResultItem, SearchResultGroup, SearchResultSelectedEvent } from './search-types';
+import { SearchResultItem, SearchResultGroup, SearchResultSelectedEvent, MatchChip, MatchChipFieldLookup, MatchChipsFor } from './search-types';
 import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -54,7 +54,7 @@ export class SearchResultsComponent extends BaseAngularComponent {
     /** Whether to show the results summary line (count + time). Set false when parent provides its own header. */
     @Input() ShowSummary = true;
 
-    /** Whether to show score badges */
+    /** Whether to show the "how it matched" chips (Name match, Text match, Similar meaning, re-ranker relevance) */
     @Input() ShowScores = true;
 
     /** Whether to show tags */
@@ -195,6 +195,50 @@ export class SearchResultsComponent extends BaseAngularComponent {
      */
     public HighlightMatch(text: string): string {
         return HighlightSearchMatches(text, this.HighlightText, 'search-highlight');
+    }
+
+    /** Chips per result ID; the result list is replaced, not mutated, so a cache by ID is stable. */
+    private matchChipsCache = new Map<string, MatchChip[]>();
+    private chipsFor: SearchResultItem[] | null = null;
+
+    /** How a result matched, as chips (see {@link MatchChipsFor}). */
+    public GetMatchChips(result: SearchResultItem): MatchChip[] {
+        if (this.chipsFor !== this.FlatResults) {
+            this.chipsFor = this.FlatResults;
+            this.matchChipsCache.clear();
+        }
+        let chips = this.matchChipsCache.get(result.ID);
+        if (!chips) {
+            chips = MatchChipsFor(result, this.fieldLookup);
+            this.matchChipsCache.set(result.ID, chips);
+        }
+        return chips;
+    }
+
+    /** Position of a result in the flat list (1-based), for the technical details. */
+    public RankOf(result: SearchResultItem): number {
+        return this.FlatResults.indexOf(result) + 1;
+    }
+
+    /** Matched field names as display names, for the technical details. */
+    public MatchedFieldNames(result: SearchResultItem): string {
+        return (result.MatchedFields ?? []).map(f => this.fieldLookup.DisplayName(result.EntityName, f)).join(', ');
+    }
+
+    /** Field facts the chips need, read from entity metadata; unknown entities and fields fall back to the raw name. */
+    private readonly fieldLookup: MatchChipFieldLookup = {
+        IsNameField: (entityName: string, fieldName: string): boolean =>
+            this.findField(entityName, fieldName)?.IsNameField ?? false,
+        DisplayName: (entityName: string, fieldName: string): string =>
+            this.findField(entityName, fieldName)?.DisplayNameOrName ?? fieldName,
+    };
+
+    private findField(entityName: string, fieldName: string): { IsNameField: boolean; DisplayNameOrName: string } | undefined {
+        try {
+            return this.ProviderToUse.EntityByName(entityName)?.Fields.find(f => f.Name === fieldName);
+        } catch {
+            return undefined;
+        }
     }
 
     /** Format a score as a percentage */

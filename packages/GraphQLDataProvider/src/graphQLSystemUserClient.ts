@@ -1413,12 +1413,15 @@ export class GraphQLSystemUserClient {
                                 FullText
                                 Entity
                                 Storage
+                                Tag
+                                ReRank
                             }
                             Tags
                             EntityIcon
                             RecordName
                             MatchedAt
                             RawMetadata
+                            MatchedFields
                             ProviderId
                             ProviderLabel
                             ProviderIcon
@@ -1493,12 +1496,15 @@ export class GraphQLSystemUserClient {
                                 FullText
                                 Entity
                                 Storage
+                                Tag
+                                ReRank
                             }
                             Tags
                             EntityIcon
                             RecordName
                             MatchedAt
                             RawMetadata
+                            MatchedFields
                             ProviderId
                             ProviderLabel
                             ProviderIcon
@@ -1560,6 +1566,7 @@ export class GraphQLSystemUserClient {
                 RecordName: item.RecordName,
                 MatchedAt: item.MatchedAt,
                 RawMetadata: item.RawMetadata,
+                MatchedFields: item.MatchedFields ?? undefined,
                 ProviderId: item.ProviderId,
                 ProviderLabel: item.ProviderLabel,
                 ProviderIcon: item.ProviderIcon,
@@ -1586,6 +1593,8 @@ export class GraphQLSystemUserClient {
         if (breakdown.FullText !== undefined) result.FullText = breakdown.FullText;
         if (breakdown.Entity !== undefined) result.Entity = breakdown.Entity;
         if (breakdown.Storage !== undefined) result.Storage = breakdown.Storage;
+        if (breakdown.Tag != null) result.Tag = breakdown.Tag;
+        if (breakdown.ReRank != null) result.ReRank = breakdown.ReRank;
         return result;
     }
 
@@ -2693,6 +2702,8 @@ interface SearchScoreBreakdownGQLResponse {
     FullText?: number;
     Entity?: number;
     Storage?: number;
+    Tag?: number | null;
+    ReRank?: number | null;
 }
 
 /**
@@ -2738,6 +2749,7 @@ interface SearchResultItemGQLResponse {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    MatchedFields?: string[] | null;
     ProviderId?: string;
     ProviderLabel?: string;
     ProviderIcon?: string;

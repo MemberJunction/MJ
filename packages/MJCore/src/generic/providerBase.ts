@@ -2776,6 +2776,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }>({
             EntityName: 'MJ: Entity Documents',
             ExtraFilter: filter,
+            // With more than one active Search document for an entity, the oldest wins every time;
+            // without an order the pick was arbitrary and adding a second one could silently move search to it.
+            OrderBy: '__mj_CreatedAt ASC, ID ASC',
             ResultType: 'simple',
             MaxRows: 1,
             SkipTotalRowCount: true,

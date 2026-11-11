@@ -15,6 +15,7 @@
  * TestBed, matching how `sensitive-fields.ts` is structured.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { TemplatePlaceholderNames } from './sensitive-fields';
 
 // ─── 1. Entity Document Type per use case ────────────────────────────────────
@@ -208,4 +209,71 @@ export function SuggestedMatchThresholds(
         return null;
     }
     return { Potential: potential, Absolute: absolute };
+}
+
+// ─── 4. One active Search document per entity ────────────────────────────────
+
+/** The Entity Document columns {@link FindOtherActiveSearchDocument} reads. */
+export interface EntityDocumentSummary {
+    ID: string;
+    Name: string;
+    EntityID: string;
+    Status: string;
+    /** The Entity Document Type's name (the view's `Type` column); null when the type row is missing. */
+    Type: string | null;
+    __mj_CreatedAt: Date;
+}
+
+/**
+ * The oldest other active `Search` document for an entity, or null when there is none.
+ *
+ * Semantic search reads one Search document per entity — the oldest active one
+ * (`resolveSearchEntityDocument` orders by `__mj_CreatedAt`) — so a second one is never searched.
+ * Nothing stopped a second one being created, so the save paths warn with this (a warning, not a
+ * block: there are migration cases for keeping two for a while).
+ *
+ * @param documents every Entity Document (e.g. `KnowledgeHubMetadataEngine.Instance.EntityDocuments`)
+ * @param entityID the entity the document being saved belongs to
+ * @param selfID the document being saved, ignored in the list; null/undefined for a new one
+ */
+export function FindOtherActiveSearchDocument<T extends EntityDocumentSummary>(
+    documents: ReadonlyArray<T>,
+    entityID: string,
+    selfID: string | null | undefined,
+): T | null {
+    const others = documents.filter(d =>
+        UUIDsEqual(d.EntityID, entityID) &&
+        d.Status === 'Active' &&
+        d.Type?.trim().toLowerCase() === 'search' &&
+        !(selfID && UUIDsEqual(d.ID, selfID)),
+    );
+    if (others.length === 0) {
+        return null;
+    }
+    return [...others].sort((a, b) => createdTime(a) - createdTime(b))[0];
+}
+
+/**
+ * The warning shown when a document is saved as an active Search document while another exists.
+ * Says which one search will use: the older of the two.
+ *
+ * @param existing the other active Search document ({@link FindOtherActiveSearchDocument})
+ * @param selfCreatedAt the saved document's creation time; null/undefined for a new document
+ */
+export function SecondSearchDocumentWarning(
+    existing: Pick<EntityDocumentSummary, 'Name' | '__mj_CreatedAt'>,
+    selfCreatedAt: Date | null | undefined,
+): string {
+    const selfIsOlder = selfCreatedAt != null && createdTime({ __mj_CreatedAt: selfCreatedAt }) < createdTime(existing);
+    if (selfIsOlder) {
+        return `"${existing.Name}" is also an active Search document for this entity. Search uses only the oldest ` +
+            `active Search document, so it will use this one and stop using "${existing.Name}".`;
+    }
+    return `"${existing.Name}" is already the active Search document for this entity. Search uses only the oldest ` +
+        `active Search document, so it keeps using "${existing.Name}" and this document's vectors are not searched.`;
+}
+
+function createdTime(d: Pick<EntityDocumentSummary, '__mj_CreatedAt'>): number {
+    const t = d.__mj_CreatedAt instanceof Date ? d.__mj_CreatedAt.getTime() : new Date(d.__mj_CreatedAt).getTime();
+    return Number.isFinite(t) ? t : Number.MAX_SAFE_INTEGER;
 }
