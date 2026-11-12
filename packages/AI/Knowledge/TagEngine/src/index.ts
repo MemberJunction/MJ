@@ -3,6 +3,7 @@ export * from './SeedTaxonomy';
 export * from './TagGovernanceEngine';
 export * from './TagHealthJob';
 export * from './ContentItemTagBridge';
+export * from './tag-match-decision';
 
 // These engines are browser-safe and now live in @memberjunction/tag-engine-base.
 // Re-exported here so existing server-side consumers importing from

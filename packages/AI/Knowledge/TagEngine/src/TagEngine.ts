@@ -4,11 +4,23 @@ import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjuncti
 import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
 import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { AIDecisionParams, AIEmbeddingRunner, RunDecisionUse, type DecisionUseMode, type ShadowDecisionRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import type { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { TagGovernanceEngine, TagSuggestionReason } from './TagGovernanceEngine';
 import { generateSeedTaxonomy as generateSeedTaxonomyImpl, SeedTaxonomyResult } from './SeedTaxonomy';
+import {
+    BuildTagMatchQuestions,
+    BuildTagMatchState,
+    CompareTagMatchDecision,
+    GetTagMatchDecisionMode,
+    ReadTagMatchVerdict,
+    TAG_MATCH_DECISION_TIMEOUT_MS,
+    TAG_MATCH_DECISION_USE,
+    TagMatchAnsweredBy,
+    TagMatchApplies,
+    type TagMatchDecisionInput,
+} from './tag-match-decision';
 import type { IMetadataProvider } from '@memberjunction/core';
 
 /**
@@ -63,6 +75,27 @@ export interface ResolveTagOptions {
      * auto-creating tags) to allow safe resolution previews without DB mutations.
      */
     dryRun?: boolean;
+    /**
+     * How a keyword in the suggestion band is answered (`tag-match-decision.ts`). Defaults to the
+     * process setting, `GetTagMatchDecisionMode()`. A dry run never records a shadow decision.
+     */
+    decisionMode?: DecisionUseMode;
+}
+
+/** The decision prompt a near-miss tag match asks. */
+const TAG_MATCH_DECISION_PROMPT_NAME = 'Default Decision';
+
+/** How far up the tree a near-miss tag's path is read for the decision. */
+const TAG_MATCH_MAX_PATH_DEPTH = 10;
+
+let tagMatchDecisionRunner: ShadowDecisionRunner | null = null;
+
+/**
+ * Sets (or clears with `null`) the decision runner near-miss tag matches use. For tests; the default
+ * is a new `AIDecisionRunner` per call.
+ */
+export function SetTagMatchDecisionRunner(runner: ShadowDecisionRunner | null): void {
+    tagMatchDecisionRunner = runner;
 }
 
 /**
@@ -726,27 +759,99 @@ export class TagEngine extends BaseSingleton<TagEngine> {
                 return tag;
             }
 
-            // Score >= suggestThreshold but < threshold → enqueue suggestion, return null.
+            // Score >= suggestThreshold but < threshold → the near-miss band: queue a suggestion, or,
+            // in Decision mode, let a confident decision apply the tag.
             if (score >= suggestThreshold) {
-                if (!options?.dryRun) {
-                    await this.enqueueSuggestionSafe(contextUser, {
-                        proposedName: tagText,
-                        proposedParentID: rootID,
-                        bestMatchTagID: tag.ID,
-                        bestMatchScore: score,
-                        reason: 'BelowThreshold',
-                        sourceContentItemID: options?.sourceContentItemID ?? null,
-                        sourceContentSourceID: options?.sourceContentSourceID ?? null,
-                        sourceText: options?.sourceText ?? null,
-                    });
-                }
-                return null;
+                return this.resolveNearMiss(tagText, tag, score, rootID, contextUser, options);
             }
             // Below the suggestion band — fall through to handleNoMatch.
         }
 
         // 4. No match found - behavior depends on mode + governance.
         return this.handleNoMatch(tagText, weight, mode, rootID, contextUser, options);
+    }
+
+    /**
+     * A keyword whose best match scored in the suggestion band. The existing path queues it for review
+     * and returns null; the `tag-match` decision may run beside it (`Shadow`) or apply the tag when it
+     * is confidently the same concept (`Decision`). See `tag-match-decision.ts`.
+     */
+    private async resolveNearMiss(
+        tagText: string,
+        tag: MJTagEntity,
+        score: number,
+        rootID: string | null,
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
+    ): Promise<MJTagEntity | null> {
+        const configured = options?.decisionMode ?? GetTagMatchDecisionMode();
+        const mode: DecisionUseMode = options?.dryRun && configured === 'Shadow' ? 'Prompt' : configured;
+        const input = this.buildTagMatchInput(tagText, tag, options?.sourceText ?? null);
+        const outcome = await RunDecisionUse<MJTagEntity | null>({
+            Use: TAG_MATCH_DECISION_USE,
+            Mode: mode,
+            BuildDecision: () => this.buildTagMatchDecision(input, contextUser),
+            FromDecision: (run) => (TagMatchApplies(ReadTagMatchVerdict(run.Answers, TagMatchAnsweredBy(run), AIEngine.Instance)) ? tag : null),
+            RunExisting: () => this.queueNearMiss(tagText, tag, score, rootID, contextUser, options),
+            Compare: (answers, _existing, run) =>
+                CompareTagMatchDecision(input, ReadTagMatchVerdict(answers, TagMatchAnsweredBy(run), AIEngine.Instance), tag.ID, score),
+            Runner: tagMatchDecisionRunner ?? undefined,
+        });
+        return outcome.Value;
+    }
+
+    /** The existing near-miss path: queue the keyword for review (unless a dry run) and match nothing. */
+    private async queueNearMiss(
+        tagText: string,
+        tag: MJTagEntity,
+        score: number,
+        rootID: string | null,
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
+    ): Promise<null> {
+        if (!options?.dryRun) {
+            await this.enqueueSuggestionSafe(contextUser, {
+                proposedName: tagText,
+                proposedParentID: rootID,
+                bestMatchTagID: tag.ID,
+                bestMatchScore: score,
+                reason: 'BelowThreshold',
+                sourceContentItemID: options?.sourceContentItemID ?? null,
+                sourceContentSourceID: options?.sourceContentSourceID ?? null,
+                sourceText: options?.sourceText ?? null,
+            });
+        }
+        return null;
+    }
+
+    /** The keyword and its near-miss tag, with the tag's ancestors' names (root first). */
+    private buildTagMatchInput(tagText: string, tag: MJTagEntity, sourceText: string | null): TagMatchDecisionInput {
+        const path: string[] = [];
+        let parentID = tag.ParentID;
+        for (let depth = 0; parentID && depth < TAG_MATCH_MAX_PATH_DEPTH; depth++) {
+            const parent = this.Base.GetTagByID(parentID);
+            if (!parent) {
+                break;
+            }
+            path.unshift(parent.DisplayName || parent.Name);
+            parentID = parent.ParentID;
+        }
+        return { Keyword: tagText, TagName: tag.DisplayName || tag.Name, TagDescription: tag.Description, TagPath: path, SourceText: sourceText };
+    }
+
+    /** The near-miss decision, asked as the resolving user, or null when there is no active decision prompt. */
+    private buildTagMatchDecision(input: TagMatchDecisionInput, contextUser: UserInfo): AIDecisionParams | null {
+        const prompt = AIEngine.Instance.Prompts?.find(p => p.Name === TAG_MATCH_DECISION_PROMPT_NAME && p.Status === 'Active');
+        if (!prompt) {
+            return null;
+        }
+        const params = new AIDecisionParams();
+        params.prompt = prompt;
+        params.contextUser = contextUser;
+        params.State = BuildTagMatchState(input);
+        params.Questions = BuildTagMatchQuestions(input);
+        params.timeoutMS = TAG_MATCH_DECISION_TIMEOUT_MS;
+        return params;
     }
 
     private computeSuggestThreshold(matchThreshold: number, suggestThreshold?: number): number {
