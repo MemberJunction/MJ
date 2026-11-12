@@ -36,7 +36,7 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient, type AgentReplyAcknowledgement } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase, ResolveConversationAgentPreset } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, agentFailureDisposition, agentFailureMessage, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
 import { PendingAttachment, SendSlotMode } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';

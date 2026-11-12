@@ -1,12 +1,21 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { EntityFieldExtendedType, FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { SafeJSONParse } from "@memberjunction/global";
-import { AIPromptRunner, AIPromptTimeoutError } from "@memberjunction/ai-prompts";
+import { AIDecisionParams, AIPromptRunner, AIPromptTimeoutError, RunDecisionUse, type AIDecisionRunResult, type ShadowDecisionRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { CodeGenReporter } from "./codegen-reporter";
 import { NormalizeSmartFieldResultShape } from "../Database/search-guardrails";
+import {
+    BuildSmartFieldQuestions,
+    BuildSmartFieldState,
+    CompareSmartFieldDecision,
+    ReadSmartFieldVerdict,
+    SMART_FIELD_DECISION_USE,
+    SmartFieldResultFromVerdict,
+    type SmartFieldDecisionEntity,
+} from "./smart-field-decision";
 
 export type EntityNameResult = { entityName: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -548,7 +557,15 @@ export class AdvancedGeneration {
     }
 
     /**
-     * Smart Field Identification - determine name field and default in view
+     * The decision runner Smart Field Identification uses in `Shadow` and `Decision` modes. Tests
+     * replace it; the default is a new `AIDecisionRunner` per call.
+     */
+    protected SmartFieldDecisionRunner: ShadowDecisionRunner | undefined = undefined;
+
+    /**
+     * Smart Field Identification - determine name field and default in view. Answered by the prompt,
+     * a decision model, or both, as `advancedGeneration.smartFieldDecisionMode` says (default
+     * `Prompt`; see `smart-field-decision.ts`).
      */
     public async identifyFields(  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         entity: any,
@@ -557,7 +574,50 @@ export class AdvancedGeneration {
         if (!this.featureEnabled('SmartFieldIdentification')) {
             return null;
         }
+        const mode = configInfo.advancedGeneration?.smartFieldDecisionMode ?? 'Prompt';
+        if (mode === 'Prompt') {
+            return this.identifyFieldsWithPrompt(entity, contextUser);
+        }
+        const decisionEntity: SmartFieldDecisionEntity = { Name: entity.Name, Description: entity.Description, Fields: entity.Fields ?? [] };
+        const answeredBy = (run: AIDecisionRunResult) => ({ ModelName: run.modelInfo?.modelName, ResolvedModel: run.DecisionResult?.ResolvedModel });
+        const outcome = await RunDecisionUse<SmartFieldIdentificationResult | null>({
+            Use: SMART_FIELD_DECISION_USE,
+            Mode: mode,
+            BuildDecision: () => this.buildSmartFieldDecision(decisionEntity, contextUser),
+            FromDecision: (run) => {
+                const result = SmartFieldResultFromVerdict(decisionEntity, ReadSmartFieldVerdict(decisionEntity, run.Answers, answeredBy(run), AIEngine.Instance));
+                return result ? NormalizeSmartFieldResultShape(result) : null;
+            },
+            RunExisting: () => this.identifyFieldsWithPrompt(entity, contextUser),
+            Compare: (answers, existing, run) =>
+                CompareSmartFieldDecision(ReadSmartFieldVerdict(decisionEntity, answers, answeredBy(run), AIEngine.Instance), existing),
+            Runner: this.SmartFieldDecisionRunner,
+        });
+        return outcome.Value;
+    }
 
+    /** The Smart Field Identification decision, or null when the AI circuit is open or there is no active `Default Decision` prompt. */
+    private buildSmartFieldDecision(entity: SmartFieldDecisionEntity, contextUser: UserInfo): AIDecisionParams | null {
+        if (this._aiCircuitOpen) {
+            return null;
+        }
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Default Decision' && p.Status === 'Active');
+        if (!prompt) {
+            return null;
+        }
+        const params = new AIDecisionParams();
+        params.prompt = prompt;
+        params.contextUser = contextUser;
+        params.State = BuildSmartFieldState(entity);
+        params.Questions = BuildSmartFieldQuestions(entity);
+        return params;
+    }
+
+    /** Smart Field Identification by the `CodeGen: Smart Field Identification` prompt: the path that ran before decisions. */
+    private async identifyFieldsWithPrompt(
+        entity: any,
+        contextUser: UserInfo
+    ): Promise<SmartFieldIdentificationResult | null> {
         try {
             const prompt = await this.getPromptEntity('CodeGen: Smart Field Identification', contextUser);
 
