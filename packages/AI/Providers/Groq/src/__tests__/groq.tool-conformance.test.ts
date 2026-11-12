@@ -35,8 +35,6 @@ function completion(message: Record<string, unknown>, finishReason: string): Rec
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'Groq',
     SupportsTools: true,
-    // OpenAI-shaped providers pass 'stop' through unchanged on an ordinary turn (MJ#4335).
-    OrdinaryFinishReason: 'stop',
     CreateLLM: () => {
         const llm = new GroqLLM('conformance-test-key');
         (llm as unknown as { _client: typeof seamClient })._client = seamClient;
