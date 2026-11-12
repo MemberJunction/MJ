@@ -10,6 +10,10 @@ import { SearchPanelComponent } from './search-panel.component';
  * DOM spec for <mj-search-panel>. SearchService reads the GLOBAL Metadata.Provider (it has
  * no Provider input), so the fake is installed globally rather than bound as an input.
  */
+/** Lets a typed query's debounce elapse and the search it starts settle. */
+const afterDebounce = (): Promise<void> =>
+  new Promise((r) => setTimeout(r, SearchPanelComponent.SearchDebounceMs + 20));
+
 const CONVERSATIONS = [
   { ID: 'c1', Name: 'Poem About MemberJunction', Description: 'a poem', EnvironmentID: 'env1' },
   { ID: 'c2', Name: 'Query Builder Model Ranking', Description: null, EnvironmentID: 'env1' },
@@ -57,8 +61,8 @@ describe('SearchPanelComponent (DOM, data-bound)', () => {
     const f = render();
     type(f, 'poem');
 
-    // onSearchInput fire-and-forgets an async search; let it settle.
-    await new Promise((r) => setTimeout(r, 0));
+    // onSearchInput debounces, then fire-and-forgets an async search; let both settle.
+    await afterDebounce();
 
     expect(queryAll(f, '.result-item').length).toBe(CONVERSATIONS.length);
   });
@@ -66,7 +70,7 @@ describe('SearchPanelComponent (DOM, data-bound)', () => {
   it('exposes the searched results on the component', async () => {
     const f = render();
     type(f, 'poem');
-    await new Promise((r) => setTimeout(r, 0));
+    await afterDebounce();
 
     expect(f.componentInstance.results.total).toBe(CONVERSATIONS.length);
     expect(f.componentInstance.results.conversations.length).toBe(CONVERSATIONS.length);
@@ -89,7 +93,7 @@ describe('SearchPanelComponent (DOM, data-bound)', () => {
     // If ngModel did not write through before the handler ran, the component still holds ''.
     expect(f.componentInstance.searchQuery).toBe('poem');
 
-    await new Promise((r) => setTimeout(r, 0));
+    await afterDebounce();
 
     expect(queryAll(f, '.result-item').length).toBe(CONVERSATIONS.length);
   });
@@ -135,7 +139,7 @@ describe('SearchPanelComponent (DOM) message hits in a fork', () => {
     f.componentInstance.setFilter('messages');
     f.componentInstance.searchQuery = 'poem';
     f.componentInstance.onSearchInput();
-    await new Promise((r) => setTimeout(r, 0));
+    await afterDebounce();
     f.detectChanges();
     return f;
   }
@@ -167,5 +171,81 @@ describe('SearchPanelComponent (DOM) message hits in a fork', () => {
     const f = await searchMessages();
 
     expect(tagsByPreview(f)['poem in a fork of a conversation the engine has not loaded']?.Text).toBe('in a fork');
+  });
+});
+
+describe('SearchPanelComponent (DOM) debounced typing', () => {
+  const installProvider = useFakeGlobalProvider();
+  let conversationQueries: number;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function render(): ComponentFixture<SearchPanelComponent> {
+    conversationQueries = 0;
+    installProvider({
+      runViewResults: (params: RunViewParams) => {
+        if (params.EntityName === 'MJ: Conversations') {
+          conversationQueries++;
+          return CONVERSATIONS;
+        }
+        return [];
+      },
+    });
+    vi.spyOn(ConversationEngine.Instance, 'GetVisibleConversationsFilter').mockResolvedValue("EnvironmentID='env1'");
+    const f = renderComponentFixture(SearchPanelComponent, {
+      imports: [FormsModule],
+      inputs: { isOpen: true, environmentId: 'env1', currentUser: { ID: 'me', Name: 'Me' } as unknown as UserInfo },
+    });
+    // One sub-search keeps the count to one read per search.
+    f.componentInstance.SetFilter('conversations');
+    return f;
+  }
+
+  const type = (f: ComponentFixture<SearchPanelComponent>, q: string): void => {
+    f.componentInstance.SearchQuery = q;
+    f.componentInstance.OnSearchInput();
+  };
+
+  it('runs one search for five key presses inside the wait', async () => {
+    vi.useFakeTimers();
+    const f = render();
+
+    for (const q of ['p', 'po', 'poe', 'poem', 'poems']) {
+      type(f, q);
+      await vi.advanceTimersByTimeAsync(40);
+    }
+    expect(conversationQueries).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(SearchPanelComponent.SearchDebounceMs);
+    expect(conversationQueries).toBe(1);
+  });
+
+  it('runs a search at once on a filter click', async () => {
+    vi.useFakeTimers();
+    const f = render();
+    type(f, 'poem');
+    await vi.advanceTimersByTimeAsync(SearchPanelComponent.SearchDebounceMs + 10);
+    expect(conversationQueries).toBe(1);
+
+    // A filter click (here the same filter again) searches without waiting.
+    f.componentInstance.SetFilter('conversations');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(conversationQueries).toBe(2);
+  });
+
+  it('searches again for the same text typed after a clear', async () => {
+    vi.useFakeTimers();
+    const f = render();
+    type(f, 'poem');
+    await vi.advanceTimersByTimeAsync(SearchPanelComponent.SearchDebounceMs + 10);
+
+    type(f, '');
+    type(f, 'poem');
+    await vi.advanceTimersByTimeAsync(SearchPanelComponent.SearchDebounceMs + 10);
+
+    expect(conversationQueries).toBe(2);
   });
 });

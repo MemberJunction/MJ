@@ -7,7 +7,7 @@ import {
   type MJConversationEntity,
   type MJConversationDetailEntity,
 } from '@memberjunction/core-entities';
-import { ExportService, type ExportFormat } from './export.service';
+import { ExportService, EXPORT_ARTIFACT_CONTENT_LIMIT, type ExportArtifact, type ExportFormat } from './export.service';
 
 /**
  * DOM spec (jsdom — `escapeHtml` and the theme snapshot touch `document`) for the
@@ -344,7 +344,9 @@ describe('ExportService — ExportConversation scope', () => {
       { Success: true, Results: [conversation] },
       { Success: true, Results: details },
     ]);
-    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunViews: runViews } as unknown as RunView);
+    // The artifact reads find none: these specs cover the messages.
+    const noArtifacts = vi.fn(async () => ({ Success: true, Results: [] }));
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunViews: runViews, RunView: noArtifacts } as unknown as RunView);
     URL.createObjectURL = vi.fn(() => 'blob:export');
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
@@ -466,5 +468,169 @@ describe('ExportService — ExportConversation scope', () => {
     await svc.exportConversation('c1', 'markdown', user, {}, branchScope);
 
     expect(detailsRead().ExtraFilter).toBe(ConversationEngine.LiveRowsFilter(ConversationEngine.ScopeFilter(branchScope)));
+  });
+});
+
+/** Output artifacts written under the message that produced them. */
+describe('ExportService — artifacts', () => {
+  const conversation = {
+    ID: 'c1',
+    Name: 'Sales review',
+    Description: null,
+    __mj_CreatedAt: new Date('2026-01-02T03:04:05Z'),
+    __mj_UpdatedAt: new Date('2026-01-02T03:04:05Z'),
+  } as unknown as MJConversationEntity;
+  const details = [
+    { ID: 'm1', Role: 'User', Message: 'Chart sales by region', __mj_CreatedAt: new Date('2026-01-02T03:05:00Z') },
+    { ID: 'M2', Role: 'AI', Message: 'Here is the chart.', __mj_CreatedAt: new Date('2026-01-02T03:05:30Z') },
+  ] as unknown as MJConversationDetailEntity[];
+  const chart: ExportArtifact = {
+    ArtifactID: 'a1',
+    VersionID: 'v1',
+    Name: 'Sales by Region',
+    Type: 'Component',
+    VersionNumber: 2,
+    Content: '{"title":"Sales by Region","code":"<b>x</b>"}',
+    MimeType: null,
+    FileBacked: false,
+  };
+  const workbook: ExportArtifact = {
+    ArtifactID: 'a2',
+    VersionID: 'v2',
+    Name: 'Raw data',
+    Type: 'File',
+    VersionNumber: 1,
+    Content: null,
+    MimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    FileBacked: true,
+  };
+  const withArtifacts = (list: ExportArtifact[]) => ({
+    conversation,
+    details,
+    artifacts: new Map([['m2', list]]),
+  });
+  const formats: readonly ExportFormat[] = ['markdown', 'text', 'html', 'json'];
+  const svc = new ExportService();
+
+  it('writes name, type and version under the producing message in every format', async () => {
+    for (const format of formats) {
+      const { content } = await svc.BuildExportContent(withArtifacts([chart]), format);
+      expect(content, format).toContain('Sales by Region');
+      expect(content, format).toContain('Component');
+      expect(content.indexOf('Sales by Region'), format).toBeGreaterThan(content.indexOf('Here is the chart.'));
+    }
+    expect((await svc.BuildExportContent(withArtifacts([chart]), 'markdown')).content)
+      .toContain('**Artifact:** Sales by Region (Component, version 2)');
+  });
+
+  it('carries the stored content and IDs in JSON', async () => {
+    const json = JSON.parse((await svc.BuildExportContent(withArtifacts([chart, workbook]), 'json')).content);
+    expect(json.messages[0].artifacts).toBeUndefined();
+    expect(json.messages[1].artifacts).toEqual([
+      { id: 'a1', versionId: 'v1', name: 'Sales by Region', type: 'Component', version: 2, content: chart.Content },
+      { id: 'a2', versionId: 'v2', name: 'Raw data', type: 'File', version: 1, mimeType: workbook.MimeType, content: null },
+    ]);
+  });
+
+  it('writes a file-backed version as its MIME type, without content', async () => {
+    const md = (await svc.BuildExportContent(withArtifacts([workbook]), 'markdown')).content;
+    expect(md).toContain(`**Artifact:** Raw data (File, version 1, ${workbook.MimeType})`);
+    expect(md).not.toContain('```');
+  });
+
+  it('cuts long content with a marker in the text formats', async () => {
+    const long = { ...chart, Content: 'x'.repeat(EXPORT_ARTIFACT_CONTENT_LIMIT + 50) };
+    for (const format of ['markdown', 'text', 'html'] as const) {
+      const { content } = await svc.BuildExportContent(withArtifacts([long]), format);
+      expect(content, format).toContain(`[truncated: ${EXPORT_ARTIFACT_CONTENT_LIMIT} of ${EXPORT_ARTIFACT_CONTENT_LIMIT + 50} characters shown]`);
+      expect(content, format).not.toContain('x'.repeat(EXPORT_ARTIFACT_CONTENT_LIMIT + 1));
+    }
+    const json = JSON.parse((await svc.BuildExportContent(withArtifacts([long]), 'json')).content);
+    expect(json.messages[1].artifacts[0].content).toHaveLength(EXPORT_ARTIFACT_CONTENT_LIMIT + 50);
+  });
+
+  it('fences Markdown content longer than any backtick run inside it', async () => {
+    const md = (await svc.BuildExportContent(withArtifacts([{ ...chart, Content: 'a ```js fence``` inside' }]), 'markdown')).content;
+    expect(md).toContain('````\na ```js fence``` inside\n````');
+  });
+
+  it('escapes artifact content in HTML', async () => {
+    const html = (await svc.BuildExportContent(withArtifacts([chart]), 'html')).content;
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(html).not.toContain('<b>x</b>');
+    expect(html).toContain('.artifact {');
+  });
+
+  it('writes a link only when the host builds one, and only an http(s) link', async () => {
+    const plain = (await svc.BuildExportContent(withArtifacts([chart]), 'markdown')).content;
+    expect(plain).not.toContain('Open in the app');
+
+    const artifactLink = vi.fn(() => 'https://mj.example.com/chat?artifactId=a1');
+    for (const format of formats) {
+      const { content } = await svc.BuildExportContent(withArtifacts([chart]), format, { artifactLink });
+      expect(content, format).toContain('https://mj.example.com/chat?artifactId=a1');
+    }
+    expect(artifactLink).toHaveBeenCalledWith({ ConversationID: 'c1', ArtifactID: 'a1', VersionID: 'v1', VersionNumber: 2 });
+
+    const hostile = (await svc.BuildExportContent(withArtifacts([chart]), 'html', { artifactLink: () => 'javascript:alert(1)' })).content;
+    expect(hostile).not.toContain('javascript:');
+  });
+
+  it('includeArtifacts: false writes the same document as a conversation without artifacts', async () => {
+    for (const format of ['markdown', 'text', 'html'] as const) {
+      const off = (await svc.BuildExportContent(withArtifacts([chart, workbook]), format, { includeArtifacts: false })).content;
+      const none = (await svc.BuildExportContent({ conversation, details }, format)).content;
+      // The file name carries a timestamp; the document body must match exactly.
+      expect(off, format).toBe(none);
+    }
+    const offJson = JSON.parse((await svc.BuildExportContent(withArtifacts([chart]), 'json', { includeArtifacts: false })).content);
+    expect(offJson.messages[1].artifacts).toBeUndefined();
+  });
+
+  describe('ExportConversation reads', () => {
+    const user = { ID: 'u1' } as unknown as UserInfo;
+    let runView: ReturnType<typeof vi.fn>;
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+
+    beforeEach(() => {
+      const rows: Record<string, object[]> = {
+        'MJ: Conversation Detail Artifacts': [{ ConversationDetailID: 'm2', ArtifactVersionID: 'V1' }],
+        'MJ: Artifact Versions': [{ ID: 'v1', ArtifactID: 'A1', VersionNumber: 2, Name: null, Content: 'chart spec', FileID: null, MimeType: null }],
+        'MJ: Artifacts': [{ ID: 'a1', Name: 'Sales by Region', Type: 'Component' }],
+      };
+      runView = vi.fn(async (params: { EntityName: string }) => ({ Success: true, Results: rows[params.EntityName] ?? [] }));
+      const runViews = vi.fn(async () => [
+        { Success: true, Results: [conversation] },
+        { Success: true, Results: details },
+      ]);
+      vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunViews: runViews, RunView: runView } as unknown as RunView);
+      URL.createObjectURL = vi.fn(() => 'blob:export');
+      URL.revokeObjectURL = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      vi.restoreAllMocks();
+    });
+
+    it('reads the output artifacts of the exported messages as the current user', async () => {
+      const build = vi.spyOn(svc, 'BuildExportContent');
+      await svc.ExportConversation('c1', ConversationEngine.TrunkScope('c1'), 'json', user);
+
+      const [linkRead, linkUser] = runView.mock.calls[0];
+      expect(linkRead.EntityName).toBe('MJ: Conversation Detail Artifacts');
+      expect(linkRead.ExtraFilter).toBe("ConversationDetailID IN ('m1','M2') AND Direction='Output'");
+      expect(linkUser).toBe(user);
+      const content = (await build.mock.results[0].value).content;
+      expect(JSON.parse(content).messages[1].artifacts[0]).toMatchObject({ id: 'a1', name: 'Sales by Region', content: 'chart spec' });
+    });
+
+    it('reads no artifacts when includeArtifacts is false', async () => {
+      await svc.ExportConversation('c1', ConversationEngine.TrunkScope('c1'), 'json', user, { includeArtifacts: false });
+      expect(runView).not.toHaveBeenCalled();
+    });
   });
 });

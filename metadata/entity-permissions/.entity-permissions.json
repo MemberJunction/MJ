@@ -643,5 +643,23 @@
       "lastModified": "2026-10-27T00:34:10.515Z",
       "checksum": "ddaefec783fe523a5c49e3fc3c78a1abfb03347c61af822841b02033faedd4f1"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Projects",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own or Shared Projects",
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Projects",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Projects",
+      "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Projects"
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Projects&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
   }
 ]

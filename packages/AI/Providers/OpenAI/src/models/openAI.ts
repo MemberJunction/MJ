@@ -413,7 +413,9 @@ export class OpenAILLM extends BaseLLM {
      * by default. The provider's 400 says so in words, which is the signal used here: no model name
      * is listed in code, and a model that later accepts both is never touched. On that rejection the
      * request is resent once with `reasoning_effort: 'none'`, and the model is remembered so its later
-     * requests skip the failed round trip. The tools are kept, which is the point: without this the
+     * requests skip the failed round trip. A model the catalog marks
+     * (`LLM.ChatCompletionsToolsRequireNoReasoning`, passed as `ChatParams.toolsRequireNoReasoning`)
+     * goes out with reasoning off on its first request. The tools are kept, which is the point: without this the
      * prompt runner retries on the envelope path and the model loses its tool declarations.
      *
      * The Responses API accepts tools and reasoning together for these models; moving tool calls to
@@ -424,7 +426,8 @@ export class OpenAILLM extends BaseLLM {
         params: ChatParams
     ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
         const modelKey = this.toolsWithoutReasoningKey(request.model);
-        const first = request.tools?.length && OpenAILLM.toolsWithoutReasoningModels.has(modelKey)
+        const first = request.tools?.length
+            && (params.toolsRequireNoReasoning === true || OpenAILLM.toolsWithoutReasoningModels.has(modelKey))
             ? this.withReasoningOffForTools(request)
             : request;
         try {

@@ -1,0 +1,31 @@
+[
+  {
+    "_comments": [
+      "Corrects the description of MJ: AI Prompts.FailoverStrategy to what the runners do (#4907).",
+      "The chat prompt runner only tells None apart from the other values: every non-None strategy",
+      "walks the candidates from model selection in priority order, which can include other models.",
+      "Cross-model failover is what keeps agents running during a provider outage, so the runner keeps",
+      "that behavior and the description is corrected instead. AutoUpdateDescription = 0 keeps CodeGen",
+      "from restoring the old text from the column comment."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "AutoUpdateDescription": false,
+            "Description": "Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Prompts&Name=FailoverStrategy"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  }
+]
