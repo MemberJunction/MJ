@@ -83,6 +83,40 @@ describe('RewriteGrammarGaps — clause keywords the grammar lacks', () => {
     });
 });
 
+describe('RewriteGrammarGaps — row-limiting clauses', () => {
+    it.each([
+        ['OFFSET without FETCH', 'SELECT a FROM t ORDER BY a OFFSET 5 ROWS', 'SELECT a FROM t ORDER BY a '],
+        ['OFFSET with FETCH FIRST', 'SELECT a FROM t ORDER BY a OFFSET 5 ROWS FETCH FIRST 3 ROWS ONLY', 'SELECT a FROM t ORDER BY a  '],
+        ['singular ROW and no count', 'SELECT a FROM t ORDER BY a OFFSET 1 ROW FETCH NEXT ROW ONLY', 'SELECT a FROM t ORDER BY a  '],
+        ['FETCH … WITH TIES', 'SELECT a FROM t ORDER BY a FETCH FIRST 3 ROWS WITH TIES', 'SELECT a FROM t ORDER BY a '],
+    ])('drops %s on SQL Server', (_case, sql, expected) => {
+        expect(RewriteGrammarGaps(sql, ss)).toBe(expected);
+    });
+
+    it.each([
+        ['an OFFSET count that is an expression', 'SELECT a FROM t ORDER BY a OFFSET (SELECT 1) ROWS'],
+        ['a FETCH count that is an expression', 'SELECT a FROM t ORDER BY a FETCH FIRST (SELECT 1) ROWS ONLY'],
+        ['an OFFSET that PostgreSQL already reads', 'SELECT a FROM t ORDER BY a OFFSET 5'],
+    ])('keeps %s', (_case, sql) => {
+        expect(RewriteGrammarGaps(sql, pg)).toBe(sql);
+    });
+});
+
+describe('RewriteGrammarGaps — PostgreSQL', () => {
+    it('reads a RANGE frame as ROWS and drops OFFSET … ROWS / FETCH … ONLY', () => {
+        expect(RewriteGrammarGaps('SELECT COUNT(*) OVER (ORDER BY d RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS r FROM t ORDER BY d OFFSET 5 ROWS FETCH FIRST 3 ROWS ONLY', pg))
+            .toBe('SELECT COUNT(*) OVER (ORDER BY d ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS r FROM t ORDER BY d  ');
+    });
+
+    it.each([
+        ['INTERSECT, which its grammar reads', 'SELECT a FROM t INTERSECT SELECT a FROM u'],
+        ['ESCAPE, which its grammar reads', "SELECT a FROM t WHERE a LIKE '%!_%' ESCAPE '!'"],
+        ['a leading semicolon, which its grammar reads', ';SELECT 1'],
+    ])('leaves %s alone', (_case, sql) => {
+        expect(RewriteGrammarGaps(sql, pg)).toBe(sql);
+    });
+});
+
 describe('RewriteGrammarGaps — dialects', () => {
     it('returns the text unchanged for a dialect whose grammar reads both forms', () => {
         const sql = "SELECT a FROM t EXCEPT SELECT a FROM u";

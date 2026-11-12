@@ -129,9 +129,10 @@ export class StrictFragmentValidator {
 
     /**
      * A `SQLParser` reading of `sql`, with its fallbacks. When that fails, one more reading of the
-     * text with the grammar's gaps rewritten ({@link RewriteGrammarGaps}: `STRING_AGG … WITHIN
-     * GROUP`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG`, `RANGE` frames, `LIKE … ESCAPE`,
-     * `TOP … WITH TIES`, a leading `;`), which reads the same relations.
+     * text with the grammar's gaps rewritten ({@link RewriteGrammarGaps}: on SQL Server `STRING_AGG …
+     * WITHIN GROUP`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG`, `LIKE … ESCAPE`, `TOP … WITH TIES`,
+     * a leading `;`; on SQL Server and PostgreSQL `RANGE` frames and `OFFSET … ROWS` / `FETCH …`
+     * clauses), which reads the same relations.
      */
     private static fallbackTree(sql: string, dialect: SQLParserDialect): SQLParser {
         const parser = new SQLParser(sql, dialect);
