@@ -35,7 +35,8 @@ Sizes: **S** = up to a day, **M** = a few days, **L** = a week or more.
 ## 2. Phase 0 — correctness bugs (do first, each S unless noted)
 
 These are defects, not features. Several plausibly explain the weakest benchmark numbers, so
-fixing them is also the cheapest accuracy work available.
+fixing them is also the cheapest accuracy work available. Some are partly fixed in open PRs;
+§12 says which.
 
 | # | Bug | Evidence | Fix |
 |---|---|---|---|
@@ -289,13 +290,51 @@ DBAutoDoc should **not** become a question-answering application; that belongs t
 
 ## 12. Coordination with work already in flight
 
-*To be filled from the survey of open MJ issues, pull requests and branches.*
+Surveyed 2026-11-12 (open issues, open PRs, and recent branches on MemberJunction/MJ). This plan
+is meant to sit alongside that work, not restate it.
+
+### Already in progress: do not duplicate
+
+| Work | What it covers | Effect on this plan |
+|---|---|---|
+| **#5223** (issue): evidence-driven relationship discovery | The existing key-discovery roadmap: per-candidate verification SQL with target uniqueness, fan-out and type checks; `verify`/`prune` commands; sandboxed read-only exploration SQL; documentation ingestion; LLM-proposed naming conventions judged against data; ID-format fingerprints; convention packs per source system; self-references; one parent per column; calibrated confidence; a coverage report; a precision/recall harness. | **Phase 2 builds on #5223 rather than parallel to it.** Items 2.3, 2.7 and 2.11 and Phase 1.1 are the same ideas; implement them under #5223. Genuinely new here: query history (2.9), view/procedure mining (2.10), the name normaliser (2.1), identity evidence (2.2). |
+| **#6004** (issue), fixed in **#6498** and again in **#6327** | One PK per table. | Covers part of 0.2. **The two PRs implement it differently (`ApplyPrimaryKeys.ts` in both); only one should land.** After merge, check whether FK-flag clearing and generator gating (rest of 0.2) are covered. |
+| **#6498** (PR) | Composite FK components need a unique target; `IsUnique` means unique alone (CodeGen side of #4534). | Covers the composite half of 0.3. The single-column LLM-FK uniqueness check remains. |
+| **#6499** (PR) | Discovery reuses sampling statistics via `ColumnStatsCache`; date columns described distinctly. | Covers 3.1. |
+| **#6505** (PR) | Data-quality phase: ~20 checks from sampling and catalog, orphan anti-joins, `data-quality.md/json`, findings fed into prompts; fixes stats merge, empty tables reported as 1 row, SQL Server composite FK order; planted-defect bench. | Overlaps 0.7, 8.5 and Phase 9. Its bench is a model for Phase 1. Sequence Phase 2 after it. |
+| **#5722** (issue) | Database-sourced text reaches prompts unsanitised; decide a trust model. | **Prerequisite for Phase 4 and for every new prompt input** (query history 2.9, module text 2.10, #5223's documents and sandbox results). |
+| **#6240** (PR) | Moves `PromptEngine` onto `@memberjunction/nunjucks-sandbox`. | Any `PromptEngine` change here waits for it. |
+| **#5816** (issue) | Store per-entity row counts and field statistics in MJ metadata for Skip. | Agree with #6505 on one source of statistics. DBAutoDoc can produce them; storing them in MJ is the consumer's job. |
+| **#6404** (PR): MJ Canon graph | Graph of entities, FKs, joins, queries and concepts rendered for agent prompts. | **Inside MJ, the ontology layer is Canon.** DBAutoDoc should not grow its own ontology store; Ossie and Auto-Ontology exporters (8.3, 8.4) are output formats for non-MJ consumers. |
+| **#5217**, **#6466** / **#6575** | Soft-FK indexes not created on PostgreSQL; FK index guard duplicates indexes. | Phase 8.1 should emit index DDL alongside constraint DDL, as #5223 also suggests. |
+| **#6583** (PR) | Saved-query metadata moves to `QueryEngine`. | Not used by DBAutoDoc (it reads the source database's own query history), but MJ-side consumers of query evidence should read through `QueryEngine`. |
+
+### Open ground (no existing issue or PR found)
+
+Query-history mining, Apache Ossie and Auto-Ontology export, certification state that survives
+re-runs, the privacy switch, dropping `server-bootstrap-lite`, new drivers, held-out and
+contamination-controlled benchmarks, and the downstream text-to-SQL benchmark.
+
+### Files several open PRs already change
+
+`core/AnalysisEngine.ts` (#6505, #6498, #6327), `discovery/DiscoveryEngine.ts` (#6498, #6499,
+#6327), `discovery/ColumnStatsCache.ts` (#6505, #6499), `prompts/table-analysis.md` (#6505,
+#6499), `types/state.ts` (#6505, #6327), `prompts/PromptEngine.ts` (#6240). Work on this plan
+that touches these files starts after those PRs land.
+
+### Existing plans this one extends
+
+[`benchmark-evaluation.md`](benchmark-evaluation.md) (Phase 1), [`driver-abstraction.md`](driver-abstraction.md)
+(Phase 6), [`enum-detection.md`](enum-detection.md) (value lists; unchanged here).
 
 ---
 
 ## 13. Suggested order
 
-1. Phase 0 (all), then Phase 1 items 1–3 and 6–7, so the next benchmark numbers are trustworthy.
+0. Land or close the open PRs in §12 (#6505, #6498 or #6327, #6499, #6240), and settle the #5722
+   trust model.
+1. Phase 0 (what the open PRs leave), then Phase 1 items 1–3 and 6–7, so the next benchmark
+   numbers are trustworthy.
 2. Phase 2 items 1–8 (cheap, measurable), with before/after on held-out databases.
 3. Phase 4.1–4.3 and Phase 5.1–5.2 (privacy switch and footprint), which matter to adopters
    immediately.

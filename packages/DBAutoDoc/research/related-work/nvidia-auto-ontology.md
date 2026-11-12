@@ -167,6 +167,10 @@ The safe sequence:
    the fast path (`semantic_fk.py`, "Declared FK fast path"), so the weak inference never
    runs for them, and Terms are written on top of DBAutoDoc's descriptions.
 
+For MJ users the same picture holds with MJ's own consumers in Auto-Ontology's place: CodeGen
+turns DBAutoDoc's output into entities, and the MJ Canon graph (in progress, MJ#6404) plays the
+role of a semantic layer for agents. DBAutoDoc stays the same tool underneath either one.
+
 Step 3 is the only new code, a DBAutoDoc generator. An Apache Ossie exporter is the
 standards-based version of the same generator and reaches any Ossie consumer, not just
 Auto-Ontology.
