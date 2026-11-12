@@ -9,18 +9,14 @@
  * {@link REALTIME_MODERATOR_CALIBRATION_KEY}. Until one ships for the answering model, `Decision` mode
  * reads every answer as unsure and falls back to the prompt.
  *
- * Pure: no I/O, so each rule is unit-tested on its own.
+ * No I/O: calibrations come from the loaded `AIEngine`, so each rule is unit-tested on its own.
  *
  * @module @memberjunction/ai-agents
  */
 
 import { ApplyPlattCalibration, type DecisionAnswer, type LikelihoodQuestion } from '@memberjunction/ai';
-import {
-    FindDecisionCalibration,
-    type DecisionAnsweringModel,
-    type DecisionCalibrationKey,
-    type DecisionCalibrationSource
-} from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel, DecisionCalibrationKey } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { ShadowDecisionComparison } from '@memberjunction/ai-prompts';
 
 /** The decision use of the moderator's decision. */
@@ -99,17 +95,15 @@ function moderatorQuestionText(agent: ModeratorDecisionAgent): string {
  * @param answers The decision's answers.
  * @param agents The roster the questions were built from, in the same order.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared, normally `AIEngine.Instance`.
  * @param threshold The calibrated probability at which an agent speaks.
  */
 export function ModeratorSpeakersFromDecision(
     answers: Record<string, DecisionAnswer>,
     agents: readonly ModeratorDecisionAgent[],
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined,
     threshold: number = REALTIME_MODERATOR_MIN_PROBABILITY
 ): string[] | null {
-    const calibration = FindDecisionCalibration(calibrations, REALTIME_MODERATOR_CALIBRATION_KEY, answeredBy);
+    const calibration = AIEngine.Instance.FindDecisionCalibration(REALTIME_MODERATOR_CALIBRATION_KEY, answeredBy);
     if (!calibration) {
         return null;
     }
@@ -137,17 +131,15 @@ export function ModeratorSpeakersFromDecision(
  * @param promptSpeakers The names the prompt picked, in order.
  * @param agents The roster the questions were built from.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared.
  */
 export function CompareModeratorDecision(
     answers: Record<string, DecisionAnswer>,
     promptSpeakers: readonly string[],
     agents: readonly ModeratorDecisionAgent[],
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): ShadowDecisionComparison {
     const picked = new Set(promptSpeakers.map(normalizeName));
-    const calibrated = ModeratorSpeakersFromDecision(answers, agents, answeredBy, calibrations);
+    const calibrated = ModeratorSpeakersFromDecision(answers, agents, answeredBy);
     const decisionSpeakers = calibrated ?? agents
         .filter((_agent, i) => (rawProbability(answers[ModeratorQuestionKey(i)]) ?? 0) >= 0.5)
         .map(a => a.name);

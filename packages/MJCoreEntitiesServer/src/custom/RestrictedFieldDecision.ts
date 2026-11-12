@@ -22,12 +22,8 @@
  */
 
 import type { DecisionAnswer, LikelihoodQuestion } from '@memberjunction/ai';
-import {
-    CalibrateDecisionProbability,
-    type DecisionAnsweringModel,
-    type DecisionCalibrationKey,
-    type DecisionCalibrationSource
-} from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel, DecisionCalibrationKey } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     ResolveDecisionUseMode,
     type AIDecisionRunResult,
@@ -157,18 +153,16 @@ export interface RestrictedFieldDecisionVerdict {
  * @param input The comment and its candidate fields, in the order the questions were built.
  * @param answers The decision's answers.
  * @param answeredBy The model that answered.
- * @param source Where the calibrations are declared, normally `AIEngine.Instance`.
  */
 export function ReadRestrictedFieldVerdicts(
     input: RestrictedFieldDecisionInput,
     answers: Record<string, DecisionAnswer>,
-    answeredBy: DecisionAnsweringModel,
-    source: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): RestrictedFieldDecisionVerdict[] {
     return input.CandidateFields.map((field, i) => {
         const answer = answers[RestrictedFieldQuestionKey(i)];
         const raw = answer?.Kind === 'Likelihood' && Number.isFinite(answer.Probability) ? answer.Probability : null;
-        const calibrated = raw === null ? null : CalibrateDecisionProbability(source, RESTRICTED_FIELD_CALIBRATION_KEY, raw, answeredBy);
+        const calibrated = raw === null ? null : AIEngine.Instance.CalibrateDecisionProbability(RESTRICTED_FIELD_CALIBRATION_KEY, raw, answeredBy);
         return { Name: field.Name, RawProbability: raw, CalibratedProbability: calibrated };
     });
 }

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { DecisionAnswer, DecisionCalibrationEntry } from '@memberjunction/ai';
-import type { DecisionAnsweringModel, DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
+import { ServeDecisionCalibrations } from './helpers/shipped-decision-calibrations';
 import {
     BuildModeratorQuestions,
     CompareModeratorDecision,
@@ -13,11 +14,12 @@ import {
 
 const JEV: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 
-const IDENTITY: DecisionCalibrationSource = {
-    GetDecisionCalibrations: (name: string): readonly DecisionCalibrationEntry[] =>
-        name === 'Jev' ? [{ ...REALTIME_MODERATOR_CALIBRATION_KEY, ResolvedModel: JEV.ResolvedModel ?? '', A: 1, B: 0 }] : []
-};
-const NONE: DecisionCalibrationSource = { GetDecisionCalibrations: () => [] };
+/** An identity fit (calibrated = raw) on Jev at its pinned version, served from the AI engine. */
+const IDENTITY = (name: string): readonly DecisionCalibrationEntry[] =>
+    name === 'Jev' ? [{ ...REALTIME_MODERATOR_CALIBRATION_KEY, ResolvedModel: JEV.ResolvedModel ?? '', A: 1, B: 0 }] : [];
+const NONE = (): readonly DecisionCalibrationEntry[] => [];
+
+afterEach(() => vi.restoreAllMocks());
 
 const ROSTER: ModeratorDecisionAgent[] = [
     { name: 'Sage', aliases: ['the assistant'], role: 'Answers general questions', mode: 'proactive' },
@@ -43,22 +45,27 @@ describe('realtime moderator decision', () => {
     });
 
     it('picks the agents at or over the threshold, most likely first, roster order breaking ties', () => {
-        expect(ModeratorSpeakersFromDecision(answers(0.7, 0.9, 0.2), ROSTER, JEV, IDENTITY)).toEqual(['Skip', 'Sage']);
-        expect(ModeratorSpeakersFromDecision(answers(0.8, 0.8, REALTIME_MODERATOR_MIN_PROBABILITY), ROSTER, JEV, IDENTITY))
+        ServeDecisionCalibrations(IDENTITY);
+        expect(ModeratorSpeakersFromDecision(answers(0.7, 0.9, 0.2), ROSTER, JEV)).toEqual(['Skip', 'Sage']);
+        expect(ModeratorSpeakersFromDecision(answers(0.8, 0.8, REALTIME_MODERATOR_MIN_PROBABILITY), ROSTER, JEV))
             .toEqual(['Sage', 'Skip', 'Scribe']);
     });
 
     it('lets nobody speak when no agent clears the threshold', () => {
-        expect(ModeratorSpeakersFromDecision(answers(0.1, 0.2, 0.3), ROSTER, JEV, IDENTITY)).toEqual([]);
+        ServeDecisionCalibrations(IDENTITY);
+        expect(ModeratorSpeakersFromDecision(answers(0.1, 0.2, 0.3), ROSTER, JEV)).toEqual([]);
     });
 
     it('cannot pick without a calibration for the answering model, or with an answer missing', () => {
-        expect(ModeratorSpeakersFromDecision(answers(0.9, 0.9, 0.9), ROSTER, JEV, NONE)).toBeNull();
-        expect(ModeratorSpeakersFromDecision(answers(0.9, 0.9), ROSTER, JEV, IDENTITY)).toBeNull();
+        ServeDecisionCalibrations(NONE);
+        expect(ModeratorSpeakersFromDecision(answers(0.9, 0.9, 0.9), ROSTER, JEV)).toBeNull();
+        ServeDecisionCalibrations(IDENTITY);
+        expect(ModeratorSpeakersFromDecision(answers(0.9, 0.9), ROSTER, JEV)).toBeNull();
     });
 
     it('agrees on the same set of speakers whatever their order, and labels each agent for a fit', () => {
-        const comparison = CompareModeratorDecision(answers(0.7, 0.9, 0.2), ['Sage', 'skip'], ROSTER, JEV, IDENTITY);
+        ServeDecisionCalibrations(IDENTITY);
+        const comparison = CompareModeratorDecision(answers(0.7, 0.9, 0.2), ['Sage', 'skip'], ROSTER, JEV);
 
         expect(comparison.Agreed).toBe(true);
         expect(comparison.Details?.Agents).toEqual([
@@ -69,13 +76,15 @@ describe('realtime moderator decision', () => {
     });
 
     it('labels an agent the prompt named by an alias', () => {
-        const comparison = CompareModeratorDecision(answers(0.9, 0.1, 0.1), ['the assistant'], ROSTER, JEV, NONE);
+        ServeDecisionCalibrations(NONE);
+        const comparison = CompareModeratorDecision(answers(0.9, 0.1, 0.1), ['the assistant'], ROSTER, JEV);
         const agents = comparison.Details?.Agents as Array<{ Name: string; Label: boolean }>;
         expect(agents.find(a => a.Name === 'Sage')?.Label).toBe(true);
     });
 
     it('compares uncalibrated answers at 0.5 and says so', () => {
-        const comparison = CompareModeratorDecision(answers(0.6, 0.4, 0.1), ['Skip'], ROSTER, JEV, NONE);
+        ServeDecisionCalibrations(NONE);
+        const comparison = CompareModeratorDecision(answers(0.6, 0.4, 0.1), ['Skip'], ROSTER, JEV);
         expect(comparison.Agreed).toBe(false);
         expect(comparison.Summary).toContain('uncalibrated');
         expect(comparison.Details?.Calibrated).toBe(false);

@@ -599,12 +599,12 @@ instructions followed by the criterion as **Rubric Criterion** renders it.
   `UnaskedCriteria` (the score records it as unanswered, so completeness drops); DecisionThenLLM sends it to the LLM.
 
 **Confidence is raw unless a calibration exists.** A criterion's confidence is the model's own probability for
-the chosen level (for a numeric scale, the level nearest the value). When the engine has a calibration source
-and the decision model's `ModelConfiguration.Decision.Calibrations` hold a fit for use `rubric-evaluation`,
+the chosen level (for a numeric scale, the level nearest the value). When the decision model's
+`ModelConfiguration.Decision.Calibrations` hold a fit for use `rubric-evaluation`,
 question = the **criterion's key**, on the exact model that answered (`ModelName` + `ResolvedModel`), the
 confidence is calibrated with it and the criterion is listed in `CalibratedCriteria`. No such fits ship today, so
-every rubric confidence is raw until one is fitted with the `fit-decision-calibration` rig. A server registers
-the source once with `RegisterRubricDecisionCalibrations(AIEngine.Instance)`; without it, confidences stay raw.
+every rubric confidence is raw until one is fitted with the `fit-decision-calibration` rig. The evaluators read
+fits through `AIEngineBase.Instance.CalibrateDecisionProbability`, on the server and in the browser.
 
 **DecisionThenLLM**, step by step:
 

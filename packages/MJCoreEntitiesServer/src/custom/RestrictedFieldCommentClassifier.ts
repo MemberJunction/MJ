@@ -405,13 +405,13 @@ async function runDefaultAIEngineRestrictedFieldClassifier(
         BuildDecision: () => buildRestrictedFieldDecision(prompt, contextUser),
         FromDecision: (run) => {
             const flagged = FlaggedFieldsFromVerdicts(
-                ReadRestrictedFieldVerdicts(prompt, run.Answers, AnsweredByOf(run), AIEngine.Instance)
+                ReadRestrictedFieldVerdicts(prompt, run.Answers, AnsweredByOf(run))
             );
             return flagged === null ? null : normalizeMatchedFieldNames(flagged, validByLower);
         },
         RunExisting: () => runRestrictedFieldPrompt(prompt, contextUser, validByLower),
         Compare: (answers, existing, run) => CompareRestrictedFieldDecision(
-            ReadRestrictedFieldVerdicts(prompt, answers, AnsweredByOf(run), AIEngine.Instance),
+            ReadRestrictedFieldVerdicts(prompt, answers, AnsweredByOf(run)),
             existing
         ),
         Runner: restrictedFieldDecisionRunner ?? undefined

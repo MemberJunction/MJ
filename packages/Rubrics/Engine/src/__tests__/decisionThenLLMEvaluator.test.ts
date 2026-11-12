@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApplyPlattCalibration, type ScoreAnswer } from '@memberjunction/ai';
-import type { DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { DecisionThenLLMRubricEvaluator } from '../DecisionThenLLMRubricEvaluator.js';
 import { CreateRubricEvaluator, ResolveRubricEvaluatorSelection } from '../evaluatorRegistry.js';
@@ -65,12 +65,11 @@ function llm(decisionsByKey: Record<string, object> = {}) {
     }));
 }
 
-function calibrations(fits: Record<string, { A: number; B: number }>): DecisionCalibrationSource {
-    return {
-        GetDecisionCalibrations: (model: string) => model !== 'Jev' ? [] : Object.entries(fits).map(([question, fit]) => ({
-            Use: 'rubric-evaluation', Question: question, ResolvedModel: 'jev-1.13', ...fit,
-        })),
-    };
+/** Serves Platt fits for rubric questions on Jev (jev-1.13) from the AI engine. */
+function serveCalibrations(fits: Record<string, { A: number; B: number }>): void {
+    vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation((model: string) => model !== 'Jev' ? [] : Object.entries(fits).map(([question, fit]) => ({
+        Use: 'rubric-evaluation', Question: question, ResolvedModel: 'jev-1.13', ...fit,
+    })));
 }
 
 async function run(services: RubricEvaluatorServices, settings: RubricEvaluatorSettings = {}, tree = version()) {
@@ -84,6 +83,9 @@ function withoutEvidence(): RubricVersionSnapshot {
     tree.nodes = tree.nodes.filter(node => node.key !== 'sources');
     return tree;
 }
+
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('DecisionThenLLMRubricEvaluator', () => {
     it('makes no LLM call when the decision settles every criterion', async () => {
@@ -128,9 +130,10 @@ describe('DecisionThenLLMRubricEvaluator', () => {
     });
 
     it('sends a criterion whose calibrated confidence is under the threshold to the LLM, and keeps an uncalibrated one', async () => {
+        serveCalibrations({ clarity: { A: 1, B: -1 } });
         const prompts = llm();
         const output = await run(
-            { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: prompts, Calibrations: calibrations({ clarity: { A: 1, B: -1 } }) },
+            { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: prompts },
             {},
             withoutEvidence(),
         );
@@ -139,25 +142,28 @@ describe('DecisionThenLLMRubricEvaluator', () => {
         expect(output.answers[0]).toMatchObject({ criterionId: 'a', rationale: 'LLM on clarity', confidence: 0.8 });
         expect(output.metadata).toMatchObject({ LLMCriteria: [{ Key: 'clarity', Reason: 'LowConfidence' }], CalibratedCriteria: ['clarity'], ConfidenceThreshold: 0.7 });
 
+        serveCalibrations({});
         const raw = await run({ Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: llm() }, {}, withoutEvidence());
         expect(raw.metadata).toMatchObject({ AnsweredBy: 'Decision', CalibratedCriteria: [] });
         expect(raw.answers[0].confidence).toBe(0.6);
     });
 
     it('keeps a calibrated answer at or above the threshold, which is configurable', async () => {
-        const services = { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: llm(), Calibrations: calibrations({ clarity: { A: 1, B: -1 } }) };
+        serveCalibrations({ clarity: { A: 1, B: -1 } });
+        const services = { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: llm() };
         const output = await run(services, { DecisionConfidenceThreshold: 0.2 }, withoutEvidence());
         expect(output.metadata).toMatchObject({ AnsweredBy: 'Decision', ConfidenceThreshold: 0.2 });
         expect(output.answers[0].confidence).toBeCloseTo(ApplyPlattCalibration(0.6, { A: 1, B: -1 }));
     });
 
     it('keeps the decision answer for a low-confidence criterion the LLM leaves out, and drops answers it was not asked for', async () => {
+        serveCalibrations({ clarity: { A: 1, B: -1 } });
         const prompts = FakePromptService(async () => ({
             Text: JSON.stringify({ decisions: [{ key: 'accuracy', value: 1, rationale: 'not asked' }] }),
             PromptRunID: 'llm-run',
         }));
         const output = await run(
-            { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: prompts, Calibrations: calibrations({ clarity: { A: 1, B: -1 } }) },
+            { Decisions: decisions([], { clarity: UNSURE, accuracy: THREE }), Prompts: prompts },
             {},
             withoutEvidence(),
         );
@@ -188,8 +194,8 @@ describe('DecisionThenLLMRubricEvaluator', () => {
         const nothingAskable = await run({ Decisions: decisions([], {}), Prompts: llm() }, {}, onlyEvidence);
         expect(nothingAskable.metadata).toMatchObject({ AnsweredBy: 'LLM', FallbackReason: 'No criterion in this rubric can be asked as a Score question.' });
 
-        const broken: DecisionCalibrationSource = { GetDecisionCalibrations: () => { throw new Error('calibrations unreadable'); } };
-        const unreadable = await run({ Decisions: decisions([], { clarity: HIGH, accuracy: THREE }), Prompts: llm(), Calibrations: broken }, {}, withoutEvidence());
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(() => { throw new Error('calibrations unreadable'); });
+        const unreadable = await run({ Decisions: decisions([], { clarity: HIGH, accuracy: THREE }), Prompts: llm() }, {}, withoutEvidence());
         expect(unreadable.metadata).toMatchObject({ AnsweredBy: 'LLM', FallbackReason: 'calibrations unreadable' });
         expect(unreadable.answers).toHaveLength(2);
     });

@@ -154,9 +154,9 @@ export class RealtimeTurnModerator {
             Use: REALTIME_MODERATOR_USE,
             Mode: cfg.decisionMode,
             BuildDecision: () => this.buildDecision(ctx, cfg, state),
-            FromDecision: (run) => ModeratorSpeakersFromDecision(run.Answers, state.agents, answeredByOf(run), AIEngine.Instance),
+            FromDecision: (run) => ModeratorSpeakersFromDecision(run.Answers, state.agents, answeredByOf(run)),
             RunExisting: () => this.runPromptForSpeakers(ctx, cfg, state, agentRunId),
-            Compare: (answers, existing, run) => CompareModeratorDecision(answers, existing, state.agents, answeredByOf(run), AIEngine.Instance),
+            Compare: (answers, existing, run) => CompareModeratorDecision(answers, existing, state.agents, answeredByOf(run)),
             Runner: this.CreateDecisionRunner(),
         });
         if (outcome.AnsweredBy === 'Decision') {

@@ -71,7 +71,7 @@ export class DecisionThenLLMRubricEvaluator extends BaseRubricEvaluator {
             if (!decisions) throw new Error('no decision service is available');
             pass = await RunRubricDecisionPass({
                 Version: context.Version, Content: context.Content, Criteria: criteria, Decisions: decisions, Prompt: decisionPrompt,
-                ModelID: settings.DecisionModelID, Calibrations: context.Services.Calibrations, AskEvidenceRequired: false,
+                ModelID: settings.DecisionModelID, AskEvidenceRequired: false,
             });
         } catch (error) {
             return this.wholeRubricByLLM(context, error instanceof Error ? error.message : String(error));

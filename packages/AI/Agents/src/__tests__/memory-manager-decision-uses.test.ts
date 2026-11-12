@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/ai-prompts';
 import { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { MemoryManagerAgent } from '../memory-manager-agent';
+import { ServeDecisionCalibrations } from './helpers/shipped-decision-calibrations';
 import {
     MEMORY_CONTRADICTION_CALIBRATION_KEY,
     MEMORY_DUPLICATE_QUESTION,
@@ -123,7 +124,7 @@ describe('MemoryManagerAgent - dedupe and contradiction decisions', () => {
     beforeEach(() => {
         agent = new TestMemoryManager();
         vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([prompt('Default Decision'), prompt('Memory Decision')]);
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(calibrations());
+        ServeDecisionCalibrations(calibrations());
         promptSpy = spyOnPrompts();
         promptSpy.mockResolvedValue({
             success: true, result: { shouldAdd: false, reason: 'prompt says duplicate' }
@@ -160,7 +161,7 @@ describe('MemoryManagerAgent - dedupe and contradiction decisions', () => {
     });
 
     it('in Decision, a calibrated confident answer replaces the prompt', async () => {
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(calibrations(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
+        ServeDecisionCalibrations(calibrations(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
         agent.Runner = new ScriptedRunner(decisionRun({ duplicate: 0.05 }));
         agent.Configure('Decision', { decisionsEnabled: true });
 
@@ -183,7 +184,7 @@ describe('MemoryManagerAgent - dedupe and contradiction decisions', () => {
     });
 
     it('fails closed as the prompt does when the decision is unsure and the prompt fails', async () => {
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(calibrations(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
+        ServeDecisionCalibrations(calibrations(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
         promptSpy.mockResolvedValue({ success: false, result: undefined } as AIPromptRunResult);
         agent.Runner = new ScriptedRunner(decisionRun({ duplicate: 0.5 }));
         agent.Configure('Decision', { decisionsEnabled: true });
@@ -194,7 +195,7 @@ describe('MemoryManagerAgent - dedupe and contradiction decisions', () => {
     });
 
     it('in Decision, revokes the older note of a calibrated contradiction without the prompt', async () => {
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(calibrations(MEMORY_CONTRADICTION_CALIBRATION_KEY));
+        ServeDecisionCalibrations(calibrations(MEMORY_CONTRADICTION_CALIBRATION_KEY));
         agent.Runner = new ScriptedRunner(decisionRun({ contradicts: 0.95 }));
         agent.Configure('Decision', { decisionsEnabled: true });
 

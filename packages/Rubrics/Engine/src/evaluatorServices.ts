@@ -1,5 +1,4 @@
 import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
-import type { DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
 import type { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
@@ -147,11 +146,6 @@ export interface RubricEvaluatorServices {
     Prompts?: RubricPromptService;
     Decisions?: RubricDecisionService;
     Agent?: EvaluationAgentRunner;
-    /**
-     * Where decision calibrations are declared, normally `AIEngine.Instance`. Without it, or without
-     * a fit for the model that answered, decision confidences stay raw.
-     */
-    Calibrations?: DecisionCalibrationSource;
 }
 
 /** Everything one evaluation run can read. */

@@ -1645,8 +1645,8 @@ export class MemoryManagerAgent extends BaseAgent {
             similarity: s.similarity
         })));
         return this.runMemoryDecisionUse<MemoryDedupeVerdict>(MEMORY_NOTE_DEDUPE_USE, request, contextUser, {
-            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy, AIEngine.Instance),
-            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy, AIEngine.Instance),
+            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy),
             RunExisting: () => this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similarNotes, contextUser)
         });
     }
@@ -1669,8 +1669,8 @@ export class MemoryManagerAgent extends BaseAgent {
             similarity: s.similarity
         })));
         return this.runMemoryDecisionUse<MemoryDedupeVerdict>(MEMORY_EXAMPLE_DEDUPE_USE, request, contextUser, {
-            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy, AIEngine.Instance),
-            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy, AIEngine.Instance),
+            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy),
             RunExisting: () => this.runExampleDedupePrompt(runner, dedupePrompt, candidate, similarExamples, contextUser)
         });
     }
@@ -2894,8 +2894,8 @@ export class MemoryManagerAgent extends BaseAgent {
         const a = contradictionNoteOf(noteA);
         const b = contradictionNoteOf(noteB);
         return this.runMemoryDecisionUse<MemoryContradictionVerdict | null>(MEMORY_CONTRADICTION_USE, BuildContradictionDecision(a, b), contextUser, {
-            FromDecision: (run, answeredBy) => ContradictionVerdictFromDecision(run.Answers, a, b, answeredBy, AIEngine.Instance),
-            Compare: (answers, existing, answeredBy) => CompareContradictionDecision(answers, existing, answeredBy, AIEngine.Instance),
+            FromDecision: (run, answeredBy) => ContradictionVerdictFromDecision(run.Answers, a, b, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareContradictionDecision(answers, existing, answeredBy),
             RunExisting: () => this.evaluateContradictionPair(noteA, noteB, prompt, runner, contextUser)
         });
     }

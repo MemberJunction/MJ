@@ -90,7 +90,7 @@ vi.mock('@memberjunction/ai-core-plus', async () => ({
 
 import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 import type { EvaluationAgentRunner } from '../AgentRubricEvaluator.js';
-import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRecords, ProviderRubricEngine, RegisterRubricAgentRunner, RegisterRubricDecisionCalibrations } from '../providerRecords.js';
+import { ProviderDecisionService, ProviderEvaluationStore, ProviderPromptService, ProviderRecords, ProviderRubricEngine, RegisterRubricAgentRunner } from '../providerRecords.js';
 import { RubricEngine } from '../RubricEngine.js';
 
 describe('provider evaluator services', () => {
@@ -177,19 +177,6 @@ describe('provider evaluator services', () => {
         expect(output.Answers.clarity.Probabilities.High).toBe(0.8);
         expect(output.ModelName).toBe('Jev');
         expect(output.ResolvedModel).toBe('typesafe/jev-1.13-20260917');
-    });
-
-    it('lends every provider engine the registered calibration source', async () => {
-        const source = { GetDecisionCalibrations: () => [] };
-        RegisterRubricDecisionCalibrations(source);
-        try {
-            const engine = ProviderRubricEngine({}, { ID: 'user' }) as unknown as { services: { Calibrations?: unknown } };
-            expect(engine.services.Calibrations).toBe(source);
-        } finally {
-            RegisterRubricDecisionCalibrations(undefined);
-        }
-        const unregistered = ProviderRubricEngine({}, { ID: 'user' }) as unknown as { services: { Calibrations?: unknown } };
-        expect(unregistered.services.Calibrations).toBeUndefined();
     });
 });
 

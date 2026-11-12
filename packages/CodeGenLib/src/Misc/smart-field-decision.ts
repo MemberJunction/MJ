@@ -10,8 +10,8 @@
  * - `allowSearch`: a Likelihood that users search this entity at all.
  *
  * A Likelihood is acted on only once calibrated for the answering model
- * (`ModelConfiguration.Decision.Calibrations`, `Use: 'codegen-smart-fields'`, `Question: 'view' |
- * 'search' | 'allowSearch'`); with any one uncalibrated the whole answer reads as unsure, and
+ * (`AIEngine.Instance.CalibrateDecisionProbability`, from `ModelConfiguration.Decision.Calibrations`,
+ * `Use: 'codegen-smart-fields'`, `Question: 'view' | 'search' | 'allowSearch'`); with any one uncalibrated the whole answer reads as unsure, and
  * `Decision` mode runs the prompt instead. The decision leaves the search predicates and full-text
  * settings unset, which CodeGen's apply step reads as "no change".
  *
@@ -22,11 +22,8 @@
  */
 
 import type { ChoiceOption, ChoiceQuestion, DecisionAnswer, DecisionQuestion, LikelihoodQuestion } from '@memberjunction/ai';
-import {
-    CalibrateDecisionProbability,
-    type DecisionAnsweringModel,
-    type DecisionCalibrationSource,
-} from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { ShadowDecisionComparison } from '@memberjunction/ai-prompts';
 import type { SmartFieldIdentificationResult } from './advanced_generation';
 
@@ -174,18 +171,16 @@ export interface SmartFieldDecisionVerdict {
  * @param entity The entity, as the questions were built.
  * @param answers The decision's answers.
  * @param answeredBy The model that answered.
- * @param source Where the calibrations are declared, normally `AIEngine.Instance`.
  */
 export function ReadSmartFieldVerdict(
     entity: SmartFieldDecisionEntity,
     answers: Record<string, DecisionAnswer>,
-    answeredBy: DecisionAnsweringModel,
-    source: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): SmartFieldDecisionVerdict {
     const read = (key: string, question: string) => {
         const answer = answers[key];
         const raw = answer?.Kind === 'Likelihood' && Number.isFinite(answer.Probability) ? answer.Probability : null;
-        const calibrated = raw === null ? null : CalibrateDecisionProbability(source, { Use: SMART_FIELD_DECISION_USE, Question: question }, raw, answeredBy);
+        const calibrated = raw === null ? null : AIEngine.Instance.CalibrateDecisionProbability({ Use: SMART_FIELD_DECISION_USE, Question: question }, raw, answeredBy);
         return { Raw: raw, Calibrated: calibrated };
     };
     return {

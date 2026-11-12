@@ -8,7 +8,18 @@ const engine = vi.hoisted(() => ({
     Config: vi.fn(),
     Prompts: [] as Array<{ Name: string; Status: string }>,
     Calibrations: [] as DecisionCalibrationEntry[],
-    GetDecisionCalibrations(name: string) { return name === 'Jev' ? this.Calibrations : []; }
+    GetDecisionCalibrations(name: string) { return name === 'Jev' ? this.Calibrations : []; },
+    // AIEngineBase's rule: the use, question and resolved model match one declared entry exactly.
+    FindDecisionCalibration(key: { Use: string; Question: string }, by: { ModelName?: string | null; ResolvedModel?: string | null }) {
+        const entry = by.ModelName && by.ResolvedModel
+            ? this.GetDecisionCalibrations(by.ModelName).find(c => c.Use === key.Use && c.Question === key.Question && c.ResolvedModel === by.ResolvedModel)
+            : undefined;
+        return entry ? { A: entry.A, B: entry.B } : null;
+    },
+    CalibrateDecisionProbability(key: { Use: string; Question: string }, p: number, by: { ModelName?: string | null; ResolvedModel?: string | null }) {
+        const fit = this.FindDecisionCalibration(key, by);
+        return fit ? 1 / (1 + Math.exp(-(fit.A * Math.log(p / (1 - p)) + fit.B))) : null;
+    }
 }));
 const promptRun = vi.hoisted(() => ({ ExecutePrompt: vi.fn() }));
 

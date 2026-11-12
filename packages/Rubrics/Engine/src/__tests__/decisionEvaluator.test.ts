@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApplyPlattCalibration, type ScoreAnswer } from '@memberjunction/ai';
-import type { DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import {
     ChosenLevel, DecisionRubricEvaluator, NUMERIC_SCORE_BUCKETS, NumericScoreValues, NumericValueFromAnswer, ScoreQuestionForCriterion, SnapToScale,
@@ -51,16 +51,17 @@ function decisions(calls: DecideInput[], answers: Record<string, ScoreAnswer> = 
     };
 }
 
-/** A Platt fit for one rubric question on Jev (jev-1.13). */
-function calibrations(question: string): DecisionCalibrationSource {
-    return {
-        GetDecisionCalibrations: (model: string) => model === 'Jev'
-            ? [{ Use: 'rubric-evaluation', Question: question, ResolvedModel: 'jev-1.13', A: 2, B: -1 }]
-            : [],
-    };
+/** Serves a Platt fit for one rubric question on Jev (jev-1.13) from the AI engine. */
+function serveCalibrations(question: string): void {
+    vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation((model: string) => model === 'Jev'
+        ? [{ Use: 'rubric-evaluation', Question: question, ResolvedModel: 'jev-1.13', A: 2, B: -1 }]
+        : []);
 }
 
 const subject = { entityName: 'MJ: Documents', recordId: '1' };
+
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('DecisionRubricEvaluator', () => {
     it('asks every level and numeric leaf in one call on Default Decision', async () => {
@@ -112,13 +113,13 @@ describe('DecisionRubricEvaluator', () => {
     });
 
     it('calibrates a confidence when a fit exists for the model that answered, and keeps it raw otherwise', async () => {
+        serveCalibrations('clarity');
         const calls: DecideInput[] = [];
         const output = await new DecisionRubricEvaluator().EvaluateRubric({
             Version: version(), Content: { text: 'x' }, Subject: subject, Settings: {},
             Services: {
                 Decisions: decisions(calls, undefined, { ModelName: 'Jev', ResolvedModel: 'jev-1.13' }),
                 Prompts: FakePromptService(),
-                Calibrations: calibrations('clarity'),
             },
         });
         const calibrated = ApplyPlattCalibration(0.75, { A: 2, B: -1 });
@@ -133,7 +134,6 @@ describe('DecisionRubricEvaluator', () => {
             Services: {
                 Decisions: decisions([], undefined, { ModelName: 'Jev', ResolvedModel: 'jev-2.0' }),
                 Prompts: FakePromptService(),
-                Calibrations: calibrations('clarity'),
             },
         });
         expect(otherModel.answers[0].confidence).toBe(0.75);

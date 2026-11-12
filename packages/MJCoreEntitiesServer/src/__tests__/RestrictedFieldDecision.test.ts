@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { DecisionAnswer, DecisionCalibrationEntry } from '@memberjunction/ai';
-import type { DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
     BuildRestrictedFieldQuestions,
     BuildRestrictedFieldState,
@@ -32,8 +32,9 @@ function likelihood(p: number): DecisionAnswer {
 }
 
 /** A source holding an identity-like fit (A=1, B=0 keeps the raw probability's log-odds) for this use. */
-function sourceWith(entries: DecisionCalibrationEntry[]): DecisionCalibrationSource {
-    return { GetDecisionCalibrations: (name: string) => (name === 'Jev' ? entries : []) };
+/** Serves `entries` as Jev's declared calibrations from the AI engine. */
+function serveFits(entries: DecisionCalibrationEntry[]): void {
+    vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation((name: string) => (name === 'Jev' ? entries : []));
 }
 
 const identityFit: DecisionCalibrationEntry = {
@@ -46,6 +47,7 @@ const identityFit: DecisionCalibrationEntry = {
 
 describe('RestrictedFieldDecision', () => {
     afterEach(() => SetRestrictedFieldClassifierDecisionMode(undefined));
+    afterEach(() => vi.restoreAllMocks());
 
     describe('mode', () => {
         it('defaults to Shadow', () => {
@@ -92,13 +94,15 @@ describe('RestrictedFieldDecision', () => {
 
     describe('reading the decision', () => {
         it('flags fields at or above the calibrated threshold of 0.2', () => {
-            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.25), f2: likelihood(0.1) }, answeredBy, sourceWith([identityFit]));
+            serveFits([identityFit]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.25), f2: likelihood(0.1) }, answeredBy);
             expect(verdicts[0].CalibratedProbability).toBeCloseTo(0.25, 5);
             expect(FlaggedFieldsFromVerdicts(verdicts)).toEqual(['Salary']);
         });
 
         it('is unsure (null) when the answering model has no calibration for this use', () => {
-            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.9), f2: likelihood(0.9) }, answeredBy, sourceWith([]));
+            serveFits([]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.9), f2: likelihood(0.9) }, answeredBy);
             expect(verdicts.every(v => v.CalibratedProbability === null)).toBe(true);
             expect(FlaggedFieldsFromVerdicts(verdicts)).toBeNull();
         });
@@ -107,20 +111,23 @@ describe('RestrictedFieldDecision', () => {
             const answers: Record<string, DecisionAnswer> = {
                 f1: { Kind: 'Choice', Value: 'x', Probabilities: { x: 1 }, Confidence: 1 }
             };
-            const verdicts = ReadRestrictedFieldVerdicts(input, answers, answeredBy, sourceWith([identityFit]));
+            serveFits([identityFit]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, answers, answeredBy);
             expect(verdicts.map(v => v.RawProbability)).toEqual([null, null]);
             expect(FlaggedFieldsFromVerdicts(verdicts)).toBeNull();
         });
 
         it('flags nothing when every calibrated probability is below the threshold', () => {
-            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.05), f2: likelihood(0.1) }, answeredBy, sourceWith([identityFit]));
+            serveFits([identityFit]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.05), f2: likelihood(0.1) }, answeredBy);
             expect(FlaggedFieldsFromVerdicts(verdicts)).toEqual([]);
         });
     });
 
     describe('CompareRestrictedFieldDecision', () => {
         it('agrees when the decision flags the same fields as the prompt at a raw 0.5', () => {
-            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.8), f2: likelihood(0.2) }, answeredBy, sourceWith([]));
+            serveFits([]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.8), f2: likelihood(0.2) }, answeredBy);
             const comparison = CompareRestrictedFieldDecision(verdicts, ['salary']);
             expect(comparison.Agreed).toBe(true);
             expect(comparison.Summary).toBe('decision flagged [Salary], prompt flagged [salary]');
@@ -131,7 +138,8 @@ describe('RestrictedFieldDecision', () => {
         });
 
         it('disagrees when the sets differ', () => {
-            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.8), f2: likelihood(0.7) }, answeredBy, sourceWith([]));
+            serveFits([]);
+            const verdicts = ReadRestrictedFieldVerdicts(input, { f1: likelihood(0.8), f2: likelihood(0.7) }, answeredBy);
             expect(CompareRestrictedFieldDecision(verdicts, ['Salary']).Agreed).toBe(false);
             expect(CompareRestrictedFieldDecision(verdicts, []).Agreed).toBe(false);
         });

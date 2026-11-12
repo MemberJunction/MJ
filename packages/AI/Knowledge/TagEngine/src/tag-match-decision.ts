@@ -23,12 +23,8 @@
  */
 
 import type { DecisionAnswer, LikelihoodQuestion } from '@memberjunction/ai';
-import {
-    CalibrateDecisionProbability,
-    type DecisionAnsweringModel,
-    type DecisionCalibrationKey,
-    type DecisionCalibrationSource,
-} from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel, DecisionCalibrationKey } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import {
     ResolveDecisionUseMode,
     type AIDecisionRunResult,
@@ -158,16 +154,11 @@ export function TagMatchAnsweredBy(run: AIDecisionRunResult): DecisionAnsweringM
  *
  * @param answers The decision's answers.
  * @param answeredBy The model that answered.
- * @param source Where the calibrations are declared, normally `AIEngine.Instance`.
  */
-export function ReadTagMatchVerdict(
-    answers: Record<string, DecisionAnswer>,
-    answeredBy: DecisionAnsweringModel,
-    source: DecisionCalibrationSource | null | undefined
-): TagMatchDecisionVerdict {
+export function ReadTagMatchVerdict(answers: Record<string, DecisionAnswer>, answeredBy: DecisionAnsweringModel): TagMatchDecisionVerdict {
     const answer = answers[TAG_MATCH_DECISION_QUESTION];
     const raw = answer?.Kind === 'Likelihood' && Number.isFinite(answer.Probability) ? answer.Probability : null;
-    const calibrated = raw === null ? null : CalibrateDecisionProbability(source, TAG_MATCH_CALIBRATION_KEY, raw, answeredBy);
+    const calibrated = raw === null ? null : AIEngine.Instance.CalibrateDecisionProbability(TAG_MATCH_CALIBRATION_KEY, raw, answeredBy);
     return { RawProbability: raw, CalibratedProbability: calibrated };
 }
 

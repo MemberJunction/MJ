@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { DecisionAnswer, DecisionCalibrationEntry } from '@memberjunction/ai';
-import type { DecisionAnsweringModel, DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import type { DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
+import { ServeDecisionCalibrations } from './helpers/shipped-decision-calibrations';
 import {
     BuildContradictionDecision,
     BuildExampleDedupeDecision,
@@ -26,12 +27,14 @@ import {
 const JEV: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
 
 /** An identity fit (calibrated = raw) for the given use and question, on Jev at its pinned version. */
-function identitySource(...keys: Array<{ Use: string; Question: string }>): DecisionCalibrationSource {
+function identitySource(...keys: Array<{ Use: string; Question: string }>): (name: string) => readonly DecisionCalibrationEntry[] {
     const entries: DecisionCalibrationEntry[] = keys.map(k => ({ ...k, ResolvedModel: JEV.ResolvedModel ?? '', A: 1, B: 0 }));
-    return { GetDecisionCalibrations: (name: string) => (name === 'Jev' ? entries : []) };
+    return (name: string) => (name === 'Jev' ? entries : []);
 }
 
-const NO_CALIBRATIONS: DecisionCalibrationSource = { GetDecisionCalibrations: () => [] };
+const NO_CALIBRATIONS = (): readonly DecisionCalibrationEntry[] => [];
+
+afterEach(() => vi.restoreAllMocks());
 
 function likelihood(key: string, probability: number): Record<string, DecisionAnswer> {
     return { [key]: { Kind: 'Likelihood', Probability: probability } };
@@ -86,27 +89,31 @@ describe('memory decision uses', () => {
             [MEMORY_DECISION_BANDS.No - 0.01, 'No'],
             [0.1, 'No']
         ])('reads calibrated %s as %s', (probability, band) => {
-            const reading = ReadMemoryDecision(likelihood('duplicate', probability).duplicate, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source);
+            ServeDecisionCalibrations(source);
+            const reading = ReadMemoryDecision(likelihood('duplicate', probability).duplicate, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV);
             expect(reading.Band).toBe(band);
             expect(reading.CalibratedProbability).toBeCloseTo(probability, 6);
         });
 
         it('is unsure without a calibration for the answering model, keeping the raw probability', () => {
-            const reading = ReadMemoryDecision(likelihood('duplicate', 0.99).duplicate, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, NO_CALIBRATIONS);
+            ServeDecisionCalibrations(NO_CALIBRATIONS);
+            const reading = ReadMemoryDecision(likelihood('duplicate', 0.99).duplicate, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV);
             expect(reading).toMatchObject({ Band: 'Unsure', RawProbability: 0.99 });
             expect(reading.CalibratedProbability).toBeUndefined();
         });
 
         it('is unsure when a calibration exists only for another version of the model', () => {
+            ServeDecisionCalibrations(source);
             const reading = ReadMemoryDecision(likelihood('duplicate', 0.99).duplicate, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY,
-                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-2.0' }, source);
+                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-2.0' });
             expect(reading.Band).toBe('Unsure');
         });
 
         it('is unsure on a missing or non-Likelihood answer', () => {
-            expect(ReadMemoryDecision(undefined, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source).Band).toBe('Unsure');
+            ServeDecisionCalibrations(source);
+            expect(ReadMemoryDecision(undefined, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV).Band).toBe('Unsure');
             const choice: DecisionAnswer = { Kind: 'Choice', Value: 'x', Probabilities: { x: 1 }, Confidence: 1 };
-            expect(ReadMemoryDecision(choice, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source).Band).toBe('Unsure');
+            expect(ReadMemoryDecision(choice, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV).Band).toBe('Unsure');
         });
     });
 
@@ -114,16 +121,19 @@ describe('memory decision uses', () => {
         const source = identitySource(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY);
 
         it('rejects a confident duplicate and adds a confident non-duplicate', () => {
-            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.95), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source)?.shouldAdd).toBe(false);
-            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.05), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source)?.shouldAdd).toBe(true);
+            ServeDecisionCalibrations(source);
+            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.95), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV)?.shouldAdd).toBe(false);
+            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.05), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV)?.shouldAdd).toBe(true);
         });
 
         it('returns null when unsure, so the prompt answers', () => {
-            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.5), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, source)).toBeNull();
+            ServeDecisionCalibrations(source);
+            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.5), MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV)).toBeNull();
         });
 
         it('never reads one use through another use\'s fit', () => {
-            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.95), MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, JEV, source)).toBeNull();
+            ServeDecisionCalibrations(source);
+            expect(DedupeVerdictFromDecision(likelihood('duplicate', 0.95), MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, JEV)).toBeNull();
         });
     });
 
@@ -151,40 +161,47 @@ describe('memory decision uses', () => {
         const source = identitySource({ Use: MEMORY_CONTRADICTION_USE, Question: MEMORY_CONTRADICTS_QUESTION });
 
         it('revokes the older note on a confident contradiction', () => {
+            ServeDecisionCalibrations(source);
             const verdict = ContradictionVerdictFromDecision(likelihood('contradicts', 0.9),
-                note('A', { CreatedAt: '2026-09-01T00:00:00Z' }), note('B', { CreatedAt: '2026-10-01T00:00:00Z' }), JEV, source);
+                note('A', { CreatedAt: '2026-09-01T00:00:00Z' }), note('B', { CreatedAt: '2026-10-01T00:00:00Z' }), JEV);
             expect(verdict).toMatchObject({ isContradiction: true, keepNoteId: 'B', revokeNoteId: 'A', triplesExtracted: 0 });
         });
 
         it('finds no contradiction on a confident no, or on a tie', () => {
-            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.1), note('A'), note('B'), JEV, source)?.isContradiction).toBe(false);
-            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.9), note('A'), note('B'), JEV, source)?.isContradiction).toBe(false);
+            ServeDecisionCalibrations(source);
+            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.1), note('A'), note('B'), JEV)?.isContradiction).toBe(false);
+            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.9), note('A'), note('B'), JEV)?.isContradiction).toBe(false);
         });
 
         it('returns null when unsure or uncalibrated', () => {
-            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.5), note('A'), note('B'), JEV, source)).toBeNull();
-            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.9), note('A'), note('B'), JEV, NO_CALIBRATIONS)).toBeNull();
+            ServeDecisionCalibrations(source);
+            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.5), note('A'), note('B'), JEV)).toBeNull();
+            ServeDecisionCalibrations(NO_CALIBRATIONS);
+            expect(ContradictionVerdictFromDecision(likelihood('contradicts', 0.9), note('A'), note('B'), JEV)).toBeNull();
         });
     });
 
     describe('shadow comparisons', () => {
         it('labels a dedupe run with the prompt\'s verdict and compares the raw answer at 0.5 when uncalibrated', () => {
+            ServeDecisionCalibrations(NO_CALIBRATIONS);
             const comparison = CompareDedupeDecision(likelihood('duplicate', 0.8), { shouldAdd: false, reason: 'dup' },
-                MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, NO_CALIBRATIONS);
+                MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV);
             expect(comparison.Agreed).toBe(true);
             expect(comparison.Details).toMatchObject({ Question: 'duplicate', Label: true, RawProbability: 0.8, CalibratedProbability: null, Band: 'Unsure' });
         });
 
         it('disagrees when the calibrated decision is unsure', () => {
+            ServeDecisionCalibrations(identitySource(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
             const comparison = CompareDedupeDecision(likelihood('duplicate', 0.5), { shouldAdd: true, reason: '' },
-                MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV, identitySource(MEMORY_NOTE_DEDUPE_CALIBRATION_KEY));
+                MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, JEV);
             expect(comparison.Agreed).toBe(false);
             expect(comparison.Summary).toContain('decision unsure');
         });
 
         it('compares a contradiction decision with the prompt, and records nothing to compare when the prompt failed', () => {
-            expect(CompareContradictionDecision(likelihood('contradicts', 0.2), { isContradiction: false, reason: '', triplesExtracted: 2 }, JEV, NO_CALIBRATIONS).Agreed).toBe(true);
-            expect(CompareContradictionDecision(likelihood('contradicts', 0.2), null, JEV, NO_CALIBRATIONS).Agreed).toBe(false);
+            ServeDecisionCalibrations(NO_CALIBRATIONS);
+            expect(CompareContradictionDecision(likelihood('contradicts', 0.2), { isContradiction: false, reason: '', triplesExtracted: 2 }, JEV).Agreed).toBe(true);
+            expect(CompareContradictionDecision(likelihood('contradicts', 0.2), null, JEV).Agreed).toBe(false);
         });
 
         it('names its uses distinctly', () => {

@@ -585,12 +585,12 @@ export class AdvancedGeneration {
             Mode: mode,
             BuildDecision: () => this.buildSmartFieldDecision(decisionEntity, contextUser),
             FromDecision: (run) => {
-                const result = SmartFieldResultFromVerdict(decisionEntity, ReadSmartFieldVerdict(decisionEntity, run.Answers, answeredBy(run), AIEngine.Instance));
+                const result = SmartFieldResultFromVerdict(decisionEntity, ReadSmartFieldVerdict(decisionEntity, run.Answers, answeredBy(run)));
                 return result ? NormalizeSmartFieldResultShape(result) : null;
             },
             RunExisting: () => this.identifyFieldsWithPrompt(entity, contextUser),
             Compare: (answers, existing, run) =>
-                CompareSmartFieldDecision(ReadSmartFieldVerdict(decisionEntity, answers, answeredBy(run), AIEngine.Instance), existing),
+                CompareSmartFieldDecision(ReadSmartFieldVerdict(decisionEntity, answers, answeredBy(run)), existing),
             Runner: this.SmartFieldDecisionRunner,
         });
         return outcome.Value;

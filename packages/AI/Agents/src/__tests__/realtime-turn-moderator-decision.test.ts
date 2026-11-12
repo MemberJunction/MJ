@@ -7,6 +7,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner, type AIDecisionParams, type AIDecisionRunResult, type ShadowDecisionRunner } from '@memberjunction/ai-prompts';
 import { RealtimeTurnModerator, type TurnModeratorContextInput } from '../realtime/realtime-turn-moderator';
 import { REALTIME_MODERATOR_CALIBRATION_KEY } from '../realtime/realtime-moderator-decision';
+import { ServeDecisionCalibrations } from './helpers/shipped-decision-calibrations';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -94,7 +95,7 @@ describe('RealtimeTurnModerator - decision modes', () => {
         moderator = new TestModerator();
         vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([prompt(MODERATOR_PROMPT_ID, 'Realtime: Turn Moderator'), prompt('aaaaaaaa-9999-4000-8000-000000000004', 'Default Decision')]);
         vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([]);
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockReturnValue([]);
+        ServeDecisionCalibrations(() => []);
         promptSpy = spyOnPrompts();
         promptSpy.mockResolvedValue({
             success: true, result: { speakers: [{ agent: 'Sage' }] }
@@ -126,7 +127,7 @@ describe('RealtimeTurnModerator - decision modes', () => {
 
     it('in Decision mode with a calibration, the decision picks the speakers and the prompt does not run', async () => {
         configure({ decisionMode: 'Decision' });
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockReturnValue([{ ...REALTIME_MODERATOR_CALIBRATION_KEY, ResolvedModel: JEV_RESOLVED, A: 1, B: 0 }]);
+        ServeDecisionCalibrations(() => [{ ...REALTIME_MODERATOR_CALIBRATION_KEY, ResolvedModel: JEV_RESOLVED, A: 1, B: 0 }]);
         moderator.Runner = new ScriptedRunner(decisionRun([0.1, 0.99]));
 
         expect(await moderator.Decide(CTX)).toEqual(['s-skip']);

@@ -18,19 +18,18 @@
  * keeping both), so the decision path applies that rule deterministically
  * ({@link PickContradictionAuthority}) and asks the model only whether the notes conflict.
  *
- * Pure: no I/O, so each rule is unit-tested on its own.
+ * No I/O: calibrations come from the loaded `AIEngine`, so each rule is unit-tested on its own.
  *
  * @module @memberjunction/ai-agents
  */
 
 import type { DecisionAnswer, LikelihoodQuestion } from '@memberjunction/ai';
 import {
-    CalibrateDecisionProbability,
     DescribeAnsweringModel,
     type DecisionAnsweringModel,
-    type DecisionCalibrationKey,
-    type DecisionCalibrationSource
+    type DecisionCalibrationKey
 } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { DecisionUseMode, ShadowDecisionComparison } from '@memberjunction/ai-prompts';
 
 /** The mode a Memory Manager run uses for these calls when `data.memoryDecisionMode` names none. */
@@ -213,14 +212,12 @@ function roundSimilarity(similarity: number): number {
  * @param answer The answer to the use's question.
  * @param key The use and question, for the calibration lookup.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared, normally `AIEngine.Instance`.
  * @param bands The yes and no bands (default: {@link MEMORY_DECISION_BANDS}).
  */
 export function ReadMemoryDecision(
     answer: DecisionAnswer | undefined,
     key: DecisionCalibrationKey,
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined,
     bands: MemoryDecisionBands = MEMORY_DECISION_BANDS
 ): MemoryDecisionReading {
     const raw = answer?.Kind === 'Likelihood' && typeof answer.Probability === 'number' && Number.isFinite(answer.Probability)
@@ -229,7 +226,7 @@ export function ReadMemoryDecision(
     if (raw === undefined) {
         return { Band: 'Unsure', Reason: `No Likelihood answer to '${key.Question}'` };
     }
-    const calibrated = CalibrateDecisionProbability(calibrations, key, raw, answeredBy);
+    const calibrated = AIEngine.Instance.CalibrateDecisionProbability(key, raw, answeredBy);
     if (calibrated === null) {
         return { Band: 'Unsure', RawProbability: raw, Reason: `${DescribeAnsweringModel(answeredBy)} has no '${key.Use}' calibration` };
     }
@@ -243,15 +240,13 @@ export function ReadMemoryDecision(
  * @param answers The decision's answers.
  * @param key The dedupe use's calibration key.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared.
  */
 export function DedupeVerdictFromDecision(
     answers: Record<string, DecisionAnswer>,
     key: DecisionCalibrationKey,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): MemoryDedupeVerdict | null {
-    const reading = ReadMemoryDecision(answers[key.Question], key, answeredBy, calibrations);
+    const reading = ReadMemoryDecision(answers[key.Question], key, answeredBy);
     if (reading.Band === 'Unsure') {
         return null;
     }
@@ -267,16 +262,14 @@ export function DedupeVerdictFromDecision(
  * @param noteA The first note.
  * @param noteB The second note.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared.
  */
 export function ContradictionVerdictFromDecision(
     answers: Record<string, DecisionAnswer>,
     noteA: MemoryContradictionNote,
     noteB: MemoryContradictionNote,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): MemoryContradictionVerdict | null {
-    const reading = ReadMemoryDecision(answers[MEMORY_CONTRADICTS_QUESTION], MEMORY_CONTRADICTION_CALIBRATION_KEY, answeredBy, calibrations);
+    const reading = ReadMemoryDecision(answers[MEMORY_CONTRADICTS_QUESTION], MEMORY_CONTRADICTION_CALIBRATION_KEY, answeredBy);
     if (reading.Band === 'Unsure') {
         return null;
     }
@@ -357,16 +350,14 @@ function compareSignal(
  * @param existing The prompt's verdict.
  * @param key The dedupe use's calibration key.
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared.
  */
 export function CompareDedupeDecision(
     answers: Record<string, DecisionAnswer>,
     existing: MemoryDedupeVerdict,
     key: DecisionCalibrationKey,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): ShadowDecisionComparison {
-    return compareYesNo(answers, !existing.shouldAdd, key, answeredBy, calibrations, existing.shouldAdd ? 'LLM added it' : 'LLM rejected it as a duplicate');
+    return compareYesNo(answers, !existing.shouldAdd, key, answeredBy, existing.shouldAdd ? 'LLM added it' : 'LLM rejected it as a duplicate');
 }
 
 /**
@@ -376,18 +367,16 @@ export function CompareDedupeDecision(
  * @param answers The decision's answers.
  * @param existing The prompt's verdict, or null when the prompt failed (then nothing is compared).
  * @param answeredBy The model that answered.
- * @param calibrations Where calibrations are declared.
  */
 export function CompareContradictionDecision(
     answers: Record<string, DecisionAnswer>,
     existing: MemoryContradictionVerdict | null,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): ShadowDecisionComparison {
     if (!existing) {
         return { Agreed: false, Summary: 'the LLM prompt gave no verdict to compare with', Details: { Question: MEMORY_CONTRADICTS_QUESTION } };
     }
-    return compareYesNo(answers, existing.isContradiction, MEMORY_CONTRADICTION_CALIBRATION_KEY, answeredBy, calibrations,
+    return compareYesNo(answers, existing.isContradiction, MEMORY_CONTRADICTION_CALIBRATION_KEY, answeredBy,
         existing.isContradiction ? 'LLM found a contradiction' : 'LLM found none');
 }
 
@@ -397,10 +386,9 @@ function compareYesNo(
     existingYes: boolean,
     key: DecisionCalibrationKey,
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined,
     existingSummary: string
 ): ShadowDecisionComparison {
-    const reading = ReadMemoryDecision(answers[key.Question], key, answeredBy, calibrations);
+    const reading = ReadMemoryDecision(answers[key.Question], key, answeredBy);
     const decisionYes = reading.CalibratedProbability !== undefined
         ? reading.Band === 'Yes' ? true : reading.Band === 'No' ? false : null
         : reading.RawProbability !== undefined ? reading.RawProbability >= 0.5 : null;

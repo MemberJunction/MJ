@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { DecisionAnswer, DecisionCalibrationEntry } from '@memberjunction/ai';
 import type { AIDecisionRunResult, ShadowDecisionRunner } from '@memberjunction/ai-prompts';
 import { configInfo } from '../Config/config';
@@ -31,7 +32,13 @@ const ENTITY: SmartFieldDecisionEntity = {
 const IDENTITY_FITS: DecisionCalibrationEntry[] = ['view', 'search', 'allowSearch'].map(q => ({
     Use: 'codegen-smart-fields', Question: q, ResolvedModel: 'jev-1', A: 1, B: 0,
 }));
-const SOURCE = { GetDecisionCalibrations: (model: string) => (model === 'Jev' ? IDENTITY_FITS : []) };
+const IDENTITY_CALIBRATIONS = (model: string): readonly DecisionCalibrationEntry[] => (model === 'Jev' ? IDENTITY_FITS : []);
+
+// Calibrations are read from AIEngineBase.Instance, which AIEngine wraps; serve the fixture fits there.
+beforeEach(() => {
+    vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(IDENTITY_CALIBRATIONS);
+});
+afterEach(() => vi.restoreAllMocks());
 const JEV = { ModelName: 'Jev', ResolvedModel: 'jev-1' };
 
 const lk = (p: number): DecisionAnswer => ({ Kind: 'Likelihood', Probability: p });
@@ -60,7 +67,7 @@ describe('smart field decision', () => {
         const one: SmartFieldDecisionEntity = { Name: 'Tags', Fields: [{ Name: 'ID', Type: 'int', IsPrimaryKey: true }, { Name: 'Label', Type: 'varchar' }] };
         expect(BuildSmartFieldQuestions(one)['name']).toBeUndefined();
         const answers = { view_1: lk(0.9), search_1: lk(0.9), allowSearch: lk(0.2) };
-        const result = SmartFieldResultFromVerdict(one, ReadSmartFieldVerdict(one, answers, JEV, SOURCE));
+        const result = SmartFieldResultFromVerdict(one, ReadSmartFieldVerdict(one, answers, JEV));
         expect(result?.nameFields).toEqual(['Label']);
         expect(result?.allowUserSearch).toBe(false);
     });
@@ -72,7 +79,7 @@ describe('smart field decision', () => {
     });
 
     it('builds the prompt-shaped result from calibrated answers', () => {
-        const result = SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, ANSWERS, JEV, SOURCE));
+        const result = SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, ANSWERS, JEV));
         expect(result).toMatchObject({
             nameFields: ['FullName', 'Email'],
             defaultInView: ['FullName', 'Email', 'CompanyID'],
@@ -87,15 +94,15 @@ describe('smart field decision', () => {
 
     it('is unsure when a Likelihood is uncalibrated or unanswered, or the name went unranked', () => {
         const other = { ModelName: 'Jev', ResolvedModel: 'jev-2' };
-        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, ANSWERS, other, SOURCE))).toBeNull();
+        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, ANSWERS, other))).toBeNull();
         const { view_2: _dropped, ...missing } = ANSWERS;
-        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, missing, JEV, SOURCE))).toBeNull();
+        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, missing, JEV))).toBeNull();
         const { name: _name, ...noName } = ANSWERS;
-        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, noName, JEV, SOURCE))).toBeNull();
+        expect(SmartFieldResultFromVerdict(ENTITY, ReadSmartFieldVerdict(ENTITY, noName, JEV))).toBeNull();
     });
 
     it('compares with the prompt on name, view and search, keeping per-field labels for the fit', () => {
-        const verdict = ReadSmartFieldVerdict(ENTITY, ANSWERS, { ModelName: 'Uncalibrated' }, SOURCE);
+        const verdict = ReadSmartFieldVerdict(ENTITY, ANSWERS, { ModelName: 'Uncalibrated' });
         const prompt: SmartFieldIdentificationResult = {
             nameFields: ['FullName'], nameFieldsReason: '', defaultInView: ['fullname', 'Email', 'CompanyID'], defaultInViewReason: '',
             searchableFields: ['FullName', 'Email'], searchableFieldsReason: '', allowUserSearch: true, confidence: 'high',
@@ -146,7 +153,6 @@ describe('AdvancedGeneration.identifyFields by mode', () => {
     beforeEach(() => {
         promptCalls = 0;
         vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([{ Name: 'Default Decision', Status: 'Active' }] as never);
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(SOURCE.GetDecisionCalibrations);
     });
 
     afterEach(() => {

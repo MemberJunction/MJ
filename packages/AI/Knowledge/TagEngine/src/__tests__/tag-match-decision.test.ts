@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    // A fixture fit: Jev at one version, calibrated = sigmoid(2·logit(p) − 1).
-    CalibrateDecisionProbability: (_s: unknown, key: { Use: string; Question: string }, raw: number, by: { ModelName?: string; ResolvedModel?: string }) => {
-        if (key.Use !== 'tag-match' || key.Question !== 'same' || by.ModelName !== 'Jev' || by.ResolvedModel !== 'jev-1') return null;
-        const logit = Math.log(raw / (1 - raw));
-        return 1 / (1 + Math.exp(-(2 * logit - 1)));
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: {
+        Instance: {
+            // A fixture fit: Jev at one version, calibrated = sigmoid(2·logit(p) − 1).
+            CalibrateDecisionProbability: (key: { Use: string; Question: string }, raw: number, by: { ModelName?: string; ResolvedModel?: string }) => {
+                if (key.Use !== 'tag-match' || key.Question !== 'same' || by.ModelName !== 'Jev' || by.ResolvedModel !== 'jev-1') return null;
+                const logit = Math.log(raw / (1 - raw));
+                return 1 / (1 + Math.exp(-(2 * logit - 1)));
+            },
+        },
     },
 }));
 
@@ -63,17 +67,17 @@ describe('tag-match decision', () => {
     });
 
     it('reads the answer raw and calibrated for the model that answered', () => {
-        const yes = ReadTagMatchVerdict({ same: { Kind: 'Likelihood', Probability: 0.9 } as never }, JEV, null);
+        const yes = ReadTagMatchVerdict({ same: { Kind: 'Likelihood', Probability: 0.9 } as never }, JEV);
         expect(yes.RawProbability).toBe(0.9);
         expect(yes.CalibratedProbability).toBeCloseTo(1 / (1 + Math.exp(-(2 * Math.log(9) - 1))), 6);
         expect(TagMatchApplies(yes)).toBe(true);
 
-        const other = ReadTagMatchVerdict({ same: { Kind: 'Likelihood', Probability: 0.99 } as never }, { ModelName: 'Jev', ResolvedModel: 'jev-2' }, null);
+        const other = ReadTagMatchVerdict({ same: { Kind: 'Likelihood', Probability: 0.99 } as never }, { ModelName: 'Jev', ResolvedModel: 'jev-2' });
         expect(other).toEqual({ RawProbability: 0.99, CalibratedProbability: null });
         expect(TagMatchApplies(other)).toBe(false);
 
-        expect(ReadTagMatchVerdict({}, JEV, null)).toEqual({ RawProbability: null, CalibratedProbability: null });
-        expect(ReadTagMatchVerdict({ same: { Kind: 'Choice' } as never }, JEV, null).RawProbability).toBeNull();
+        expect(ReadTagMatchVerdict({}, JEV)).toEqual({ RawProbability: null, CalibratedProbability: null });
+        expect(ReadTagMatchVerdict({ same: { Kind: 'Choice' } as never }, JEV).RawProbability).toBeNull();
     });
 
     it('applies the tag only at or above the bar', () => {

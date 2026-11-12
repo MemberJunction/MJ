@@ -460,7 +460,6 @@ function definedServices(services: RubricEvaluatorServices | undefined): RubricE
     if (services?.Prompts) defined.Prompts = services.Prompts;
     if (services?.Decisions) defined.Decisions = services.Decisions;
     if (services?.Agent) defined.Agent = services.Agent;
-    if (services?.Calibrations) defined.Calibrations = services.Calibrations;
     return defined;
 }
 

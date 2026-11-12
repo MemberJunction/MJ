@@ -126,9 +126,6 @@ vi.mock('@memberjunction/ai-prompts', () => {
 // not pulled into the mocked import graph.
 vi.mock('@memberjunction/ai-core-plus', () => ({
     AIPromptParams: class {},
-    // A fixture fit for the tag-match use: calibrated = raw.
-    CalibrateDecisionProbability: (_s: unknown, key: { Use: string }, raw: number, by: { ModelName?: string }) =>
-        key.Use === 'tag-match' && by.ModelName === 'Jev' ? raw : null,
 }));
 
 vi.mock('@memberjunction/clustering-engine', () => ({
@@ -212,6 +209,9 @@ vi.mock('@memberjunction/aiengine', () => ({
             Config: vi.fn(),
             Loaded: true,
             Prompts: [{ Name: 'Default Decision', Status: 'Active' }],
+            // A fixture fit for the tag-match use: calibrated = raw.
+            CalibrateDecisionProbability: (key: { Use: string }, raw: number, by: { ModelName?: string }) =>
+                key.Use === 'tag-match' && by.ModelName === 'Jev' ? raw : null,
             Models: [
                 { ID: 'model-1', Name: 'text-embedding-3-small', IsActive: true, AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],

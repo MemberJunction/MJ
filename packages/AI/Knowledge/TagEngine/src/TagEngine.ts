@@ -791,10 +791,10 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             Use: TAG_MATCH_DECISION_USE,
             Mode: mode,
             BuildDecision: () => this.buildTagMatchDecision(input, contextUser),
-            FromDecision: (run) => (TagMatchApplies(ReadTagMatchVerdict(run.Answers, TagMatchAnsweredBy(run), AIEngine.Instance)) ? tag : null),
+            FromDecision: (run) => (TagMatchApplies(ReadTagMatchVerdict(run.Answers, TagMatchAnsweredBy(run))) ? tag : null),
             RunExisting: () => this.queueNearMiss(tagText, tag, score, rootID, contextUser, options),
             Compare: (answers, _existing, run) =>
-                CompareTagMatchDecision(input, ReadTagMatchVerdict(answers, TagMatchAnsweredBy(run), AIEngine.Instance), tag.ID, score),
+                CompareTagMatchDecision(input, ReadTagMatchVerdict(answers, TagMatchAnsweredBy(run)), tag.ID, score),
             Runner: tagMatchDecisionRunner ?? undefined,
         });
         return outcome.Value;

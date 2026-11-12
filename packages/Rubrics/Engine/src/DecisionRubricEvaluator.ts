@@ -1,5 +1,5 @@
 import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
-import { CalibrateDecisionProbability, type DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { RubricNodeSnapshot, RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { RegisterClass } from '@memberjunction/global';
 import { PromptRef, RenderCriteriaText, RUBRIC_CRITERION_PROMPT } from './LLMRubricEvaluator.js';
@@ -159,7 +159,6 @@ export interface RubricDecisionPassInput {
     Decisions: RubricDecisionService;
     Prompt: RubricPromptRef;
     ModelID?: string;
-    Calibrations?: DecisionCalibrationSource;
     /** False leaves evidence-required criteria out of the call; a decision model cannot quote. */
     AskEvidenceRequired: boolean;
 }
@@ -167,9 +166,9 @@ export interface RubricDecisionPassInput {
 /**
  * Asks every askable leaf as a Score question in one decision call and turns the answers into
  * candidates. A level scale answers with its most probable level; a numeric scale with its
- * probability-weighted value. Each confidence is calibrated when the decision models' calibrations
- * hold a fit for use `rubric-evaluation`, question = the criterion's key, on the exact model that
- * answered; otherwise it is the model's raw probability.
+ * probability-weighted value. Each confidence is calibrated when the answering model declares a fit
+ * for use `rubric-evaluation`, question = the criterion's key, on its exact resolved model
+ * (`AIEngineBase.Instance.CalibrateDecisionProbability`); otherwise it is the model's raw probability.
  *
  * Throws when nothing can be asked, when the call throws, or when an answer names a level the scale
  * does not have. Leaves that were not asked or not answered are returned, never dropped silently.
@@ -204,7 +203,7 @@ export async function RunRubricDecisionPass(input: RubricDecisionPassInput): Pro
         const chosen = CandidateFromAnswer(input.Version, leaf, criterion, question, answer);
         const calibrated = chosen.confidence === null
             ? null
-            : CalibrateDecisionProbability(input.Calibrations, { Use: RUBRIC_DECISION_USE, Question: leaf.key }, chosen.confidence, answeredBy);
+            : AIEngineBase.Instance.CalibrateDecisionProbability({ Use: RUBRIC_DECISION_USE, Question: leaf.key }, chosen.confidence, answeredBy);
         const confidence = calibrated ?? chosen.confidence;
         answered.push({
             Key: leaf.key,
@@ -265,9 +264,9 @@ export function DecisionPassMetadata(pass: RubricDecisionPass): Record<string, R
  * decision prompt is the settings' PromptID or PromptName, else Default Decision, and its model
  * bindings choose the model. ModelID pins one.
  *
- * Confidences are the model's raw probabilities unless the engine has a calibration source and it
- * holds a fit for use `rubric-evaluation`, question = the criterion's key, on the model that answered;
- * then they are calibrated. Run metadata lists the calibrated criteria.
+ * Confidences are the model's raw probabilities unless the answering model declares a fit for use
+ * `rubric-evaluation`, question = the criterion's key, on its exact resolved model; then they are
+ * calibrated. Run metadata lists the calibrated criteria.
  *
  * A decision model returns no rationale and no quotes. Each answer's rationale states the chosen
  * level and its probability. A leaf that requires evidence is refused before any call, because the
@@ -299,7 +298,7 @@ export class DecisionRubricEvaluator extends BaseRubricEvaluator {
         const prompt = PromptRef(context.Settings.PromptID, context.Settings.PromptName, DEFAULT_DECISION_PROMPT);
         const pass = await RunRubricDecisionPass({
             Version: context.Version, Content: context.Content, Criteria: criteria, Decisions: decisions, Prompt: prompt,
-            ModelID: context.Settings.ModelID, Calibrations: context.Services.Calibrations, AskEvidenceRequired: true,
+            ModelID: context.Settings.ModelID, AskEvidenceRequired: true,
         });
         if (pass.Unanswered.length > 0) throw new Error(`The decision model did not answer ${pass.Unanswered.join(', ')}.`);
         const metadata: Record<string, RubricJsonValue> = {
