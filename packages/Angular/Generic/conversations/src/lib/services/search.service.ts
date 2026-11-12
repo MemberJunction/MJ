@@ -9,6 +9,7 @@ import {
   MJCollectionArtifactEntity,
   MJTaskEntity,
   MJArtifactEntity,
+  MJArtifactVersionEntity,
   ConversationEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
@@ -58,6 +59,12 @@ type MessageSearchRow = Pick<
 const MESSAGE_SEARCH_FIELDS: ReadonlyArray<keyof MessageSearchRow> = [
   'ID', 'ConversationID', 'Conversation', 'Message', 'BranchID', 'Sequence', '__mj_CreatedAt'
 ];
+
+/** The version columns the artifact search reads to find each artifact's collection. */
+type ArtifactVersionIdRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID'>;
+
+/** The collection-link columns the artifact search reads. */
+type ArtifactCollectionRow = Pick<MJCollectionArtifactEntity, 'ArtifactVersionID' | 'CollectionID' | 'Collection'>;
 
 /**
  * Search results grouped by type
@@ -148,6 +155,13 @@ export class SearchService {
 
   private _provider: IMetadataProvider | null = null;
 
+  /**
+   * Bumped by every {@link Search} call and by {@link ClearResults}. A search publishes its
+   * results and clears the busy flag only while its generation is still the newest, so a slow
+   * older search cannot replace newer results or end the busy state of a newer one.
+   */
+  private _searchGeneration = 0;
+
   constructor(private artifactPermissions: ArtifactPermissionService) {
     this.initializeSearch();
     this.loadRecentSearches();
@@ -190,6 +204,7 @@ export class SearchService {
     environmentId: string,
     currentUser: UserInfo
   ): Promise<GroupedSearchResults> {
+    const generation = ++this._searchGeneration;
     if (!query || query.trim().length === 0) {
       const emptyResults: GroupedSearchResults = {
         conversations: [],
@@ -200,6 +215,7 @@ export class SearchService {
         total: 0
       };
       this._searchResults$.next(emptyResults);
+      this._isSearching$.next(false);
       return emptyResults;
     }
 
@@ -238,11 +254,22 @@ export class SearchService {
         total: conversations.length + messages.length + artifacts.length + collections.length + tasks.length
       };
 
-      this._searchResults$.next(results);
+      // An older search still returns its results to its own caller, but only the newest
+      // one publishes them to the panel.
+      if (this.isCurrentSearch(generation)) {
+        this._searchResults$.next(results);
+      }
       return results;
     } finally {
-      this._isSearching$.next(false);
+      if (this.isCurrentSearch(generation)) {
+        this._isSearching$.next(false);
+      }
     }
+  }
+
+  /** True when no newer search or clear has started since the given generation. */
+  private isCurrentSearch(generation: number): boolean {
+    return generation === this._searchGeneration;
   }
 
   /** @deprecated Use {@link Search}. */
@@ -411,41 +438,80 @@ export class SearchService {
       return [];
     }
 
-    const searchResults: SearchResult[] = [];
+    const collections = await this.loadArtifactCollections(
+      result.Results.map(a => a.ID),
+      currentUser
+    );
+    return result.Results.map(artifact => {
+      const collection = collections.get(artifact.ID.toLowerCase());
+      return collection
+        ? this.mapArtifactToSearchResult(artifact, query, collection.CollectionID, collection.Collection ?? undefined)
+        : this.mapArtifactToSearchResult(artifact, query);
+    });
+  }
 
-    // For each artifact, check if it's in a collection for context
-    for (const artifact of result.Results) {
-      // Check for collection associations
-      const collResult = await rv.RunView<MJCollectionArtifactEntity>(
-        {
-          EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `ArtifactVersionID IN (
-            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifact.ID}'
-          )`,
-          MaxRows: 1,
-          SkipTotalRowCount: true,
-          ResultType: 'entity_object'
-        },
-        currentUser
-      );
+  /**
+   * The first collection each artifact sits in, keyed by lower-cased artifact ID.
+   *
+   * Two batched reads, each filtering only its own entity's columns (no subquery on another
+   * entity's view, so it runs on every provider): the artifacts' versions, then the
+   * collection rows for those versions. A failed read leaves the artifacts without a
+   * collection, as before.
+   */
+  private async loadArtifactCollections(
+    artifactIds: string[],
+    currentUser: UserInfo
+  ): Promise<Map<string, ArtifactCollectionRow>> {
+    const byArtifact = new Map<string, ArtifactCollectionRow>();
+    if (artifactIds.length === 0) {
+      return byArtifact;
+    }
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
-      if (collResult.Success && collResult.Results && collResult.Results.length > 0) {
-        const collArtifact = collResult.Results[0];
-        searchResults.push(
-          this.mapArtifactToSearchResult(
-            artifact,
-            query,
-            collArtifact.CollectionID,
-            collArtifact.Collection ?? undefined
-          )
-        );
-      } else {
-        // No collection association
-        searchResults.push(this.mapArtifactToSearchResult(artifact, query));
-      }
+    const versions = await rv.RunView<ArtifactVersionIdRow>(
+      {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID IN (${artifactIds.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
+        Fields: ['ID', 'ArtifactID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+    if (!versions.Success) {
+      console.error('Failed to load artifact versions for search results:', versions.ErrorMessage);
+      return byArtifact;
+    }
+    const versionRows = versions.Results ?? [];
+    if (versionRows.length === 0) {
+      return byArtifact;
     }
 
-    return searchResults;
+    const links = await rv.RunView<ArtifactCollectionRow>(
+      {
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactVersionID IN (${versionRows.map(v => `'${EscapeSQLString(v.ID)}'`).join(',')})`,
+        Fields: ['ArtifactVersionID', 'CollectionID', 'Collection'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+    if (!links.Success) {
+      console.error('Failed to load collections for search results:', links.ErrorMessage);
+      return byArtifact;
+    }
+
+    const artifactByVersion = new Map<string, string>();
+    for (const version of versionRows) {
+      artifactByVersion.set(version.ID.toLowerCase(), version.ArtifactID.toLowerCase());
+    }
+    for (const link of links.Results ?? []) {
+      const artifactKey = artifactByVersion.get(link.ArtifactVersionID.toLowerCase());
+      // First collection wins, as with the single-row lookup this replaces.
+      if (artifactKey && !byArtifact.has(artifactKey)) {
+        byArtifact.set(artifactKey, link);
+      }
+    }
+    return byArtifact;
   }
 
   /**
@@ -759,6 +825,9 @@ export class SearchService {
    * Clear search results
    */
   public ClearResults(): void {
+    // A search still in flight must not repopulate the cleared panel.
+    this._searchGeneration++;
+    this._isSearching$.next(false);
     this._searchResults$.next({
       conversations: [],
       messages: [],

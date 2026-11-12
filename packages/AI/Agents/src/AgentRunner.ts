@@ -2,8 +2,8 @@
  * @fileoverview AgentRunner provides a thin wrapper for executing AI agents
  * using the MemberJunction AI Agent framework.
  * 
- * This module handles agent instantiation using the ClassFactory pattern to ensure
- * the correct agent subclass is used based on the agent type's DriverClass property.
+ * This module handles agent instantiation through {@link CreateAgentInstance}, so the
+ * subclass named by the agent's own DriverClass runs (or the plain BaseAgent when it names none).
  * 
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
@@ -22,7 +22,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjunction/ai-engine-base';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
-import { BaseAgent } from './base-agent';
+import { CreateAgentInstance } from './agent-instance';
 import { HostAllowedAgentIDs } from './decision-discovery';
 import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
 import {
@@ -185,8 +185,8 @@ export interface FollowHandoffsInput<C = any> {
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
- * - Loading agent type metadata to get the DriverClass
- * - Instantiating the correct agent class using ClassFactory
+ * - Checking the agent's type exists
+ * - Instantiating the agent's own class (CreateAgentInstance)
  * - Passing through to the agent's Execute method
  * 
  * @class AgentRunner
@@ -264,8 +264,8 @@ export class AgentRunner {
      * Runs an AI agent with the specified parameters.
      * 
      * This method acts as a thin pass-through that:
-     * 1. Loads the agent type to get the DriverClass
-     * 2. Uses ClassFactory to instantiate the correct agent class
+     * 1. Checks the agent's type exists
+     * 2. Instantiates the agent's own class via CreateAgentInstance
      * 3. Calls Execute on the agent instance and returns the result
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution (same as BaseAgent.Execute)
@@ -286,29 +286,21 @@ export class AgentRunner {
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
             
-            // Find the agent type to get the DriverClass
+            // The agent must have a known type
             const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
             if (!agentType) {
                 throw new Error(`Agent type not found for ID: ${params.agent.TypeID}`);
             }
             
-            // Get the correct agent class using ClassFactory, prefer the agent's DriverClass if specified, otherwise fallback to Agent Type, otherwise we get BaseAgent from ClassFactory
-            const driverClass = params.agent.DriverClass || agentType.DriverClass;
+            // The agent's own DriverClass, or the plain BaseAgent when it declares none. Never the
+            // agent type's DriverClass (a BaseAgentType key), and an unregistered key throws (#4112).
             LogStatusEx({
-                message: `AgentRunner: Using driver class: ${driverClass}`,
+                message: `AgentRunner: Using driver class: ${params.agent.DriverClass?.trim() || 'BaseAgent'}`,
                 verboseOnly: true,
                 isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
             });
-            
-            const agentInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(
-                BaseAgent,
-                driverClass
-            );
-            
-            if (!agentInstance) {
-                throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
-            }
-            
+            const agentInstance = await CreateAgentInstance(params.agent);
+
             // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
             // clone occurs in hydrateConversationArtifacts or Execute.
             if (!params.treeBudget) {
@@ -1884,6 +1876,8 @@ export class AgentRunner {
             let isNewArtifact = false;
             let forkedSourceArtifactId: string | undefined;
             let forkCommentNote: string | undefined;
+            // Known for a new header; looked up for an existing artifact when the version is built.
+            let artifactTypeId: string | null = null;
 
             if (plan.kind === 'version') {
                 const maxVersion = await this.GetMaxVersionForArtifact(plan.artifactId, contextUser, provider);
@@ -1955,6 +1949,7 @@ export class AgentRunner {
                         forkCommentNote
                     );
                     artifactId = artifact.ID;
+                    artifactTypeId = artifact.TypeID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
                     LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
@@ -2018,6 +2013,12 @@ export class AgentRunner {
             version.VersionNumber = newVersionNumber;
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
+            // Preview plugins match on the version's MIME type; without it their contentType arm never
+            // fires for payload artifacts (#4597).
+            version.MimeType = await this.ResolvePayloadVersionMimeType(
+                artifactTypeId ?? await this.GetArtifactTypeIDForArtifact(artifactId, contextUser, provider),
+                contextUser
+            );
 
             const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
             const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
@@ -2495,6 +2496,71 @@ export class AgentRunner {
             );
         }
         return failedRecipients;
+    }
+
+    /**
+     * MIME type stamped on an agent payload version: its artifact type's `ContentType` when that is
+     * concrete, `null` when it is empty or a wildcard (`image/*`, `text/*`), since a wildcard is not
+     * a real MIME type.
+     *
+     * @param contentType - The artifact type's `ContentType`.
+     * @returns The MIME type to store, or `null`.
+     */
+    public static PayloadVersionMimeType(contentType: string | null | undefined): string | null {
+        const trimmed = contentType?.trim();
+        if (!trimmed || trimmed.includes('*')) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    /**
+     * Resolves the MIME type for a payload version from its artifact type (see
+     * {@link PayloadVersionMimeType}). Never throws: a lookup failure leaves the MIME type empty
+     * rather than failing the artifact.
+     *
+     * @param artifactTypeId - The artifact's `TypeID`, or `null` when unknown.
+     * @param contextUser - User the run executes as.
+     * @returns The MIME type to store, or `null`.
+     */
+    protected async ResolvePayloadVersionMimeType(artifactTypeId: string | null, contextUser: UserInfo): Promise<string | null> {
+        if (!artifactTypeId) {
+            return null;
+        }
+        try {
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+            const artifactType = ArtifactMetadataEngine.Instance.ArtifactTypes.find(t => UUIDsEqual(t.ID, artifactTypeId));
+            return AgentRunner.PayloadVersionMimeType(artifactType?.ContentType);
+        } catch (error) {
+            LogError(`Could not resolve artifact type ${artifactTypeId} for payload version MIME type: ${(error as Error)?.message ?? 'unknown error'}`);
+            return null;
+        }
+    }
+
+    /**
+     * Reads an existing artifact's `TypeID`. Never throws.
+     *
+     * @param artifactId - The artifact being versioned.
+     * @param contextUser - User the run executes as.
+     * @param provider - Optional provider for the lookup.
+     * @returns The type id, or `null` when the artifact cannot be read.
+     */
+    protected async GetArtifactTypeIDForArtifact(artifactId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        try {
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
+            const result = await rv.RunView<{ TypeID: string }>({
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID='${AgentRunner.filterId(artifactId, 'GetArtifactTypeIDForArtifact artifactId')}'`,
+                Fields: ['TypeID'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            }, contextUser);
+            return result.Success ? (result.Results?.[0]?.TypeID ?? null) : null;
+        } catch (error) {
+            LogError(`Error reading artifact type for ${artifactId}: ${(error as Error)?.message ?? 'unknown error'}`);
+            return null;
+        }
     }
 
     /**

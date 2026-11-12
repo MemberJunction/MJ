@@ -1,6 +1,32 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, NormalizeFinishReason, CHAT_FINISH_REASON_STOP, CHAT_FINISH_REASON_LENGTH, CHAT_FINISH_REASON_TOOL_CALLS } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { LMStudioClient, LLMPredictionFragment, OngoingPrediction, PredictionResult } from '@lmstudio/sdk';
+import { LMStudioClient, LLMPredictionFragment, LLMPredictionStats, LLMPredictionStopReason, OngoingPrediction } from '@lmstudio/sdk';
+
+/**
+ * The last item of a streamed prediction: LM Studio's stats for the finished prediction, read from
+ * `prediction.result()` after the fragments end. The fragments themselves carry no stop reason or
+ * token counts, so without this a stopped prediction looked like a short, complete answer (#5651).
+ */
+interface LMStudioPredictionEnd {
+    readonly Kind: 'LMStudioPredictionEnd';
+    readonly Stats: LLMPredictionStats;
+}
+
+/** LM Studio stop reasons that end a prediction normally, as MJ's normalized `finish_reason`. */
+const LM_STUDIO_FINISH_REASONS: Readonly<Partial<Record<LLMPredictionStopReason, string>>> = {
+    eosFound: CHAT_FINISH_REASON_STOP,
+    stopStringFound: CHAT_FINISH_REASON_STOP,
+    maxPredictedTokensReached: CHAT_FINISH_REASON_LENGTH,
+    contextLengthReached: CHAT_FINISH_REASON_LENGTH,
+    toolCalls: CHAT_FINISH_REASON_TOOL_CALLS
+};
+
+/** Stop reasons where LM Studio ended the prediction before the model did: the text is incomplete. */
+const LM_STUDIO_INTERRUPTED: ReadonlySet<LLMPredictionStopReason> = new Set<LLMPredictionStopReason>(['userStopped', 'modelUnloaded']);
+
+function isPredictionEnd(chunk: unknown): chunk is LMStudioPredictionEnd {
+    return typeof chunk === 'object' && chunk !== null && (chunk as { Kind?: unknown }).Kind === 'LMStudioPredictionEnd';
+}
 
 /**
  * LM Studio implementation of the BaseLLM class
@@ -63,35 +89,49 @@ export class LMStudioLLM extends BaseLLM {
         }
     }
 
-    /**
-     * Whether a resolved prediction was ended by an abort. The LM Studio SDK does not reject when the
-     * signal fires: it resolves the prediction with stop reason `userStopped`, so the abort has to be
-     * read off the result.
-     */
-    private isUserStopped(response: PredictionResult): boolean {
-        return response.stats?.stopReason === 'userStopped';
+    /** Whether LM Studio ended a prediction before the model finished it (stopped, or model unloaded). */
+    private isInterrupted(stats: LLMPredictionStats | undefined): boolean {
+        return stats?.stopReason != null && LM_STUDIO_INTERRUPTED.has(stats.stopReason);
+    }
+
+    /** A finished prediction's stop reason as MJ's normalized `finish_reason`. */
+    private finishReasonFor(stats: LLMPredictionStats | undefined): string {
+        const reason = stats?.stopReason;
+        return reason ? (LM_STUDIO_FINISH_REASONS[reason] ?? NormalizeFinishReason(reason)) : CHAT_FINISH_REASON_STOP;
     }
 
     /**
      * The result of a prediction LM Studio stopped on its own (from its UI or the server), not because
      * the caller aborted it: a failure, and a retriable one, since another model or vendor can answer.
      */
-    private stoppedByServerResult(startTime: Date, endTime: Date): ChatResult {
+    private stoppedByServerResult(startTime: Date, endTime: Date, stopReason: LLMPredictionStopReason = 'userStopped'): ChatResult {
         const result = new ChatResult(false, startTime, endTime);
         result.data = { choices: [], usage: new ModelUsage(0, 0) };
         result.statusText = 'error';
-        result.errorMessage = 'LM Studio stopped the prediction before it finished';
+        result.errorMessage = stopReason === 'modelUnloaded'
+            ? 'LM Studio unloaded the model before the prediction finished'
+            : 'LM Studio stopped the prediction before it finished';
         result.errorInfo = { errorType: 'ServiceUnavailable', severity: 'Retriable', canFailover: true };
         return result;
     }
 
     /**
-     * Exposes a prediction as a plain async-iterable of its fragments. An `OngoingPrediction` is also
-     * a thenable, so returning it from an `async` method would await the whole prediction instead of
-     * streaming it; this hands back only its iterator.
+     * Exposes a prediction as a plain async-iterable of its fragments, followed by one
+     * {@link LMStudioPredictionEnd} carrying the finished prediction's stats. An `OngoingPrediction` is
+     * also a thenable, so returning it from an `async` method would await the whole prediction instead
+     * of streaming it; this hands back an iterator. Each call reads its own prediction, so nothing is
+     * kept on the shared driver instance.
      */
-    private asFragmentStream(prediction: OngoingPrediction): AsyncIterable<LLMPredictionFragment> {
-        return { [Symbol.asyncIterator]: () => prediction[Symbol.asyncIterator]() };
+    private asFragmentStream(prediction: OngoingPrediction): AsyncIterable<LLMPredictionFragment | LMStudioPredictionEnd> {
+        return {
+            [Symbol.asyncIterator]: async function* (): AsyncGenerator<LLMPredictionFragment | LMStudioPredictionEnd> {
+                for await (const fragment of prediction) {
+                    yield fragment;
+                }
+                const finished = await prediction.result();
+                yield { Kind: 'LMStudioPredictionEnd', Stats: finished.stats };
+            }
+        };
     }
 
     /**
@@ -167,8 +207,8 @@ export class LMStudioLLM extends BaseLLM {
             if (params.cancellationToken?.aborted) {
                 return this.BuildCancelledChatResult(startTime, { signal: params.cancellationToken });
             }
-            if (this.isUserStopped(response)) {
-                return this.stoppedByServerResult(startTime, endTime);
+            if (this.isInterrupted(response.stats)) {
+                return this.stoppedByServerResult(startTime, endTime, response.stats.stopReason);
             }
 
             const choices: ChatResultChoice[] = [{
@@ -177,7 +217,7 @@ export class LMStudioLLM extends BaseLLM {
                     content: response.nonReasoningContent,
                     thinking: response.reasoningContent  
                 },
-                finish_reason: 'stop', // LM Studio doesn't provide detailed finish reasons
+                finish_reason: this.finishReasonFor(response.stats),
                 index: 0
             }];
             
@@ -245,7 +285,7 @@ export class LMStudioLLM extends BaseLLM {
     /**
      * Create a streaming request for LM Studio
      */
-    protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<LLMPredictionFragment>> {
+    protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<LLMPredictionFragment | LMStudioPredictionEnd>> {
         // Initialize streaming state for thinking extraction if supported
         if (this.supportsThinkingModels()) {
             this.initializeThinkingStreamState();
@@ -315,6 +355,10 @@ export class LMStudioLLM extends BaseLLM {
         finishReason?: string;
         usage?: any;
     } {
+        if (isPredictionEnd(chunk)) {
+            return { content: '', finishReason: this.finishReasonFor(chunk.Stats), usage: chunk.Stats };
+        }
+
         let content = '';
         let finishReason = undefined;
         
@@ -356,18 +400,18 @@ export class LMStudioLLM extends BaseLLM {
         lastChunk: any | null | undefined,
         usage: any | null | undefined
     ): ChatResult {
-        // Extract finish reason from last chunk if available
-        let finishReason = 'stop';
-        if (lastChunk?.finished) {
-            finishReason = 'stop';
-        }
-        
-        // For LM Studio, we may have usage metrics from the final chunk
-        const promptTokens = usage?.promptTokensCount || lastChunk?.stats?.promptTokensCount || 0;
-        const completionTokens = usage?.predictedTokensCount || lastChunk?.stats?.predictedTokensCount || 0;
-        
-        // Create dates (will be overridden by base class)
+        // The stream ends with the prediction's stats (asFragmentStream). A prediction LM Studio
+        // stopped or whose model it unloaded is incomplete: a retriable failure, never an answer. A
+        // caller's own abort never reaches here; BaseLLM turns it into a cancelled result first.
+        const stats = isPredictionEnd(lastChunk) ? lastChunk.Stats : undefined;
         const now = new Date();
+        if (this.isInterrupted(stats)) {
+            return this.stoppedByServerResult(now, now, stats?.stopReason);
+        }
+        const finishReason = this.finishReasonFor(stats);
+
+        const promptTokens = stats?.promptTokensCount || usage?.promptTokensCount || 0;
+        const completionTokens = stats?.predictedTokensCount || usage?.predictedTokensCount || 0;
         
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);

@@ -301,6 +301,18 @@ describe('AITextToSpeechRunner', () => {
       expect(JSON.stringify(run)).not.toContain('SECRET-AUDIO-BYTES');
     });
 
+    it('records a driver-reported Characters usage on the run row (ElevenLabs, #4865)', async () => {
+      respond = () => spoken(ModelUsage.ForMedia('Characters', 7, 0));
+
+      await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+      const run = MediaHarness.LastRun;
+
+      expect(run?.UsageTypeID).toBe(USAGE_TYPE.Characters);
+      expect(run?.InputUnitsUsed).toBe(7);
+      expect(run?.OutputUnitsUsed).toBe(0);
+    });
+
     it("records the driver's own measure when it reports one, not the character count", async () => {
       respond = () => spoken(ModelUsage.ForMedia('Seconds', 0, 3.5));
 
@@ -401,7 +413,8 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toBe(error.message);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(0);
+      // The one failed call is counted as an attempt; one driver call is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
 
     it.each([

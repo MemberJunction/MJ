@@ -5,8 +5,9 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { BuildExportArtifactLink } from './chat-export-artifact-link.js';
 import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
@@ -89,6 +90,7 @@ import { firstValueFrom, Subject, takeUntil } from 'rxjs';
               [pendingArtifactId]="pendingArtifactId"
               [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+              [ExportArtifactLink]="ExportArtifactLink"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
@@ -503,6 +505,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
   private engine = ConversationEngine.Instance;
+
+  /** Deep link written into conversation exports for each artifact; opens it in this resource. */
+  public readonly ExportArtifactLink = (target: ExportArtifactLinkTarget): string | null =>
+    typeof window === 'undefined' ? null : BuildExportArtifactLink(window.location.href, target);
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
