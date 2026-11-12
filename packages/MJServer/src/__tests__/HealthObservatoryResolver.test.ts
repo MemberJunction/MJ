@@ -147,12 +147,12 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             expect(recordBridgeSpy).toHaveBeenCalledWith(mockReport);
             expect(recordOtelSpy).toHaveBeenCalledWith(mockReport);
 
-            expect(result.overallStatus).toBe('GREEN');
-            expect(result.mjVersion).toBe('6.3.0-edge.0');
-            expect(result.summaryCounts.green).toBe(7);
-            expect(result.signals).toHaveLength(2);
-            expect(result.signals[0].code).toBe('MJ.CORE.DB.CONNECTIVITY_AND_POOL');
-            expect(JSON.parse(result.signals[0].observedMetricsJson)).toEqual({ latencyMs: 3.2, activeConnections: 4 });
+            expect(result.OverallStatus).toBe('GREEN');
+            expect(result.MjVersion).toBe('6.3.0-edge.0');
+            expect(result.SummaryCounts.Green).toBe(7);
+            expect(result.Signals).toHaveLength(2);
+            expect(result.Signals[0].Code).toBe('MJ.CORE.DB.CONNECTIVITY_AND_POOL');
+            expect(JSON.parse(result.Signals[0].ObservedMetricsJson)).toEqual({ latencyMs: 3.2, activeConnections: 4 });
         });
     });
 
@@ -185,9 +185,9 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             const result: InstanceHealthReportGQL = await resolver.ExecuteLiveCrudVerification(undefined, ctx);
 
             expect(runCheckSpy).toHaveBeenCalledWith('live-test', expect.anything());
-            expect(result.mode).toBe('live-test');
-            expect(result.signals[0].code).toBe('MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS');
-            expect(result.signals[0].status).toBe('GREEN');
+            expect(result.Mode).toBe('live-test');
+            expect(result.Signals[0].Code).toBe('MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS');
+            expect(result.Signals[0].Status).toBe('GREEN');
         });
     });
 
@@ -236,12 +236,12 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             const ctx = createMockContext('Owner');
             const series: ObservatoryMinuteSeriesGQL = resolver.GetObservatoryMinuteSeries('RunView', ctx);
 
-            expect(series.countBuckets).toHaveLength(1);
-            expect(series.countBuckets[0].category).toBe('RunView');
-            expect(series.countBuckets[0].count).toBe(15);
-            expect(series.healthBuckets[0].green).toBe(7);
-            expect(series.probeSignalBuckets[0].signalCode).toBe('MJ.CORE.DB.CONNECTIVITY_AND_POOL');
-            expect(series.featureUsageBuckets[0].routeTemplate).toBe('/health/observatory');
+            expect(series.CountBuckets).toHaveLength(1);
+            expect(series.CountBuckets[0].Category).toBe('RunView');
+            expect(series.CountBuckets[0].Count).toBe(15);
+            expect(series.HealthBuckets[0].Green).toBe(7);
+            expect(series.ProbeSignalBuckets[0].SignalCode).toBe('MJ.CORE.DB.CONNECTIVITY_AND_POOL');
+            expect(series.FeatureUsageBuckets[0].RouteTemplate).toBe('/health/observatory');
         });
     });
 
@@ -292,18 +292,18 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
 
             expect(aggregates).toHaveLength(2);
 
-            const runViewAgg = aggregates.find((a) => a.category === 'RunView')!;
-            expect(runViewAgg.eventCount).toBe(3);
-            expect(runViewAgg.totalElapsedMs).toBe(160);
-            expect(runViewAgg.minElapsedMs).toBe(20);
-            expect(runViewAgg.maxElapsedMs).toBe(100);
-            expect(runViewAgg.p50ElapsedMs).toBe(40);
-            expect(runViewAgg.errorCount).toBe(1);
+            const runViewAgg = aggregates.find((a) => a.Category === 'RunView')!;
+            expect(runViewAgg.EventCount).toBe(3);
+            expect(runViewAgg.TotalElapsedMs).toBe(160);
+            expect(runViewAgg.MinElapsedMs).toBe(20);
+            expect(runViewAgg.MaxElapsedMs).toBe(100);
+            expect(runViewAgg.P50ElapsedMs).toBe(40);
+            expect(runViewAgg.ErrorCount).toBe(1);
 
-            const aiAgg = aggregates.find((a) => a.category === 'AI')!;
-            expect(aiAgg.eventCount).toBe(1);
-            expect(aiAgg.totalInputTokens).toBe(500);
-            expect(aiAgg.totalOutputTokens).toBe(120);
+            const aiAgg = aggregates.find((a) => a.Category === 'AI')!;
+            expect(aiAgg.EventCount).toBe(1);
+            expect(aiAgg.TotalInputTokens).toBe(500);
+            expect(aiAgg.TotalOutputTokens).toBe(120);
         });
     });
 
@@ -327,10 +327,10 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             const events: RingBufferEventSummaryGQL[] = resolver.GetRecentRingBufferEvents(10, 'RunQuery', ctx);
 
             expect(events).toHaveLength(1);
-            expect(events[0].id).toBe('ev-1');
-            expect(events[0].category).toBe('RunQuery');
-            expect(events[0].success).toBe(true);
-            expect(JSON.parse(events[0].paramsJson)).toEqual({ QueryName: 'ActiveUsers', RowCount: 25 });
+            expect(events[0].ID).toBe('ev-1');
+            expect(events[0].Category).toBe('RunQuery');
+            expect(events[0].Success).toBe(true);
+            expect(JSON.parse(events[0].ParamsJson)).toEqual({ QueryName: 'ActiveUsers', RowCount: 25 });
         });
     });
 
@@ -351,10 +351,10 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             const ctx = createMockContext('Owner');
             const status: OtelStatusGQL = resolver.GetOtelStatus(ctx);
 
-            expect(status.enabled).toBe(true);
-            expect(status.isInitialized).toBe(true);
-            expect(status.serviceName).toBe('mj-observatory-test');
-            expect(status.otlpEndpoint).toBe('http://localhost:4318');
+            expect(status.Enabled).toBe(true);
+            expect(status.IsInitialized).toBe(true);
+            expect(status.ServiceName).toBe('mj-observatory-test');
+            expect(status.OtlpEndpoint).toBe('http://localhost:4318');
         });
     });
 
@@ -388,10 +388,10 @@ describe('HealthObservatoryResolver (@memberjunction/server)', () => {
             const ctx = createMockContext('Owner');
             const preview: ShareLayerPreviewGQL = resolver.PreviewSharePackage('HealthAndAggregatedUsage', ctx);
 
-            expect(preview.consentTier).toBe('HealthAndAggregatedUsage');
-            expect(preview.payloadHashHex).toBe('abc123digest');
-            expect(preview.aggregatedUsageCount).toBe(1);
-            expect(preview.allowlistCompliant).toBe(true);
+            expect(preview.ConsentTier).toBe('HealthAndAggregatedUsage');
+            expect(preview.PayloadHashHex).toBe('abc123digest');
+            expect(preview.AggregatedUsageCount).toBe(1);
+            expect(preview.AllowlistCompliant).toBe(true);
         });
 
         it('throws an error when preview is requested for ConsentTier "Off"', () => {

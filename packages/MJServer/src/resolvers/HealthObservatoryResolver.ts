@@ -3,6 +3,7 @@ import type { AppContext } from '../types.js';
 import {
     AuthorizationEvaluator,
     DatabaseProviderBase,
+    IMetadataProvider,
     Metadata,
     TelemetryCategory,
     TelemetryEvent,
@@ -28,109 +29,109 @@ import { GetReadOnlyProvider } from '../util.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
-// GraphQL Types: Health Reports & Signals
+// GraphQL Types: Health Reports & Signals (PascalCase for Standards compliance)
 // ============================================================================
 
 @ObjectType()
 export class HealthRemediationPlaybookGQL {
     @Field(() => String)
-    agentInstructions: string;
+    AgentInstructions: string;
 
     @Field(() => [String])
-    allowedAutonomousActions: string[];
+    AllowedAutonomousActions: string[];
 
     @Field(() => Int)
-    maxAutonomousAttempts: number;
+    MaxAutonomousAttempts: number;
 
     @Field(() => Int)
-    retryCooldownSeconds: number;
+    RetryCooldownSeconds: number;
 
     @Field(() => String)
-    humanEscalationCriteria: string;
+    HumanEscalationCriteria: string;
 
     @Field(() => String, { nullable: true })
-    humanOperatorRunbook?: string;
+    HumanOperatorRunbook?: string;
 }
 
 @ObjectType()
 export class HealthSignalEvaluationGQL {
     @Field(() => String)
-    code: string;
+    Code: string;
 
     @Field(() => String)
-    title: string;
+    Title: string;
 
     @Field(() => String)
-    layer: string;
+    Layer: string;
 
     @Field(() => String)
-    ownerApp: string;
+    OwnerApp: string;
 
     @Field(() => String)
-    mode: string;
+    Mode: string;
 
     @Field(() => String)
-    status: string; // 'GREEN' | 'YELLOW' | 'RED'
+    Status: string; // 'GREEN' | 'YELLOW' | 'RED'
 
     @Field(() => String)
-    summary: string;
+    Summary: string;
 
     @Field(() => String)
-    observedMetricsJson: string;
+    ObservedMetricsJson: string;
 
     @Field(() => String, { nullable: true })
-    thresholdsJson?: string;
+    ThresholdsJson?: string;
 
     @Field(() => String)
-    evaluatedAt: string;
+    EvaluatedAt: string;
 
     @Field(() => Float)
-    durationMs: number;
+    DurationMs: number;
 
     @Field(() => HealthRemediationPlaybookGQL, { nullable: true })
-    activePlaybook?: HealthRemediationPlaybookGQL;
+    ActivePlaybook?: HealthRemediationPlaybookGQL;
 
     @Field(() => String, { nullable: true })
-    diagnosticError?: string;
+    DiagnosticError?: string;
 }
 
 @ObjectType()
 export class HealthSummaryCountsGQL {
     @Field(() => Int)
-    green: number;
+    Green: number;
 
     @Field(() => Int)
-    yellow: number;
+    Yellow: number;
 
     @Field(() => Int)
-    red: number;
+    Red: number;
 }
 
 @ObjectType()
 export class InstanceHealthReportGQL {
     @Field(() => String)
-    overallStatus: string;
+    OverallStatus: string;
 
     @Field(() => String)
-    mjVersion: string;
+    MjVersion: string;
 
     @Field(() => String)
-    databasePlatform: string;
+    DatabasePlatform: string;
 
     @Field(() => String)
-    evaluatedAt: string;
+    EvaluatedAt: string;
 
     @Field(() => Float)
-    totalDurationMs: number;
+    TotalDurationMs: number;
 
     @Field(() => String)
-    mode: string;
+    Mode: string;
 
     @Field(() => HealthSummaryCountsGQL)
-    summaryCounts: HealthSummaryCountsGQL;
+    SummaryCounts: HealthSummaryCountsGQL;
 
     @Field(() => [HealthSignalEvaluationGQL])
-    signals: HealthSignalEvaluationGQL[];
+    Signals: HealthSignalEvaluationGQL[];
 }
 
 // ============================================================================
@@ -140,94 +141,94 @@ export class InstanceHealthReportGQL {
 @ObjectType()
 export class TelemetryCountBucketGQL {
     @Field(() => String)
-    bucketStartIso: string;
+    BucketStartIso: string;
 
     @Field(() => String)
-    category: string;
+    Category: string;
 
     @Field(() => Int)
-    count: number;
+    Count: number;
 
     @Field(() => Float)
-    totalElapsedMs: number;
+    TotalElapsedMs: number;
 
     @Field(() => Float)
-    totalInputTokens: number;
+    TotalInputTokens: number;
 
     @Field(() => Float)
-    totalOutputTokens: number;
+    TotalOutputTokens: number;
 }
 
 @ObjectType()
 export class HealthStatusBucketGQL {
     @Field(() => String)
-    bucketStartIso: string;
+    BucketStartIso: string;
 
     @Field(() => Int)
-    green: number;
+    Green: number;
 
     @Field(() => Int)
-    yellow: number;
+    Yellow: number;
 
     @Field(() => Int)
-    red: number;
+    Red: number;
 }
 
 @ObjectType()
 export class ProbeSignalBucketGQL {
     @Field(() => String)
-    bucketStartIso: string;
+    BucketStartIso: string;
 
     @Field(() => String)
-    signalCode: string;
+    SignalCode: string;
 
     @Field(() => String)
-    ownerApp: string;
+    OwnerApp: string;
 
     @Field(() => Int)
-    green: number;
+    Green: number;
 
     @Field(() => Int)
-    yellow: number;
+    Yellow: number;
 
     @Field(() => Int)
-    red: number;
+    Red: number;
 
     @Field(() => Float)
-    totalDurationMs: number;
+    TotalDurationMs: number;
 
     @Field(() => Int)
-    sampleCount: number;
+    SampleCount: number;
 }
 
 @ObjectType()
 export class FeatureUsageBucketGQL {
     @Field(() => String)
-    bucketStartIso: string;
+    BucketStartIso: string;
 
     @Field(() => String)
-    applicationName: string;
+    ApplicationName: string;
 
     @Field(() => String)
-    routeTemplate: string;
+    RouteTemplate: string;
 
     @Field(() => Int)
-    count: number;
+    Count: number;
 }
 
 @ObjectType()
 export class ObservatoryMinuteSeriesGQL {
     @Field(() => [TelemetryCountBucketGQL])
-    countBuckets: TelemetryCountBucketGQL[];
+    CountBuckets: TelemetryCountBucketGQL[];
 
     @Field(() => [HealthStatusBucketGQL])
-    healthBuckets: HealthStatusBucketGQL[];
+    HealthBuckets: HealthStatusBucketGQL[];
 
     @Field(() => [ProbeSignalBucketGQL])
-    probeSignalBuckets: ProbeSignalBucketGQL[];
+    ProbeSignalBuckets: ProbeSignalBucketGQL[];
 
     @Field(() => [FeatureUsageBucketGQL])
-    featureUsageBuckets: FeatureUsageBucketGQL[];
+    FeatureUsageBuckets: FeatureUsageBucketGQL[];
 }
 
 // ============================================================================
@@ -237,76 +238,76 @@ export class ObservatoryMinuteSeriesGQL {
 @ObjectType()
 export class TelemetryCategoryAggregateGQL {
     @Field(() => String)
-    category: string;
+    Category: string;
 
     @Field(() => Int)
-    eventCount: number;
+    EventCount: number;
 
     @Field(() => Float)
-    totalElapsedMs: number;
+    TotalElapsedMs: number;
 
     @Field(() => Float)
-    avgElapsedMs: number;
+    AvgElapsedMs: number;
 
     @Field(() => Float)
-    minElapsedMs: number;
+    MinElapsedMs: number;
 
     @Field(() => Float)
-    maxElapsedMs: number;
+    MaxElapsedMs: number;
 
     @Field(() => Float)
-    p50ElapsedMs: number;
+    P50ElapsedMs: number;
 
     @Field(() => Float)
-    p95ElapsedMs: number;
+    P95ElapsedMs: number;
 
     @Field(() => Int)
-    errorCount: number;
+    ErrorCount: number;
 
     @Field(() => Float)
-    totalInputTokens: number;
+    TotalInputTokens: number;
 
     @Field(() => Float)
-    totalOutputTokens: number;
+    TotalOutputTokens: number;
 }
 
 @ObjectType()
 export class RingBufferEventSummaryGQL {
     @Field(() => String)
-    id: string;
+    ID: string;
 
     @Field(() => String)
-    category: string;
+    Category: string;
 
     @Field(() => String)
-    operation: string;
+    Operation: string;
 
     @Field(() => String)
-    fingerprint: string;
+    Fingerprint: string;
 
     @Field(() => Float)
-    startTime: number;
+    StartTime: number;
 
     @Field(() => Float, { nullable: true })
-    elapsedMs?: number;
+    ElapsedMs?: number;
 
     @Field(() => String, { nullable: true })
-    userId?: string;
+    UserID?: string;
 
     @Field(() => Boolean)
-    success: boolean;
+    Success: boolean;
 
     @Field(() => String, { nullable: true })
-    errorMessage?: string;
+    ErrorMessage?: string;
 
     @Field(() => String)
-    paramsJson: string;
+    ParamsJson: string;
 
     @Field(() => Float, { nullable: true })
-    inputTokens?: number;
+    InputTokens?: number;
 
     @Field(() => Float, { nullable: true })
-    outputTokens?: number;
+    OutputTokens?: number;
 }
 
 // ============================================================================
@@ -316,37 +317,37 @@ export class RingBufferEventSummaryGQL {
 @ObjectType()
 export class OtelStatusGQL {
     @Field(() => Boolean)
-    enabled: boolean;
+    Enabled: boolean;
 
     @Field(() => Boolean)
-    isInitialized: boolean;
+    IsInitialized: boolean;
 
     @Field(() => String)
-    serviceName: string;
+    ServiceName: string;
 
     @Field(() => String)
-    serviceVersion: string;
+    ServiceVersion: string;
 
     @Field(() => String)
-    environment: string;
+    Environment: string;
 
     @Field(() => String, { nullable: true })
-    otlpEndpoint?: string;
+    OtlpEndpoint?: string;
 
     @Field(() => String, { nullable: true })
-    tracesEndpoint?: string;
+    TracesEndpoint?: string;
 
     @Field(() => String, { nullable: true })
-    metricsEndpoint?: string;
+    MetricsEndpoint?: string;
 
     @Field(() => String)
-    databasePlatform: string;
+    DatabasePlatform: string;
 
     @Field(() => Float)
-    samplingRatio: number;
+    SamplingRatio: number;
 
     @Field(() => String)
-    signalGaugesJson: string;
+    SignalGaugesJson: string;
 }
 
 // ============================================================================
@@ -356,28 +357,28 @@ export class OtelStatusGQL {
 @ObjectType()
 export class ShareLayerPreviewGQL {
     @Field(() => String)
-    consentTier: string;
+    ConsentTier: string;
 
     @Field(() => String)
-    generatedAtIso: string;
+    GeneratedAtIso: string;
 
     @Field(() => String)
-    payloadHashHex: string;
+    PayloadHashHex: string;
 
     @Field(() => String)
-    payloadJson: string;
+    PayloadJson: string;
 
     @Field(() => Int)
-    healthSignalsCount: number;
+    HealthSignalsCount: number;
 
     @Field(() => Int)
-    aggregatedUsageCount: number;
+    AggregatedUsageCount: number;
 
     @Field(() => Int)
-    featureUsageCount: number;
+    FeatureUsageCount: number;
 
     @Field(() => Boolean)
-    allowlistCompliant: boolean;
+    AllowlistCompliant: boolean;
 }
 
 // ============================================================================
@@ -392,40 +393,40 @@ function computePercentile(sortedValues: number[], p: number): number {
 
 function mapReportToGQL(report: InstanceHealthReport): InstanceHealthReportGQL {
     return {
-        overallStatus: report.OverallStatus,
-        mjVersion: report.MJVersion,
-        databasePlatform: report.DatabasePlatform,
-        evaluatedAt: report.EvaluatedAt,
-        totalDurationMs: report.TotalDurationMs,
-        mode: report.Mode,
-        summaryCounts: {
-            green: report.SummaryCounts.Green,
-            yellow: report.SummaryCounts.Yellow,
-            red: report.SummaryCounts.Red,
+        OverallStatus: report.OverallStatus,
+        MjVersion: report.MJVersion,
+        DatabasePlatform: report.DatabasePlatform,
+        EvaluatedAt: report.EvaluatedAt,
+        TotalDurationMs: report.TotalDurationMs,
+        Mode: report.Mode,
+        SummaryCounts: {
+            Green: report.SummaryCounts.Green,
+            Yellow: report.SummaryCounts.Yellow,
+            Red: report.SummaryCounts.Red,
         },
-        signals: report.Signals.map((s): HealthSignalEvaluationGQL => ({
-            code: s.Code,
-            title: s.Title,
-            layer: s.Layer,
-            ownerApp: s.OwnerApp,
-            mode: s.Mode,
-            status: s.Status,
-            summary: s.Summary,
-            observedMetricsJson: JSON.stringify(s.ObservedMetrics ?? {}),
-            thresholdsJson: s.Thresholds ? JSON.stringify(s.Thresholds) : undefined,
-            evaluatedAt: s.EvaluatedAt,
-            durationMs: s.DurationMs,
-            activePlaybook: s.ActivePlaybook
+        Signals: report.Signals.map((s): HealthSignalEvaluationGQL => ({
+            Code: s.Code,
+            Title: s.Title,
+            Layer: s.Layer,
+            OwnerApp: s.OwnerApp,
+            Mode: s.Mode,
+            Status: s.Status,
+            Summary: s.Summary,
+            ObservedMetricsJson: JSON.stringify(s.ObservedMetrics ?? {}),
+            ThresholdsJson: s.Thresholds ? JSON.stringify(s.Thresholds) : undefined,
+            EvaluatedAt: s.EvaluatedAt,
+            DurationMs: s.DurationMs,
+            ActivePlaybook: s.ActivePlaybook
                 ? {
-                      agentInstructions: s.ActivePlaybook.AgentInstructions,
-                      allowedAutonomousActions: s.ActivePlaybook.AllowedAutonomousActions,
-                      maxAutonomousAttempts: s.ActivePlaybook.MaxAutonomousAttempts,
-                      retryCooldownSeconds: s.ActivePlaybook.RetryCooldownSeconds,
-                      humanEscalationCriteria: s.ActivePlaybook.HumanEscalationCriteria,
-                      humanOperatorRunbook: s.ActivePlaybook.HumanOperatorRunbook,
+                      AgentInstructions: s.ActivePlaybook.AgentInstructions,
+                      AllowedAutonomousActions: s.ActivePlaybook.AllowedAutonomousActions,
+                      MaxAutonomousAttempts: s.ActivePlaybook.MaxAutonomousAttempts,
+                      RetryCooldownSeconds: s.ActivePlaybook.RetryCooldownSeconds,
+                      HumanEscalationCriteria: s.ActivePlaybook.HumanEscalationCriteria,
+                      HumanOperatorRunbook: s.ActivePlaybook.HumanOperatorRunbook,
                   }
                 : undefined,
-            diagnosticError: s.DiagnosticError,
+            DiagnosticError: s.DiagnosticError,
         })),
     };
 }
@@ -476,11 +477,16 @@ export class HealthObservatoryResolver {
 
     private resolveContextDeps(context?: AppContext): {
         dbProvider: DatabaseProviderBase;
+        metadataProvider: IMetadataProvider;
         systemUser: UserInfo;
     } {
         const dbProvider =
             GetReadOnlyProvider(context?.providers ?? [], { allowFallbackToReadWrite: true }) ??
             MJGlobal.Instance.ClassFactory.CreateInstance<DatabaseProviderBase>(DatabaseProviderBase);
+
+        const metadataProvider =
+            (GetReadOnlyProvider(context?.providers ?? [], { allowFallbackToReadWrite: true }) as IMetadataProvider | undefined) ??
+            Metadata.Provider; // global-provider-ok: server probe runner falls back to global metadata provider when no request context
 
         let systemUser: UserInfo | undefined = context?.userPayload?.userRecord;
         if (!systemUser) {
@@ -494,7 +500,7 @@ export class HealthObservatoryResolver {
             systemUser = fallback;
         }
 
-        return { dbProvider, systemUser };
+        return { dbProvider, metadataProvider, systemUser };
     }
 
     /**
@@ -507,12 +513,12 @@ export class HealthObservatoryResolver {
         @Ctx() context?: AppContext,
     ): Promise<InstanceHealthReportGQL> {
         this.requireDiagnosticsAccess(context);
-        const { dbProvider, systemUser } = this.resolveContextDeps(context);
+        const { dbProvider, metadataProvider, systemUser } = this.resolveContextDeps(context);
 
         const checkType = mode === 'live-test' ? 'live-test' : 'passive';
         const report = await MJHealthEngine.Instance.RunCheck(checkType, {
             DatabaseProvider: dbProvider,
-            MetadataProvider: Metadata.Provider,
+            MetadataProvider: metadataProvider,
             SystemUser: systemUser,
             AppFilter: appFilter,
         });
@@ -533,11 +539,11 @@ export class HealthObservatoryResolver {
         @Ctx() context?: AppContext,
     ): Promise<InstanceHealthReportGQL> {
         this.requireDiagnosticsAccess(context);
-        const { dbProvider, systemUser } = this.resolveContextDeps(context);
+        const { dbProvider, metadataProvider, systemUser } = this.resolveContextDeps(context);
 
         const report = await MJHealthEngine.Instance.RunCheck('live-test', {
             DatabaseProvider: dbProvider,
-            MetadataProvider: Metadata.Provider,
+            MetadataProvider: metadataProvider,
             SystemUser: systemUser,
             AppFilter: appFilter,
         });
@@ -562,51 +568,51 @@ export class HealthObservatoryResolver {
         const typedCategory = category as TelemetryCategory | undefined;
         const countBuckets = bridge.GetCountBuckets(typedCategory).map(
             (b): TelemetryCountBucketGQL => ({
-                bucketStartIso: b.BucketStartIso,
-                category: b.Category,
-                count: b.Count,
-                totalElapsedMs: b.TotalElapsedMs,
-                totalInputTokens: b.TotalInputTokens,
-                totalOutputTokens: b.TotalOutputTokens,
+                BucketStartIso: b.BucketStartIso,
+                Category: b.Category,
+                Count: b.Count,
+                TotalElapsedMs: b.TotalElapsedMs,
+                TotalInputTokens: b.TotalInputTokens,
+                TotalOutputTokens: b.TotalOutputTokens,
             }),
         );
 
         const healthBuckets = bridge.GetHealthBuckets().map(
             (b): HealthStatusBucketGQL => ({
-                bucketStartIso: b.BucketStartIso,
-                green: b.Green,
-                yellow: b.Yellow,
-                red: b.Red,
+                BucketStartIso: b.BucketStartIso,
+                Green: b.Green,
+                Yellow: b.Yellow,
+                Red: b.Red,
             }),
         );
 
         const probeSignalBuckets = bridge.GetProbeSignalBuckets().map(
             (b): ProbeSignalBucketGQL => ({
-                bucketStartIso: b.BucketStartIso,
-                signalCode: b.SignalCode,
-                ownerApp: b.OwnerApp,
-                green: b.Green,
-                yellow: b.Yellow,
-                red: b.Red,
-                totalDurationMs: b.TotalDurationMs,
-                sampleCount: b.SampleCount,
+                BucketStartIso: b.BucketStartIso,
+                SignalCode: b.SignalCode,
+                OwnerApp: b.OwnerApp,
+                Green: b.Green,
+                Yellow: b.Yellow,
+                Red: b.Red,
+                TotalDurationMs: b.TotalDurationMs,
+                SampleCount: b.SampleCount,
             }),
         );
 
         const featureUsageBuckets = bridge.GetFeatureUsageBuckets().map(
             (b): FeatureUsageBucketGQL => ({
-                bucketStartIso: b.BucketStartIso,
-                applicationName: b.ApplicationName,
-                routeTemplate: b.RouteTemplate,
-                count: b.Count,
+                BucketStartIso: b.BucketStartIso,
+                ApplicationName: b.ApplicationName,
+                RouteTemplate: b.RouteTemplate,
+                Count: b.Count,
             }),
         );
 
         return {
-            countBuckets,
-            healthBuckets,
-            probeSignalBuckets,
-            featureUsageBuckets,
+            CountBuckets: countBuckets,
+            HealthBuckets: healthBuckets,
+            ProbeSignalBuckets: probeSignalBuckets,
+            FeatureUsageBuckets: featureUsageBuckets,
         };
     }
 
@@ -674,21 +680,21 @@ export class HealthObservatoryResolver {
             const p95 = computePercentile(durations, 95);
 
             results.push({
-                category,
-                eventCount: count,
-                totalElapsedMs: data.totalElapsedMs,
-                avgElapsedMs: avgElapsed,
-                minElapsedMs: minElapsed,
-                maxElapsedMs: maxElapsed,
-                p50ElapsedMs: p50,
-                p95ElapsedMs: p95,
-                errorCount: data.errorCount,
-                totalInputTokens: data.totalInputTokens,
-                totalOutputTokens: data.totalOutputTokens,
+                Category: category,
+                EventCount: count,
+                TotalElapsedMs: data.totalElapsedMs,
+                AvgElapsedMs: avgElapsed,
+                MinElapsedMs: minElapsed,
+                MaxElapsedMs: maxElapsed,
+                P50ElapsedMs: p50,
+                P95ElapsedMs: p95,
+                ErrorCount: data.errorCount,
+                TotalInputTokens: data.totalInputTokens,
+                TotalOutputTokens: data.totalOutputTokens,
             });
         }
 
-        return results.sort((a, b) => b.eventCount - a.eventCount);
+        return results.sort((a, b) => b.EventCount - a.EventCount);
     }
 
     /**
@@ -718,18 +724,18 @@ export class HealthObservatoryResolver {
                       : undefined;
 
             return {
-                id: ev.id,
-                category: ev.category,
-                operation: ev.operation,
-                fingerprint: ev.fingerprint,
-                startTime: ev.startTime,
-                elapsedMs: ev.elapsedMs,
-                userId: ev.userId,
-                success: !isError,
-                errorMessage,
-                paramsJson: JSON.stringify(params),
-                inputTokens: typeof params.inputTokens === 'number' ? params.inputTokens : undefined,
-                outputTokens: typeof params.outputTokens === 'number' ? params.outputTokens : undefined,
+                ID: ev.id,
+                Category: ev.category,
+                Operation: ev.operation,
+                Fingerprint: ev.fingerprint,
+                StartTime: ev.startTime,
+                ElapsedMs: ev.elapsedMs,
+                UserID: ev.userId,
+                Success: !isError,
+                ErrorMessage: errorMessage,
+                ParamsJson: JSON.stringify(params),
+                InputTokens: typeof params.inputTokens === 'number' ? params.inputTokens : undefined,
+                OutputTokens: typeof params.outputTokens === 'number' ? params.outputTokens : undefined,
             };
         });
     }
@@ -744,17 +750,17 @@ export class HealthObservatoryResolver {
         const config = sdk.Config;
 
         return {
-            enabled: config?.Enabled ?? false,
-            isInitialized: sdk.IsInitialized,
-            serviceName: config?.ServiceName ?? 'memberjunction',
-            serviceVersion: config?.ServiceVersion ?? 'unknown',
-            environment: config?.Environment ?? 'production',
-            otlpEndpoint: config?.OtlpEndpoint,
-            tracesEndpoint: config?.TracesEndpoint,
-            metricsEndpoint: config?.MetricsEndpoint,
-            databasePlatform: config?.DatabasePlatform ?? 'sqlserver',
-            samplingRatio: config?.SamplingRatio ?? 1.0,
-            signalGaugesJson: JSON.stringify({}),
+            Enabled: config?.Enabled ?? false,
+            IsInitialized: sdk.IsInitialized,
+            ServiceName: config?.ServiceName ?? 'memberjunction',
+            ServiceVersion: config?.ServiceVersion ?? 'unknown',
+            Environment: config?.Environment ?? 'production',
+            OtlpEndpoint: config?.OtlpEndpoint,
+            TracesEndpoint: config?.TracesEndpoint,
+            MetricsEndpoint: config?.MetricsEndpoint,
+            DatabasePlatform: config?.DatabasePlatform ?? 'sqlserver',
+            SamplingRatio: config?.SamplingRatio ?? 1.0,
+            SignalGaugesJson: JSON.stringify({}),
         };
     }
 
@@ -778,14 +784,14 @@ export class HealthObservatoryResolver {
         const pkg = packager.PreviewNextPackage(typedTier, bridge);
 
         return {
-            consentTier: pkg.Payload.ConsentTier,
-            generatedAtIso: pkg.Payload.GeneratedAtIso,
-            payloadHashHex: pkg.PayloadHashHex,
-            payloadJson: pkg.PayloadJson,
-            healthSignalsCount: pkg.Payload.HealthSignals?.Buckets?.length ?? 0,
-            aggregatedUsageCount: pkg.Payload.AggregatedUsage?.Buckets?.length ?? 0,
-            featureUsageCount: pkg.Payload.FeatureUsage?.DailyBuckets?.length ?? 0,
-            allowlistCompliant: true,
+            ConsentTier: pkg.Payload.ConsentTier,
+            GeneratedAtIso: pkg.Payload.GeneratedAtIso,
+            PayloadHashHex: pkg.PayloadHashHex,
+            PayloadJson: pkg.PayloadJson,
+            HealthSignalsCount: pkg.Payload.HealthSignals?.Buckets?.length ?? 0,
+            AggregatedUsageCount: pkg.Payload.AggregatedUsage?.Buckets?.length ?? 0,
+            FeatureUsageCount: pkg.Payload.FeatureUsage?.DailyBuckets?.length ?? 0,
+            AllowlistCompliant: true,
         };
     }
 }
