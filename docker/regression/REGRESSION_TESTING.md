@@ -61,6 +61,8 @@ mj test regression build
 # 3. Run the full stack — creates docker/regression/test-results/run-{TIMESTAMP}/
 #    Fast path: docker compose up under the "full" profile, no codegen.
 mj test regression up
+#    Only some tests: mj test regression up --test "T001 - Login Smoke" (repeatable;
+#    sets TEST_NAMES, a comma-separated list of exact names, for the test runner)
 
 # 4. Check results — see "Output Structure" below for what gets generated
 ls docker/regression/test-results/latest/
@@ -444,7 +446,7 @@ The image is built by [`docker/agentic-test-runner/Dockerfile`](../agentic-test-
 
 ## Environment Variables
 
-All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for the template.
+All variables go in `docker/regression/.env.test` (gitignored). Copy [`.env.test.example`](.env.test.example) to start.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|

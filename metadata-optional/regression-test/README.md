@@ -18,6 +18,9 @@ The `Computer Use` TestType row itself stays in the normal `metadata/test-types/
 # Run the full suite via Docker
 mj test regression up
 
+# Run only some tests of the suite via Docker (exact names; repeat --test)
+mj test regression up --test "T001 - Login Smoke" --test "T002 - Data Explorer Open Record"
+
 # Compare the two most recent runs
 mj test regression compare
 
@@ -217,7 +220,8 @@ Three things worth knowing:
 - **A re-derived script lands in `PendingReplayScript`, not `ReplayScript`.** Once a test has a
   promoted script, a run that produces a different one parks it in the review slot rather than
   silently rewriting how the suite drives the app. Use `mj test scripts` to see the drift, then
-  `--promote` or `--discard`.
+  `--promote` or `--discard`. `mj test scripts --format=md --output=drift.md` writes the drift
+  report as markdown for a PR body (`--format=json` for scripts).
 - **Pulling without those `externalizeFields` entries inlines every script.** Externalization is
   driven by the config, not by what the file already contains — so a pull with the entries removed
   writes the scripts into the test JSONs and orphans the files.

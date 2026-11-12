@@ -223,6 +223,9 @@ services:
       # entrypoint; overridden by `mj test regression remote` via the target
       # profile's "suite" field. Used by the BYO overlay too.
       TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      # Comma-separated exact test names. When set, only those suite tests run
+      # (`mj test regression up --test`).
+      TEST_NAMES: "${TEST_NAMES:-}"
       EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
       # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
       # etc. inside test JSONs. Mode A leaves these empty; the entrypoint

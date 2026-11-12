@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, ResolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestScripts extends Command {
   static description =
@@ -12,6 +13,7 @@ export default class TestScripts extends Command {
     '<%= config.bin %> <%= command.id %> --promote --test "T042 - Filter Grid"',
     '<%= config.bin %> <%= command.id %> --promote --yes',
     '<%= config.bin %> <%= command.id %> --discard --test "T042 - Filter Grid"',
+    '<%= config.bin %> <%= command.id %> --format=md --output=drift.md',
   ];
 
   static flags = {
@@ -33,6 +35,11 @@ export default class TestScripts extends Command {
       description: 'Confirm a bulk --promote/--discard that was not narrowed with --test',
       default: false,
     }),
+    format: TEST_FORMAT_FLAG,
+    output: Flags.string({
+      char: 'o',
+      description: 'Write the pending-script report to this file',
+    }),
   };
 
   async run(): Promise<void> {
@@ -46,6 +53,13 @@ export default class TestScripts extends Command {
         promote: flags.promote,
         discard: flags.discard,
         yes: flags.yes,
+        format: ResolveLegacyFormat({
+          Format: flags.format,
+          Legacy: 'console' as const,
+          LegacyDefault: 'console' as const,
+          Map: TEST_FORMAT_MAP,
+        }),
+        output: flags.output,
       });
     } catch (error) {
       this.error(error as Error);
