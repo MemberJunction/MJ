@@ -44,7 +44,7 @@ import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, Postgr
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
-import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -1283,7 +1283,7 @@ const setupComplete$ = new ReplaySubject(1);
     resolvers: allResolvers,
     validate: false,
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-    emitSchemaFile: websiteRunFromPackage !== 1,
+    emitSchemaFile: process.env.MJ_EMIT_SCHEMA_GQL === '1' && websiteRunFromPackage !== 1,
     pubSub,
   });
   const buildMs = performance.now() - tBuild;
@@ -1312,8 +1312,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   const tTransform = performance.now();
   schema = ApplyRootVariablesLoggingMiddleware(schema);
-  schema = requireSystemUserDirective.transformer(schema);
-  schema = publicDirective.transformer(schema);
+  schema = ApplyBuiltInDirectivesTransformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {

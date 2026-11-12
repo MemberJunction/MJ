@@ -3747,7 +3747,7 @@ export class SQLCodeGenBase {
                 recordIdExpr = parts.join(` ${concat} '||' ${concat} `);
             }
 
-            sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
+            sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'RecordGeoCode')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
         sOutput += this.generateEmbeddedGeoJoins(entity, classNameFirstChar);
