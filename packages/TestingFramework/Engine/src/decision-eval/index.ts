@@ -16,3 +16,5 @@ export * from './discovery-baseline';
 export * from './discovery-suite';
 export * from './discovery-metrics';
 export * from './discovery-scorecard';
+export * from './calibration-fit';
+export * from './calibration-points';

@@ -114,11 +114,45 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 | `agent-memory-tests.ts` | live-model gate (`RUN_AGENT_TESTS=1`) |
 | `runview-matrix-tests.ts` | running MJAPI + `MJ_API_KEY` — client-first RunView sweep across every entity |
 | `ps-inproc-*.ts` / `ps-live-*.ts` | Predictive Studio flows (`PS_INTEGRATION=1`, Python sidecar) |
+| `fit-decision-calibration.ts` | a points JSONL, or a labels JSONL plus the database (`.env`) — fits Platt calibrations for any decision use and model; see [Fitting a decision calibration](#fitting-a-decision-calibration) |
 | `native-tool-matrix.ts` | LLM provider API keys (`AI_VENDOR_API_KEY__{Anthropic,OpenAI,Gemini}LLM`) — the provider tool-calling probe. **Dry-run by default**; `--live` sends requests. Reports rates, asserts nothing. |
 
 ```bash
 npx tsx packages/TestingFramework/integration-test-suite/rigs/runview-matrix-tests.ts
 ```
+
+### Fitting a decision calibration
+
+A decision model's raw probabilities are not calibrated, so a consumer that acts on a threshold
+applies a Platt calibration fitted for the exact model and question. The fits live in the model
+catalog: `ModelConfiguration.Decision.Calibrations` on the answering model's `MJ: AI Models` row
+(`metadata/ai-models/`). `rigs/fit-decision-calibration.ts` makes one for any use and any model:
+
+1. **Collect labelled points**, either way:
+   - a **points file**, one per line:
+     `{"Use":"conversation-routing","Question":"continues","ModelName":"Jev","ResolvedModel":"typesafe/jev-1.13-20260917","RawProbability":0.82,"Label":true}`
+     (optional `Weight`, a repeat count, and `Fold`: give every repeat of one case the same fold);
+   - a **labels file** naming decision prompt runs already in the database (production, shadow or
+     eval runs): `{"PromptRunID":"…","Question":"continues","Label":true}`, or for a Choice or Score
+     `{"PromptRunID":"…","Question":"agent","ExpectedValue":"research"}`. The rig reads each run's
+     `Model`, `ResolvedModel` and answer from `MJ: AI Prompt Runs`. A Likelihood is scored on its
+     probability, a Choice or Score on its confidence.
+2. **Run the rig**, writing outside the repository:
+   ```bash
+   npx tsx packages/TestingFramework/integration-test-suite/rigs/fit-decision-calibration.ts \
+     --labels ~/corpora/routing-labels.jsonl --use conversation-routing \
+     --target-prior 0.9 --corpus-label "routing corpus 08dd187a" --out ~/fits/routing-2026-11
+   ```
+   `--target-prior` re-targets each fit from the corpus's class mix to the one production sees
+   (`B' = B + logit(target) − logit(corpus mix)`; a share, or `use=share,…,*=share`). Groups with
+   fewer than `--min-points` (30) points, or fewer than `--min-per-class` (5) of either class, are
+   refused and listed with the reason.
+3. **Read `report.md`**: raw → calibrated balanced accuracy, ECE and Brier, out of fold.
+4. **Paste** each model's entries from `calibrations.json` into `Decision.Calibrations` on its
+   `metadata/ai-models/` record, replacing any entry with the same `Use`, `Question` and
+   `ResolvedModel`. Then set the consumer's threshold on calibrated values, and re-measure.
+
+Refit whenever a model, its pinned version, the question's wording or the state's layout changes.
 
 ### Golden-label-quality rig (`rigs/feature-pipelines/`)
 
