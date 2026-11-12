@@ -1,86 +1,88 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import { BuildMetadataSupportObjectsSQL } from '../Database/providers/postgresql/metadataSupportObjects';
 
 /**
- * #4534: a composite foreign key's components become single-column related entities only when
- * their referenced column is unique on its own. Pairing the columns positionally gave every
- * component a RelatedEntityID, and a trailing component whose target is not unique produced a
- * label join that multiplied rows in the base view. #4536: IsUnique means unique on its own, so
- * member columns of a composite unique index are not unique.
+ * A column of a multi-column foreign key gets a RelatedEntityID only when the column it references
+ * is unique on its own (a single-column primary key, or the sole key of an unfiltered unique index).
+ * Every other component references a non-unique column, so a label join on it alone multiplies the
+ * base view's rows. Four places stamp RelatedEntityID and all four must drop those components:
  *
- * These tests pin the SQL both providers emit for new fields and the PostgreSQL procedure for
- * existing fields. The SQL Server procedure lives in a migration and is covered by the same text
- * pattern there (see the migration's header).
+ *   1. spUpdateExistingEntityFieldsFromSchema (SQL Server migration)
+ *   2. SQL Server new-field query
+ *   3. PostgreSQL update routine (metadataSupportObjects)
+ *   4. PostgreSQL new-field query
+ *
+ * Each reuses the single-column key snapshots that IsUnique is computed from, so the two rules agree.
  */
 
-const sqlServer = new SQLServerCodeGenProvider().getPendingEntityFieldsSQL('__mj');
-const postgres = new PostgreSQLCodeGenProvider().getPendingEntityFieldsSQL('__mj');
-const pgSupport = BuildMetadataSupportObjectsSQL('__mj');
+const repoRoot = path.resolve(__dirname, '../../../../');
 
-describe('composite foreign keys need a unique target (#4534)', () => {
-  it('SQL Server materialises the component count and whether the target column is unique on its own', () => {
-    expect(sqlServer).toMatch(/COUNT\(\*\) OVER \(PARTITION BY fk\.FK_NAME, fk\.\[schema_name\], fk\.\[table\]\) AS ColumnCount/);
-    expect(sqlServer).toContain('AS TargetIsUnique');
-    expect(sqlServer).toMatch(/WHERE ri\.is_unique = 1 AND ri\.has_filter = 0/);
-    expect(sqlServer).toMatch(/k\.is_included_column = 0\) = 1/);
-    expect(sqlServer).toContain('INTO #__mj__CodeGen__vwForeignKeys');
+/** The definition matched by `definesObject` in the newest versioned migration holding one, up to the next GO. */
+function newestDefinition(definesObject: RegExp): { file: string; body: string } {
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/^V\d{12}__.*\.sql$/.test(entry.name)) files.push(full);
+    }
+  };
+  walk(path.join(repoRoot, 'migrations'));
+  const matching = files.filter((f) => definesObject.test(fs.readFileSync(f, 'utf8')));
+  matching.sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
+  const sql = fs.readFileSync(matching[0], 'utf8');
+  const start = sql.search(definesObject);
+  const end = sql.indexOf('\nGO', start);
+  return { file: path.basename(matching[0]), body: sql.slice(start, end) };
+}
+
+describe('composite foreign key components need a target that is unique on its own', () => {
+  it('1. spUpdateExistingEntityFieldsFromSchema prunes #uef_fk after the key snapshots, before the RelatedEntity join', () => {
+    const { body } = newestDefinition(/CREATE\s+OR\s+ALTER\s+PROC(EDURE)?\s+\S*spUpdateExistingEntityFieldsFromSchema\b/i);
+    const prune = body.indexOf('DELETE fk\n    FROM #uef_fk fk');
+    expect(prune).toBeGreaterThan(body.indexOf('INTO #uef_uk'));
+    expect(prune).toBeLessThan(body.indexOf('INSERT INTO @FilteredRows'));
+    const statement = body.slice(prune, body.indexOf(';', prune));
+    expect(statement).toMatch(/EXISTS \(\s+SELECT 1 FROM #uef_fk sibling\s+WHERE sibling\.FK_NAME = fk\.FK_NAME[\s\S]*?sibling\.\[column\] <> fk\.\[column\]/);
+    expect(statement).toMatch(/NOT EXISTS \(\s+SELECT 1 FROM #uef_pk pk[\s\S]*?pk\.KeyColumnCount = 1/);
+    expect(statement).toMatch(/NOT EXISTS \(\s+SELECT 1 FROM #uef_uk uk/);
   });
 
-  it('SQL Server joins a field to its foreign key only for single-column constraints or unique targets', () => {
-    expect(sqlServer).toMatch(
-      /ON sf\.FieldName = fk\.\[column\] AND e\.BaseTable = fk\.\[table\] AND e\.SchemaName = fk\.\[schema_name\]\s+AND \(fk\.ColumnCount = 1 OR fk\.TargetIsUnique = 1\)/,
-    );
+  it('2. the SQL Server new-field query keeps FK_NAME and prunes its foreign-key snapshot the same way', () => {
+    const sql = new SQLServerCodeGenProvider().getPendingEntityFieldsSQL('__mj');
+    expect(sql).toMatch(/SELECT FK_NAME, \[column\], [^\n]*\nINTO #__mj__CodeGen__vwForeignKeys/);
+    const prune = sql.indexOf('DELETE fk\nFROM #__mj__CodeGen__vwForeignKeys fk');
+    expect(prune).toBeGreaterThan(sql.indexOf('INTO #__mj__CodeGen__vwTableUniqueKeys'));
+    expect(prune).toBeLessThan(sql.indexOf('WITH MaxSequences AS'));
+    const statement = sql.slice(prune, sql.indexOf(';', prune));
+    expect(statement).toMatch(/sibling\.FK_NAME = fk\.FK_NAME[\s\S]*?sibling\.\[column\] <> fk\.\[column\]/);
+    expect(statement).toMatch(/#__mj__CodeGen__vwTablePrimaryKeys pk[\s\S]*?pk\.KeyColumnCount = 1/);
+    expect(statement).toContain('#__mj__CodeGen__vwTableUniqueKeys uk');
   });
 
-  it('PostgreSQL materialises the same two facts in the foreign-key cache', () => {
-    expect(postgres).toMatch(/COUNT\(\*\) OVER \(PARTITION BY fk\."FK_NAME", fk\."schema_name", fk\."table"\) AS column_count/);
-    expect(postgres).toMatch(/ri\.indisunique AND ri\.indnkeyatts = 1 AND ri\.indpred IS NULL/);
-    expect(postgres).toContain('AS target_is_unique');
+  it('3. the PostgreSQL update routine prunes _uef_fk after _uef_uk, and _uef_fk keeps the view shape', () => {
+    const sql = BuildMetadataSupportObjectsSQL('__mj');
+    expect(sql).toContain('INSERT INTO _uef_fk SELECT * FROM __mj."vwForeignKeys";');
+    const prune = sql.indexOf('DELETE FROM _uef_fk fk');
+    expect(prune).toBeGreaterThan(sql.indexOf('ANALYZE _uef_uk;'));
+    const statement = sql.slice(prune, sql.indexOf(';', prune));
+    expect(statement).toMatch(/sibling\."FK_NAME" = fk\."FK_NAME"[\s\S]*?sibling\."column" <> fk\."column"/);
+    expect(statement).toMatch(/FROM _uef_pk pk[\s\S]*?pk\."KeyColumnCount" = 1/);
+    expect(statement).toContain('FROM _uef_uk uk');
+    expect(prune).toBeLessThan(sql.indexOf('LEFT JOIN _uef_fk fk'));
   });
 
-  it('PostgreSQL joins a field to its foreign key only for single-column constraints or unique targets', () => {
-    expect(postgres).toMatch(
-      /fk_cache fk ON sf\."FieldName" = fk\."column" AND e\."BaseTable" = fk\."table" AND e\."SchemaName" = fk\."schema_name"\s+AND \(fk\.column_count = 1 OR fk\.target_is_unique\)/,
-    );
-  });
-
-  it('the PostgreSQL existing-field procedure applies the same rule', () => {
-    expect(pgSupport).toMatch(
-      /CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS\s+SELECT fk\.\*,\s+COUNT\(\*\) OVER \(PARTITION BY fk\."FK_NAME", fk\.schema_name, fk\."table"\) AS column_count/,
-    );
-    expect(pgSupport).toContain('AS target_is_unique');
-    expect(pgSupport).toMatch(/LEFT JOIN _uef_fk fk\s+ON ef\."Name"::text = fk\."column"::text[^\n]*\n\s+AND \(fk\.column_count = 1 OR fk\.target_is_unique\)/);
-    expect(pgSupport).not.toContain('INSERT INTO _uef_fk SELECT * FROM');
-  });
-});
-
-describe('IsUnique means unique on its own (#4536)', () => {
-  it('PostgreSQL reads single-key-column unfiltered unique indexes for the pending-fields query', () => {
-    expect(postgres).toMatch(
-      /uk_cache AS \([\s\S]*?FROM pg_index i[\s\S]*?WHERE i\.indisunique AND NOT i\.indisprimary AND i\.indnkeyatts = 1 AND i\.indpred IS NULL/,
-    );
-    expect(postgres).not.toMatch(/uk_cache AS \(\s+SELECT "TableName", "ColumnName", "SchemaName"\s+FROM [^\n]*vwTableUniqueKeys/);
-  });
-
-  it('the PostgreSQL existing-field procedure reads the same single-column unique indexes', () => {
-    expect(pgSupport).toMatch(
-      /CREATE TEMP TABLE IF NOT EXISTS _uef_uk AS[\s\S]*?WHERE i\.indisunique AND NOT i\.indisprimary AND i\.indnkeyatts = 1 AND i\.indpred IS NULL/,
-    );
-    expect(pgSupport).not.toContain('INSERT INTO _uef_uk SELECT * FROM');
-  });
-
-  it('a composite primary key does not make its members unique, on either engine', () => {
-    expect(sqlServer).toMatch(/COUNT\(\*\) OVER \(PARTITION BY SchemaName, TableName\) AS ColumnCount\s+INTO #__mj__CodeGen__vwTablePrimaryKeys/);
-    expect(sqlServer).toMatch(/IsUnique = CASE\s+WHEN pk\.ColumnName IS NOT NULL AND pk\.ColumnCount = 1 THEN 1/);
-    expect(postgres).toMatch(/COUNT\(\*\) OVER \(PARTITION BY "SchemaName", "TableName"\) AS column_count/);
-    expect(postgres).toMatch(/WHEN pk\."ColumnName" IS NOT NULL AND pk\.column_count = 1 THEN TRUE/);
-    expect(pgSupport).toContain('((pk."ColumnName" IS NOT NULL AND pk.column_count = 1) OR uk."ColumnName" IS NOT NULL) AS new_is_unique');
-    expect(pgSupport).not.toContain('(pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)');
-  });
-
-  it('SQL Server still reads vwTableUniqueKeys, which the migration narrows to single-column indexes', () => {
-    expect(sqlServer).toMatch(/INTO #__mj__CodeGen__vwTableUniqueKeys\s+FROM \[__mj\]\.\[vwTableUniqueKeys\]/);
+  it('4. the PostgreSQL new-field query joins only the usable components', () => {
+    const sql = new PostgreSQLCodeGenProvider().getPendingEntityFieldsSQL('__mj');
+    expect(sql).toMatch(/COUNT\(\*\) OVER \(PARTITION BY "FK_NAME", "schema_name", "table"\) AS "ComponentCount"/);
+    const cache = sql.slice(sql.indexOf('fk_cache AS ('), sql.indexOf('max_sequences AS ('));
+    expect(cache).toMatch(/FROM fk_all fk\s+WHERE fk\."ComponentCount" = 1/);
+    expect(cache).toMatch(/OR EXISTS \(\s+SELECT 1 FROM pk_cache pk[\s\S]*?pk\."KeyColumnCount" = 1/);
+    expect(cache).toMatch(/OR EXISTS \(\s+SELECT 1 FROM uk_cache uk/);
+    expect(sql).toMatch(/fk_cache fk ON sf\."FieldName" = fk\."column"/);
   });
 });

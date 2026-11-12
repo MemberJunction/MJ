@@ -359,40 +359,9 @@ BEGIN
   INSERT INTO _uef_cols SELECT * FROM __mj."vwSQLColumnsAndEntityFields";
   ANALYZE _uef_cols;
 
-  -- Two columns beside the view's: column_count (components in the constraint) and target_is_unique
-  -- (the referenced column is unique on its own). A composite FK's components are valid single-column
-  -- references only when their target is unique; the others would join a non-unique target and
-  -- multiply rows in the base view (#4534). Same create-once + TRUNCATE shape as the other snapshots.
-  CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS
-  SELECT fk.*,
-         COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk.schema_name, fk."table") AS column_count,
-         EXISTS (
-             SELECT 1
-             FROM pg_index ri
-             JOIN pg_class rc ON rc.oid = ri.indrelid
-             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
-             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
-             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
-               AND rn.nspname = fk.referenced_schema::text
-               AND rc.relname = fk.referenced_table::text
-               AND ra.attname = fk.referenced_column::text
-          ) AS target_is_unique
-  FROM __mj."vwForeignKeys" fk WITH NO DATA;
+  CREATE TEMP TABLE IF NOT EXISTS _uef_fk AS SELECT * FROM __mj."vwForeignKeys" WITH NO DATA;
   TRUNCATE _uef_fk;
-  INSERT INTO _uef_fk SELECT fk.*,
-         COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk.schema_name, fk."table") AS column_count,
-         EXISTS (
-             SELECT 1
-             FROM pg_index ri
-             JOIN pg_class rc ON rc.oid = ri.indrelid
-             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
-             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
-             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
-               AND rn.nspname = fk.referenced_schema::text
-               AND rc.relname = fk.referenced_table::text
-               AND ra.attname = fk.referenced_column::text
-          ) AS target_is_unique
-  FROM __mj."vwForeignKeys" fk;
+  INSERT INTO _uef_fk SELECT * FROM __mj."vwForeignKeys";
   ANALYZE _uef_fk;
 
   -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536).
@@ -418,6 +387,26 @@ BEGIN
     WHERE u."KeyColumnCount" = 1
       AND NOT u."IsFiltered";
   ANALYZE _uef_uk;
+
+  -- A column of a multi-column foreign key is a usable single-column reference only when the
+  -- column it references is unique on its own. Joined alone, any other component matches many
+  -- referenced rows and the base view's label join multiplies rows, so it gets no related entity.
+  DELETE FROM _uef_fk fk
+  WHERE EXISTS (
+          SELECT 1 FROM _uef_fk sibling
+          WHERE sibling."FK_NAME" = fk."FK_NAME" AND sibling.schema_name = fk.schema_name
+            AND sibling."table" = fk."table" AND sibling."column" <> fk."column"
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_pk pk
+          WHERE pk."SchemaName"::text = fk.referenced_schema::text AND pk."TableName"::text = fk.referenced_table::text
+            AND pk."ColumnName"::text = fk.referenced_column::text AND pk."KeyColumnCount" = 1
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_uk uk
+          WHERE uk."SchemaName"::text = fk.referenced_schema::text AND uk."TableName"::text = fk.referenced_table::text
+            AND uk."ColumnName"::text = fk.referenced_column::text
+        );
 
   -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
   -- view never joins _uef_cols below, so it is never renumbered and keeps its old Sequence. When
@@ -582,7 +571,6 @@ BEGIN
   INNER JOIN __mj."Entity" e ON ef."EntityID" = e."ID"
   LEFT JOIN _uef_fk fk
     ON ef."Name"::text = fk."column"::text AND e."BaseTable"::text = fk."table"::text AND e."SchemaName"::text = fk."schema_name"::text
-       AND (fk.column_count = 1 OR fk.target_is_unique)
   LEFT JOIN __mj."Entity" re
     ON re."BaseTable"::text = fk."referenced_table"::text AND re."SchemaName"::text = fk."referenced_schema"::text
   LEFT JOIN _uef_pk pk

@@ -1,44 +1,20 @@
--- ----------------------------------------------------------------------------
--- #4534 / #4536: a foreign-key component is a single-column reference only when its target is
--- unique on its own, and a column is IsUnique only when a unique index or the primary key covers it alone.
+-- ════════════════════════════════════════════════════════════════════════════════════════
+-- Composite foreign keys: a component needs a target that is unique on its own (#4534)
 --
--- vwTableUniqueKeys listed every member column of a composite unique index, so CodeGen marked each
--- of them IsUnique (#4536). The view now lists the columns of single-key-column, unfiltered unique
--- indexes only: a composite unique index makes the tuple unique, not its members.
+-- A multi-column foreign key such as OrderLine(a_key, a_prd_key, a_ptp_key) -> Price(prc_key,
+-- prc_prd_key, prc_prd_ptp_key) gave EVERY component a RelatedEntityID. Only a component whose
+-- referenced column is unique by itself (here prc_key, the primary key) is a valid single-column
+-- reference. The others reference copies of the parent's own keys, so the base view's label join
+-- on them matched many Price rows and multiplied OrderLine rows without any error.
 --
--- spUpdateExistingEntityFieldsFromSchema stamped RelatedEntityID on every column of a composite
--- foreign key by positional pairing, so trailing components whose referenced column is not unique
--- (denormalised copies of the parent's own keys) got a related entity, and the base view's label
--- join on them multiplied rows (#4534). The procedure keeps a component only when its constraint is
--- single-column or its referenced column is unique on its own; the other components get no
--- related entity rather than a guessed one. The pending-fields query in CodeGen applies the same
--- rule in code (SQLServerCodeGenProvider / PostgreSQLCodeGenProvider).
+-- spUpdateExistingEntityFieldsFromSchema now drops those components from #uef_fk before the
+-- RelatedEntity join, using the single-column key rules V202611101200 introduced (#uef_pk with
+-- KeyColumnCount = 1, #uef_uk). With AutoUpdateRelatedEntityInfo = 1 the next CodeGen run clears
+-- the relationship on fields that already have one. Soft foreign keys are untouched.
 --
--- The procedure body is otherwise the one from V202610261530 (CodeGen_EntityField_Drift_Repairs).
--- ----------------------------------------------------------------------------
-
-CREATE OR ALTER VIEW [${flyway:defaultSchema}].[vwTableUniqueKeys] AS
-SELECT
-    s.name AS SchemaName,
-    t.name AS TableName,
-    c.name AS ColumnName
-FROM
-    sys.tables t
-INNER JOIN
-    sys.schemas s ON t.schema_id = s.schema_id
-INNER JOIN
-    sys.indexes i ON t.object_id = i.object_id
-INNER JOIN
-    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
-INNER JOIN
-    sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
-WHERE
-    i.is_unique = 1
-    AND i.is_primary_key = 0
-    AND i.has_filter = 0
-    -- Single key column only: a composite unique index does not make its members unique (#4536).
-    AND (SELECT COUNT(*) FROM sys.index_columns k WHERE k.object_id = i.object_id AND k.index_id = i.index_id AND k.is_included_column = 0) = 1;
-GO
+-- Starts from V202611101200 (the newest definition). Only the DELETE after #uef_uk is new.
+-- The PostgreSQL counterpart is produced at release.
+-- ════════════════════════════════════════════════════════════════════════════════════════
 
 CREATE OR ALTER PROC [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema]
     @ExcludedSchemaNames NVARCHAR(MAX),
@@ -81,30 +57,47 @@ BEGIN
     SELECT * INTO #uef_cols FROM [${flyway:defaultSchema}].vwSQLColumnsAndEntityFields
         WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs);
     IF OBJECT_ID('tempdb..#uef_fk') IS NOT NULL DROP TABLE #uef_fk;
-    -- Two columns beside the view's: ColumnCount (components in the constraint) and TargetIsUnique
-    -- (the referenced column is unique on its own). A composite FK's components are valid
-    -- single-column references only when their target is unique; the others would join a
-    -- non-unique target and multiply rows in the base view (#4534).
-    SELECT fk.*,
-           COUNT(*) OVER (PARTITION BY fk.FK_NAME, fk.[schema_name], fk.[table]) AS ColumnCount,
-           CASE WHEN EXISTS (
-           SELECT 1
-           FROM sys.indexes ri
-           INNER JOIN sys.tables rt ON rt.object_id = ri.object_id
-           INNER JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
-           INNER JOIN sys.index_columns ric ON ric.object_id = ri.object_id AND ric.index_id = ri.index_id AND ric.is_included_column = 0
-           INNER JOIN sys.columns rc ON rc.object_id = ric.object_id AND rc.column_id = ric.column_id
-           WHERE ri.is_unique = 1 AND ri.has_filter = 0
-             AND rs.name = fk.referenced_schema AND rt.name = fk.referenced_table AND rc.name = fk.referenced_column
-             AND (SELECT COUNT(*) FROM sys.index_columns k WHERE k.object_id = ri.object_id AND k.index_id = ri.index_id AND k.is_included_column = 0) = 1
-       ) THEN 1 ELSE 0 END AS TargetIsUnique
-    INTO #uef_fk FROM [${flyway:defaultSchema}].vwForeignKeys fk;
+    SELECT * INTO #uef_fk FROM [${flyway:defaultSchema}].vwForeignKeys;
     IF OBJECT_ID('tempdb..#uef_pk') IS NOT NULL DROP TABLE #uef_pk;
-    -- ColumnCount: members of the table's primary key; IsUnique needs a single-column key (#4536).
-    SELECT pk.*, COUNT(*) OVER (PARTITION BY pk.SchemaName, pk.TableName) AS ColumnCount
-    INTO #uef_pk FROM [${flyway:defaultSchema}].vwTablePrimaryKeys pk;
+    -- KeyColumnCount: a column of a composite primary key is not unique on its own (#4536).
+    SELECT pk.SchemaName, pk.TableName, pk.ColumnName,
+           COUNT(*) OVER (PARTITION BY pk.SchemaName, pk.TableName) AS KeyColumnCount
+    INTO #uef_pk
+    FROM [${flyway:defaultSchema}].vwTablePrimaryKeys pk;
     IF OBJECT_ID('tempdb..#uef_uk') IS NOT NULL DROP TABLE #uef_uk;
-    SELECT * INTO #uef_uk FROM [${flyway:defaultSchema}].vwTableUniqueKeys;
+    -- Only columns that are, alone, the key of an unfiltered unique index or constraint (#4536).
+    -- vwTableUniqueKeys lists every key column of every unique index; composite members, INCLUDE
+    -- columns and filtered indexes are not a per-column uniqueness guarantee. Composite keys are
+    -- recorded as key sets in EntityUniqueKey instead. DISTINCT: a column can be the sole key of
+    -- more than one index.
+    SELECT DISTINCT uk.SchemaName, uk.TableName, uk.ColumnName
+    INTO #uef_uk
+    FROM [${flyway:defaultSchema}].vwTableUniqueKeys uk
+    WHERE uk.KeyColumnCount = 1
+      AND uk.IsFiltered = 0;
+
+    -- A column of a multi-column foreign key is a usable single-column reference only when the
+    -- column it references is unique on its own: a single-column primary key, or the sole key of
+    -- an unfiltered unique index. Joined alone, any other component matches many referenced rows
+    -- and the base view's label join multiplies rows, so it gets no related entity, and a run on
+    -- an existing database clears the relationship it was given before.
+    DELETE fk
+    FROM #uef_fk fk
+    WHERE EXISTS (
+              SELECT 1 FROM #uef_fk sibling
+              WHERE sibling.FK_NAME = fk.FK_NAME AND sibling.[schema_name] = fk.[schema_name]
+                AND sibling.[table] = fk.[table] AND sibling.[column] <> fk.[column]
+          )
+      AND NOT EXISTS (
+              SELECT 1 FROM #uef_pk pk
+              WHERE pk.SchemaName = fk.referenced_schema AND pk.TableName = fk.referenced_table
+                AND pk.ColumnName = fk.referenced_column AND pk.KeyColumnCount = 1
+          )
+      AND NOT EXISTS (
+              SELECT 1 FROM #uef_uk uk
+              WHERE uk.SchemaName = fk.referenced_schema AND uk.TableName = fk.referenced_table
+                AND uk.ColumnName = fk.referenced_column
+          );
 
     -- Orphan-tolerant renumber (#4050). A row whose column is no longer in the base view never
     -- joins #uef_cols below, so the renumber cannot move it. If its Sequence sits inside the live
@@ -190,7 +183,7 @@ BEGIN
         CASE WHEN ef.IsSoftPrimaryKey = 1 THEN ef.IsPrimaryKey
              WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
         CASE WHEN ef.IsSoftPrimaryKey = 1 THEN ef.IsUnique
-             WHEN pk.ColumnName IS NOT NULL AND pk.ColumnCount = 1 THEN 1
+             WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
              ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
@@ -205,7 +198,6 @@ BEGIN
         ON ef.Name = fk.[column]
            AND e.BaseTable = fk.[table]
            AND e.SchemaName = fk.[schema_name]
-           AND (fk.ColumnCount = 1 OR fk.TargetIsUnique = 1)
     LEFT OUTER JOIN
         [${flyway:defaultSchema}].Entity re
         ON re.BaseTable = fk.referenced_table AND re.SchemaName = fk.[referenced_schema]
@@ -246,7 +238,7 @@ BEGIN
           -- Soft-PK guard: soft-PK rows are never a PK/unique material change
           (ef.IsSoftPrimaryKey = 0 AND ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END) OR
           (ef.IsSoftPrimaryKey = 0 AND ef.IsUnique <> CASE
-              WHEN pk.ColumnName IS NOT NULL AND pk.ColumnCount = 1 THEN 1
+              WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
           END) OR
           -- Detect AllowUpdateAPI that needs clearing on virtual transition
@@ -287,4 +279,6 @@ BEGIN
 
     SELECT * FROM @FilteredRows;
 END;
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateExistingEntityFieldsFromSchema] TO [cdp_Developer], [cdp_Integration];
 GO

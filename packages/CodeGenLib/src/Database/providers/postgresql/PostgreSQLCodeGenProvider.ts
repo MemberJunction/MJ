@@ -3161,25 +3161,10 @@ WHERE p.prokind IN ('f', 'p')
             ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
-WITH fk_cache AS (
-   -- Two columns beside the view's: column_count (components in the constraint) and target_is_unique
-   -- (the referenced column is unique on its own). A composite FK's components are valid single-column
-   -- references only when their target is unique; the others would join a non-unique target and
-   -- multiply rows in the base view (#4534).
-   SELECT fk."column", fk."table", fk."schema_name", fk."referenced_table", fk."referenced_column", fk."referenced_schema",
-          COUNT(*) OVER (PARTITION BY fk."FK_NAME", fk."schema_name", fk."table") AS column_count,
-          EXISTS (
-             SELECT 1
-             FROM pg_index ri
-             JOIN pg_class rc ON rc.oid = ri.indrelid
-             JOIN pg_namespace rn ON rn.oid = rc.relnamespace
-             JOIN pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ri.indkey[0]
-             WHERE ri.indisunique AND ri.indnkeyatts = 1 AND ri.indpred IS NULL
-               AND rn.nspname = fk."referenced_schema"::text
-               AND rc.relname = fk."referenced_table"::text
-               AND ra.attname = fk."referenced_column"::text
-          ) AS target_is_unique
-   FROM ${qs(schema, 'vwForeignKeys')} fk
+WITH fk_all AS (
+   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema",
+          COUNT(*) OVER (PARTITION BY "FK_NAME", "schema_name", "table") AS "ComponentCount"
+   FROM ${qs(schema, 'vwForeignKeys')}
 ),
 -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
 pk_cache AS (
@@ -3194,6 +3179,24 @@ uk_cache AS (
    FROM ${qs(schema, 'vwTableUniqueKeys')}
    WHERE "KeyColumnCount" = 1
      AND NOT "IsFiltered"
+),
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+fk_cache AS (
+   SELECT fk.*
+   FROM fk_all fk
+   WHERE fk."ComponentCount" = 1
+      OR EXISTS (
+            SELECT 1 FROM pk_cache pk
+            WHERE pk."SchemaName" = fk."referenced_schema" AND pk."TableName" = fk."referenced_table"
+              AND pk."ColumnName" = fk."referenced_column" AND pk."KeyColumnCount" = 1
+         )
+      OR EXISTS (
+            SELECT 1 FROM uk_cache uk
+            WHERE uk."SchemaName" = fk."referenced_schema" AND uk."TableName" = fk."referenced_table"
+              AND uk."ColumnName" = fk."referenced_column"
+         )
 ),
 max_sequences AS (
    SELECT
@@ -3244,7 +3247,6 @@ numbered_rows AS (
       ${qs(schema, 'Entity')} e ON sf."EntityID" = e."ID"
    LEFT OUTER JOIN
       fk_cache fk ON sf."FieldName" = fk."column" AND e."BaseTable" = fk."table" AND e."SchemaName" = fk."schema_name"
-         AND (fk.column_count = 1 OR fk.target_is_unique)
    LEFT OUTER JOIN
       ${qs(schema, 'Entity')} re ON re."BaseTable" = fk."referenced_table" AND re."SchemaName" = fk."referenced_schema"
    LEFT OUTER JOIN
