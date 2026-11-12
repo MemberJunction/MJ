@@ -1,6 +1,31 @@
-import { describe, it, expect, vi } from 'vitest';
-import { EntityFieldInfo, EntityInfo, IMetadataProvider, QueryInfo, UserInfo } from '@memberjunction/core';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EntityFieldInfo, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
+
+/** The slice of a cached query that source resolution reads. */
+interface QueryStub {
+    ID: string;
+    Name: string;
+    UserCanRun: () => { canRun: boolean; deniedEntities: string[] };
+    QueryFields: Array<{ Name: string; Sequence: number; SQLBaseType: string | null }>;
+    QueryParameters: Array<{ Name: string; IsServerSet: boolean }>;
+}
+
+const { queryEngineStub } = vi.hoisted(() => {
+    const queries: QueryStub[] = [];
+    return {
+        queryEngineStub: {
+            Queries: queries,
+            Config: vi.fn(async () => undefined),
+            FindQueryByID: (id: string) => queries.find(q => q.ID.trim().toLowerCase() === id.trim().toLowerCase()),
+        },
+    };
+});
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
+    QueryEngine: { Instance: queryEngineStub },
+}));
 import {
     DataTypeForEntityField,
     DataTypeForSQLType,
@@ -47,27 +72,29 @@ function viewStub(options: ViewStubOptions = {}): MJUserViewEntityExtended {
     return stub as unknown as MJUserViewEntityExtended;
 }
 
-function queryStub(canRun = true): QueryInfo {
+function queryStub(canRun = true): QueryStub {
     return {
         ID: QUERY_ID,
         Name: 'Renewals by Month',
-        UserCanRun: () => canRun,
-        Fields: [
+        UserCanRun: () => ({ canRun, deniedEntities: canRun ? [] : ['Members'] }),
+        QueryFields: [
             { Name: 'Month', Sequence: 1, SQLBaseType: 'date' },
             { Name: 'Count', Sequence: 2, SQLBaseType: 'int' },
             { Name: 'Notes', Sequence: 3, SQLBaseType: null },
         ],
-        Parameters: [
+        QueryParameters: [
             { Name: 'Year', IsServerSet: false },
             { Name: 'ChapterID', IsServerSet: true },
         ],
-    } as unknown as QueryInfo;
+    };
 }
 
-function providerWith(view: MJUserViewEntityExtended, queries: QueryInfo[] = [queryStub()]): IMetadataProvider {
+/** A provider whose deprecated query list is empty; `queries` go into the stubbed QueryEngine. */
+function providerWith(view: MJUserViewEntityExtended, queries: QueryStub[] = [queryStub()]): IMetadataProvider {
+    queryEngineStub.Queries.splice(0, queryEngineStub.Queries.length, ...queries);
     return {
         GetEntityObject: vi.fn(async () => view),
-        Queries: queries,
+        Queries: [],
     } as unknown as IMetadataProvider;
 }
 
@@ -144,6 +171,20 @@ describe('ResolveWorkbookSources — queries', () => {
     it('refuses a query the caller can\'t run', async () => {
         await expect(ResolveWorkbookSources([{ Kind: 'Query', ID: QUERY_ID }], providerWith(viewStub(), [queryStub(false)]), user))
             .rejects.toBeInstanceOf(ExcelSourceError);
+    });
+
+    it('loads QueryEngine as the caller, through the request provider', async () => {
+        queryEngineStub.Config.mockClear();
+        const provider = providerWith(viewStub());
+        await ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, provider, user);
+        expect(queryEngineStub.Config).toHaveBeenCalledWith(false, user, provider);
+    });
+
+    it('refuses a missing query and a denied query with the same message', async () => {
+        const denied = ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, providerWith(viewStub(), [queryStub(false)]), user);
+        await expect(denied).rejects.toThrow('That saved query doesn\'t exist, or you don\'t have access to it.');
+        const missing = ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, providerWith(viewStub(), []), user);
+        await expect(missing).rejects.toThrow('That saved query doesn\'t exist, or you don\'t have access to it.');
     });
 });
 

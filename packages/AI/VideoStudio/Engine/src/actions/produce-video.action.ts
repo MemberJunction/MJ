@@ -11,7 +11,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import type {
     AgentRunAudience,
     ExecuteAgentParams,
@@ -19,7 +19,7 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, QueryEngine, VideoStudioEngine } from '@memberjunction/core-entities';
 import type { VideoFormat, VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import {
     BuildProduceVideoRequest,
@@ -98,6 +98,7 @@ export class ProduceVideoAction extends BaseAction {
             AIEngine.Instance.Config(false, params.ContextUser, params.Provider),
             VideoStudioEngine.Instance.Config(false, params.ContextUser, params.Provider),
             BrandKitEngine.Instance.Config(false, params.ContextUser, params.Provider),
+            QueryEngine.Instance.Config(false, params.ContextUser, params.Provider),
         ]);
     }
 
@@ -124,7 +125,7 @@ export class ProduceVideoAction extends BaseAction {
             findArchetype: (nameOrId: string) => this.lookupArchetype(nameOrId, companyId),
             findBrandKit: (nameOrId: string) => this.lookupBrandKit(nameOrId, companyId),
             findDefaultBrandKit: (cid?: string | null) => BrandKitEngine.Instance.GetDefaultKit(cid ?? null),
-            findQueryByName: (name: string) => this.lookupQueryByName(params, name),
+            findQueryByName: (name: string) => this.lookupQueryByName(name),
             findPreset: (name: string) => AIEngine.Instance.FindActiveAgentConfigurationPreset(agentId, name),
             defaultPreset: () => AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId),
             presetNames: () => AIEngine.Instance.GetAgentConfigurationPresets(agentId, true).map((p) => p.Name),
@@ -160,11 +161,9 @@ export class ProduceVideoAction extends BaseAction {
         );
     }
 
-    private lookupQueryByName(params: RunActionParams, name: string): { ID: string; Name?: string } | undefined {
-        const normalized = name.trim().toLowerCase();
-        const provider = params.Provider ?? Metadata.Provider;
-        const queries = provider?.Queries ?? [];
-        return queries.find((q) => q.Name?.trim().toLowerCase() === normalized);
+    /** Finds a saved query by name (trimmed, case-insensitive) in the `QueryEngine` cache. */
+    private lookupQueryByName(name: string): { ID: string; Name?: string } | undefined {
+        return QueryEngine.Instance.FindQueryByName(name);
     }
 
     private async handleRunResult(

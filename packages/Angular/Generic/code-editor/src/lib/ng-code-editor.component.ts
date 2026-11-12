@@ -668,7 +668,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   /**
    * Resolves a composition token path to query metadata for the hover tooltip.
-   * Uses Metadata.Provider.Queries to look up the referenced query.
+   * Uses QueryEngine.Instance.Queries to look up the referenced query.
    */
   private resolveCompositionToken(fullPath: string): CompositionTokenInfo | null {
     try {

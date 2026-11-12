@@ -5,25 +5,58 @@ import {
     EntityFieldInfo,
     EntityInfo,
     IMetadataProvider,
-    QueryEntityInfo,
-    QueryInfo,
     RowLevelSecurityFilterInfo,
     UserInfo,
 } from '@memberjunction/core';
 import type { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import type { MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
+import type {
+    MJAIAgentUserPolicyEntity,
+    MJQueryEntityEntity,
+    MJQueryParameterEntity,
+} from '@memberjunction/core-entities';
 import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+
+/** The slice of a cached query the guard reads, with its child rows inline. */
+interface StoredQueryStub {
+    ID: string;
+    Name: string;
+    SQL: string;
+    UsesTemplate?: boolean;
+    QueryParameters?: Array<Partial<MJQueryParameterEntity>>;
+    QueryEntities: Array<Partial<MJQueryEntityEntity>>;
+}
 
 const {
     runViewMock,
     runQueryMock,
     adhocAuthorizerMock,
     readOnlyProviderRunQueryMock,
-} = vi.hoisted(() => ({
-    runViewMock: vi.fn(),
-    runQueryMock: vi.fn(),
-    adhocAuthorizerMock: vi.fn(),
-    readOnlyProviderRunQueryMock: vi.fn(),
+    queryEngineStub,
+} = vi.hoisted(() => {
+    const queries: StoredQueryStub[] = [];
+    const normalize = (value: string) => value.trim().toLowerCase();
+    return {
+        runViewMock: vi.fn(),
+        runQueryMock: vi.fn(),
+        adhocAuthorizerMock: vi.fn(),
+        readOnlyProviderRunQueryMock: vi.fn(),
+        queryEngineStub: {
+            Queries: queries,
+            Config: vi.fn(async () => undefined),
+            FindQueryByID: (id: string) => queries.find((q) => normalize(q.ID) === normalize(id)),
+            FindQueryByName: (name: string) => queries.find((q) => normalize(q.Name) === normalize(name)),
+        },
+    };
+});
+
+/** Puts `queries` into the stubbed `QueryEngine` cache, replacing whatever it held. */
+function setEngineQueries(...queries: StoredQueryStub[]): void {
+    queryEngineStub.Queries.splice(0, queryEngineStub.Queries.length, ...queries);
+}
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
+    QueryEngine: { Instance: queryEngineStub },
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -80,6 +113,7 @@ import { DeleteRecordAction } from '../custom/crud/delete-record.action';
 import { WriteEntityFieldsAction } from '../custom/crud/write-entity-fields.action';
 import { RunStoredQueryAction } from '../custom/data/run-stored-query.action';
 import { RunAdhocQueryAction } from '../custom/data/run-adhoc-query.action';
+import { AgentDataPolicyGuard } from '../custom/crud/agent-data-policy-guard';
 
 interface TestableAction {
     InternalRunAction(params: RunActionParams): Promise<ActionResultSimple>;
@@ -185,7 +219,7 @@ interface MockRecordOptions {
     deleteSuccess?: boolean;
 }
 
-function makeProvider(options: MockRecordOptions = {}, queries: QueryInfo[] = [], rlsFilters: RowLevelSecurityFilterInfo[] = []): {
+function makeProvider(options: MockRecordOptions = {}, rlsFilters: RowLevelSecurityFilterInfo[] = []): {
     provider: IMetadataProvider;
     entityState: Record<string, unknown>;
     saveMock: ReturnType<typeof vi.fn>;
@@ -206,7 +240,8 @@ function makeProvider(options: MockRecordOptions = {}, queries: QueryInfo[] = []
     const allEntities = [employeesEntity, auditEntity];
     const provider = {
         Entities: allEntities,
-        Queries: queries,
+        // The deprecated provider query list stays empty: stored queries resolve through QueryEngine.
+        Queries: [],
         RowLevelSecurityFilters: rlsFilters,
         EntityByName: (name: string) =>
             allEntities.find((e) => e.Name.trim().toLowerCase() === name.trim().toLowerCase()),
@@ -244,6 +279,8 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         runQueryMock.mockReset();
         adhocAuthorizerMock.mockReset().mockReturnValue(null);
         readOnlyProviderRunQueryMock.mockReset();
+        setEngineQueries();
+        queryEngineStub.Config.mockReset().mockResolvedValue(undefined);
         mockReadOnlyProvider = {
             PlatformKey: 'sqlserver',
             Entities: [employeesEntity, auditEntity],
@@ -342,7 +379,7 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
             ],
         });
 
-        const { provider } = makeProvider({}, [], [rlsFilter]);
+        const { provider } = makeProvider({}, [rlsFilter]);
         const res = await invokeAction(new GetRecordsAction(), {
             Action: {} as RunActionParams['Action'],
             ContextUser: user,
@@ -471,13 +508,13 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
 
     it('RunStoredQueryAction masks deniedFields on allowed queries and blocks queries referencing row-filtered entities', async () => {
         const user = makeUser();
-        const empQuery = {
+        setEngineQueries({
             ID: 'q-emp-1',
             Name: 'Active Employees Directory',
             SQL: 'SELECT ID, Name, Salary FROM __mj.vwEmployees',
-            Entities: [{ QueryID: 'q-emp-1', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' } as QueryEntityInfo],
-        } as unknown as QueryInfo;
-        const { provider } = makeProvider({}, [empQuery]);
+            QueryEntities: [{ QueryID: 'q-emp-1', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' }],
+        });
+        const { provider } = makeProvider();
 
         // 1. Denied fields masked on stored query output + formatted JSON
         AgentUserPolicyEngine.Instance.SetCachedPolicy(
@@ -696,26 +733,27 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
 
     it('refuses stored queries that alias/aggregate denied fields, use CTE positional renames, or read non-allow-listed SQL tables missing from QueryEntities', async () => {
         const user = makeUser();
-        const aliasedQuery = {
-            ID: 'q-alias',
-            Name: 'Aliased Salary Query',
-            SQL: 'SELECT ID, Salary AS TotalComp FROM __mj.vwEmployees',
-            Entities: [{ QueryID: 'q-alias', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' } as QueryEntityInfo],
-        } as Partial<QueryInfo> as QueryInfo;
-        const ctePositionalQuery = {
-            ID: 'q-cte',
-            Name: 'CTE Positional Query',
-            SQL: 'WITH c(a, b, c_col, d, e, f) AS (SELECT * FROM __mj.vwEmployees) SELECT a, e FROM c',
-            Entities: [{ QueryID: 'q-cte', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' } as QueryEntityInfo],
-        } as Partial<QueryInfo> as QueryInfo;
-        const unindexedAuditQuery = {
-            ID: 'q-unindexed-audit',
-            Name: 'Unindexed Audit Query',
-            SQL: 'SELECT ID, Description FROM __mj.vwAuditLogs',
-            Entities: [], // Stale/empty QueryEntities metadata!
-        } as Partial<QueryInfo> as QueryInfo;
-
-        const { provider } = makeProvider({}, [aliasedQuery, ctePositionalQuery, unindexedAuditQuery]);
+        setEngineQueries(
+            {
+                ID: 'q-alias',
+                Name: 'Aliased Salary Query',
+                SQL: 'SELECT ID, Salary AS TotalComp FROM __mj.vwEmployees',
+                QueryEntities: [{ QueryID: 'q-alias', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' }],
+            },
+            {
+                ID: 'q-cte',
+                Name: 'CTE Positional Query',
+                SQL: 'WITH c(a, b, c_col, d, e, f) AS (SELECT * FROM __mj.vwEmployees) SELECT a, e FROM c',
+                QueryEntities: [{ QueryID: 'q-cte', EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' }],
+            },
+            {
+                ID: 'q-unindexed-audit',
+                Name: 'Unindexed Audit Query',
+                SQL: 'SELECT ID, Description FROM __mj.vwAuditLogs',
+                QueryEntities: [], // Stale/empty QueryEntities metadata!
+            }
+        );
+        const { provider } = makeProvider();
 
         AgentUserPolicyEngine.Instance.SetCachedPolicy(
             makePolicy({
@@ -741,6 +779,8 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
             });
             expect(res.Success).toBe(false);
             expect(res.ResultCode).toBe('PERMISSION_DENIED');
+            // Refused for what the query reads, not because its metadata could not be found.
+            expect(res.Message).not.toContain('could not be resolved');
         }
         expect(runQueryMock).not.toHaveBeenCalled();
     });
@@ -1004,5 +1044,144 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         >;
         expect(pgRecords).toHaveLength(1);
         expect(pgRecords[0]['Salary']).toBeUndefined();
+    });
+});
+
+describe('AgentDataPolicyGuard.EvaluateStoredQuery — stored query resolution through QueryEngine', () => {
+    const NARROWED_POLICY = {
+        DefaultDataAccessMode: 'AllowListOnly' as const,
+        EntityAccessRulesObject: [{ entityPattern: 'Employees', access: 'ReadOnly' as const }],
+    };
+
+    function storedQueryParams(provider: IMetadataProvider): RunActionParams {
+        return {
+            Action: {} as RunActionParams['Action'],
+            ContextUser: makeUser(),
+            Context: { AgentID: AGENT_ID },
+            Provider: provider,
+            Filters: [],
+            Params: [],
+        };
+    }
+
+    const employeeDirectory: StoredQueryStub = {
+        ID: 'AAAA0000-0000-4000-8000-000000000001',
+        Name: 'Employee Directory',
+        SQL: 'SELECT ID, Name FROM __mj.vwEmployees',
+        QueryEntities: [{ EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' }],
+    };
+
+    beforeEach(() => {
+        AgentUserPolicyEngine.Instance.ClearCache();
+        setEngineQueries();
+        queryEngineStub.Config.mockReset().mockResolvedValue(undefined);
+    });
+
+    it('loads QueryEngine through the caller provider and finds the query by ID while the provider query list is empty', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries(employeeDirectory);
+        const { provider } = makeProvider();
+        const params = storedQueryParams(provider);
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(params, employeeDirectory.ID.toLowerCase(), undefined);
+
+        expect(outcome).toEqual({ Allowed: { Active: true, DeniedFieldPatterns: [] } });
+        expect(queryEngineStub.Config).toHaveBeenCalledWith(false, params.ContextUser, provider);
+    });
+
+    it('finds the query by trimmed, case-insensitive name when no ID matches', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries(employeeDirectory);
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(
+            storedQueryParams(provider),
+            'BBBB0000-0000-4000-8000-000000000009',
+            '  employee DIRECTORY '
+        );
+
+        expect(outcome).toEqual({ Allowed: { Active: true, DeniedFieldPatterns: [] } });
+    });
+
+    it('refuses an unresolvable query under a narrowed policy (fail-closed)', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries(employeeDirectory);
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(storedQueryParams(provider), undefined, 'No Such Query');
+
+        expect('Blocked' in outcome && outcome.Blocked.ResultCode).toBe('PERMISSION_DENIED');
+        expect('Blocked' in outcome && outcome.Blocked.Message).toContain('could not be resolved');
+    });
+
+    it('lets an unresolvable query through to RunQuery when the policy does not narrow entity reads', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy({}));
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(storedQueryParams(provider), undefined, 'No Such Query');
+
+        expect(outcome).toEqual({ Allowed: { Active: true, DeniedFieldPatterns: [] } });
+    });
+
+    it('refuses the query when QueryEngine cannot be loaded (fail-closed)', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy({}));
+        setEngineQueries(employeeDirectory);
+        queryEngineStub.Config.mockRejectedValueOnce(new Error('metadata load timed out'));
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(storedQueryParams(provider), employeeDirectory.ID, undefined);
+
+        expect('Blocked' in outcome && outcome.Blocked.ResultCode).toBe('PERMISSION_DENIED');
+        expect('Blocked' in outcome && outcome.Blocked.Message).toContain('could not be loaded');
+        // The cause is logged, not handed to the agent: it can carry database detail.
+        expect('Blocked' in outcome && outcome.Blocked.Message).not.toContain('metadata load timed out');
+    });
+
+    it('checks the entities named by the query QueryEntities rows, not only those its SQL reads', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries({
+            ...employeeDirectory,
+            QueryEntities: [
+                { EntityID: EMPLOYEES_ENTITY_ID, Entity: 'Employees' },
+                { EntityID: AUDIT_ENTITY_ID, Entity: 'MJ: Audit Logs' },
+            ],
+        });
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(storedQueryParams(provider), employeeDirectory.ID, undefined);
+
+        expect('Blocked' in outcome && outcome.Blocked.ResultCode).toBe('PERMISSION_DENIED');
+        expect('Blocked' in outcome && outcome.Blocked.Message).toContain('MJ: Audit Logs');
+    });
+
+    it('refuses a query whose QueryEntities row names an entity the catalog does not hold', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries({
+            ...employeeDirectory,
+            QueryEntities: [{ EntityID: 'CCCC0000-0000-4000-8000-000000000003', Entity: 'Retired Entity' }],
+        });
+        const { provider } = makeProvider();
+
+        const outcome = await AgentDataPolicyGuard.EvaluateStoredQuery(storedQueryParams(provider), employeeDirectory.ID, undefined);
+
+        expect('Blocked' in outcome && outcome.Blocked.Message).toContain('entity references could not be verified');
+    });
+
+    it('renders a template query against its QueryParameters definitions', async () => {
+        AgentUserPolicyEngine.Instance.SetCachedPolicy(makePolicy(NARROWED_POLICY));
+        setEngineQueries({
+            ...employeeDirectory,
+            SQL: 'SELECT ID, Name FROM __mj.vwEmployees WHERE Department = {{ Department | sqlString }}',
+            UsesTemplate: true,
+            QueryParameters: [{ Name: 'Department', Type: 'string', IsRequired: true, IsServerSet: false, ValidationFilters: null }],
+        });
+        const { provider } = makeProvider();
+        const params = storedQueryParams(provider);
+
+        const missing = await AgentDataPolicyGuard.EvaluateStoredQuery(params, employeeDirectory.ID, undefined, {});
+        const supplied = await AgentDataPolicyGuard.EvaluateStoredQuery(params, employeeDirectory.ID, undefined, { Department: 'Sales' });
+
+        expect('Blocked' in missing && missing.Blocked.Message).toContain('could not be rendered safely');
+        expect(supplied).toEqual({ Allowed: { Active: true, DeniedFieldPatterns: [] } });
     });
 });

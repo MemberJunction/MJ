@@ -14,14 +14,18 @@ import {
     EntityFieldTSType,
     EntityInfo,
     IMetadataProvider,
-    QueryFieldInfo,
-    QueryInfo,
-    QueryParameterInfo,
     RunView,
     TypeScriptTypeFromSQLType,
     UserInfo,
 } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
+import {
+    MJQueryEntityExtended,
+    MJQueryFieldEntity,
+    MJQueryParameterEntity,
+    MJUserViewEntityExtended,
+    QueryEngine,
+    ViewColumnInfo,
+} from '@memberjunction/core-entities';
 import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     EXCEL_MAX_SOURCES_PER_WORKBOOK,
@@ -294,13 +298,15 @@ function orderOf(column: ViewColumnInfo): number {
     return typeof column.orderIndex === 'number' ? column.orderIndex : Number.MAX_SAFE_INTEGER;
 }
 
-function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): ExcelResolvedWorkbookSource {
-    // Roles-only check (QueryInfo.UserCanRun). No rows are read here; GetQueryData runs the full check on refresh.
-    const query = provider.Queries.find(q => UUIDsEqual(q.ID, request.ID));
-    if (!query || !query.UserCanRun(user)) {
+async function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): Promise<ExcelResolvedWorkbookSource> {
+    // Query roles plus read access to the entities it reads (UserCanRun). No rows are read here;
+    // GetQueryData runs the full check on refresh.
+    await QueryEngine.Instance.Config(false, user, provider);
+    const query = QueryEngine.Instance.FindQueryByID(request.ID);
+    if (!query || !query.UserCanRun(user).canRun) {
         throw new ExcelSourceError('That saved query doesn\'t exist, or you don\'t have access to it.');
     }
-    const source: ExcelResolvedWorkbookSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.Fields) };
+    const source: ExcelResolvedWorkbookSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.QueryFields) };
     const parameters = checkParameters(query, request.Parameters);
     if (parameters) {
         source.Parameters = parameters;
@@ -308,20 +314,20 @@ function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataPr
     return source;
 }
 
-function queryColumns(fields: QueryFieldInfo[]): ExcelSourceColumn[] {
+function queryColumns(fields: MJQueryFieldEntity[]): ExcelSourceColumn[] {
     return [...fields]
         .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0))
         .map(f => ({ Name: f.Name, Header: f.Name, DataType: DataTypeForSQLType(f.SQLBaseType) }));
 }
 
 /** Keeps only the query's own, caller-settable parameters, under their canonical names. */
-function checkParameters(query: QueryInfo, supplied: Record<string, ExcelParameterValue> | undefined): Record<string, ExcelParameterValue> | undefined {
+function checkParameters(query: MJQueryEntityExtended, supplied: Record<string, ExcelParameterValue> | undefined): Record<string, ExcelParameterValue> | undefined {
     if (!supplied || Object.keys(supplied).length === 0) {
         return undefined;
     }
     const result: Record<string, ExcelParameterValue> = {};
     for (const [name, value] of Object.entries(supplied)) {
-        const parameter = findParameter(query.Parameters, name);
+        const parameter = findParameter(query.QueryParameters, name);
         if (!parameter) {
             throw new ExcelSourceError(`The query "${query.Name}" has no parameter "${name}".`);
         }
@@ -336,7 +342,7 @@ function checkParameters(query: QueryInfo, supplied: Record<string, ExcelParamet
     return result;
 }
 
-function findParameter(parameters: QueryParameterInfo[], name: string): QueryParameterInfo | undefined {
+function findParameter(parameters: MJQueryParameterEntity[], name: string): MJQueryParameterEntity | undefined {
     const wanted = name.trim().toLowerCase();
     return parameters.find(p => p.Name.trim().toLowerCase() === wanted);
 }

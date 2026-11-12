@@ -18,8 +18,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
         get Entities() {
             return state.entities;
         }
+        /** The provider's deprecated query list stays empty: queries come from the QueryEngine. */
         get Queries() {
-            return state.queries;
+            return [];
         }
         EntityByName(name: string) {
             return state.entities.find((e) => String(e.Name).toLowerCase() === name.toLowerCase());
@@ -52,6 +53,19 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     }
     return { Metadata, RunView, RunQuery, CompositeKey, FormatDateOnly, IsDateOnlySQLType };
 });
+
+vi.mock('@memberjunction/core-entities', () => ({
+    QueryEngine: {
+        Instance: {
+            get Queries() {
+                return state.queries;
+            },
+            get ApprovedQueries() {
+                return state.queries.filter((q) => q.Status === 'Approved');
+            },
+        },
+    },
+}));
 
 import {
     LoadEntities,
@@ -100,9 +114,15 @@ describe('LoadEntities', () => {
 describe('LoadQueries', () => {
     beforeEach(() => {
         state.queries = [
-            { ID: 'q1', Name: 'Beta', Description: null, Status: 'Approved', CategoryInfo: { Name: 'Cat' } },
-            { ID: 'q2', Name: 'Alpha', Description: 'a', Status: 'Approved', CategoryInfo: null },
-            { ID: 'q3', Name: 'Draft', Description: null, Status: 'Pending' },
+            {
+                ID: 'q1', Name: 'Beta', Description: null, Status: 'Approved', CategoryEntity: { Name: 'Cat' },
+                QueryParameters: [{ Name: 'region', IsRequired: true, DefaultValue: null }],
+            },
+            {
+                ID: 'q2', Name: 'Alpha', Description: 'a', Status: 'Approved', CategoryEntity: undefined,
+                QueryParameters: [{ Name: 'year', IsRequired: true, DefaultValue: '2026' }, { Name: 'top', IsRequired: false, DefaultValue: null }],
+            },
+            { ID: 'q3', Name: 'Draft', Description: null, Status: 'Pending', CategoryEntity: undefined, QueryParameters: [] },
         ];
     });
 
@@ -111,10 +131,16 @@ describe('LoadQueries', () => {
         expect(list.map((q) => q.name)).toEqual(['Alpha', 'Beta']);
     });
 
-    it('resolves category name from CategoryInfo (or null)', () => {
+    it('resolves category name from CategoryEntity (or null)', () => {
         const byName = new Map(LoadQueries().map((q) => [q.name, q]));
         expect(byName.get('Beta')?.category).toBe('Cat');
         expect(byName.get('Alpha')?.category).toBeNull();
+    });
+
+    it('flags a query that needs a parameter with no default, and not one whose required parameter has a default', () => {
+        const byName = new Map(LoadQueries().map((q) => [q.name, q]));
+        expect(byName.get('Beta')?.requiresParameters).toBe(true);
+        expect(byName.get('Alpha')?.requiresParameters).toBe(false);
     });
 
     it('QueryCount counts only Approved queries', () => {

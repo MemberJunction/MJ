@@ -7,6 +7,8 @@ const {
     presets,
     archetypes,
     brandKits,
+    savedQueries,
+    queryEngineConfigMock,
 } = vi.hoisted(() => ({
     runAgentMock: vi.fn(),
     processAgentArtifactsMock: vi.fn(),
@@ -14,6 +16,8 @@ const {
     presets: [] as Array<Record<string, unknown>>,
     archetypes: [] as Array<Record<string, unknown>>,
     brandKits: [] as Array<Record<string, unknown>>,
+    savedQueries: [] as Array<{ ID: string; Name: string }>,
+    queryEngineConfigMock: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -90,6 +94,13 @@ vi.mock('@memberjunction/core-entities', () => ({
             GetDefaultKit: vi.fn(() => brandKits.find((k) => k.IsDefault === true) ?? null),
         },
     },
+    QueryEngine: {
+        Instance: {
+            Config: (...args: unknown[]) => queryEngineConfigMock(...args),
+            FindQueryByName: (name: string) =>
+                savedQueries.find((q) => q.Name.trim().toLowerCase() === name.trim().toLowerCase()),
+        },
+    },
 }));
 
 import { ProduceVideoAction } from '../produce-video.action.js';
@@ -118,6 +129,8 @@ describe('ProduceVideoAction', () => {
         presets.length = 0;
         archetypes.length = 0;
         brandKits.length = 0;
+        savedQueries.length = 0;
+        queryEngineConfigMock.mockReset().mockResolvedValue(undefined);
 
         agents.push({
             ID: 'ag-video-studio',
@@ -333,5 +346,44 @@ describe('ProduceVideoAction', () => {
         });
         expect(params.Params.find((p) => p.Name === 'AgentRunID')?.Value).toBe('run-vs-fail');
         expect(processAgentArtifactsMock).not.toHaveBeenCalled();
+    });
+
+    describe('Query DataRefs resolved by name', () => {
+        const QUERY_ID = 'A1B2C3D4-0000-4000-8000-000000000001';
+        // The deprecated provider query list is empty: saved queries resolve through QueryEngine.
+        const provider = { Queries: [] };
+
+        function queryDataRefParams(queryName: string) {
+            return {
+                Params: [
+                    { Name: 'Topic', Type: 'Input', Value: 'Revenue walkthrough' },
+                    { Name: 'DataRefs', Type: 'Input', Value: [{ Key: 'rev', Kind: 'Query', QueryName: queryName, Shape: 'Series' }] },
+                ] as Param[],
+                ContextUser: { ID: 'user-1' },
+                Provider: provider,
+            };
+        }
+
+        beforeEach(() => {
+            savedQueries.push({ ID: QUERY_ID, Name: 'Quarterly Revenue' });
+            runAgentMock.mockResolvedValue({ success: false, payload: {}, agentRun: { ID: 'run-q', ErrorMessage: 'stop' } });
+        });
+
+        it('loads QueryEngine through the caller provider and binds the query found by trimmed, case-insensitive name', async () => {
+            const params = queryDataRefParams('  quarterly REVENUE ');
+
+            await invokeAction(new ProduceVideoAction(), params);
+
+            expect(queryEngineConfigMock).toHaveBeenCalledWith(false, params.ContextUser, provider);
+            const payload = (runAgentMock.mock.calls[0][0] as { payload: { DataBindings: Array<{ Source: { QueryID: string } }> } }).payload;
+            expect(payload.DataBindings[0].Source.QueryID).toBe(QUERY_ID);
+        });
+
+        it('returns NOT_FOUND without running the agent when QueryEngine holds no query of that name', async () => {
+            const result = await invokeAction(new ProduceVideoAction(), queryDataRefParams('Unknown Query'));
+
+            expect(result).toMatchObject({ Success: false, ResultCode: 'NOT_FOUND' });
+            expect(runAgentMock).not.toHaveBeenCalled();
+        });
     });
 });

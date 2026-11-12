@@ -143,11 +143,13 @@ describe('Query part', () => {
     };
     const provider = {
         CurrentUser: { ID: 'u1' },
+        Queries: [],
         GetEntityObject: vi.fn(async () => ({ Load: vi.fn(async () => true) })),
     } as unknown as IMetadataProvider;
 
     beforeEach(() => {
         engine.GetQueryParameters.mockClear();
+        engine.FindQueryByName.mockReset();
         vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(engine as unknown as QueryEngine);
     });
     afterEach(() => {
@@ -187,6 +189,25 @@ describe('Query part', () => {
         await flush();
         expect(part.MappedParameters).toBeNull();
         expect(engine.GetQueryParameters).not.toHaveBeenCalled();
+    });
+
+    it('finds a query named in the config through the QueryEngine, not the provider', async () => {
+        engine.FindQueryByName.mockReturnValue({ ID: 'Q1', Name: 'Members' });
+        const part = queryPart({ type: 'Query', queryName: 'Members' }, null);
+        await flush();
+        expect(part.ErrorMessage).toBeNull();
+        expect(part.QueryId).toBe('Q1');
+        expect(part.HasQuery).toBe(true);
+        expect(engine.FindQueryByName).toHaveBeenCalledWith('Members');
+    });
+
+    it('shows "not found" when the QueryEngine has no query with the configured name', async () => {
+        engine.FindQueryByName.mockReturnValue(undefined);
+        const part = queryPart({ type: 'Query', queryName: 'Missing' }, null);
+        await flush();
+        expect(engine.FindQueryByName).toHaveBeenCalledWith('Missing');
+        expect(part.ErrorMessage).toBe('Query "Missing" not found');
+        expect(part.HasQuery).toBe(false);
     });
 
     it("raises RowSelected with the row's columns, and no values when the selection is emptied", () => {

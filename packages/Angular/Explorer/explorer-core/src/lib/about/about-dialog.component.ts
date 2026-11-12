@@ -9,8 +9,8 @@ import {
     inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { UserRoleInfo } from '@memberjunction/core';
-import { InstanceConfigEngine } from '@memberjunction/core-entities';
+import { IMetadataProvider, UserRoleInfo } from '@memberjunction/core';
+import { InstanceConfigEngine, QueryEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -591,12 +591,21 @@ export class AboutDialogComponent extends BaseAngularComponent implements OnInit
         if (this.toastTimer) clearTimeout(this.toastTimer);
     }
 
+    /** How many saved queries the provider's QueryEngine holds; 0 when the user may not read them. */
+    private queryCount(provider: IMetadataProvider): number {
+        try {
+            return (QueryEngine.GetProviderInstance<QueryEngine>(provider, QueryEngine) as QueryEngine).Queries.length;
+        } catch {
+            return 0;
+        }
+    }
+
     private populate(): void {
         const provider = this.ProviderToUse;
 
         this.EntityCount = provider?.Entities?.length ?? 0;
         this.ApplicationCount = provider?.Applications?.length ?? 0;
-        this.QueryCount = provider?.Queries?.length ?? 0;
+        this.QueryCount = provider ? this.queryCount(provider) : 0;
 
         const user = provider?.CurrentUser;
         if (user) {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
-import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
-import { MJGlobal, ResolveSingleEntityResourceTarget, UUIDsEqual } from '@memberjunction/global';
+import { MJMaterializedResultEntity, MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
+import { MJGlobal, ResolveSingleEntityResourceTarget } from '@memberjunction/global';
 import { HoistCTEs, SQLParser, SqlDocument, StripOrderBy } from '@memberjunction/sql-parser';
 import { GetDialect, DatabasePlatform } from '@memberjunction/sql-dialect';
 
@@ -141,21 +141,21 @@ export class MaterializationRefresher {
     /**
      * Resolves the SQL that the READ path would execute for `queryId` on the engine we are refreshing against,
      * so the snapshot is built from the same statement live serves. Mirrors the read path's
-     * `QueryInfo.GetPlatformSQL(PlatformKey)`, whose precedence is: `MJ: Query SQLs` child row for the platform
-     * → legacy PlatformVariants → base SQL.
+     * `GetPlatformSQL(PlatformKey)` on the cached query, whose precedence is: `MJ: Query SQLs` child row for
+     * the platform → base SQL.
      *
-     * `GetPlatformSQL` lives on the metadata `QueryInfo`, not on the generated `MJQueryEntity`, so the variant
-     * is resolved through the provider's query metadata. Falls back to the entity's own SQL when the query
-     * isn't present in that metadata (e.g. a provider whose cache hasn't loaded it), which reproduces exactly
-     * the previous behavior rather than failing the refresh.
+     * The query is looked up in the `QueryEngine` cache, which the caller must have loaded (see
+     * {@link resolveQuerySnapshotSQL}). Falls back to the entity's own SQL when the query isn't present in that
+     * cache, which reproduces exactly the previous behavior rather than failing the refresh.
      *
+     * @param provider Unused. Kept so existing callers compile; the query metadata comes from `QueryEngine`.
      * @returns the platform-resolved SQL, or null when neither source yields a non-empty statement.
      * @internal exposed for unit testing; not part of the supported surface.
      */
     public static ResolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
         const platform: DatabasePlatform = isPostgres ? 'postgresql' : 'sqlserver';
-        const info = provider.Queries?.find((q) => UUIDsEqual(q.ID, queryId));
-        const resolved = info ? info.GetPlatformSQL(platform) : null;
+        const query = QueryEngine.Instance.FindQueryByID(queryId);
+        const resolved = query ? query.GetPlatformSQL(platform) : null;
         const chosen = resolved && resolved.trim().length > 0 ? resolved : entitySql;
         return chosen && chosen.trim().length > 0 ? chosen : null;
     }
@@ -1022,13 +1022,13 @@ export class MaterializationRefresher {
                 await query.Load(sourceQueryId);
             }
             // Snapshot the SAME statement the READ path executes. Reads resolve SQL via
-            // QueryInfo.GetPlatformSQL(PlatformKey) (GenericDatabaseProvider's ORDER BY gate and its query
+            // the cached query's GetPlatformSQL(PlatformKey) (GenericDatabaseProvider's ORDER BY gate and its query
             // execution both do), which prefers a per-platform `MJ: Query SQLs` variant over the base SQL.
             // Snapshotting the base `SQL` instead means a query carrying a variant for THIS engine is
             // materialized from a different statement than the one live serves — either a hard refresh
             // failure every cycle, or (worse) a snapshot whose contents silently disagree with live, which
             // is precisely the invariant materialization exists to preserve.
-            rawSql = MaterializationRefresher.resolvePlatformQuerySQL(provider, sourceQueryId, query.SQL, isPostgres);
+            rawSql = await this.resolveQuerySnapshotSQL(provider, contextUser, sourceQueryId, query.SQL, isPostgres);
         }
         // Strip a top-level ORDER BY before this SELECT is wrapped in a derived table by the rebuild
         // (SELECT … INTO shadow FROM (<sql>) AS src): SQL Server rejects ORDER BY inside a derived table /
@@ -1036,6 +1036,16 @@ export class MaterializationRefresher {
         // every refresh. A materialized snapshot has no inherent row order (readers apply their own ORDER
         // BY at read time), so dropping the source ordering is semantically safe.
         return rawSql == null ? null : MaterializationRefresher.stripTopLevelOrderBy(rawSql, isPostgres);
+    }
+
+    /**
+     * Loads `QueryEngine` (a no-op once loaded) and resolves the platform SQL a query-sourced snapshot is built
+     * from (see {@link ResolvePlatformQuerySQL}). A load failure propagates and fails this refresh, rather than
+     * snapshotting a statement that may differ from the one live serves.
+     */
+    private async resolveQuerySnapshotSQL(provider: IMetadataProvider, contextUser: UserInfo, queryId: string, entitySql: string | null, isPostgres: boolean): Promise<string | null> {
+        await QueryEngine.Instance.Config(false, contextUser, provider);
+        return MaterializationRefresher.ResolvePlatformQuerySQL(provider, queryId, entitySql, isPostgres);
     }
 
     /**
