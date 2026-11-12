@@ -1,4 +1,5 @@
 ---
+"@memberjunction/core": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/integration-test-suite": minor
 ---
