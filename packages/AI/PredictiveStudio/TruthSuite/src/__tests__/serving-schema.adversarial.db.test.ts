@@ -916,7 +916,7 @@ describe('spDeleteEntityWithCoreDependencies removes an entity with its serving 
 // ── the hand-written blocks that must apply twice ─────────────────────────────────────────────────────────────────
 
 /** The migration whose hand-written Entity insert the run-twice case re-applies, from the repository root. */
-const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
+const SERVING_MIGRATION = new URL('../../../../../../migrations/v6/V202611111352__v6.3.x__PS_Honest_Serving_Schema.sql', import.meta.url);
 /**
  * The entities the census looks up: MJ: Feature Values and MJ: ML Models are existing core entities, and the
  * virtual entity's ID is this migration's literal. FeatureValue's Role and MLModelID, with their metadata rows, are

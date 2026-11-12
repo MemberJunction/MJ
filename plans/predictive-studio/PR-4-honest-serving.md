@@ -2979,7 +2979,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql:661`) and `MLModel.TrainingRunID` for the doomed runs (`:739`),
+(`V202611111352__v6.3.x__PS_Honest_Serving_Schema.sql:661`) and `MLModel.TrainingRunID` for the doomed runs (`:739`),
 then deletes the runs (`:751`) and the models (`:752`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -3986,19 +3986,19 @@ tests (`Sidecar/src/python/tests/test_gate_parity.py`, `TruthSuite/python/tests/
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD..origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD..origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
 
@@ -9746,7 +9746,7 @@ are monitored on real outcomes.
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->2<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->c29e0150c7<!-- /gen:head -->
+- Head: <!-- gen:head -->b717b082ed<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10498,6 +10498,97 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   startup gate. The DB lane runs all four files and loads Engine's `dist`. Restarting the sidecar on the same URL needs
   `TRUTH_SIDECAR_PORT`. A MJAPI restart through ps-env can be refused exit 4 for ~20 s while the previous process's or
   a script's idle `node-mssql` sessions close.
+
+### 2026-11-12 09:50 CST — Claude (Fable 5.1, M3 start) — M3
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving`. The merge commit `b717b082ed` sits on M2's `0338b2d490`, and this commit
+  `chore(ps): PR 4 M3 start — merge next @c9ceac9976, bootstrap, §10/§11` sits on the merge. Both are pushed at the
+  after-merge push point (D-072).
+- **Merge:** merged next @c9ceac9976, migration retimed V202611110217 → V202611111352. next brings three new
+  migrations: `V202611111345` (UI Role Own Folders RLS filter), `V202611111350` (AIPrompt TimeoutMS) and
+  `V202611111351` (ToolCallingMode NativeRecovered).
+  - **Stop terms.** The controller cleared them. The FeatureValue/MLModel lines in `V202611111350` are next's own
+    regenerated `spDeleteAIPrompt` cascade calling `spUpdateFeatureValue` with #6180's `@Role`/`@MLModelID`. None of
+    the three migrations creates or alters an object ours does.
+  - **Conflict 1.** `ServerBootstrap/src/generated/mj-class-registrations.ts` was taken from next
+    (`git checkout --theirs`). The build's manifest step then regenerated it with PR 4's five classes (core-entities
+    492 → 497).
+  - **Conflict 2.** `integration-test-suite/src/__tests__/check-registry.test.ts` was merged by hand. It keeps next's
+    `record-change-snapshot` bundle, `conversation-authorship-client` 13, `user-elevation` 5 and CA13/RCS1–4 skips, and
+    M2.4's `ps-gate-r1-s7-1`/`ps-gate-w1-s7-1` pins. The bundle total is **240**, measured by running the test
+    (359 passed).
+- **Correction to the M2 exit entry.** It says `origin/next` was "unchanged since M2's start". That is false: next
+  moved on 2026-11-11 15:03 CST and was `c9ceac9976` (+89 past `7744b3eb1d`) at the M2 exit. No CI ran on any M2 code:
+  the PR was CONFLICTING until this merge, and the 11 runs on `c29e0150c7` never started. The plans-repo
+  `program/decisions.md` edit that entry calls "uncommitted there" is committed as plans `6717281` (with D-084/D-085).
+- **Start-list correction (for the M3 checkpoint).** The Start list's `git diff --name-only HEAD..origin/next` is a
+  two-dot tree diff, so it also lists PR 4's own files. What next brings is the three-dot form `HEAD...origin/next`.
+  Its hits were the three migrations above, three `metadata-optional/integration-test` files (IT169,
+  `.integration-suite.json`, `.it-payload-agents.json`) and `FeatureValueCacheService.ts` (#4917).
+- **Retime tool.** The `--dry-run` printed
+  `UPDATE [<schema>].[flyway_schema_history] SET version = '202611111352', script = 'v6/V202611111352__v6.3.x__PS_Honest_Serving_Schema.sql' WHERE version = '202611110217';`.
+  The real run did the `git mv` and 3 plan replacements; the changeset had 0. Its history UPDATE was **skipped**
+  (`flyway: no row for 202611110217 in __mj, pstruth, (2, rows, affected), skipped`) even though the row existed in
+  `__mj`.
+  - **Root cause, reproduced.** `sqlcmd -h -1 -W` without `SET NOCOUNT ON` returns `1\n\n(1 row affected)\n`, so
+    `ShouldUpdateFlyway`'s `trim() === '1'` is false. The schema list also picks up the `(2 rows affected)` footer
+    tokens.
+  - The implementer database was rebuilt from clean anyway. The review database got the UPDATE by sqlcmd (below).
+  - One plan replacement was in this §11 (M2 start's "last versioned script still 175 …") and was reverted to the old
+    name. The other live reference, TruthSuite `serving-schema.adversarial.db.test.ts:919` `SERVING_MIGRATION`, is
+    updated. `git grep V202611110217` outside this plan returns nothing. The remaining plan mentions are history
+    (§9 D4-79, §11).
+- **Database / ports:**
+  - **`MJ_PS_PR4_claude`, rebuilt from clean.** DROP/CREATE + `READ_COMMITTED_SNAPSHOT ON`.
+    - `mj migrate` → `179 applied`, then `codegen --skipfiles` (emitted nothing).
+    - `sync push` → `created 34, updated 31, unchanged 16747, errorCount 0`. 15 write-backs were restored from the
+      index.
+    - `codegen --skipdb` → 0, then `pnpm run build` → `321 successful`.
+    - The proof, `codegen --skipfiles` on the freshly built database, emitted only OF4-9's two `SubtypeSelector`
+      UPDATEs (D4-89; 10 lines; deleted). The tail was not regenerated, so no HAND EDIT was re-applied.
+      `EntityRelationship` naming `MJ: Latest Feature Values` → 0.
+    - `truth:provision` → `pstruth: 47 entities`. The IT metadata push (scratch copy) → `created 708` (704 on review
+      before next's IT169).
+    - C1 corpus → `{"C1Person":2015,"C1OrderHeader":15420,…}`, `immutable fields declared: 279`.
+    - MJAPI :4041 was restarted after the corpus load (`507 entities`, `/healthcheck` 200) and left running.
+    - Flyway top 5 by `installed_rank`: 179 `R__RefreshMetadata`, 178 `V202611111352…PS_Honest_Serving_Schema`,
+      177 `V202611111351`, 176 `V202611111350`, 175 `V202611111345`. 180 success rows, 0 failed.
+  - **`MJ_PS_PR4_review`.** I started only after its bootstrap reported `DONE (with concerns)`, with 4049 free and no
+    suite lock.
+    - The retime UPDATE was applied by sqlcmd: before-count 1, `(1 row affected)`.
+    - `PS_AGENT=review mj migrate` → `Applying 3 migration(s) older than the database's newest applied migration
+      (outOfOrder enabled for this run)` … `4 applied` (3 + `R__`).
+    - `sync push` → `created 8, updated 23, errorCount 0` (write-backs restored).
+    - `codegen --skipfiles` → a 5036-line `CodeGen_Run` holding only `[pstruth]` objects (1092 references; its
+      `EntityField` statements target `PS Truth: W9_EventRegistration`) plus OF4-9's two UPDATEs. Deleted.
+    - The top 5 versions match the implementer's. The order of application differs (ours before next's three there),
+      but the `__mj` schema is identical: the SHA-256 of every module definition plus every column's type, length and
+      nullability is 8666 lines on each database, `diff` empty. 178 versioned rows on each.
+- **Tests (on this tree):**
+  - Core `pnpm test` → `35 passed (35)` / `472 passed (472)`.
+  - Engine → `92 passed (92)` / `1369 passed (1369)`.
+  - TruthSuite `pnpm test` → `21 passed (21)` / `122 passed (122)`. That is 120 + 2: the review bootstrap's two new
+    `PS_SIDECAR_RUN_DIR` cases in `sidecar-files.test.ts`, 3 → 5 `it`.
+  - integration-test-suite → `69 passed (69)` / `1024 passed (1024)`. That is 1021 + 3, all from next's merge (the
+    package changed only by next plus the hand-merged total).
+  - TruthSuite DB lane → `4 passed (4)` / `38 passed (38)`.
+  - `check:guards` → 0. `check:standards` → 0 (`✓ No errors. 14327 warning(s)`).
+- **Done this session:** M3's five Start boxes ticked. This commit carries the retime rename, the
+  `SERVING_MIGRATION` constant, the regenerated class registrations and the review bootstrap's four-file
+  `PS_SIDECAR_RUN_DIR` change (`sidecar-files.ts`, its test, `scripts/sidecar.mts`, `src/harness/sidecar.ts`).
+- **State left behind:**
+  - The owner's 7 untracked files.
+  - MJAPI :4041 running on `MJ_PS_PR4_claude`.
+  - The implementer truth sidecar `http://127.0.0.1:64203` (pid in `TruthSuite/.run/sidecar.pid`) and the review
+    sidecar `http://127.0.0.1:64249` (`~/.mj-ps/pr4-review/sidecar-run`), both running.
+  - The §10 `gen:head` change that `pr-body --edit-pr` leaves after the push rides M3's checkpoint.
+- **Next step (exact):** M3, Task M3.1 Step 1 (`.superpowers/sdd/PR-4-honest-serving/task-M3.1-brief.md`).
+- **Gotchas / decisions:**
+  - `retime-migration.mjs` skips the flyway UPDATE because of the `(n rows affected)` footer (above), so verify the
+    history row by hand after every retime until the tool sets `NOCOUNT`.
+  - With two databases, a retime updates both histories (D4-89 addendum).
+  - My root build ran 09:19–09:30 while the review bootstrap's Containment run (MJAPI 4049 started 09:20) was in
+    progress. That run reported 10 / 0, but it overlapped a `dist` rebuild of the 5 packages turbo rebuilt.
 
 ## 12. Refresh log (append-only)
 

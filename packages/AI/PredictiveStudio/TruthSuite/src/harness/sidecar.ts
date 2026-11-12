@@ -64,7 +64,7 @@ export class HarnessSidecar {
 
   /**
    * Point this gate process's in-process engine calls (TrainingDelegation.RetrainFromSnapshotViaEngine) at the suite's
-   * single-threaded sidecar — the one MJAPI trains on (`.run/sidecar.url`) — and return its URL. MLSidecar reads
+   * single-threaded sidecar — the one MJAPI trains on (`sidecar.url` in the run directory) — and return its URL. MLSidecar reads
    * PREDICTIVE_STUDIO_SIDECAR_URL when it is constructed, and the process-wide sidecar is constructed once, so this
    * only reaches a client built after it; `DefaultToSuiteSidecar` runs before any gate builds one.
    *
@@ -99,7 +99,7 @@ export class HarnessSidecar {
   /**
    * Restart the suite sidecar on the URL it answers today, so every client holding that URL (MJAPI's) reaches the new
    * process: stop the process its pid file names (SIGTERM, then wait for it to exit), start `pnpm run truth:sidecar`
-   * detached in the TruthSuite package with `TRUTH_SIDECAR_PORT` set to the same port (output to `.run/sidecar.log`), and
+   * detached in the TruthSuite package with `TRUTH_SIDECAR_PORT` set to the same port (output to `sidecar.log` in the run directory), and
    * wait until it has written a new pid file and its `/health` route answers 200. The new process outlives the caller.
    * Nothing is started when the stop step refuses: a missing pid file or a pid that is not running throws first.
    *
