@@ -1,4 +1,5 @@
 ---
+"@memberjunction/core": minor
 "@memberjunction/ng-conversations": minor
 "@memberjunction/ng-explorer-core": minor
 "@memberjunction/core-entities": minor
