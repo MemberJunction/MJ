@@ -62,19 +62,22 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * no patch file; the sandbox installs offline with the real lockfile and `patches/` and applies the patches.
      * When pnpm reports `ERR_PNPM_OUTDATED_LOCKFILE`, the sandbox installs once more, still offline, without the frozen lockfile,
      * so only workspace links and packages already in the store can resolve.
+     * With `packages`, the install covers the root project and the named packages the revision has, with their dependencies
+     * (`--filter . --filter <name>...`); with none of them present, or no `packages`, it covers the whole workspace.
      * When the fetch or the install fails, the worktree is removed before the error is rethrown; a removal failure does not replace that error.
      */
-    public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
+    public async Prepare(revision: RevisionRef, packages: string[] = []): Promise<PreparedRevision> {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
         try {
             await this.hostFetch(revision);
-            let r = await this.installInSandbox(prepared, '--frozen-lockfile');
+            const present = this.PackagesAt(prepared, packages);
+            let r = await this.installInSandbox(prepared, '--frozen-lockfile', present);
             if (r.ExitCode !== 0 && tail(r).includes('ERR_PNPM_OUTDATED_LOCKFILE')) {
                 process.stderr.write(`prepare ${revision.Kind} ${revision.SHA.slice(0, 7)}: the lockfile is out of date with a package.json; installing offline without the frozen lockfile\n`);
-                r = await this.installInSandbox(prepared, '--no-frozen-lockfile');
+                r = await this.installInSandbox(prepared, '--no-frozen-lockfile', present);
             }
             if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
         } catch (e) {
@@ -84,9 +87,13 @@ export class VitestCatchTarget extends BaseCatchTarget {
         return prepared;
     }
 
-    /** Offline `pnpm install` and `pnpm rebuild` in the sandbox, with the given lockfile flag. */
-    private installInSandbox(prepared: PreparedRevision, lockfileFlag: '--frozen-lockfile' | '--no-frozen-lockfile'): Promise<SandboxRunResult> {
-        const install = `pnpm install --offline ${lockfileFlag} --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
+    /**
+     * Offline `pnpm install` and `pnpm rebuild` in the sandbox, with the given lockfile flag. With `packages`, the install is
+     * filtered to the root project (whose devDependencies hold vitest and turbo) and those packages with their dependencies.
+     */
+    private installInSandbox(prepared: PreparedRevision, lockfileFlag: '--frozen-lockfile' | '--no-frozen-lockfile', packages: string[]): Promise<SandboxRunResult> {
+        const filters = packages.length > 0 ? ` --filter . ${packages.map((p) => `--filter ${sq(`${p}...`)}`).join(' ')}` : '';
+        const install = `pnpm install --offline ${lockfileFlag} --ignore-scripts --store-dir ${CONTAINER_STORE}${filters} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
         return this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
     }
 

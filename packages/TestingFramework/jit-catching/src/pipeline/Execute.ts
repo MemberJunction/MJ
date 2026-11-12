@@ -21,7 +21,7 @@ export interface ExecuteOptions { RunID: string; RepoRoot: string; Settings: Set
 type TypeErrors = ExecutionFile['TypeErrors'];
 
 /**
- * Job 2: prepares head, writes the produced tests into the base worktree kept by job 1 and into head, type-checks
+ * Job 2: prepares head for the packages of the produced tests, writes them into the base worktree kept by job 1 and into head, type-checks
  * and runs them on both, measures coverage on head for tests that pass on both when `Settings.Coverage` is on, and writes `execution.json` with the time of each stage,
  * which it also prints on one stdout line.
  * Head is removed at the end. An error from the target (such as an `InfrastructureError`) ends the step with no file.
@@ -37,7 +37,7 @@ export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
     const base: PreparedRevision = { Ref: { Kind: 'Base', SHA: gen.Run.BaseSHA }, RootDir: baseRoot };
     await d.EnsureImage?.();
     const now = d.Now ?? Date.now;
-    const prepared = await Timed(now, () => d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA }));
+    const prepared = await Timed(now, () => d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA }, [...new Set(tests.map((t) => t.Package))]));
     const head = prepared.Result;
     let timings: ExecutionTimings;
     try {

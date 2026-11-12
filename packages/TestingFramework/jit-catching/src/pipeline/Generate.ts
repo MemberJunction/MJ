@@ -9,7 +9,7 @@ import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
-import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, PreparedRevision, Run, SessionRecord, TokenUsage, Trigger } from '../types';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, Run, SessionRecord, TokenUsage, Trigger } from '../types';
 import { NewID, NewRunID } from '../ids';
 import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
@@ -51,7 +51,7 @@ export class GenerateError extends Error {
 }
 
 /**
- * Job 1: checks the environment, resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
+ * Job 1: checks the environment, resolves the revisions, analyses the change, prepares base for the packages under test and builds it, runs one generation session per
  * (package, method[, risk]) and writes `generation.json` with one record per session, the analyzer's and the sessions' tokens per role and model, and the time of each stage,
  * which it also prints on one stdout line. The base worktree stays for the execute and assess jobs.
  * A failure from the analyzer on is thrown as a `GenerateError`; an earlier failure is thrown as it is.
@@ -68,34 +68,35 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     const t = d.ForRun(dir);
     await t.EnsureImage();
     const now = d.Now ?? Date.now;
-    const prepared = await Timed(now, () => t.Target.Prepare({ Kind: 'Base', SHA: BaseSHA }));
     const text = await pullRequestText(d, pr, HeadSHA);
     const finished: TokenUsage[] = [];
-    try { await analyzeAndGenerate(run, dir, t, prepared.Result, text, o.Settings, finished, { Now: now, PrepareBaseMs: prepared.Ms }); }
+    try { await analyzeAndGenerate(run, dir, t, BaseSHA, text, o.Settings, finished, now); }
     catch (e) { throw new GenerateError(run.ID, SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...finished]), e); }
     return { RunID: run.ID };
 }
 
 /**
- * Analyses the change, keeps the packages base has, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`
- * with the stage times: `clock.PrepareBaseMs` and the analyze, build and generate times on `clock.Now`.
+ * Analyses the change, prepares base for the packages under test, keeps the packages base has, builds base, runs the sessions
+ * (adding each finished session's usage to `finished`) and writes `generation.json` with the analyze, prepare, build and generate times on `now`.
  */
-async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, base: PreparedRevision, text: PullRequestText, settings: Settings, finished: TokenUsage[],
-    clock: { Now: () => number; PrepareBaseMs: number }): Promise<void> {
-    const analyzed = await Timed(clock.Now, () => t.Analyzer.Analyze(run, text));
+async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, baseSHA: string, text: PullRequestText, settings: Settings, finished: TokenUsage[],
+    now: () => number): Promise<void> {
+    const analyzed = await Timed(now, () => t.Analyzer.Analyze(run, text));
     const found = analyzed.Result;
+    const prepared = await Timed(now, () => t.Target.Prepare({ Kind: 'Base', SHA: baseSHA }, found.PackagesToTest));
+    const base = prepared.Result;
     const present = t.Target.PackagesAt(base, found.PackagesToTest);
     for (const name of found.PackagesToTest) if (!present.includes(name)) process.stderr.write(`run ${run.ID}: ${name} is not in base; skipped\n`);
     const analysis: ChangeAnalysis = { ...found, PackagesToTest: present };
-    const built = await Timed(clock.Now, () => t.Target.BuildPackages(base, analysis.PackagesToTest));
+    const built = await Timed(now, () => t.Target.BuildPackages(base, analysis.PackagesToTest));
     const requests = buildRequests(run, analysis, base.RootDir, settings, t.PackageMap);
-    const generated = await Timed(clock.Now, () => RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
+    const generated = await Timed(now, () => RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
         const result = await generateOrFail(t, r);
         finished.push({ ...result.Tokens, Role: 'Generator' });
         return result;
     }));
     const results = generated.Result;
-    const timings: GenerationTimings = { AnalyzeMs: analyzed.Ms, PrepareBaseMs: clock.PrepareBaseMs, BuildBaseMs: built.Ms, GenerateMs: generated.Ms };
+    const timings: GenerationTimings = { AnalyzeMs: analyzed.Ms, PrepareBaseMs: prepared.Ms, BuildBaseMs: built.Ms, GenerateMs: generated.Ms };
     const tests = results.flatMap((r) => r.Tests);
     const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null, EndReason: results[i].EndReason,
         Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,

@@ -11,16 +11,16 @@ import { DEFAULT_SETTINGS } from '../settings';
 import type { CandidateTest, ChangedLines, PreparedRevision, RevisionRef } from '../types';
 import { candidate, generation, HEAD_SHA, ID_A, ID_B, PKG, results, RUN_ID } from './helpers/pipelineFixtures';
 
-interface Calls { Prepare: RevisionRef[]; Build: { Kind: string; Packages: string[] }[]; Write: string[]; Run: { Kind: string; IDs: string[]; Repeats: number }[]; Coverage: string[][]; Cleanup: string[] }
+interface Calls { Prepare: RevisionRef[]; PreparePackages: (string[] | undefined)[]; Build: { Kind: string; Packages: string[] }[]; Write: string[]; Run: { Kind: string; IDs: string[]; Repeats: number }[]; Coverage: string[][]; Cleanup: string[] }
 
 /**
  * A target that records every call: A passes on base and fails on head, B passes on both, nothing has type errors.
  * Each call advances `clock.Ms`: Prepare 1s, BuildPackages 2s, each TypeCheck 1.5s, each Run 2s, Coverage 5s.
  */
 function fakeTarget(prepareError?: Error, clock: { Ms: number } = { Ms: 0 }): { Target: PipelineTarget; Calls: Calls } {
-  const calls: Calls = { Prepare: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] };
+  const calls: Calls = { Prepare: [], PreparePackages: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] };
   const target: PipelineTarget = {
-    Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { clock.Ms += 1000; calls.Prepare.push(r); if (prepareError) throw prepareError; return { Ref: r, RootDir: '/work/head' }; },
+    Prepare: async (r: RevisionRef, p?: string[]): Promise<PreparedRevision> => { clock.Ms += 1000; calls.Prepare.push(r); calls.PreparePackages.push(p); if (prepareError) throw prepareError; return { Ref: r, RootDir: '/work/head' }; },
     BuildPackages: async (r: PreparedRevision, p: string[]) => { clock.Ms += 2000; calls.Build.push({ Kind: r.Ref.Kind, Packages: p }); },
     PackagesAt: (_r: PreparedRevision, p: string[]) => p,
     WriteTests: async (r: PreparedRevision) => { calls.Write.push(r.Ref.Kind); },
@@ -49,6 +49,7 @@ describe('ExecuteStep', () => {
     const { Target, Calls } = fakeTarget();
     await ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } });
     expect(Calls.Prepare).toEqual([{ Kind: 'Head', SHA: HEAD_SHA }]);
+    expect(Calls.PreparePackages).toEqual([[PKG]]);
     expect(Calls.Build).toEqual([{ Kind: 'Head', Packages: [PKG] }]);
     expect(Calls.Write).toEqual(['Base', 'Head']);
     expect(Calls.Run).toEqual([{ Kind: 'Base', IDs: [ID_A, ID_B], Repeats: 3 }, { Kind: 'Head', IDs: [ID_A, ID_B], Repeats: 3 }]);
@@ -93,6 +94,6 @@ describe('ExecuteStep', () => {
     dir.WriteGeneration(generation(outside, [candidate(ID_A)]));
     const { Target, Calls } = fakeTarget();
     await expect(ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } })).rejects.toThrow(/base worktree/);
-    expect(Calls).toEqual({ Prepare: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] });
+    expect(Calls).toEqual({ Prepare: [], PreparePackages: [], Build: [], Write: [], Run: [], Coverage: [], Cleanup: [] });
   });
 });

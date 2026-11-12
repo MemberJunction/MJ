@@ -47,6 +47,25 @@ describe('GenerateStep', () => {
     expect(g.Tests.map((t) => t.ID)).toEqual([ID_A]);
   });
 
+  it('analyzes the change before it prepares base, and prepares base for the packages under test', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const OTHER = '@memberjunction/other'; const order: string[] = [];
+    const a: ChangeAnalysis = { ...analysis(), PackagesToTest: [PKG, OTHER], Risks: [] };
+    const tools: GenerateTools = {
+      EnsureImage: async () => undefined,
+      Target: { Prepare: async (r: RevisionRef, p?: string[]): Promise<PreparedRevision> => { order.push(`prepare ${r.Kind} ${(p ?? []).join(',')}`); return { Ref: r, RootDir: '/work/base' }; },
+        BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
+      Analyzer: { Analyze: async () => { order.push('analyze'); return a; }, Usage: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
+      PackageMap: { Get: (n: string) => ({ Name: n, Dir: PKG_DIR, HasVitest: true, HasTests: true }), PackageForPath: () => null },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 't' }, Redaction: redaction, ForRun: () => tools } });
+    expect(order).toEqual(['analyze', `prepare Base ${PKG},${OTHER}`]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it('builds and generates only for the packages that exist at base, and names the skipped ones on stderr', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const NEW = '@memberjunction/new'; const built: string[][] = []; const requests: GenerationRequest[] = [];

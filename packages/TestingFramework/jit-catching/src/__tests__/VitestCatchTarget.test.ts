@@ -210,6 +210,24 @@ describe('VitestCatchTarget.Prepare', () => {
       expect(calls.map((c) => c.Command.join(' '))).toHaveLength(2);
     } finally { stderr.mockRestore(); }
   });
+  it('installs only the root project and the packages under test that the revision has, with their dependencies', async () => {
+    const { target, calls, work } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''));
+    const o = (target as never as { o: { Repo: { AddWorktree: (d: string, s: string) => Promise<void> } } }).o;
+    const add = o.Repo.AddWorktree;
+    (target as never as { o: object }).o = { ...o, Repo: { ...o.Repo, AddWorktree: async (d: string, sha: string) => { await add(d, sha); mkdirSync(join(work, 'head', 'packages/MJCore'), { recursive: true }); writeFileSync(join(work, 'head', 'packages/MJCore/package.json'), '{}'); } },
+      PackageMap: { Get: (n: string) => ({ Name: n, Dir: n === '@memberjunction/core' ? 'packages/MJCore' : 'packages/Missing', HasVitest: true, HasTests: true }) } } as never;
+    await target.Prepare({ Kind: 'Head', SHA: 'h' }, ['@memberjunction/core', '@memberjunction/missing']);
+    const command = calls[0].Command.join(' ');
+    expect(command).toContain(`--ignore-scripts --store-dir /pnpm-store --filter . --filter '@memberjunction/core...' && pnpm rebuild`);
+    expect(command).not.toContain('missing');
+  });
+  it('runs the unfiltered install when no packages are given or the list is empty', async () => {
+    for (const packages of [undefined, []]) {
+      const { target, calls } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''));
+      await target.Prepare({ Kind: 'Head', SHA: 'h' }, packages);
+      expect(calls[0].Command.join(' ')).not.toContain('--filter');
+    }
+  });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];
     const { target, calls } = prepWorld(async (_f, a) => { host.push(a); return '11.24.0\n'; });

@@ -65,7 +65,7 @@ function fakes(o: { catches?: Catch[]; passes?: Record<string, number>; applies?
   });
   return {
     Target: {
-      Prepare: vi.fn(async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: `/work/head-${r.SHA.slice(0, 1)}` })),
+      Prepare: vi.fn(async (r: RevisionRef, _p?: string[]): Promise<PreparedRevision> => ({ Ref: r, RootDir: `/work/head-${r.SHA.slice(0, 1)}` })),
       BuildPackages: vi.fn(async () => undefined),
       WriteTests: vi.fn(async (_rev: PreparedRevision, _tests: CandidateTest[]) => undefined),
       Run: run,
@@ -108,7 +108,7 @@ describe('MatchStep', () => {
     const work = join(new RunDir(root, RUN_1, redaction).Path, 'match', 'work');
     expect(d.Repo.CommitWithPatch).toHaveBeenCalledWith(sha('a'), join(work, 'fix.patch'), join(work, 'fix'));
     expect(readFileSync(join(work, 'fix.patch'), 'utf8')).toBe('diff e..f\n');
-    expect(d.Target.Prepare.mock.calls.map((c) => c[0])).toEqual([{ Kind: 'Head', SHA: sha('f') }]);
+    expect(d.Target.Prepare.mock.calls).toEqual([[{ Kind: 'Head', SHA: sha('f') }, [PKG]]]);
     expect(stderr.join('')).toContain(`match ${LEDGER_ID}: PR #1: the fix does not apply on head; trying the fix merge fffffff\n`);
     expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'FixMerge' }));
     expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
@@ -130,7 +130,7 @@ describe('MatchStep', () => {
     const d = fakes({ passes: { [ID_A]: 3 } });
     const l = await match(root, corpus, d);
     expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'Patched' }));
-    expect(d.Target.Prepare).toHaveBeenCalledWith({ Kind: 'Head', SHA: fixedOf(sha('a')) });
+    expect(d.Target.Prepare).toHaveBeenCalledWith({ Kind: 'Head', SHA: fixedOf(sha('a')) }, [PKG]);
     expect(d.Target.BuildPackages).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-7' }), [PKG]);
     expect(d.Target.WriteTests.mock.calls[0]?.[1].map((t) => t.ID)).toEqual([ID_A, ID_B]);
     expect(d.Target.Run).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-7' }), expect.any(Array), DEFAULT_SETTINGS.Repeats);
