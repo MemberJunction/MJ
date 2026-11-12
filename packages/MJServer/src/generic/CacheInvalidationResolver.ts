@@ -297,12 +297,15 @@ export class CacheInvalidationResolver {
      * WebSocket reconnect reveals missed invalidation sequence numbers.
      */
     @Query(() => CacheInvalidationCatchUpResult)
-    GetCacheInvalidationsSince(
+    async GetCacheInvalidationsSince(
         @Arg('sinceSequence', () => Int) sinceSequence: number,
         @Ctx() context: CacheInvalidationFilterContext | undefined
-    ): CacheInvalidationCatchUpResult {
+    ): Promise<CacheInvalidationCatchUpResult> {
         const user = context?.userPayload?.userRecord as UserInfo | undefined;
-        return CacheInvalidationBroadcastManager.Instance.Provider.GetChangesSince(sinceSequence, user);
+        const provider = CacheInvalidationBroadcastManager.Instance.Provider;
+        return provider.GetChangesSinceAsync
+            ? await provider.GetChangesSinceAsync(sinceSequence, user)
+            : provider.GetChangesSince(sinceSequence, user);
     }
 
     /**

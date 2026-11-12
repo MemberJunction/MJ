@@ -2079,6 +2079,7 @@ export abstract class CodeGenDatabaseProvider {
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult>;
 
     // ─── POST-RUN VALIDATION ─────────────────────────────────────────────

@@ -100,6 +100,7 @@ import { QuerySecurityChecks } from '../checks/query-security.checks';
 import { SqlPipeMatrixChecks, SqlPipeMatrixCrossChecks } from '../checks/sqlpipe-matrix.checks';
 import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.checks';
 import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
+import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
 import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
 import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
 import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
@@ -289,6 +290,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
+        ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
     ];
 
@@ -516,6 +518,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'realtime-deterministic': 20,
         'realtime-session-guard': 2,
         'realtime-session-verification': 6,
+        'record-change-snapshot': 4,
         'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
@@ -992,6 +995,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'realtime-session-verification.RSV4',
         'realtime-session-verification.RSV5',
         'realtime-session-verification.RSV6',
+        'record-change-snapshot.RCS1',
+        'record-change-snapshot.RCS2',
+        'record-change-snapshot.RCS3',
+        'record-change-snapshot.RCS4',
         'record-cloning.RC1',
         'record-cloning.RC2',
         'record-cloning.RC4',
