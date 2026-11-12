@@ -61,7 +61,8 @@ export class SchemaEvolution {
             if (standardCols.has(lowerName)) continue;
 
             // PK columns: an existing one is never altered (a change only warns). A missing one is
-            // added as nullable, because the rows already stored have no value for it.
+            // added as nullable, because the rows already stored have no value for it. A sync cannot
+            // match those rows to incoming records, so they must be cleared and the object fully re-synced.
             if (pkNames.has(lowerName)) {
                 if (existingNames.has(lowerName)) {
                     const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
@@ -71,7 +72,7 @@ export class SchemaEvolution {
                     }
                 } else {
                     added.push({ ...col, IsNullable: true });
-                    warnings.push(`PK column '${col.TargetColumnName}' added to existing table ${targetConfig.SchemaName}.${targetConfig.TableName} as nullable — rows stored before this change have no value in it until they are synced again`);
+                    warnings.push(`PK column '${col.TargetColumnName}' added to existing table ${targetConfig.SchemaName}.${targetConfig.TableName} as nullable — rows stored before this change have no value in it, so a sync cannot match them. Clear this object's rows and record maps, then run a full sync (6.2 and later do this automatically)`);
                 }
                 continue;
             }

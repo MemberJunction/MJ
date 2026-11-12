@@ -195,6 +195,26 @@ describe('SchemaEvolution', () => {
             expect(diff.AddedColumns[0].IsNullable).toBe(true);
         });
 
+        it('should warn that rows stored before an added key column must be cleared and fully re-synced', () => {
+            // Stored rows have NULL in the new key column, so a sync cannot match them to incoming records.
+            const target: TargetTableConfig = {
+                ...MakeTargetConfig([
+                    { SourceFieldName: 'list_id', TargetColumnName: 'list_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                    { SourceFieldName: 'newsletter_id', TargetColumnName: 'newsletter_id', TargetSqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null, DefaultValue: null },
+                ]),
+                PrimaryKeyFields: ['list_id', 'newsletter_id'],
+            };
+            const existing = MakeExistingTable([
+                { Name: 'list_id', SqlType: 'NVARCHAR(100)', IsNullable: false },
+            ]);
+
+            const diff = evo.DiffSchema(MakeSourceObject(), target, existing, 'sqlserver');
+            expect(diff.Warnings).toHaveLength(1);
+            expect(diff.Warnings[0]).toContain("'newsletter_id'");
+            expect(diff.Warnings[0]).toContain('hubspot.Contact');
+            expect(diff.Warnings[0]).toMatch(/clear .*record maps.*full sync/i);
+        });
+
         it('should not warn about a key column that differs only in nullability', () => {
             // The state a key column is left in once it was added as nullable.
             const target: TargetTableConfig = {
