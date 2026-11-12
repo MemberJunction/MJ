@@ -453,6 +453,7 @@ export interface CollaboratorPresence {
   Color: string;
   ActiveBlockID?: string;
   CanEdit: boolean;
+  IsAgent?: boolean;
 }
 
 /**
@@ -798,7 +799,14 @@ export class DocumentCollaborationSession {
   constructor(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
     endpointResolver?: (
@@ -837,6 +845,8 @@ export class DocumentCollaborationSession {
       email: user.email,
       color: user.color ?? 'var(--mj-brand-primary)',
       canEdit,
+      isAgent: user.isAgent,
+      role: user.role,
     });
 
     this.bindDocObservers(this.Doc);
@@ -1534,6 +1544,8 @@ export class DocumentCollaborationSession {
             color?: string;
             activeBlockId?: string;
             canEdit?: boolean;
+            isAgent?: boolean;
+            role?: string;
           };
         },
         clientId: number,
@@ -1548,6 +1560,7 @@ export class DocumentCollaborationSession {
             Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
             ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
             CanEdit: u.canEdit !== false,
+            IsAgent: u.isAgent === true || u.role === 'agent' || /\bagent\b/i.test(u.name),
           });
         }
       },
@@ -2410,7 +2423,14 @@ export class DocumentCollaborationService implements OnDestroy {
   public CreateSession(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
   ): DocumentCollaborationSession {
