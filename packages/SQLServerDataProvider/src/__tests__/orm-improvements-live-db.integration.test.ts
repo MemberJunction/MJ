@@ -20,11 +20,16 @@ import {
     Metadata,
     RunView,
     SetProvider,
-    SetTypedQueryDriftMode,
-    SetTypedQueryRowValidation,
     UserInfo,
 } from '@memberjunction/core';
-import { MJEntityEntity, MJTagEntity, Queries, QueryEngine } from '@memberjunction/core-entities';
+import {
+    MJEntityEntity,
+    MJTagEntity,
+    Queries,
+    QueryEngine,
+    SetTypedQueryDriftMode,
+    SetTypedQueryRowValidation,
+} from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';

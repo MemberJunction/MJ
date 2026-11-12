@@ -49,6 +49,7 @@ export * from './engines/UserViewEngine';
 export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';
 export * from './engines/QueryEngine';
+export * from './custom/typedQuery';
 export * from './engines/conversations';
 export * from './engines/knowledgeHubMetadata';
 export * from './engines/InstanceConfigEngine';

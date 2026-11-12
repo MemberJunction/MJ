@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -107,6 +107,7 @@ import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
+  SetTypedQueryDriftMode,
 } from '@memberjunction/core-entities';
 import {
   ServerExtensionLoader,

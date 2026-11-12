@@ -942,6 +942,8 @@ parameter, the save would be refused with `MJQ_COMPOSITION_IMPLICIT_ARGUMENT` un
 
 ## 15. Typed Query Wrappers (`DefineTypedQuery` & `Queries`)
 
+`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode` and the rest of the typed-query API are exported from `@memberjunction/core-entities`.
+
 For every saved query with `Status = 'Approved'` and `Reusable = 1`, MemberJunction CodeGen (`typed_query_codegen.ts`) emits strongly-typed parameter and row interfaces, a Zod row schema, a `DefineTypedQuery<TParams, TRow>(...)` descriptor, and a hierarchical `Queries.<Category>.<Name>` namespace object (`packages/MJCoreEntities/src/generated/queries/__mj.ts` for core queries, and `packages/GeneratedEntities/src/generated/queries/<schema>.ts` for OpenApp / tenant queries).
 
 ```ts
@@ -979,6 +981,6 @@ const tagged = await Queries.MJ.Tags.EntityRecordsByTag.Run(
 
 Each generated `DefineTypedQuery` descriptor embeds a deterministic `Signature: 'sha256:...'` computed via `ComputeTypedQuerySignature` over the query's normalized parameter and field metadata. Before `TypedQuery.Run()` dispatches to `RunQuery`:
 
-- **`'warn'` mode (default)**: logs a warning once per query per process if the live `QueryInfo` metadata in `Metadata.Provider.Queries` has drifted since CodeGen ran, then executes the query.
+- **`'warn'` mode (default)**: logs a warning once per query per process if the live query metadata in `QueryEngine` (its `QueryParameters` and `QueryFields`) has drifted since CodeGen ran, then executes the query. A query `QueryEngine` does not hold (not loaded yet, or unknown) is not checked. Pass `metadataProvider` in the run options to check against the `QueryEngine` of another provider's connection.
 - **`'throw'` mode**: throws `TypedQueryDriftError` before executing the query. Configure via `databaseSettings.typedQueryDrift: 'warn' | 'throw'` in `mj.config.cjs`, `SetTypedQueryDriftMode('throw')` in tests/CI, or per call via `Run(params, { driftMode: 'throw' })`.
 - **Optional Zod row validation**: enable via `MJ_TYPED_QUERY_VALIDATE=1` or `SetTypedQueryRowValidation(true)` to validate the first `validateMaxRows` (default 10) result rows against the generated `RowSchema`.
