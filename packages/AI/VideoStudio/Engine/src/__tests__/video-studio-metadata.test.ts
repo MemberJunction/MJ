@@ -977,6 +977,8 @@ describe('Video Studio metadata pin (VS-AGT-1)', () => {
             'MJ Sans',
             'MJ Mono',
             'MJVideo',
+            'MJNarration',
+            'UnresolvedNarrationCue',
             'BindingKey',
             'Date',
             'Math',

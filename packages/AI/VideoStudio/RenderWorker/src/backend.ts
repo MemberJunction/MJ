@@ -3,6 +3,8 @@ import * as path from 'node:path';
 import type {
     CheckIssue,
     ExtractedKeyframe,
+    RenderAudioMixPlan,
+    RenderAudioReport,
     RenderHealth,
     RenderProgress,
     RenderWorkerErrorBody,
@@ -75,6 +77,32 @@ export interface BackendRenderJob {
     DurationSeconds?: number;
     /** Optional encoding quality preset. */
     Quality?: 'draft' | 'standard' | 'high';
+    /** Parallel capture workers, already clamped by the job runner (`ResolveRenderCaptureWorkers`). */
+    Workers?: number;
+}
+
+/**
+ * Parameters passed to `RenderBackend.FinalizeAudio` after the picture has been rendered.
+ */
+export interface BackendAudioJob {
+    /** Absolute path to the unpacked bundle directory (plan `Src` paths resolve inside it). */
+    RootDir: string;
+    /** MP4 written by `RenderBackend.Render`. */
+    VideoPath: string;
+    /** Film duration in seconds. */
+    DurationSeconds: number;
+    /** Optional soundtrack plan from `RenderRequest.AudioMix`. */
+    Plan?: RenderAudioMixPlan;
+}
+
+/**
+ * Delivered MP4 path and audio report returned by `RenderBackend.FinalizeAudio`.
+ */
+export interface BackendAudioResult {
+    /** Delivered MP4 path. */
+    OutputPath: string;
+    /** Mix, loudness, and audio check outcome. */
+    Report: RenderAudioReport;
 }
 
 /**
@@ -180,6 +208,11 @@ export interface RenderBackend {
         onProgress: (progress: RenderProgress) => void,
         signal?: AbortSignal,
     ): Promise<{ OutputPath: string; FrameCount: number }>;
+    /**
+     * Builds (from the plan) or keeps the soundtrack, normalizes loudness, muxes the delivered MP4, and
+     * runs the deterministic audio checks.
+     */
+    FinalizeAudio(job: BackendAudioJob, signal?: AbortSignal): Promise<BackendAudioResult>;
     /** Captures one or more still frames in a single headless browser session. */
     CaptureStills(job: BackendStillsJob, signal?: AbortSignal): Promise<Uint8Array[]>;
     /** Probes an MP4 file for duration, dimensions, and audio stream presence. */
@@ -219,6 +252,8 @@ export interface FakeRenderBackendOptions {
     HasAudio?: boolean;
     /** Simulated health status returned by `Health()` (defaults to `true`). */
     Healthy?: boolean;
+    /** Scripted audio report returned by `FinalizeAudio()` (defaults to a clean, normalized report). */
+    AudioReport?: RenderAudioReport;
 }
 
 /**
@@ -240,6 +275,8 @@ export class FakeRenderBackend implements RenderBackend {
     public LastMeasureTextJob?: BackendCheckJob;
     public LastCheckCliSignal?: AbortSignal;
     public LastMeasureTextSignal?: AbortSignal;
+    public LastRenderJob?: BackendRenderJob;
+    public LastAudioJob?: BackendAudioJob;
 
     public constructor(options: FakeRenderBackendOptions = {}) {
         this.options = options;
@@ -291,6 +328,7 @@ export class FakeRenderBackend implements RenderBackend {
         signal?: AbortSignal,
     ): Promise<{ OutputPath: string; FrameCount: number }> {
         throwIfAborted(signal);
+        this.LastRenderJob = { ...job };
         const entryContent = await fs.readFile(path.join(job.RootDir, job.EntryFile), 'utf8');
         const durationSeconds = job.DurationSeconds ?? parseDurationFromHtml(entryContent) ?? 3;
         const totalFrames = Math.max(1, Math.round(durationSeconds * job.Fps));
@@ -331,6 +369,21 @@ export class FakeRenderBackend implements RenderBackend {
         };
 
         return { OutputPath: outputPath, FrameCount: totalFrames };
+    }
+
+    public async FinalizeAudio(job: BackendAudioJob, signal?: AbortSignal): Promise<BackendAudioResult> {
+        throwIfAborted(signal);
+        this.LastAudioJob = { ...job };
+        const report: RenderAudioReport = this.options.AudioReport
+            ? structuredClone(this.options.AudioReport)
+            : {
+                  Mixed: Boolean(job.Plan),
+                  Normalized: true,
+                  Measurements: { IntegratedLufs: -14, TruePeakDb: -1.6, LoudnessRangeLu: 6 },
+                  Issues: [],
+                  Synthesized: [],
+              };
+        return { OutputPath: job.VideoPath, Report: report };
     }
 
     public async CaptureStills(job: BackendStillsJob, signal?: AbortSignal): Promise<Uint8Array[]> {

@@ -36,3 +36,64 @@ export interface MJVideoRuntime {
      */
     OnFrame(cb: (timeSeconds: number) => void): void;
 }
+
+/**
+ * One spoken word in the narration cue table (seconds on the master timeline).
+ */
+export interface NarrationCueWord {
+    /** Word as written in the narration line (punctuation attached). */
+    Word: string;
+    /** Normalized match key (lower case, punctuation removed). */
+    Key: string;
+    /** When the word starts. */
+    Start: number;
+    /** When the word ends. */
+    End: number;
+}
+
+/**
+ * Timings of one narration line in the cue table.
+ */
+export interface NarrationCueLine {
+    /** When the line starts. */
+    Start: number;
+    /** When the line ends. */
+    End: number;
+    /** Spoken words in order (empty when the TTS returned no word timings). */
+    Words: NarrationCueWord[];
+}
+
+/**
+ * Narration timings staged into every bundle at `mj/narration-cues.js`, keyed by `NarrationLine.Key`.
+ */
+export interface NarrationCueTable {
+    /** Lines keyed by `NarrationLine.Key`. */
+    Lines: Record<string, NarrationCueLine>;
+}
+
+/**
+ * Word-anchored timing runtime (`window.MJNarration`), loaded automatically from `mj/narration-cues.js`.
+ *
+ * Use it to start an element exactly when the narration says the word that introduces it:
+ * `const t = window.mjCue('line-3', 'revenue');` then animate relative to `t` inside `OnFrame`.
+ * Matching ignores case and punctuation, and a multi-word phrase (`'own your data'`) matches
+ * consecutive words. Prefer these lookups over typed timestamps: they follow the measured speech.
+ */
+export interface MJNarrationCues {
+    /** The staged cue table. */
+    readonly Table: NarrationCueTable;
+    /** `lineKey:phrase` labels that did not resolve (diagnostics only). */
+    readonly Misses: string[];
+    /**
+     * Seconds when the `nth` (1-based, default 1) occurrence of `phrase` starts in line `lineKey`.
+     * Falls back to the line start when the phrase is not spoken, or `0` when the line is unknown.
+     * Also available as `window.mjCue(lineKey, phrase, nth?)`.
+     */
+    Cue(lineKey: string, phrase: string, nth?: number): number;
+    /** Seconds when that occurrence ends (falls back to the line end). Also `window.mjCueEnd(...)`. */
+    CueEnd(lineKey: string, phrase: string, nth?: number): number;
+    /** True when the phrase is spoken in the line. */
+    Has(lineKey: string, phrase: string, nth?: number): boolean;
+    /** Start and end of a line, or `null` when unknown. */
+    Line(lineKey: string): { Start: number; End: number } | null;
+}

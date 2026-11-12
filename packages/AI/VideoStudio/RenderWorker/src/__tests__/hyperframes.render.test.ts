@@ -9,7 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { CapturedStill, RenderProjectBundle } from '@memberjunction/video-studio-core';
+import {
+    DEFAULT_AUDIO_CHECK_THRESHOLDS,
+    DEFAULT_DUCKING_SETTINGS,
+    DEFAULT_LOUDNESS_TARGET,
+    WithNarrationCues,
+    type CapturedStill,
+    type RenderProjectBundle,
+} from '@memberjunction/video-studio-core';
 import { StageRenderBundle } from '../bundle.js';
 import { HyperFramesRenderBackend } from '../hyperframes-backend.js';
 import {
@@ -187,6 +194,69 @@ describe.skipIf(!CAN_RUN_RENDER_TESTS)(
             expect(health.ChromiumVersion.length).toBeGreaterThan(0);
             expect(health.FfmpegVersion.length).toBeGreaterThan(0);
         }, 30_000);
+
+        it(
+            'renders with 2 parallel capture workers, a narration-cue script, and a worker-built soundtrack (narration + ducked synthesized bed + synthesized effects) normalized to -14 LUFS',
+            async () => {
+                const golden = await buildGoldenBundle();
+                const narrationLine = {
+                    Key: 'line-1',
+                    BeatKey: 'b1',
+                    Text: 'Golden render with sound.',
+                    StartSeconds: 0.3,
+                    DurationSeconds: 2,
+                    WordTimings: [{ Word: 'Golden', StartSeconds: 0.3, EndSeconds: 0.8 }],
+                };
+                const bundle = WithNarrationCues(
+                    {
+                        ...golden,
+                        Assets: [...golden.Assets, { Key: 'line-1', RelativePath: 'audio/line-1.wav', MimeType: 'audio/wav', DataBase64: createSineWavBase64(2) }],
+                    },
+                    { Audio: { Narration: { VoiceID: 'v', Provider: 'p', Script: [narrationLine] }, Cues: [], Captions: 'None' } },
+                );
+                const renderResult = await RunRenderJob(
+                    {
+                        Bundle: bundle,
+                        Width: 1280,
+                        Height: 720,
+                        Fps: 30,
+                        DurationSeconds: 3,
+                        Quality: 'draft',
+                        Workers: 2,
+                        AudioMix: {
+                            DurationSeconds: 3,
+                            Seed: 7,
+                            Narration: [{ Key: 'line-1', BeatKey: 'b1', Src: 'audio/line-1.wav', StartSeconds: 0.3, DurationSeconds: 2, Text: narrationLine.Text, WordTimings: narrationLine.WordTimings }],
+                            Music: { Synthesized: { Mood: 'Uplifting', Bpm: 110 }, GainDb: -15 },
+                            Sfx: [
+                                { Key: 'w', StartSeconds: 0.1, Synth: 'Whoosh', GainDb: -6 },
+                                { Key: 'c', StartSeconds: 2.6, Synth: 'Chime', GainDb: -6 },
+                            ],
+                            MusicEvents: [],
+                            Ducking: { ...DEFAULT_DUCKING_SETTINGS },
+                            Loudness: { ...DEFAULT_LOUDNESS_TARGET },
+                            Checks: { ...DEFAULT_AUDIO_CHECK_THRESHOLDS },
+                        },
+                    },
+                    backend,
+                    () => undefined,
+                );
+
+                expect(renderResult.Workers).toBe(Math.min(2, os.availableParallelism()));
+                expect(renderResult.FrameCount).toBe(90);
+                expect(renderResult.HasAudio).toBe(true);
+                expect(renderResult.Audio?.Mixed).toBe(true);
+                expect(renderResult.Audio?.Normalized).toBe(true);
+                expect(Math.abs((renderResult.Audio?.Measurements.IntegratedLufs ?? 0) + 14)).toBeLessThanOrEqual(1.5);
+                expect(renderResult.Audio?.Measurements.MinNarrationToMusicDb ?? 0).toBeGreaterThan(10);
+                expect(renderResult.Audio?.Issues).toEqual([]);
+                expect(renderResult.Audio?.Synthesized).toEqual([
+                    'Music: synthesized Uplifting bed at 110 BPM (procedurally generated, not a licensed track)',
+                    'Sound effects: 2 synthesized (Whoosh at 0.10s, Chime at 2.60s)',
+                ]);
+            },
+            180_000,
+        );
 
         it(
             'renders the 3s 1280x720 30fps golden composition (Roboto, PNG, tone, MJVideo.Data + Noise) and captures stills + contact sheets',

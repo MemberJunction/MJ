@@ -158,6 +158,8 @@ export async function RunOneShot(
                     HasAudio: renderResult.HasAudio,
                     RendererVersion: renderResult.RendererVersion,
                     RenderDurationMs: renderResult.RenderDurationMs,
+                    ...(renderResult.Workers !== undefined ? { Workers: renderResult.Workers } : {}),
+                    ...(renderResult.Audio ? { Audio: renderResult.Audio } : {}),
                 };
                 await writeJsonFile(path.join(outDir, 'result.json'), metadata);
                 return 0;

@@ -13,6 +13,12 @@
 import {
     VIDEO_STUDIO_SPEC_VERSION,
 } from './video-generation-spec.js';
+import {
+    AUDIO_SYNTH_KINDS,
+    IsValidSynthMusicKey,
+    SYNTHESIZED_MUSIC_MOODS,
+    SYNTH_MUSIC_BPM_RANGE,
+} from './audio-mix.js';
 import type {
     AudioCueKind,
     DefectSeverity,
@@ -138,6 +144,19 @@ export const AUDIO_CUE_KINDS = [
     'Silence',
 ] as const satisfies readonly AudioCueKind[];
 const _exhaustiveAudioCueKinds: AssertExhaustiveTuple<AudioCueKind, typeof AUDIO_CUE_KINDS> = AUDIO_CUE_KINDS;
+
+/** Allowed range in seconds for `NarrationLine.PauseBeforeSeconds` / `PauseAfterSeconds`. */
+export const NARRATION_PAUSE_RANGE_SECONDS = { Min: 0, Max: 3 } as const;
+
+/** Allowed `AudioCue.GainDb` range per cue kind (dB). */
+export const AUDIO_CUE_GAIN_RANGES_DB = {
+    MusicDuck: { Min: -30, Max: 0 },
+    MusicSwell: { Min: 0, Max: 12 },
+    Sfx: { Min: -30, Max: 6 },
+} as const;
+
+/** Allowed `AudioCue.DurationSeconds` range (seconds) for ducks, swells, and risers. */
+export const AUDIO_CUE_DURATION_RANGE_SECONDS = { Min: 0.05, Max: 30 } as const;
 
 /** All valid `VideoCaptionMode` values. */
 export const VIDEO_CAPTION_MODES = [
@@ -291,6 +310,9 @@ export type VideoSpecErrorCode =
     | 'UnresolvedReferenceKey'
     | 'MissingNarrationScript'
     | 'AudioCueOutsideTimeline'
+    | 'InvalidNarrationPause'
+    | 'InvalidMusicSpec'
+    | 'InvalidAudioCue'
     | 'MissingDataSnapshot'
     | 'MissingOutputManifest'
     | 'MissingOutputVideoPayload'
@@ -341,6 +363,9 @@ export const VIDEO_SPEC_ERROR_CODES = [
     'UnresolvedReferenceKey',
     'MissingNarrationScript',
     'AudioCueOutsideTimeline',
+    'InvalidNarrationPause',
+    'InvalidMusicSpec',
+    'InvalidAudioCue',
     'MissingDataSnapshot',
     'MissingOutputManifest',
     'MissingOutputVideoPayload',
@@ -1367,6 +1392,8 @@ function validateAudioSection(
         }
     }
 
+    scriptLines.forEach((line, idx) => validateNarrationPauses(line, idx, errors));
+
     if (beatKeys.size > 0) {
         scriptLines.forEach((line, idx) => {
             if (line && !beatKeys.has(line.BeatKey)) {
@@ -1377,6 +1404,11 @@ function validateAudioSection(
                 });
             }
         });
+    }
+
+    validateMusicSpec(spec.Audio?.Music, errors);
+    if (spec.Style?.Sound?.SynthesizedMusic) {
+        validateSynthesizedMusic(spec.Style.Sound.SynthesizedMusic, 'Style.Sound.SynthesizedMusic', errors);
     }
 
     if (spec.Audio?.Music?.AssetKey !== undefined && !approvedAssetKeys.has(spec.Audio.Music.AssetKey)) {
@@ -1408,6 +1440,7 @@ function validateAudioSection(
                 Message: `Audio cue "${cue.Key}" timestamp (${cue.TimestampSeconds}s) falls outside the film timeline [0, ${duration}].`,
             });
         }
+        validateCueMix(cue, idx, errors);
         if (cue.AssetKey !== undefined && !approvedAssetKeys.has(cue.AssetKey)) {
             errors.push({
                 Code: 'UnresolvedReferenceKey',
@@ -1423,6 +1456,131 @@ function validateAudioSection(
             });
         }
     });
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isOutsideRange(value: number, range: { readonly Min: number; readonly Max: number }): boolean {
+    return value < range.Min || value > range.Max;
+}
+
+function validateNarrationPauses(
+    line: NonNullable<VideoGenerationSpec['Audio']['Narration']>['Script'][number] | undefined,
+    idx: number,
+    errors: VideoSpecValidationError[],
+): void {
+    if (!line) {
+        return;
+    }
+    for (const field of ['PauseBeforeSeconds', 'PauseAfterSeconds'] as const) {
+        const value = line[field];
+        if (value === undefined) {
+            continue;
+        }
+        if (!isFiniteNumber(value) || isOutsideRange(value, NARRATION_PAUSE_RANGE_SECONDS)) {
+            errors.push({
+                Code: 'InvalidNarrationPause',
+                Path: `Audio.Narration.Script[${idx}].${field}`,
+                Message: `${field} must be a number of seconds between ${NARRATION_PAUSE_RANGE_SECONDS.Min} and ${NARRATION_PAUSE_RANGE_SECONDS.Max} (got ${String(value)}).`,
+            });
+        }
+    }
+}
+
+function validateMusicSpec(
+    music: VideoGenerationSpec['Audio']['Music'],
+    errors: VideoSpecValidationError[],
+): void {
+    if (!music) {
+        return;
+    }
+    const hasAsset = typeof music.AssetKey === 'string' && music.AssetKey.trim().length > 0;
+    if (!hasAsset && !music.Synthesized) {
+        errors.push({
+            Code: 'InvalidMusicSpec',
+            Path: 'Audio.Music',
+            Message: 'Audio.Music needs a licensed AssetKey or an opt-in Synthesized bed; remove Audio.Music for a film without music.',
+        });
+    }
+    if (music.GainDb !== undefined && (!isFiniteNumber(music.GainDb) || music.GainDb < -40 || music.GainDb > 6)) {
+        errors.push({
+            Code: 'InvalidMusicSpec',
+            Path: 'Audio.Music.GainDb',
+            Message: `Audio.Music.GainDb must be between -40 and 6 dB (got ${String(music.GainDb)}).`,
+        });
+    }
+    if (music.Synthesized) {
+        validateSynthesizedMusic(music.Synthesized, 'Audio.Music.Synthesized', errors);
+    }
+}
+
+function validateSynthesizedMusic(
+    synth: NonNullable<NonNullable<VideoGenerationSpec['Audio']['Music']>['Synthesized']>,
+    path: string,
+    errors: VideoSpecValidationError[],
+): void {
+    if (!isMemberOf(synth.Mood, SYNTHESIZED_MUSIC_MOODS)) {
+        pushEnumError(errors, `${path}.Mood`, synth.Mood, SYNTHESIZED_MUSIC_MOODS);
+    }
+    if (!isFiniteNumber(synth.Bpm) || isOutsideRange(synth.Bpm, SYNTH_MUSIC_BPM_RANGE)) {
+        errors.push({
+            Code: 'InvalidMusicSpec',
+            Path: `${path}.Bpm`,
+            Message: `Synthesized music Bpm must be between ${SYNTH_MUSIC_BPM_RANGE.Min} and ${SYNTH_MUSIC_BPM_RANGE.Max} (got ${String(synth.Bpm)}).`,
+        });
+    }
+    if (synth.Key !== undefined && (typeof synth.Key !== 'string' || !IsValidSynthMusicKey(synth.Key))) {
+        errors.push({
+            Code: 'InvalidMusicSpec',
+            Path: `${path}.Key`,
+            Message: `Synthesized music Key must look like 'C', 'F#', 'Bb', or 'Am' (got ${String(synth.Key)}).`,
+        });
+    }
+}
+
+function validateCueMix(
+    cue: VideoGenerationSpec['Audio']['Cues'][number],
+    idx: number,
+    errors: VideoSpecValidationError[],
+): void {
+    const path = `Audio.Cues[${idx}]`;
+    if (cue.Synth !== undefined && !isMemberOf(cue.Synth, AUDIO_SYNTH_KINDS)) {
+        pushEnumError(errors, `${path}.Synth`, cue.Synth, AUDIO_SYNTH_KINDS);
+    }
+    if (cue.Kind === 'Sfx' && !cue.AssetKey?.trim() && cue.Synth === undefined) {
+        errors.push({
+            Code: 'InvalidAudioCue',
+            Path: path,
+            Message: `Sfx cue "${cue.Key}" needs an AssetKey (licensed sound) or a Synth kind (${AUDIO_SYNTH_KINDS.join(', ')}).`,
+        });
+    }
+    if (cue.Synth !== undefined && cue.Kind !== 'Sfx') {
+        errors.push({
+            Code: 'InvalidAudioCue',
+            Path: `${path}.Synth`,
+            Message: `Synth is only valid on 'Sfx' cues (cue "${cue.Key}" is '${String(cue.Kind)}').`,
+        });
+    }
+    if (cue.DurationSeconds !== undefined && (!isFiniteNumber(cue.DurationSeconds) || isOutsideRange(cue.DurationSeconds, AUDIO_CUE_DURATION_RANGE_SECONDS))) {
+        errors.push({
+            Code: 'InvalidAudioCue',
+            Path: `${path}.DurationSeconds`,
+            Message: `Audio cue DurationSeconds must be between ${AUDIO_CUE_DURATION_RANGE_SECONDS.Min} and ${AUDIO_CUE_DURATION_RANGE_SECONDS.Max} seconds (got ${String(cue.DurationSeconds)}).`,
+        });
+    }
+    const gainRange =
+        cue.Kind === 'MusicDuck' || cue.Kind === 'MusicSwell' || cue.Kind === 'Sfx' ? AUDIO_CUE_GAIN_RANGES_DB[cue.Kind] : undefined;
+    if (cue.GainDb !== undefined && (!isFiniteNumber(cue.GainDb) || !gainRange || isOutsideRange(cue.GainDb, gainRange))) {
+        errors.push({
+            Code: 'InvalidAudioCue',
+            Path: `${path}.GainDb`,
+            Message: gainRange
+                ? `GainDb for a '${cue.Kind}' cue must be between ${gainRange.Min} and ${gainRange.Max} dB (got ${String(cue.GainDb)}).`
+                : `GainDb is not used on a '${String(cue.Kind)}' cue.`,
+        });
+    }
 }
 
 function validateRenderAndInteraction(

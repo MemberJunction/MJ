@@ -41,8 +41,12 @@ import type {
     RenderProgress,
     RenderProgressPhase,
 } from '@memberjunction/video-studio-core';
+import { FinalizeRenderAudio } from './audio/audio-pipeline.js';
+import { CreateFfmpegRunner } from './audio/ffmpeg-audio.js';
 import {
     RenderWorkerError,
+    type BackendAudioJob,
+    type BackendAudioResult,
     type BackendCheckJob,
     type BackendProbeResult,
     type BackendRenderJob,
@@ -236,7 +240,9 @@ export class HyperFramesRenderBackend implements RenderBackend {
             fps: job.Fps,
             quality: job.Quality ?? 'standard',
             format: 'mp4',
-            workers: 1,
+            // Parallel capture: HyperFrames splits the frame range across this many headless Chromium
+            // sessions. RunRenderJob resolves and clamps it (request, VIDEO_STUDIO_RENDER_WORKERS, CPUs).
+            workers: Math.max(1, job.Workers ?? 1),
         });
 
         try {
@@ -265,6 +271,28 @@ export class HyperFramesRenderBackend implements RenderBackend {
                 : Math.max(1, Math.round((job.DurationSeconds ?? 1) * job.Fps));
 
         return { OutputPath: finalOutputPath, FrameCount: totalFrames };
+    }
+
+    public async FinalizeAudio(job: BackendAudioJob, signal?: AbortSignal): Promise<BackendAudioResult> {
+        throwIfAborted(signal);
+        const probe = await this.Probe(job.VideoPath);
+        const result = await FinalizeRenderAudio(
+            {
+                Ffmpeg: CreateFfmpegRunner(await getFfmpegBinary()),
+                RootDir: job.RootDir,
+                VideoPath: job.VideoPath,
+                VideoHasAudio: probe.HasAudio,
+                DurationSeconds: job.DurationSeconds,
+                ...(job.Plan ? { Plan: job.Plan } : {}),
+            },
+            signal,
+        ).catch((error: unknown) => {
+            if (signal?.aborted) {
+                throw new RenderWorkerError('Cancelled', 'Render job was cancelled.');
+            }
+            throw error;
+        });
+        return { OutputPath: result.OutputPath, Report: result.Report };
     }
 
     public async CaptureStills(job: BackendStillsJob, signal?: AbortSignal): Promise<Uint8Array[]> {

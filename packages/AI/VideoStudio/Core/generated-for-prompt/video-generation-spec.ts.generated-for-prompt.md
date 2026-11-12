@@ -173,6 +173,12 @@ interface VideoStyleGuide {
     Keep: string[];  // Positive stylistic commitments to maintain across every beat.
     Avoid: string[];  // Explicit anti-patterns banned from compositions (e.g., 'centered text on gradient').
     References: ReferenceAnalysis[];  // Structured takeaways and `DoNotCopy` lists from inspected reference media.
+    Sound?: VideoSoundDirection;  // Optional sound direction from the Art Director, which the Storyboard turns into `Audio` (§8).
+}
+
+interface VideoSoundDirection {
+    SynthesizedMusic?: VideoSynthesizedMusicSpec;  // Requested opt-in synthesized music bed, used only when no licensed music track is supplied.
+    Notes?: string;  // Sound-design intent (e.g., 'one whoosh per scene change, soft ticks on counting numbers').
 }
 
 interface VideoBeat {
@@ -259,7 +265,10 @@ interface NarrationLine {
     StagedPath?: string;  // Relative bundle path of the staged audio clip during rendering.
     StartSeconds?: number;  // Resolved start time in seconds on the master timeline after synthesis.
     DurationSeconds?: number;  // Measured clip duration in seconds used to fit the beat's length.
-    WordTimings?: NarrationWordTiming[];  // Optional word-level alignment timings driving captions and audio cues.
+    WordTimings?: NarrationWordTiming[];  // Optional word-level alignment timings driving captions, audio cues, and word-anchored visuals.
+    SpokenText?: string;  // Text actually sent to TTS after `{BindingKey}` substitution and pronunciation normalization
+    PauseBeforeSeconds?: number;  // Optional silence in seconds before this line starts (0 to 3). Replaces the default 0.3 s lead-in
+    PauseAfterSeconds?: number;  // Optional silence in seconds after this line ends (0 to 3). Replaces the default 0.5 s tail
 }
 
 interface VideoNarrationSpec {
@@ -269,10 +278,24 @@ interface VideoNarrationSpec {
     Script: NarrationLine[];  // Ordered narration lines, typically one per beat.
 }
 
+type SynthesizedMusicMood =
+    | 'Calm'  // Soft major-key pad, gentle pulse; neutral explainers
+    | 'Uplifting'  // Bright major progression with a steady pulse; launches and good news
+    | 'Corporate'  // Clean, confident major progression; product and business films
+    | 'Reflective'  // Warm minor-leaning progression, slow pulse; stories and testimonials
+    | 'Tense';  // Dark minor progression with a firmer pulse; problem statements and risks
+
+interface VideoSynthesizedMusicSpec {
+    Mood: SynthesizedMusicMood;  // Overall feel, which selects the chord progression and pulse pattern.
+    Bpm: number;  // Tempo in beats per minute (60 to 140).
+    Key?: string;  // Optional tonal center such as 'C', 'F#', 'Bb', or 'Am' (defaults by mood).
+}
+
 interface VideoMusicSpec {
-    AssetKey: string;  // Key in `Assets.Approved` pointing to a licensed music track.
+    AssetKey?: string;  // Key in `Assets.Approved` pointing to a licensed music track (wins over `Synthesized`).
+    Synthesized?: VideoSynthesizedMusicSpec;  // Opt-in synthesized music bed used when no licensed track (`AssetKey`) is supplied.
     BeatGrid?: number[];  // Optional array of musical beat timestamps in seconds for cut and cue alignment.
-    GainDb?: number;  // Optional mix level in dB under narration (e.g., -18).
+    GainDb?: number;  // Optional base music level in dB relative to full scale (e.g., -15). When omitted the worker uses
 }
 
 type AudioCueKind =
@@ -281,11 +304,22 @@ type AudioCueKind =
     | 'MusicSwell'  // Swell background music during transitions or closing beat
     | 'Silence';  // Intentional breath or pause on the audio timeline
 
+type AudioSynthKind =
+    | 'Whoosh'  // Filtered air sweep for transitions and fast moves (about 0.8 s)
+    | 'Click'  // Short UI click for buttons and selections
+    | 'Tick'  // Bright tick for counters, list items, and checkmarks
+    | 'Impact'  // Low boom with a soft tail for reveals and hard cuts
+    | 'Chime'  // Bell-like chime for success states and end cards
+    | 'Riser';  // Rising noise sweep that ENDS at `TimestampSeconds` (length from `DurationSeconds`, default 1.5 s)
+
 interface AudioCue {
     Key: string;  // Unique identifier for the audio cue.
     TimestampSeconds: number;  // Exact trigger timestamp in seconds on the master timeline (`0` to `DurationSeconds`).
     Kind: AudioCueKind;  // Type of audio event or mix change.
-    AssetKey?: string;  // Optional key in `Assets.Approved` when `Kind` is `'Sfx'`.
+    AssetKey?: string;  // Optional key in `Assets.Approved` when `Kind` is `'Sfx'` (a licensed sound file; wins over `Synth`).
+    Synth?: AudioSynthKind;  // Optional synthesized sound effect when `Kind` is `'Sfx'` and no `AssetKey` is supplied.
+    DurationSeconds?: number;  // Optional span in seconds: how long a `'MusicDuck'` or `'MusicSwell'` holds (default 2 s), or the
+    GainDb?: number;  // Optional level change in dB: the duck depth for `'MusicDuck'` (default -7.5, range -30 to 0), the
     BeatKey?: string;  // Optional `VideoBeat.Key` associated with this cue for sync review.
     Notes?: string;  // Mix or sync intent notes for the critic's "close your eyes" check.
 }
@@ -434,6 +468,15 @@ interface VideoRenderMetadataSummary {
     Fps: number;  // Frame rate in frames per second used during rendering.
     DurationByFormat: Partial<Record<VideoFormat, number>>;  // Rendered duration in seconds per delivered format.
     RenderedAt: string;  // ISO-8601 timestamp when the final render completed.
+    AudioByFormat?: Partial<Record<VideoFormat, VideoRenderedAudioSummary>>;  // Measured audio of each delivered format (loudness, peaks, narration-to-music ratio, synthesized...
+}
+
+interface VideoRenderedAudioSummary {
+    IntegratedLufs?: number;  // Integrated loudness of the delivered mix in LUFS.
+    TruePeakDb?: number;  // True peak of the delivered mix in dBTP.
+    LoudnessRangeLu?: number;  // Loudness range of the delivered mix in LU.
+    MinNarrationToMusicDb?: number;  // Lowest narration-to-music ratio across narration lines, in dB.
+    Synthesized: string[];  // Human-readable descriptions of procedurally synthesized music and sound effects in the mix...
 }
 
 interface VideoGeneratedAssetProvenanceItem {

@@ -6,7 +6,13 @@
  * or external networks.
  */
 
-import type { VideoFormat, VideoRenderQuality } from './video-generation-spec.js';
+import type {
+    AudioSynthKind,
+    NarrationWordTiming,
+    VideoFormat,
+    VideoRenderQuality,
+    VideoSynthesizedMusicSpec,
+} from './video-generation-spec.js';
 
 /**
  * Base64-encoded binary payload (`string`) used across the render worker wire contract.
@@ -89,6 +95,191 @@ export interface RenderRequest {
     Quality: VideoRenderQuality;
     /** Optional per-render hard timeout in milliseconds. */
     TimeoutMs?: number;
+    /**
+     * Optional number of parallel HyperFrames capture workers (headless Chromium sessions) for this job.
+     * The worker clamps it to `[1, MAX_RENDER_CAPTURE_WORKERS]` and to its CPU count; when omitted it
+     * uses `VIDEO_STUDIO_RENDER_WORKERS` or a CPU-based default (`DefaultRenderCaptureWorkers`).
+     */
+    Workers?: number;
+    /**
+     * Optional audio mix plan. When present the worker builds the soundtrack itself from this plan
+     * (narration, ducked music, sound effects, synthesized sources), replaces the composition's own
+     * audio, normalizes loudness, and measures the result. When absent the worker keeps the
+     * composition's audio and only normalizes and measures it.
+     */
+    AudioMix?: RenderAudioMixPlan;
+}
+
+// ---------------------------------------------------------------------------
+// Audio mix plan & report (§8)
+// ---------------------------------------------------------------------------
+
+/**
+ * One synthesized narration clip placed on the master timeline.
+ */
+export interface RenderAudioNarrationTrack {
+    /** `NarrationLine.Key`. */
+    Key: string;
+    /** Optional `VideoBeat.Key` the line belongs to (reported on audio check issues). */
+    BeatKey?: string;
+    /** Bundle-relative path of the staged clip (an entry in `Bundle.Assets`). */
+    Src: string;
+    /** Start time in seconds on the master timeline. */
+    StartSeconds: number;
+    /** Measured clip duration in seconds. */
+    DurationSeconds: number;
+    /** Text that was spoken (`SpokenText ?? Text`), used to judge whether a pause inside the line is expected. */
+    Text: string;
+    /** Optional master-timeline word timings, used to place an unexpected pause between two words. */
+    WordTimings?: NarrationWordTiming[];
+}
+
+/**
+ * Background music source: a staged licensed file, or a synthesized bed.
+ */
+export interface RenderAudioMusicTrack {
+    /** Bundle-relative path of the staged licensed track (wins over `Synthesized`). */
+    Src?: string;
+    /** Synthesized bed rendered by the worker when `Src` is absent. */
+    Synthesized?: VideoSynthesizedMusicSpec;
+    /** Base music level in dB before ducking and swells. */
+    GainDb: number;
+}
+
+/**
+ * One sound effect: a staged file or a synthesized effect.
+ */
+export interface RenderAudioSfxTrack {
+    /** `AudioCue.Key`. */
+    Key: string;
+    /** Cue time in seconds (a `'Riser'` ends here; every other effect starts here). */
+    StartSeconds: number;
+    /** Bundle-relative path of a staged sound file (wins over `Synth`). */
+    Src?: string;
+    /** Synthesized effect kind when `Src` is absent. */
+    Synth?: AudioSynthKind;
+    /** Effect level in dB. */
+    GainDb: number;
+    /** Optional length in seconds (used by `'Riser'`). */
+    DurationSeconds?: number;
+}
+
+/**
+ * Explicit music level change from a `'MusicDuck'` or `'MusicSwell'` cue.
+ */
+export interface RenderMusicGainEvent {
+    /** `AudioCue.Key`. */
+    Key: string;
+    /** Whether the event lowers (`'Duck'`) or raises (`'Swell'`) the music. */
+    Kind: 'Duck' | 'Swell';
+    /** Start time in seconds. */
+    StartSeconds: number;
+    /** Hold length in seconds (ramps are added outside this span). */
+    DurationSeconds: number;
+    /** Level change in dB (negative for a duck, positive for a swell). */
+    GainDb: number;
+}
+
+/**
+ * Automatic music ducking under narration.
+ */
+export interface RenderDuckingSettings {
+    /** Whether music is lowered automatically while narration plays. */
+    Enabled: boolean;
+    /** Level change in dB applied to music during speech (negative, e.g. -7.5). */
+    DuckDb: number;
+    /** Seconds for the music to reach the ducked level; the ramp ends at the first word. */
+    AttackSeconds: number;
+    /** Seconds for the music to return to its base level after the line ends. */
+    ReleaseSeconds: number;
+}
+
+/**
+ * Loudness normalization target for the delivered mix (ffmpeg `loudnorm`, EBU R128).
+ */
+export interface RenderLoudnessTarget {
+    /** Whether the final mix is loudness-normalized. */
+    Enabled: boolean;
+    /** Integrated loudness target in LUFS (e.g. -14). */
+    IntegratedLufs: number;
+    /** Maximum true peak in dBTP (e.g. -1.5). */
+    TruePeakDb: number;
+    /** Loudness range target in LU (e.g. 11). */
+    LoudnessRangeLu: number;
+}
+
+/**
+ * Thresholds for the deterministic audio checks run on the delivered mix.
+ */
+export interface RenderAudioCheckThresholds {
+    /** Allowed distance in LU between measured integrated loudness and the target. */
+    LoudnessToleranceLu: number;
+    /** Minimum narration-to-music level difference in dB while a line is spoken. */
+    MinNarrationToMusicDb: number;
+    /** Allowed true-peak overshoot in dB above `RenderLoudnessTarget.TruePeakDb`. */
+    TruePeakToleranceDb: number;
+    /** Shortest silence in seconds inside a narration line that counts as a pause. */
+    MinLinePauseSeconds: number;
+    /** Level in dB below which narration counts as silent. */
+    SilenceThresholdDb: number;
+}
+
+/**
+ * Complete soundtrack plan sent with a `RenderRequest` (§8).
+ */
+export interface RenderAudioMixPlan {
+    /** Film duration in seconds (the mix is trimmed or padded to it). */
+    DurationSeconds: number;
+    /** Seed for synthesized sources (from `Render.Seed`). */
+    Seed: number;
+    /** Narration clips in timeline order. */
+    Narration: RenderAudioNarrationTrack[];
+    /** Optional background music. */
+    Music?: RenderAudioMusicTrack;
+    /** Sound effects. */
+    Sfx: RenderAudioSfxTrack[];
+    /** Explicit music ducks and swells from `Audio.Cues`. */
+    MusicEvents: RenderMusicGainEvent[];
+    /** Automatic ducking under narration. */
+    Ducking: RenderDuckingSettings;
+    /** Final loudness normalization. */
+    Loudness: RenderLoudnessTarget;
+    /** Audio check thresholds. */
+    Checks: RenderAudioCheckThresholds;
+}
+
+/**
+ * Measurements taken from the delivered mix.
+ */
+export interface RenderAudioMeasurements {
+    /** Integrated loudness in LUFS (ffmpeg `ebur128`). */
+    IntegratedLufs?: number;
+    /** Loudness range in LU. */
+    LoudnessRangeLu?: number;
+    /** True peak in dBTP. */
+    TruePeakDb?: number;
+    /** Sample peak in dBFS (ffmpeg `astats`). */
+    SamplePeakDb?: number;
+    /** Number of samples at or above full scale (ffmpeg `astats` peak count at 0 dBFS). */
+    ClippedSamples?: number;
+    /** Lowest narration-to-music ratio across lines, in dB. */
+    MinNarrationToMusicDb?: number;
+}
+
+/**
+ * Audio outcome of a render: what was done, what was measured, and what failed.
+ */
+export interface RenderAudioReport {
+    /** True when the worker built the soundtrack from `RenderRequest.AudioMix`. */
+    Mixed: boolean;
+    /** True when loudness normalization ran. */
+    Normalized: boolean;
+    /** Measurements of the delivered mix. */
+    Measurements: RenderAudioMeasurements;
+    /** Deterministic audio check findings (`Category: 'Audio'`), with timestamps where they apply. */
+    Issues: CheckIssue[];
+    /** Descriptions of synthesized sources in the mix, for disclosure. */
+    Synthesized: string[];
 }
 
 /**
@@ -143,6 +334,10 @@ export interface RenderResult {
     RendererVersion: string;
     /** Total wall-clock time in milliseconds spent rendering. */
     RenderDurationMs: number;
+    /** Number of parallel capture workers the renderer used. */
+    Workers?: number;
+    /** Audio mix, normalization, and measurement outcome (absent from workers that predate it). */
+    Audio?: RenderAudioReport;
 }
 
 /**
@@ -550,6 +745,32 @@ export const RENDER_WORKER_ENV = {
     Concurrency: 'VIDEO_STUDIO_RENDER_CONCURRENCY',
     MaxTimeoutMs: 'VIDEO_STUDIO_RENDER_MAX_TIMEOUT_MS',
     AllowRoot: 'VIDEO_STUDIO_RENDER_ALLOW_ROOT',
+    Workers: 'VIDEO_STUDIO_RENDER_WORKERS',
 } as const;
+
+/** Hard ceiling on parallel HyperFrames capture workers for one render job. */
+export const MAX_RENDER_CAPTURE_WORKERS = 8;
+
+/**
+ * Clamps a requested capture worker count to `[1, min(cpuCount, MAX_RENDER_CAPTURE_WORKERS)]`.
+ * Returns `undefined` for a missing or non-numeric request so callers can fall back to a default.
+ */
+export function ClampRenderCaptureWorkers(requested: number | undefined, cpuCount: number): number | undefined {
+    if (typeof requested !== 'number' || !Number.isFinite(requested)) {
+        return undefined;
+    }
+    const cpus = Math.max(1, Math.floor(Number.isFinite(cpuCount) ? cpuCount : 1));
+    const ceiling = Math.min(cpus, MAX_RENDER_CAPTURE_WORKERS);
+    return Math.min(ceiling, Math.max(1, Math.floor(requested)));
+}
+
+/**
+ * Default capture worker count for a host: half the CPUs (one Chromium plus its encoder share per
+ * worker), at least 1 and at most 4, so a default render never saturates a shared host.
+ */
+export function DefaultRenderCaptureWorkers(cpuCount: number): number {
+    const cpus = Math.max(1, Math.floor(Number.isFinite(cpuCount) ? cpuCount : 1));
+    return Math.min(4, Math.max(1, Math.floor(cpus / 2)));
+}
 
 

@@ -10,12 +10,15 @@ import { RegisterClass } from '@memberjunction/global';
 import type {
     CheckIssue,
     RenderProgress,
+    RenderResult,
     VideoFormat,
     VideoGenerationSpec,
+    VideoRenderedAudioSummary,
 } from '@memberjunction/video-studio-core';
 import { LoadDataSnapshotValues } from '../data/data-snapshot.js';
 import {
     BuildCheckRequest,
+    BuildRenderAudioMix,
     BuildRenderBundle,
     CheckProductionRules,
     FrameSizeFor,
@@ -56,6 +59,59 @@ function formatCheckFailureMessage(format: VideoFormat, issues: readonly CheckIs
         ...topIssues.map((line) => `- ${line}`),
     ];
     return lines.join('\n');
+}
+
+/**
+ * True when the spec asks for any audio: narration lines, music (licensed or synthesized), or sound effects.
+ */
+export function SpecExpectsAudio(spec: VideoGenerationSpec): boolean {
+    const narrationEnabled = spec.Audio?.Narration?.Enabled !== false;
+    const hasNarration = narrationEnabled && (spec.Audio?.Narration?.Script?.length ?? 0) > 0;
+    const hasMusic = Boolean(spec.Audio?.Music?.AssetKey?.trim() || spec.Audio?.Music?.Synthesized);
+    const hasSfx = (spec.Audio?.Cues ?? []).some((cue) => cue?.Kind === 'Sfx' && Boolean(cue.AssetKey?.trim() || cue.Synth));
+    return hasNarration || hasMusic || hasSfx;
+}
+
+/**
+ * Deterministic audio failures of a rendered format (§9 step 1, before any critic call): a missing
+ * audio track when audio was specified, plus every `Error` the worker's audio checks reported
+ * (loudness, true peak, clipping, masked narration, unexpected pauses, missing sources).
+ */
+export function CollectRenderedAudioIssues(
+    format: VideoFormat,
+    spec: VideoGenerationSpec,
+    result: Pick<RenderResult, 'HasAudio' | 'Audio'>,
+): CheckIssue[] {
+    if (SpecExpectsAudio(spec) && !result.HasAudio) {
+        return [
+            {
+                Code: 'MissingRenderedAudioTrack',
+                Category: 'Audio',
+                Severity: 'Error',
+                Message: `Rendered MP4 for format ${format} reported HasAudio=false while narration, music, or sound effects are configured on the spec.`,
+            },
+        ];
+    }
+    return (result.Audio?.Issues ?? []).filter((issue) => issue.Severity === 'Error');
+}
+
+/**
+ * Projects the worker's audio report onto the spec's per-format audio summary (measurements plus the
+ * disclosure of synthesized sources).
+ */
+export function SummarizeRenderedAudio(result: Pick<RenderResult, 'Audio'>): VideoRenderedAudioSummary | undefined {
+    const report = result.Audio;
+    if (!report) {
+        return undefined;
+    }
+    const m = report.Measurements;
+    return {
+        ...(m.IntegratedLufs !== undefined ? { IntegratedLufs: m.IntegratedLufs } : {}),
+        ...(m.TruePeakDb !== undefined ? { TruePeakDb: m.TruePeakDb } : {}),
+        ...(m.LoudnessRangeLu !== undefined ? { LoudnessRangeLu: m.LoudnessRangeLu } : {}),
+        ...(m.MinNarrationToMusicDb !== undefined ? { MinNarrationToMusicDb: m.MinNarrationToMusicDb } : {}),
+        Synthesized: [...report.Synthesized],
+    };
 }
 
 /**
@@ -174,6 +230,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
 
             const allSheetFileIDs: string[] = [];
             const durationByFormat: Partial<Record<VideoFormat, number>> = {};
+            const audioByFormat: Partial<Record<VideoFormat, VideoRenderedAudioSummary>> = {};
             let lastRendererVersion = workingSpec.Render?.RendererVersion ?? '';
             let posterStoredForFirstFormat = false;
 
@@ -348,6 +405,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
                     }
                 };
 
+                const renderSettings = VideoRenderEngine.Instance.Settings;
                 const renderResult = await driver.Render(
                     {
                         Bundle: bundle,
@@ -356,6 +414,8 @@ export class VideoStudioRenderAgent extends BaseAgent {
                         Fps: fps,
                         DurationSeconds: durationSeconds,
                         Quality: quality,
+                        ...(renderSettings.Workers !== undefined ? { Workers: renderSettings.Workers } : {}),
+                        AudioMix: BuildRenderAudioMix(workingSpec, durationSeconds, renderSettings.Audio),
                     },
                     relayProgress,
                     params.cancellationToken,
@@ -365,27 +425,19 @@ export class VideoStudioRenderAgent extends BaseAgent {
                     lastRendererVersion = renderResult.RendererVersion;
                 }
 
-                const narrationEnabled = workingSpec.Audio?.Narration?.Enabled !== false;
-                const expectsAudio =
-                    (narrationEnabled && (workingSpec.Audio?.Narration?.Script?.length ?? 0) > 0) ||
-                    Boolean(workingSpec.Audio?.Music?.AssetKey?.trim());
-
-                if (expectsAudio && !renderResult.HasAudio) {
-                    const audioIssue: CheckIssue = {
-                        Code: 'MissingRenderedAudioTrack',
-                        Category: 'Audio',
-                        Severity: 'Error',
-                        Message: `Rendered MP4 for format ${fmt} reported HasAudio=false while narration or music audio is configured on the spec.`,
-                    };
-                    const message = formatCheckFailureMessage(fmt, [audioIssue]);
-                    await finishStep(
-                        currentStep,
-                        false,
-                        { Issues: [audioIssue] },
-                        message,
+                const audioIssues = CollectRenderedAudioIssues(fmt, workingSpec, renderResult);
+                if (audioIssues.length > 0) {
+                    const message = formatCheckFailureMessage(fmt, audioIssues).replace(
+                        'Pre-render checks failed',
+                        'Rendered audio checks failed',
                     );
+                    await finishStep(currentStep, false, { Issues: audioIssues, Audio: renderResult.Audio ?? null }, message);
                     currentStep = null;
                     return failRun(message);
+                }
+                const audioSummary = SummarizeRenderedAudio(renderResult);
+                if (audioSummary) {
+                    audioByFormat[fmt] = audioSummary;
                 }
 
                 const videoBytes = Buffer.from(renderResult.Video);
@@ -459,6 +511,7 @@ export class VideoStudioRenderAgent extends BaseAgent {
                 Fps: fps,
                 DurationByFormat: durationByFormat,
                 RenderedAt: nowIso,
+                ...(Object.keys(audioByFormat).length > 0 ? { AudioByFormat: audioByFormat } : {}),
             };
             if (workingSpec.Render && lastRendererVersion) {
                 workingSpec.Render.RendererVersion = lastRendererVersion;
