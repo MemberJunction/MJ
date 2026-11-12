@@ -88,13 +88,13 @@ async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: stri
     const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
     const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
     const dir = runDirOf(id);
-    const gen = readFile(dir, 'generation.json', () => (dir.HasGeneration() ? dir.ReadGeneration() : null));
-    const exec = readFile(dir, 'execution.json', () => (dir.HasExecution() ? dir.ReadExecution() : null));
+    const gen = readRunFile(dir, 'generation.json', () => (dir.HasGeneration() ? dir.ReadGeneration() : null));
+    const exec = readRunFile(dir, 'execution.json', () => (dir.HasExecution() ? dir.ReadExecution() : null));
     return { Run: run, Catches: labeled, Sessions: sessions, Fallback: gen?.Analysis.Fallback ?? null, Timings: { ...gen?.Timings, ...exec?.Timings } };
 }
 
 /** The file `read` returns, or null when it is missing or unreadable (with one stderr line). */
-function readFile<T>(dir: RunDir, name: string, read: () => T | null): T | null {
+function readRunFile<T>(dir: RunDir, name: string, read: () => T | null): T | null {
     try { return read(); } catch {
         process.stderr.write(`report: ${dir.RunID}: ${name} unreadable, skipped\n`);
         return null;

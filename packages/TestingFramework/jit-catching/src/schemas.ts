@@ -53,7 +53,7 @@ export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), Cove
 export const SessionRecordSchema = z.object({ RunID: z.string(), Package: z.string(), Method: z.enum(['DodgyDiff', 'IntentAware']), RiskID: z.string().nullable(), EndReason: z.string(),
     Turns: z.number().int().nonnegative(), Tokens: TokenUsageSchema, TranscriptURL: z.string().nullable(), Produced: z.number().int().nonnegative(), Failed: z.number().int().nonnegative() });
 const ms = z.number().int().nonnegative();
-/** Stage times in milliseconds; files written before stages were timed have none, so every field is optional. */
+/** Stage times in milliseconds; every field and the object itself are optional. */
 export const GenerationTimingsSchema = z.object({ AnalyzeMs: ms, PrepareBaseMs: ms, BuildBaseMs: ms, GenerateMs: ms }).partial();
 export const ExecutionTimingsSchema = z.object({ PrepareHeadMs: ms, BuildHeadMs: ms, TypeCheckMs: ms, RunMs: ms, CoverageMs: ms }).partial();
 /** `BaseSourceDir` is the run's `base-src` copy of the tested packages' sources; null until the run finishes. */

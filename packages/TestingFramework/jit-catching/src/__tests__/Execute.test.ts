@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +43,7 @@ describe('ExecuteStep', () => {
     dir.WriteGeneration(generation(join(dir.Path, 'work', 'base'), [candidate(ID_A), candidate(ID_B), candidate('dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'x', 'Failed')]));
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   });
+  afterEach(() => { vi.restoreAllMocks(); });
 
   it('prepares head, runs produced tests on both revisions and writes execution.json', async () => {
     const { Target, Calls } = fakeTarget();

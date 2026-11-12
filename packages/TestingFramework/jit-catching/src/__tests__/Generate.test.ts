@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,8 @@ import type { ChangeAnalysis, GenerationRequest, GenerationResult, PreparedRevis
 import { analysis, BASE_SHA, candidate, FULL_ENV, HEAD_SHA, ID_A, PKG, PKG_DIR } from './helpers/pipelineFixtures';
 
 describe('GenerateStep', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
   it('without a PR takes the title from the head commit, sends one DodgyDiff and one IntentAware request per risk, and keeps the base worktree', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const order: string[] = []; const requests: GenerationRequest[] = []; let pr: { Title: string; Body: string } | null = null;
