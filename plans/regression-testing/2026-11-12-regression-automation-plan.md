@@ -215,8 +215,8 @@ Expected result: new files in `tests/regression/scripts/`, plus a
 `"ReplayScript": "@file:regression/scripts/<name>.json"` key in each changed test's
 `Configuration`. **Phase 0 must prove this** (see risks).
 
-> **Superseded by §7.** Phase 0 showed that `sync pull` (and the entrypoint's push before it)
-> rewrites all 155 test files. The harvest uses a focused export + apply step instead.
+> **See §7.** Phase 0 showed that `sync pull` (and the entrypoint's push before it) rewrote all
+> 155 test files. §7 lists the four causes and their fixes. The harvest keeps step 3.
 
 The commands live in the skill's helper script (C2), not in the target branch, so the harvest
 works for any branch that has replay-script support.
@@ -296,8 +296,8 @@ Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in par
 
 | Risk | Mitigation |
 |---|---|
-| `sync pull` rewrites all 155 test files (format, key order, `primaryKey`/`sync`). | Confirmed in Phase 0 (§7). Use the focused harvester. |
-| Recorded scripts hard-code the Auth0 tenant origin. | Open decision in §7. |
+| `sync pull` rewrites all 155 test files (format, key order, `primaryKey`/`sync`). | Confirmed in Phase 0. Four causes, all fixed in this branch (§7). |
+| Recorded scripts hard-code the Auth0 tenant origin. | Fix the recorder before Phase 6 (§7). |
 | Only one stack can run per machine (fixed name and ports). | Preflight stops the skill. Parameterized ports can come later. |
 | Stale images from another checkout. | The skill always builds in the worktree before `up`. |
 | The first full run is long and costs LLM tokens (about 60–75 min). | Run once for the first harvest. Later runs replay and cost less. |
@@ -382,38 +382,36 @@ replay, so a replay is cheaper but not free.
 5. **`docker/regression/scripts/lib/db.cjs` exports `connect()`** from the `DB_*` variables. A
    script mounted into a one-off container can use it without the MJ bootstrap.
 
-### Decision: a focused harvester instead of `sync pull`
+### Decision: keep `sync pull` and close its gaps
 
-1. **Export (inside the stack).** A small Node script, mounted into a one-off `test-runner`
-   container, reads `Name` and `Configuration` of the Computer Use tests through `lib/db.cjs`. It
-   writes each `ReplayScript` and `PendingReplayScript` to `test-results/<run>/harvest/`. It does
-   not start MJ, so it cannot hang the way `mj test scripts` does, and it does not depend on CLI
-   code in the target branch.
-2. **Apply (host, files only, no database).** For each exported script, compare it with the
-   committed file (`git show HEAD:…`). Write new and changed script files with a trailing newline.
-   Add `Configuration.ReplayScript` (and `PendingReplayScript` when a pending script is kept) to
-   the **committed** test text with the byte-stable serializer from finding 4. Print the changed
-   paths and a drift summary: new, changed, pending, unchanged.
-3. **Pending scripts are file decisions.** The stack database is thrown away, so promote, keep, and
-   discard change only files. The skill does not need `mj test scripts --promote/--discard`.
-4. **The skill stages only the paths the apply step prints.** The push noise stays in the
-   throwaway worktree and is deleted with it.
+A first proposal was a separate export + apply harvester. It was dropped: the pull's
+externalization works (file name, `@file:` reference, side file, replay on the next run), and the
+noise has four exact causes. Fixing them in MetadataSync helps every metadata folder, not only this
+suite.
+
+| # | Gap | Where | Fix |
+|---|---|---|---|
+| 1 | The record writer always writes `JSON.stringify(x, null, 2)` with no trailing newline and literal non-ASCII characters. 65 test files have a trailing newline, and 63 use `\u` escapes, so every push and pull rewrites them. | `lib/json-write-helper.ts` (`WriteOrderedRecordData`) | Before it overwrites a file, the writer reads it and keeps its trailing newline and its non-ASCII escape style (finding 4 shows this is byte-stable for all 155 files). |
+| 2 | Pull hashes `@file` content only when a top-level field holds `@file:` and the folder has `externalizeFields`. Push always hashes file content. A replay script is nested (`Configuration.ReplayScript`), so push and pull disagree and `lastModified` changes on every run. | `lib/RecordProcessor.ts` (`calculateSyncMetadata`) | Pull always hashes with file content, as push does. A missing file still hashes as its reference. |
+| 3 | 65 test files have no `sync` block, and the checksums in the other 90 no longer match their content. | file data | One normalization in this branch: push and pull once against a throwaway database, commit the result. |
+| 4 | `MJ: Tests` has a `RubricID` column that the files lack, and the merge adds it. | file data | Part of the same normalization. A future column on `MJ: Tests` adds one line per test file in the next harvest. |
+
+Once 1–4 are in place, a push and a pull on a fresh database write the same bytes. So the
+entrypoint's write-back and the pull's rewrite of unchanged files make no git diff.
 
 ### Effect on the phases
 
-- **Phase 3:** add the export and apply scripts with tests. Drop B2 (`mj test scripts --format`)
-  from the skill's path, because the apply step makes the drift summary. Fix the `mj test scripts`
-  exit hang as a small separate fix. Keep `TEST_NAMES` / `up --test`, `.env.test.example`, and the
-  design-doc fix.
-- **Phase 4:** skill steps 8–10 run export and apply instead of `mj test scripts` and `sync pull`.
+- **This branch:** fixes 1 and 2 (failing tests first) and the normalization (3 and 4).
+- **Phase 3:** `TEST_NAMES` / `up --test`, `.env.test.example`, the design-doc fix, `--format`
+  on `mj test scripts`, and a fix for its exit hang.
+- **Phase 4:** the skill harvests with
+  `mj sync pull --entity="MJ: Tests" --target-dir=metadata-optional/regression-test/tests --no-create-new`
+  inside a one-off `test-runner` container, then stages only `metadata-optional/regression-test/tests`.
 - **Phase 6:** expect fewer than 155 scripts (finding 1).
 
 ### Decisions made after Phase 0 (2026-11-12)
 
-- **The harvester lives in `.github/scripts/`** (`regression-harvest.mjs`), with tests under the
-  existing guard-script vitest config. The skill runs it from the main checkout with
-  `--root <worktree>`, the same way the parity guard ran against the spike. The skill folder was
-  the other option.
+- **Keep `mj sync pull`** and fix the gaps above in MetadataSync, instead of a separate harvester.
 - **Fix the recorder for the Auth0 origin.** `ComputerUse` records URLs on other origins (not the
   app's) as path fragments, so a script works on any tenant and holds no tenant name. The other
   options were a rewrite in the harvester, or keeping the URLs as recorded. This is engine code, so
