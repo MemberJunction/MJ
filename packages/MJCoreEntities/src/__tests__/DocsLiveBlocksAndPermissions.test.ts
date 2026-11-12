@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EntityFieldInfo, EntityFieldTSType, EntityInfo, IMetadataProvider, RunView, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 import {
   ArtifactPermissionEngine,
@@ -200,8 +201,10 @@ describe('ArtifactPermissionEngine & ParentArtifactPermissionDelegate', () => {
     const parentId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
     const artifactEntityId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
+    const artifactEntities = [{ ID: artifactEntityId, Name: 'MJ: Artifacts' }];
     const provider = {
-      Entities: [{ ID: artifactEntityId, Name: 'MJ: Artifacts' }],
+      Entities: artifactEntities,
+      EntityByID: (id: string) => artifactEntities.find((e) => UUIDsEqual(e.ID, id)),
       RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
         if (params.EntityName === 'MJ: Artifacts') {
           if (params.ExtraFilter.includes(childId)) {
@@ -265,8 +268,10 @@ describe('ArtifactPermissionEngine & ParentArtifactPermissionDelegate', () => {
     const cycleB = 'f2222222-2222-2222-2222-222222222222';
     const artifactEntityId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
 
+    const cycleEntities = [{ ID: artifactEntityId, Name: 'MJ: Artifacts' }];
     const provider = {
-      Entities: [{ ID: artifactEntityId, Name: 'MJ: Artifacts' }],
+      Entities: cycleEntities,
+      EntityByID: (id: string) => cycleEntities.find((e) => UUIDsEqual(e.ID, id)),
       RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
         if (params.EntityName === 'MJ: Artifacts') {
           const isA = params.ExtraFilter.includes(cycleA);
@@ -549,8 +554,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
 
   it('B2 & C2: fails closed when delegating entity has no registered delegate and resolves multi-hop parent chains in O(depth)', async () => {
     const u = createMockUser('99999999-9999-9999-9999-999999999999', 'Delegate Tester');
+    const unregEntities = [{ ID: 'ent-custom-unregistered', Name: 'Custom: Unregistered Host' }];
     const unregisteredProvider = {
-      Entities: [{ ID: 'ent-custom-unregistered', Name: 'Custom: Unregistered Host' }],
+      Entities: unregEntities,
+      EntityByID: (id: string) => unregEntities.find((e) => UUIDsEqual(e.ID, id)),
       RunView: vi.fn().mockResolvedValue({
         Success: true,
         Results: [
@@ -585,8 +592,10 @@ describe('DocumentLiveBlockEngine — RLS/FLS, IsServerSet Stripping, Freeze War
       'art-hop-1': { ID: 'art-hop-1', UserID: 'other', DelegateEntityID: 'ent-artifacts', DelegateRecordID: 'art-root' },
       'art-root': { ID: 'art-root', UserID: u.ID, DelegateEntityID: null, DelegateRecordID: null },
     };
+    const chainEntities = [{ ID: 'ent-artifacts', Name: 'MJ: Artifacts' }];
     const chainProvider = {
-      Entities: [{ ID: 'ent-artifacts', Name: 'MJ: Artifacts' }],
+      Entities: chainEntities,
+      EntityByID: (id: string) => chainEntities.find((e) => UUIDsEqual(e.ID, id)),
       RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
         if (params.EntityName === 'MJ: Artifacts') {
           artifactQueryCount++;

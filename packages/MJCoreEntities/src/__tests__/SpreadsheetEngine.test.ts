@@ -1421,7 +1421,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(cseWb, 'Sheet1', 'F9', { Formula: '=SEQUENCE(4)' }, true);
         const csePatchedBytes = engine.PatchXlsxBytes(cseSeedBytes, cseWb);
         const csePatchedXml = decoder.decode(engine.ExtractZipArchive(csePatchedBytes).get('xl/worksheets/sheet1.xml')!);
-        expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9">SUM(A1:A3)</f><v>60</v></c>');
+        expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9:E10">SUM(A1:A3)</f><v>60</v></c>');
         expect(csePatchedXml).toContain('<c r="F9" cm="1"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f></c>');
         expect(csePatchedXml).not.toContain('#NAME?');
     });
@@ -3012,5 +3012,89 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         } finally {
             spy.mockRestore();
         }
+    });
+
+    it('R13-5: preserves t="array" and ref on edited legacy CSE array formulas and evaluates inline array literals', () => {
+        const enc = new TextEncoder();
+        const dec = new TextDecoder();
+
+        // 1) Legacy CSE single-cell array formula (<f t="array" ref="B1">SUM(A1:A3*B1:B3)</f>)
+        const wb1 = engine.CreateEmptyWorkbook('CseWb13', ['Sheet1'], 10, 10);
+        const s1 = wb1.Worksheets[0];
+        engine.SetCell(wb1, s1.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'A3', { Value: 3 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'B1', { Value: 32 }, true);
+
+        const expBytes1 = engine.ExportToXlsxBytes(wb1, false);
+        const zip1 = engine.ExtractZipArchive(expBytes1);
+        let sheetXml1 = dec.decode(zip1.get('xl/worksheets/sheet1.xml')!);
+        sheetXml1 = sheetXml1.replace(
+            /<c r="B1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="B1"><f t="array" ref="B1">SUM(A1:A3*B1:B3)</f><v>32</v></c>'
+        );
+        zip1.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml1));
+        const seedBytes1 = engine.BuildZipArchive(Array.from(zip1.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        // 1a) Edit B1 to =SUM({1,2,3}*{4,5,6}): preserves t="array" ref="B1" without cm, evaluates to 32
+        const imp1a = engine.ImportFromXlsxBytes(seedBytes1);
+        const cell1a = engine.SetCell(imp1a, imp1a.Worksheets[0].SheetID, 'B1', { Formula: '=SUM({1,2,3}*{4,5,6})' }, true);
+        expect(cell1a.ComputedValue).toBe(32);
+        const patchedBytes1a = engine.PatchXlsxBytes(seedBytes1, imp1a);
+        const patchedXml1a = dec.decode(engine.ExtractZipArchive(patchedBytes1a).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml1a).toContain('<f t="array" ref="B1">SUM({1,2,3}*{4,5,6})</f>');
+        expect(patchedXml1a).not.toMatch(/<c[^>]*\bcm="/);
+
+        // 1b) Edit B1 to braced {=SUM({1,2,3}*{4,5,6})}: strips outer braces in Formula, preserves t="array" ref="B1" without cm, evaluates to 32
+        const imp1b = engine.ImportFromXlsxBytes(seedBytes1);
+        const cell1b = engine.SetCell(imp1b, imp1b.Worksheets[0].SheetID, 'B1', { Formula: '{=SUM({1,2,3}*{4,5,6})}' }, true);
+        expect(cell1b.Formula).toBe('=SUM({1,2,3}*{4,5,6})');
+        expect(cell1b.ComputedValue).toBe(32);
+        const patchedBytes1b = engine.PatchXlsxBytes(seedBytes1, imp1b);
+        const patchedXml1b = dec.decode(engine.ExtractZipArchive(patchedBytes1b).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml1b).toContain('<f t="array" ref="B1">SUM({1,2,3}*{4,5,6})</f>');
+        expect(patchedXml1b).not.toMatch(/<c[^>]*\bcm="/);
+
+        // 2) Edit legacy CSE cell B1 to =SUM(MyNamedRange*2): preserves t="array" ref="B1" without cm
+        const imp2 = engine.ImportFromXlsxBytes(seedBytes1);
+        imp2.NamedRanges.push({
+            Name: 'MyNamedRange',
+            SheetID: imp2.Worksheets[0].SheetID,
+            Range: 'A1:A3'
+        });
+        const cell2 = engine.SetCell(imp2, imp2.Worksheets[0].SheetID, 'B1', { Formula: '=SUM(MyNamedRange*2)' }, true);
+        // A1:A3 values are 1, 2, 3 -> (1*2 + 2*2 + 3*2) = 2 + 4 + 6 = 12
+        expect(cell2.ComputedValue).toBe(12);
+        const patchedBytes2 = engine.PatchXlsxBytes(seedBytes1, imp2);
+        const patchedXml2 = dec.decode(engine.ExtractZipArchive(patchedBytes2).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml2).toContain('<f t="array" ref="B1">SUM(MyNamedRange*2)</f>');
+        expect(patchedXml2).not.toMatch(/<c[^>]*\bcm="/);
+
+        // 3) Multi-cell legacy CSE array (<f t="array" ref="C1:C3">A1:A3*2</f>) on master cell C1 edited to =A1:A3*10 preserves ref="C1:C3" (does NOT shrink to C1)
+        const wb3 = engine.CreateEmptyWorkbook('MultiCseWb', ['Sheet1'], 10, 10);
+        const s3 = wb3.Worksheets[0];
+        engine.SetCell(wb3, s3.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb3, s3.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb3, s3.SheetID, 'A3', { Value: 3 }, false);
+        engine.SetCell(wb3, s3.SheetID, 'C1', { Value: 2 }, false);
+        engine.SetCell(wb3, s3.SheetID, 'C2', { Value: 4 }, false);
+        engine.SetCell(wb3, s3.SheetID, 'C3', { Value: 6 }, true);
+
+        const expBytes3 = engine.ExportToXlsxBytes(wb3, false);
+        const zip3 = engine.ExtractZipArchive(expBytes3);
+        let sheetXml3 = dec.decode(zip3.get('xl/worksheets/sheet1.xml')!);
+        sheetXml3 = sheetXml3.replace(
+            /<c r="C1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C1"><f t="array" ref="C1:C3">A1:A3*2</f><v>2</v></c>'
+        );
+        zip3.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml3));
+        const seedBytes3 = engine.BuildZipArchive(Array.from(zip3.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        const imp3 = engine.ImportFromXlsxBytes(seedBytes3);
+        engine.SetCell(imp3, imp3.Worksheets[0].SheetID, 'C1', { Formula: '=A1:A3*10' }, true);
+        const patchedBytes3 = engine.PatchXlsxBytes(seedBytes3, imp3);
+        const patchedXml3 = dec.decode(engine.ExtractZipArchive(patchedBytes3).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml3).toContain('<f t="array" ref="C1:C3">A1:A3*10</f>');
+        expect(patchedXml3).not.toMatch(/<c[^>]*\bcm="/);
     });
 });

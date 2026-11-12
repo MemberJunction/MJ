@@ -1,6 +1,6 @@
 /**
- * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT169) and client companion
- * `'docs-slides-sheets-library-client'` (IT170) — verifies the
+ * @fileoverview Integration check bundle `'docs-slides-sheets-library'` (IT170) and client companion
+ * `'docs-slides-sheets-library-client'` (IT171) — verifies the
  * collaborative MJ Docs, Slides, Sheets, Yjs Working States, Delegated OLE Permissions, and
  * Library / Chat application substrate against the live database and metadata provider.
  *
@@ -364,7 +364,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         // 1. Verify CK_Artifact_DelegateBinding rejects half-populated delegation
         const invalidDelegated = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         invalidDelegated.NewRecord();
-        invalidDelegated.Name = `__IT169_InvalidDelegate_${suffix}`;
+        invalidDelegated.Name = `__IT170_InvalidDelegate_${suffix}`;
         invalidDelegated.TypeID = docTypeId;
         invalidDelegated.UserID = ctx.User.ID;
         invalidDelegated.Visibility = 'Always';
@@ -376,7 +376,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
         // 2. Create throwaway parent Document + Version 1
         parentDoc = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         parentDoc.NewRecord();
-        parentDoc.Name = `__IT169_ParentDoc_${suffix}`;
+        parentDoc.Name = `__IT170_ParentDoc_${suffix}`;
         parentDoc.Description = 'Integration test parent document for Yjs working state and OLE delegation';
         parentDoc.TypeID = docTypeId;
         parentDoc.UserID = ctx.User.ID;
@@ -486,7 +486,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
 
         childWhiteboard = await ctx.Provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
         childWhiteboard.NewRecord();
-        childWhiteboard.Name = `__IT169_ChildWhiteboard_${suffix}`;
+        childWhiteboard.Name = `__IT170_ChildWhiteboard_${suffix}`;
         childWhiteboard.TypeID = wbTypeId;
         childWhiteboard.UserID = ctx.User.ID;
         childWhiteboard.Visibility = 'Always';
@@ -640,7 +640,7 @@ async function checkDsl3LiveWorkingStateAndDelegatedPerms(ctx: IntegrationCheckC
                 const deleted = await entity.Delete();
                 if (!deleted) {
                     console.warn(
-                        `[IT169 DSL3 teardown] Delete() returned false for ${label}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                        `[IT170 DSL3 teardown] Delete() returned false for ${label}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
             }
@@ -812,7 +812,7 @@ async function checkDsl6SpreadsheetEngineAndLiveData(ctx: IntegrationCheckContex
     engine.ClearViewerFunctionCache();
 
     // 1. Stable-ID formula coordinate shifting & cycle detection
-    const wb = engine.CreateEmptyWorkbook('IT169 Financial Model', ['Model', 'Rates'], 20, 8);
+    const wb = engine.CreateEmptyWorkbook('IT170 Financial Model', ['Model', 'Rates'], 20, 8);
     const modelSheet = wb.Worksheets[0];
     const ratesSheet = wb.Worksheets[1];
 
@@ -1070,7 +1070,7 @@ for (const c of DocsSlidesSheetsLibraryChecks) {
     IntegrationCheckRegistry.Instance.Register(c);
 }
 
-// ─── IT170: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
+// ─── IT171: Client-transport wire checks (DSLC1–DSLC4) ───────────────────────
 
 const CLIENT_BUNDLE = 'docs-slides-sheets-library-client';
 const GRANTEE_EMAIL = 'it-artifact-viewer@integration.test';
@@ -1162,7 +1162,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
                 ctx,
                 dslClientFixture,
                 granteeId,
-                'IT170 DSL client grantee (mj-integration-test)',
+                'IT171 DSL client grantee (mj-integration-test)',
             );
             const builtProvider = await BuildUserKeyProviderWithRetry(rawKey);
             dslClientFixture.GranteeProvider = builtProvider as GraphQLDataProvider;
@@ -1185,7 +1185,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 1. Shared Read-Only artifact + version 1
             const parentDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             parentDoc.NewRecord();
-            parentDoc.Name = `__IT170_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
+            parentDoc.Name = `__IT171_SharedDoc_${suffix} (mj-integration-test — safe to delete)`;
             parentDoc.TypeID = docTypeId;
             parentDoc.UserID = ctx.User.ID;
             parentDoc.Visibility = 'Always';
@@ -1194,7 +1194,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             }
             dslClientFixture.ParentDocID = parentDoc.ID;
 
-            const initialContent = `# IT170 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
+            const initialContent = `# IT171 Shared Strategy Document ${suffix}\n\nOwner baseline content.`;
             const parentVer = await ownerProvider.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 ctx.User,
@@ -1232,7 +1232,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             // 2. Private unshared artifact + version 1
             const privateDoc = await ownerProvider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', ctx.User);
             privateDoc.NewRecord();
-            privateDoc.Name = `__IT170_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
+            privateDoc.Name = `__IT171_PrivateDoc_${suffix} (mj-integration-test — safe to delete)`;
             privateDoc.TypeID = docTypeId;
             privateDoc.UserID = ctx.User.ID;
             privateDoc.Visibility = 'Always';
@@ -1251,7 +1251,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(CLIENT_BUNDLE, {
             privateVer.Name = privateDoc.Name;
             privateVer.UserID = ctx.User.ID;
             privateVer.ContentMode = 'Text';
-            privateVer.Content = `# IT170 Private Document ${suffix}\n\nConfidential owner content.`;
+            privateVer.Content = `# IT171 Private Document ${suffix}\n\nConfidential owner content.`;
             if (!(await privateVer.Save())) {
                 throw new Error(`Failed to create privateVer: ${privateVer.LatestResult?.CompleteMessage ?? ''}`);
             }

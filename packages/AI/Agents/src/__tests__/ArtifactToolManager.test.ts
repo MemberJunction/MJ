@@ -8,7 +8,7 @@ import {
 } from '../ArtifactToolManager';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { ArtifactMetadataEngine, SpreadsheetEngine, XlsxOpenXmlAdapter } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, ArtifactPermissionEngine, SpreadsheetEngine, XlsxOpenXmlAdapter } from '@memberjunction/core-entities';
 import { RegisterClass, MJEventType, MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 
@@ -2491,6 +2491,383 @@ describe('ArtifactToolManager', () => {
 
             expect(queriedFilter).toContain(`FileID = '${fileIds[2]}'`);
             expect(oldFileDeleteSpy).not.toHaveBeenCalled();
+        });
+
+        describe('R13-3: Rollback on Commit Failure in all 4 Sub-Cases', () => {
+            it('R13-3a: Rollback marks versionEntity via ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback so Delete succeeds even when permissions revoked', async () => {
+                const artifactUuid = '11112222-3333-4444-5555-666677778888';
+                const user = new UserInfo();
+                user.ID = 'user-r13-3a';
+
+                let wasTrustedOnDelete = false;
+                const deleteSpy = vi.fn().mockImplementation(async function(this: object) {
+                    wasTrustedOnDelete = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this);
+                    return true;
+                });
+
+                const mockVersionEntity = {
+                    ID: 'ver-r13-3a',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: deleteSpy,
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return { Success: true, Results: [] };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                SetArtifactLiveMutationHook(async () => ({
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    commit: async () => {
+                        throw new Error('Room commit failed');
+                    },
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const firstBlock = (blocksRes.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: firstBlock.blockId, markdown: 'Agent edit.' },
+                });
+
+                expect(editRes.result.success).toBe(false);
+                expect(deleteSpy).toHaveBeenCalledTimes(1);
+                expect(wasTrustedOnDelete).toBe(true);
+            });
+
+            it('R13-3b: When commit throws or returns applied: false, hookResult.rollback is invoked alongside DB rollback', async () => {
+                const artifactUuid = '22223333-4444-5555-6666-777788889999';
+                const user = new UserInfo();
+                user.ID = 'user-r13-3b';
+
+                const rollbackSpy1 = vi.fn().mockResolvedValue(undefined);
+                const rollbackSpy2 = vi.fn().mockResolvedValue(undefined);
+
+                const mockVersionEntity = {
+                    ID: 'ver-r13-3b',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: vi.fn().mockResolvedValue(true),
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                // Case 1: commit returns applied: false
+                SetArtifactLiveMutationHook(async () => ({
+                    applied: true,
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    rollback: rollbackSpy1,
+                    commit: async () => ({ applied: false }),
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes1 = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const b0 = (blocksRes1.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes1 = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Edit 1' },
+                });
+
+                expect(editRes1.result.success).toBe(false);
+                expect(rollbackSpy1).toHaveBeenCalledTimes(1);
+
+                // Case 2: commit throws
+                SetArtifactLiveMutationHook(async () => ({
+                    applied: true,
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    rollback: rollbackSpy2,
+                    commit: async () => {
+                        throw new Error('Commit exploded');
+                    },
+                }));
+
+                const editRes2 = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Edit 2' },
+                });
+
+                expect(editRes2.result.success).toBe(false);
+                expect(rollbackSpy2).toHaveBeenCalledTimes(1);
+            });
+
+            it('R13-3c: When a reused file-backed version rolls back after commit fails, the newly uploaded FileID is cleaned up while previous FileID is restored', async () => {
+                const artifactUuid = '33334444-5555-6666-7777-888899990000';
+                const user = new UserInfo();
+                user.ID = 'user-r13-3c';
+
+                const fileIdPrev = 'aaaaaaaa-1111-2222-3333-444444444441';
+                const fileIdNew = 'bbbbbbbb-1111-2222-3333-444444444442';
+                let uploadCount = 0;
+
+                vi.spyOn(FileStorageEngine.Instance, 'Config').mockResolvedValue();
+                Object.defineProperty(FileStorageEngine.Instance, 'HasStorageAccounts', { value: true, configurable: true });
+                vi.spyOn(FileStorageEngine.Instance, 'UploadFile').mockImplementation(async () => {
+                    uploadCount++;
+                    return {
+                        FileID: uploadCount === 1 ? fileIdPrev : fileIdNew,
+                        FileName: 'Book.xlsx',
+                        ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        Status: 'success',
+                    };
+                });
+
+                const sheetEngine = SpreadsheetEngine.Instance;
+                const wb = sheetEngine.CreateEmptyWorkbook('TestWB', ['Sheet1'], 5, 5);
+                sheetEngine.SetCell(wb, 'Sheet1', 'A1', { Value: 'Base' }, true);
+                const initialWbJson = sheetEngine.SerializeWorkbook(wb);
+                const xlsxBuffer = Buffer.from(sheetEngine.ExportToXlsxBytes(wb, false));
+
+                const deletedFileIds: string[] = [];
+                const mockFileEntity = {
+                    ID: '',
+                    Load: vi.fn().mockImplementation(async function(this: { ID: string }, id: string) {
+                        this.ID = id;
+                        return true;
+                    }),
+                    Delete: vi.fn().mockImplementation(async function(this: { ID: string }) {
+                        deletedFileIds.push(this.ID);
+                        return true;
+                    }),
+                };
+
+                let currentFileId: string | null = null;
+                const reusedVersionEntity = {
+                    ID: 'ver-reused-file',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 1,
+                    ContentMode: 'File' as 'File' | 'Text',
+                    get FileID() { return currentFileId; },
+                    set FileID(val: string | null) { currentFileId = val; },
+                    Name: 'Book.xlsx',
+                    Comments: '',
+                    Content: null,
+                    Configuration: initialWbJson,
+                    ContentHash: 'hash1',
+                    ContentSizeBytes: 100,
+                    MimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    FileName: 'Book.xlsx',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: vi.fn().mockResolvedValue(true),
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Book.xlsx', UserID: user.ID }],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return { Success: true, Results: [] };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return reusedVersionEntity;
+                        if (entityName === 'MJ: Files') return { ...mockFileEntity };
+                        return null;
+                    },
+                };
+
+                let commitShouldFail = false;
+                SetArtifactLiveMutationHook(async (evt) => ({
+                    mergedContent: evt.updatedContent,
+                    commit: async () => {
+                        if (commitShouldFail) return { applied: false };
+                        return { applied: true };
+                    },
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Book.xlsx',
+                            typeName: 'Excel Spreadsheet',
+                            toolLibraryClass: 'SpreadsheetToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-file-init',
+                            versionNumber: 1,
+                            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                            content: xlsxBuffer,
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                // Mutation 1 succeeds: sets fileIdPrev on reusedVersionEntity
+                const step1 = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'write_cells',
+                    input: { sheet: 'Sheet1', cells: [{ address: 'A1', value: 'First' }] },
+                });
+                expect(step1.result.success).toBe(true);
+                expect(currentFileId).toBe(fileIdPrev);
+
+                // Mutation 2: upload succeeds with fileIdNew, but commit fails
+                commitShouldFail = true;
+                const step2 = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'write_cells',
+                    input: { sheet: 'Sheet1', cells: [{ address: 'A1', value: 'Second Failed' }] },
+                });
+
+                expect(step2.result.success).toBe(false);
+                expect(currentFileId).toBe(fileIdPrev);
+                expect(deletedFileIds).toContain(fileIdNew);
+            });
+
+            it('R13-3d: When a newer version v3 was created before rollback runs, v2 is NOT deleted', async () => {
+                const artifactUuid = '44445555-6666-7777-8888-999900001111';
+                const user = new UserInfo();
+                user.ID = 'user-r13-3d';
+
+                const deleteSpy = vi.fn().mockResolvedValue(true);
+                const mockVersionEntity = {
+                    ID: 'ver-v2',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# V2 Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: deleteSpy,
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            if (params.ExtraFilter?.includes('VersionNumber > 2')) {
+                                return {
+                                    Success: true,
+                                    Results: [
+                                        { ID: 'ver-v3-restored', VersionNumber: 3, ContentMode: 'Text' },
+                                    ],
+                                };
+                            }
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                SetArtifactLiveMutationHook(async () => ({
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    commit: async () => {
+                        throw new Error('Room commit failed');
+                    },
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const firstBlock = (blocksRes.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: firstBlock.blockId, markdown: 'Agent edit.' },
+                });
+
+                expect(editRes.result.success).toBe(false);
+                expect(deleteSpy).not.toHaveBeenCalled();
+                expect(manager.ToJSON().artifacts[0].versionNumber).toBe(3);
+            });
         });
     });
 });

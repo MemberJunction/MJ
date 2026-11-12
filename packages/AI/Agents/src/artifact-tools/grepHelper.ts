@@ -4,11 +4,12 @@ import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecov
 
 export type GrepRawToolInput = Parameters<BaseArtifactToolLibrary['InvokeTool']>[1];
 
-export const GREP_REGEX_BUDGET_MS = 500;
+export const GREP_REGEX_BUDGET_MS = 180;
+export const MAX_SEARCHABLE_LINE_BYTES = 65_536;
 const BATCH_REGEX_MAX_MS = 40;
 const MAX_BATCH_ITEMS = 512;
 const MAX_BATCH_CHARS = 262_144;
-const MAX_REGEX_INPUT_BYTES = 65_536;
+const MAX_REGEX_INPUT_BYTES = MAX_SEARCHABLE_LINE_BYTES;
 const MAX_SAFE_UTF16_UNITS_FOR_64KB = 21_845;
 const MAX_REPORTED_UNSEARCHABLE_LINES = 50;
 
@@ -20,36 +21,46 @@ function exceedsRegexInputBytes(text: string): boolean {
 }
 
 export interface LineMatch {
-    lineNumber: number;
-    text: string;
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    lineNumber: number; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    text: string; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
 }
 
 export interface UnsearchableLine {
-    lineNumber: number;
-    reason: 'exceeds_64kb_regex_limit' | 'regex_timeout' | 'budget_expired';
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    lineNumber: number; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    reason: 'exceeds_64kb_regex_limit' | 'regex_timeout' | 'budget_expired'; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
 }
 
 export interface StructuredGrepResultData {
-    matches: LineMatch[];
-    matchCount: number;
-    partial: boolean;
-    timedOut: boolean;
-    unsearchableCount: number;
-    unsearchableLines: UnsearchableLine[];
-    warnings: string[];
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    matches: LineMatch[]; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    matchCount: number; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    partial: boolean; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    timedOut: boolean; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    unsearchableCount: number; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    unsearchableLines: UnsearchableLine[]; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    // case-violation-ok-legacy-back-compat: agent tool result JSON shape
+    warnings: string[]; // case-violation-ok-legacy-back-compat: agent tool result JSON shape
 }
 
 function looksLikeRegexPattern(pattern: string): boolean {
-    if (/\\[dwsbDWSB]|\.\*|\.\+|(?:^|[^\\])\|/.test(pattern)) {
-        return true;
-    }
-    if (/^\^/.test(pattern)) {
-        return true;
-    }
-    if (/(?:[\w\]\)])\$$/.test(pattern)) {
-        return true;
-    }
-    return false;
+    return (
+        /\\[dwsbDWSB](?![a-zA-Z])/.test(pattern) ||
+        /\.\*|\.\+/.test(pattern) ||
+        /^\^/.test(pattern) ||
+        /\[\^?[0-9a-zA-Z_]+-[0-9a-zA-Z_]+\]\+?/.test(pattern) ||
+        /[a-zA-Z0-9_)\]]\?[a-zA-Z0-9_]/.test(pattern) ||
+        /\{\d+(?:,\d*)?\}/.test(pattern) ||
+        /\((?:\?:|\?=|\?!)?[^()\s]*(?:\\[dwsbDWSB]|\[[^\]]+\]|[+*?])[^()]*\)/.test(pattern)
+    );
 }
 
 /**
@@ -83,7 +94,7 @@ export async function ExecuteStructuredLineGrep(
         const warnings: string[] = [];
         if (matches.length === 0 && looksLikeRegexPattern(patternStr)) {
             warnings.push(
-                'Pattern matched 0 literal occurrences and contains regex-like syntax; pass use_regex: true if you intended a regular expression search.'
+                'Pattern matched 0 literal occurrences; if you meant a regex, set use_regex: true.'
             );
         }
         return {
@@ -143,7 +154,9 @@ export async function ExecuteStructuredLineGrep(
     let timeoutCount = 0;
     let budgetSkippedCount = 0;
     let budgetExpired = false;
-    const regexDeadline = performance.now() + GREP_REGEX_BUDGET_MS;
+    let lastProcessedLine = 0;
+    const budgetMs = GREP_REGEX_BUDGET_MS;
+    const regexDeadline = performance.now() + budgetMs;
 
     const recordUnsearchableLine = (
         lineNumber: number,
@@ -188,6 +201,9 @@ export async function ExecuteStructuredLineGrep(
             budgetExpired = true;
         }
         for (let k = 0; k < pendingLineNums.length; k++) {
+            if (!recRes.BudgetSkipped[k]) {
+                lastProcessedLine = pendingLineNums[k];
+            }
             if (recRes.Matches[k]) {
                 matches.push({ lineNumber: pendingLineNums[k], text: pendingTexts[k] });
             } else if (recRes.TimedOut[k]) {
@@ -207,6 +223,7 @@ export async function ExecuteStructuredLineGrep(
         const line = lines[i];
         if (exceedsRegexInputBytes(line)) {
             flushLineBatch();
+            lastProcessedLine = i;
             recordUnsearchableLine(i, 'exceeds_64kb_regex_limit');
             continue;
         }
@@ -219,6 +236,7 @@ export async function ExecuteStructuredLineGrep(
         pendingChars += line.length;
         if (pendingLineNums.length >= MAX_BATCH_ITEMS || pendingChars >= MAX_BATCH_CHARS) {
             flushLineBatch();
+            await new Promise<void>((resolve) => setImmediate(resolve));
         }
     }
     flushLineBatch();
@@ -228,20 +246,17 @@ export async function ExecuteStructuredLineGrep(
     const partial = unsearchableCount > 0 || timedOut;
 
     const warnings: string[] = [];
+    const capNote = unsearchableCount > unsearchableLines.length
+        ? ` (showing ${unsearchableLines.length} of ${unsearchableCount})`
+        : '';
     if (tooLongCount > 0) {
         warnings.push(
-            `${tooLongCount} line(s) exceeded the 64 KB regex limit and were not searched. Retry with use_regex: false for plain-text search across arbitrarily long lines.`
+            `${tooLongCount} line(s) exceeded the ${ MAX_SEARCHABLE_LINE_BYTES / 1024 } KB per-line safety limit and were skipped; results are partial.${!timedOut ? capNote : ''}`,
         );
     }
     if (timedOut) {
         warnings.push(
-            `${timeoutCount + budgetSkippedCount} line(s) timed out or were skipped after reaching the ${GREP_REGEX_BUDGET_MS}ms regex time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
-        );
-    }
-    if (unsearchableCount > 0) {
-        const capNote = unsearchableCount > unsearchableLines.length ? ` (showing ${unsearchableLines.length} of ${unsearchableCount})` : '';
-        warnings.push(
-            `${unsearchableCount} line(s) could not be searched within the regex execution budget${capNote}.`
+            `Grep execution exceeded the ${budgetMs}ms safety budget after line ${lastProcessedLine}; results are partial (${unsearchableCount} line(s) unsearched)${capNote}. Narrow the pattern or specify a smaller line range.`,
         );
     }
 

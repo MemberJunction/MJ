@@ -49,7 +49,7 @@ export const ARTIFACT_COLLABORATION_WS_PATH = '/collaboration/yjs';
 export const ARTIFACT_LIVE_MUTATION_EVENT_CODE = 'ArtifactCollaboration.LiveContentMutation';
 
 /** Global store key shared with `ArtifactToolManager` (`SetArtifactLiveMutationHook`). */
-const ARTIFACT_LIVE_MUTATION_HOOK_KEY = '___MJ_ARTIFACT_LIVE_MUTATION_HOOK___';
+export const ARTIFACT_LIVE_MUTATION_HOOK_KEY = '___MJ_ARTIFACT_LIVE_MUTATION_HOOK___';
 
 /** Max inline snapshot length (chars) embedded inside `Y.Doc.getMap('meta')` (`R8-1`). */
 const MAX_META_INLINE_SNAPSHOT_B64_CHARS = 2048;
@@ -415,7 +415,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private readonly _roomInitPromises = new Map<string, Promise<CollaborationRoom>>();
     private readonly _tickets = new Map<string, StoredCollaborationTicket>();
     private readonly _consumedTickets = new Map<string, number>();
-    private readonly _inFlightCompactionVersionIds = new Set<string>();
+    private static readonly _inFlightCompactionVersionIds = new Set<string>();
     private readonly _pendingSyncWaiters = new Map<string, Set<PendingSyncWaiterEntry>>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
@@ -1041,8 +1041,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
             try {
                 // Encode Y.Doc state inside the serialized queue task so we always persist the latest state
-                const stateBytes = Y.encodeStateAsUpdate(room.Doc);
-                const stateBase64 = BytesToBase64(stateBytes);
+                let stateBytes = Y.encodeStateAsUpdate(room.Doc);
+                let stateBase64 = BytesToBase64(stateBytes);
                 const rv = RunView.FromMetadataProvider(provider);
                 const existingRes = await rv.RunView<Record<string, string | number | Uint8Array | Date | null>>(
                     {
@@ -1082,6 +1082,31 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         } finally {
                             probeDoc.destroy();
                         }
+                    }
+                }
+
+                const rawExistingYjs = existingRow ? existingRow['YjsState'] : undefined;
+                let existingBytes: Uint8Array | null = null;
+                if (typeof rawExistingYjs === 'string' && rawExistingYjs.length > 0) {
+                    existingBytes = new Uint8Array(Buffer.from(rawExistingYjs, 'base64'));
+                } else if (rawExistingYjs instanceof Uint8Array && rawExistingYjs.byteLength > 0) {
+                    existingBytes = rawExistingYjs;
+                }
+                if (existingBytes) {
+                    const mergedDoc = new Y.Doc();
+                    try {
+                        Y.applyUpdate(mergedDoc, existingBytes);
+                        Y.applyUpdate(mergedDoc, stateBytes);
+                        stateBytes = Y.encodeStateAsUpdate(mergedDoc);
+                        stateBase64 = Buffer.from(stateBytes).toString('base64');
+                    } finally {
+                        mergedDoc.destroy();
+                    }
+                    const rawExistingBaseVersionId = existingRow?.['BaseVersionID'];
+                    const existingBaseVersionId =
+                        typeof rawExistingBaseVersionId === 'string' ? rawExistingBaseVersionId : undefined;
+                    if (!existingBaseVersionId || !room.BaseVersionID || UUIDsEqual(existingBaseVersionId, room.BaseVersionID)) {
+                        Y.applyUpdate(room.Doc, existingBytes, 'relay-sync');
                     }
                 }
 
@@ -1279,7 +1304,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 versionEntity.ID = randomUUID();
             }
             const normPendingVersionId = NormalizeUUID(versionEntity.ID);
-            this._inFlightCompactionVersionIds.add(normPendingVersionId);
+            ArtifactCollaborationServer._inFlightCompactionVersionIds.add(normPendingVersionId);
             let saved = false;
             try {
                 saved = await versionEntity.Save();
@@ -1290,9 +1315,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 lastSaveError = err instanceof Error ? err.message : String(err);
                 saved = false;
             } finally {
-                this._inFlightCompactionVersionIds.delete(normPendingVersionId);
+                ArtifactCollaborationServer._inFlightCompactionVersionIds.delete(normPendingVersionId);
                 if (versionEntity.ID && versionEntity.ID.trim().length > 0) {
-                    this._inFlightCompactionVersionIds.delete(NormalizeUUID(versionEntity.ID));
+                    ArtifactCollaborationServer._inFlightCompactionVersionIds.delete(NormalizeUUID(versionEntity.ID));
                 }
             }
 
@@ -1568,7 +1593,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 room.Doc.transact(() => {
                     const meta = room.Doc.getMap('meta');
                     meta.set('roomEpoch', nextEpoch);
-                    const restoreClientId = this.applyDeterministicRestoreTextToDoc(
+                    this.applyDeterministicRestoreTextToDoc(
                         room.Doc,
                         room.ArtifactID,
                         restoreVerId,
@@ -1576,13 +1601,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         newContent,
                         'server-restore'
                     );
-                    this.applyDeterministicRestoreStructuresToDoc(
-                        room.Doc,
-                        restoreClientId,
-                        newContent,
-                        null,
-                        'server-restore'
-                    );
+                    this.syncSlideDeckStructuresIfPresent(room.Doc, newContent);
+                    this.syncSpreadsheetStructuresIfPresent(room.Doc, newContent);
                 }, 'server-restore');
             } else {
                 room.Doc.transact(() => {
@@ -1931,7 +1951,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         this._rooms.clear();
         this._tickets.clear();
         this._consumedTickets.clear();
-        this._inFlightCompactionVersionIds.clear();
+        ArtifactCollaborationServer._inFlightCompactionVersionIds.clear();
         for (const waiters of this._pendingSyncWaiters.values()) {
             for (const waiter of waiters) {
                 waiter.settle(false);
@@ -2571,7 +2591,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!this._relay) {
             return false;
         }
-        if (typeof this._relay.HasRoomPeers === 'function' && !(await this._relay.HasRoomPeers(room.ArtifactID))) {
+        const hasPeersResult = typeof this._relay.HasRoomPeers === 'function'
+            ? this._relay.HasRoomPeers(room.ArtifactID)
+            : undefined;
+        if (typeof hasPeersResult === 'boolean' && !hasPeersResult) {
             return false;
         }
         const syncWaiter = this.createPendingSyncWaiter(room.ArtifactID, timeoutMs, isSatisfied);
@@ -2643,6 +2666,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     return undefined;
                 }
                 if (evt.deferCommit === true) {
+                    const existingRoom = this._rooms.get(evt.artifactId.trim().toLowerCase());
+                    const preDeferDocSnapshot = existingRoom ? Y.encodeStateAsUpdate(existingRoom.Doc) : null;
+                    const preDeferVersionId = existingRoom?.BaseVersionID ?? null;
+                    const preDeferVersionNumber = existingRoom?.BaseVersionNumber ?? 0;
+                    const preDeferDirty = existingRoom?.DirtyVersion ?? false;
+                    const preDeferContent = existingRoom
+                        ? this.extractRoomSerializedContent(existingRoom.Doc)
+                        : (evt.previousContent ?? '');
+
                     const preview = await this.ApplyServerContentMutation(
                         evt.artifactId,
                         evt.updatedContent,
@@ -2661,24 +2693,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         rejectedAgentHunks: preview.RejectedAgentHunks,
                         commit: async (persisted) => {
                             const targetPersistedContent = preview.MergedContent ?? evt.updatedContent;
-                            const existingRoom = this._rooms.get(evt.artifactId.trim().toLowerCase());
+                            const currentTargetRoom = this._rooms.get(evt.artifactId.trim().toLowerCase()) ?? existingRoom;
                             const reconciledThisVersionViaOob = Boolean(
-                                existingRoom &&
+                                currentTargetRoom &&
                                 persisted?.versionId &&
-                                UUIDsEqual(existingRoom.LastReconciledOobVersionID, persisted.versionId) &&
-                                existingRoom.LastReconciledOobContent === targetPersistedContent
+                                UUIDsEqual(currentTargetRoom.LastReconciledOobVersionID, persisted.versionId) &&
+                                currentTargetRoom.LastReconciledOobContent === targetPersistedContent
                             );
                             if (
-                                existingRoom &&
+                                currentTargetRoom &&
                                 persisted?.versionId &&
-                                UUIDsEqual(existingRoom.BaseVersionID, persisted.versionId) &&
-                                existingRoom.BaseVersionText === targetPersistedContent &&
+                                UUIDsEqual(currentTargetRoom.BaseVersionID, persisted.versionId) &&
+                                currentTargetRoom.BaseVersionText === targetPersistedContent &&
                                 (reconciledThisVersionViaOob ||
-                                    this.extractRoomSerializedContent(existingRoom.Doc) === targetPersistedContent)
+                                    this.extractRoomSerializedContent(currentTargetRoom.Doc) === targetPersistedContent)
                             ) {
-                                const actualRoomContent = this.extractRoomSerializedContent(existingRoom.Doc);
+                                const actualRoomContent = this.extractRoomSerializedContent(currentTargetRoom.Doc);
                                 const oobMerge = reconciledThisVersionViaOob
-                                    ? existingRoom.LastReconciledOobMergeResult
+                                    ? currentTargetRoom.LastReconciledOobMergeResult
                                     : null;
                                 const effectiveHadConflict = oobMerge
                                     ? Boolean(oobMerge.HadConflict)
@@ -2692,16 +2724,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     : preview.RejectedAgentHunks;
                                 await this.FlushWorkingState(evt.artifactId, actor);
                                 if (!oobMerge && preview.HadConflict && (preview.RejectedAgentHunks?.length ?? 0) > 0) {
-                                    this.broadcastMergeConflictFrame(existingRoom, {
+                                    this.broadcastMergeConflictFrame(currentTargetRoom, {
                                         action: 'merge-conflict',
-                                        versionId: existingRoom.BaseVersionID ?? undefined,
+                                        versionId: currentTargetRoom.BaseVersionID ?? undefined,
                                         rejectedHunkCount: preview.RejectedAgentHunks?.length ?? 0,
-                                        roomEpoch: existingRoom.RoomEpoch,
+                                        roomEpoch: currentTargetRoom.RoomEpoch,
                                         actorUserId: evt.contextUser?.ID ?? actor.ID
                                     });
                                 }
-                                if (existingRoom.Connections.size === 0 && !this._shuttingDown) {
-                                    this.scheduleIdleRoomDisposal(existingRoom);
+                                if (currentTargetRoom.Connections.size === 0 && !this._shuttingDown) {
+                                    this.scheduleIdleRoomDisposal(currentTargetRoom);
                                 }
                                 return {
                                     applied: true,
@@ -2731,6 +2763,48 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 rejectedHunksCount: commitRes.RejectedAgentHunks?.length ?? 0,
                                 rejectedAgentHunks: commitRes.RejectedAgentHunks
                             };
+                        },
+                        rollback: async (): Promise<void> => {
+                            const currentRoom = this._rooms.get(evt.artifactId.trim().toLowerCase()) ?? existingRoom;
+                            if (currentRoom) {
+                                currentRoom.Doc.transact(() => {
+                                    this.applyDeterministicRestoreTextToDoc(
+                                        currentRoom.Doc,
+                                        currentRoom.ArtifactID,
+                                        preDeferVersionId ?? undefined,
+                                        preDeferVersionNumber,
+                                        preDeferContent,
+                                        'server-rollback'
+                                    );
+                                    this.syncSlideDeckStructuresIfPresent(currentRoom.Doc, preDeferContent);
+                                    this.syncSpreadsheetStructuresIfPresent(currentRoom.Doc, preDeferContent);
+                                }, 'server-rollback');
+
+                                currentRoom.BaseVersionID = preDeferVersionId;
+                                currentRoom.BaseVersionNumber = preDeferVersionNumber;
+                                currentRoom.BaseVersionText = preDeferContent;
+                                currentRoom.DirtyVersion = preDeferDirty;
+                                currentRoom.PreOutOfBandDocState = null;
+                                currentRoom.LastReconciledOobVersionID = null;
+                                currentRoom.LastReconciledOobContent = null;
+                                currentRoom.LastReconciledOobMergeResult = null;
+                                currentRoom.LastReconciledBaselineText = null;
+
+                                const fullState = Y.encodeStateAsUpdate(currentRoom.Doc);
+                                const encoder = encoding.createEncoder();
+                                encoding.writeVarUint(encoder, YJS_MESSAGE_SYNC);
+                                syncProtocol.writeUpdate(encoder, fullState);
+                                const frame = encoding.toUint8Array(encoder);
+                                for (const conn of currentRoom.Connections) {
+                                    this.sendBinaryFrame(conn.Socket, frame);
+                                }
+                                await this._relay.PublishToRoom({
+                                    ArtifactID: currentRoom.ArtifactID,
+                                    MessageType: 'sync-state',
+                                    PayloadBase64: BytesToBase64(fullState)
+                                });
+                                await this.FlushWorkingState(currentRoom.ArtifactID, actor);
+                            }
                         }
                     };
                 }
@@ -2797,17 +2871,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     Description?: string | null;
                     Comments?: string | null;
                     UserID?: string;
+                    UpdatedByUserID?: string;
                     IsRestore?: boolean;
                     OriginServerID?: string;
                     SavedStateVectorB64?: string;
                     SavedContentHash?: string;
                 };
                 const eventVersionId = payload.VersionID ?? payload.versionId;
+                const actorUserId = payload.UserID ?? payload.UpdatedByUserID;
                 if (
                     payload.ArtifactID &&
                     eventVersionId &&
                     typeof payload.VersionNumber === 'number' &&
-                    !this._inFlightCompactionVersionIds.has(NormalizeUUID(eventVersionId))
+                    !ArtifactCollaborationServer._inFlightCompactionVersionIds.has(NormalizeUUID(eventVersionId))
                 ) {
                     const room = this._rooms.get(payload.ArtifactID.trim().toLowerCase());
                     if (
@@ -2831,14 +2907,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 Configuration: payload.Configuration,
                                 Description: payload.Description,
                                 Comments: payload.Comments,
-                                UserID: payload.UserID
+                                UserID: actorUserId
                             },
                             {
                                 originServerId: payload.OriginServerID ?? tracked?.OriginServerID,
                                 savedStateVectorB64: payload.SavedStateVectorB64 ?? tracked?.SavedStateVectorB64,
                                 savedSnapshotB64: tracked?.SavedSnapshotB64,
                                 savedContentHash: expectedHash,
-                                isRestore: payload.IsRestore
+                                isRestore: payload.IsRestore,
+                                actorUserId: actorUserId
                             }
                         );
                     } else if (room && UUIDsEqual(room.BaseVersionID, eventVersionId)) {
@@ -3010,7 +3087,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const preRestoreSvB64 = BytesToBase64(preRestoreSv);
 
             room.Doc.transact(() => {
-                const restoreClientId = this.applyDeterministicRestoreTextToDoc(
+                this.applyDeterministicRestoreTextToDoc(
                     room.Doc,
                     room.ArtifactID,
                     version.ID,
@@ -3018,13 +3095,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     targetText,
                     'server-restore'
                 );
-                this.applyDeterministicRestoreStructuresToDoc(
-                    room.Doc,
-                    restoreClientId,
-                    version.Content ?? '',
-                    version.Configuration ?? null,
-                    'server-restore'
-                );
+                this.syncSlideDeckStructuresIfPresent(room.Doc, targetText);
+                this.syncSpreadsheetStructuresIfPresent(room.Doc, targetText, version.Configuration ?? null);
             }, 'server-restore');
 
             const postRestoreSv = Y.encodeStateVector(room.Doc);
@@ -3644,7 +3716,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return raw === 0 ? 1 : raw;
     }
 
-    public computeDeterministicRestoreClientId(
+    public ComputeDeterministicRestoreClientId(
         doc: Y.Doc,
         artifactId: string,
         versionId: string | undefined,
@@ -3680,7 +3752,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (yText.length > 0) {
             yText.delete(0, yText.length);
         }
-        const candidateClientId = this.computeDeterministicRestoreClientId(
+        const candidateClientId = this.ComputeDeterministicRestoreClientId(
             doc,
             artifactId,
             versionId,
@@ -3700,39 +3772,43 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return candidateClientId;
     }
 
-    private applyDeterministicRestoreStructuresToDoc(
+    public SyncSlideDeckStructuresIfPresent(
         doc: Y.Doc,
-        restoreClientId: number,
-        content: string,
-        configuration: string | null = null,
-        origin: string = 'server-restore'
+        rawContent: string,
+        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
     ): void {
-        const hasExistingStructures =
-            doc.getMap('slidesById').size > 0 || doc.getMap('worksheetsById').size > 0;
-        const mightBeJsonStructure = content.trimStart().startsWith('{');
-        if (!hasExistingStructures && !mightBeJsonStructure) {
-            return;
-        }
-        const existingStateVector = Y.decodeStateVector(Y.encodeStateVector(doc));
-        let structureClientId = this.deterministicClientIdFromSeed(`restore-struct:${restoreClientId}`);
-        let ordinal = 0;
-        while (structureClientId === restoreClientId || (existingStateVector.get(structureClientId) ?? 0) > 0) {
-            ordinal++;
-            structureClientId = this.deterministicClientIdFromSeed(`restore-struct:${restoreClientId}:${ordinal}`);
-        }
-        const tempDoc = new Y.Doc();
-        try {
-            Y.applyUpdate(tempDoc, Y.encodeStateAsUpdate(doc));
-            tempDoc.clientID = structureClientId;
-            this.syncSlideDeckStructuresIfPresent(tempDoc, content);
-            this.syncSpreadsheetStructuresIfPresent(tempDoc, content, configuration);
-            const delta = Y.encodeStateAsUpdate(tempDoc, Y.encodeStateVector(doc));
-            if (delta.byteLength > 2) {
-                Y.applyUpdate(doc, delta, origin);
-            }
-        } finally {
-            tempDoc.destroy();
-        }
+        this.syncSlideDeckStructuresIfPresent(doc, rawContent, options);
+    }
+
+    public SyncSpreadsheetStructuresIfPresent(
+        doc: Y.Doc,
+        rawContent: string,
+        rawConfiguration?: string | null,
+        options?: { preserveConcurrentAdditions?: boolean; baselineContent?: string }
+    ): void {
+        this.syncSpreadsheetStructuresIfPresent(doc, rawContent, rawConfiguration, options);
+    }
+
+    public ExtractRoomSerializedContent(doc: Y.Doc): string {
+        return this.extractRoomSerializedContent(doc);
+    }
+
+    public ApplyDeterministicRestoreTextToDoc(
+        doc: Y.Doc,
+        artifactId: string,
+        versionId: string | undefined,
+        versionNumber: number | undefined,
+        targetText: string,
+        origin: string = 'server-restore'
+    ): number {
+        return this.applyDeterministicRestoreTextToDoc(
+            doc,
+            artifactId,
+            versionId,
+            versionNumber,
+            targetText,
+            origin
+        );
     }
 
     private async createAndHydrateRoom(artifactId: string, contextUser: UserInfo): Promise<CollaborationRoom> {
@@ -4113,7 +4189,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     const meta = room.Doc.getMap('meta');
                     meta.set('roomEpoch', nextEpoch);
                     if (isHydrateRestore) {
-                        const restoreClientId = this.applyDeterministicRestoreTextToDoc(
+                        this.applyDeterministicRestoreTextToDoc(
                             room.Doc,
                             room.ArtifactID,
                             versionRow.ID,
@@ -4121,12 +4197,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             versionTargetText,
                             'hydrate'
                         );
-                        this.applyDeterministicRestoreStructuresToDoc(
+                        this.syncSlideDeckStructuresIfPresent(room.Doc, versionTargetText);
+                        this.syncSpreadsheetStructuresIfPresent(
                             room.Doc,
-                            restoreClientId,
-                            versionRow.Content ?? '',
-                            versionRow.Configuration ?? null,
-                            'hydrate'
+                            versionTargetText,
+                            versionRow.Configuration ?? null
                         );
                     } else if (!alreadyContainsVersionOps && currentSerialized !== versionTargetText) {
                         hydrateMergeResult = this.applyMinimalTextDiff(
@@ -4803,6 +4878,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             relayPayload.savedSnapshotB64
                         );
                     }
+                } else if (Boolean(relayPayload.savedStateVectorB64 || relayPayload.savedSnapshotB64)) {
+                    crdtSynced = true;
                 }
             }
 

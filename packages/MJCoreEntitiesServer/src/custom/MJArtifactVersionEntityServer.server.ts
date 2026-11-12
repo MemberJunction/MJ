@@ -529,7 +529,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const saveType: 'create' | 'update' = this.IsSaved ? 'update' : 'create';
         const actor = this.ContextCurrentUser;
-        if (!isServerSystemUser(actor)) {
+        if (!isServerSystemUser(actor) && !ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this)) {
             const provider = resolveMetadataProvider(this.ProviderToUse, actor);
             if (!actor || !provider || !this.ArtifactID) {
                 return this.recordPermissionFailure(
@@ -644,7 +644,7 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const actor = this.ContextCurrentUser;
-        if (!isServerSystemUser(actor)) {
+        if (!isServerSystemUser(actor) && !ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this)) {
             const provider = resolveMetadataProvider(this.ProviderToUse, actor);
             if (!actor || !provider || !this.ArtifactID) {
                 return this.recordPermissionFailure(

@@ -249,14 +249,14 @@ export class RedisYjsRoomRelay implements IYjsRoomRelay {
                 return;
             }
             active = false;
-            unsub();
-            this._unsubscribers.delete(unsub);
             const current = (this._subscribedChannelCounts.get(channel) ?? 0) - 1;
             if (current <= 0) {
                 this._subscribedChannelCounts.delete(channel);
             } else {
                 this._subscribedChannelCounts.set(channel, current);
             }
+            this._unsubscribers.delete(unsub);
+            unsub();
         };
     }
 

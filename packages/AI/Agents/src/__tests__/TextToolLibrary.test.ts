@@ -86,36 +86,34 @@ describe('TextToolLibrary', () => {
             const data = res.data as TextGrepResultData;
             expect(data.unsearchableCount).toBe(60);
             expect(data.unsearchableLines).toHaveLength(50);
-            expect(data.warnings.some(w => w.includes('showing 50 of 60'))).toBe(true);
+            expect(data.timedOut).toBe(false);
+            expect(data.warnings).toHaveLength(1);
+            expect(data.warnings[0]).toContain('(showing 50 of 60)');
+            expect(data.warnings[0]).not.toContain('within the regex execution budget');
         });
 
-        it('emits regex-like syntax hint warning when literal search has 0 matches for regex-looking patterns', async () => {
-            const expectedHint = 'Pattern matched 0 literal occurrences and contains regex-like syntax; pass use_regex: true if you intended a regular expression search.';
+        it('emits regex-like syntax hint warning when literal search has 0 matches for unambiguous regex patterns', async () => {
+            const expectedHint = 'Pattern matched 0 literal occurrences; if you meant a regex, set use_regex: true.';
 
-            const resPipe = await lib.InvokeTool('grep', { pattern: 'ERROR|WARN' }, 'Just an informational line');
-            expect(resPipe.success).toBe(true);
-            const dataPipe = resPipe.data as TextGrepResultData;
-            expect(dataPipe.matchCount).toBe(0);
-            expect(dataPipe.warnings).toContain(expectedHint);
+            // Plain patterns with 0 matches should NOT emit regex warnings
+            const plainPatterns = ['| Name |', 'Q1|Q2 plan', 'USD$', 'C:\\shared\\docs', '$100', '[DRAFT]'];
+            for (const p of plainPatterns) {
+                const res = await lib.InvokeTool('grep', { pattern: p }, 'Some sample log text without matching tokens');
+                expect(res.success).toBe(true);
+                const data = res.data as TextGrepResultData;
+                expect(data.matchCount).toBe(0);
+                expect(data.warnings).toEqual([]);
+            }
 
-            const resDigit = await lib.InvokeTool('grep', { pattern: 'foo\\d+' }, 'foo123 and bar');
-            expect(resDigit.success).toBe(true);
-            const dataDigit = resDigit.data as TextGrepResultData;
-            expect(dataDigit.matchCount).toBe(0);
-            expect(dataDigit.warnings).toContain(expectedHint);
-
-            // Plain literal searches with 0 matches should NOT emit false regex warnings
-            const resDollar = await lib.InvokeTool('grep', { pattern: '$100' }, 'No prices here');
-            expect(resDollar.success).toBe(true);
-            const dataDollar = resDollar.data as TextGrepResultData;
-            expect(dataDollar.matchCount).toBe(0);
-            expect(dataDollar.warnings).toEqual([]);
-
-            const resDraft = await lib.InvokeTool('grep', { pattern: '[DRAFT]' }, 'Final published notes');
-            expect(resDraft.success).toBe(true);
-            const dataDraft = resDraft.data as TextGrepResultData;
-            expect(dataDraft.matchCount).toBe(0);
-            expect(dataDraft.warnings).toEqual([]);
+            // Unambiguous regex patterns with 0 matches DOES emit hint
+            const regexPatterns = ['\\d+', 'foo.*bar', '[0-9]+', '<name>([^<]+)</name>'];
+            for (const p of regexPatterns) {
+                const res = await lib.InvokeTool('grep', { pattern: p }, 'Some sample log text without matching tokens');
+                expect(res.success).toBe(true);
+                const data = res.data as TextGrepResultData;
+                expect(data.matchCount).toBe(0);
+                expect(data.warnings).toContain(expectedHint);
+            }
         });
 
         it('TextToolLibrary.grep 500,000-line log with match on line 499_999 returns matchCount: 1 in < 2500 ms', async () => {

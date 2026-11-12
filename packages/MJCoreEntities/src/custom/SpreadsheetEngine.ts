@@ -1398,6 +1398,22 @@ export interface SpreadsheetCellSpec {
     LiveTableID?: string | null;
     /** Optional plain-text cell note. */
     Note?: string | null;
+    /** Internal XML metadata preserved from OOXML import for lossless round-tripping. */
+    _originalXmlMeta?: SpreadsheetCellXmlMeta | null;
+    /** True when formula was edited or created via SetCell / user action. */
+    FormulaDirty?: boolean;
+}
+
+/**
+ * XML metadata preserved from OOXML import for lossless round-tripping.
+ */
+interface SpreadsheetCellXmlMeta {
+    fType?: string;
+    fRef?: string | null;
+    cmAttr?: string | null;
+    openAttrs?: string;
+    sAttr?: string | null;
+    vmAttr?: string | null;
 }
 
 /**
@@ -3942,11 +3958,23 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         let formula: string | null = input.Formula !== undefined ? input.Formula : existing?.Formula ?? null;
         let rawValue: SpreadsheetCellValue = input.Value !== undefined ? input.Value : existing?.RawValue ?? null;
 
-        if (typeof input.Value === 'string' && input.Value.trim().startsWith('=') && input.Formula === undefined) {
+        if (typeof input.Value === 'string' && /^\{=([\s\S]*)\}$/.test(input.Value.trim()) && input.Formula === undefined) {
+            formula = input.Value.trim();
+            rawValue = null;
+        } else if (typeof input.Value === 'string' && input.Value.trim().startsWith('=') && input.Formula === undefined) {
             formula = input.Value.trim();
             rawValue = null;
         } else if (input.Value !== undefined && input.Formula === undefined) {
             formula = null;
+        }
+
+        let isCseBraced = false;
+        if (formula && /^\{=([\s\S]*)\}$/.test(formula.trim())) {
+            const match = formula.trim().match(/^\{=([\s\S]*)\}$/);
+            if (match) {
+                formula = `=${match[1].trim()}`;
+                isCseBraced = true;
+            }
         }
 
         let formulaStable: string | null = null;
@@ -3958,6 +3986,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         } else if (formula && formula.trim().startsWith('=')) {
             formula = formula.trim();
             formulaStable = this.CompileFormulaToStableIds(sheet, formula, workbook);
+        }
+
+        let cellXmlMeta: SpreadsheetCellXmlMeta | null = existing?._originalXmlMeta
+            ? { ...existing._originalXmlMeta }
+            : null;
+        if (isCseBraced) {
+            cellXmlMeta = {
+                ...(cellXmlMeta ?? {}),
+                fType: 'array',
+                fRef: cellXmlMeta?.fRef || canonicalAddr
+            };
         }
 
         const mergedStyle: SpreadsheetCellStyleSpec | undefined =
@@ -4012,7 +4051,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             SpilledFrom: preservedSpilledFrom,
             SpillRange: isMetadataOnlyEdit ? existing?.SpillRange : undefined,
             ArrayMaster: isMetadataOnlyEdit ? existing?.ArrayMaster : undefined,
-            LiveTableID: preservedLiveTableId
+            LiveTableID: preservedLiveTableId,
+            _originalXmlMeta: cellXmlMeta,
+            FormulaDirty: isMetadataOnlyEdit ? existing?.FormulaDirty : true
         };
 
         sheet.Cells[canonicalAddr] = cell;
@@ -4835,6 +4876,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 case 'BinaryOp':
                     stack.push(node.right, node.left);
                     break;
+                case 'ArrayLiteral':
+                    for (const row of node.rows) {
+                        for (const item of row) {
+                            stack.push(item);
+                        }
+                    }
+                    break;
                 case 'FunctionCall':
                     for (let i = node.args.length - 1; i >= 0; i--) {
                         stack.push(node.args[i]);
@@ -5082,6 +5130,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         }
     }
 
+    private finiteOrNumError(n: number): SpreadsheetCellValue {
+        return Number.isFinite(n) ? (n === 0 ? 0 : n) : '#NUM!';
+    }
+
+    private evalBinaryOpScalars(
+        left: SpreadsheetCellValue,
+        right: SpreadsheetCellValue,
+        op: BinaryOperator
+    ): SpreadsheetCellValue {
+        if (this.isErrorValue(left)) return left;
+        if (this.isErrorValue(right)) return right;
+        switch (op) {
+            case '=':
+            case '<>':
+            case '<':
+            case '<=':
+            case '>':
+            case '>=':
+                return this.compareValues(left, right, op);
+            case '&':
+                return `${left ?? ''}${right ?? ''}`;
+            case '+':
+            case '-':
+            case '*':
+            case '/':
+            case '^': {
+                const nl = this.toNumberOrError(left);
+                if (typeof nl === 'string') return nl;
+                const nr = this.toNumberOrError(right);
+                if (typeof nr === 'string') return nr;
+                if (op === '+') return this.finiteOrNumError(nl + nr);
+                if (op === '-') return this.finiteOrNumError(nl - nr);
+                if (op === '*') return this.finiteOrNumError(nl * nr);
+                if (op === '/') {
+                    if (nr === 0) return '#DIV/0!';
+                    return this.finiteOrNumError(nl / nr);
+                }
+                return this.finiteOrNumError(Math.pow(nl, nr));
+            }
+        }
+        return '#VALUE!';
+    }
+
     private evalAstNode(
         node: FormulaAstNode,
         workbook: WorkbookSpec,
@@ -5111,20 +5202,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             return c.RawValue ?? null;
         };
 
-        const finiteOrNumError = (n: number): SpreadsheetCellValue =>
-            Number.isFinite(n) ? (n === 0 ? 0 : n) : '#NUM!';
-
         switch (node.kind) {
             case 'EmptyArg':
                 return null;
             case 'NumberLiteral':
-                return finiteOrNumError(node.value);
+                return this.finiteOrNumError(node.value);
             case 'StringLiteral':
                 return node.value;
             case 'BooleanLiteral':
                 return node.value;
             case 'ErrorLiteral':
                 return node.error;
+            case 'ArrayLiteral':
+                return this.evalAstMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress)?.[0]?.[0] ?? null;
             case 'CellRef': {
                 const targetSheet = node.sheetName ? this.GetWorksheet(workbook, node.sheetName) : sheet;
                 if (!targetSheet) return '#REF!';
@@ -5157,55 +5247,19 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 if (this.isErrorValue(v)) return v;
                 const n = this.toNumberOrError(v);
                 if (typeof n === 'string') return n;
-                return finiteOrNumError(n / 100);
+                return this.finiteOrNumError(n / 100);
             }
             case 'UnaryOp': {
                 const v = this.evalAstNode(node.operand, workbook, sheet, cellLookup, currentCellAddress);
                 if (this.isErrorValue(v)) return v;
                 const n = this.toNumberOrError(v);
                 if (typeof n === 'string') return n;
-                return finiteOrNumError(node.op === '-' ? (n === 0 ? 0 : -n) : n);
+                return this.finiteOrNumError(node.op === '-' ? (n === 0 ? 0 : -n) : n);
             }
             case 'BinaryOp': {
                 const left = this.evalAstNode(node.left, workbook, sheet, cellLookup, currentCellAddress);
-                if (this.isErrorValue(left)) return left;
                 const right = this.evalAstNode(node.right, workbook, sheet, cellLookup, currentCellAddress);
-                if (this.isErrorValue(right)) return right;
-
-                switch (node.op) {
-                    case '=':
-                    case '<>':
-                    case '<':
-                    case '<=':
-                    case '>':
-                    case '>=':
-                        return this.compareValues(left, right, node.op);
-                    case '&':
-                        return `${left ?? ''}${right ?? ''}`;
-                    case '+':
-                    case '-':
-                    case '*':
-                    case '/':
-                    case '^': {
-                        const nl = this.toNumberOrError(left);
-                        if (typeof nl === 'string') return nl;
-                        const nr = this.toNumberOrError(right);
-                        if (typeof nr === 'string') return nr;
-                        if (node.op === '+') {
-                            return finiteOrNumError(nl + nr);
-                        }
-                        if (node.op === '-') {
-                            return finiteOrNumError(nl - nr);
-                        }
-                        if (node.op === '*') return finiteOrNumError(nl * nr);
-                        if (node.op === '/') {
-                            if (nr === 0) return '#DIV/0!';
-                            return finiteOrNumError(nl / nr);
-                        }
-                        return finiteOrNumError(Math.pow(nl, nr));
-                    }
-                }
-                return '#VALUE!';
+                return this.evalBinaryOpScalars(left, right, node.op);
             }
             case 'FunctionCall':
                 return this.evalAstFunctionCall(
@@ -5307,6 +5361,99 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         return [[this.evalAstNode(argNode, workbook, sheet, cellLookup ?? null, currentCellAddress)]];
     }
 
+    private evalAstMatrix(
+        node: FormulaAstNode,
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        getCellVal: (targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue,
+        cellLookup?: ((targetSheet: WorksheetSpec, addr: string) => SpreadsheetCellValue) | null,
+        currentCellAddress?: string
+    ): SpreadsheetCellValue[][] {
+        switch (node.kind) {
+            case 'ArrayLiteral': {
+                const matrix: SpreadsheetCellValue[][] = [];
+                for (const row of node.rows) {
+                    const rowVals: SpreadsheetCellValue[] = [];
+                    for (const item of row) {
+                        rowVals.push(this.evalAstNode(item, workbook, sheet, cellLookup, currentCellAddress));
+                    }
+                    matrix.push(rowVals);
+                }
+                return matrix.length > 0 ? matrix : [[null]];
+            }
+            case 'RangeRef':
+            case 'CellRef': {
+                return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+            }
+            case 'Identifier': {
+                const desc = this.resolveAstRangeDescriptor(node, workbook, sheet, false);
+                if (desc && desc !== '#REF!') {
+                    return this.resolveAstRangeMatrix(node, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                }
+                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress);
+                return [[scalarVal]];
+            }
+            case 'UnaryOp': {
+                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                return m.map((row) =>
+                    row.map((val) => {
+                        if (this.isErrorValue(val)) return val;
+                        const n = this.toNumberOrError(val);
+                        if (typeof n === 'string') return n;
+                        return this.finiteOrNumError(node.op === '-' ? (n === 0 ? 0 : -n) : n);
+                    })
+                );
+            }
+            case 'PostfixPercent': {
+                const m = this.evalAstMatrix(node.operand, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                return m.map((row) =>
+                    row.map((val) => {
+                        if (this.isErrorValue(val)) return val;
+                        const n = this.toNumberOrError(val);
+                        if (typeof n === 'string') return n;
+                        return this.finiteOrNumError(n / 100);
+                    })
+                );
+            }
+            case 'BinaryOp': {
+                const leftM = this.evalAstMatrix(node.left, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const rightM = this.evalAstMatrix(node.right, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                const leftRows = leftM.length;
+                const leftCols = leftM[0]?.length ?? 0;
+                const rightRows = rightM.length;
+                const rightCols = rightM[0]?.length ?? 0;
+
+                const outRows = Math.max(leftRows, rightRows);
+                const outCols = Math.max(leftCols, rightCols);
+
+                if (
+                    (leftRows !== rightRows && leftRows !== 1 && rightRows !== 1) ||
+                    (leftCols !== rightCols && leftCols !== 1 && rightCols !== 1)
+                ) {
+                    return [['#VALUE!']];
+                }
+
+                const out: SpreadsheetCellValue[][] = [];
+                for (let r = 0; r < outRows; r++) {
+                    const row: SpreadsheetCellValue[] = [];
+                    const lr = leftRows === 1 ? 0 : r;
+                    const rr = rightRows === 1 ? 0 : r;
+                    for (let c = 0; c < outCols; c++) {
+                        const lc = leftCols === 1 ? 0 : c;
+                        const rc = rightCols === 1 ? 0 : c;
+                        row.push(this.evalBinaryOpScalars(leftM[lr][lc], rightM[rr][rc], node.op));
+                    }
+                    out.push(row);
+                }
+                return out;
+            }
+            default: {
+                const scalarVal = this.evalAstNode(node, workbook, sheet, cellLookup, currentCellAddress);
+                return [[scalarVal]];
+            }
+        }
+    }
+
     private evalAstFunctionCall(
         rawFnName: string,
         args: FormulaAstNode[],
@@ -5325,6 +5472,27 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             arg.kind === 'CellRef' ||
             (arg.kind === 'Identifier' &&
                 workbook.NamedRanges.some((nr) => nr.Name.toLowerCase() === arg.name.toLowerCase()));
+
+        const nodeContainsArray = (node: FormulaAstNode): boolean => {
+            switch (node.kind) {
+                case 'ArrayLiteral':
+                case 'RangeRef':
+                    return true;
+                case 'Identifier': {
+                    const named = workbook.NamedRanges.find(
+                        (nr) => nr.Name.toLowerCase() === node.name.toLowerCase()
+                    );
+                    return Boolean(named && named.Range.includes(':'));
+                }
+                case 'UnaryOp':
+                case 'PostfixPercent':
+                    return nodeContainsArray(node.operand);
+                case 'BinaryOp':
+                    return nodeContainsArray(node.left) || nodeContainsArray(node.right);
+                default:
+                    return false;
+            }
+        };
 
         const resolveFlattenedRange = (arg?: FormulaAstNode): SpreadsheetCellValue[] => {
             if (!arg) return [];
@@ -5420,6 +5588,20 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             nums.push(v);
                         }
                     }
+                } else if (nodeContainsArray(arg)) {
+                    const matrix = this.evalAstMatrix(arg, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                    for (const row of matrix) {
+                        for (const v of row) {
+                            if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(v)) return v as string;
+                            if (typeof v === 'number' && !Number.isNaN(v)) {
+                                nums.push(v);
+                            } else if (coerceDirectScalars) {
+                                const n = this.toNumberOrError(v);
+                                if (typeof n === 'string') return n;
+                                nums.push(n);
+                            }
+                        }
+                    }
                 } else {
                     const v = evalScalar(arg);
                     if (v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL || this.isErrorValue(v)) return v as string;
@@ -5464,6 +5646,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                             if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                             if (typeof v === 'number' && !Number.isNaN(v)) count++;
                         }
+                    } else if (nodeContainsArray(arg)) {
+                        const matrix = this.evalAstMatrix(arg, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                        for (const row of matrix) {
+                            for (const v of row) {
+                                if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                                if (typeof v === 'number' && !Number.isNaN(v)) count++;
+                                else if (typeof v === 'string' && v.trim() !== '' && !this.isErrorValue(v) && !Number.isNaN(Number(v))) {
+                                    count++;
+                                }
+                            }
+                        }
                     } else {
                         const v = evalScalar(arg);
                         if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
@@ -5483,6 +5676,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         for (const v of resolveNonBlankRangeValues(arg)) {
                             if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
                             if (v !== null && v !== undefined && v !== '') count++;
+                        }
+                    } else if (nodeContainsArray(arg)) {
+                        const matrix = this.evalAstMatrix(arg, workbook, sheet, getCellVal, cellLookup, currentCellAddress);
+                        for (const row of matrix) {
+                            for (const v of row) {
+                                if (v === '#MJ_ACCESS_DENIED!' || v === UNIMPLEMENTED_DYNAMIC_ARRAY_SENTINEL) return v;
+                                if (v !== null && v !== undefined && v !== '') count++;
+                            }
                         }
                     } else {
                         const v = evalScalar(arg);
@@ -10090,13 +10291,30 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (rawFormulaBody.length > 0) {
                 const prefixedFormula = prefixOoxmlFutureFunctions(rawFormulaBody);
                 const isSpillDynArray = isSpillDynamicArrayFormulaBody(rawFormulaBody);
-                const hasRangeRef = /(?:\$?[A-Z]{1,3}\$?\d+\s*:\s*\$?[A-Z]{1,3}\$?\d+|\$?[A-Z]{1,3}\s*:\s*\$?[A-Z]{1,3}|\$?\d+\s*:\s*\$?\d+)/i.test(rawFormulaBody);
-                if (isSpillDynArray || (Boolean(orig?.cmAttr) && orig?.fType === 'array' && hasRangeRef)) {
-                    const cmVal = String(dynamicArrayCmIndex);
-                    cExtraMetaAttrs += ` cm="${this.escapeXml(cmVal)}"`;
-                    formulaXml = `<f t="array" ref="${this.escapeXml(cell.Address)}">${this.escapeXml(prefixedFormula)}</f>`;
-                } else if (orig?.fType === 'array' && !orig?.cmAttr && hasRangeRef) {
-                    formulaXml = `<f t="array" ref="${this.escapeXml(cell.Address)}">${this.escapeXml(prefixedFormula)}</f>`;
+                const origMeta: { fType?: string; fRef?: string | null; cmAttr?: string | null } = {
+                    fType: cell._originalXmlMeta?.fType ?? orig?.fType,
+                    fRef: cell._originalXmlMeta?.fRef ?? orig?.fRef,
+                    cmAttr: cell._originalXmlMeta?.cmAttr ?? orig?.cmAttr
+                };
+                const formulaWithoutStrings = rawFormulaBody.replace(/"(?:""|[^"])*"/g, '""');
+                const hasFunctionOrIdentOrArrayLiteral =
+                    /[A-Za-z_\\]/.test(formulaWithoutStrings) || /\{/.test(formulaWithoutStrings);
+                const keepCseArray = origMeta.fType === 'array' && (
+                    !cell.FormulaDirty || hasFunctionOrIdentOrArrayLiteral
+                );
+                if (isSpillDynArray || keepCseArray) {
+                    const arrayRef = isSpillDynArray || Boolean(origMeta.cmAttr)
+                        ? cell.Address
+                        : origMeta.fRef || cell.Address;
+                    const cmVal = isSpillDynArray
+                        ? String(dynamicArrayCmIndex)
+                        : origMeta.cmAttr
+                          ? origMeta.cmAttr
+                          : null;
+                    if (cmVal) {
+                        cExtraMetaAttrs += ` cm="${this.escapeXml(cmVal)}"`;
+                    }
+                    formulaXml = `<f t="array" ref="${this.escapeXml(arrayRef)}">${this.escapeXml(prefixedFormula)}</f>`;
                 } else {
                     formulaXml = `<f>${this.escapeXml(prefixedFormula)}</f>`;
                 }
@@ -10546,28 +10764,49 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 );
                 const rawFormulaBody = hasStandardFormula ? cell.Formula!.trim().slice(1) : '';
                 const isSpillDynArray = rawFormulaBody.length > 0 && isSpillDynamicArrayFormulaBody(rawFormulaBody);
-                const cmAttr = isSpillDynArray ? ` cm="${dynamicArrayCmIndex}"` : '';
+                const origMeta = cell._originalXmlMeta;
+                const formulaWithoutStrings = rawFormulaBody.replace(/"(?:""|[^"])*"/g, '""');
+                const hasFunctionOrIdentOrArrayLiteral =
+                    /[A-Za-z_\\]/.test(formulaWithoutStrings) || /\{/.test(formulaWithoutStrings);
+                const keepCseArray = origMeta?.fType === 'array' && (
+                    !cell.FormulaDirty || hasFunctionOrIdentOrArrayLiteral
+                );
+                let cExtraMetaAttrs = '';
                 const prefixedFormula = rawFormulaBody.length > 0 ? prefixOoxmlFutureFunctions(rawFormulaBody) : '';
-                const formulaXml = hasStandardFormula
-                    ? isSpillDynArray
-                        ? `<f t="array" ref="${this.escapeXml(cell.Address)}">${this.escapeXml(prefixedFormula)}</f>`
-                        : `<f>${this.escapeXml(prefixedFormula)}</f>`
-                    : '';
+                let formulaXml = '';
+                if (hasStandardFormula) {
+                    if (isSpillDynArray || keepCseArray) {
+                        const arrayRef = isSpillDynArray || Boolean(origMeta?.cmAttr)
+                            ? cell.Address
+                            : origMeta?.fRef || cell.Address;
+                        const cmVal = isSpillDynArray
+                            ? String(dynamicArrayCmIndex)
+                            : origMeta?.cmAttr
+                              ? origMeta.cmAttr
+                              : null;
+                        if (cmVal) {
+                            cExtraMetaAttrs = ` cm="${this.escapeXml(cmVal)}"`;
+                        }
+                        formulaXml = `<f t="array" ref="${this.escapeXml(arrayRef)}">${this.escapeXml(prefixedFormula)}</f>`;
+                    } else {
+                        formulaXml = `<f>${this.escapeXml(prefixedFormula)}</f>`;
+                    }
+                }
 
                 if (rawFormulaBody.length > 0 && isUnimplementedDynamicArrayError(rawFormulaBody, val)) {
-                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cmAttr}>${formulaXml}</c>`);
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs}>${formulaXml}</c>`);
                 } else if (typeof val === 'number' && !Number.isNaN(val)) {
-                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cmAttr} t="n">${formulaXml}<v>${val}</v></c>`);
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs} t="n">${formulaXml}<v>${val}</v></c>`);
                 } else if (typeof val === 'boolean') {
-                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cmAttr} t="b">${formulaXml}<v>${val ? 1 : 0}</v></c>`);
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs} t="b">${formulaXml}<v>${val ? 1 : 0}</v></c>`);
                 } else if (typeof val === 'string' && this.isErrorValue(val)) {
                     cellTags.push(
-                        `<c r="${cell.Address}"${sAttr}${cmAttr} t="e">${formulaXml}<v>${this.escapeXml(val)}</v></c>`
+                        `<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs} t="e">${formulaXml}<v>${this.escapeXml(val)}</v></c>`
                     );
                 } else if (val !== null && val !== undefined && String(val) !== '') {
                     if (formulaXml) {
                         cellTags.push(
-                            `<c r="${cell.Address}"${sAttr}${cmAttr} t="str">${formulaXml}<v>${this.escapeXml(String(val))}</v></c>`
+                            `<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs} t="str">${formulaXml}<v>${this.escapeXml(String(val))}</v></c>`
                         );
                     } else {
                         cellTags.push(
@@ -10575,7 +10814,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         );
                     }
                 } else if (formulaXml) {
-                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cmAttr}>${formulaXml}</c>`);
+                    cellTags.push(`<c r="${cell.Address}"${sAttr}${cExtraMetaAttrs}>${formulaXml}</c>`);
                 }
             }
             if (cellTags.length > 0) {
@@ -10833,6 +11072,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
             const tAttr = this.extractXmlAttr(attrs, 't') || '';
             const sAttr = this.extractXmlAttr(attrs, 's');
+            const cmAttr = this.extractXmlAttr(attrs, 'cm');
             const styleIdx = sAttr ? parseInt(sAttr, 10) : 0;
             const styleInfo = styleLookup[styleIdx];
 
@@ -10878,13 +11118,15 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             let formula: string | null = null;
             let formulaStable: string | null = null;
             let spillRange: string | undefined;
+            let fType = '';
+            let fRef: string | null = null;
 
             if (fTagMatch) {
                 const fAttrs = fTagMatch[1] ?? '';
                 const fBodyRaw = this.unescapeXml((fTagMatch[2] ?? '').trim());
-                const fType = (this.extractXmlAttr(fAttrs, 't') ?? '').toLowerCase();
+                fType = (this.extractXmlAttr(fAttrs, 't') ?? '').toLowerCase();
                 const sharedIdx = this.extractXmlAttr(fAttrs, 'si');
-                const fRef = this.extractXmlAttr(fAttrs, 'ref');
+                fRef = this.extractXmlAttr(fAttrs, 'ref');
 
                 if (fType === 'shared' && sharedIdx !== null) {
                     if (fBodyRaw.length > 0) {
@@ -10934,7 +11176,17 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 ComputedValue: rawVal,
                 DisplayValue: this.FormatCellValue(rawVal, cellStyle),
                 Style: cellStyle,
-                ...(spillRange ? { SpillRange: spillRange } : {})
+                ...(spillRange ? { SpillRange: spillRange } : {}),
+                ...(fType === 'array' || Boolean(cmAttr)
+                    ? {
+                          _originalXmlMeta: {
+                              fType: fType || undefined,
+                              fRef: fRef || canonicalAddr,
+                              cmAttr: cmAttr || undefined,
+                              sAttr: sAttr || undefined
+                          }
+                      }
+                    : {})
             };
             ws.Cells[canonicalAddr] = createdCell;
             if (formulaStable) {
@@ -11894,6 +12146,7 @@ type FormulaAstNode =
     | { kind: 'StringLiteral'; value: string }
     | { kind: 'BooleanLiteral'; value: boolean }
     | { kind: 'ErrorLiteral'; error: string }
+    | { kind: 'ArrayLiteral'; rows: FormulaAstNode[][] }
     | { kind: 'CellRef'; sheetName?: string; address: string }
     | { kind: 'RangeRef'; sheetName?: string; startAddress: string; endAddress: string }
     | { kind: 'Identifier'; name: string }
@@ -11913,7 +12166,10 @@ type FormulaToken =
     | { type: 'Colon' }
     | { type: 'Comma' }
     | { type: 'LParen' }
-    | { type: 'RParen' };
+    | { type: 'RParen' }
+    | { type: 'LBrace' }
+    | { type: 'RBrace' }
+    | { type: 'Semicolon' };
 
 const FORMULA_AST_CACHE = new Map<string, FormulaAstNode>();
 
@@ -12054,6 +12310,21 @@ function tokenizeFormula(expr: string): FormulaToken[] | { error: string } {
         }
         if (ch === ')') {
             tokens.push({ type: 'RParen' });
+            i++;
+            continue;
+        }
+        if (ch === '{') {
+            tokens.push({ type: 'LBrace' });
+            i++;
+            continue;
+        }
+        if (ch === '}') {
+            tokens.push({ type: 'RBrace' });
+            i++;
+            continue;
+        }
+        if (ch === ';') {
+            tokens.push({ type: 'Semicolon' });
             i++;
             continue;
         }
@@ -12234,6 +12505,37 @@ function parseFormulaAst(expr: string): FormulaAstNode {
             }
             consume();
             return inner;
+        }
+        if (t.type === 'LBrace') {
+            consume();
+            const rows: FormulaAstNode[][] = [];
+            let currentRow: FormulaAstNode[] = [];
+            if (peek()?.type === 'RBrace') {
+                consume();
+                return { kind: 'ArrayLiteral', rows: [] };
+            }
+            while (true) {
+                const element = parseComparison();
+                currentRow.push(element);
+                const nextTok = peek();
+                if (nextTok?.type === 'Comma') {
+                    consume();
+                    continue;
+                }
+                if (nextTok?.type === 'Semicolon') {
+                    consume();
+                    rows.push(currentRow);
+                    currentRow = [];
+                    continue;
+                }
+                if (nextTok?.type === 'RBrace') {
+                    consume();
+                    rows.push(currentRow);
+                    break;
+                }
+                return { kind: 'ErrorLiteral', error: '#VALUE!' };
+            }
+            return { kind: 'ArrayLiteral', rows };
         }
         if (t.type === 'SheetPrefix') {
             consume();

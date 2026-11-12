@@ -152,6 +152,22 @@ const INTERNAL_PERMISSION_QUERY_PARAMS_STORE_KEY = '___MJ_INTERNAL_ARTIFACT_PERM
 const INTERNAL_PERMISSION_QUERY_SYMBOL_STORE_KEY = '___MJ_INTERNAL_ARTIFACT_PERMISSION_QUERY_SYMBOL___';
 const FALLBACK_INTERNAL_PERMISSION_QUERY_WEAK_SET = new WeakSet<object>();
 const FALLBACK_INTERNAL_PERMISSION_QUERY_SYMBOL = Symbol('MJInternalArtifactPermissionQuery');
+const TRUSTED_SERVER_VERSION_ROLLBACKS_STORE_KEY = '___MJ_TRUSTED_SERVER_VERSION_ROLLBACKS___';
+const fallbackTrustedServerVersionRollbacks = new WeakSet<object>();
+
+function getTrustedServerVersionRollbacksWeakSet(): WeakSet<object> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[TRUSTED_SERVER_VERSION_ROLLBACKS_STORE_KEY];
+        if (existing instanceof WeakSet) {
+            return existing;
+        }
+        const created = new WeakSet<object>();
+        store[TRUSTED_SERVER_VERSION_ROLLBACKS_STORE_KEY] = created;
+        return created;
+    }
+    return fallbackTrustedServerVersionRollbacks;
+}
 
 function getInternalPermissionQueryWeakSet(): WeakSet<object> {
     const store = GetGlobalObjectStore();
@@ -324,6 +340,22 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 descriptor.value !== null &&
                 weakSet.has(descriptor.value)
         );
+    }
+
+    public MarkTrustedServerVersionRollback(versionEntity: object): void {
+        getTrustedServerVersionRollbacksWeakSet().add(versionEntity);
+    }
+
+    public IsTrustedServerVersionRollback(versionEntity: object): boolean {
+        return getTrustedServerVersionRollbacksWeakSet().has(versionEntity);
+    }
+
+    public static MarkTrustedServerVersionRollback(versionEntity: object): void {
+        getTrustedServerVersionRollbacksWeakSet().add(versionEntity);
+    }
+
+    public static IsTrustedServerVersionRollback(versionEntity: object): boolean {
+        return getTrustedServerVersionRollbacksWeakSet().has(versionEntity);
     }
 
     /**
@@ -564,7 +596,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     ): Promise<ResolvedArtifactPermissions | null> {
         const delegateEntityId = artifact.DelegateEntityID!;
         const delegateRecordId = artifact.DelegateRecordID!;
-        const entityInfo = provider.Entities?.find((e) => UUIDsEqual(e.ID, delegateEntityId));
+        const entityInfo = provider.EntityByID(delegateEntityId);
         const delegateEntityName = entityInfo?.Name ?? '';
 
         const delegate = this.resolveDelegateInstance(delegateEntityId, delegateEntityName);

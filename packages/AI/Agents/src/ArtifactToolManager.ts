@@ -1050,7 +1050,7 @@ export class ArtifactToolManager {
             : (targetEntry.currentVersionNumber ?? targetEntry.versionNumber ?? 0) + 1
           : targetEntry.versionNumber;
 
-        if (hook && targetEntry.artifactId && targetEntry.contentMode !== 'File') {
+        if (hook && targetEntry.artifactId) {
           hookInvokedBeforePersist = true;
           try {
             hookResult = await hook({
@@ -1148,11 +1148,24 @@ export class ArtifactToolManager {
                 versionNumber: targetEntry.versionNumber,
               });
               if (commitOutcome && typeof commitOutcome === 'object') {
+                const preCommitRollback = hookResult.rollback;
                 hookResult = commitOutcome;
                 if (commitOutcome.applied === false) {
                   const warnMsg = `Deferred mutation was not applied to active room for artifact '${targetEntry.artifactId}'`;
                   LogError(`ArtifactToolManager: ${warnMsg}`);
                   commitWarning = warnMsg;
+                  const rollbackToRun = commitOutcome.rollback ?? preCommitRollback;
+                  if (rollbackToRun) {
+                    try {
+                      await rollbackToRun();
+                    } catch (rbErr) {
+                      LogError(
+                        `ArtifactToolManager: exception in hookResult.rollback for artifact '${targetEntry.artifactId}': ${
+                          rbErr instanceof Error ? rbErr.message : String(rbErr)
+                        }`,
+                      );
+                    }
+                  }
                   await this.rollbackPersistedArtifactVersionMutation(targetEntry, persistOutcome, previousContentStr);
                   targetEntry.content = previousContent;
                   if (previousOriginalXlsxBytes) {
@@ -1225,6 +1238,17 @@ export class ArtifactToolManager {
                 commitErr instanceof Error ? commitErr.message : String(commitErr)
               }`;
               LogError(errMsg);
+              if (hookResult && typeof hookResult === 'object' && hookResult.rollback) {
+                try {
+                  await hookResult.rollback();
+                } catch (rbErr) {
+                  LogError(
+                    `ArtifactToolManager: exception in hookResult.rollback for artifact '${targetEntry.artifactId}': ${
+                      rbErr instanceof Error ? rbErr.message : String(rbErr)
+                    }`,
+                  );
+                }
+              }
               await this.rollbackPersistedArtifactVersionMutation(targetEntry, persistOutcome, previousContentStr);
               targetEntry.content = previousContent;
               if (previousOriginalXlsxBytes) {
@@ -1915,12 +1939,49 @@ export class ArtifactToolManager {
       return;
     }
 
+    ArtifactPermissionEngine.Instance.MarkTrustedServerVersionRollback(versionEntity);
+
     if (!snapshot.hadExistingAgentRunVersion) {
+      if (this.provider && entry.artifactId && versionEntity.VersionNumber != null) {
+        try {
+          const rv = RunView.FromMetadataProvider(this.provider);
+          const newerCheck = await rv.RunView<{
+            ID: string;
+            VersionNumber: number;
+            ContentMode?: 'File' | 'Text' | null;
+            FileID?: string | null;
+          }>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ArtifactID = '${EscapeSQLString(entry.artifactId)}' AND VersionNumber > ${versionEntity.VersionNumber}`,
+              OrderBy: 'VersionNumber DESC',
+              MaxRows: 1,
+              ResultType: 'simple',
+            },
+            this.contextUser,
+          );
+          const newest = newerCheck.Results?.[0];
+          if (newerCheck.Success && newest && newest.VersionNumber > versionEntity.VersionNumber) {
+            entry.versionId = newest.ID;
+            entry.versionNumber = newest.VersionNumber;
+            entry.currentVersionNumber = newest.VersionNumber;
+            if (newest.ContentMode) {
+              entry.contentMode = newest.ContentMode;
+            }
+            return;
+          }
+        } catch (err) {
+          LogError(
+            `ArtifactToolManager: exception checking for newer versions before rollback of '${versionEntity.ID}': ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
+
       let deleted = false;
       try {
-        if (typeof versionEntity.Delete === 'function') {
-          deleted = await versionEntity.Delete();
-        }
+        deleted = await versionEntity.Delete();
       } catch (delErr) {
         LogError(
           `ArtifactToolManager: exception deleting rolled-back version record '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
@@ -1939,7 +2000,10 @@ export class ArtifactToolManager {
         versionEntity.ContentHash = createHash('sha256').update(prevContent, 'utf8').digest('hex');
         versionEntity.ContentSizeBytes = Buffer.byteLength(prevContent, 'utf8');
         try {
-          await versionEntity.Save();
+          const fallbackSaved = await versionEntity.Save();
+          if (!fallbackSaved) {
+            LogError(`ArtifactToolManager: Fallback Save() during rollback of version ${versionEntity.ID} also failed.`);
+          }
         } catch (saveErr) {
           LogError(
             `ArtifactToolManager: exception restoring previous content on version '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
@@ -1953,6 +2017,7 @@ export class ArtifactToolManager {
         await this.deleteUnreferencedArtifactFile(versionEntity.FileID);
       }
     } else {
+      const failedUploadFileId = versionEntity.FileID;
       versionEntity.Name = snapshot.entityName ?? '';
       versionEntity.Comments = snapshot.entityComments;
       versionEntity.Content = snapshot.entityContent;
@@ -1965,11 +2030,13 @@ export class ArtifactToolManager {
       versionEntity.FileName = snapshot.entityFileName;
 
       try {
-        const reverted = await versionEntity.Save();
-        if (!reverted) {
+        const revertedSaved = await versionEntity.Save();
+        if (!revertedSaved) {
           LogError(
             `ArtifactToolManager: failed to revert reused version '${versionEntity.ID}' fields for artifact '${entry.artifactId}'`,
           );
+        } else if (failedUploadFileId && !UUIDsEqual(failedUploadFileId, snapshot.entityFileID)) {
+          await this.deleteUnreferencedArtifactFile(failedUploadFileId);
         }
       } catch (revErr) {
         LogError(

@@ -23,6 +23,9 @@ import {
     DocumentLiveBlockEngine,
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
+    SlideDeckEngine,
+    type SlideDeckSpec,
+    type SlideSpec,
     SpreadsheetEngine,
     type SpreadsheetCellSpec,
     type WorkbookSpec,
@@ -80,8 +83,10 @@ vi.mock('type-graphql', () => {
 import {
     ARTIFACT_COLLABORATION_WS_PATH,
     ARTIFACT_LIVE_MUTATION_EVENT_CODE,
+    ARTIFACT_LIVE_MUTATION_HOOK_KEY,
     ARTIFACT_VERSION_SAVED_EVENT_CODE,
     ArtifactCollaborationServer,
+    type ArtifactLiveMutationHookResult,
     COLLAB_SECRET_UNCONFIGURED_CODE,
     CollaborationControlFrame,
     CollaborationPermissionStatusFrame,
@@ -7152,23 +7157,314 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const doc2 = new Y.Doc();
 
         // Same version ID & version number, but differing text
-        const cidTextA = server.computeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
-        const cidTextB = server.computeDeterministicRestoreClientId(doc2, testArtId, 'ver-r12-seed', 1, 'Text variant B');
-        const cidTextA2 = server.computeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
+        const cidTextA = server.ComputeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
+        const cidTextB = server.ComputeDeterministicRestoreClientId(doc2, testArtId, 'ver-r12-seed', 1, 'Text variant B');
+        const cidTextA2 = server.ComputeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
 
         expect(cidTextA).not.toBe(cidTextB);
         expect(cidTextA).toBe(cidTextA2);
 
         // Ad-hoc calls without version ID
-        const cidAdhoc1 = server.computeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
-        const cidAdhoc2 = server.computeDeterministicRestoreClientId(doc2, testArtId, undefined, undefined, 'Adhoc Text 2');
-        const cidAdhoc1Dup = server.computeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
+        const cidAdhoc1 = server.ComputeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
+        const cidAdhoc2 = server.ComputeDeterministicRestoreClientId(doc2, testArtId, undefined, undefined, 'Adhoc Text 2');
+        const cidAdhoc1Dup = server.ComputeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
 
         expect(cidAdhoc1).not.toBe(cidAdhoc2);
         expect(cidAdhoc1).toBe(cidAdhoc1Dup);
 
         doc1.destroy();
         doc2.destroy();
+    });
+
+    it('R13-2: partitioned nodes with divergent live slide edits restoring the same version preserve all slides and converge identically after partition heals', () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtId = 'e8130000-0000-4000-8000-000000000002';
+
+        const serializeSlideDeckFromYDoc = (doc: Y.Doc, fallbackText = ''): string => {
+            return server.ExtractRoomSerializedContent(doc) || fallbackText;
+        };
+
+        const defaultTheme = SlideDeckEngine.Instance.CreateDefaultDeck().Theme;
+        const defaultMaster = SlideDeckEngine.Instance.CreateDefaultDeck().Master;
+
+        const v1Deck: SlideDeckSpec = {
+            SchemaVersion: '1.0',
+            DeckID: 'deck-r13-2',
+            Title: 'Partition Test Deck',
+            AspectRatio: '16:9',
+            Theme: defaultTheme,
+            Master: defaultMaster,
+            Slides: [
+                {
+                    SlideID: 's1',
+                    SlideNumber: 1,
+                    Layout: 'Title',
+                    Title: 'One',
+                    Regions: []
+                },
+                {
+                    SlideID: 's2',
+                    SlideNumber: 2,
+                    Layout: 'TitleAndBody',
+                    Title: 'Two',
+                    Regions: []
+                },
+                {
+                    SlideID: 's3',
+                    SlideNumber: 3,
+                    Layout: 'TitleAndBody',
+                    Title: 'Three',
+                    Regions: []
+                }
+            ]
+        };
+        const v1Content = SlideDeckEngine.Instance.SerializeDeckSpec(v1Deck);
+
+        const docA = new Y.Doc();
+        docA.clientID = 11111;
+        const docB = new Y.Doc();
+        docB.clientID = 22222;
+
+        server.ApplyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
+        server.SyncSlideDeckStructuresIfPresent(docA, v1Content);
+
+        // Seed docB with the exact same initial state
+        const initialBytes = Y.encodeStateAsUpdate(docA);
+        Y.applyUpdate(docB, initialBytes);
+
+        expect(docA.getArray<string>('slideOrder').toArray()).toEqual(['s1', 's2', 's3']);
+        expect(docB.getArray<string>('slideOrder').toArray()).toEqual(['s1', 's2', 's3']);
+
+        // While partitioned:
+        // Node A edits slide s2
+        const s2RawA = docA.getMap<string>('slidesById').get('s2');
+        const s2ParsedA = JSON.parse(s2RawA!) as SlideSpec;
+        s2ParsedA.Title = 'Two-A';
+        docA.getMap<string>('slidesById').set('s2', JSON.stringify(s2ParsedA));
+
+        // Node B edits slide s3
+        const s3RawB = docB.getMap<string>('slidesById').get('s3');
+        const s3ParsedB = JSON.parse(s3RawB!) as SlideSpec;
+        s3ParsedB.Title = 'Three-B';
+        docB.getMap<string>('slidesById').set('s3', JSON.stringify(s3ParsedB));
+
+        // Both nodes independently restore v1
+        server.ApplyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
+        server.SyncSlideDeckStructuresIfPresent(docA, v1Content);
+
+        server.ApplyDeterministicRestoreTextToDoc(docB, testArtId, 'v1', 1, v1Content);
+        server.SyncSlideDeckStructuresIfPresent(docB, v1Content);
+
+        // Heal partition by exchanging updates
+        const updateA = Y.encodeStateAsUpdate(docA);
+        const updateB = Y.encodeStateAsUpdate(docB);
+        Y.applyUpdate(docA, updateB);
+        Y.applyUpdate(docB, updateA);
+
+        // Verify via serializeSlideDeckFromYDoc that BOTH nodes preserve all 3 slides in order and converge to identical JSON!
+        const finalA = serializeSlideDeckFromYDoc(docA, '');
+        const finalB = serializeSlideDeckFromYDoc(docB, '');
+        expect(finalA).toBe(finalB);
+
+        const parsedFinalA = SlideDeckEngine.Instance.ParseDeckSpec(finalA);
+        const parsedFinalB = SlideDeckEngine.Instance.ParseDeckSpec(finalB);
+        expect(parsedFinalA.Slides.map((s) => `${s.SlideID}:${s.Title}`)).toEqual([
+            's1:One',
+            's2:Two',
+            's3:Three'
+        ]);
+        expect(parsedFinalB.Slides.map((s) => `${s.SlideID}:${s.Title}`)).toEqual([
+            's1:One',
+            's2:Two',
+            's3:Three'
+        ]);
+
+        docA.destroy();
+        docB.destroy();
+    });
+
+    it('R13-3b: deferCommit rollback reverts live room content, BaseVersionID, and DirtyVersion back to v1 when commit fails', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtifactId = 'a1300000-0000-4000-8000-000000000001';
+        const v1Content = 'Line 1: baseline\nLine 2: baseline\n';
+        const v2Content = 'Line 1: baseline\nLine 2: modified by agent\nLine 3: added\n';
+
+        versions = [
+            {
+                ID: 'ver-r13-v1',
+                ArtifactID: testArtifactId,
+                VersionNumber: 1,
+                Content: v1Content,
+                ContentHash: 'hash-v1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.clear();
+
+        // Hydrate or initialize the room at v1
+        const room = await server.GetOrCreateRoom(testArtifactId, editorUser);
+        expect(room).toBeTruthy();
+        expect(room!.BaseVersionID).toBe('ver-r13-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+        expect(room!.DirtyVersion).toBe(false);
+        expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(v1Content);
+
+        // Fetch registered live mutation hook
+        const store = GetGlobalObjectStore();
+        type LiveHook = (evt: {
+            artifactId: string;
+            alphaId: string;
+            versionId?: string;
+            versionNumber?: number;
+            previousContent?: string;
+            updatedContent: string;
+            tool: string;
+            deferCommit?: boolean;
+            contextUser?: UserInfo;
+        }) => Promise<ArtifactLiveMutationHookResult | void>;
+        const liveHook = store ? (store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] as LiveHook | undefined) : undefined;
+        expect(typeof liveHook).toBe('function');
+
+        // Execute deferCommit mutation preview
+        const hookRes = await liveHook!({
+            artifactId: testArtifactId,
+            alphaId: 'alpha-r13',
+            updatedContent: v2Content,
+            previousContent: v1Content,
+            tool: 'test-tool',
+            deferCommit: true,
+            contextUser: editorUser
+        });
+
+        expect(hookRes).toBeTruthy();
+        expect(typeof hookRes?.commit).toBe('function');
+        expect(typeof hookRes?.rollback).toBe('function');
+
+        // Simulate DB saving v2 while deferCommit is in flight:
+        // MJ_ARTIFACT_VERSION_SAVED fires for v2
+        versions.push({
+            ID: 'ver-r13-v2',
+            ArtifactID: testArtifactId,
+            VersionNumber: 2,
+            Content: v2Content,
+            ContentHash: 'hash-v2',
+            UserID: editorUser.ID
+        });
+
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: testArtifactId,
+                VersionID: 'ver-r13-v2',
+                VersionNumber: 2,
+                Content: v2Content,
+                UserID: editorUser.ID
+            }
+        });
+
+        // The room reconciled v2
+        expect(room!.BaseVersionID).toBe('ver-r13-v2');
+        expect(room!.BaseVersionNumber).toBe(2);
+        expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(v2Content);
+
+        // Now commit() fails or throws: ArtifactToolManager rolls back v2 in DB, and calls rollback()
+        versions.pop();
+        await hookRes!.rollback!();
+
+        // Verify the room reverted cleanly back to v1!
+        expect(room!.BaseVersionID).toBe('ver-r13-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+        expect(room!.DirtyVersion).toBe(false);
+        expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(v1Content);
+    });
+
+    it('R13-4: MJ_ARTIFACT_VERSION_SAVED payload with UpdatedByUserID targets MSG_MERGE_CONFLICT only to that actor and not to other editors', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtifactId = 'a1300000-0000-4000-8000-000000000004';
+        const aliceId = secondEditorUser.ID; // Alice (agent / out-of-band actor)
+        const bobId = editorUser.ID;         // Bob (human editor)
+
+        const baseContent = 'Header\nLine to conflict\nFooter\n';
+        versions = [
+            {
+                ID: 'ver-r13-4-1',
+                ArtifactID: testArtifactId,
+                VersionNumber: 1,
+                Content: baseContent,
+                ContentHash: 'hash-r13-4-1',
+                UserID: bobId
+            }
+        ];
+        workingStates.clear();
+
+        // Connect both Bob and Alice via connectYjsClient
+        const bobClient = await connectYjsClient(bobId, testArtifactId);
+        await bobClient.waitForText('Line to conflict');
+
+        const aliceClient = await connectYjsClient(aliceId, testArtifactId);
+        await aliceClient.waitForText('Line to conflict');
+
+        // Bob makes a dirty edit on the conflicting line
+        bobClient.doc.transact(() => {
+            const yText = bobClient.doc.getText('content');
+            const idx = yText.toString().indexOf('Line to conflict');
+            yText.delete(idx, 'Line to conflict'.length);
+            yText.insert(idx, "Bob's human edit");
+        }, 'bob-edit');
+
+        await vi.waitFor(async () => {
+            expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(
+                "Header\nBob's human edit\nFooter\n"
+            );
+        });
+
+        // Clear control frames before raising the event
+        bobClient.controlFrames.length = 0;
+        aliceClient.controlFrames.length = 0;
+
+        // Alice's out-of-band version write creates a merge conflict on the same line
+        // Notice: UserID is undefined, but UpdatedByUserID is aliceId!
+        const oobContent = 'Header\nAlice conflicting edit\nFooter\n';
+        versions.push({
+            ID: 'ver-r13-4-2',
+            ArtifactID: testArtifactId,
+            VersionNumber: 2,
+            Content: oobContent,
+            ContentHash: 'hash-r13-4-2',
+            UserID: aliceId
+        });
+
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: testArtifactId,
+                VersionID: 'ver-r13-4-2',
+                VersionNumber: 2,
+                Content: oobContent,
+                UserID: undefined,
+                UpdatedByUserID: aliceId
+            }
+        });
+
+        // Verify that ONLY Alice's socket receives 'merge-conflict', and Bob's socket does NOT receive 'merge-conflict'!
+        await vi.waitFor(() => {
+            const aliceConflicts = aliceClient.controlFrames.filter((f) => f.action === 'merge-conflict');
+            expect(aliceConflicts.length).toBeGreaterThanOrEqual(1);
+            expect(aliceConflicts[0].versionId).toBe('ver-r13-4-2');
+            expect(aliceConflicts[0].actorUserId).toBe(aliceId);
+        });
+
+        const bobConflicts = bobClient.controlFrames.filter((f) => f.action === 'merge-conflict');
+        expect(bobConflicts).toHaveLength(0);
+
+        bobClient.ws.close();
+        bobClient.doc.destroy();
+        aliceClient.ws.close();
+        aliceClient.doc.destroy();
     });
 
     it('W3 & Whiteboard v1: Honor incoming array reorder when live kept base relative order, and support whiteboard v1 elements', () => {
