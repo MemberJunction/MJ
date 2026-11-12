@@ -275,6 +275,14 @@ describe('MessageInputComponent — decision routing', () => {
 
     beforeEach(() => {
         vi.spyOn(AIEngineBase.Instance, 'Agents', 'get').mockReturnValue(AGENTS);
+        // The conversation-routing calibrations shipped on the Jev and LLM Decision AI models.
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation((modelName: string) =>
+            modelName === 'Jev'
+                ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }]
+                : modelName === 'LLM Decision'
+                    ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }]
+                    : []
+        );
         vi.spyOn(MentionAutocompleteService.Instance, 'GetAvailableAgents').mockReturnValue(RUNNABLE);
         vi.spyOn(PlanModePreference, 'IsEnabled').mockReturnValue(false);
         vi.spyOn(PlanModePreference, 'ClaimPendingNew').mockImplementation(() => undefined);

@@ -15,6 +15,7 @@
  * @module @memberjunction/testing-engine
  */
 
+import type { DecisionCalibrationEntry } from '@memberjunction/ai';
 import {
     ApplyPlatt,
     BalancedAccuracy,
@@ -58,26 +59,6 @@ export interface CalibrationPoint {
      * lacks one, the group's folds are dealt at random instead.
      */
     Fold?: number;
-}
-
-/**
- * One calibration as the model catalog stores it, in `ModelConfiguration.Decision.Calibrations` on
- * the answering model's `MJ: AI Models` row. A consumer applies it as
- * `1 / (1 + exp(-(A · logit(p) + B)))` (`ApplyPlattCalibration` in `@memberjunction/ai`).
- */
-export interface DecisionCalibrationEntry {
-    /** The decision use. */
-    Use: string;
-    /** The question's key in that use. */
-    Question: string;
-    /** The exact model the fit was made on, as the driver reports it. */
-    ResolvedModel: string;
-    /** The slope on logit(p). */
-    A: number;
-    /** The intercept, after any prior shift. */
-    B: number;
-    /** What the fit was made on and how it scored, for whoever reads the row later. */
-    FittedOn?: string;
 }
 
 /** The calibrations for one decision model: what goes into its `Decision.Calibrations`. */
