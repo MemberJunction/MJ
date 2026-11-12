@@ -79,7 +79,7 @@ export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig
  * const entityScope = scopes.find(s => s.FullPath === 'entity:read');
  * ```
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
     // Cached entity arrays
     private _scopes: MJAPIScopeEntity[] = [];

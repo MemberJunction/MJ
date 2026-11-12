@@ -189,7 +189,7 @@ const DEFAULT_MAX_DIMENSION = 4096;
  * (Members intended to be reached ONLY through `AIEngineBase.Instance` — e.g. internals another
  * base-layer package consumes — need no delegate; the rule is about the server-side call path.)
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];

@@ -46,7 +46,7 @@ import {
  * // -> { Scope, Providers, ExternalIndexes, Entities, StorageAccounts }
  * ```
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     /**
      * Returns the global singleton instance.

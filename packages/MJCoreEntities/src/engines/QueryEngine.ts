@@ -79,7 +79,7 @@ interface DefinitionIndexes {
     QuerySQLsByQuery: UUIDMap<MJQuerySQLEntity[]>;
 }
 
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class QueryEngine extends BaseEngine<QueryEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application.

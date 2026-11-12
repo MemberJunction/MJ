@@ -53,7 +53,7 @@ type CatalogEdgeEnds = Pick<CatalogDependencyEdge, 'CompanyIntegrationObjectID' 
  * For server-side orchestration (sync execution), use the full IntegrationEngine
  * from @memberjunction/integration-engine which wraps this base via composition.
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     // ── Cached entity arrays ──────────────────────────────────────────
     private _integrations: MJIntegrationEntity[] = [];

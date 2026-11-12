@@ -14,6 +14,37 @@ export interface ClassInfo {
 }
 
 /**
+ * Symbol key used to stamp and read unminified class names on constructor functions.
+ */
+export const MJ_CLASS_NAME_SYMBOL: unique symbol = Symbol.for('__mjClassName') as never;
+
+/**
+ * Stamps a class constructor with an unminified class name so that ClassFactory registration
+ * and reflection can discover the true class name even under aggressive production minification.
+ * Defines both `MJ_CLASS_NAME_SYMBOL` and `'__mjClassName'` as non-enumerable own properties.
+ *
+ * @param ClassRef The class constructor reference
+ * @param className The unminified class name to assign
+ */
+export function StampClassName(ClassRef: unknown, className: string): void {
+    if (typeof ClassRef === 'function' && className && className.trim().length > 0) {
+        const trimmed = className.trim();
+        Object.defineProperty(ClassRef, MJ_CLASS_NAME_SYMBOL, {
+            value: trimmed,
+            writable: false,
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(ClassRef, '__mjClassName', {
+            value: trimmed,
+            writable: false,
+            enumerable: false,
+            configurable: true
+        });
+    }
+}
+
+/**
  * Gets the immediate superclass of the given class
  * @param ClassRef The class constructor reference
  * @returns The superclass constructor or null if no superclass
@@ -145,7 +176,7 @@ export function GetClassInheritance(ClassRef: any): ClassInfo[] {
         }
 
         chain.push({
-            name: current.name || 'Anonymous',
+            name: GetClassName(current),
             reference: current
         });
 
@@ -176,7 +207,7 @@ export function GetFullClassHierarchy(ClassRef: any): ClassInfo[] {
         }
         
         chain.push({
-            name: current.name || 'Anonymous',
+            name: GetClassName(current),
             reference: current
         });
         
@@ -246,20 +277,34 @@ export function IsClassConstructor(value: any): boolean {
 }
 
 /**
- * Gets the class name safely, handling minification and anonymous classes
+ * Gets the class name safely, handling minification and anonymous classes.
+ * Checks for own-property unminified class name stamps (symbol and string) before
+ * falling back to constructor `.name` and string parsing.
+ *
  * @param ClassRef The class constructor reference
  * @returns The class name or a fallback string
  */
-export function GetClassName(ClassRef: any): string {
+export function GetClassName(ClassRef: unknown): string {
     if (!ClassRef || typeof ClassRef !== 'function') {
         return 'Unknown';
     }
-    
-    // Try to get the name property
-    if (ClassRef.name) {
-        return ClassRef.name;
+
+    if (Object.prototype.hasOwnProperty.call(ClassRef, MJ_CLASS_NAME_SYMBOL)) {
+        const s = (ClassRef as { [MJ_CLASS_NAME_SYMBOL]?: unknown })[MJ_CLASS_NAME_SYMBOL];
+        if (typeof s === 'string' && s.length > 0) return s;
     }
-    
+
+    if (Object.prototype.hasOwnProperty.call(ClassRef, '__mjClassName')) {
+        const n = (ClassRef as { __mjClassName?: unknown }).__mjClassName;
+        if (typeof n === 'string' && n.length > 0) return n;
+    }
+
+    // Try to get the name property
+    const named = ClassRef as { name?: unknown };
+    if (typeof named.name === 'string' && named.name.length > 0) {
+        return named.name;
+    }
+
     // Try to extract from toString() as fallback
     const fnString = ClassRef.toString();
     const match = fnString.match(/^class\s+(\w+)/);

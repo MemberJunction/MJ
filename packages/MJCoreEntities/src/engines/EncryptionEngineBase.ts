@@ -64,7 +64,7 @@ export interface EncryptionKeyConfiguration {
  * For actual encryption/decryption operations, use or extend the EncryptionEngine
  * class in the @memberjunction/encryption package, which extends this base class.
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: typeof window !== 'undefined' })
 export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
     /**
      * Cached array of encryption keys loaded from the database.
