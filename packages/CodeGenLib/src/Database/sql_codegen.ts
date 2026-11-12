@@ -2322,6 +2322,9 @@ export class SQLCodeGenBase {
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
                 // so logging stays centralized in logSQLForNewOrModifiedEntity.
                 baseViewChanged = await this.checkBaseViewChangedInDB(options.pool, options.entity, s);
+                // The alternate-view rebinds are appended after the comparison so they never count
+                // as a view change; see appendAlternateBaseViewRebindsForLog.
+                const sLogged = this.appendAlternateBaseViewRebindsForLog(options.entity, s);
 
                 // Now log TVFs with baseViewChanged as forceLog, ensuring they're included
                 // in TempBatchFile whenever the view that depends on them is also included
@@ -2335,15 +2338,15 @@ export class SQLCodeGenBase {
 
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
-                    this.writeFileIfChanged(filePath, s);
-                    const viewLogged = this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.writeFileIfChanged(filePath, sLogged);
+                    const viewLogged = this.logSQLForNewOrModifiedEntity(options.entity, sLogged, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                     if (viewLogged && options.entity.HasLayeredBaseView) {
                         this.layeredEntitiesWithLoggedInnerView.add(options.entity.Name);
                         this.logLayeredOuterViewRefresh(options.entity);
                     }
                     files.push(filePath);
                 }
-                sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                sRet += sLogged + '\n' + this._dbProvider.BatchSeparator + '\n';
             }
             // always generate permissions for the base view
             const permHeader = this.GenerateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView);
@@ -3321,6 +3324,29 @@ export class SQLCodeGenBase {
             viewSQL,
             viewPermSQL: permissions,
         };
+    }
+
+    /**
+     * Appends the alternate-base-view rebind statements to the base view SQL that is written to the
+     * view file and logged into the migration / bake capture (#6539).
+     *
+     * On platforms that refresh views (SQL Server) {@link GenerateBaseViewPieces} already folds these
+     * statements into `viewSQL`, so `viewSQL` is returned unchanged. On platforms that do not
+     * (PostgreSQL) the phased executor rebinds alternate views live, but nothing put the rebinds in
+     * the logged SQL, so every release file and migrate-only install kept each `vw*Active` view at
+     * its old column list. Layered entities get their rebinds from the layered refresh path instead.
+     * `viewSQL` itself is left alone so the phased executor does not run the rebinds twice.
+     */
+    protected appendAlternateBaseViewRebindsForLog(entity: EntityInfo, viewSQL: string): string {
+        if (this._dbProvider.NeedsViewRefresh || entity.HasLayeredBaseView) {
+            return viewSQL;
+        }
+        const rebinds = this.getAlternateBaseViewRefreshStatements(entity);
+        if (rebinds.length === 0) {
+            return viewSQL;
+        }
+        const separator = '\n' + this._dbProvider.BatchSeparator + '\n';
+        return viewSQL + separator + rebinds.join(separator);
     }
 
     /** @deprecated Use {@link GenerateBaseViewPieces}. */
