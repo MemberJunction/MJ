@@ -3056,6 +3056,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Artifacts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifacts"
+        SectionName="Artifacts"
+        Icon="fa fa-file"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifacts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','DelegateEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts','DelegateEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifacts')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Feature Values Section -->
     <mj-collapsible-panel
         SectionKey="mJFeatureValues"

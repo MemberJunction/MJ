@@ -246,6 +246,7 @@ export * from './checks/graph-runtime.checks';
 export * from './checks/task-graph-security.checks';
 export * from './checks/work-bus-core.checks';
 export * from './checks/integration-schema-pipeline.checks';
+export * from './checks/docs-slides-sheets-library.checks';
 export * from './checks/record-change-snapshot.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

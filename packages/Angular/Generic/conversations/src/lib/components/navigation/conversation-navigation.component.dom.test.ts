@@ -30,7 +30,7 @@ describe('ConversationNavigationComponent (DOM)', () => {
   it('renders the three navigation tabs', () => {
     const f = render();
     const tabs = queryAll(f, '.nav-tab').map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['Chats', 'Collections', 'Tasks']);
+    expect(tabs).toEqual(['Chats', 'Collections', 'Agent Activity']);
   });
 
   it('marks the active tab from the activeTab input', () => {
