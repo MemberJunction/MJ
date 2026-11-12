@@ -14,7 +14,7 @@ import { Violation } from '../component-linter';
  * - utilities.rv: RunView(), RunViews()
  * - utilities.rq: RunQuery()
  * - utilities.md: GetEntityObject(), Entities
- * - utilities.ai: ExecutePrompt(), EmbedText(), VectorService
+ * - utilities.ai: ExecutePrompt(), EmbedText(), Decide(), VectorService
  *
  * Severity: critical
  * Applies to: all components
@@ -32,7 +32,7 @@ export class UtilitiesApiValidationRule extends BaseLintRule {
       rv: { methods: new Set(['RunView', 'RunViews']), properties: new Set() },
       rq: { methods: new Set(['RunQuery']), properties: new Set() },
       md: { methods: new Set(['GetEntityObject']), properties: new Set(['Entities']) },
-      ai: { methods: new Set(['ExecutePrompt', 'EmbedText']), properties: new Set(['VectorService']) },
+      ai: { methods: new Set(['ExecutePrompt', 'EmbedText', 'Decide']), properties: new Set(['VectorService']) },
     };
 
     const validUtilityProps = new Set(Object.keys(utilitiesAPI));

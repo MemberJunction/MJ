@@ -59,7 +59,9 @@ import {
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
-  SimpleEmbedTextResult
+  SimpleEmbedTextResult,
+  SimpleDecideParams,
+  SimpleDecideResult
 } from '@memberjunction/interactive-component-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
@@ -194,8 +196,44 @@ export class RuntimeUtilities {
         }
       },
       
+      Decide: (params: SimpleDecideParams): Promise<SimpleDecideResult> => this.runDecide(graphQLProvider, params),
+
       VectorService: new SimpleVectorService()
     };
+  }
+
+  /**
+   * Runs a typed decision through the `RunDecision` mutation. Never throws: a failure, including a
+   * transport error, comes back as `Success: false` with empty answers, so a component never acts on
+   * a partial result.
+   */
+  private async runDecide(graphQLProvider: GraphQLDataProvider, params: SimpleDecideParams): Promise<SimpleDecideResult> {
+    try {
+      const result = await graphQLProvider.AI.RunDecision({
+        State: params.State,
+        Questions: params.Questions,
+        PromptName: params.PromptName,
+        TimeoutMS: params.TimeoutMS
+      });
+      if (this.debug) {
+        console.log('🤖  Decide', { params, result });
+      }
+      return {
+        Success: result.Success,
+        ErrorMessage: result.ErrorMessage,
+        Answers: result.Success ? result.Answers : {},
+        ModelName: result.ModelName,
+        ResolvedModel: result.ResolvedModel,
+        ExecutionTimeMs: result.ExecutionTimeMs
+      };
+    } catch (error) {
+      LogError(error);
+      return {
+        Success: false,
+        ErrorMessage: 'Failed to run decision: ' + (error instanceof Error ? error.message : String(error)),
+        Answers: {}
+      };
+    }
   }
 
   /**
