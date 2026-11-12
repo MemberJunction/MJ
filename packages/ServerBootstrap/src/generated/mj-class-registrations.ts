@@ -70,8 +70,9 @@ import {
     FireworksLLM,
 } from '@memberjunction/ai-fireworks';
 
-// @memberjunction/ai-gemini (4 classes)
+// @memberjunction/ai-gemini (5 classes)
 import {
+    GeminiDecision,
     GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
@@ -1892,6 +1893,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CohereEmbedding,
     CohereReranker,
     FireworksLLM,
+    GeminiDecision,
     GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
@@ -2076,11 +2078,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
-    MJAuditLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
@@ -2280,11 +2282,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLModelScoringBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
-    MJMLTrainingRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
@@ -2484,11 +2486,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     DataContextItemServer,
     MJLibraryEntityExtended,
     MJLibraryItemEntityExtended,
-    EntityActionInvocationMultipleRecords,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
@@ -2688,11 +2690,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AzureFileStorage,
     BoxFileStorage,
     DropboxFileStorage,
-    GoogleDriveFileStorage,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GoogleDriveFileStorage,
     GoogleFileStorage,
     LocalFileSystemStorage,
     SharePointFileStorage,
@@ -2892,11 +2894,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
-    MJAIPromptEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
     MJAISkillEntityServer,
@@ -3096,11 +3098,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
     GitHubAddCommentAction,
-    GitHubCommitFilesAndCreatePRAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GitHubCommitFilesAndCreatePRAction,
     GitHubCommitFilesToBranchAction,
     GitHubCreateOrUpdateIssueAction,
     GitHubCreatePullRequestAction,
@@ -3251,7 +3253,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1333;
+export const CLASS_REGISTRATIONS_COUNT = 1334;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

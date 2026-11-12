@@ -1,0 +1,82 @@
+[
+  {
+    "fields": {
+      "Name": "Gemini Decision 1",
+      "Description": "Google's purpose-built decision model, gemini-decision-1, released November 11, 2026 and served by the Gemini Decisions API (POST https://generativelanguage.googleapis.com/v1beta/decisions) in Google AI Studio. It answers Likelihood (noul), Choice (2 to 255 options) and Score (2 to 255 levels) questions, up to 1,000 in one call, about one shared input of up to 262,144 tokens, and returns a calibrated probability for every option or level plus a confidence. It scores the candidates in a single forward pass and writes no text, so only input tokens are billed. The API takes text, images, audio, video and PDFs in that input; MJ sends text only. Google reports 150-250 ms end-to-end latency, nearly flat from 1 to 100 questions, and the lowest Top-1 calibration error of the models it compared (including Jev and GPT-6 Luna Decisions); those are Google's figures, not MJ measurements. Its raw probabilities are not calibrated to MJ's data, so set thresholds on calibrated values.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "PowerRank": 61,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "Decision": {
+          "MaxQuestionsPerCall": 1000,
+          "MaxChoiceOptions": 255,
+          "MaxScoreLevels": 255,
+          "MaxStateTokens": 262144
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "1C6DF195-1526-4309-9924-BCDE74E9FF29"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiDecision",
+            "APIName": "gemini-decision-1",
+            "MaxInputTokens": 262144,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1BBF8C0F-2FEA-42AF-A2F0-E24B01D60250"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-11-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini Decisions API (gemini-decision-1), November 2026: $0.10 per million input tokens; no output-token charge. The shared input is billed once per request however many questions it carries; each question adds only its own instruction and criteria tokens. No separate audio-transcription or OCR charge. A no-cost tier is available in Google AI Studio for prototyping. Source: https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/"
+          },
+          "primaryKey": {
+            "ID": "5C4650A1-9159-4198-A918-62B08C3EEF34"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0807032D-2C97-4C1B-8F44-D80006D6A6A6"
+    }
+  }
+]

@@ -70,8 +70,9 @@ import {
     FireworksLLM,
 } from '@memberjunction/ai-fireworks';
 
-// @memberjunction/ai-gemini (4 classes)
+// @memberjunction/ai-gemini (5 classes)
 import {
+    GeminiDecision,
     GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
@@ -1562,6 +1563,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CohereEmbedding,
     CohereReranker,
     FireworksLLM,
+    GeminiDecision,
     GeminiEmbedding,
     GeminiImageGenerator,
     GeminiLLM,
@@ -1746,11 +1748,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
-    MJCollectionArtifactEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCollectionArtifactEntity,
     MJCollectionEntity,
     MJCollectionPermissionEntity,
     MJCollectionPermissionEntityExtended,
@@ -1950,11 +1952,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
     MJMeetingEntity,
-    MJMeetingParticipantEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMeetingParticipantEntity,
     MJNumberPoolEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
@@ -2154,11 +2156,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
-    GetBusinessCentralSalesInvoicesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
     GetCustomersAction,
     GetDimensionsAction,
@@ -2358,11 +2360,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ExcelToolLibrary,
     FlowAgentType,
     GenericBinaryToolLibrary,
-    IdentityVerificationChannelServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
     LoopAgentType,
@@ -2562,11 +2564,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateSVGChartAction,
     CreateSVGDiagramAction,
     CreateSVGInfographicAction,
-    CreateSVGNetworkAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateSVGNetworkAction,
     CreateSVGSketchDiagramAction,
     CreateSVGWordCloudAction,
     CreateUserAction_core_actions,
@@ -2774,7 +2776,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1191;
+export const CLASS_REGISTRATIONS_COUNT = 1192;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

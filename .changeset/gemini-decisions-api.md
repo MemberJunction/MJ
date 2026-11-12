@@ -1,0 +1,6 @@
+---
+"@memberjunction/ai-gemini": minor
+"@memberjunction/integration-test-suite": minor
+---
+
+Add `GeminiDecision`, a `BaseDecision` driver for Google's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`), and the `Gemini Decision 1` model (type Decision, `gemini-decision-1`, $0.10 per million input tokens, no output charge; up to 1,000 questions, 255 Choice options and 255 Score levels per call, 262,144 input tokens). Gemini's questions and answers are the System One shape, so the driver extends `BaseHostedSystemOneDecision` and changes only what differs: the `x-goog-api-key` header, the state sent as `input`, Gemini's `total_input_tokens`/`total_output_tokens` usage, and an input blocked by Gemini's filter (`prompt_feedback.block_reason`), which fails the call with the reason and allows failover. Google's `400 INVALID_ARGUMENT` and `403 PERMISSION_DENIED` are pinned to a failover-eligible `ModelError`, so Gemini Decision 1 as a `Default Decision` fallback never ends the failover loop; `401` stays a fatal `Authentication` error. MJ sends text only. The model is not bound to any prompt; add it to `Default Decision` (or another Decision prompt) to route decisions to it.
