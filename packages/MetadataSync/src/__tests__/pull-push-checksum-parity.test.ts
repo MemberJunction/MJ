@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
 import type { UserInfo } from '@memberjunction/core';
 import type { EntityConfig } from '../config';
 import { SyncEngine, type RecordData } from '../lib/sync-engine';
@@ -77,6 +80,53 @@ describe('pull/push sync checksum parity (#4530)', () => {
 
     expect(await pushChecksum({ ...withEmptyAxes, sync: pulled })).toBe(pulled.checksum);
     expect(await pushChecksum({ fields, sync: pulled })).toBe(pulled.checksum);
+  });
+
+  describe('records with @file references', () => {
+    let fileDir: string;
+
+    beforeEach(async () => {
+      fileDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-parity-'));
+      await fs.outputFile(path.join(fileDir, 'regression/scripts/t001-login-smoke.json'), '{\n  "Steps": []\n}');
+      await fs.outputFile(path.join(fileDir, 'context/app-context.md'), '# App context');
+    });
+
+    afterEach(async () => {
+      await fs.remove(fileDir);
+    });
+
+    async function checksumsFor(fields: Record<string, unknown>, config: EntityConfig) {
+      const pulled = await processor['calculateSyncMetadata'](fields, fileDir, config, undefined, false);
+      const payload = pushService['buildRecordChecksumPayload']({ fields }, { ...fields });
+      return { pulled: pulled.checksum, pushed: await syncEngine.CalculateChecksumWithFileContent(payload, fileDir) };
+    }
+
+    it('matches when a nested field holds the reference', async () => {
+      const config: EntityConfig = {
+        entity: 'MJ: Tests',
+        filePattern: '**/.*.json',
+        pull: {
+          externalizeFields: [{ field: 'Configuration.ReplayScript', pattern: '@file:regression/scripts/{Name}.json' }],
+        },
+      };
+      const fields = {
+        Name: 'T001 - Login Smoke',
+        Configuration: { maxSteps: 35, ReplayScript: '@file:regression/scripts/t001-login-smoke.json' },
+      };
+
+      const { pulled, pushed } = await checksumsFor(fields, config);
+
+      expect(pulled).toBe(pushed);
+    });
+
+    it('matches when the folder has no externalizeFields', async () => {
+      const config: EntityConfig = { entity: 'MJ: Test Suites', filePattern: '**/.*.json' };
+      const fields = { Name: 'Suite', Configuration: { applicationContext: '@file:context/app-context.md' } };
+
+      const { pulled, pushed } = await checksumsFor(fields, config);
+
+      expect(pulled).toBe(pushed);
+    });
   });
 
   it('keeps lastModified when pull runs over a file push just wrote', async () => {

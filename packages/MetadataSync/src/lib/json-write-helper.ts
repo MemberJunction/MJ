@@ -1,5 +1,6 @@
 import fs, { JsonWriteOptions } from 'fs-extra';
 import { RecordData } from './sync-engine';
+import { ApplyJsonFileFormat, ReadJsonFileFormat } from './json-file-format';
 
 /**
  * Helper class for writing JSON files for RecordData objects.
@@ -8,16 +9,17 @@ import { RecordData } from './sync-engine';
 export class JsonWriteHelper {
   
   /**
-   * Write RecordData or arrays of RecordData with consistent property ordering
+   * Write RecordData or arrays of RecordData with consistent property ordering.
+   * An existing file keeps its trailing newline and its non-ASCII escape style.
    * @param filePath - Path to the JSON file to write
    * @param data - RecordData object or array of RecordData objects
    */
   static async WriteOrderedRecordData(filePath: string, data: RecordData | RecordData[]): Promise<void> {
     // Pre-process the data to ensure correct ordering before JSON.stringify
     const normalizedData = this.preserveAndRecurseRecordData(data);
-    
-    // Use JSON.stringify with proper spacing
-    const jsonString = JSON.stringify(normalizedData, null, 2);
+
+    const format = await ReadJsonFileFormat(filePath);
+    const jsonString = ApplyJsonFileFormat(JSON.stringify(normalizedData, null, 2), format);
     await fs.writeFile(filePath, jsonString, 'utf8');
   }
 

@@ -91,6 +91,7 @@ describe('RecordProcessor pull — @env: in composition axes', () => {
       })),
       calculateChecksum: vi.fn().mockReturnValue('cs-1'),
       calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
+      CalculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
     } as unknown as SyncEngine;
     processor = new RecordProcessor(mockSync, {} as UserInfo);
     warnings = [];

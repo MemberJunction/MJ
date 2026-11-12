@@ -1126,7 +1126,8 @@ export class RecordProcessor {
   }
 
   /**
-   * Calculates sync metadata including checksum and last modified timestamp
+   * Calculates sync metadata including checksum and last modified timestamp.
+   * The checksum includes the content of every `@file` reference, at any depth, as push does.
    */
   private async calculateSyncMetadata(
     fields: Record<string, any>,
@@ -1138,18 +1139,8 @@ export class RecordProcessor {
     embeds?: Record<string, RecordData>,
     extension?: RecordData['extension']
   ): Promise<{ lastModified: string; checksum: string }> {
-    // Determine if we should include external file content in checksum
-    const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
-
     const checksumPayload = SyncEngine.BuildRecordChecksumPayload(fields, collections, embeds, extension);
-
-    const checksum = hasExternalizedFields
-      ? await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, targetDir)
-      : this.syncEngine.calculateChecksum(checksumPayload);
-
-    if (verbose && hasExternalizedFields) {
-      console.log(`Calculated checksum including external file content for record`);
-    }
+    const checksum = await this.syncEngine.CalculateChecksumWithFileContent(checksumPayload, targetDir);
 
     // Compare with existing checksum to determine if data changed
     const existingChecksum = existingRecordData?.sync?.checksum;
@@ -1441,16 +1432,6 @@ export class RecordProcessor {
       return shorthandFields;
     }
     return (extension as Record<string, { fields?: Record<string, unknown> }>)[childEntityName]?.fields;
-  }
-
-  /**
-   * Checks if the record has externalized fields
-   */
-  private hasExternalizedFields(fields: Record<string, any>, entityConfig: EntityConfig): boolean {
-    return !!entityConfig.pull?.externalizeFields &&
-           Object.values(fields).some(value =>
-             typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)
-           );
   }
 
   /**
