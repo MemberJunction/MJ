@@ -218,6 +218,24 @@ describe('StrictFragmentValidator.ValidateReadOnlyStatement', () => {
         expect(tables).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
     });
 
+    it.each([
+        ['OFFSET … ROWS without FETCH', 'SELECT ID FROM dbo.vwUsers WHERE ID IN (SELECT UserID FROM dbo.vwOrders) ORDER BY ID OFFSET 10 ROWS'],
+        ['OFFSET … FETCH FIRST', 'SELECT ID FROM dbo.vwUsers WHERE ID IN (SELECT UserID FROM dbo.vwOrders) ORDER BY ID OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY'],
+    ])('accepts %s on SQL Server and reads every relation', (_case, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
+    });
+
+    it.each([
+        ['a RANGE frame', 'SELECT id, COUNT(*) OVER (ORDER BY created RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS n, (SELECT MAX(id) FROM public.orders) AS m FROM public.users'],
+        ['OFFSET … ROWS FETCH FIRST … ROWS ONLY', 'SELECT id, (SELECT MAX(id) FROM public.orders) AS m FROM public.users ORDER BY id OFFSET 5 ROWS FETCH FIRST 3 ROWS ONLY'],
+    ])('accepts %s on PostgreSQL and reads every relation', (_case, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, pg, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['public|orders||table', 'public|users||table']);
+    });
+
     it('reports the same facts with and without the fallback parse for text that parses directly', () => {
         const sql = 'SELECT ID FROM dbo.vwUsers WHERE Name IN (SELECT Name FROM dbo.vwPeople)';
         const withFallback = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });

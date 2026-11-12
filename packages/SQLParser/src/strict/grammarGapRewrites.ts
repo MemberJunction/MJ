@@ -2,17 +2,17 @@ import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { IsKeyword, LexSQL, SignificantTokens, type SQLLexToken } from '../sqlLexer.js';
 
 /**
- * Rewrites for valid SQL Server reads that node-sql-parser's TransactSQL grammar cannot parse.
- * Each rewrite changes only syntax the grammar lacks, never what the statement reads: every
- * relation, subquery, column and write stays where it was, and a removed span is only keywords or
- * one string literal. The strict validator parses the result only to decide whether a statement
- * is a safe read and to collect its reads; the database still runs the original text. Never use
- * it to produce SQL to run.
+ * Rewrites for valid read-only SQL that node-sql-parser's TransactSQL or PostgresQL grammar cannot
+ * parse. Each rewrite changes only syntax the grammar lacks, never what the statement reads: every
+ * relation, subquery, column and write stays where it was, and a removed span is only keywords,
+ * literal row counts or one string literal. The strict validator parses the result only to decide
+ * whether a statement is a safe read and to collect its reads; the database still runs the
+ * original text. Never use it to produce SQL to run.
  */
 
 /**
- * Aggregates the grammar reads with a dedicated rule that has no `WITHIN GROUP` clause, so
- * `STRING_AGG(x, ', ') WITHIN GROUP (ORDER BY y)` does not parse: the grammar ends the call at its
+ * Aggregates the TransactSQL grammar reads with a dedicated rule that has no `WITHIN GROUP` clause,
+ * so `STRING_AGG(x, ', ') WITHIN GROUP (ORDER BY y)` does not parse: the grammar ends the call at its
  * closing parenthesis and reads `WITHIN` as a column alias. Its generic function rule does read
  * `WITHIN GROUP`, which is why `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x)` parses.
  */
@@ -22,9 +22,9 @@ const WITHIN_GROUP_AGGREGATES = new Set<string>(['STRING_AGG', 'ARRAY_AGG']);
 const UNSUPPORTED_SET_OPERATORS = new Set<string>(['INTERSECT', 'EXCEPT']);
 
 /**
- * Function names the grammar lacks, each with a name it reads that takes the same arguments in the
- * same form: `TRY_CAST(x AS INT)` reads exactly what `CAST(x AS INT)` reads, and `COUNT_BIG(*)`
- * what `COUNT(*)` reads.
+ * Function names the TransactSQL grammar lacks, each with a name it reads that takes the same
+ * arguments in the same form: `TRY_CAST(x AS INT)` reads exactly what `CAST(x AS INT)` reads, and
+ * `COUNT_BIG(*)` what `COUNT(*)` reads.
  */
 const UNSUPPORTED_FUNCTIONS: ReadonlyMap<string, string> = new Map([
     ['TRY_CAST', 'CAST'],
@@ -34,6 +34,24 @@ const UNSUPPORTED_FUNCTIONS: ReadonlyMap<string, string> = new Map([
 /** Words that follow `RANGE` only in a window frame (`RANGE UNBOUNDED PRECEDING`, `RANGE BETWEEN …`). */
 const WINDOW_FRAME_STARTS = new Set<string>(['UNBOUNDED', 'BETWEEN', 'CURRENT']);
 
+/** The gaps one grammar has; each flag turns on the rewrite of that form. */
+interface GrammarGaps {
+    /** `STRING_AGG … WITHIN GROUP`, `INTERSECT` / `EXCEPT`, `TRY_CAST`, `COUNT_BIG`. */
+    FunctionsAndSetOperators: boolean;
+    /** `LIKE … ESCAPE '<char>'`, `TOP … WITH TIES`, semicolons before the statement. */
+    ClauseKeywords: boolean;
+    /** A `RANGE` window frame. */
+    RangeFrames: boolean;
+    /** `OFFSET <n> ROW[S]` and `FETCH FIRST|NEXT [<n>] ROW[S] ONLY|WITH TIES` with literal counts. */
+    OffsetFetch: boolean;
+}
+
+/** The gaps of each grammar the rewrites know, keyed by grammar name. */
+const GRAMMAR_GAPS: Readonly<Record<string, GrammarGaps>> = {
+    TransactSQL: { FunctionsAndSetOperators: true, ClauseKeywords: true, RangeFrames: true, OffsetFetch: true },
+    PostgresQL: { FunctionsAndSetOperators: false, ClauseKeywords: false, RangeFrames: true, OffsetFetch: true },
+};
+
 /** Replace the tokens `From` through `To` (inclusive) with `Text`. */
 interface TokenEdit {
     From: number;
@@ -42,24 +60,26 @@ interface TokenEdit {
 }
 
 /**
- * `sql` with the grammar gaps rewritten, for bracket-quoting dialects (SQL Server); `sql` itself
- * for any other, whose grammar reads these forms. Each rewrite acts on tokens outside literals,
- * quoted identifiers and comments:
- * - the name of each {@link WITHIN_GROUP_AGGREGATES} call that `WITHIN GROUP (` follows is
- *   bracket-quoted, so the generic function rule reads it, arguments and ORDER BY included;
- * - each `INTERSECT` / `EXCEPT` set operator becomes `UNION`, which reads the same branches;
- * - each call of an {@link UNSUPPORTED_FUNCTIONS} name is renamed to its stand-in;
- * - a `RANGE` window frame becomes a `ROWS` frame with the same bounds;
- * - `ESCAPE '<char>'` after a LIKE pattern, `WITH TIES` after a TOP clause, and semicolons before
- *   the statement are dropped.
+ * `sql` with the gaps of the grammar `dialect` parses with (its `ParserDialect`) rewritten; `sql`
+ * itself for a grammar with no known gaps. Each rewrite acts on tokens outside literals, quoted
+ * identifiers and comments:
+ * - TransactSQL: the name of each {@link WITHIN_GROUP_AGGREGATES} call that `WITHIN GROUP (` follows
+ *   is bracket-quoted, so the generic function rule reads it, arguments and ORDER BY included; each
+ *   `INTERSECT` / `EXCEPT` becomes `UNION`, which reads the same branches; each call of an
+ *   {@link UNSUPPORTED_FUNCTIONS} name is renamed to its stand-in; and `ESCAPE '<char>'` after a
+ *   LIKE pattern, `WITH TIES` after a TOP clause and semicolons before the statement are dropped;
+ * - TransactSQL and PostgresQL: a `RANGE` window frame becomes a `ROWS` frame with the same bounds,
+ *   and an `OFFSET <n> ROW[S]` or `FETCH FIRST|NEXT [<n>] ROW[S] ONLY|WITH TIES` clause with a
+ *   literal count is dropped.
  */
 export function RewriteGrammarGaps(sql: string, dialect: SQLParserDialect): string {
-    if (!dialect.QuoteIdentifier('x').startsWith('[')) return sql;
+    const gaps = GRAMMAR_GAPS[dialect.ParserDialect];
+    if (!gaps) return sql;
     const tokens = SignificantTokens(LexSQL(sql, dialect));
     let out = sql;
     // Right to left, so an earlier token's offsets still hold after a later span is rewritten.
     for (let k = tokens.length - 1; k >= 0; k--) {
-        const edit = editAt(tokens, k);
+        const edit = editAt(tokens, k, gaps);
         if (edit !== null) {
             out = `${out.substring(0, tokens[edit.From].Start)}${edit.Text}${out.substring(tokens[edit.To].End)}`;
         }
@@ -67,32 +87,65 @@ export function RewriteGrammarGaps(sql: string, dialect: SQLParserDialect): stri
     return out;
 }
 
-/** The edit that starts at `tokens[k]`, or null when the token stays. */
-function editAt(tokens: SQLLexToken[], k: number): TokenEdit | null {
+/** The edit that starts at `tokens[k]` under `gaps`, or null when the token stays. */
+function editAt(tokens: SQLLexToken[], k: number, gaps: GrammarGaps): TokenEdit | null {
     const token = tokens[k];
-    if (token.Kind === 'semicolon') return isBeforeStatement(tokens, k) ? { From: k, To: k, Text: '' } : null;
+    if (token.Kind === 'semicolon') {
+        return gaps.ClauseKeywords && isBeforeStatement(tokens, k) ? { From: k, To: k, Text: '' } : null;
+    }
     if (token.Kind !== 'word') return null;
     const upper = token.Text.toUpperCase();
+    return (gaps.FunctionsAndSetOperators ? functionOrSetOperatorEdit(tokens, k, upper) : null)
+        ?? (gaps.ClauseKeywords ? clauseKeywordEdit(tokens, k, upper) : null)
+        ?? (gaps.RangeFrames ? rangeFrameEdit(tokens, k, upper) : null)
+        ?? (gaps.OffsetFetch ? offsetFetchEdit(tokens, k, upper) : null);
+}
+
+/** The edit for a set operator, an unsupported function name or a WITHIN GROUP aggregate at `tokens[k]`. */
+function functionOrSetOperatorEdit(tokens: SQLLexToken[], k: number, upper: string): TokenEdit | null {
     if (UNSUPPORTED_SET_OPERATORS.has(upper)) return { From: k, To: k, Text: 'UNION' };
     const standIn = UNSUPPORTED_FUNCTIONS.get(upper);
     if (standIn && isUnqualifiedCall(tokens, k)) return { From: k, To: k, Text: standIn };
-    if (isWithinGroupAggregateCall(tokens, k)) return { From: k, To: k, Text: `[${token.Text}]` };
-    return keywordEditAt(tokens, k, upper);
+    if (isWithinGroupAggregateCall(tokens, k)) return { From: k, To: k, Text: `[${tokens[k].Text}]` };
+    return null;
 }
 
-/** The edit for a clause keyword at `tokens[k]` (`RANGE`, `ESCAPE`, `WITH TIES`), or null. */
-function keywordEditAt(tokens: SQLLexToken[], k: number, upper: string): TokenEdit | null {
+/** The edit for `ESCAPE '<char>'` or `WITH TIES` after a TOP clause at `tokens[k]`. */
+function clauseKeywordEdit(tokens: SQLLexToken[], k: number, upper: string): TokenEdit | null {
     const next = tokens[k + 1];
-    if (upper === 'RANGE' && next?.Kind === 'word' && WINDOW_FRAME_STARTS.has(next.Text.toUpperCase())) {
-        return { From: k, To: k, Text: 'ROWS' };
-    }
-    if (upper === 'ESCAPE' && next?.Kind === 'string') {
-        return { From: k, To: k + 1, Text: '' };
-    }
-    if (upper === 'WITH' && IsKeyword(next, 'TIES') && isAfterTopClause(tokens, k)) {
-        return { From: k, To: k + 1, Text: '' };
-    }
+    if (upper === 'ESCAPE' && next?.Kind === 'string') return { From: k, To: k + 1, Text: '' };
+    if (upper === 'WITH' && IsKeyword(next, 'TIES') && isAfterTopClause(tokens, k)) return { From: k, To: k + 1, Text: '' };
     return null;
+}
+
+/** The edit that turns a `RANGE` window frame at `tokens[k]` into a `ROWS` frame. */
+function rangeFrameEdit(tokens: SQLLexToken[], k: number, upper: string): TokenEdit | null {
+    const next = tokens[k + 1];
+    if (upper !== 'RANGE' || next?.Kind !== 'word' || !WINDOW_FRAME_STARTS.has(next.Text.toUpperCase())) return null;
+    return { From: k, To: k, Text: 'ROWS' };
+}
+
+/**
+ * The edit that drops `OFFSET <n> ROW[S]` or `FETCH FIRST|NEXT [<n>] ROW[S] ONLY|WITH TIES` starting
+ * at `tokens[k]`. Only a literal count is dropped, so a count that is an expression (a subquery
+ * among them) always stays to be read.
+ */
+function offsetFetchEdit(tokens: SQLLexToken[], k: number, upper: string): TokenEdit | null {
+    if (upper === 'OFFSET') {
+        return tokens[k + 1]?.Kind === 'number' && isRowWord(tokens[k + 2]) ? { From: k, To: k + 2, Text: '' } : null;
+    }
+    if (upper !== 'FETCH' || !(IsKeyword(tokens[k + 1], 'FIRST') || IsKeyword(tokens[k + 1], 'NEXT'))) return null;
+    let i = k + 2;
+    if (tokens[i]?.Kind === 'number') i++;
+    if (!isRowWord(tokens[i])) return null;
+    if (IsKeyword(tokens[i + 1], 'ONLY')) return { From: k, To: i + 1, Text: '' };
+    if (IsKeyword(tokens[i + 1], 'WITH') && IsKeyword(tokens[i + 2], 'TIES')) return { From: k, To: i + 2, Text: '' };
+    return null;
+}
+
+/** Whether `token` is `ROW` or `ROWS`. */
+function isRowWord(token: SQLLexToken | undefined): boolean {
+    return IsKeyword(token, 'ROW') || IsKeyword(token, 'ROWS');
 }
 
 /** Whether every token before `tokens[k]` is a semicolon too: separators ahead of the statement. */
