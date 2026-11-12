@@ -523,7 +523,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     get LocalStorageProvider(): ILocalStorageProvider {
         if (!this._localStorageProvider) {
-            this._localStorageProvider = new InMemoryLocalStorageProvider();
+            this._localStorageProvider = this.ConfigData?.LocalStorageProvider ?? new InMemoryLocalStorageProvider();
         }
         return this._localStorageProvider;
     }
