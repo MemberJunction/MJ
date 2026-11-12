@@ -31,8 +31,8 @@ import { UserInfo } from '@memberjunction/core';
           class="nav-tab"
           [class.active]="activeTab === 'tasks'"
           (click)="tabChanged.emit('tasks')">
-          <i class="fas fa-tasks"></i>
-          <span>Tasks</span>
+          <i class="fas fa-diagram-project"></i>
+          <span>Agent Activity</span>
         </button>
       </div>
       <div class="nav-right">

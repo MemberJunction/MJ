@@ -117,6 +117,8 @@ All variables go in `docker/regression/.env.test` (gitignored). See `.env.test.e
 |----------|----------|---------|
 | `TEST_SA_PASSWORD` | Yes | SQL Server SA password (min 8 chars, requires complexity) |
 | `MJ_BASE_ENCRYPTION_KEY` | Yes | Base64 encryption key (`openssl rand -base64 32`) |
+| `MJ_ARTIFACT_COLLAB_HMAC_SECRET` | Recommended | `>= 32`-char HMAC secret for Yjs collaboration WebSocket tickets (`openssl rand -hex 32`) |
+| `MJ_FROZEN_BLOCK_HMAC_SECRET` | Recommended | `>= 32`-char HMAC secret for frozen live-block snapshots (`openssl rand -hex 32`) |
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |

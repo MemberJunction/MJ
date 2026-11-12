@@ -117,6 +117,7 @@ import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.ch
 import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 import { GraphRuntimeChecks } from '../checks/graph-runtime.checks';
 import { TaskGraphSecurityChecks } from '../checks/task-graph-security.checks';
+import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } from '../checks/docs-slides-sheets-library.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
@@ -288,6 +289,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
         ['graph-runtime', GraphRuntimeChecks, 6], // GR1-GR6 MJ Canon traversal, per-caller query visibility, the edge approval gate on a real Save, Get Graph Context, JoinEntity and QueryEdgeProvider fixtures (IT167)
         ['task-graph-security', TaskGraphSecurityChecks, 10], // TGS1-TGS10 envelope on every row and immutable, one compensation per step, A2A store row boundary, dispatcher taint gate & compensation, the real action runner's taint gate, a person's review clears taint, a server-answered request clears nothing, an early settle clears nothing, only the service makes workflows, REST edits ordinary tasks (IT168)
+        ['docs-slides-sheets-library', DocsSlidesSheetsLibraryChecks, 7], // DSL1-DSL7 Collaborative Docs, Slides, Sheets, Yjs working states, delegated OLE permissions, and Library/Chat wiring (IT170)
+        ['docs-slides-sheets-library-client', DocsSlidesSheetsLibraryClientChecks, 4], // DSLC1-DSLC4 Client-transport GraphQL + WebSocket collaboration checks (IT171)
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
@@ -394,6 +397,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'conversation-compaction': 23,
         'dataset-cache': 4,
         'diagnostics': 4,
+        'docs-slides-sheets-library': 7,
+        'docs-slides-sheets-library-client': 4,
         'encrypted-read-client': 4,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -601,7 +606,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(239);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(241);
     });
 });
 
@@ -713,6 +718,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA7',
         'conversation-authorship-client.CA8',
         'conversation-authorship-client.CA9',
+        'docs-slides-sheets-library.DSL3',
         'encrypted-read-client.ER1',
         'encrypted-read-client.ER2',
         'encrypted-read-client.ER3',
