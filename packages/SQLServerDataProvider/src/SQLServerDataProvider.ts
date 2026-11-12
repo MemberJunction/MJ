@@ -19,6 +19,7 @@
 
 import {
   BaseEntity,
+  LocalCacheManager,
   IEntityDataProvider,
   IMetadataProvider,
   IRunViewProvider,
@@ -81,6 +82,7 @@ import {
   FormatSqlParameterTypesForError,
   RowFilterParameterCollector,
   type RowFilterBoundParameter,
+  RecordChangeSnapshotColumnKindOf,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
@@ -606,6 +608,8 @@ export class SQLServerDataProvider
    */
   private static _viewColumnOrderCacheByPool = new WeakMap<sql.ConnectionPool, Promise<Map<string, string[]>>>();
   private static readonly _viewColumnOrderCacheByDbKey = new Map<string, Promise<Map<string, string[]>>>();
+  private static _resolvedViewColumnOrderByPool = new WeakMap<sql.ConnectionPool, Map<string, string[]>>();
+  private static readonly _resolvedViewColumnOrderByDbKey = new Map<string, Map<string, string[]>>();
   private static readonly DEFAULT_SQL_SERVER_PORT = 1433;
 
   private static viewColumnOrderDbKey(pool: sql.ConnectionPool): string | null {
@@ -797,6 +801,46 @@ export class SQLServerDataProvider
    * @param configData - Configuration data including connection string and options
    * @returns Promise<boolean> - True if configuration succeeded
    */
+  /**
+   * Returns `true` when global metadata, `LocalCacheManager`, and `pool`'s view-column-order
+   * cache are all warm in memory so {@link ConfigureFromGlobalSync} will succeed without I/O.
+   */
+  public static CanConfigureFromGlobalSync(pool: sql.ConnectionPool | null | undefined): boolean {
+    if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+      return false;
+    }
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    const resolvedCache = dbKey !== null
+      ? SQLServerDataProvider._resolvedViewColumnOrderByDbKey.get(dbKey)
+      : SQLServerDataProvider._resolvedViewColumnOrderByPool.get(pool);
+    return resolvedCache !== undefined;
+  }
+
+  /**
+   * Synchronously configures a per-request `SQLServerDataProvider` when global metadata and this
+   * pool's view-column-order cache are already warm in memory. Returns `false` if any dependency
+   * is not yet warm, allowing callers to fall back to async {@link Config}.
+   */
+  public ConfigureFromGlobalSync(configData: SQLServerProviderConfigData): boolean {
+    const pool = configData.ConnectionPool;
+    if (!pool) {
+      return false;
+    }
+    const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
+    const resolvedCache = dbKey !== null
+      ? SQLServerDataProvider._resolvedViewColumnOrderByDbKey.get(dbKey)
+      : SQLServerDataProvider._resolvedViewColumnOrderByPool.get(pool);
+    if (!resolvedCache) {
+      return false;
+    }
+    this._pool = pool;
+    if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+      return false;
+    }
+    this._viewColumnOrderCache = resolvedCache;
+    return true;
+  }
+
   public async Config(configData: SQLServerProviderConfigData, providerToUse?: IMetadataProvider): Promise<boolean> {
     try {
       this._pool = configData.ConnectionPool; // Now expects a ConnectionPool instead of DataSource
@@ -842,7 +886,13 @@ export class SQLServerDataProvider
       }
     }
     try {
-      this._viewColumnOrderCache = await scanPromise;
+      const resolved = await scanPromise;
+      this._viewColumnOrderCache = resolved;
+      if (dbKey !== null) {
+        SQLServerDataProvider._resolvedViewColumnOrderByDbKey.set(dbKey, resolved);
+      } else {
+        SQLServerDataProvider._resolvedViewColumnOrderByPool.set(pool, resolved);
+      }
     } catch (e) {
       // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order.
       // Drop the shared entry (only if it's still OUR failed promise) so a later Config() can retry.
@@ -899,9 +949,11 @@ export class SQLServerDataProvider
    */
   public static InvalidateViewColumnOrderCache(pool: sql.ConnectionPool): void {
     SQLServerDataProvider._viewColumnOrderCacheByPool.delete(pool);
+    SQLServerDataProvider._resolvedViewColumnOrderByPool.delete(pool);
     const dbKey = SQLServerDataProvider.viewColumnOrderDbKey(pool);
     if (dbKey !== null) {
       SQLServerDataProvider._viewColumnOrderCacheByDbKey.delete(dbKey);
+      SQLServerDataProvider._resolvedViewColumnOrderByDbKey.delete(dbKey);
     }
   }
 
@@ -2029,12 +2081,24 @@ export class SQLServerDataProvider
       .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',[${pk.Name}]`)
       .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
-    // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
-    // referencing `@ID` (set below from the result table).
-    const recordChangeEXEC = this.renderRecordChangeEXEC(entity.EntityInfo.Name, '@ID', payload, params);
+    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
+
+    // The snapshot is the row the procedure returned, when @ResultTable holds the whole row;
+    // otherwise the payload's in-memory snapshot. Build the inline `EXEC spCreateRecordChange_Internal`
+    // from the payload, referencing `@ID` (set below from the result table).
+    const snapshotFromRow = this.BuildsFullRecordJSONFromResultRow(entity, resolvedReturn);
+    const recordChangeEXEC = this.renderRecordChangeEXEC(
+      entity.EntityInfo.Name,
+      '@ID',
+      payload,
+      params,
+      snapshotFromRow ? SQLServerDataProvider.resultRowSnapshotVariable : undefined,
+    );
+    const snapshotDeclareSQL = snapshotFromRow
+      ? `DECLARE ${SQLServerDataProvider.resultRowSnapshotVariable} NVARCHAR(MAX) = (${this.renderResultRowSnapshotSelect(entity.EntityInfo)});`
+      : '';
 
     const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${saveBinding.callArgsSQL}`;
-    const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
     const resultTableColumnsSQL = this.getSaveResultTableColumnsSQL(entity.EntityInfo, resolvedReturn);
     const finalSelectSQL = `SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM @ResultTable;`;
 
@@ -2060,6 +2124,8 @@ export class SQLServerDataProvider
                             ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
                         );
 
+                        ${snapshotDeclareSQL}
+
                         INSERT INTO @ResultChangesTable
                         ${recordChangeEXEC};
                     END;
@@ -2074,7 +2140,13 @@ export class SQLServerDataProvider
    * for the rendered form; without, the literals are written in directly. The entity name and change
    * type stay literal: they are constant for an entity and operation.
    */
-  private renderRecordChangeEXEC(entityName: string, recordIDSQL: string, payload: RecordChangePayload, params?: SaveParameterCollector): string {
+  private renderRecordChangeEXEC(
+    entityName: string,
+    recordIDSQL: string,
+    payload: RecordChangePayload,
+    params?: SaveParameterCollector,
+    fullRecordJSONSQL?: string,
+  ): string {
     const bind = (fieldName: string, literal: string): string => (params ? params.AddField(this.recordChangeField(fieldName), literal) : literal);
     const lineageClause = payload.source === 'Restore'
       ? `,
@@ -2092,9 +2164,87 @@ export class SQLServerDataProvider
                                                                                         @Type='${payload.type}',
                                                                                         @ChangesJSON=${bind('ChangesJSON', `N'${payload.changesJSON}'`)},
                                                                                         @ChangesDescription=${bind('ChangesDescription', `N'${payload.changesDescription}'`)},
-                                                                                        @FullRecordJSON=${bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
+                                                                                        @FullRecordJSON=${fullRecordJSONSQL ?? bind('FullRecordJSON', `N'${payload.fullRecordJSON}'`)},
                                                                                         @Status='Complete',
                                                                                         @Comments=null${lineageClause}`;
+  }
+
+  /** The batch variable a save's Record Change snapshot is built into from `@ResultTable`. */
+  private static readonly resultRowSnapshotVariable = '@__mj_FullRecordJSON';
+
+  /** `FOR JSON` select lists by entity, built once per entity metadata object. */
+  private static readonly _resultRowSnapshotSelectCache = new WeakMap<EntityInfo, string>();
+
+  /**
+   * True when a save's Record Change snapshot can be built from the row its procedure returned:
+   * `@ResultTable` holds the whole row (the compiled procedure does not return datestamps only), and
+   * no column name contains a `.`, which `FOR JSON PATH` would turn into a nested object.
+   *
+   * Built from the returned row, the snapshot holds what the database stored: values another writer
+   * committed to columns this save did not change, server-set timestamps and defaults, current
+   * joined display values, and encrypted columns as their ciphertext.
+   */
+  protected override BuildsFullRecordJSONFromResultRow(entity: BaseEntity, returnContext: SaveReturnContext): boolean {
+    return !returnContext.spReturnsDatestampsOnly && entity.EntityInfo.Fields.every((f) => !f.Name.includes('.'));
+  }
+
+  /**
+   * `SELECT … FROM @ResultTable FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES`, one
+   * column per entity field, each rendered as {@link renderResultRowSnapshotColumn} describes.
+   */
+  private renderResultRowSnapshotSelect(entityInfo: EntityInfo): string {
+    const cached = SQLServerDataProvider._resultRowSnapshotSelectCache.get(entityInfo);
+    if (cached) {
+      return cached;
+    }
+    const columns = entityInfo.Fields.map((f) => `${this.renderResultRowSnapshotColumn(f)} AS ${this.QuoteIdentifier(f.Name)}`);
+    const sql = `SELECT ${columns.join(', ')} FROM @ResultTable FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES`;
+    SQLServerDataProvider._resultRowSnapshotSelectCache.set(entityInfo, sql);
+    return sql;
+  }
+
+  /**
+   * One `@ResultTable` column as the snapshot writes it, matching how a loaded entity serializes the
+   * same value: date-times as UTC ISO-8601 with milliseconds and `Z` (MJ stores `datetime`/`datetime2`
+   * as UTC), `bigint` as a string, binary as base64, and CLR types (which `FOR JSON` cannot serialize)
+   * and unrecognized types as text.
+   */
+  private renderResultRowSnapshotColumn(field: EntityFieldInfo): string {
+    const col = this.QuoteIdentifier(field.Name);
+    switch (RecordChangeSnapshotColumnKindOf(field.Type, 'sqlserver')) {
+      case 'utc-datetime':
+        // `datetime` holds 1/300-second ticks (.997 is stored as .99667), which the driver rounds to the
+        // millisecond; the finer types are truncated, as JavaScript's Date truncates them.
+        return SQLServerDataProvider.isoMillisecondsUTC(
+          `CAST(${col} AS ${field.Type.trim().toLowerCase() === 'datetime' ? 'datetime2(3)' : 'datetime2(7)'})`,
+        );
+      case 'offset-datetime':
+        return SQLServerDataProvider.isoMillisecondsUTC(`CAST(SWITCHOFFSET(${col}, '+00:00') AS datetime2(7))`);
+      case 'date':
+        return `CONVERT(nvarchar(10), ${col}, 23) + 'T00:00:00.000Z'`;
+      case 'time':
+        return `'1970-01-01T' + CONVERT(nvarchar(8), ${col}, 108) + '.' + RIGHT('00' + CONVERT(nvarchar(3), DATEPART(millisecond, ${col})), 3) + 'Z'`;
+      case 'bigint':
+        return `CONVERT(nvarchar(20), ${col})`;
+      case 'binary':
+        return `CAST(${col} AS varbinary(max))`;
+      case 'clr':
+        return `${col}.ToString()`;
+      case 'json':
+      case 'text':
+        return `CONVERT(nvarchar(max), ${col})`;
+      default:
+        return col;
+    }
+  }
+
+  /**
+   * `YYYY-MM-DDTHH:MM:SS.mmmZ` for a `datetime2` expression already in UTC. Style 126 drops the
+   * fraction when it is zero, so the milliseconds are written separately, truncated as JavaScript's
+   * `Date` truncates them. NULL stays NULL.
+   */
+  private static isoMillisecondsUTC(datetime2SQL: string): string {
+    return `CONVERT(nvarchar(19), ${datetime2SQL}, 126) + '.' + RIGHT('00' + CONVERT(nvarchar(3), DATEPART(millisecond, ${datetime2SQL})), 3) + 'Z'`;
   }
 
   /** A field of `MJ: Record Changes`, whose column types type the Record Change parameters. */

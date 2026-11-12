@@ -4,6 +4,12 @@
     "//"
   ],
   "tasks": {
+    "build": {
+      "inputs": [
+        "$TURBO_EXTENDS$",
+        "$TURBO_ROOT$/metadata/entities/JSONType-interfaces/**"
+      ]
+    },
     "test": {
       "inputs": [
         "$TURBO_EXTENDS$",
