@@ -17,8 +17,8 @@ npx mj sync push --dir=metadata-optional/integration-test
 # Run a single integration test against your local DB (run the LOCAL workspace cli, not a global mj)
 MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT01 - Server RunView Cache Integrity"
 
-# Validate definitions without executing
-mj test validate --dir=metadata-optional/integration-test/tests/integration
+# Check that every bundle has its IT record and suite membership (no database)
+cd packages/TestingFramework/integration-test-suite && pnpm test
 ```
 
 > **Run the LOCAL cli.** A globally-installed `mj` ships its own published testing packages and does

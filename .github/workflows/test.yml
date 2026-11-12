@@ -492,6 +492,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm run check:manifest-registrations
 
+      # Regression suite parity gate. A Computer Use test file without its suite member (or a member
+      # without its file, a duplicate T number, or a replay script no test references) merges cleanly
+      # and only shows up as a missing or broken test in the next Docker run. Pure file reads.
+      - name: Regression suite parity gate
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-regression-suite.mjs
+
       # Undeclared dynamic-import gate (#3741). A bare `import('pkg')` resolves from the importing
       # package, so under pnpm an undeclared one fails at runtime even when the host installs it.
       # Knip misses the `'pkg' as string` and `const id = 'pkg'; import(id)` forms; this gate parses
