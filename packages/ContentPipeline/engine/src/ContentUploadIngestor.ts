@@ -735,9 +735,8 @@ export class ContentUploadIngestor {
     ): Promise<ContentItemStageRow[]> {
         const preExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
         const extractIDs = preExtractItems.filter((i) => this.isStagePending(i.ExtractionStatus)).map((i) => i.ID);
-        let extractBatchSucceeded = false;
         if (extractIDs.length > 0) {
-            extractBatchSucceeded = await this.executeProcessStage(
+            await this.executeProcessStage(
                 CONTENT_PIPELINE_EXTRACT_PROCESS_ID,
                 'Extract',
                 extractIDs,
@@ -747,7 +746,7 @@ export class ContentUploadIngestor {
             );
         }
         const postExtractItems = await this.collectLiveTreeItems(rootItemID, provider, contextUser);
-        return this.filterCompletedExtractItems(postExtractItems, extractBatchSucceeded);
+        return this.filterCompletedExtractItems(postExtractItems);
     }
 
     /** Runs Segment, then Tag (before Embed, so the vectors carry the tags), on the extracted items. */
@@ -782,19 +781,8 @@ export class ContentUploadIngestor {
         return { segmentIDs, segmentBatchSucceeded };
     }
 
-    private filterCompletedExtractItems(
-        items: readonly ContentItemStageRow[],
-        extractBatchSucceeded: boolean,
-    ): ContentItemStageRow[] {
-        return items.filter((item) => {
-            if (item.ExtractionStatus === 'Complete') {
-                return true;
-            }
-            if (item.ExtractionStatus === 'Failed' || item.ExtractionStatus === 'Skipped') {
-                return false;
-            }
-            return extractBatchSucceeded;
-        });
+    private filterCompletedExtractItems(items: readonly ContentItemStageRow[]): ContentItemStageRow[] {
+        return items.filter((item) => item.ExtractionStatus === 'Complete');
     }
 
     private async resolveCompletedSegmentItems(
@@ -890,15 +878,33 @@ export class ContentUploadIngestor {
         contextUser: UserInfo,
     ): Promise<void> {
         for (const itemID of itemIDs) {
+            await this.markSingleItemFailed(itemID, statusField, provider, contextUser);
+        }
+    }
+
+    private async markSingleItemFailed(
+        itemID: string,
+        statusField: ItemFailureStatusField,
+        provider: IMetadataProvider,
+        contextUser: UserInfo,
+    ): Promise<void> {
+        try {
             const item = await provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
             if (await item.InnerLoad(CompositeKey.FromID(itemID))) { // first-pk-ok: MJ core content entity, single-column ID
                 this.setItemFailedStatus(item, statusField);
                 if (!(await item.Save())) {
-                    throw new Error(
-                        `Failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    LogError(
+                        `ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
+            } else {
+                LogError(
+                    `ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${item.LatestResult?.CompleteMessage ?? 'record could not be loaded'}`,
+                );
             }
+        } catch (saveError: unknown) {
+            const saveMessage = saveError instanceof Error ? saveError.message : String(saveError);
+            LogError(`ContentUploadIngestor: failed to mark Content Item '${itemID}' ${statusField} as Failed: ${saveMessage}`);
         }
     }
 
