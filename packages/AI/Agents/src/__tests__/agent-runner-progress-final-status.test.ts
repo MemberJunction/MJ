@@ -143,6 +143,7 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
 
         const runner = new AgentRunner(makeProvider([makeRacyDetail('user-detail'), agentDetail]));
         vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockImplementation(async (params: ExecuteAgentParams) => {
+            events.length = 0; // clear initial In-Progress detail creation save
             await params.onProgress?.({ step: 'prompt_execution', percentage: 50, message: 'midway' } as never);
             return { success: true, agentRun: { Message: 'done' } } as unknown as ExecuteAgentResult;
         });
@@ -158,8 +159,8 @@ describe('AgentRunner.RunAgentInConversation — a progress save still committin
             onProgress,
         } as unknown as ExecuteAgentParams, { conversationId: 'conv-1', userMessage: 'hi' });
 
-        expect(events[0]).toBe('save:start');
-        expect(events[1]).toBe('onProgress:called');
+        expect(events[0]).toBe('onProgress:called');
+        expect(events[1]).toBe('save:start');
         expect(events[2]).toBe('save:finish');
     });
 
