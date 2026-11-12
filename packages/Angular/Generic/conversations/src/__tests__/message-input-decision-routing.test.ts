@@ -278,9 +278,9 @@ describe('MessageInputComponent — decision routing', () => {
         // The conversation-routing calibrations shipped on the Jev and LLM Decision AI models.
         vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation((modelName: string) =>
             modelName === 'Jev'
-                ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }]
+                ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }]
                 : modelName === 'LLM Decision'
-                    ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }]
+                    ? [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }]
                     : []
         );
         vi.spyOn(MentionAutocompleteService.Instance, 'GetAvailableAgents').mockReturnValue(RUNNABLE);
@@ -299,10 +299,14 @@ describe('MessageInputComponent — decision routing', () => {
         vi.restoreAllMocks();
     });
 
-    describe('off by default', () => {
-        it('the input defaults to false', () => {
-            expect(h.component.EnableDecisionRouting).toBe(false);
+    describe('the default', () => {
+        it('the input defaults to true', () => {
+            expect(buildHarness().component.EnableDecisionRouting).toBe(true);
         });
+    });
+
+    describe('off', () => {
+        beforeEach(() => h.set({ EnableDecisionRouting: false }));
 
         it('makes no call and routes to the last agent, exactly as before', async () => {
             h.runDecision.mockResolvedValue(leavesTo(RESEARCH));
@@ -433,8 +437,8 @@ describe('MessageInputComponent — decision routing', () => {
 
         it.each([
             ['a low-confidence Choice', async () => answered({ route: choice(RESEARCH.ID, 0.5), continues: likelihood(0.1) })],
-            // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
-            ['an ambiguous Likelihood', async () => answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.87) })],
+            // Ambiguous after calibration: Jev's raw 0.6 is a calibrated 0.47 (a raw 0.3 is 0.09, a clear "leaves")
+            ['an ambiguous Likelihood', async () => answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.6) })],
             ['a failed decision', async (): Promise<RunDecisionResult> => ({ Success: false, ErrorMessage: 'no model', Answers: {} })],
             ['a call that throws', async (): Promise<RunDecisionResult> => { throw new Error('network down'); }],
         ])('%s keeps continuity', async (_label, answer) => {

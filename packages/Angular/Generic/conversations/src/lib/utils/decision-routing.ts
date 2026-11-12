@@ -5,8 +5,8 @@
  *
  * It runs before {@link ResolveAgentTurn}, which stays pure. When the answer is confident, the
  * caller replaces the continuity candidate with {@link ApplyRoutingDecision}; otherwise nothing
- * changes. Every failure keeps today's routing. The chat turns it on with `EnableDecisionRouting`,
- * which is off by default.
+ * changes. Every failure keeps today's routing. The chat's `EnableDecisionRouting` input controls
+ * it, and is on by default.
  *
  * The decision itself (its input, questions and state, and how its answers are read) is built in
  * `@memberjunction/ai-core-plus` (`conversation-routing-decision.ts`), so the Decision Eval harness

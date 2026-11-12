@@ -20,8 +20,8 @@
               "Question": "continues",
               "ResolvedModel": "typesafe/jev-1.13-20260917",
               "A": 1.7757,
-              "B": -3.3506,
-              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29: 301 scored points (174 switch, 127 continue), 5 repeats, private corpus (corpus.jsonl SHA-256 08dd187af4318a93…). Out of fold: balanced accuracy 0.800 raw → 0.928 calibrated, ECE 0.226 → 0.041. Fitted at the corpus mix (42% continue)."
+              "B": -0.8385,
+              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29: 301 scored points (174 switch, 127 continue), 5 repeats, private corpus (corpus.jsonl SHA-256 08dd187af4318a93…). Out of fold: balanced accuracy 0.800 raw → 0.928 calibrated, ECE 0.226 → 0.041. Fitted at the corpus mix (42% continue), then B shifted by logit(0.9) − logit(127/301) = +2.5121 to a chat's 90%-continue mix (B at the corpus mix: -3.3506)."
             },
             {
               "Use": "agent-discovery",

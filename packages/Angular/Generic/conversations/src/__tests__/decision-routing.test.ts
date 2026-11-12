@@ -117,8 +117,8 @@ const ALWAYS = { ReplyMode: 'Always', AllowedAgentIDs: null } as const;
  * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngineBase.Instance` would serve them.
  */
 const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
-    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }],
-    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }],
+    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }],
+    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }],
 };
 
 describe('decision routing', () => {
@@ -216,8 +216,8 @@ describe('decision routing', () => {
         });
 
         it('keeps continuity when the Likelihood is ambiguous', async () => {
-            // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
-            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) });
+            // Ambiguous after calibration: Jev's raw 0.6 is a calibrated 0.47 (a raw 0.3 is 0.09, a clear "leaves")
+            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.6) });
             expect((await RunRoutingDecision(input(), runner(ambiguous))).Verdict).toBe('KeptContinuity');
         });
 

@@ -173,8 +173,8 @@ async function run(config: Partial<DecisionEvalConfig>, respond: () => Promise<A
  * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngine.Instance` would serve them.
  */
 const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
-    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }],
-    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }],
+    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }],
+    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }],
 };
 
 describe('DecisionEvalDriver', () => {
@@ -265,7 +265,7 @@ describe('DecisionEvalDriver', () => {
             const { result } = await run({ modelId: PINNED_MODEL, vendorId: PINNED_VENDOR }, async () => movedAway('Jev', 'typesafe/jev-1.13-20260917'));
             const actual = actualOf(result);
             expect(actual.RoutingVerdict).toBe('Routed');
-            expect(actual.RoutingPolicy).toEqual({ MinConfidence: 0.7, TimeoutMs: 350, Calibration: { A: 1.7757, B: -3.3506 } });
+            expect(actual.RoutingPolicy).toEqual({ MinConfidence: 0.7, TimeoutMs: 350, Calibration: { A: 1.7757, B: -0.8385 } });
         });
 
         it('records the move away as kept, as production would, when the exact model has no calibration', async () => {
@@ -276,7 +276,7 @@ describe('DecisionEvalDriver', () => {
                 expect(actual.RoutingPolicy?.Calibration).toBeNull();
             }
             const { result } = await run({ modelId: PINNED_MODEL }, async () => movedAway('LLM Decision', 'GPT-OSS-120B'));
-            expect(actualOf(result)).toMatchObject({ RoutingVerdict: 'Routed', RoutingPolicy: { Calibration: { A: 1.6508, B: -2.911 } } });
+            expect(actualOf(result)).toMatchObject({ RoutingVerdict: 'Routed', RoutingPolicy: { Calibration: { A: 1.6508, B: -0.3989 } } });
         });
 
         it('links the prompt run as the target, so cost comes from it', async () => {

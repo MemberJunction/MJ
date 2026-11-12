@@ -14,7 +14,7 @@ export * from './lib/models/navigation-request.model';
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
 export * from './lib/utils/agent-handoff-map';
-// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+// Decision routing for an unmentioned message (EnableDecisionRouting, on by default)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';

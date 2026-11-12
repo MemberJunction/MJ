@@ -136,41 +136,39 @@ describe('conversation routing decision', () => {
             expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
             expect(ROUTING_CONTINUES_CALIBRATION_KEY).toEqual({ Use: 'conversation-routing', Question: ROUTING_CONTINUES_QUESTION });
             expect(SHIPPED_ROUTING_CALIBRATIONS['Jev']).toEqual([
-                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }
+                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }
             ]);
             expect(SHIPPED_ROUTING_CALIBRATIONS['LLM Decision']).toEqual([
-                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.9110 }
+                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }
             ]);
         });
     });
 
     describe('the thread likelihood is calibrated per exact model', () => {
         it('maps a raw probability through the answering model\'s Platt calibration', () => {
-            // At the corpus's mix (127 continuations to 174 switches, so 42% continue), Jev's raw 0.5
-            // is a calibrated 0.03. A chat continues far more often; see the next test.
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, JEV)).toBeCloseTo(0.0339, 4);
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, LLM_DECISION)).toBeCloseTo(0.0516, 4);
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, { ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' })).toBeCloseTo(0.0339, 4);
+            // The shipped fits are shifted to a chat's mix (90% of messages continue): Jev's raw 0.5
+            // is a calibrated 0.30 there, and LLM Decision's a calibrated 0.40.
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, JEV)).toBeCloseTo(0.3019, 4);
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, LLM_DECISION)).toBeCloseTo(0.4016, 4);
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, { ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' })).toBeCloseTo(0.3019, 4);
         });
 
-        it('is calibrated at the corpus\'s mix, and the documented chat-mix figures follow from the fits', () => {
-            // Platt's B absorbs the corpus's base rate. A 90%-continue prior, closer to a chat, adds
-            // ln(9 × 174/127) to the calibrated logit.
-            const chatPriorShift = Math.log(9 * 174 / 127);
-            expect(chatPriorShift).toBeCloseTo(2.51, 2);
-            const atChatMix = (calibrated: number): number =>
-                1 / (1 + Math.exp(-(Math.log(calibrated / (1 - calibrated)) + chatPriorShift)));
-            const leaveBar = 1 - DECISION_ROUTING_MIN_CONFIDENCE;
+        it('is the corpus fit shifted to a chat\'s mix, so the leave bar is a 70% chance the person moved on', () => {
+            // Platt's B absorbs the corpus's base rate (127 continuations to 174 switches). The shipped
+            // B adds logit(0.9) − logit(127/301) to the corpus fit, so it reads at a 90%-continue mix.
+            const chatPriorShift = Math.log(0.9 / 0.1) - Math.log(127 / 174);
+            expect(chatPriorShift).toBeCloseTo(2.5121, 4);
+            const jev = SHIPPED_ROUTING_CALIBRATIONS['Jev'][0];
+            const llm = SHIPPED_ROUTING_CALIBRATIONS['LLM Decision'][0];
+            expect(jev.B - chatPriorShift).toBeCloseTo(-3.3506, 3);
+            expect(llm.B - chatPriorShift).toBeCloseTo(-2.9110, 3);
 
-            // Jev's raw 0.5 is about 0.30 at a chat's mix, not 0.03
-            expect(atChatMix(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.5, JEV) ?? Number.NaN)).toBeCloseTo(0.30, 2);
-            // The leave bar, a calibrated 0.30 at the corpus's mix, is about an 84% chance of continuing
-            expect(atChatMix(leaveBar)).toBeCloseTo(0.84, 2);
-            // In raw terms, routing leaves at Jev's raw 0.80 or below, and LLM Decision's 0.77 or below
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.80, JEV)).toBeLessThanOrEqual(leaveBar);
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.81, JEV)).toBeGreaterThan(leaveBar);
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.77, LLM_DECISION)).toBeLessThanOrEqual(leaveBar);
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.78, LLM_DECISION)).toBeGreaterThan(leaveBar);
+            // In raw terms, routing leaves at Jev's raw 0.49 or below, and LLM Decision's 0.43 or below
+            const leaveBar = 1 - DECISION_ROUTING_MIN_CONFIDENCE;
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.49, JEV)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.51, JEV)).toBeGreaterThan(leaveBar);
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.43, LLM_DECISION)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.44, LLM_DECISION)).toBeGreaterThan(leaveBar);
         });
 
         it('has no calibrated probability for a model it was not fitted on', () => {
@@ -194,10 +192,10 @@ describe('conversation routing decision', () => {
         });
 
         it('keeps continuity for LLM Decision answered by a chat model it was not fitted on', () => {
-            // The review's probe: GPT-OSS-120B's fit turns a raw 0.75 into a calibrated 0.25, a
+            // The review's probe: GPT-OSS-120B's fit turns a raw 0.3 into a calibrated 0.14, a
             // "leaves". Applied to another chat model's answer, that would route it away.
-            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.75) };
-            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.75, LLM_DECISION)).toBeCloseTo(0.25, 2);
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.3) };
+            expect(CalibratedContinuesProbability(SHIPPED_ROUTING_SOURCE, 0.3, LLM_DECISION)).toBeCloseTo(0.14, 2);
             expect(InterpretRoutingAnswers(input(), answered(answers, LLM_DECISION), SHIPPED_ROUTING_SOURCE).Verdict).toBe('Routed');
             const other = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }), SHIPPED_ROUTING_SOURCE);
             expect(other.Verdict).toBe('KeptContinuity');
@@ -205,8 +203,8 @@ describe('conversation routing decision', () => {
         });
 
         it('keeps continuity for Jev at a version it was not fitted on', () => {
-            // The review's probe: Jev's fit turns a raw 0.8 into a calibrated 0.29, a "leaves".
-            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) };
+            // The review's probe: Jev's fit turns a raw 0.3 into a calibrated 0.09, a "leaves".
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.3) };
             expect(InterpretRoutingAnswers(input(), answered(answers), SHIPPED_ROUTING_SOURCE).Verdict).toBe('Routed');
             const edited = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }), SHIPPED_ROUTING_SOURCE);
             expect(edited.Verdict).toBe('KeptContinuity');
@@ -219,17 +217,17 @@ describe('conversation routing decision', () => {
         });
 
         it('routes on a raw answer the uncalibrated check called unsure', () => {
-            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.02
+            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.23
             const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.45) }), SHIPPED_ROUTING_SOURCE);
             expect(outcome.Verdict).toBe('Routed');
             expect(outcome.RoutedAgentId).toBe(WRITER.ID);
         });
 
         it('keeps continuity when the calibrated probability is still in the middle', () => {
-            // Raw 0.87 from Jev is a calibrated 0.51
-            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) }), SHIPPED_ROUTING_SOURCE);
+            // Raw 0.6 from Jev is a calibrated 0.47
+            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.6) }), SHIPPED_ROUTING_SOURCE);
             expect(outcome.Verdict).toBe('KeptContinuity');
-            expect(outcome.Reason).toContain('calibrated probability 0.506');
+            expect(outcome.Reason).toContain('calibrated probability 0.470');
         });
 
         it('keeps continuity when the answering model is unnamed or uncalibrated, however sure it sounds', () => {

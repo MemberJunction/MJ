@@ -528,6 +528,9 @@ export class ConversationAgentService {
    *
    * @param branchId The active branch. Only the agent's artifacts on its path are listed for the
    *   classifier; null or omitted reads the trunk.
+   * @deprecated Nothing in MJ calls this: the chat routes an unmentioned message with a typed
+   *   decision instead (`RunRoutingDecision`, through `EnableDecisionRouting`), which answers in a few
+   *   hundred milliseconds and is calibrated per model. Kept for hosts that call it directly.
    */
   async CheckAgentContinuityIntent(
     conversationId: string,
