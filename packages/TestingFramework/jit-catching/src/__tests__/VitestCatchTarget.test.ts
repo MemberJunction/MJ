@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CountCoveredChangedLines, HostEnv, InfrastructureError, VitestCatchTarget } from '../target/VitestCatchTarget';
@@ -12,7 +12,7 @@ function fakeTarget(onRun: (o: SandboxRunOptions) => { Stdout: string; ExitCode:
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async (_f, _a) => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
   vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); const r = onRun(o); return { ExitCode: r.ExitCode, TimedOut: false, Stdout: r.Stdout, Stderr: '', DurationMs: 1 }; });
   const target = new VitestCatchTarget({ Repo: { Root: '/repo' } as never, Sandbox: sandbox, Settings: DEFAULT_SETTINGS, WorkRoot: '/work', StoreDir: '/work/pnpm-store', PackageMap: { Get: (n: string) => ({ Name: n, Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never });
-  return { target, calls };
+  return { target, calls, sandbox };
 }
 const test = (id: string): CandidateTest => ({ ID: id, RunID: 'r', Package: '@memberjunction/core', Method: 'DodgyDiff', RiskID: null, RiskText: null, Mutant: null, MutantFailure: null,
   FilePath: `packages/MJCore/src/__tests__/jit/${id}.jit.test.ts`, Source: 'x', GenerationOutcome: 'Produced', FailureReason: null, Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptURL: null });
@@ -161,6 +161,7 @@ describe('VitestCatchTarget.Prepare', () => {
   it('redacts token-shaped text in the build output before it goes into the build error', async () => {
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const { target } = fakeTarget(() => ({ Stdout: `turbo failed with ${token}`, ExitCode: 1 }));
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: mkdtempSync(join(tmpdir(), 'jit-build-')) } as never;
     const err = await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, ['@memberjunction/core']).catch((e: Error) => e);
     expect((err as Error).message).toContain('build failed on Head'); expect((err as Error).message).not.toContain(token);
   });
@@ -258,6 +259,17 @@ describe('VitestCatchTarget.BuildPackages', () => {
     await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
     expect(existsSync(join(work, 'turbo-summaries', 'head', 'host.json'))).toBe(false);
   });
+  it('mounts the run turbo cache read-write at /turbo-cache, created on the host before the build', async () => {
+    const work = realpathSync(mkdtempSync(join(tmpdir(), 'jit-build-'))); const head = join(work, 'head'); mkdirSync(head);
+    let existed = false;
+    const { target, calls, sandbox } = fakeTarget(() => { existed = existsSync(join(work, 'turbo-cache')); return { Stdout: '', ExitCode: 0 }; });
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: work } as never;
+    await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
+    const args = sandbox.BuildArgs(calls[0]);
+    expect(existed).toBe(true);
+    expect(args).toContain(`${join(work, 'turbo-cache')}:/turbo-cache:rw`);
+    expect(args).toContain('TURBO_CACHE_DIR=/turbo-cache');
+  });
 });
 
 describe('VitestCatchTarget.TypeCheck', () => {
@@ -334,6 +346,16 @@ describe('VitestCatchTarget FilePath checks', () => {
     await target.Run({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, [test(ID1)], 1);
     const cmd = calls[0].Command.join(' ');
     expect(cmd).toContain(`cd '/work/packages/MJCore'`); expect(cmd).toContain(`'src/__tests__/jit/${ID1}.jit.test.ts'`);
+  });
+});
+
+describe('VitestCatchTarget.RemoveStore', () => {
+  it('removes the run turbo cache', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-store-')); mkdirSync(join(work, 'turbo-cache/abc'), { recursive: true });
+    const { target } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'pnpm-store') } as never;
+    await target.RemoveStore();
+    expect(existsSync(join(work, 'turbo-cache'))).toBe(false);
   });
 });
 
