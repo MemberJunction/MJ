@@ -35,6 +35,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
+import { ArtifactCollaborationServer, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
@@ -275,6 +276,8 @@ export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
+export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
@@ -556,6 +559,7 @@ const setupComplete$ = new ReplaySubject(1);
     await WireEntityInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
+    ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
@@ -965,6 +969,8 @@ const setupComplete$ = new ReplaySubject(1);
     }
   }
 
+  ArtifactCollaborationServer.Instance.SetDataSources(dataSources);
+
   // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
   // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
   try {
@@ -1335,6 +1341,9 @@ const setupComplete$ = new ReplaySubject(1);
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
+    if (ArtifactCollaborationServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
+      return;
+    }
     let pathname = graphqlRootPath;
     try {
       pathname = new URL(request.url ?? graphqlRootPath, 'http://internal').pathname;
@@ -1677,7 +1686,11 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RejectUpgradeWhileStarting(startup, socket) || RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return (
+      RejectUpgradeWhileStarting(startup, socket) ||
+      RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head) ||
+      ArtifactCollaborationServer.Instance.TryHandleUpgrade(req, socket, head)
+    );
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────

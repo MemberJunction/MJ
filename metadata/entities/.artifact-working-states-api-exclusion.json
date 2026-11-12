@@ -1,0 +1,22 @@
+[
+  {
+    "_comments": [
+      "Collaborative Yjs CRDT working state: server-internal only, no change tracking, no caching, no user search, no public GraphQL mutations"
+    ],
+    "fields": {
+      "Name": "MJ: Artifact Working States",
+      "IncludeInAPI": true,
+      "AllowAllRowsAPI": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowUserSearchAPI": false,
+      "AllowCaching": false,
+      "TrustServerCacheCompletely": false,
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifact Working States"
+    }
+  }
+]

@@ -196,7 +196,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const effectiveTimeout = this.getEffectiveTimeout(context.test);
         const deadline = Date.now() + effectiveTimeout;
         let timedOut = false;
-        const timer = setTimeout(() => { timedOut = true; }, effectiveTimeout);
+        const markTimedOut = (): void => { timedOut = true; };
+        const isBudgetExhausted = (): boolean => timedOut || Date.now() >= deadline;
+        const timer = setTimeout(markTimedOut, effectiveTimeout);
 
         const oracleResults: OracleResult[] = [];
         const outcomes: TestOutcome[] = []; // parallel array for the EMIT_OUTCOMES sidecar
@@ -205,12 +207,12 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
             // 4) Run each selected bundle's checks IN ORDER against ONE shared context.
             for (const sel of selectors) {
-                if (timedOut) {
+                if (isBudgetExhausted()) {
                     // Bundles the loop never reached: each registered check is a budget skip.
                     this.recordBudgetSkips(context, IntegrationCheckRegistry.Instance.GetBundle(sel.type), new Set(), oracleResults, outcomes);
                     continue;
                 }
-                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, () => timedOut, deadline);
+                await this.runBundle(context, checkCtx, sel.type, sel.config, oracleResults, outcomes, isBudgetExhausted, markTimedOut, deadline);
             }
         } catch (bootErr) {
             clearTimeout(timer);
@@ -239,7 +241,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
 
         // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
-        return this.buildResult(context, startTime, oracleResults, timedOut);
+        return this.buildResult(context, startTime, oracleResults, isBudgetExhausted());
     }
 
     /**
@@ -270,6 +272,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
         isTimedOut: () => boolean,
+        markTimedOut: () => void,
         deadline: number
     ): Promise<void> {
         const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
@@ -338,7 +341,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
                         LIVE_MODEL_GATE_ALLOWANCE);
                     continue;
                 }
-                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
+                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, markTimedOut, deadline);
             }
 
             // A bundle whose every check was gated out ran NOTHING, and used to report PASS for it.
@@ -445,12 +448,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         id: string,
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         checkCtx: IntegrationCheckContext,
-        remaining: number
+        remaining: number,
+        markTimedOut: () => void
     ): Promise<void> {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<never>((_, reject) => {
             timer = setTimeout(
-                () => reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`)),
+                () => {
+                    markTimedOut();
+                    reject(new Error(`check '${id}' exceeded the ${remaining}ms remaining run budget (hung check)`));
+                },
                 remaining
             );
         });
@@ -510,6 +517,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         fn: (ctx: IntegrationCheckContext) => Promise<void>,
         oracleResults: OracleResult[],
         outcomes: TestOutcome[],
+        markTimedOut: () => void,
         deadline: number
     ): Promise<void> {
         const checkStart = Date.now();
@@ -521,7 +529,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         let failure: string | undefined;
         let skipReason: string | undefined;
         try {
-            await this.runWithDeadline(id, fn, checkCtx, remaining);
+            await this.runWithDeadline(id, fn, checkCtx, remaining, markTimedOut);
         } catch (checkErr) {
             if (IsCheckSkip(checkErr)) {
                 skipReason = `SKIPPED: ${checkErr.message}`;

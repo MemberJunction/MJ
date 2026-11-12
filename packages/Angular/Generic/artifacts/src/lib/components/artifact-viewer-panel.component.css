@@ -82,6 +82,13 @@
   background: var(--mj-border-default);
 }
 
+.version-selector.comparing {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+  font-weight: 600;
+}
+
 .version-selector i {
   font-size: 11px;
 }
@@ -103,13 +110,51 @@
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 200px;
+  min-width: 224px;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   box-shadow: var(--mj-shadow-md);
   z-index: 1000;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.version-dropdown-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.version-dropdown-footer {
+  border-top: 1px solid var(--mj-border-default);
+  padding: 5px;
+  background: var(--mj-bg-surface-sunken);
+}
+
+.version-compare-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mj-brand-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.version-compare-trigger:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+}
+
+.version-compare-trigger.active {
+  color: var(--mj-text-primary);
 }
 
 .version-option {
@@ -732,6 +777,11 @@
   margin-bottom: 5px;
   min-width: 0;
   min-height: 0;
+}
+
+.tab-content.tab-content--compare {
+  overflow: hidden;
+  margin-bottom: 0;
 }
 
 /* Plugin Container */

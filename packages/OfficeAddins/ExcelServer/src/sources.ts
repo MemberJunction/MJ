@@ -17,11 +17,12 @@ import {
     QueryFieldInfo,
     QueryInfo,
     QueryParameterInfo,
+    RunView,
     TypeScriptTypeFromSQLType,
     UserInfo,
 } from '@memberjunction/core';
 import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
-import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     EXCEL_MAX_SOURCES_PER_WORKBOOK,
     ExcelColumnDataType,
@@ -81,6 +82,88 @@ export async function ResolveSingleWorkbookSource(
         case 'Query':
             return resolveQuery(request, provider, user);
     }
+}
+
+/**
+ * Resolves a saved view on `entity` by UUID or view `Name` (or falls back to `entity`'s default columns
+ * when `viewNameOrId` is empty or `'(Default)'`), verifying `view.EntityID` matches `entity.ID` (`A5`).
+ */
+export async function ResolveViewByNameOrId(
+    entity: EntityInfo,
+    viewNameOrId: string | undefined,
+    provider: IMetadataProvider,
+    user: UserInfo,
+): Promise<ExcelResolvedWorkbookSource> {
+    if (!entity || entity.IncludeInAPI === false || entity.Status === 'Disabled' || !entity.GetUserPermisions(user).CanRead) {
+        throw new ExcelSourceError('That entity doesn\'t exist, or you don\'t have access to read it.');
+    }
+
+    const ref = (viewNameOrId ?? '').trim();
+    if (!ref || ref.toLowerCase() === '(default)') {
+        return resolveEntity(entity.ID, provider, user);
+    }
+
+    let resolvedViewId: string;
+    if (IsValidUUID(ref)) {
+        resolvedViewId = ref;
+    } else {
+        const rv = RunView.FromMetadataProvider(provider);
+        const lookupRes = await rv.RunView<{
+            ID: string;
+            Name: string;
+            EntityID: string;
+            UserID?: string;
+            IsShared?: boolean;
+        }>(
+            {
+                EntityName: 'MJ: User Views',
+                ExtraFilter: `EntityID='${EscapeSQLString(entity.ID)}' AND Name='${EscapeSQLString(ref)}'`,
+                Fields: ['ID', 'Name', 'EntityID', 'UserID', 'IsShared'],
+                MaxRows: 20,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            user,
+        );
+        const candidates = lookupRes.Success ? (lookupRes.Results ?? []) : [];
+        const preferred =
+            candidates.find(c => c.UserID && UUIDsEqual(c.UserID, user.ID)) ??
+            candidates.find(c => Boolean(c.IsShared)) ??
+            candidates[0];
+        if (!preferred) {
+            throw new ExcelSourceError(`That saved view "${ref}" doesn't exist on "${entity.DisplayNameOrName}", or you don't have access to it.`);
+        }
+        resolvedViewId = preferred.ID;
+    }
+
+    const view = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', user);
+    const loaded = await view.Load(resolvedViewId);
+    if (!loaded || !view.UserCanView) {
+        throw new ExcelSourceError('That saved view doesn\'t exist, or you don\'t have access to it.');
+    }
+
+    const viewEntityId = view.EntityID || view.ViewEntityInfo?.ID || '';
+    if (viewEntityId && !UUIDsEqual(viewEntityId, entity.ID)) {
+        throw new ExcelSourceError(`The saved view "${view.Name}" does not belong to entity "${entity.DisplayNameOrName}".`);
+    }
+
+    const effectiveEntity = view.ViewEntityInfo ?? entity;
+    if (!effectiveEntity.GetUserPermisions(user).CanRead) {
+        throw new ExcelSourceError(`You don't have access to the data in the view "${view.Name}".`);
+    }
+
+    const columns = viewColumns(view.Columns, effectiveEntity.Fields);
+    if (columns.length === 0) {
+        throw new ExcelSourceError(`The view "${view.Name}" has no columns to show.`);
+    }
+
+    return {
+        Kind: 'View',
+        ID: view.ID,
+        Name: view.Name,
+        EntityName: entity.Name,
+        Columns: columns,
+    };
 }
 
 /** The data type the pane uses for an entity field's values. */

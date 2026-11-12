@@ -16,7 +16,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, NormalizeRecordIdForMatch, FormatEntityRecordDisplayTitle, ResolveRecordTabDisplayTitle, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery, FindMovedNavItem, FindMovedNavItemApp, ResolveMovedNavItem } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -1771,24 +1771,39 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          // Activate the app and open the nav item
-          await this.appManager.SetActiveApp(app.ID);
+          let targetApp = app;
           const navItems = await app.GetNavItems();
-          const navItem = navItems.find(
+          let navItem = navItems.find(
             item => item.Label?.trim().toLowerCase() === navItemName.trim().toLowerCase()
           );
 
+          if (!navItem) {
+            const resolvedMove = await ResolveMovedNavItem(app.Name, navItemName, this.appManager.GetAllApps());
+            if (resolvedMove) {
+              const movedNavItems = await resolvedMove.App.GetNavItems();
+              const movedCandidate = movedNavItems.find(
+                item => item.Label?.trim().toLowerCase() === resolvedMove.Move.ToNavItem.trim().toLowerCase()
+              );
+              if (movedCandidate) {
+                targetApp = resolvedMove.App;
+                navItem = movedCandidate;
+              }
+            }
+          }
+
           if (navItem) {
+            await this.appManager.SetActiveApp(targetApp.ID);
             // Parse query params to pass as configuration
             const qpObj = this.urlSearchParamsToRecord(queryParams);
             this.navigationService.OpenNavItem(
-              app.ID,
+              targetApp.ID,
               navItem,
-              app.GetColor(),
+              targetApp.GetColor(),
               Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
             );
             return true;
           } else {
+            await this.appManager.SetActiveApp(app.ID);
             console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
           }
         }
@@ -1980,13 +1995,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
         if (!tabAppName || !tabNavItemName) return false;
 
-        // Match by app path/name and nav item name (case-insensitive)
+        // Match by app path/name and nav item name (case-insensitive), including moved nav items
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
         if (!app) return false;
 
-        const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
-                          UUIDsEqual(tab.applicationId, app.ID);
-        const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
+        const moved = FindMovedNavItem(app.Name, navItemName);
+        const movedApp = moved ? FindMovedNavItemApp(moved, this.appManager.GetAllApps()) : undefined;
+
+        const appMatches =
+          tabAppName.toLowerCase() === app.Name.toLowerCase() ||
+          UUIDsEqual(tab.applicationId, app.ID) ||
+          (movedApp !== undefined &&
+            (tabAppName.toLowerCase() === movedApp.Name.toLowerCase() ||
+              UUIDsEqual(tab.applicationId, movedApp.ID)));
+        const navMatches =
+          tabNavItemName.toLowerCase() === navItemName.toLowerCase() ||
+          (moved !== null && tabNavItemName.toLowerCase() === moved.ToNavItem.toLowerCase());
 
         return appMatches && navMatches;
       }) || null;
