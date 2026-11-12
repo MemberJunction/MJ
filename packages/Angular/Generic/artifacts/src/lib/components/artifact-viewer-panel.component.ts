@@ -1508,7 +1508,7 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
       } else {
         LogError(newVer.LatestResult?.Message || 'Failed to save new artifact version.');
-        this.notificationService?.CreateSimpleNotification?.(
+        this.notificationService.CreateSimpleNotification(
           'Failed to save new artifact version.',
           'error',
           4000,
@@ -1968,16 +1968,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
               };
               versionQueries.push(singleVerQuery);
 
-              const batchResults = typeof (md as Partial<IRunViewProvider>).RunViews === 'function'
-                ? await rv.RunViews<MJArtifactVersionEntity | ArtifactVersionListRow>(
-                    versionQueries,
-                    this.CurrentUser,
-                  )
-                : await Promise.all(
-                    versionQueries.map(q =>
-                      rv.RunView<MJArtifactVersionEntity | ArtifactVersionListRow>(q, this.CurrentUser),
-                    ),
-                  );
+              const batchResults = await rv.RunViews<MJArtifactVersionEntity | ArtifactVersionListRow>(
+                versionQueries,
+                this.CurrentUser,
+              );
 
               const listRes = batchResults?.[0];
               const everyVersionResult = scope ? batchResults?.[1] : undefined;

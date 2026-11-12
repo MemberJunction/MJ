@@ -285,7 +285,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
      * (`{ ...params }`) or a custom `WellKnownUserSource` returns a user not matched by
      * `isServerSystemUser`.
      */
-    public static MarkInternalArtifactPermissionQuery(params: RunViewParams): void {
+    public static MarkPermissionResolutionRecursionGuard(params: RunViewParams): void {
         if (!params || typeof params !== 'object') {
             return;
         }
@@ -307,9 +307,9 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
      * Must never be called on untrusted caller `RunViewParams`.
      *
      * Returns `true` when `params` (or a shallow `{ ...params }` clone produced by `ProviderBase.RunView`)
-     * was marked by {@link MarkInternalArtifactPermissionQuery}.
+     * was marked by {@link MarkPermissionResolutionRecursionGuard}.
      */
-    public static IsInternalArtifactPermissionQuery(params: object | null | undefined): boolean {
+    public static IsPermissionResolutionRecursionGuard(params: object | null | undefined): boolean {
         if (!params || typeof params !== 'object') {
             return false;
         }
@@ -564,10 +564,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
     ): Promise<ResolvedArtifactPermissions | null> {
         const delegateEntityId = artifact.DelegateEntityID!;
         const delegateRecordId = artifact.DelegateRecordID!;
-        const entityInfo =
-            typeof provider.EntityByID === 'function'
-                ? provider.EntityByID(delegateEntityId)
-                : provider.Entities?.find((e) => UUIDsEqual(e.ID, delegateEntityId));
+        const entityInfo = provider.Entities?.find((e) => UUIDsEqual(e.ID, delegateEntityId));
         const delegateEntityName = entityInfo?.Name ?? '';
 
         const delegate = this.resolveDelegateInstance(delegateEntityId, delegateEntityName);
@@ -720,7 +717,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
-            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(artifactParams);
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(artifactParams);
             const result = await rv.RunView<ArtifactRowProjection>(artifactParams, user);
             if (!result.Success || !result.Results || result.Results.length === 0) {
                 return null;
@@ -749,7 +746,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
-            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(directParams);
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(directParams);
             const result = await rv.RunView<ArtifactPermissionRowProjection>(directParams, user);
             return result.Success ? result.Results ?? [] : [];
         } catch (err) {
@@ -794,7 +791,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
-            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(versionsParams);
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(versionsParams);
             const versionsResult = await rv.RunView<{ ID: string }>(versionsParams, queryActor);
             const versionIds = Array.from(
                 new Set((versionsResult.Success ? versionsResult.Results ?? [] : []).map((v) => v.ID).filter(Boolean))
@@ -811,7 +808,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
-            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(colParams);
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(colParams);
             const colResult = await rv.RunView<CollectionArtifactRowProjection>(colParams, queryActor);
             const collectionIds = Array.from(
                 new Set((colResult.Success ? colResult.Results ?? [] : []).map((r) => r.CollectionID).filter(Boolean))
@@ -828,7 +825,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 SkipTotalRowCount: true,
                 ResultType: 'simple'
             };
-            ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(permParams);
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(permParams);
             const permResult = await rv.RunView<CollectionPermissionRowProjection>(permParams, queryActor);
             return permResult.Success ? permResult.Results ?? [] : [];
         } catch (err) {

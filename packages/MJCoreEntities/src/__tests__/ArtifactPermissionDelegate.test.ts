@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as mjCore from '@memberjunction/core';
-import { IMetadataProvider, RunView, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, RunView, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from '../custom/ArtifactPermissionDelegate';
 
@@ -28,17 +28,17 @@ describe('ArtifactPermissionEngine Round 8 safeguards', () => {
             ResultType: 'simple'
         };
 
-        expect(ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params)).toBe(false);
+        expect(ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params)).toBe(false);
 
-        ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(params);
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(params);
 
         const store = GetGlobalObjectStore();
         expect(store?.['___MJ_INTERNAL_ARTIFACT_PERMISSION_QUERY_PARAMS___']).toBeInstanceOf(WeakSet);
-        expect(ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params)).toBe(true);
+        expect(ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params)).toBe(true);
 
         // ProviderBase.RunView executes `params = { ...params }` before PreRunView / PostRunView hooks.
         const shallowClone: RunViewParams = { ...params };
-        expect(ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(shallowClone)).toBe(true);
+        expect(ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(shallowClone)).toBe(true);
         // JSON serialization must not leak internal marker symbols.
         expect(Object.keys(shallowClone)).toEqual(['EntityName', 'ExtraFilter', 'Fields', 'ResultType']);
     });
@@ -79,9 +79,11 @@ describe('ArtifactPermissionEngine Round 8 safeguards', () => {
             })
         } as Pick<RunView, 'RunView'> as RunView);
 
+        const entities: EntityInfo[] = [];
         const provider: Partial<IMetadataProvider> = {
             ProviderType: 'Database',
-            Entities: []
+            Entities: entities,
+            EntityByID: (id: string) => entities.find((e) => e.ID === id)
         };
 
         const resolved = await ArtifactPermissionEngine.Instance.ResolvePermissions(
@@ -93,8 +95,8 @@ describe('ArtifactPermissionEngine Round 8 safeguards', () => {
         expect(resolved.CanRead).toBe(false);
         expect(observedParams.length).toBe(3);
         for (const p of observedParams) {
-            expect(ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(p)).toBe(true);
-            expect(ArtifactPermissionEngine.IsInternalArtifactPermissionQuery({ ...p })).toBe(true);
+            expect(ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(p)).toBe(true);
+            expect(ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard({ ...p })).toBe(true);
         }
 
         expect(logErrorSpy).toHaveBeenCalledTimes(1);

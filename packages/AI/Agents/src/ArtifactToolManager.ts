@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   ArtifactPermissionEngine,
@@ -133,6 +133,10 @@ export interface ArtifactToolCall {
   input: Record<string, unknown>;
 }
 
+interface ArtifactToolLibraryWithRevisionHash extends BaseArtifactToolLibrary {
+  ComputeRevisionHash?(content: string): string;
+}
+
 interface ArtifactEntry {
   alphaId: string;
   name: string;
@@ -149,7 +153,7 @@ interface ArtifactEntry {
   description?: string;
   mimeType?: string;
   content: string | Buffer;
-  library: BaseArtifactToolLibrary;
+  library: ArtifactToolLibraryWithRevisionHash;
   annotation?: string;
   deliveryMode?: 'Inline' | 'ToolsOnly';
   forceToolsOnly?: boolean;
@@ -204,6 +208,16 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
     };
   }
 
+  public ComputeRevisionHash?(content: string): string | undefined {
+    for (const lib of this.chain) {
+      const candidate = lib as ArtifactToolLibraryWithRevisionHash;
+      if (typeof candidate.ComputeRevisionHash === 'function') {
+        return candidate.ComputeRevisionHash(content);
+      }
+    }
+    return undefined;
+  }
+
   // Required by the abstract base but never invoked — GetToolList / InvokeTool
   // are fully overridden above.
   protected getSubclassToolList(): ArtifactToolDefinition[] {
@@ -212,6 +226,34 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
   protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
     return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via invokeSubclassTool.' };
   }
+}
+
+interface PersistVersionRollbackSnapshot {
+  hadExistingAgentRunVersion: boolean;
+  entryVersionId?: string;
+  entryVersionNumber?: number;
+  entryCurrentVersionNumber?: number;
+  entryAgentRunVersionId?: string;
+  entryAgentRunVersionEntity?: MJArtifactVersionEntity;
+  entryContentMode?: ArtifactEntry['contentMode'];
+  entityName?: string | null;
+  entityComments?: string | null;
+  entityContent?: string | null;
+  entityConfiguration?: string | null;
+  entityContentHash?: string | null;
+  entityContentSizeBytes?: number | null;
+  entityContentMode?: MJArtifactVersionEntity['ContentMode'] | null;
+  entityFileID?: string | null;
+  entityMimeType?: string | null;
+  entityFileName?: string | null;
+}
+
+interface PersistMutationOutcome {
+  persisted: boolean;
+  errorMessage?: string;
+  versionEntity?: MJArtifactVersionEntity;
+  supersededFileId?: string | null;
+  rollbackSnapshot?: PersistVersionRollbackSnapshot;
 }
 
 export interface StoredToolResult {
@@ -1066,6 +1108,7 @@ export class ArtifactToolManager {
             effectiveContent,
             xlsxBase64,
             call.tool,
+            previousContentStr,
           );
           if (!persistOutcome.persisted) {
             if (hookResult && typeof hookResult === 'object') {
@@ -1110,6 +1153,7 @@ export class ArtifactToolManager {
                   const warnMsg = `Deferred mutation was not applied to active room for artifact '${targetEntry.artifactId}'`;
                   LogError(`ArtifactToolManager: ${warnMsg}`);
                   commitWarning = warnMsg;
+                  await this.rollbackPersistedArtifactVersionMutation(targetEntry, persistOutcome, previousContentStr);
                   targetEntry.content = previousContent;
                   if (previousOriginalXlsxBytes) {
                     targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
@@ -1146,7 +1190,13 @@ export class ArtifactToolManager {
                       );
                     }
                   }
-                  const rePersistOutcome = await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                  const rePersistOutcome = await this.persistArtifactVersionMutation(
+                    targetEntry,
+                    effectiveContent,
+                    xlsxBase64,
+                    call.tool,
+                    previousContentStr,
+                  );
                   if (!rePersistOutcome.persisted) {
                     const failMsg = rePersistOutcome.errorMessage ?? 'Failed to persist merged artifact version after concurrent edit reconciliation';
                     LogError(`ArtifactToolManager: ${failMsg}`);
@@ -1165,6 +1215,9 @@ export class ArtifactToolManager {
                     this.toolResults.push(failedStored);
                     return failedStored;
                   }
+                  if (rePersistOutcome.supersededFileId) {
+                    await this.deleteUnreferencedArtifactFile(rePersistOutcome.supersededFileId);
+                  }
                 }
               }
             } catch (commitErr) {
@@ -1172,6 +1225,7 @@ export class ArtifactToolManager {
                 commitErr instanceof Error ? commitErr.message : String(commitErr)
               }`;
               LogError(errMsg);
+              await this.rollbackPersistedArtifactVersionMutation(targetEntry, persistOutcome, previousContentStr);
               targetEntry.content = previousContent;
               if (previousOriginalXlsxBytes) {
                 targetEntry.originalXlsxBytes = previousOriginalXlsxBytes;
@@ -1191,6 +1245,9 @@ export class ArtifactToolManager {
               this.toolResults.push(failedStored);
               return failedStored;
             }
+          }
+          if (persistOutcome.supersededFileId) {
+            await this.deleteUnreferencedArtifactFile(persistOutcome.supersededFileId);
           }
         }
 
@@ -1219,7 +1276,13 @@ export class ArtifactToolManager {
               effectiveContent = hookResult.mergedContent;
               targetEntry.content = effectiveContent;
               if (this.contextUser && this.provider) {
-                const rePersistOutcome = await this.persistArtifactVersionMutation(targetEntry, effectiveContent, xlsxBase64, call.tool);
+                const rePersistOutcome = await this.persistArtifactVersionMutation(
+                  targetEntry,
+                  effectiveContent,
+                  xlsxBase64,
+                  call.tool,
+                  previousContentStr,
+                );
                 if (!rePersistOutcome.persisted) {
                   const failMsg = rePersistOutcome.errorMessage ?? 'Failed to persist merged artifact version after concurrent edit reconciliation';
                   LogError(`ArtifactToolManager: ${failMsg}`);
@@ -1237,6 +1300,9 @@ export class ArtifactToolManager {
                   };
                   this.toolResults.push(failedStored);
                   return failedStored;
+                }
+                if (rePersistOutcome.supersededFileId) {
+                  await this.deleteUnreferencedArtifactFile(rePersistOutcome.supersededFileId);
                 }
               }
             }
@@ -1285,11 +1351,12 @@ export class ArtifactToolManager {
         }
         if (
           effectiveContent !== updatedContent &&
-          'revisionHash' in sanitizedData &&
-          'ComputeRevisionHash' in targetEntry.library &&
-          typeof targetEntry.library.ComputeRevisionHash === 'function'
+          'revisionHash' in sanitizedData
         ) {
-          sanitizedData.revisionHash = targetEntry.library.ComputeRevisionHash(effectiveContent);
+          const recomputed = targetEntry.library.ComputeRevisionHash?.(effectiveContent);
+          if (typeof recomputed === 'string') {
+            sanitizedData.revisionHash = recomputed;
+          }
         }
         const rejectedCount =
           hookResult && typeof hookResult === 'object'
@@ -1395,8 +1462,11 @@ export class ArtifactToolManager {
         return `Artifact was modified concurrently (v${latestRow.VersionNumber} > v${expectedVersion}); call reload_artifact before mutating`;
       }
     } catch (err) {
-      if (this.provider && typeof (this.provider as unknown as { RunView?: unknown }).RunView === 'function') {
-        return `Failed to verify artifact concurrency before mutation: ${err instanceof Error ? err.message : String(err)}`;
+      if (this.provider) {
+        const runViewProvider: Partial<IRunViewProvider> = this.provider;
+        if (runViewProvider.RunView) {
+          return `Failed to verify artifact concurrency before mutation: ${err instanceof Error ? err.message : String(err)}`;
+        }
       }
     }
     return null;
@@ -1634,7 +1704,8 @@ export class ArtifactToolManager {
     updatedContent: string,
     xlsxBase64: string | undefined,
     toolName: string,
-  ): Promise<{ persisted: boolean; errorMessage?: string }> {
+    previousContentStr?: string,
+  ): Promise<PersistMutationOutcome> {
     if (!entry.artifactId || !this.contextUser || !this.provider) {
       return { persisted: false };
     }
@@ -1722,6 +1793,26 @@ export class ArtifactToolManager {
         ? (entry.currentVersionNumber ?? entry.versionNumber ?? 1)
         : (entry.currentVersionNumber ?? entry.versionNumber ?? 0) + 1;
 
+      const rollbackSnapshot: PersistVersionRollbackSnapshot = {
+        hadExistingAgentRunVersion: isReuse,
+        entryVersionId: entry.versionId,
+        entryVersionNumber: entry.versionNumber,
+        entryCurrentVersionNumber: entry.currentVersionNumber,
+        entryAgentRunVersionId: entry.agentRunVersionId,
+        entryAgentRunVersionEntity: entry.agentRunVersionEntity,
+        entryContentMode: entry.contentMode,
+        entityName: versionEntity ? versionEntity.Name : null,
+        entityComments: versionEntity ? versionEntity.Comments : null,
+        entityContent: versionEntity ? versionEntity.Content : null,
+        entityConfiguration: versionEntity ? versionEntity.Configuration : null,
+        entityContentHash: versionEntity ? versionEntity.ContentHash : null,
+        entityContentSizeBytes: versionEntity ? versionEntity.ContentSizeBytes : null,
+        entityContentMode: versionEntity ? versionEntity.ContentMode : null,
+        entityFileID: versionEntity ? versionEntity.FileID : null,
+        entityMimeType: versionEntity ? versionEntity.MimeType : null,
+        entityFileName: versionEntity ? versionEntity.FileName : null,
+      };
+
       if (!versionEntity) {
         versionEntity = await this.provider.GetEntityObject<MJArtifactVersionEntity>(
           'MJ: Artifact Versions',
@@ -1770,24 +1861,17 @@ export class ArtifactToolManager {
         entry.agentRunVersionId = versionEntity.ID;
         entry.agentRunVersionEntity = versionEntity;
 
-        if (
-          previousReusedFileId &&
-          uploadedFileId &&
-          !UUIDsEqual(previousReusedFileId, uploadedFileId) &&
-          this.provider &&
-          this.contextUser
-        ) {
-          try {
-            const oldFile = await this.provider.GetEntityObject<MJFileEntity>('MJ: Files', this.contextUser);
-            if (await oldFile.Load(previousReusedFileId)) {
-              await oldFile.Delete();
-            }
-          } catch {
-            // best-effort orphan cleanup
-          }
-        }
+        const supersededFileId =
+          previousReusedFileId && uploadedFileId && !UUIDsEqual(previousReusedFileId, uploadedFileId)
+            ? previousReusedFileId
+            : null;
 
-        return { persisted: true };
+        return {
+          persisted: true,
+          versionEntity,
+          supersededFileId,
+          rollbackSnapshot,
+        };
       }
 
       // If Save() returned false, check whether a concurrent human version was saved in the meantime
@@ -1803,6 +1887,152 @@ export class ArtifactToolManager {
       const msg = err instanceof Error ? err.message : String(err);
       LogError(`ArtifactToolManager: failed to persist version for artifact '${entry.artifactId}': ${msg}`);
       return { persisted: false, errorMessage: msg };
+    }
+  }
+
+  /**
+   * Rolls back a persisted version record and reverts manager entry state when a deferred commit fails.
+   */
+  private async rollbackPersistedArtifactVersionMutation(
+    entry: ArtifactEntry,
+    outcome: PersistMutationOutcome,
+    previousContentStr?: string,
+  ): Promise<void> {
+    const snapshot = outcome.rollbackSnapshot;
+    if (!snapshot) {
+      return;
+    }
+
+    entry.versionId = snapshot.entryVersionId;
+    entry.versionNumber = snapshot.entryVersionNumber;
+    entry.currentVersionNumber = snapshot.entryCurrentVersionNumber;
+    entry.agentRunVersionId = snapshot.entryAgentRunVersionId;
+    entry.agentRunVersionEntity = snapshot.entryAgentRunVersionEntity;
+    entry.contentMode = snapshot.entryContentMode;
+
+    const versionEntity = outcome.versionEntity;
+    if (!versionEntity) {
+      return;
+    }
+
+    if (!snapshot.hadExistingAgentRunVersion) {
+      let deleted = false;
+      try {
+        if (typeof versionEntity.Delete === 'function') {
+          deleted = await versionEntity.Delete();
+        }
+      } catch (delErr) {
+        LogError(
+          `ArtifactToolManager: exception deleting rolled-back version record '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
+            delErr instanceof Error ? delErr.message : String(delErr)
+          }`,
+        );
+        deleted = false;
+      }
+
+      if (!deleted) {
+        LogError(
+          `ArtifactToolManager: failed to delete rolled-back version record '${versionEntity.ID}' for artifact '${entry.artifactId}'; restoring previous content`,
+        );
+        const prevContent = previousContentStr ?? '';
+        versionEntity.Content = prevContent;
+        versionEntity.ContentHash = createHash('sha256').update(prevContent, 'utf8').digest('hex');
+        versionEntity.ContentSizeBytes = Buffer.byteLength(prevContent, 'utf8');
+        try {
+          await versionEntity.Save();
+        } catch (saveErr) {
+          LogError(
+            `ArtifactToolManager: exception restoring previous content on version '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
+              saveErr instanceof Error ? saveErr.message : String(saveErr)
+            }`,
+          );
+        }
+      }
+
+      if (versionEntity.FileID) {
+        await this.deleteUnreferencedArtifactFile(versionEntity.FileID);
+      }
+    } else {
+      versionEntity.Name = snapshot.entityName ?? '';
+      versionEntity.Comments = snapshot.entityComments;
+      versionEntity.Content = snapshot.entityContent;
+      versionEntity.Configuration = snapshot.entityConfiguration;
+      versionEntity.ContentHash = snapshot.entityContentHash;
+      versionEntity.ContentSizeBytes = snapshot.entityContentSizeBytes;
+      versionEntity.ContentMode = snapshot.entityContentMode ?? 'Text';
+      versionEntity.FileID = snapshot.entityFileID;
+      versionEntity.MimeType = snapshot.entityMimeType;
+      versionEntity.FileName = snapshot.entityFileName;
+
+      try {
+        const reverted = await versionEntity.Save();
+        if (!reverted) {
+          LogError(
+            `ArtifactToolManager: failed to revert reused version '${versionEntity.ID}' fields for artifact '${entry.artifactId}'`,
+          );
+        }
+      } catch (revErr) {
+        LogError(
+          `ArtifactToolManager: exception reverting reused version '${versionEntity.ID}' fields for artifact '${entry.artifactId}': ${
+            revErr instanceof Error ? revErr.message : String(revErr)
+          }`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Safely deletes an unreferenced file record from storage after verifying no MJ: Artifact Versions reference it.
+   */
+  private async deleteUnreferencedArtifactFile(fileId: string): Promise<void> {
+    if (!this.provider || !this.contextUser) {
+      return;
+    }
+    const trimmedFileId = (fileId ?? '').trim();
+    if (!IsValidUUID(trimmedFileId)) {
+      LogError(`ArtifactToolManager: refusing to delete artifact file — '${fileId}' is not a valid UUID`);
+      return;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.provider);
+      const refParams = {
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `FileID = '${EscapeSQLString(trimmedFileId)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'simple' as const,
+      };
+      const refRes = await rv.RunView<{ ID: string }>(refParams, this.contextUser);
+      if (!refRes.Success) {
+        LogError(
+          `ArtifactToolManager: failed checking MJ: Artifact Versions references before deleting FileID '${trimmedFileId}': ${
+            refRes.ErrorMessage || 'RunView failed'
+          }`,
+        );
+        return;
+      }
+      if ((refRes.Results?.length ?? 0) > 0) {
+        return;
+      }
+
+      const oldFile = await this.provider.GetEntityObject<MJFileEntity>('MJ: Files', this.contextUser);
+      if (await oldFile.Load(trimmedFileId)) {
+        const deleted = await oldFile.Delete();
+        if (!deleted) {
+          LogError(
+            `ArtifactToolManager: failed to delete superseded MJ: Files record '${trimmedFileId}': ${
+              oldFile.LatestResult?.CompleteMessage || 'Delete() returned false'
+            }`,
+          );
+        }
+      }
+    } catch (err) {
+      LogError(
+        `ArtifactToolManager: exception deleting superseded MJ: Files record '${trimmedFileId}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
@@ -1825,6 +2055,8 @@ export class ArtifactToolManager {
         alphaId: a.alphaId,
         name: a.name,
         typeName: a.typeName,
+        artifactId: a.artifactId,
+        versionNumber: a.versionNumber,
       })),
       resultCount: this.toolResults.length,
     };

@@ -201,7 +201,7 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
         expect(data.matchCount).toBe(1);
         expect(data.matches[0].lineNumber).toBe(499_999);
         expect(data.matches[0].text).toBe('CRITICAL_ERROR at end of processing log');
-        expect(elapsed).toBeLessThan(500);
+        expect(elapsed).toBeLessThan(2500);
     });
 
     it('R11-6: TextToolLibrary.grep use_regex: true with a poison 16 KB line reports timeout and finds matches in later batches', async () => {

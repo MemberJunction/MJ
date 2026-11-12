@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, ViewEncapsulation, inject } from '@angular/core';
-import { CompositeKey, DataSnapshot, UserInfo } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
@@ -234,8 +234,10 @@ export class ArtifactResource extends BaseResourceComponent {
         if (resolved && typeof resolved.CanEdit === 'boolean') {
           return resolved;
         }
-      } catch {
-        // Fall back to in-process ArtifactPermissionEngine when server GQL is unavailable
+      } catch (err) {
+        LogError(
+          `ArtifactResourceComponent: ResolveArtifactPermissions GraphQL query failed for '${targetArtifactId}', falling back to ArtifactPermissionEngine: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 

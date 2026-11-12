@@ -3576,7 +3576,7 @@ export class SlideDeckArtifactViewerComponent
 
   private notifyError(message: string): void {
     this.StatusBannerMessage = message;
-    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.notificationService?.CreateSimpleNotification(message, 'error', 4000);
     this.cdr.markForCheck();
   }
 
@@ -4223,42 +4223,34 @@ export class SlideDeckArtifactViewerComponent
   }
 
   private restoreWorkspacePreferences(): void {
-    try {
-      const artifactId = this.artifactVersion?.ArtifactID || 'default';
-      const raw = UserInfoEngine.Instance.GetSetting(
-        `${SlideDeckArtifactViewerComponent.USER_SETTING_PREFIX}${artifactId}`,
-      );
-      if (raw) {
-        const parsed = SafeJSONParse<{
-          showFilmstrip?: boolean;
-          rightDrawerTab?: SlideRightDrawerTab;
-        }>(raw);
-        if (parsed) {
-          if (typeof parsed.showFilmstrip === 'boolean') {
-            this.ShowFilmstrip = parsed.showFilmstrip;
-          }
-          if (parsed.rightDrawerTab) {
-            this.RightDrawerTab = parsed.rightDrawerTab;
-          }
+    const artifactId = this.artifactVersion?.ArtifactID || 'default';
+    const raw = UserInfoEngine.Instance.GetSetting(
+      `${SlideDeckArtifactViewerComponent.USER_SETTING_PREFIX}${artifactId}`,
+    );
+    if (raw) {
+      const parsed = SafeJSONParse<{
+        showFilmstrip?: boolean;
+        rightDrawerTab?: SlideRightDrawerTab;
+      }>(raw);
+      if (parsed) {
+        if (typeof parsed.showFilmstrip === 'boolean') {
+          this.ShowFilmstrip = parsed.showFilmstrip;
+        }
+        if (parsed.rightDrawerTab) {
+          this.RightDrawerTab = parsed.rightDrawerTab;
         }
       }
-    } catch {
-      // Ignore when UserInfoEngine is not initialized in isolated unit tests
     }
   }
 
   private persistWorkspacePreferences(): void {
-    try {
-      const artifactId = this.artifactVersion?.ArtifactID || 'default';
-      void UserInfoEngine.Instance.SetSettingDebounced(
-        `${SlideDeckArtifactViewerComponent.USER_SETTING_PREFIX}${artifactId}`,
-        JSON.stringify({
-          showFilmstrip: this.ShowFilmstrip,
-          rightDrawerTab: this.RightDrawerTab,
-        }),
-      );
-    } catch {
-      // Ignore when UserInfoEngine is not initialized in isolated unit tests
-    }
+    const artifactId = this.artifactVersion?.ArtifactID || 'default';
+    void UserInfoEngine.Instance.SetSettingDebounced(
+      `${SlideDeckArtifactViewerComponent.USER_SETTING_PREFIX}${artifactId}`,
+      JSON.stringify({
+        showFilmstrip: this.ShowFilmstrip,
+        rightDrawerTab: this.RightDrawerTab,
+      }),
+    );
   }
 }

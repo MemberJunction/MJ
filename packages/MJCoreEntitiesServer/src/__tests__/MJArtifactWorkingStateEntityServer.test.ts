@@ -586,14 +586,14 @@ describe('MJArtifactWorkingStateEntityServer & ArtifactWorkingStatePostRunViewHo
         providerSpy.mockRestore();
     });
 
-    it('skips PreRunView and PostRunView permission hooks when params are marked via MarkInternalArtifactPermissionQuery', async () => {
+    it('skips PreRunView and PostRunView permission hooks when params are marked via MarkPermissionResolutionRecursionGuard', async () => {
         const resolveSpy = vi.spyOn(ArtifactPermissionEngine.Instance, 'ResolvePermissions');
         const internalParams: RunViewParams = {
             EntityName: 'MJ: Artifact Working States',
             Fields: ['ID'],
             ResultType: 'simple'
         };
-        ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(internalParams);
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(internalParams);
         const clonedParams: RunViewParams = { ...internalParams };
 
         ArtifactWorkingStatePreRunViewHook(clonedParams, devUser);

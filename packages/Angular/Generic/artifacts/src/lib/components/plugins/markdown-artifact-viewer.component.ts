@@ -4242,14 +4242,10 @@ export class MarkdownArtifactViewerComponent
 
   public ToggleOutlineRail(): void {
     this.ShowOutlineRail = !this.ShowOutlineRail;
-    try {
-      void UserInfoEngine.Instance.SetSettingDebounced(
-        MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
-        String(this.ShowOutlineRail),
-      );
-    } catch {
-      // Ignore if UserInfoEngine is not initialized in unit tests
-    }
+    void UserInfoEngine.Instance.SetSettingDebounced(
+      MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
+      String(this.ShowOutlineRail),
+    );
     this.cdr.markForCheck();
   }
 
@@ -5563,54 +5559,46 @@ export class MarkdownArtifactViewerComponent
   private loadCollapsedStateFromUserSettings(): void {
     this.userCollapsedBlockOverrides.clear();
     this.collapsedHeadingIds.clear();
-    try {
-      const outlinePref = UserInfoEngine.Instance.GetSetting(
-        MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
-      );
-      if (outlinePref === 'true' || outlinePref === 'false') {
-        this.ShowOutlineRail = outlinePref === 'true';
-      }
+    const outlinePref = UserInfoEngine.Instance.GetSetting(
+      MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
+    );
+    if (outlinePref === 'true' || outlinePref === 'false') {
+      this.ShowOutlineRail = outlinePref === 'true';
+    }
 
-      const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
-      if (!raw) {
-        return;
+    const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
+    if (!raw) {
+      return;
+    }
+    const parsed = SafeJSONParse<{
+      blocks?: Record<string, boolean>;
+      headings?: string[];
+    }>(raw);
+    if (!parsed) {
+      return;
+    }
+    if (parsed.blocks && typeof parsed.blocks === 'object') {
+      for (const [k, v] of Object.entries(parsed.blocks)) {
+        this.userCollapsedBlockOverrides.set(k, Boolean(v));
       }
-      const parsed = SafeJSONParse<{
-        blocks?: Record<string, boolean>;
-        headings?: string[];
-      }>(raw);
-      if (!parsed) {
-        return;
+    }
+    if (Array.isArray(parsed.headings)) {
+      for (const h of parsed.headings) {
+        this.collapsedHeadingIds.add(String(h));
       }
-      if (parsed.blocks && typeof parsed.blocks === 'object') {
-        for (const [k, v] of Object.entries(parsed.blocks)) {
-          this.userCollapsedBlockOverrides.set(k, Boolean(v));
-        }
-      }
-      if (Array.isArray(parsed.headings)) {
-        for (const h of parsed.headings) {
-          this.collapsedHeadingIds.add(String(h));
-        }
-      }
-    } catch {
-      // Ignore if UserInfoEngine is not initialized in unit tests
     }
   }
 
   private persistCollapsedStateToUserSettings(): void {
-    try {
-      const blocksObj: Record<string, boolean> = {};
-      for (const [k, v] of this.userCollapsedBlockOverrides.entries()) {
-        blocksObj[k] = v;
-      }
-      const payload = JSON.stringify({
-        blocks: blocksObj,
-        headings: Array.from(this.collapsedHeadingIds),
-      });
-      UserInfoEngine.Instance.SetSettingDebounced(this.getCollapsedBlocksUserSettingKey(), payload);
-    } catch {
-      // Ignore if UserInfoEngine is not initialized in unit tests
+    const blocksObj: Record<string, boolean> = {};
+    for (const [k, v] of this.userCollapsedBlockOverrides.entries()) {
+      blocksObj[k] = v;
     }
+    const payload = JSON.stringify({
+      blocks: blocksObj,
+      headings: Array.from(this.collapsedHeadingIds),
+    });
+    UserInfoEngine.Instance.SetSettingDebounced(this.getCollapsedBlocksUserSettingKey(), payload);
   }
 
   // =========================================================================
@@ -7617,7 +7605,7 @@ export class MarkdownArtifactViewerComponent
 
   private notifyError(message: string): void {
     this.StatusBannerMessage = message;
-    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.notificationService?.CreateSimpleNotification(message, 'error', 4000);
     this.cdr.markForCheck();
   }
 

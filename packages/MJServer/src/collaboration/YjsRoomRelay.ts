@@ -18,7 +18,8 @@ export interface YjsRelayMessage {
         | 'permission-revoked'
         | 'sync-request'
         | 'sync-state'
-        | 'version-saved';
+        | 'version-saved'
+        | 'presence-ping';
     /** Base64-encoded binary payload (Yjs update/state-vector bytes or encoded awareness update). */
     PayloadBase64: string;
     /** Optional user ID that authored the update or whose permissions changed. */
@@ -52,8 +53,9 @@ export interface IYjsRoomRelay {
 
     /**
      * Publishes a room event to all other subscribed server instances.
+     * Returns the number of peer subscribers reached if known, or void.
      */
-    PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<void>;
+    PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<number | void>;
 
     /**
      * Cleanly releases all active subscriptions and underlying transport resources.
@@ -64,7 +66,7 @@ export interface IYjsRoomRelay {
      * Optional probe checking if at least one peer server instance is currently subscribed
      * to `artifactId`.
      */
-    HasRoomPeers?(artifactId: string): boolean;
+    HasRoomPeers?(artifactId: string): boolean | Promise<boolean>;
 }
 
 /**
@@ -113,16 +115,18 @@ export class InMemoryYjsRelayBus {
         return false;
     }
 
-    public async Publish(message: YjsRelayMessage): Promise<void> {
+    public async Publish(message: YjsRelayMessage): Promise<number> {
         const key = message.ArtifactID.trim().toLowerCase();
         const set = this._handlersByRoom.get(key);
         if (!set || set.size === 0) {
-            return;
+            return 0;
         }
+        let invokedCount = 0;
         for (const entry of set) {
             if (entry.InstanceID === message.OriginInstanceID) {
                 continue;
             }
+            invokedCount++;
             try {
                 await entry.Handler(message);
             } catch (err) {
@@ -133,6 +137,7 @@ export class InMemoryYjsRelayBus {
                 );
             }
         }
+        return invokedCount;
     }
 }
 
@@ -163,8 +168,8 @@ export class InMemoryYjsRoomRelay implements IYjsRoomRelay {
         };
     }
 
-    public async PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<void> {
-        await this._bus.Publish({
+    public async PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<number> {
+        return await this._bus.Publish({
             ...message,
             OriginInstanceID: this.InstanceID
         });
@@ -186,6 +191,7 @@ export class RedisYjsRoomRelay implements IYjsRoomRelay {
     public readonly InstanceID: string;
     private readonly _redisProvider: RedisLocalStorageProvider;
     private readonly _unsubscribers = new Set<() => void>();
+    private readonly _subscribedChannelCounts = new Map<string, number>();
 
     constructor(redisProvider: RedisLocalStorageProvider, instanceId?: string) {
         this.InstanceID = instanceId ?? uuidv4();
@@ -196,12 +202,33 @@ export class RedisYjsRoomRelay implements IYjsRoomRelay {
         return `yjs:room:${artifactId.trim().toLowerCase()}`;
     }
 
+    public async HasRoomPeers(artifactId: string): Promise<boolean> {
+        if (!this._redisProvider.IsPubSubEnabled) {
+            return false;
+        }
+        const channel = RedisYjsRoomRelay.channelForArtifact(artifactId);
+        const totalSubscribers = await this._redisProvider.PublishMessageAndWait(
+            channel,
+            JSON.stringify({
+                ArtifactID: artifactId,
+                OriginInstanceID: this.InstanceID,
+                MessageType: 'presence-ping',
+                PayloadBase64: ''
+            } satisfies YjsRelayMessage)
+        );
+        const selfSubscribed = (this._subscribedChannelCounts.get(channel) ?? 0) > 0 ? 1 : 0;
+        return totalSubscribers - selfSubscribed > 0;
+    }
+
     public async SubscribeRoom(artifactId: string, handler: YjsRelayMessageHandler): Promise<() => void> {
         const channel = RedisYjsRoomRelay.channelForArtifact(artifactId);
         const unsub = await this._redisProvider.SubscribeToChannel(channel, async (rawPayload: string) => {
             try {
                 const parsed = JSON.parse(rawPayload) as YjsRelayMessage;
                 if (!parsed || parsed.OriginInstanceID === this.InstanceID) {
+                    return;
+                }
+                if (parsed.MessageType === 'presence-ping') {
                     return;
                 }
                 await handler(parsed);
@@ -214,22 +241,37 @@ export class RedisYjsRoomRelay implements IYjsRoomRelay {
             }
         });
         this._unsubscribers.add(unsub);
+        this._subscribedChannelCounts.set(channel, (this._subscribedChannelCounts.get(channel) ?? 0) + 1);
+
+        let active = true;
         return () => {
+            if (!active) {
+                return;
+            }
+            active = false;
             unsub();
             this._unsubscribers.delete(unsub);
+            const current = (this._subscribedChannelCounts.get(channel) ?? 0) - 1;
+            if (current <= 0) {
+                this._subscribedChannelCounts.delete(channel);
+            } else {
+                this._subscribedChannelCounts.set(channel, current);
+            }
         };
     }
 
-    public async PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<void> {
+    public async PublishToRoom(message: Omit<YjsRelayMessage, 'OriginInstanceID'>): Promise<number> {
         if (!this._redisProvider.IsPubSubEnabled) {
-            return;
+            return 0;
         }
         const channel = RedisYjsRoomRelay.channelForArtifact(message.ArtifactID);
         const fullMessage: YjsRelayMessage = {
             ...message,
             OriginInstanceID: this.InstanceID
         };
-        await this._redisProvider.PublishMessageAndWait(channel, JSON.stringify(fullMessage));
+        const totalSubscribers = await this._redisProvider.PublishMessageAndWait(channel, JSON.stringify(fullMessage));
+        const selfSubscribed = (this._subscribedChannelCounts.get(channel) ?? 0) > 0 ? 1 : 0;
+        return Math.max(0, totalSubscribers - selfSubscribed);
     }
 
     public async Shutdown(): Promise<void> {
@@ -237,5 +279,6 @@ export class RedisYjsRoomRelay implements IYjsRoomRelay {
             unsub();
         }
         this._unsubscribers.clear();
+        this._subscribedChannelCounts.clear();
     }
 }

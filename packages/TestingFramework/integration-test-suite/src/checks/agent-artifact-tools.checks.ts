@@ -391,7 +391,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip();
             // XML artifact type has no ToolLibraryClass → composite chain resolves to TextToolLibrary; grep works.
-            const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern }, 'AT6 XML grep');
+            const tr = await interrogate(ctx, fx, 'XML', 'application/xml', ASSET_XML, false, 'grep', { pattern: MANIFEST_EXPECTED.xml.grepPattern, use_regex: true }, 'AT6 XML grep');
             const rawData = tr.result.data;
             const matches = Array.isArray(rawData)
                 ? rawData
@@ -460,7 +460,12 @@ export const ArtifactToolsChecks: NamedCheck[] = [
                 'AT9 large-text'
             );
             const tr = await readToolResult(ctx, runId);
-            const matches = tr && Array.isArray(tr.result.data) ? (tr.result.data as unknown[]) : [];
+            const rawData = tr?.result.data;
+            const matches = Array.isArray(rawData)
+                ? rawData
+                : rawData && typeof rawData === 'object' && Array.isArray(asRecord(rawData).matches)
+                  ? (asRecord(rawData).matches as Array<{ lineNumber?: number; text?: string }>)
+                  : [];
             Assert(matches.length === 1, 'AT9: the tool did not reach into the large (tools-only) artifact content');
 
             // The 60k body must NOT have been inlined into the prompt (tools-only delivery for large artifacts).

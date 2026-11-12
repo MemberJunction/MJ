@@ -186,7 +186,7 @@ async function fetchVersionArtifactIdsByIds(
             ResultType: 'simple'
         };
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.add(lookupParams);
-        ArtifactPermissionEngine.MarkInternalArtifactPermissionQuery(lookupParams);
+        ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(lookupParams);
         const res = await rv.RunView<{ ID?: string; ArtifactID?: string }>(
             lookupParams,
             systemUser
@@ -245,7 +245,7 @@ export const ArtifactVersionPreRunViewHook: PreRunViewHook = (
     if (
         !params ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
-        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
+        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions' ||
         isServerSystemUser(contextUser) ||
         (!contextUser && provider !== null && provider.ProviderType !== 'Database')
@@ -276,7 +276,7 @@ export const ArtifactVersionPostRunViewHook: PostRunViewHook = async (
     if (
         !results?.Success ||
         INTERNAL_VERSION_SECURITY_QUERY_PARAMS.has(params) ||
-        ArtifactPermissionEngine.IsInternalArtifactPermissionQuery(params) ||
+        ArtifactPermissionEngine.IsPermissionResolutionRecursionGuard(params) ||
         resolveTargetEntityName(params) !== 'MJ: Artifact Versions'
     ) {
         return results;

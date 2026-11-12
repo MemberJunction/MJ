@@ -2007,6 +2007,14 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     private workbooksWithVirtualAxisIds = new WeakSet<WorkbookSpec>();
     private unimplementedResultCells = new WeakSet<SpreadsheetCellSpec>();
     private monotonicIdCounter = 0;
+    private _lastEvaluatedFormulaCount = 0;
+
+    /**
+     * Number of cell formulas evaluated in the most recent `EvaluateWorkbook` or incremental recalculation pass.
+     */
+    public get LastEvaluatedFormulaCount(): number {
+        return this._lastEvaluatedFormulaCount;
+    }
 
     protected constructor() {
         super();
@@ -4439,6 +4447,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
      * `ComputedValue` (or `'#MJ_PENDING!'` until `EvaluateMjCustomFunctions` runs with a `UserInfo`).
      */
     public EvaluateWorkbook(workbook: WorkbookSpec): void {
+        this._lastEvaluatedFormulaCount = 0;
         this.bindSheetsToWorkbook(workbook);
 
         for (const sheet of workbook.Worksheets) {
@@ -4498,6 +4507,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             this.EvaluateWorkbook(workbook);
             return;
         }
+
+        this._lastEvaluatedFormulaCount = 0;
 
         const allSeedAddrs = extraDirtyAddrs.length > 0 ? [canonicalAddr, ...extraDirtyAddrs] : [canonicalAddr];
         const dirtySet = new Set<string>();
@@ -5041,6 +5052,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 }
 
                 const ast = dag.astByCellKey.get(top.key) ?? compileFormulaAstCached(cell.Formula.trim().slice(1).trim());
+                this._lastEvaluatedFormulaCount++;
                 let computed: SpreadsheetCellValue;
                 try {
                     computed = this.evalAstNode(
@@ -10078,9 +10090,12 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             if (rawFormulaBody.length > 0) {
                 const prefixedFormula = prefixOoxmlFutureFunctions(rawFormulaBody);
                 const isSpillDynArray = isSpillDynamicArrayFormulaBody(rawFormulaBody);
-                if (isSpillDynArray) {
+                const hasRangeRef = /(?:\$?[A-Z]{1,3}\$?\d+\s*:\s*\$?[A-Z]{1,3}\$?\d+|\$?[A-Z]{1,3}\s*:\s*\$?[A-Z]{1,3}|\$?\d+\s*:\s*\$?\d+)/i.test(rawFormulaBody);
+                if (isSpillDynArray || (Boolean(orig?.cmAttr) && orig?.fType === 'array' && hasRangeRef)) {
                     const cmVal = String(dynamicArrayCmIndex);
                     cExtraMetaAttrs += ` cm="${this.escapeXml(cmVal)}"`;
+                    formulaXml = `<f t="array" ref="${this.escapeXml(cell.Address)}">${this.escapeXml(prefixedFormula)}</f>`;
+                } else if (orig?.fType === 'array' && !orig?.cmAttr && hasRangeRef) {
                     formulaXml = `<f t="array" ref="${this.escapeXml(cell.Address)}">${this.escapeXml(prefixedFormula)}</f>`;
                 } else {
                     formulaXml = `<f>${this.escapeXml(prefixedFormula)}</f>`;

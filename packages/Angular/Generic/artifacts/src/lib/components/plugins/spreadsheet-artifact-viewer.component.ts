@@ -2481,7 +2481,7 @@ export class SpreadsheetArtifactViewerComponent
 
   private notifyError(message: string): void {
     this.StatusBannerMessage = message;
-    this.notificationService?.CreateSimpleNotification?.(message, 'error', 4000);
+    this.notificationService?.CreateSimpleNotification(message, 'error', 4000);
     this.cdr.markForCheck();
   }
 

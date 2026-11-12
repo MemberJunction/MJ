@@ -14,7 +14,7 @@ import {
     MJAIAgentRunEntityExtended
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { EntityInfo, IMetadataProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { Base64ToBytes, BytesToBase64, GetGlobalObjectStore, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -85,6 +85,7 @@ import {
     COLLAB_SECRET_UNCONFIGURED_CODE,
     CollaborationControlFrame,
     CollaborationPermissionStatusFrame,
+    type CollaborationRoom,
     WS_CLOSE_FORBIDDEN,
     YJS_MESSAGE_AWARENESS,
     YJS_MESSAGE_CONTROL,
@@ -254,7 +255,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
     function createMockProvider(options?: {
         onBeforeVersionSave?: (draft: MockStoredVersion) => Promise<boolean>;
-    }): IMetadataProvider {
+    }): IMetadataProvider & IRunViewProvider {
         const runViewFn = async (params: RunViewParams) => {
             const filter = typeof params.ExtraFilter === 'string' ? params.ExtraFilter : '';
             const artMatch = filter.match(/\bArtifactID='([^']+)'/);
@@ -297,15 +298,15 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             return { Success: true, Results: [], TotalRowCount: 0 };
         };
 
-        const mockProvider: Partial<IMetadataProvider> = {
-            RunView: runViewFn as IMetadataProvider['RunView'],
+        const mockProvider: Partial<IMetadataProvider & IRunViewProvider> = {
+            RunView: runViewFn as IRunViewProvider['RunView'],
             RunViews: (async (paramsArray: RunViewParams[]) => {
                 const results = [];
                 for (const p of paramsArray) {
                     results.push(await runViewFn(p));
                 }
                 return results;
-            }) as IMetadataProvider['RunViews'],
+            }) as IRunViewProvider['RunViews'],
             GetEntityObject: (async (entityName: string) => {
                 if (entityName === 'MJ: Artifact Working States') {
                     const record: MockStoredWorkingState & {
@@ -432,7 +433,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             }) as IMetadataProvider['GetEntityObject']
         };
 
-        return mockProvider as IMetadataProvider;
+        return mockProvider as IMetadataProvider & IRunViewProvider;
     }
 
     beforeEach(async () => {
@@ -2162,7 +2163,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const agentsSpy = vi
             .spyOn(AIEngine.Instance, 'Agents', 'get')
             .mockReturnValue([fakeSkipAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
         const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
             success: true,
             payload: {
@@ -2583,7 +2584,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const agentsSpy = vi
             .spyOn(AIEngine.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
 
         try {
             // 1. API key scope enforcement: 'artifact:comment' key may comment, but 'edit' mode requires 'artifact:edit'
@@ -3126,7 +3127,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const agentsSpy = vi
             .spyOn(AIEngine.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
 
         const editorCtx: AppContext = {
             dataSource: {} as AppContext['dataSource'],
@@ -4154,7 +4155,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             const agentsSpy = vi
                 .spyOn(AIEngine.Instance, 'Agents', 'get')
                 .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-            const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+            const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
             const runCommentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValueOnce({
                 success: true,
                 payload: { reply: 'Reviewed note.' },
@@ -4653,7 +4654,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     return baseRelayADelta.InstanceID;
                 },
                 PublishToRoom: async (msg) => {
-                    publishedByA.push(msg);
+                    publishedByA.push({ ...msg, OriginInstanceID: baseRelayADelta.InstanceID });
                     await baseRelayADelta.PublishToRoom(msg);
                 },
                 SubscribeRoom: (artId, handler) =>
@@ -5268,7 +5269,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const agentsSpy = vi
             .spyOn(AIEngine.Instance, 'Agents', 'get')
             .mockReturnValue([activeAgent as MJAIAgentEntityExtended]);
-        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockReturnValue(true);
+        const canRunSpy = vi.spyOn(AIEngine.Instance, 'CanUserRunAgent').mockResolvedValue(true);
         const runConflictSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockImplementationOnce(async () => {
             // Concurrent co-author rewrites the exact anchored selection while the agent is thinking
             mentionRoom!.Doc.transact(() => {
@@ -5741,7 +5742,6 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 await relay2.PublishToRoom({
                     ArtifactID: syncArtId,
                     MessageType: 'sync-request',
-                    OriginInstanceID: relay2.InstanceID,
                     PayloadBase64: BytesToBase64(new Uint8Array([0x80]))
                 });
                 await new Promise((r) => setTimeout(r, 25));
@@ -5765,7 +5765,6 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     await relayStale.PublishToRoom({
                         ArtifactID: syncArtId,
                         MessageType: 'sync-state',
-                        OriginInstanceID: relayStale.InstanceID,
                         PayloadBase64: emptyStateB64
                     });
                 }
@@ -6085,7 +6084,6 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             await relayA.PublishToRoom({
                 ArtifactID: multiArtId,
                 MessageType: 'version-saved',
-                OriginInstanceID: relayA.InstanceID,
                 PayloadBase64: JSON.stringify({ isRestore: true }),
                 VersionID: 'ver-r9-m3',
                 VersionNumber: 3
@@ -6215,7 +6213,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     Content: updated1
                 }
             });
-            await preview1!.commit?.({ versionId: 'ver-agent-2', versionNumber: 2 });
+            if (preview1 && 'commit' in preview1 && preview1.commit) {
+                await preview1.commit({ versionId: 'ver-agent-2', versionNumber: 2 });
+            }
 
             expect(await server.GetRoomContent(agentArtId, editorUser)).toBe(updated1);
             expect(agentRoom!.DirtyVersion).toBe(false);
@@ -6244,7 +6244,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                     Content: updated2
                 }
             });
-            await preview2!.commit?.({ versionId: 'ver-agent-2', versionNumber: 2 });
+            if (preview2 && 'commit' in preview2 && preview2.commit) {
+                await preview2.commit({ versionId: 'ver-agent-2', versionNumber: 2 });
+            }
 
             expect(await server.GetRoomContent(agentArtId, editorUser)).toBe(updated2);
             expect(agentRoom!.DirtyVersion).toBe(false);
@@ -6570,6 +6572,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
     it('R11-1 / N6: independent out-of-band restore on two nodes with suppressed sync-update/state converges with zero duplication', async () => {
         class R11NodeA extends ArtifactCollaborationServer {
+            public static Create(): R11NodeA {
+                return new this();
+            }
             public ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
@@ -6578,6 +6583,9 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
             }
         }
         class R11NodeB extends ArtifactCollaborationServer {
+            public static Create(): R11NodeB {
+                return new this();
+            }
             public ReconcileOob(
                 room: CollaborationRoom,
                 version: { ID: string; VersionNumber: number; Content?: string | null; Configuration?: string | null }
@@ -6589,8 +6597,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const bus = new InMemoryYjsRelayBus();
         const relayA = new InMemoryYjsRoomRelay(bus, 'r11-node-a');
         const relayB = new InMemoryYjsRoomRelay(bus, 'r11-node-b');
-        const nodeA = new R11NodeA();
-        const nodeB = new R11NodeB();
+        const nodeA = R11NodeA.Create();
+        const nodeB = R11NodeB.Create();
         nodeA.SetMetadataProviderOverride(createMockProvider());
         nodeB.SetMetadataProviderOverride(createMockProvider());
         nodeA.SetRoomRelay(relayA);
@@ -6671,14 +6679,22 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     });
 
     it('R11-2 / N5: second node edits propagate to first node without pendingStructs clock stall', async () => {
-        class R11N5NodeA extends ArtifactCollaborationServer {}
-        class R11N5NodeB extends ArtifactCollaborationServer {}
+        class R11N5NodeA extends ArtifactCollaborationServer {
+            public static Create(): R11N5NodeA {
+                return new this();
+            }
+        }
+        class R11N5NodeB extends ArtifactCollaborationServer {
+            public static Create(): R11N5NodeB {
+                return new this();
+            }
+        }
 
         const bus = new InMemoryYjsRelayBus();
         const relayA = new InMemoryYjsRoomRelay(bus, 'r11-n5-node-a');
         const relayB = new InMemoryYjsRoomRelay(bus, 'r11-n5-node-b');
-        const nodeA = new R11N5NodeA();
-        const nodeB = new R11N5NodeB();
+        const nodeA = R11N5NodeA.Create();
+        const nodeB = R11N5NodeB.Create();
         nodeA.SetMetadataProviderOverride(createMockProvider());
         nodeB.SetMetadataProviderOverride(createMockProvider());
         nodeA.SetRoomRelay(relayA);
@@ -6726,6 +6742,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 VersionNumber: 2,
                 Name: 'Doc.md',
                 Content: v1Base,
+                ContentHash: '',
                 Description: 'Restored from Version 1',
                 UserID: secondEditorUser.ID
             };
@@ -6777,8 +6794,12 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
     it('R11-4: single-node RestoreToSavedVersion completes in < 100 ms without waiting 1.5s timeout', async () => {
         const bus = new InMemoryYjsRelayBus();
         const relay = new InMemoryYjsRoomRelay(bus, 'r11-single-node');
-        class SingleRestoreNode extends ArtifactCollaborationServer {}
-        const server = new SingleRestoreNode();
+        class SingleRestoreNode extends ArtifactCollaborationServer {
+            public static Create(): SingleRestoreNode {
+                return new this();
+            }
+        }
+        const server = SingleRestoreNode.Create();
         server.SetMetadataProviderOverride(createMockProvider());
         server.SetRoomRelay(relay);
 
@@ -6818,6 +6839,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 VersionNumber: 3,
                 Name: 'Fast.md',
                 Content: v1Text,
+                ContentHash: '',
                 Description: 'Restored from Version 1',
                 UserID: editorUser.ID
             };
@@ -6837,6 +6859,7 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
                 VersionNumber: 4,
                 Name: 'Fast.md',
                 Content: v1Text,
+                ContentHash: '',
                 Description: 'Restored from Version 1',
                 UserID: editorUser.ID
             };
@@ -6915,5 +6938,301 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(room!.DirtyVersion).toBe(true);
         expect(room!.LastCompactedStateVector).toBeNull();
         expect(room!.DirtyWorkingState).toBe(true);
+    });
+
+    it('R12-1 / S7c: deferCommit preview sees clean baseline, human edits room before MJ_ARTIFACT_VERSION_SAVED reconciles, then commit() returns hadConflict: true with rejected agent hunks', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const s7cArtId = 'e8120000-0000-4000-8000-000000000001';
+        permissionTable.set(s7cArtId, { CanRead: true, CanEdit: true });
+        const v1Base = 'Budget: $5k.\n';
+
+        versions.push({
+            ID: 'ver-s7c-1',
+            ArtifactID: s7cArtId,
+            VersionNumber: 1,
+            Name: 'Budget.md',
+            Content: v1Base,
+            ContentHash: 'hash-s7c-1',
+            UserID: editorUser.ID
+        });
+
+        const room = await server.GetOrCreateRoom(s7cArtId, editorUser);
+        expect(room).not.toBeNull();
+        expect(room!.BaseVersionID).toBe('ver-s7c-1');
+        expect(room!.BaseVersionText).toBe(v1Base);
+
+        const store = GetGlobalObjectStore();
+        const hook = store?.['___MJ_ARTIFACT_LIVE_MUTATION_HOOK___'] as
+            | ((evt: {
+                  artifactId: string;
+                  alphaId: string;
+                  previousContent?: string;
+                  updatedContent: string;
+                  tool: string;
+                  contextUser?: UserInfo;
+                  deferCommit?: boolean;
+              }) => Promise<{
+                  mergedContent?: string;
+                  hadConflict?: boolean;
+                  rejectedHunksCount?: number;
+                  rejectedAgentHunks?: Array<{
+                      BaseText: string;
+                      LiveText: string;
+                      RejectedIncomingText: string;
+                  }>;
+                  commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<{
+                      applied: boolean;
+                      mergedContent?: string;
+                      hadConflict?: boolean;
+                      rejectedHunksCount?: number;
+                      rejectedAgentHunks?: Array<{
+                          BaseText: string;
+                          LiveText: string;
+                          RejectedIncomingText: string;
+                      }>;
+                  }>;
+              } | void>)
+            | undefined;
+        expect(typeof hook).toBe('function');
+
+        const preview = await hook!({
+            artifactId: s7cArtId,
+            alphaId: 'A',
+            previousContent: v1Base,
+            updatedContent: 'Budget: $10k.\n',
+            tool: 'replace_section',
+            contextUser: editorUser,
+            deferCommit: true
+        });
+
+        expect(preview && 'mergedContent' in preview && preview.mergedContent).toBe('Budget: $10k.\n');
+        expect(preview && 'hadConflict' in preview && preview.hadConflict).toBe(false);
+
+        // Before commit is called, human edits room to "Budget: $25k.\n"
+        room!.Doc.transact(() => {
+            const yText = room!.Doc.getText('content');
+            yText.delete(0, yText.length);
+            yText.insert(0, 'Budget: $25k.\n');
+        }, 'human-edit');
+
+        // Out-of-band MJ_ARTIFACT_VERSION_SAVED event arrives saving v2 ("Budget: $10k.\n")
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: s7cArtId,
+                VersionID: 'ver-s7c-2',
+                VersionNumber: 2,
+                Content: 'Budget: $10k.\n',
+                UserID: editorUser.ID
+            }
+        });
+
+        // Human edit won the 3-way merge conflict in reconcileOutOfBandVersionIntoRoom
+        expect(await server.GetRoomContent(s7cArtId, editorUser)).toBe('Budget: $25k.\n');
+
+        // Now commit is called: commit() must report hadConflict: true, rejectedHunksCount: 1,
+        // rejectedAgentHunks containing "$10k", and mergedContent: "Budget: $25k.\n"
+        expect(preview && 'commit' in preview && preview.commit).toBeTruthy();
+        if (preview && 'commit' in preview && preview.commit) {
+            const commitRes = await preview.commit({ versionId: 'ver-s7c-2', versionNumber: 2 });
+            expect(commitRes.hadConflict).toBe(true);
+            expect(commitRes.rejectedHunksCount).toBe(1);
+            expect(commitRes.mergedContent).toBe('Budget: $25k.\n');
+            expect(JSON.stringify(commitRes.rejectedAgentHunks)).toContain('$10k');
+        }
+    });
+
+    it('R12-4: RestoreToSavedVersion with RedisYjsRoomRelay (fakeRedis) completes in < 100ms when peer count is 0', async () => {
+        const channelHandlers = new Map<string, Array<(payload: string) => Promise<void>>>();
+        const fakeRedis: Pick<
+            RedisLocalStorageProvider,
+            'IsPubSubEnabled' | 'SubscribeToChannel' | 'PublishMessageAndWait'
+        > = {
+            IsPubSubEnabled: true,
+            SubscribeToChannel: vi.fn(async (channel: string, cb: (payload: string) => Promise<void>) => {
+                const list = channelHandlers.get(channel) ?? [];
+                list.push(cb);
+                channelHandlers.set(channel, list);
+                return () => {
+                    const current = channelHandlers.get(channel) ?? [];
+                    const idx = current.indexOf(cb);
+                    if (idx >= 0) {
+                        current.splice(idx, 1);
+                    }
+                };
+            }),
+            PublishMessageAndWait: vi.fn(async (channel: string, message: string) => {
+                const list = channelHandlers.get(channel) ?? [];
+                for (const cb of list) {
+                    await cb(message);
+                }
+                return list.length;
+            })
+        };
+
+        const redisRelay = new RedisYjsRoomRelay(fakeRedis as RedisLocalStorageProvider, 'r12-redis-relay');
+        class R12RedisNode extends ArtifactCollaborationServer {
+            public static Create(): R12RedisNode {
+                return new this();
+            }
+        }
+        const server = R12RedisNode.Create();
+        server.SetMetadataProviderOverride(createMockProvider());
+        server.SetRoomRelay(redisRelay);
+
+        const r12ArtId = 'e8120000-0000-4000-8000-000000000002';
+        permissionTable.set(r12ArtId, { CanRead: true, CanEdit: true });
+        const v1Clean = '# Clean Spec\n\nOriginal text.\n';
+        const v2Dirty = '# Dirty Spec\n\nDirty text.\n';
+
+        versions.push(
+            {
+                ID: 'ver-r12-4-1',
+                ArtifactID: r12ArtId,
+                VersionNumber: 1,
+                Name: 'Spec.md',
+                Content: v1Clean,
+                ContentHash: 'hash-r12-4-1',
+                UserID: editorUser.ID
+            },
+            {
+                ID: 'ver-r12-4-2',
+                ArtifactID: r12ArtId,
+                VersionNumber: 2,
+                Name: 'Spec.md',
+                Content: v2Dirty,
+                ContentHash: 'hash-r12-4-2',
+                UserID: editorUser.ID
+            }
+        );
+
+        // Pre-seed persisted working state in DB so hasPersistedWorkingState returns true
+        const emptyDoc = new Y.Doc();
+        emptyDoc.getText('content').insert(0, v2Dirty);
+        workingStates.set(r12ArtId, {
+            ID: 'ws-r12-4-id',
+            ArtifactID: r12ArtId,
+            YjsState: BytesToBase64(Y.encodeStateAsUpdate(emptyDoc)),
+            LastModifiedByUserID: editorUser.ID
+        });
+        emptyDoc.destroy();
+
+        const v3Restore = {
+            ID: 'ver-r12-4-3',
+            ArtifactID: r12ArtId,
+            VersionNumber: 3,
+            Name: 'Spec.md',
+            Content: v1Clean,
+            ContentHash: '',
+            Description: 'Restored from Version 1',
+            UserID: editorUser.ID
+        };
+        versions.push(v3Restore);
+
+        try {
+            const start = Date.now();
+            await server.RestoreToSavedVersion(r12ArtId, v3Restore, editorUser);
+            const duration = Date.now() - start;
+
+            // Must complete in < 100ms (not waiting 1500ms sync waiter timeout)
+            expect(duration).toBeLessThan(100);
+            expect(await server.GetRoomContent(r12ArtId, editorUser)).toBe(v1Clean);
+        } finally {
+            await server.Shutdown();
+            await redisRelay.Shutdown();
+        }
+    });
+
+    it('R12-seed: Two ad-hoc isRestore calls with same version ID/number but different text produce distinct deterministic client IDs', () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtId = 'e8120000-0000-4000-8000-000000000003';
+        const doc1 = new Y.Doc();
+        const doc2 = new Y.Doc();
+
+        // Same version ID & version number, but differing text
+        const cidTextA = server.computeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
+        const cidTextB = server.computeDeterministicRestoreClientId(doc2, testArtId, 'ver-r12-seed', 1, 'Text variant B');
+        const cidTextA2 = server.computeDeterministicRestoreClientId(doc1, testArtId, 'ver-r12-seed', 1, 'Text variant A');
+
+        expect(cidTextA).not.toBe(cidTextB);
+        expect(cidTextA).toBe(cidTextA2);
+
+        // Ad-hoc calls without version ID
+        const cidAdhoc1 = server.computeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
+        const cidAdhoc2 = server.computeDeterministicRestoreClientId(doc2, testArtId, undefined, undefined, 'Adhoc Text 2');
+        const cidAdhoc1Dup = server.computeDeterministicRestoreClientId(doc1, testArtId, undefined, undefined, 'Adhoc Text 1');
+
+        expect(cidAdhoc1).not.toBe(cidAdhoc2);
+        expect(cidAdhoc1).toBe(cidAdhoc1Dup);
+
+        doc1.destroy();
+        doc2.destroy();
+    });
+
+    it('W3 & Whiteboard v1: Honor incoming array reorder when live kept base relative order, and support whiteboard v1 elements', () => {
+        const server = ArtifactCollaborationServer.Instance;
+
+        // W3: incoming reorder [3, 1, 2] honored when live kept base order [1, 2, 3] with an edit on 2
+        const baseJson = JSON.stringify({
+            items: [
+                { id: 'item-1', name: 'One' },
+                { id: 'item-2', name: 'Two' },
+                { id: 'item-3', name: 'Three' }
+            ]
+        }, null, 2);
+
+        const liveJson = JSON.stringify({
+            items: [
+                { id: 'item-1', name: 'One' },
+                { id: 'item-2', name: 'Two modified' },
+                { id: 'item-3', name: 'Three' }
+            ]
+        }, null, 2);
+
+        const incJson = JSON.stringify({
+            items: [
+                { id: 'item-3', name: 'Three' },
+                { id: 'item-1', name: 'One' },
+                { id: 'item-2', name: 'Two' }
+            ]
+        }, null, 2);
+
+        const merged = server.MergeConcurrentDocumentEdits(baseJson, liveJson, incJson);
+        const parsed = JSON.parse(merged) as { items: Array<{ id: string; name: string }> };
+
+        expect(parsed.items.map((it) => it.id)).toEqual(['item-3', 'item-1', 'item-2']);
+        expect(parsed.items.find((it) => it.id === 'item-2')?.name).toBe('Two modified');
+
+        // Whiteboard v1 root with 'elements' array and idCounter / zCounter
+        const baseWb1 = JSON.stringify({
+            elements: [
+                { id: 'shape-1', type: 'rect' }
+            ],
+            idCounter: 1,
+            zCounter: 1
+        });
+        const liveWb1 = JSON.stringify({
+            elements: [
+                { id: 'shape-1', type: 'rect', color: 'blue' }
+            ],
+            idCounter: 1,
+            zCounter: 1
+        });
+        const incWb1 = JSON.stringify({
+            elements: [
+                { id: 'shape-1', type: 'rect' },
+                { id: 'shape-5', type: 'circle' }
+            ],
+            idCounter: 1,
+            zCounter: 2
+        });
+
+        const mergedWb1 = server.MergeConcurrentDocumentEdits(baseWb1, liveWb1, incWb1);
+        const parsedWb1 = JSON.parse(mergedWb1) as { elements: Array<{ id: string }>; idCounter: number; zCounter: number };
+        expect(parsedWb1.idCounter).toBeGreaterThanOrEqual(5);
+        expect(parsedWb1.zCounter).toBe(2);
+        expect(parsedWb1.elements.length).toBe(2);
     });
 });

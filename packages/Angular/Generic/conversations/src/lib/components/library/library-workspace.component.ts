@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { CompositeKey, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   FileStorageEngineBase,
@@ -2431,34 +2431,30 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   private restoreUserPreferences(): void {
-    try {
-      const mode = UserInfoEngine.Instance.GetSetting(SETTING_SURFACE_MODE);
-      if (mode === 'hub' || mode === 'navigator') {
-        this.SurfaceMode = mode;
-        this.preferredSurfaceMode = mode;
-      }
-      const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
-      if (listStyle === 'cards' || listStyle === 'list') {
-        this.ListStyle = listStyle;
-      }
-      const starredRaw = UserInfoEngine.Instance.GetSetting(SETTING_STARRED_IDS);
-      if (starredRaw) {
+    const mode = UserInfoEngine.Instance.GetSetting(SETTING_SURFACE_MODE);
+    if (mode === 'hub' || mode === 'navigator') {
+      this.SurfaceMode = mode;
+      this.preferredSurfaceMode = mode;
+    }
+    const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
+    if (listStyle === 'cards' || listStyle === 'list') {
+      this.ListStyle = listStyle;
+    }
+    const starredRaw = UserInfoEngine.Instance.GetSetting(SETTING_STARRED_IDS);
+    if (starredRaw) {
+      try {
         const parsed = JSON.parse(starredRaw) as string[];
         if (Array.isArray(parsed)) {
           this.StarredArtifactIds = new Set(parsed.map((id) => NormalizeUUID(id)));
         }
+      } catch (err) {
+        LogError(`LibraryWorkspaceComponent: failed to parse ${SETTING_STARRED_IDS}: ${err instanceof Error ? err.message : String(err)}`);
       }
-    } catch {
-      // Safe defaults on uninitialized UserInfoEngine in isolated unit tests
     }
   }
 
   private saveSettingSafe(key: string, value: string): void {
-    try {
-      UserInfoEngine.Instance.SetSettingDebounced(key, value);
-    } catch {
-      // No-op in isolated test environments without UserInfoEngine bootstrap
-    }
+    UserInfoEngine.Instance.SetSettingDebounced(key, value);
   }
 
   private emitWorkspaceState(): void {

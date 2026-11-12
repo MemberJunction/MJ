@@ -493,12 +493,14 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(ws.Rows.length * ws.Columns.length).toBe(100_000);
         expect(ws.Cells['B1500'].ComputedValue).toBe(3000);
         expect(ws.Cells['C1500'].ComputedValue).toBe(25);
+        expect(engine.LastEvaluatedFormulaCount).toBeGreaterThan(1000);
         expect(fullEvalMs).toBeLessThan(3000);
 
         // Incremental dirty-subgraph recalculation: editing A1500 updates ONLY B1500 and C1500 in milliseconds
         const incStart = performance.now();
         engine.SetCell(wb, ws.SheetID, 'A1500', { Value: 102 }, true);
         const incMs = performance.now() - incStart;
+        expect(engine.LastEvaluatedFormulaCount).toBe(2);
         expect(ws.Cells['B1500'].ComputedValue).toBe(3100);
         expect(ws.Cells['C1500'].ComputedValue).toBe(1025);
         expect(incMs).toBeLessThan(2000);
@@ -1419,7 +1421,7 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         engine.SetCell(cseWb, 'Sheet1', 'F9', { Formula: '=SEQUENCE(4)' }, true);
         const csePatchedBytes = engine.PatchXlsxBytes(cseSeedBytes, cseWb);
         const csePatchedXml = decoder.decode(engine.ExtractZipArchive(csePatchedBytes).get('xl/worksheets/sheet1.xml')!);
-        expect(csePatchedXml).toContain('<c r="E9" t="n"><f>SUM(A1:A3)</f><v>60</v></c>');
+        expect(csePatchedXml).toContain('<c r="E9" t="n"><f t="array" ref="E9">SUM(A1:A3)</f><v>60</v></c>');
         expect(csePatchedXml).toContain('<c r="F9" cm="1"><f t="array" ref="F9">_xlfn.SEQUENCE(4)</f></c>');
         expect(csePatchedXml).not.toContain('#NAME?');
     });
@@ -2607,6 +2609,84 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         const patchedSheetXml = dec.decode(patchedZip.get('xl/worksheets/sheet1.xml')!);
         expect(patchedSheetXml).toContain('<f>1+1</f>');
         expect(patchedSheetXml).not.toMatch(/<f t="array"[^>]*>1\+1<\/f>/);
+    });
+
+    it('Round 12: preserves t="array" and cm when appropriate on edited array formulas in PatchXlsxBytes', () => {
+        const enc = new TextEncoder();
+        const dec = new TextDecoder();
+
+        // 1) Legacy CSE single-cell array formula {=SUM(A1:A3*B1:B3)} on C1 edited to =SUM(A1:A3*B1:B3)+1
+        const wb1 = engine.CreateEmptyWorkbook('CseWb', ['Sheet1'], 10, 10);
+        const s1 = wb1.Worksheets[0];
+        engine.SetCell(wb1, s1.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'A3', { Value: 3 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'B1', { Value: 4 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'B2', { Value: 5 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'B3', { Value: 6 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'C1', { Value: 32 }, true);
+        const expBytes1 = engine.ExportToXlsxBytes(wb1, false);
+        const zip1 = engine.ExtractZipArchive(expBytes1);
+        let sheetXml1 = dec.decode(zip1.get('xl/worksheets/sheet1.xml')!);
+        sheetXml1 = sheetXml1.replace(
+            /<c r="C1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C1"><f t="array" ref="C1">SUM(A1:A3*B1:B3)</f><v>32</v></c>'
+        );
+        zip1.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml1));
+        const seedBytes1 = engine.BuildZipArchive(Array.from(zip1.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        // Edit formula in imported wb
+        const imp1 = engine.ImportFromXlsxBytes(seedBytes1);
+        engine.SetCell(imp1, imp1.Worksheets[0].SheetID, 'C1', { Formula: '=SUM(A1:A3*B1:B3)+1' }, true);
+        const patchedBytes1 = engine.PatchXlsxBytes(seedBytes1, imp1);
+        const patchedXml1 = dec.decode(engine.ExtractZipArchive(patchedBytes1).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml1).toContain('<f t="array" ref="C1">SUM(A1:A3*B1:B3)+1</f>');
+        expect(patchedXml1).not.toMatch(/<c[^>]*\bcm="/);
+
+        // 2) cm="1" dynamic array =A1:A3*10 edited to =A1:A3*20
+        const wb2 = engine.CreateEmptyWorkbook('DynWb', ['Sheet1'], 10, 10);
+        const s2 = wb2.Worksheets[0];
+        engine.SetCell(wb2, s2.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'A3', { Value: 3 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'D1', { Value: 10 }, true);
+        const expBytes2 = engine.ExportToXlsxBytes(wb2, false);
+        const zip2 = engine.ExtractZipArchive(expBytes2);
+        zip2.set(
+            'xl/metadata.xml',
+            enc.encode(
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+                    '<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray">' +
+                    '<metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>' +
+                    '<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata>' +
+                    '<cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata>' +
+                    '</metadata>'
+            )
+        );
+        let sheetXml2 = dec.decode(zip2.get('xl/worksheets/sheet1.xml')!);
+        sheetXml2 = sheetXml2.replace(
+            /<c r="D1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="D1" cm="1"><f t="array" ref="D1:D3">A1:A3*10</f><v>10</v></c>'
+        );
+        zip2.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml2));
+        const seedBytes2 = engine.BuildZipArchive(Array.from(zip2.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        const imp2 = engine.ImportFromXlsxBytes(seedBytes2);
+        engine.SetCell(imp2, imp2.Worksheets[0].SheetID, 'D1', { Formula: '=A1:A3*20' }, true);
+        const patchedBytes2 = engine.PatchXlsxBytes(seedBytes2, imp2);
+        const patchedZip2 = engine.ExtractZipArchive(patchedBytes2);
+        const patchedXml2 = dec.decode(patchedZip2.get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml2).toMatch(/<c[^>]*\bcm="1"[^>]*><f t="array" ref="D1">A1:A3\*20<\/f>/);
+        expect(patchedZip2.has('xl/metadata.xml')).toBe(true);
+
+        // 3) editing {=SUM(A1:A3*B1:B3)} to scalar =99+1 writes <f>99+1</f> without t="array"
+        const imp3 = engine.ImportFromXlsxBytes(seedBytes1);
+        engine.SetCell(imp3, imp3.Worksheets[0].SheetID, 'C1', { Formula: '=99+1' }, true);
+        const patchedBytes3 = engine.PatchXlsxBytes(seedBytes1, imp3);
+        const patchedXml3 = dec.decode(engine.ExtractZipArchive(patchedBytes3).get('xl/worksheets/sheet1.xml')!);
+        expect(patchedXml3).toContain('<f>99+1</f>');
+        expect(patchedXml3).not.toMatch(/<f t="array"[^>]*>99\+1<\/f>/);
+        expect(patchedXml3).not.toMatch(/<c[^>]*\bcm="/);
     });
 
     it('R9-10: ValidateExtraFilter rejects unbracketed PostgreSQL niladic tokens but allows bracketed identifiers', () => {
