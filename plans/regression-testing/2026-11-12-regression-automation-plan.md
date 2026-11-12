@@ -215,6 +215,9 @@ Expected result: new files in `tests/regression/scripts/`, plus a
 `"ReplayScript": "@file:regression/scripts/<name>.json"` key in each changed test's
 `Configuration`. **Phase 0 must prove this** (see risks).
 
+> **Superseded by §7.** Phase 0 showed that `sync pull` (and the entrypoint's push before it)
+> rewrites all 155 test files. The harvest uses a focused export + apply step instead.
+
 The commands live in the skill's helper script (C2), not in the target branch, so the harvest
 works for any branch that has replay-script support.
 
@@ -284,7 +287,7 @@ Every task writes its failing tests first, confirms they fail, then implements.
 | 3 | **Stack and CLI fixes** (B2, B3): `--format` on `mj test scripts`, `TEST_NAMES` + `up --test`, `.env.test.example`, design-doc fix. | 0 | M |
 | 4 | **Replay-script PR skill** (Part C) with `preflight.sh` and `harvest.sh`. Add it to the skills list in root `CLAUDE.md` (check `npm run check:claude-md`). | 0, 3 | M |
 | 5 | **Authoring skill** (A3). | 2, 3 | M |
-| 6 | **First real harvest.** Run the Part C skill on `next`. This is the first PR that commits replay scripts (expect all 155 as new promoted scripts). | 4 | L (run time) |
+| 6 | **First real harvest.** Run the Part C skill on `next`. This is the first PR that commits replay scripts. Expect fewer than 155: a test whose run used an unmatched coordinate click records no script (§7). | 4 | L (run time) |
 | 7 | **Later:** a `workflow_dispatch` / nightly GitHub Action that runs Part C's helpers, copied from the `bizapps-guide.yml` PR pattern (GitHub App token, fixed branch, reuse an open PR). Needs Auth0 and LLM secrets and a large runner. | 6 | L |
 
 Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in parallel.
@@ -293,7 +296,8 @@ Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in par
 
 | Risk | Mitigation |
 |---|---|
-| `sync pull` rewrites all 155 test files (format, key order, `primaryKey`/`sync`). | Phase 0 spike. If the diff is noisy, write a focused harvester instead. |
+| `sync pull` rewrites all 155 test files (format, key order, `primaryKey`/`sync`). | Confirmed in Phase 0 (§7). Use the focused harvester. |
+| Recorded scripts hard-code the Auth0 tenant origin. | Open decision in §7. |
 | Only one stack can run per machine (fixed name and ports). | Preflight stops the skill. Parameterized ports can come later. |
 | Stale images from another checkout. | The skill always builds in the worktree before `up`. |
 | The first full run is long and costs LLM tokens (about 60–75 min). | Run once for the first harvest. Later runs replay and cost less. |
@@ -310,3 +314,107 @@ Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in par
 - Running the Part C skill on `next` opens a PR to `next` that contains only replay-script
   files and `Configuration` references, plus a body with run counts and the drift report.
 - After that PR merges, the next run uses the replay tier for the tests that have scripts.
+
+## 7. Phase 0 findings (2026-11-12)
+
+The spike ran in a throwaway worktree on `origin/next` (`6736c12914`) with a temporary suite,
+"Harvest Spike Suite" (T001, T002). Nothing from it is committed. The evidence (both
+`results.json` files, the T001 script, the T001 pull diff) was kept outside the repo.
+
+### Times
+
+| Step | Time |
+|---|---|
+| `gen-forms.sh` (no `.docker-generated/` yet) | 19 min |
+| Image build | 42 min |
+| `up -d` until the runner starts tests (db-setup, metadata push) | 8.5 min |
+| Two tests, LLM tier | 61 s |
+| `sync pull` in a one-off container | 22 s |
+| Second `up` on a fresh database (no rebuild) + two tests | 8.5 min + 45 s |
+
+### Answers
+
+**(0) A one-off container reaches the database: yes.** `docker compose … run --rm --no-deps
+--entrypoint node test-runner …` gets the `DB_*` variables from the service and the image's
+`mj.config.cjs`. But `mj test scripts` prints its answer and then does not exit. It was still
+running after 5 minutes, after "Connection pool is closed" errors from `AIEngine`. `sync pull`
+exits normally.
+
+**(a) The pull changes only script files and references: no.** The pull rewrote all 155 test
+files:
+
+- It adds `"RubricID": null` to every test (the database has the column; the files do not).
+- It adds or refreshes the `sync` block on every record.
+- It removes the trailing newline from 65 files and writes the `\u` escapes in 63 files as
+  literal characters.
+
+The entrypoint's push makes the `sync`, newline, and escape changes **before** the pull runs,
+because `metadata-optional/` is mounted read-write and push writes its state back into the files.
+No push flag turns this off. So after any run, the worktree has 156 dirty files (155 tests and the
+suite file).
+
+**(b) File names follow `{Name}` sanitization: yes.** `T001 - Login Smoke` becomes
+`tests/regression/scripts/t001-login-smoke.json`: lowercase, whitespace becomes `-`, characters
+outside `[a-z0-9.-]` are removed, repeated `-` collapse. The test gets
+`"ReplayScript": "@file:regression/scripts/t001-login-smoke.json"` as the last key of
+`Configuration`. The script file has no trailing newline. The parity guard passes on the result.
+
+**(c) The next run replays: yes.** On a fresh database, the push loaded the script and T001 ran on
+the `replay-with-heal` tier: 4 of 4 steps hit, 0 healed, 0 diverged, 20 s (the LLM run took 28 s).
+The tier is "with heal" because the script's `AppBuildHash` is empty. The judge still runs on a
+replay, so a replay is cheaper but not free.
+
+### Other findings
+
+1. **Not every passing test records a script.** T002 passed on both runs and recorded nothing:
+   "step 5 used a coordinate click that matches no extracted element".
+2. **No secrets are in the script.** Typed credentials are stored as `%authUsername%` and
+   `%authPassword%`. No `.env.test` value is in the file, except the Auth0 tenant domain.
+3. **The script hard-codes the Auth0 tenant origin** in 4 places (step 0 postcondition, step 1
+   precondition, `UrlBefore` of steps 1–3). `TraceUrlMatches` (`ComputerUse/src/engine/trace.ts`)
+   matches an absolute pattern by origin. So the script fails its guards on another tenant, and
+   the tenant name goes into the public repo. A path fragment such as `/u/login` matches by
+   containment on any tenant.
+4. **Test files round-trip byte for byte.** `JSON.stringify(x, null, 2)`, plus lowercase
+   `\uXXXX` escapes for non-ASCII characters when the file already uses escapes, plus the
+   trailing newline the file had. All 155 files match exactly. So a harvester can add one key and
+   change nothing else.
+5. **`docker/regression/scripts/lib/db.cjs` exports `connect()`** from the `DB_*` variables. A
+   script mounted into a one-off container can use it without the MJ bootstrap.
+
+### Decision: a focused harvester instead of `sync pull`
+
+1. **Export (inside the stack).** A small Node script, mounted into a one-off `test-runner`
+   container, reads `Name` and `Configuration` of the Computer Use tests through `lib/db.cjs`. It
+   writes each `ReplayScript` and `PendingReplayScript` to `test-results/<run>/harvest/`. It does
+   not start MJ, so it cannot hang the way `mj test scripts` does, and it does not depend on CLI
+   code in the target branch.
+2. **Apply (host, files only, no database).** For each exported script, compare it with the
+   committed file (`git show HEAD:…`). Write new and changed script files with a trailing newline.
+   Add `Configuration.ReplayScript` (and `PendingReplayScript` when a pending script is kept) to
+   the **committed** test text with the byte-stable serializer from finding 4. Print the changed
+   paths and a drift summary: new, changed, pending, unchanged.
+3. **Pending scripts are file decisions.** The stack database is thrown away, so promote, keep, and
+   discard change only files. The skill does not need `mj test scripts --promote/--discard`.
+4. **The skill stages only the paths the apply step prints.** The push noise stays in the
+   throwaway worktree and is deleted with it.
+
+### Effect on the phases
+
+- **Phase 3:** add the export and apply scripts with tests. Drop B2 (`mj test scripts --format`)
+  from the skill's path, because the apply step makes the drift summary. Fix the `mj test scripts`
+  exit hang as a small separate fix. Keep `TEST_NAMES` / `up --test`, `.env.test.example`, and the
+  design-doc fix.
+- **Phase 4:** skill steps 8–10 run export and apply instead of `mj test scripts` and `sync pull`.
+- **Phase 6:** expect fewer than 155 scripts (finding 1).
+
+### Decisions made after Phase 0 (2026-11-12)
+
+- **The harvester lives in `.github/scripts/`** (`regression-harvest.mjs`), with tests under the
+  existing guard-script vitest config. The skill runs it from the main checkout with
+  `--root <worktree>`, the same way the parity guard ran against the spike. The skill folder was
+  the other option.
+- **Fix the recorder for the Auth0 origin.** `ComputerUse` records URLs on other origins (not the
+  app's) as path fragments, so a script works on any tenant and holds no tenant name. The other
+  options were a rewrite in the harvester, or keeping the URLs as recorded. This is engine code, so
+  it gets its own failing tests first and lands before the first real harvest (Phase 6).
