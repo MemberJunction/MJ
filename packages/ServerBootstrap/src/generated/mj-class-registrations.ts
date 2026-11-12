@@ -1305,7 +1305,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (25 classes)
+// @memberjunction/ai-agents (29 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1313,6 +1313,7 @@ import {
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -1330,8 +1331,11 @@ import {
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/action-runtime-host (1 classes)
@@ -2809,6 +2813,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -2826,8 +2831,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
     DefaultRuntimeActionBridgeBuilder,
     AntigravityCliAdapter,
     AntigravityCloudAdapter,
@@ -2917,14 +2925,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
-    TeamsMessagingExtension,
-    ActionLogRetentionScheduledJobDriver,
-    ActionScheduledJobDriver,
-    AgentRunSweepScheduledJobDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TeamsMessagingExtension,
+    ActionLogRetentionScheduledJobDriver,
+    ActionScheduledJobDriver,
+    AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
     IntegrationDiscoveryScheduledJobDriver,
@@ -3121,14 +3129,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
-    GenerateVideoAction,
-    GeocodeAddressAction,
-    GetActiveFormForEntityAction,
-    GetArchitectureDiagramReferenceAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GenerateVideoAction,
+    GeocodeAddressAction,
+    GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -3303,7 +3311,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1357;
+export const CLASS_REGISTRATIONS_COUNT = 1361;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

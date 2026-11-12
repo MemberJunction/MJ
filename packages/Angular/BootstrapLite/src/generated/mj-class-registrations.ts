@@ -677,13 +677,15 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-explorer-core (14 classes)
+// @memberjunction/ng-explorer-core (16 classes)
 import {
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1386,19 +1388,21 @@ const CLASS_REGISTRATIONS_2: any[] = [
     WebURLConfigPanelComponent,
     WebURLPartComponent,
     ArtifactResource,
+    ChatCollectionsResource,
     ChatConversationsResource,
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
-    OmnibarCommandProvider,
-    OmnibarRecordProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    OmnibarCommandProvider,
+    OmnibarRecordProvider,
     OmnibarSearchProvider,
     QueryResource,
     SearchResultsResource,
@@ -1492,7 +1496,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 679;
+export const CLASS_REGISTRATIONS_COUNT = 681;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

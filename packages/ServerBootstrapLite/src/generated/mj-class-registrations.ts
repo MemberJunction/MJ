@@ -1078,7 +1078,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (25 classes)
+// @memberjunction/ai-agents (29 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1086,6 +1086,7 @@ import {
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -1103,8 +1104,11 @@ import {
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/ai-agent-harness (12 classes)
@@ -2373,6 +2377,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -2390,8 +2395,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
     AntigravityCliAdapter,
     AntigravityCloudAdapter,
     ClaudeCodeCliAdapter,
@@ -2568,14 +2576,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ConditionalAction,
     ConfigureAgentUserPolicyAction,
     CopyObjectAction,
-    CreateDirectoryAction,
-    CreateDocumentAction,
-    CreateEmployeeAction,
-    CreateFormContributionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateDirectoryAction,
+    CreateDocumentAction,
+    CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -2772,6 +2780,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
     WorkQueueListDeadLettersServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
@@ -2786,13 +2798,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ...CLASS_REGISTRATIONS_3,
     ...CLASS_REGISTRATIONS_4,
     ...CLASS_REGISTRATIONS_5,
+    ...CLASS_REGISTRATIONS_6,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1200;
+export const CLASS_REGISTRATIONS_COUNT = 1204;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
