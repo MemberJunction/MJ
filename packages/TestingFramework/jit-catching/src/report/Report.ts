@@ -33,8 +33,11 @@ export interface ModelReport {
     Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; ByModel: Record<string, { RecordedUSD: number; TableUSD: number }>; UnpricedModels: string[] };
     /** Session end reason → count. */
     Sessions: Record<string, number>;
-    /** Fallbacks: runs whose analyzer reply was invalid twice, of the Runs with a readable generation file. NoFile: runs with data but no readable generation file. */
-    AnalyzerFallbacks: { Fallbacks: number; Runs: number; NoFile: number };
+    /**
+     * Fallbacks: runs whose analyzer reply was invalid twice, of the Runs whose analysis recorded the flag.
+     * NoFlag: runs with a readable generation file whose analysis did not record the flag. NoFile: runs with data but no readable generation file.
+     */
+    AnalyzerFallbacks: { Fallbacks: number; Runs: number; NoFlag: number; NoFile: number };
     /** Per stage in pipeline order, the median minutes over the runs that recorded it; null when none did. */
     StageMinutes: { Stage: string; Minutes: number | null }[];
     /** Drop rule → count. */
@@ -61,7 +64,9 @@ type StageTimings = Partial<GenerationTimings & ExecutionTimings>;
 /** A catch with its human label (latest feedback by `At`), or null when it has none. */
 type LabeledCatch = Catch & { Label: HumanLabel | null };
 interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[];
-    /** The analysis's fallback flag; null when the generation file is missing or unreadable. */
+    /** True when the generation file was read. */
+    HasGeneration: boolean;
+    /** The analysis's fallback flag; null when the analysis did not record it or the generation file is missing or unreadable. */
     Fallback: boolean | null;
     /** The stage times of the generation and execution files; empty when neither is readable. */
     Timings: StageTimings; }
@@ -74,7 +79,7 @@ interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
  * (not a false alarm, score +1, grouped under Bug in TPProb). Bug-set catches take their truth from the match:
  * a matched test scores +1, an unmatched one −1. The store is read once per run ID; each run's generation file
  * is read for the analyzer fallback and the stage times, and its execution file for the stage times.
- * A missing or unreadable generation file leaves the run out of the fallback count; an unreadable generation or execution file also writes one stderr line.
+ * A missing or unreadable generation file, or an analysis that did not record the flag, leaves the run out of the fallback count; an unreadable generation or execution file also writes one stderr line.
  */
 export async function BuildGateReport(o: GateReportOptions): Promise<GateReport> {
     const runIDs = [...new Set(o.Ledgers.flatMap((l) => l.Entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID]))))];
@@ -90,7 +95,7 @@ async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: stri
     const dir = runDirOf(id);
     const gen = readRunFile(dir, 'generation.json', () => (dir.HasGeneration() ? dir.ReadGeneration() : null));
     const exec = readRunFile(dir, 'execution.json', () => (dir.HasExecution() ? dir.ReadExecution() : null));
-    return { Run: run, Catches: labeled, Sessions: sessions, Fallback: gen?.Analysis.Fallback ?? null, Timings: { ...gen?.Timings, ...exec?.Timings } };
+    return { Run: run, Catches: labeled, Sessions: sessions, HasGeneration: gen !== null, Fallback: gen?.Analysis.Fallback ?? null, Timings: { ...gen?.Timings, ...exec?.Timings } };
 }
 
 /** The file `read` returns, or null when it is missing or unreadable (with one stderr line). */
@@ -129,7 +134,10 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
         CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean' && cleanPRs.has(e.PR)), cleanPRs.size, data),
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
-        AnalyzerFallbacks: { Fallbacks: runs.filter((r) => r.Fallback === true).length, Runs: runs.filter((r) => r.Fallback !== null).length, NoFile: runs.filter((r) => r.Fallback === null).length },
+        AnalyzerFallbacks: {
+            Fallbacks: runs.filter((r) => r.Fallback === true).length, Runs: runs.filter((r) => r.Fallback !== null).length,
+            NoFlag: runs.filter((r) => r.HasGeneration && r.Fallback === null).length, NoFile: runs.filter((r) => !r.HasGeneration).length,
+        },
         StageMinutes: STAGES.map((s) => ({ Stage: s.Name, Minutes: medianMinutes(runs.flatMap((r) => { const ms = r.Timings[s.Key]; return ms === undefined ? [] : [ms]; })) })),
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
         Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
@@ -308,8 +316,9 @@ export function MarkdownText(text: string): string {
 
 function renderSessions(m: ModelReport): string[] {
     const f = m.AnalyzerFallbacks;
-    const noFile = f.NoFile > 0 ? `; ${f.NoFile} runs have no generation file` : '';
-    return renderCounts('Session end reasons', m.Sessions, [`- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs with a generation file${noFile}`]);
+    const noFile = f.NoFile > 0 ? `; ${f.NoFile === 1 ? '1 run has' : `${f.NoFile} runs have`} no generation file` : '';
+    const noFlag = f.NoFlag > 0 ? `; ${f.NoFlag === 1 ? '1 run' : `${f.NoFlag} runs`} did not record the flag` : '';
+    return renderCounts('Session end reasons', m.Sessions, [`- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs with a generation file${noFile}${noFlag}`]);
 }
 
 /** A count section; `extra` lines follow the count rows. */

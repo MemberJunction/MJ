@@ -15,10 +15,11 @@ export const RunSchema = z.object({
 export const DiffHunkSchema = z.object({ Path: z.string(), OldStart: z.number().int(), OldLines: z.number().int(), NewStart: z.number().int(), NewLines: z.number().int(), Lines: z.array(z.string()) });
 export const ChangedFileSchema = z.object({ Path: z.string(), Package: z.string().nullable(), AddedLines: z.array(z.number().int().positive()), RemovedLineCount: z.number().int().nonnegative(), Hunks: z.array(DiffHunkSchema) });
 export const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z.string(), WhatCouldBreak: z.string(), HowObserved: z.string() });
+/** `Fallback` is null for an analysis written before the analyzer recorded it. */
 export const ChangeAnalysisSchema = z.object({
     RunID: z.string(), IntentType: z.enum(['feature', 'fix', 'refactor', 'perf', 'dead_code_removal', 'logging', 'config', 'other']),
     Summary: z.string(), Risks: z.array(RiskSchema), PackagesToTest: z.array(z.string()), ChangedFiles: z.array(ChangedFileSchema),
-    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(), Fallback: z.boolean().default(false),
+    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(), Fallback: z.boolean().nullable().default(null),
 });
 
 /** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. Every path segment here and in `MutantEditSchema.File` starts with a letter, digit or underscore, so `.` and `..` are never segments. */

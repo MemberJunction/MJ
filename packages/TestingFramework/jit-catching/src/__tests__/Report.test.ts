@@ -217,7 +217,16 @@ describe('BuildGateReport', () => {
 
   it('leaves a run with no generation file out of the fallback count and names how many there are', async () => {
     const md = await fallbackReport(() => {});
-    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 runs have no generation file\n');
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 run has no generation file\n');
+  });
+
+  it('leaves a record written before the fallback flag out of the fallback count and names how many there are', async () => {
+    const md = await fallbackReport((root, redaction) => {
+      const dir = new RunDir(root, 'rb', redaction); mkdirSync(dir.Path, { recursive: true });
+      const { Fallback, ...old } = analysis(); void Fallback;
+      writeFileSync(join(dir.Path, 'generation.json'), JSON.stringify({ ...generation(join(root, 'base'), []), Analysis: old }));
+    });
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 run did not record the flag\n');
   });
 
   it('skips an unreadable generation file with one stderr line and counts it as having no generation file', async () => {
@@ -226,7 +235,7 @@ describe('BuildGateReport', () => {
       const md = await fallbackReport((root, redaction) => {
         const dir = new RunDir(root, 'rb', redaction); mkdirSync(dir.Path, { recursive: true }); writeFileSync(join(dir.Path, 'generation.json'), '{ not json');
       });
-      expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 runs have no generation file\n');
+      expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 run has no generation file\n');
       expect(stderr.mock.calls.map((c) => String(c[0])).filter((l) => l === 'report: rb: generation.json unreadable, skipped\n')).toHaveLength(1);
     } finally { stderr.mockRestore(); }
   });

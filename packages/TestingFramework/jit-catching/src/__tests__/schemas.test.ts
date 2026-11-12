@@ -9,6 +9,10 @@ describe('record schemas', () => {
     expect(RunSchema.parse(run)).toEqual(run);
     expect(() => RunSchema.parse({ ...run, Trigger: 'Comment' })).toThrow();
   });
+  it('reads an analysis written before the fallback flag as not recording it', () => {
+    const { Fallback, ...old } = analysis(); void Fallback;
+    expect(ChangeAnalysisSchema.parse(old).Fallback).toBeNull();
+  });
   it('accepts more packages to test than three: Settings.Limits.PackagesPerPR is the limit', () => {
     const a = { ...analysis(), PackagesToTest: ['@a/1', '@a/2', '@a/3', '@a/4'] };
     expect(ChangeAnalysisSchema.parse(a).PackagesToTest).toHaveLength(4);
