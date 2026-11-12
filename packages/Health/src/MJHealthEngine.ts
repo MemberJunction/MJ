@@ -2,6 +2,7 @@ import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseHealthProbe } from './BaseHealthProbe';
 import { BaseLiveCrudVerifier } from './LiveCrudVerifier';
+import { LIVE_ENTITY_CRUD_SIGNAL_CODE } from './probes/LiveEntityCrudProbe';
 import type { HealthEvaluateOptions, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, InstanceHealthReport } from './types';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -77,7 +78,7 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
       if (probe.Mode !== mode) return false;
       if (!options.AppFilter) return true;
       if (probe.OwnerApp === options.AppFilter) return true;
-      if (probe.ProbeKey === 'MJ.CORE.LIVE.ENTITY_CRUD_AND_RLS' && hasMatchingVerifier) return true;
+      if (probe.ProbeKey === LIVE_ENTITY_CRUD_SIGNAL_CODE && hasMatchingVerifier) return true;
       return false;
     });
 
@@ -91,7 +92,16 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
       LiveCrudVerifier: options.LiveCrudVerifier,
     };
 
-    const perProbeResults = await Promise.all(probes.map((probe) => this.evaluateProbeSafely(probe, context)));
+    const perProbeResults: HealthSignalEvaluation[][] = [];
+    if (mode === 'live-test') {
+      // In live-test mode, execute probes sequentially to eliminate transaction savepoint
+      // interleaving on the shared DatabaseProvider instance.
+      for (const probe of probes) {
+        perProbeResults.push(await this.evaluateProbeSafely(probe, context));
+      }
+    } else {
+      perProbeResults.push(...await Promise.all(probes.map((probe) => this.evaluateProbeSafely(probe, context))));
+    }
     const signals = perProbeResults.flat();
 
     return this.buildReport(signals, {
@@ -114,7 +124,25 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       LogError(`MJHealthEngine: probe '${probe.ProbeKey}' failed: ${error.message}`);
-      return probe.SignalDefinitions.map((definition) => this.buildFailureEvaluation(definition, error, probeStartedAt));
+      const definitions = [...probe.SignalDefinitions];
+      if (probe.ProbeKey === LIVE_ENTITY_CRUD_SIGNAL_CODE && context.LiveCrudVerifier) {
+        const supplied = Array.isArray(context.LiveCrudVerifier) ? context.LiveCrudVerifier : [context.LiveCrudVerifier];
+        for (const v of supplied) {
+          if (!definitions.some((d) => d.Code === v.VerifierKey || d.Code.endsWith(`.${v.VerifierKey}`))) {
+            definitions.push({
+              Code: `${v.OwnerApp.toUpperCase()}.${v.VerifierKey}`,
+              Title: v.Title,
+              Layer: 'live-test',
+              OwnerApp: v.OwnerApp,
+              Mode: 'live-test',
+              Description: `Open App live verifier ${v.VerifierKey}`,
+              YellowPlaybook: v.YellowPlaybook,
+              RedPlaybook: v.RedPlaybook,
+            });
+          }
+        }
+      }
+      return definitions.map((definition) => this.buildFailureEvaluation(definition, error, probeStartedAt));
     }
   }
 

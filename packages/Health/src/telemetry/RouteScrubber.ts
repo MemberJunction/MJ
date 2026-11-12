@@ -9,9 +9,25 @@ export interface ScrubbedRouteResult {
   ApplicationName?: string;
 }
 
+/** Canonical route templates recognized by {@link RouteScrubber}. */
+export const KNOWN_ROUTE_TEMPLATES = [
+  'app/:appName/record/:entityName/:recordId',
+  'app/:appName/:resourceType/:param1',
+  'app/:appName/:navItemName',
+  'resource/record/:entityName/:recordId',
+  'resource/search/:searchInput',
+  'resource/view/dynamic/:entityName',
+  'resource/view/:viewId',
+  'resource/dashboard/:dashboardId',
+  'resource/artifact/:artifactId',
+  'resource/query/:queryId',
+] as const;
+
+export type KnownRouteTemplate = (typeof KNOWN_ROUTE_TEMPLATES)[number];
+
 interface KnownRoute {
   pattern: RegExp;
-  template: string;
+  template: KnownRouteTemplate;
   scrubbed: (match: RegExpMatchArray) => string;
 }
 
@@ -34,6 +50,16 @@ export class RouteScrubber {
       scrubbed: (m) => `app/${m[1]}/record/${m[2]}/_id_`,
     },
     {
+      pattern: /^app\/([^/]+)\/([^/]+)\/([^/]+)/,
+      template: 'app/:appName/:resourceType/:param1',
+      scrubbed: (m) => `app/${m[1]}/${m[2]}/_id_`,
+    },
+    {
+      pattern: /^app\/([^/]+)\/([^/]+)/,
+      template: 'app/:appName/:navItemName',
+      scrubbed: (m) => `app/${m[1]}/${m[2]}`,
+    },
+    {
       pattern: /^resource\/record\/([^/]+)\/([^/]+)/,
       template: 'resource/record/:entityName/:recordId',
       scrubbed: (m) => `resource/record/${m[1]}/_id_`,
@@ -44,6 +70,11 @@ export class RouteScrubber {
       scrubbed: () => 'resource/search/[REDACTED]',
     },
     {
+      pattern: /^resource\/view\/dynamic\/([^/]+)/,
+      template: 'resource/view/dynamic/:entityName',
+      scrubbed: (m) => `resource/view/dynamic/${m[1]}`,
+    },
+    {
       pattern: /^resource\/view\/([^/]+)/,
       template: 'resource/view/:viewId',
       scrubbed: () => 'resource/view/_id_',
@@ -52,6 +83,16 @@ export class RouteScrubber {
       pattern: /^resource\/dashboard\/([^/]+)/,
       template: 'resource/dashboard/:dashboardId',
       scrubbed: () => 'resource/dashboard/_id_',
+    },
+    {
+      pattern: /^resource\/artifact\/([^/]+)/,
+      template: 'resource/artifact/:artifactId',
+      scrubbed: () => 'resource/artifact/_id_',
+    },
+    {
+      pattern: /^resource\/query\/([^/]+)/,
+      template: 'resource/query/:queryId',
+      scrubbed: () => 'resource/query/_id_',
     },
   ];
 
@@ -114,17 +155,32 @@ export class RouteScrubber {
     if (template.startsWith('app/:appName/record/')) {
       return { ResourceType: 'record', ApplicationName: match[1], EntityName: match[2] };
     }
+    if (template === 'app/:appName/:resourceType/:param1') {
+      return { ResourceType: match[2], ApplicationName: match[1] };
+    }
+    if (template === 'app/:appName/:navItemName') {
+      return { ApplicationName: match[1] };
+    }
     if (template.startsWith('resource/record/')) {
       return { ResourceType: 'record', EntityName: match[1] };
     }
     if (template.startsWith('resource/search/')) {
       return { ResourceType: 'search' };
     }
+    if (template === 'resource/view/dynamic/:entityName') {
+      return { ResourceType: 'view', EntityName: match[1] };
+    }
     if (template.startsWith('resource/view/')) {
       return { ResourceType: 'view' };
     }
     if (template.startsWith('resource/dashboard/')) {
       return { ResourceType: 'dashboard' };
+    }
+    if (template.startsWith('resource/artifact/')) {
+      return { ResourceType: 'artifact' };
+    }
+    if (template.startsWith('resource/query/')) {
+      return { ResourceType: 'query' };
     }
     return {};
   }

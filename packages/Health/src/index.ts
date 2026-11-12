@@ -15,3 +15,4 @@ export * from './telemetry/RouteScrubber';
 export * from './telemetry/LocalTelemetrySignalBridge';
 export * from './telemetry/BaseTelemetrySink';
 export * from './telemetry/ShareLayerPackager';
+export * from './otel/index';

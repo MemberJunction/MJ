@@ -46,18 +46,34 @@ describe('SchemaMigrationParityProbe', () => {
     expect(evaluation.ActivePlaybook).toBeDefined();
   });
 
-  it('reports YELLOW when a historical attempt failed but the latest succeeded', async () => {
+  it('reports GREEN when a historical failure was repaired by a subsequent successful attempt', async () => {
     const provider = new DatabaseProviderStub();
     vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([
       { version: '202601010000', success: false },
       { version: '202601010000', success: true },
+      { version: '202601020000', success: true },
+    ]);
+    const probe = new SchemaMigrationParityProbe();
+
+    const [evaluation] = await probe.Evaluate(makeContext(provider));
+
+    expect(evaluation.Status).toBe('GREEN');
+    expect(evaluation.ObservedMetrics.HistoricalFailedAttempts).toBe(1);
+    expect(evaluation.ObservedMetrics.UnrepairedCount).toBe(0);
+  });
+
+  it('reports YELLOW when an earlier migration failed and was never repaired', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([
+      { version: '202601010000', success: false },
+      { version: '202601020000', success: true },
     ]);
     const probe = new SchemaMigrationParityProbe();
 
     const [evaluation] = await probe.Evaluate(makeContext(provider));
 
     expect(evaluation.Status).toBe('YELLOW');
-    expect(evaluation.ObservedMetrics.FailedAttemptCount).toBe(1);
+    expect(evaluation.ObservedMetrics.UnrepairedCount).toBe(1);
   });
 
   it('reports RED when no migration history can be read at all', async () => {

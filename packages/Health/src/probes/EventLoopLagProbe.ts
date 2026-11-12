@@ -1,6 +1,17 @@
+import { monitorEventLoopDelay, type IntervalHistogram } from 'node:perf_hooks';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseHealthProbe } from '../BaseHealthProbe';
 import type { AgentRemediationPlaybook, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, ProbeExecutionMode } from '../types';
+
+let eventLoopHistogram: IntervalHistogram | undefined;
+try {
+  if (typeof monitorEventLoopDelay === 'function') {
+    eventLoopHistogram = monitorEventLoopDelay({ resolution: 20 });
+    eventLoopHistogram.enable();
+  }
+} catch {
+  // Fall back to setImmediate if monitorEventLoopDelay cannot be initialized
+}
 
 /** Signal code for {@link EventLoopLagProbe}. */
 export const EVENT_LOOP_LAG_SIGNAL_CODE = 'MJ.CORE.RUNTIME.EVENT_LOOP_LAG';
@@ -94,13 +105,19 @@ export class EventLoopLagProbe extends BaseHealthProbe {
   }
 
   /**
-   * Resolves with the elapsed time between scheduling and running a `setImmediate` callback,
-   * in milliseconds. A busy event loop delays the callback proportionally to its backlog. Public
-   * so it can also be used as a standalone diagnostic (e.g. `mj doctor --live`) independent of a
-   * full `Evaluate()` call, and so tests can substitute a deterministic value without reaching
-   * past TypeScript's access modifiers.
+   * Resolves with event loop lag in milliseconds. When supported, uses
+   * `perf_hooks.monitorEventLoopDelay` (p99 over the sampling window) to capture bursts, GC pauses,
+   * and task backlog; falls back to measuring the round-trip delay of a `setImmediate` callback.
    */
-  public MeasureEventLoopLagMs(): Promise<number> {
+  public async MeasureEventLoopLagMs(): Promise<number> {
+    if (eventLoopHistogram) {
+      const p99Ns = eventLoopHistogram.percentile(99);
+      if (typeof p99Ns === 'number' && Number.isFinite(p99Ns) && p99Ns > 0) {
+        eventLoopHistogram.reset();
+        return p99Ns / 1_000_000;
+      }
+    }
+
     return new Promise<number>((resolve) => {
       const start = process.hrtime.bigint();
       setImmediate(() => {

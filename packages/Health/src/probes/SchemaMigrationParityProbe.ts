@@ -78,9 +78,13 @@ export class SchemaMigrationParityProbe extends BaseHealthProbe {
     let rows: MigrationHistoryRow[] = [];
 
     try {
-      const tableRef = context.DatabaseProvider.QuoteSchemaAndView('__mj', MIGRATION_HISTORY_TABLE);
+      const schema = context.DatabaseProvider.MJCoreSchemaName;
+      const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, MIGRATION_HISTORY_TABLE);
+      const versionCol = context.DatabaseProvider.QuoteIdentifier('version');
+      const successCol = context.DatabaseProvider.QuoteIdentifier('success');
+      const rankCol = context.DatabaseProvider.QuoteIdentifier('installed_rank');
       rows = await context.DatabaseProvider.ExecuteSQL<MigrationHistoryRow>(
-        `SELECT version, success FROM ${tableRef} ORDER BY installed_rank ASC`,
+        `SELECT ${versionCol}, ${successCol} FROM ${tableRef} ORDER BY ${rankCol} ASC`,
         undefined,
         undefined,
         context.SystemUser,
@@ -97,22 +101,50 @@ export class SchemaMigrationParityProbe extends BaseHealthProbe {
       return [this.buildEvaluation(definition, 'RED', 'No migration history found — this instance may not have been migrated.', { AppliedMigrationCount: 0 }, durationMs)];
     }
 
-    const failedVersions = rows.filter((r) => !r.success).map((r) => r.version ?? 'unknown');
+    const latestSuccessByVersion = new Map<string, boolean>();
+    let historicalFailedAttempts = 0;
+    for (const r of rows) {
+      const v = r.version ?? 'unknown';
+      if (!r.success) {
+        historicalFailedAttempts++;
+      }
+      latestSuccessByVersion.set(v, Boolean(r.success));
+    }
+
+    const unrepairedVersions: string[] = [];
+    for (const [v, success] of latestSuccessByVersion) {
+      if (!success) {
+        unrepairedVersions.push(v);
+      }
+    }
+
     const lastRow = rows[rows.length - 1];
-    const status = !lastRow.success ? 'RED' : failedVersions.length > 0 ? 'YELLOW' : 'GREEN';
+    const status = !lastRow.success
+      ? 'RED'
+      : unrepairedVersions.length > 0
+        ? 'YELLOW'
+        : 'GREEN';
+
     const summary =
       status === 'RED'
         ? `The most recent migration attempt (version ${lastRow.version ?? 'unknown'}) failed.`
         : status === 'YELLOW'
-          ? `All migrations are currently applied, but ${failedVersions.length} historical attempt(s) failed before succeeding: ${failedVersions.join(', ')}.`
-          : `All ${rows.length} applied migrations succeeded with no historical failures.`;
+          ? `Unrepaired migration failure(s) detected: ${unrepairedVersions.join(', ')}.`
+          : historicalFailedAttempts > 0
+            ? `All ${latestSuccessByVersion.size} migrations are currently applied successfully (${historicalFailedAttempts} historical attempt(s) were repaired).`
+            : `All ${rows.length} applied migrations succeeded with no historical failures.`;
 
     return [
       this.buildEvaluation(
         definition,
         status,
         summary,
-        { AppliedMigrationCount: rows.length, FailedAttemptCount: failedVersions.length, LatestVersion: lastRow.version ?? 'unknown' },
+        {
+          AppliedMigrationCount: rows.length,
+          UnrepairedCount: unrepairedVersions.length,
+          HistoricalFailedAttempts: historicalFailedAttempts,
+          LatestVersion: lastRow.version ?? 'unknown',
+        },
         durationMs,
       ),
     ];

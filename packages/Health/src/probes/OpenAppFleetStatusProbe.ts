@@ -79,9 +79,13 @@ export class OpenAppFleetStatusProbe extends BaseHealthProbe {
     let rows: OpenAppStatusRow[] = [];
 
     try {
-      const tableRef = context.DatabaseProvider.QuoteSchemaAndView('__mj', 'OpenApp');
+      const schema = context.DatabaseProvider.MJCoreSchemaName;
+      const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, 'OpenApp');
+      const nameCol = context.DatabaseProvider.QuoteIdentifier('Name');
+      const statusCol = context.DatabaseProvider.QuoteIdentifier('Status');
+      const updatedCol = context.DatabaseProvider.QuoteIdentifier('__mj_UpdatedAt');
       rows = await context.DatabaseProvider.ExecuteSQL<OpenAppStatusRow>(
-        `SELECT Name, Status, __mj_UpdatedAt FROM ${tableRef}`,
+        `SELECT ${nameCol}, ${statusCol}, ${updatedCol} FROM ${tableRef}`,
         undefined,
         undefined,
         context.SystemUser,

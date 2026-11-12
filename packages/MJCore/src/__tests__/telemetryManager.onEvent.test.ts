@@ -210,4 +210,46 @@ describe('TelemetryManager — OnEvent lifecycle hook', () => {
         expect(capturedParams?.tokenInfinity).toBe('[REDACTED]');
         expect(capturedParams?.authorization).toBe('[REDACTED]');
     });
+
+    it('respects explicit Phases option in OnEvent', () => {
+        const tm = TelemetryManager.Instance;
+        const startPhases: TelemetryEventLifecycleType[] = [];
+        const endPhases: TelemetryEventLifecycleType[] = [];
+
+        const unsubStart = tm.OnEvent((_e, t) => startPhases.push(t), { Phases: ['start'] });
+        const unsubEnd = tm.OnEvent((_e, t) => endPhases.push(t), { Phases: ['end'] });
+
+        const id = tm.StartEvent('RunView', 'ProviderBase.RunView', { EntityName: 'MJ: Users' });
+        expect(startPhases).toEqual(['start']);
+        expect(endPhases).toEqual([]);
+
+        tm.EndEvent(id);
+        expect(startPhases).toEqual(['start']);
+        expect(endPhases).toEqual(['end']);
+
+        unsubStart();
+        unsubEnd();
+    });
+
+    it('fires "end" lifecycle event when an active event is evicted by maxActiveEvents', () => {
+        const tm = TelemetryManager.Instance;
+        const evictedPhases: TelemetryEventLifecycleType[] = [];
+        const unsub = tm.OnEvent((_e, t) => evictedPhases.push(t), { Phases: ['end'] });
+
+        // Force a low maxActiveEvents for this test
+        tm.UpdateSettings({ autoTrim: { enabled: true, maxActiveEvents: 2 } });
+
+        const id1 = tm.StartEvent('RunView', 'op1', {});
+        const id2 = tm.StartEvent('RunView', 'op2', {});
+        expect(evictedPhases).toHaveLength(0);
+
+        // Third start exceeds maxActiveEvents of 2, evicting the oldest (id1)
+        tm.StartEvent('RunView', 'op3', {});
+        expect(evictedPhases).toHaveLength(1);
+
+        unsub();
+        tm.EndEvent(id2);
+        // Restore default settings
+        tm.UpdateSettings({ autoTrim: { enabled: true, maxActiveEvents: 2000 } });
+    });
 });

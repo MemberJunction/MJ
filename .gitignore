@@ -121,6 +121,7 @@ Schema Files/
 /docs/*
 !/docs/decisions/
 !/docs/telemetry-shareable-schema.md
+!/docs/opentelemetry-setup.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old

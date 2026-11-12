@@ -75,34 +75,81 @@ export class AiProviderReadinessProbe extends BaseHealthProbe {
     const startedAt = Date.now();
     const definition = this.SignalDefinitions[0];
     let diagnosticError: string | undefined;
-    let activeRouteCount = 0;
+    let catalogRouteCount = 0;
+    let configuredCount = 0;
 
     try {
-      activeRouteCount = await this.countActiveInferenceRoutes(context);
+      catalogRouteCount = await this.countActiveInferenceRoutes(context);
+      if (catalogRouteCount > 0) {
+        configuredCount = this.countConfiguredEnvKeys();
+        const dbCreds = await this.countDbCredentials(context);
+        configuredCount += dbCreds;
+      }
     } catch (error) {
       diagnosticError = error instanceof Error ? (error.stack ?? error.message) : String(error);
     }
 
     const durationMs = Date.now() - startedAt;
     if (diagnosticError) {
-      return [this.buildEvaluation(definition, 'RED', `Could not read AI model vendor configuration: ${diagnosticError.split('\n')[0]}`, 0, durationMs, diagnosticError)];
+      return [this.buildEvaluation(definition, 'RED', `Could not read AI model vendor configuration: ${diagnosticError.split('\n')[0]}`, 0, 0, durationMs, diagnosticError)];
     }
 
-    const status = this.classify(activeRouteCount);
+    const effectiveReady = catalogRouteCount === 0 ? 0 : configuredCount;
+    const status = this.classify(catalogRouteCount, configuredCount);
     const summary =
-      status === 'RED'
-        ? 'No active inference-provider route is configured — no AI capability is available on this instance.'
-        : status === 'YELLOW'
-          ? 'Exactly one active inference-provider route is configured — no fallback if it becomes unavailable.'
-          : `${activeRouteCount} active inference-provider routes are configured.`;
+      catalogRouteCount === 0
+        ? 'No active inference-provider route is in the catalog — no AI capability is defined.'
+        : configuredCount === 0
+          ? 'Active inference-provider catalog routes exist, but zero API keys or credentials are configured — no AI capability is ready.'
+          : configuredCount === 1
+            ? 'Exactly one active inference-provider route has configured credentials — no fallback if it becomes unavailable.'
+            : `${configuredCount} active inference-provider routes are configured and ready.`;
 
-    return [this.buildEvaluation(definition, status, summary, activeRouteCount, durationMs)];
+    return [this.buildEvaluation(definition, status, summary, catalogRouteCount, effectiveReady, durationMs)];
+  }
+
+  private countConfiguredEnvKeys(): number {
+    if (typeof process === 'undefined' || !process.env) return 0;
+    const knownVendors = new Set<string>();
+    if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 5) knownVendors.add('OpenAI');
+    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.trim().length > 5) knownVendors.add('Anthropic');
+    if ((process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) && ((process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY)?.trim().length ?? 0) > 5) knownVendors.add('Google');
+    if (process.env.MISTRAL_API_KEY && process.env.MISTRAL_API_KEY.trim().length > 5) knownVendors.add('Mistral');
+    if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim().length > 5) knownVendors.add('Groq');
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith('AI_VENDOR_API_KEY__') && (process.env[key]?.trim().length ?? 0) > 5) {
+        knownVendors.add(key);
+      }
+    }
+    return knownVendors.size;
+  }
+
+  private async countDbCredentials(context: HealthProbeContext): Promise<number> {
+    try {
+      const schema = context.DatabaseProvider.MJCoreSchemaName;
+      const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, 'AICredentialBinding');
+      const isActiveCol = context.DatabaseProvider.QuoteIdentifier('IsActive');
+      const countCol = context.DatabaseProvider.QuoteIdentifier('BindingCount');
+      const rows = await context.DatabaseProvider.ExecuteSQL<{ BindingCount: number }>(
+        `SELECT COUNT(*) AS ${countCol} FROM ${tableRef} WHERE ${isActiveCol} = 1`,
+        undefined,
+        undefined,
+        context.SystemUser,
+      );
+      return rows[0]?.BindingCount ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   private async countActiveInferenceRoutes(context: HealthProbeContext): Promise<number> {
-    const tableRef = context.DatabaseProvider.QuoteSchemaAndView('__mj', 'AIModelVendor');
+    const schema = context.DatabaseProvider.MJCoreSchemaName;
+    const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, 'AIModelVendor');
+    const statusCol = context.DatabaseProvider.QuoteIdentifier('Status');
+    const typeIdCol = context.DatabaseProvider.QuoteIdentifier('TypeID');
+    const countCol = context.DatabaseProvider.QuoteIdentifier('ActiveRouteCount');
     const rows = await context.DatabaseProvider.ExecuteSQL<ActiveVendorRouteRow>(
-      `SELECT COUNT(*) AS ActiveRouteCount FROM ${tableRef} WHERE Status = 'Active' AND TypeID = '${INFERENCE_PROVIDER_TYPE_ID}'`,
+      `SELECT COUNT(*) AS ${countCol} FROM ${tableRef} WHERE ${statusCol} = 'Active' AND ${typeIdCol} = '${INFERENCE_PROVIDER_TYPE_ID}'`,
       undefined,
       undefined,
       context.SystemUser,
@@ -110,9 +157,9 @@ export class AiProviderReadinessProbe extends BaseHealthProbe {
     return rows[0]?.ActiveRouteCount ?? 0;
   }
 
-  private classify(activeRouteCount: number): HealthStatus {
-    if (activeRouteCount === 0) return 'RED';
-    if (activeRouteCount === 1) return 'YELLOW';
+  private classify(catalogCount: number, configuredCount: number): HealthStatus {
+    if (catalogCount === 0 || configuredCount === 0) return 'RED';
+    if (configuredCount === 1) return 'YELLOW';
     return 'GREEN';
   }
 
@@ -120,7 +167,8 @@ export class AiProviderReadinessProbe extends BaseHealthProbe {
     definition: HealthSignalDefinition,
     status: HealthStatus,
     summary: string,
-    activeRouteCount: number,
+    catalogRouteCount: number,
+    readyCount: number,
     durationMs: number,
     diagnosticError?: string,
   ): HealthSignalEvaluation {
@@ -132,7 +180,10 @@ export class AiProviderReadinessProbe extends BaseHealthProbe {
       Mode: definition.Mode,
       Status: status,
       Summary: summary,
-      ObservedMetrics: { ActiveInferenceRouteCount: activeRouteCount },
+      ObservedMetrics: {
+        ActiveCatalogRouteCount: catalogRouteCount,
+        ReadyInferenceProviderCount: readyCount,
+      },
       Thresholds: { MinimumHealthyRouteCount: 2 },
       EvaluatedAt: new Date().toISOString(),
       DurationMs: durationMs,

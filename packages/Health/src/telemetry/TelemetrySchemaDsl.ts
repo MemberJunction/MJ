@@ -1,3 +1,6 @@
+import type { TelemetryCategory } from '@memberjunction/core';
+import { KNOWN_ROUTE_TEMPLATES } from './RouteScrubber';
+
 /**
  * Compile-time DSL for data that is eligible to leave an MJ deployment boundary. Every field a
  * `TelemetrySchema` declares must match one of these closed shapes — there is deliberately no
@@ -197,10 +200,42 @@ export interface DailyUsageShareRecord {
   TotalOutputTokens: number;
 }
 
+/** The closed set of telemetry categories permitted in shareable usage records. */
+export const SAFE_TELEMETRY_CATEGORIES: readonly TelemetryCategory[] = [
+  'RunView',
+  'RunQuery',
+  'Engine',
+  'Network',
+  'AI',
+  'Cache',
+  'Coalesce',
+  'Custom',
+];
+
 /** Normative shareable schema for aggregated category usage. */
 export const DAILY_USAGE_SHARE_SCHEMA: TelemetrySchema<DailyUsageShareRecord> = {
   DateBucket: { kind: 'date_bucket', granularity: 'day' },
-  Category: { kind: 'enum', values: ['RunView', 'RunQuery', 'AI', 'Action', 'Engine', 'Cache', 'Coalesce', 'Network', 'Custom'] },
+  Category: { kind: 'enum', values: [...SAFE_TELEMETRY_CATEGORIES] },
+  Count: { kind: 'count' },
+  TotalElapsedMs: { kind: 'duration_ms' },
+  TotalInputTokens: { kind: 'tokens' },
+  TotalOutputTokens: { kind: 'tokens' },
+};
+
+/** Allowlisted share record shape for sub-day (minute) aggregated usage (Tier 3: HealthAndMetadataEvents). */
+export interface MinuteUsageShareRecord {
+  BucketStartIso: string;
+  Category: string;
+  Count: number;
+  TotalElapsedMs: number;
+  TotalInputTokens: number;
+  TotalOutputTokens: number;
+}
+
+/** Normative shareable schema for sub-day (minute) category usage (Tier 3: HealthAndMetadataEvents). */
+export const MINUTE_USAGE_SHARE_SCHEMA: TelemetrySchema<MinuteUsageShareRecord> = {
+  BucketStartIso: { kind: 'date_bucket', granularity: 'minute' },
+  Category: { kind: 'enum', values: [...SAFE_TELEMETRY_CATEGORIES] },
   Count: { kind: 'count' },
   TotalElapsedMs: { kind: 'duration_ms' },
   TotalInputTokens: { kind: 'tokens' },
@@ -219,13 +254,7 @@ export const FEATURE_USAGE_SHARE_SCHEMA: TelemetrySchema<FeatureUsageShareRecord
   DateBucket: { kind: 'date_bucket', granularity: 'day' },
   RouteTemplate: {
     kind: 'enum',
-    values: [
-      'app/:appName/record/:entityName/:recordId',
-      'resource/record/:entityName/:recordId',
-      'resource/search/:searchInput',
-      'resource/view/:viewId',
-      'resource/dashboard/:dashboardId',
-    ],
+    values: [...KNOWN_ROUTE_TEMPLATES],
   },
   NavigationCount: { kind: 'count' },
 };

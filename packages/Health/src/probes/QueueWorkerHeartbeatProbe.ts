@@ -98,30 +98,69 @@ export class QueueWorkerHeartbeatProbe extends BaseHealthProbe {
     }
 
     const { heartbeatAgeMs, failureRatio, recentRunCount } = this.computeMetrics(rows);
-    const status = this.classify(heartbeatAgeMs, failureRatio);
+    let overdueJobCount = 0;
+    if (heartbeatAgeMs >= HEARTBEAT_YELLOW_MS) {
+      overdueJobCount = await this.countOverdueJobs(context);
+    }
+
+    const status = this.classify(heartbeatAgeMs, failureRatio, overdueJobCount);
     const summary =
       status === 'RED'
-        ? `Heartbeat age ${Math.round(heartbeatAgeMs / 1000)}s / failure ratio ${(failureRatio * 100).toFixed(1)}% exceed RED thresholds.`
+        ? overdueJobCount > 0
+          ? `${overdueJobCount} scheduled job(s) are overdue (>180s) with worker inactive for ${Math.round(heartbeatAgeMs / 1000)}s.`
+          : `Failure ratio ${(failureRatio * 100).toFixed(1)}% exceeds RED threshold.`
         : status === 'YELLOW'
-          ? `Heartbeat age ${Math.round(heartbeatAgeMs / 1000)}s / failure ratio ${(failureRatio * 100).toFixed(1)}% are elevated.`
-          : `Heartbeat is current (${Math.round(heartbeatAgeMs / 1000)}s old) with a ${(failureRatio * 100).toFixed(1)}% failure ratio over the last hour.`;
+          ? overdueJobCount > 0
+            ? `${overdueJobCount} scheduled job(s) are due with worker inactive for ${Math.round(heartbeatAgeMs / 1000)}s.`
+            : `Recent job failure ratio ${(failureRatio * 100).toFixed(1)}% is elevated.`
+          : overdueJobCount === 0 && heartbeatAgeMs >= HEARTBEAT_YELLOW_MS
+            ? `Queue worker is idle with zero overdue jobs; last run was ${Math.round(heartbeatAgeMs / 1000)}s ago.`
+            : `Heartbeat is current (${Math.round(heartbeatAgeMs / 1000)}s old) with a ${(failureRatio * 100).toFixed(1)}% failure ratio over the last hour.`;
 
     return [
       this.buildEvaluation(
         definition,
         status,
         summary,
-        { HeartbeatAgeMs: Math.round(heartbeatAgeMs), FailureRatio: Number(failureRatio.toFixed(4)), RecentRunCount: recentRunCount },
+        {
+          HeartbeatAgeMs: Math.round(heartbeatAgeMs),
+          FailureRatio: Number(failureRatio.toFixed(4)),
+          RecentRunCount: recentRunCount,
+          OverdueJobCount: overdueJobCount,
+        },
         durationMs,
       ),
     ];
   }
 
+  private async countOverdueJobs(context: HealthProbeContext): Promise<number> {
+    try {
+      const schema = context.DatabaseProvider.MJCoreSchemaName;
+      const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, 'ScheduledJob');
+      const statusCol = context.DatabaseProvider.QuoteIdentifier('Status');
+      const nextRunCol = context.DatabaseProvider.QuoteIdentifier('NextRunAt');
+      const countCol = context.DatabaseProvider.QuoteIdentifier('OverdueCount');
+      const thresholdIso = new Date(Date.now() - HEARTBEAT_RED_MS).toISOString();
+      const rows = await context.DatabaseProvider.ExecuteSQL<{ OverdueCount: number }>(
+        `SELECT COUNT(*) AS ${countCol} FROM ${tableRef} WHERE ${statusCol} = 'Active' AND ${nextRunCol} IS NOT NULL AND ${nextRunCol} < '${thresholdIso}'`,
+        undefined,
+        undefined,
+        context.SystemUser,
+      );
+      return rows[0]?.OverdueCount ?? 0;
+    } catch {
+      return 0;
+    }
+  }
+
   private async fetchRecentRuns(context: HealthProbeContext): Promise<ScheduledJobRunRow[]> {
-    const tableRef = context.DatabaseProvider.QuoteSchemaAndView('__mj', 'ScheduledJobRun');
+    const schema = context.DatabaseProvider.MJCoreSchemaName;
+    const tableRef = context.DatabaseProvider.QuoteSchemaAndView(schema, 'ScheduledJobRun');
+    const startedAtCol = context.DatabaseProvider.QuoteIdentifier('StartedAt');
+    const successCol = context.DatabaseProvider.QuoteIdentifier('Success');
     const { prefix, suffix } = this.mostRecentClause(context.DatabaseProvider.PlatformKey, SAMPLE_ROW_LIMIT);
     return context.DatabaseProvider.ExecuteSQL<ScheduledJobRunRow>(
-      `SELECT ${prefix}StartedAt, Success FROM ${tableRef} ORDER BY StartedAt DESC ${suffix}`,
+      `SELECT ${prefix}${startedAtCol}, ${successCol} FROM ${tableRef} ORDER BY ${startedAtCol} DESC ${suffix}`,
       undefined,
       undefined,
       context.SystemUser,
@@ -149,9 +188,11 @@ export class QueueWorkerHeartbeatProbe extends BaseHealthProbe {
     return { heartbeatAgeMs, failureRatio, recentRunCount: recentRows.length };
   }
 
-  private classify(heartbeatAgeMs: number, failureRatio: number): HealthStatus {
-    if (heartbeatAgeMs >= HEARTBEAT_RED_MS || failureRatio >= FAILURE_RATIO_RED) return 'RED';
-    if (heartbeatAgeMs >= HEARTBEAT_YELLOW_MS || failureRatio >= FAILURE_RATIO_YELLOW) return 'YELLOW';
+  private classify(heartbeatAgeMs: number, failureRatio: number, overdueJobCount: number = 0): HealthStatus {
+    if (failureRatio >= FAILURE_RATIO_RED) return 'RED';
+    if (overdueJobCount > 0 && heartbeatAgeMs >= HEARTBEAT_RED_MS) return 'RED';
+    if (failureRatio >= FAILURE_RATIO_YELLOW) return 'YELLOW';
+    if (overdueJobCount > 0 && heartbeatAgeMs >= HEARTBEAT_YELLOW_MS) return 'YELLOW';
     return 'GREEN';
   }
 

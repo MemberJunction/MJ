@@ -430,6 +430,18 @@ export interface MemorySnapshot {
 export type TelemetryEventLifecycleType = 'start' | 'end';
 
 /**
+ * Configuration options for {@link TelemetryManager.OnEvent}.
+ */
+export interface TelemetryOnEventOptions {
+    /**
+     * Which lifecycle phases to receive. Defaults to:
+     * - `['start', 'end']` when `listener.length >= 2`
+     * - `['end']` when `listener.length < 2`
+     */
+    Phases?: readonly TelemetryEventLifecycleType[];
+}
+
+/**
  * Callback signature for {@link TelemetryManager.OnEvent}. Invoked synchronously; must never throw
  * in a way that should disrupt the producer — `OnEvent` already catches and swallows exceptions,
  * but implementations should still avoid relying on that as a substitute for their own error
@@ -980,7 +992,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     private _analyzers: TelemetryAnalyzer[] = [];
     private _insights: TelemetryInsight[] = [];
     private _insightDedupeWindow: Map<string, number> = new Map();
-    private _listeners: Set<TelemetryEventCallback> = new Set();
+    private _listeners: Map<TelemetryEventCallback, ReadonlySet<TelemetryEventLifecycleType>> = new Map();
 
     /**
      * Subscribe to telemetry events as they start and complete (zero-polling flight recorder /
@@ -990,6 +1002,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      *   from both `StartEvent`+`EndEvent` and `RecordEvent` (which fires both in immediate succession).
      * - **1-arg listeners** `(event) => ...`: fire **only once** on `'end'` (when `elapsedMs` is populated)
      *   for both `StartEvent`+`EndEvent` and `RecordEvent`.
+     * - Listeners can explicitly select phases by passing `{ Phases: ['start', 'end'] }` (or `['start']`, `['end']`).
      *
      * Exceptions thrown by `listener` are caught and swallowed — an observer must never disrupt
      * the producer it is observing. Notification is skipped entirely while diagnostic capture is
@@ -997,8 +1010,14 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      *
      * @returns An idempotent unsubscribe function.
      */
-    public OnEvent(listener: TelemetryEventCallback): () => void {
-        this._listeners.add(listener);
+    public OnEvent(listener: TelemetryEventCallback, options?: TelemetryOnEventOptions): () => void {
+        const phases: ReadonlySet<TelemetryEventLifecycleType> = options?.Phases
+            ? new Set(options.Phases)
+            : listener.length >= 2
+                ? new Set(['start', 'end'])
+                : new Set(['end']);
+
+        this._listeners.set(listener, phases);
         let unsubscribed = false;
         return () => {
             if (unsubscribed) return;
@@ -1022,8 +1041,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         if (this._listeners.size === 0 || IsDiagnosticCaptureSuppressed()) {
             return;
         }
-        for (const listener of this._listeners) {
-            if (type === 'start' && listener.length < 2) {
+        for (const [listener, phases] of this._listeners) {
+            if (!phases.has(type)) {
                 continue;
             }
             try {
@@ -1228,7 +1247,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         if (this._settings.autoTrim.enabled && maxActive > 0 && this._activeEvents.size >= maxActive) {
             const oldestKey = this._activeEvents.keys().next().value;
             if (oldestKey !== undefined) {
+                const evicted = this._activeEvents.get(oldestKey);
                 this._activeEvents.delete(oldestKey);
+                if (evicted) {
+                    evicted.endTime = this.getTimestamp();
+                    evicted.elapsedMs = evicted.endTime - evicted.startTime;
+                    this.notifyEventListeners(evicted, 'end');
+                }
             }
         }
 

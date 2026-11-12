@@ -1,3 +1,4 @@
+import { createHash, createHmac } from 'node:crypto';
 import type { TelemetryPackage } from './ShareLayerPackager';
 
 /**
@@ -119,60 +120,24 @@ export abstract class BaseTelemetrySink {
    * thrown exception for a programming error (e.g. missing required configuration).
    */
   public abstract DeliverPackage(pkg: TelemetryPackage, context: SinkExecutionContext): Promise<SinkAckResult>;
-}
 
-/** No-op telemetry sink for dry-runs and testing. */
-export class NoopTelemetrySink extends BaseTelemetrySink {
-  public readonly SinkKey = 'noop';
-  public readonly DisplayName = 'No-op Telemetry Sink';
-  public readonly RequiredConsentTier = 'HealthOnly' as const;
-  public readonly BatchCadenceMinutes = 1440;
-
-  public async DeliverPackage(_pkg: TelemetryPackage, _context: SinkExecutionContext): Promise<SinkAckResult> {
-    return { Success: true, StatusCode: 204 };
-  }
-}
-
-/** Configuration options for {@link MJCentralTelemetrySink}. */
-export interface MJCentralTelemetrySinkOptions {
-  EndpointUrl?: string;
-  Transport?: TelemetryHttpTransport;
-  TimeoutMs?: number;
-}
-
-/** Sinks telemetry packages to MemberJunction Central fleet service over HTTPS. */
-export class MJCentralTelemetrySink extends BaseTelemetrySink {
-  public readonly SinkKey = 'mjc-fleet';
-  public readonly DisplayName = 'MemberJunction Central Fleet Sink';
-  public readonly RequiredConsentTier = 'HealthOnly' as const;
-  public readonly BatchCadenceMinutes = 1440;
-
-  private readonly _endpointUrl: string;
-  private readonly _transport: TelemetryHttpTransport;
-  private readonly _timeoutMs: number;
-
-  constructor(options?: MJCentralTelemetrySinkOptions) {
-    super();
-    this._endpointUrl = options?.EndpointUrl ?? 'https://telemetry.memberjunction.com/v1/packages';
-    this._transport = options?.Transport ?? DefaultTelemetryHttpTransport;
-    this._timeoutMs = options?.TimeoutMs ?? 30_000;
-  }
-
-  public async DeliverPackage(pkg: TelemetryPackage, context: SinkExecutionContext): Promise<SinkAckResult> {
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'x-mj-install-id': context.InstallId,
-      'x-mj-consent-tier': pkg.Payload.ConsentTier,
-      'x-mj-payload-sha256': pkg.PayloadHashHex,
-      'x-mj-signature': context.SignatureHeader ?? '',
-    };
+  /**
+   * Protected helper for sending JSON over an HTTP transport and mapping response/exceptions to SinkAckResult.
+   */
+  protected async PostJson(
+    transport: TelemetryHttpTransport,
+    url: string,
+    headers: Record<string, string>,
+    body: string,
+    timeoutMs: number,
+  ): Promise<SinkAckResult> {
     try {
-      const response = await this._transport({
-        Url: this._endpointUrl,
+      const response = await transport({
+        Url: url,
         Method: 'POST',
         Headers: headers,
-        Body: pkg.PayloadJson,
-        TimeoutMs: this._timeoutMs,
+        Body: body,
+        TimeoutMs: timeoutMs,
       });
 
       const success = response.StatusCode >= 200 && response.StatusCode < 300;
@@ -190,6 +155,58 @@ export class MJCentralTelemetrySink extends BaseTelemetrySink {
         ErrorMessage: errorMsg,
       };
     }
+  }
+}
+
+/** No-op telemetry sink for dry-runs and testing. */
+export class NoopTelemetrySink extends BaseTelemetrySink {
+  public readonly SinkKey = 'noop';
+  public readonly DisplayName = 'No-op Telemetry Sink';
+  public readonly RequiredConsentTier = 'HealthOnly' as const;
+  public readonly BatchCadenceMinutes = 1440;
+
+  public async DeliverPackage(_pkg: TelemetryPackage, _context: SinkExecutionContext): Promise<SinkAckResult> {
+    return { Success: true, StatusCode: 204 };
+  }
+}
+
+/** Configuration options for {@link MJCentralTelemetrySink}. */
+export interface MJCentralTelemetrySinkOptions {
+  EndpointUrl: string;
+  Transport?: TelemetryHttpTransport;
+  TimeoutMs?: number;
+}
+
+/** Sinks telemetry packages to MemberJunction Central fleet service over HTTPS. */
+export class MJCentralTelemetrySink extends BaseTelemetrySink {
+  public readonly SinkKey = 'mjc-fleet';
+  public readonly DisplayName = 'MemberJunction Central Fleet Sink';
+  public readonly RequiredConsentTier = 'HealthOnly' as const;
+  public readonly BatchCadenceMinutes = 1440;
+
+  private readonly _endpointUrl: string;
+  private readonly _transport: TelemetryHttpTransport;
+  private readonly _timeoutMs: number;
+
+  constructor(options: MJCentralTelemetrySinkOptions) {
+    super();
+    if (!options?.EndpointUrl) {
+      throw new Error('MJCentralTelemetrySink: EndpointUrl is required.');
+    }
+    this._endpointUrl = options.EndpointUrl;
+    this._transport = options.Transport ?? DefaultTelemetryHttpTransport;
+    this._timeoutMs = options.TimeoutMs ?? 30_000;
+  }
+
+  public async DeliverPackage(pkg: TelemetryPackage, context: SinkExecutionContext): Promise<SinkAckResult> {
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      'x-mj-install-id': context.InstallId,
+      'x-mj-consent-tier': pkg.Payload.ConsentTier,
+      'x-mj-payload-sha256': pkg.PayloadHashHex,
+      'x-mj-signature': context.SignatureHeader ?? '',
+    };
+    return this.PostJson(this._transport, this._endpointUrl, headers, pkg.PayloadJson, this._timeoutMs);
   }
 }
 
@@ -232,30 +249,7 @@ export class FederatedMJTelemetrySink extends BaseTelemetrySink {
     if (this._peerId) {
       headers['x-mj-peer-id'] = this._peerId;
     }
-    try {
-      const response = await this._transport({
-        Url: this._endpointUrl,
-        Method: 'POST',
-        Headers: headers,
-        Body: pkg.PayloadJson,
-        TimeoutMs: this._timeoutMs,
-      });
-
-      const success = response.StatusCode >= 200 && response.StatusCode < 300;
-      return {
-        Success: success,
-        StatusCode: response.StatusCode,
-        RetryAfterSeconds: parseRetryAfterHeader(response.RetryAfterHeader),
-        ErrorMessage: success ? undefined : (response.BodyText || `HTTP ${response.StatusCode}`),
-      };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      return {
-        Success: false,
-        StatusCode: 0,
-        ErrorMessage: errorMsg,
-      };
-    }
+    return this.PostJson(this._transport, this._endpointUrl, headers, pkg.PayloadJson, this._timeoutMs);
   }
 }
 
@@ -289,93 +283,118 @@ export class OtlpHttpTelemetrySink extends BaseTelemetrySink {
 
   public async DeliverPackage(pkg: TelemetryPackage, context: SinkExecutionContext): Promise<SinkAckResult> {
     const otlpPayload = this.transformToOtlp(pkg, context);
+    const bodyText = JSON.stringify(otlpPayload);
+    let signatureHeader = context.SignatureHeader ?? '';
+    if (context.SigningKeyHex && /^[0-9a-fA-F]+$/.test(context.SigningKeyHex) && context.SigningKeyHex.length % 2 === 0) {
+      const sig = createHmac('sha256', Buffer.from(context.SigningKeyHex, 'hex')).update(bodyText).digest('hex');
+      signatureHeader = `sha256=${sig}`;
+    }
     const headers: Record<string, string> = {
       'content-type': 'application/json',
       'x-mj-install-id': context.InstallId,
       'x-mj-consent-tier': pkg.Payload.ConsentTier,
-      'x-mj-signature': context.SignatureHeader ?? '',
+      'x-mj-payload-sha256': createHash('sha256').update(bodyText).digest('hex'),
+      'x-mj-original-payload-sha256': pkg.PayloadHashHex,
+      'x-mj-signature': signatureHeader,
       ...this._customHeaders,
     };
-    try {
-      const response = await this._transport({
-        Url: this._collectorUrl,
-        Method: 'POST',
-        Headers: headers,
-        Body: JSON.stringify(otlpPayload),
-        TimeoutMs: this._timeoutMs,
-      });
-
-      const success = response.StatusCode >= 200 && response.StatusCode < 300;
-      return {
-        Success: success,
-        StatusCode: response.StatusCode,
-        RetryAfterSeconds: parseRetryAfterHeader(response.RetryAfterHeader),
-        ErrorMessage: success ? undefined : (response.BodyText || `HTTP ${response.StatusCode}`),
-      };
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      return {
-        Success: false,
-        StatusCode: 0,
-        ErrorMessage: errorMsg,
-      };
-    }
+    return this.PostJson(this._transport, this._collectorUrl, headers, bodyText, this._timeoutMs);
   }
 
   private transformToOtlp(pkg: TelemetryPackage, context: SinkExecutionContext): object {
     const metrics: object[] = [];
 
-    if (pkg.Payload.HealthSignals?.Buckets) {
+    if (pkg.Payload.HealthSignals?.Buckets && pkg.Payload.HealthSignals.Buckets.length > 0) {
+      const dataPoints: object[] = [];
       for (const bucket of pkg.Payload.HealthSignals.Buckets) {
-        metrics.push({
-          name: 'mj.health.status_count',
-          description: 'Counts of health check evaluations by status',
-          unit: '1',
-          sum: {
-            dataPoints: [
-              { asInt: bucket.Green, attributes: [{ key: 'status', value: { stringValue: 'GREEN' } }] },
-              { asInt: bucket.Yellow, attributes: [{ key: 'status', value: { stringValue: 'YELLOW' } }] },
-              { asInt: bucket.Red, attributes: [{ key: 'status', value: { stringValue: 'RED' } }] },
-            ],
-            aggregationTemporality: 2,
-            isMonotonic: false,
-          },
-        });
+        const startEpochMs = Date.parse(bucket.BucketStartIso);
+        const startNano = String(BigInt(Number.isNaN(startEpochMs) ? Date.now() : startEpochMs) * 1_000_000n);
+        const endEpochMs = Number.isNaN(startEpochMs) ? Date.now() : startEpochMs + 86_400_000;
+        const endNano = String(BigInt(endEpochMs) * 1_000_000n);
+
+        dataPoints.push(
+          { asInt: bucket.Green, startTimeUnixNano: startNano, timeUnixNano: endNano, attributes: [{ key: 'status', value: { stringValue: 'GREEN' } }] },
+          { asInt: bucket.Yellow, startTimeUnixNano: startNano, timeUnixNano: endNano, attributes: [{ key: 'status', value: { stringValue: 'YELLOW' } }] },
+          { asInt: bucket.Red, startTimeUnixNano: startNano, timeUnixNano: endNano, attributes: [{ key: 'status', value: { stringValue: 'RED' } }] },
+        );
       }
+      metrics.push({
+        name: 'mj.health.status_count',
+        description: 'Counts of health check evaluations by status',
+        unit: '1',
+        sum: {
+          dataPoints,
+          aggregationTemporality: 2,
+          isMonotonic: false,
+        },
+      });
     }
 
-    if (pkg.Payload.AggregatedUsage?.DailyBuckets) {
+    if (pkg.Payload.AggregatedUsage?.DailyBuckets && pkg.Payload.AggregatedUsage.DailyBuckets.length > 0) {
+      const opDataPoints: object[] = [];
+      const tokenDataPoints: object[] = [];
+
       for (const bucket of pkg.Payload.AggregatedUsage.DailyBuckets) {
+        const startEpochMs = Date.parse(bucket.DateBucket);
+        const startNano = String(BigInt(Number.isNaN(startEpochMs) ? Date.now() : startEpochMs) * 1_000_000n);
+        const endEpochMs = Number.isNaN(startEpochMs) ? Date.now() : startEpochMs + 86_400_000;
+        const endNano = String(BigInt(endEpochMs) * 1_000_000n);
+
+        opDataPoints.push({
+          asInt: bucket.Count,
+          startTimeUnixNano: startNano,
+          timeUnixNano: endNano,
+          attributes: [{ key: 'category', value: { stringValue: bucket.Category } }],
+        });
+
+        if (bucket.TotalInputTokens > 0 || bucket.TotalOutputTokens > 0) {
+          tokenDataPoints.push(
+            {
+              asInt: bucket.TotalInputTokens,
+              startTimeUnixNano: startNano,
+              timeUnixNano: endNano,
+              attributes: [
+                { key: 'category', value: { stringValue: bucket.Category } },
+                { key: 'token_type', value: { stringValue: 'input' } },
+              ],
+            },
+            {
+              asInt: bucket.TotalOutputTokens,
+              startTimeUnixNano: startNano,
+              timeUnixNano: endNano,
+              attributes: [
+                { key: 'category', value: { stringValue: bucket.Category } },
+                { key: 'token_type', value: { stringValue: 'output' } },
+              ],
+            },
+          );
+        }
+      }
+
+      if (opDataPoints.length > 0) {
         metrics.push({
           name: 'mj.usage.operations',
           description: 'Aggregated operations by category',
           unit: '1',
           sum: {
-            dataPoints: [
-              {
-                asInt: bucket.Count,
-                attributes: [{ key: 'category', value: { stringValue: bucket.Category } }],
-              },
-            ],
+            dataPoints: opDataPoints,
             aggregationTemporality: 2,
             isMonotonic: true,
           },
         });
-        if (bucket.TotalInputTokens > 0 || bucket.TotalOutputTokens > 0) {
-          metrics.push({
-            name: 'mj.usage.tokens',
-            description: 'Aggregated AI token counts',
-            unit: '1',
-            sum: {
-              dataPoints: [
-                { asInt: bucket.TotalInputTokens, attributes: [{ key: 'token_type', value: { stringValue: 'input' } }] },
-                { asInt: bucket.TotalOutputTokens, attributes: [{ key: 'token_type', value: { stringValue: 'output' } }] },
-              ],
-              aggregationTemporality: 2,
-              isMonotonic: true,
-            },
-          });
-        }
+      }
+
+      if (tokenDataPoints.length > 0) {
+        metrics.push({
+          name: 'mj.usage.tokens',
+          description: 'Aggregated AI token counts',
+          unit: '1',
+          sum: {
+            dataPoints: tokenDataPoints,
+            aggregationTemporality: 2,
+            isMonotonic: true,
+          },
+        });
       }
     }
 

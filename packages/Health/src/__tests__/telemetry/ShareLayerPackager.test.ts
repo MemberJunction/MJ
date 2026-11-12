@@ -128,6 +128,69 @@ describe('ShareLayerPackager.BuildPackage', () => {
     ]);
   });
 
+  it('filters out in-progress calendar day records when CompletedDaysOnly is enabled', () => {
+    const pastHealth: HealthStatusBucket = { BucketStartIso: '2026-11-01', Green: 2, Yellow: 0, Red: 0 };
+    const todayHealth: HealthStatusBucket = { BucketStartIso: new Date().toISOString(), Green: 5, Yellow: 1, Red: 0 };
+    const pastCount: TelemetryCountBucket = {
+      BucketStartIso: '2026-11-01T12:00:00.000Z',
+      Category: 'RunView',
+      Count: 4,
+      TotalElapsedMs: 100,
+      TotalInputTokens: 0,
+      TotalOutputTokens: 0,
+    };
+    const todayCount: TelemetryCountBucket = {
+      BucketStartIso: new Date().toISOString(),
+      Category: 'RunView',
+      Count: 8,
+      TotalElapsedMs: 200,
+      TotalInputTokens: 0,
+      TotalOutputTokens: 0,
+    };
+    const source: TelemetryBucketSource = {
+      GetHealthBuckets: () => [pastHealth, todayHealth],
+      GetCountBuckets: () => [pastCount, todayCount],
+    };
+
+    const pkg = ShareLayerPackager.Instance.BuildPackage('HealthAndAggregatedUsage', source, { CompletedDaysOnly: true });
+    expect(pkg.Payload.HealthSignals?.Buckets).toHaveLength(1);
+    expect(pkg.Payload.HealthSignals?.Buckets[0].BucketStartIso).toBe('2026-11-01');
+    expect(pkg.Payload.AggregatedUsage?.DailyBuckets).toHaveLength(1);
+    expect(pkg.Payload.AggregatedUsage?.DailyBuckets?.[0].DateBucket).toBe('2026-11-01');
+  });
+
+  it('filters out records at or before WatermarkDate', () => {
+    const day1: HealthStatusBucket = { BucketStartIso: '2026-11-05', Green: 1, Yellow: 0, Red: 0 };
+    const day2: HealthStatusBucket = { BucketStartIso: '2026-11-06', Green: 2, Yellow: 0, Red: 0 };
+    const source: TelemetryBucketSource = {
+      GetHealthBuckets: () => [day1, day2],
+      GetCountBuckets: () => [],
+    };
+
+    const pkg = ShareLayerPackager.Instance.BuildPackage('HealthOnly', source, { WatermarkDate: '2026-11-05' });
+    expect(pkg.Payload.HealthSignals?.Buckets).toHaveLength(1);
+    expect(pkg.Payload.HealthSignals?.Buckets[0].BucketStartIso).toBe('2026-11-06');
+  });
+
+  it('validates outbound minute-granularity buckets against MINUTE_USAGE_SHARE_SCHEMA at HealthAndMetadataEvents', () => {
+    const validCountBucket: TelemetryCountBucket = {
+      BucketStartIso: '2026-11-01T10:15:00.000Z',
+      Category: 'RunView',
+      Count: 5,
+      TotalElapsedMs: 250,
+      TotalInputTokens: 0,
+      TotalOutputTokens: 0,
+    };
+    const source: TelemetryBucketSource = {
+      GetHealthBuckets: () => [],
+      GetCountBuckets: () => [validCountBucket],
+    };
+
+    const pkg = ShareLayerPackager.Instance.BuildPackage('HealthAndMetadataEvents', source);
+    expect(pkg.Payload.AggregatedUsage?.Buckets).toHaveLength(1);
+    expect(pkg.Payload.AggregatedUsage?.Buckets[0].BucketStartIso).toBe('2026-11-01T10:15:00.000Z');
+  });
+
   it('validates records against allowlisted share schemas and strips unexpected properties', () => {
     // If a caller passes extra properties, ValidateTelemetryRecord rejects them
     const dirtyRecord = { BucketStartIso: '2026-11-11', Green: 1, Yellow: 0, Red: 0, LeakedSecret: 'bad' };
@@ -185,6 +248,13 @@ describe('ShareLayerPackager.SignPackage', () => {
     const otherKeyHex = Buffer.from('a-different-signing-key-32-bytes', 'utf8').toString('hex');
     const signatureB = ShareLayerPackager.Instance.SignPackage(pkg, otherKeyHex);
     expect(signatureA).not.toBe(signatureB);
+  });
+
+  it('throws when signingKeyHex is empty, odd-length, or contains non-hex characters', () => {
+    const pkg = ShareLayerPackager.Instance.BuildPackage('HealthOnly', makeSource());
+    expect(() => ShareLayerPackager.Instance.SignPackage(pkg, '')).toThrow(/non-empty, even-length hexadecimal/);
+    expect(() => ShareLayerPackager.Instance.SignPackage(pkg, 'abc')).toThrow(/non-empty, even-length hexadecimal/);
+    expect(() => ShareLayerPackager.Instance.SignPackage(pkg, 'not-hex-at-all!!')).toThrow(/non-empty, even-length hexadecimal/);
   });
 });
 
@@ -258,6 +328,7 @@ describe('Concrete Telemetry Sinks', () => {
 
     // Error handling test
     const failingSink = new MJCentralTelemetrySink({
+      EndpointUrl: 'https://test.mj.fleet/v1',
       Transport: async () => {
         throw new Error('network down');
       },
@@ -266,6 +337,10 @@ describe('Concrete Telemetry Sinks', () => {
     expect(failedAck.Success).toBe(false);
     expect(failedAck.StatusCode).toBe(0);
     expect(failedAck.ErrorMessage).toContain('network down');
+  });
+
+  it('MJCentralTelemetrySink throws if EndpointUrl is missing', () => {
+    expect(() => new MJCentralTelemetrySink({ EndpointUrl: '' })).toThrow(/EndpointUrl is required/);
   });
 
   it('FederatedMJTelemetrySink sends package with peer id and handles responses', async () => {
@@ -318,10 +393,12 @@ describe('Concrete Telemetry Sinks', () => {
     expect(ack.Success).toBe(true);
     expect(capturedRequest?.Url).toBe('https://collector.local:4318/v1/metrics');
     expect(capturedRequest?.Headers['x-custom-tenant']).toBe('tenant-42');
-    expect(capturedRequest?.Headers['x-mj-signature']).toBe('sha256=otlp-sig');
+    expect(capturedRequest?.Headers['x-mj-signature']).toMatch(/^sha256=[0-9a-f]+$/);
     expect(capturedRequest?.Body).toContain('resourceMetrics');
     expect(capturedRequest?.Body).toContain('mj.health.status_count');
     expect(capturedRequest?.Body).toContain('mj.usage.operations');
+    expect(capturedRequest?.Body).toContain('timeUnixNano');
+    expect(capturedRequest?.Body).toContain('startTimeUnixNano');
 
     // Network error test
     const failingSink = new OtlpHttpTelemetrySink({

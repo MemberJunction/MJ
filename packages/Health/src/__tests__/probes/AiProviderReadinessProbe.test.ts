@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import type { UserInfo } from '@memberjunction/core';
 import { AiProviderReadinessProbe, AI_PROVIDER_READINESS_SIGNAL_CODE } from '../../probes/AiProviderReadinessProbe';
@@ -15,7 +15,24 @@ function makeContext(provider: DatabaseProviderStub): HealthProbeContext {
 }
 
 describe('AiProviderReadinessProbe', () => {
-  it('reports RED when zero active inference-provider routes are configured', async () => {
+  const origOpenAI = process.env.OPENAI_API_KEY;
+  const origAnthropic = process.env.ANTHROPIC_API_KEY;
+
+  beforeEach(() => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+  });
+
+  afterEach(() => {
+    if (origOpenAI !== undefined) process.env.OPENAI_API_KEY = origOpenAI;
+    else delete process.env.OPENAI_API_KEY;
+    if (origAnthropic !== undefined) process.env.ANTHROPIC_API_KEY = origAnthropic;
+    else delete process.env.ANTHROPIC_API_KEY;
+  });
+
+  it('reports RED when zero active inference-provider catalog routes exist', async () => {
     const provider = new DatabaseProviderStub();
     vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{ ActiveRouteCount: 0 }]);
     const probe = new AiProviderReadinessProbe();
@@ -27,9 +44,29 @@ describe('AiProviderReadinessProbe', () => {
     expect(evaluation.ActivePlaybook).toBeDefined();
   });
 
-  it('reports YELLOW when exactly one active route is configured (no fallback)', async () => {
+  it('reports RED on stock install when catalog rows exist but no API keys or credentials are configured', async () => {
     const provider = new DatabaseProviderStub();
-    vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{ ActiveRouteCount: 1 }]);
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+      if (sql.includes('AIModelVendor')) return [{ ActiveRouteCount: 5 }];
+      if (sql.includes('AICredentialBinding')) return [{ BindingCount: 0 }];
+      return [];
+    });
+    const probe = new AiProviderReadinessProbe();
+
+    const [evaluation] = await probe.Evaluate(makeContext(provider));
+
+    expect(evaluation.Status).toBe('RED');
+    expect(evaluation.Summary).toContain('zero API keys or credentials are configured');
+  });
+
+  it('reports YELLOW when exactly one inference provider is configured (no fallback)', async () => {
+    process.env.OPENAI_API_KEY = 'sk-proj-test-12345678';
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+      if (sql.includes('AIModelVendor')) return [{ ActiveRouteCount: 5 }];
+      if (sql.includes('AICredentialBinding')) return [{ BindingCount: 0 }];
+      return [];
+    });
     const probe = new AiProviderReadinessProbe();
 
     const [evaluation] = await probe.Evaluate(makeContext(provider));
@@ -37,15 +74,21 @@ describe('AiProviderReadinessProbe', () => {
     expect(evaluation.Status).toBe('YELLOW');
   });
 
-  it('reports GREEN when two or more active routes are configured', async () => {
+  it('reports GREEN when two or more active providers are configured', async () => {
+    process.env.OPENAI_API_KEY = 'sk-proj-test-12345678';
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test-12345678';
     const provider = new DatabaseProviderStub();
-    vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{ ActiveRouteCount: 3 }]);
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+      if (sql.includes('AIModelVendor')) return [{ ActiveRouteCount: 5 }];
+      if (sql.includes('AICredentialBinding')) return [{ BindingCount: 0 }];
+      return [];
+    });
     const probe = new AiProviderReadinessProbe();
 
     const [evaluation] = await probe.Evaluate(makeContext(provider));
 
     expect(evaluation.Status).toBe('GREEN');
-    expect(evaluation.ObservedMetrics.ActiveInferenceRouteCount).toBe(3);
+    expect(evaluation.ObservedMetrics.ReadyInferenceProviderCount).toBe(2);
     expect(evaluation.ActivePlaybook).toBeUndefined();
   });
 

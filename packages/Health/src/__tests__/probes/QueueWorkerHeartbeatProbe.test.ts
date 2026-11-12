@@ -45,15 +45,34 @@ describe('QueueWorkerHeartbeatProbe', () => {
     expect(evaluation.ObservedMetrics.FailureRatio).toBe(0);
   });
 
-  it('reports RED when the heartbeat is stale beyond 180s', async () => {
+  it('reports RED when the heartbeat is stale beyond 180s and scheduled jobs are overdue', async () => {
     const provider = new DatabaseProviderStub();
-    vi.spyOn(provider, 'ExecuteSQL').mockResolvedValue([{ StartedAt: isoAgo(5 * 60 * 1000), Success: true }]);
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+      if (sql.includes('ScheduledJobRun')) return [{ StartedAt: isoAgo(5 * 60 * 1000), Success: true }];
+      if (sql.includes('ScheduledJob')) return [{ OverdueCount: 2 }];
+      return [];
+    });
     const probe = new QueueWorkerHeartbeatProbe();
 
     const [evaluation] = await probe.Evaluate(makeContext(provider));
 
     expect(evaluation.Status).toBe('RED');
     expect(evaluation.ActivePlaybook).toBeDefined();
+  });
+
+  it('reports GREEN when worker is idle between runs with zero overdue jobs', async () => {
+    const provider = new DatabaseProviderStub();
+    vi.spyOn(provider, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+      if (sql.includes('ScheduledJobRun')) return [{ StartedAt: isoAgo(20 * 60 * 1000), Success: true }];
+      if (sql.includes('ScheduledJob')) return [{ OverdueCount: 0 }];
+      return [];
+    });
+    const probe = new QueueWorkerHeartbeatProbe();
+
+    const [evaluation] = await probe.Evaluate(makeContext(provider));
+
+    expect(evaluation.Status).toBe('GREEN');
+    expect(evaluation.Summary).toContain('idle with zero overdue jobs');
   });
 
   it('reports RED when the recent failure ratio exceeds 15%', async () => {

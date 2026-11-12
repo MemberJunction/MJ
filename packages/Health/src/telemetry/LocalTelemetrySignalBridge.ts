@@ -145,7 +145,7 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
       probeBucket.SampleCount++;
       this._probeSignalBuckets.set(signalKey, probeBucket);
     }
-    this.pruneMap(this._probeSignalBuckets, (b) => b.BucketStartIso);
+    this.pruneMap(this._probeSignalBuckets, (b) => b.BucketStartIso, (b) => b.SignalCode);
   }
 
   /**
@@ -166,7 +166,7 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
       };
       bucket.Count += 1;
       this._featureUsageBuckets.set(key, bucket);
-      this.pruneMap(this._featureUsageBuckets, (b) => b.BucketStartIso);
+      this.pruneMap(this._featureUsageBuckets, (b) => b.BucketStartIso, (b) => `${b.ApplicationName}:${b.RouteTemplate}`);
     }
     return scrubbed;
   }
@@ -194,7 +194,7 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
       }
     }
     this._countBuckets.set(key, bucket);
-    this.pruneMap(this._countBuckets, (b) => b.BucketStartIso);
+    this.pruneMap(this._countBuckets, (b) => b.BucketStartIso, (b) => b.Category);
   }
 
   /** Every count bucket currently retained, optionally filtered to one category. */
@@ -242,11 +242,14 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
 
   /**
    * Prunes a bucket map in place: first by age (any bucket older than `_maxAgeMs`), then by count
-   * (oldest-first, by `BucketStartIso`) down to `_maxBucketsPerSeries`. Mirrors
-   * `TelemetryManager.trimIfNeeded`'s two-stage age/count bound, scoped to one map at a time so
-   * `_countBuckets` (keyed per-category) and `_healthBuckets` (one series) are pruned independently.
+   * per series down to `_maxBucketsPerSeries` (oldest-first, by `BucketStartIso`). Scoped per series
+   * so one high-volume series cannot starve or evict buckets belonging to other series.
    */
-  private pruneMap<V>(map: Map<string, V>, bucketStartOf: (value: V) => string): void {
+  private pruneMap<V>(
+    map: Map<string, V>,
+    bucketStartOf: (value: V) => string,
+    seriesOf?: (value: V) => string,
+  ): void {
     const now = Date.now();
     for (const [key, value] of map) {
       if (now - new Date(bucketStartOf(value)).getTime() > this._maxAgeMs) {
@@ -254,12 +257,38 @@ export class LocalTelemetrySignalBridge extends BaseSingleton<LocalTelemetrySign
       }
     }
 
-    if (map.size <= this._maxBucketsPerSeries) return;
+    if (!seriesOf) {
+      if (map.size <= this._maxBucketsPerSeries) return;
+      const sortedKeys = [...map.entries()]
+        .sort((a, b) => new Date(bucketStartOf(a[1])).getTime() - new Date(bucketStartOf(b[1])).getTime())
+        .map(([k]) => k);
+      const overflow = sortedKeys.length - this._maxBucketsPerSeries;
+      for (let i = 0; i < overflow; i++) {
+        map.delete(sortedKeys[i]);
+      }
+      return;
+    }
 
-    const sortedKeys = [...map.entries()].sort((a, b) => new Date(bucketStartOf(a[1])).getTime() - new Date(bucketStartOf(b[1])).getTime()).map(([key]) => key);
-    const overflow = sortedKeys.length - this._maxBucketsPerSeries;
-    for (let i = 0; i < overflow; i++) {
-      map.delete(sortedKeys[i]);
+    // Partition keys by series
+    const seriesBuckets = new Map<string, Array<{ key: string; time: number }>>();
+    for (const [key, value] of map) {
+      const s = seriesOf(value);
+      let list = seriesBuckets.get(s);
+      if (!list) {
+        list = [];
+        seriesBuckets.set(s, list);
+      }
+      list.push({ key, time: new Date(bucketStartOf(value)).getTime() });
+    }
+
+    for (const [, list] of seriesBuckets) {
+      if (list.length > this._maxBucketsPerSeries) {
+        list.sort((a, b) => a.time - b.time);
+        const overflow = list.length - this._maxBucketsPerSeries;
+        for (let i = 0; i < overflow; i++) {
+          map.delete(list[i].key);
+        }
+      }
     }
   }
 }

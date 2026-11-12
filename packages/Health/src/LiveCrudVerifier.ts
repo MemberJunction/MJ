@@ -73,8 +73,18 @@ export abstract class BaseLiveCrudVerifier {
 
   /**
    * Runs the synthetic CRUD/permission round trip. Called by `LiveEntityCrudProbe` from inside an
-   * already-open, unconditionally-rolled-back transaction scope — `txProvider` is that scope's
-   * provider, so any write performed through it is guaranteed to roll back regardless of outcome.
+   * already-open, unconditionally-rolled-back transaction scope on `txProvider`.
+   *
+   * **Important Transaction Isolation Boundary:**
+   * Unconditional rollback holds strictly for direct database writes executed through `txProvider`
+   * within this async scope. It does NOT undo out-of-band side effects produced by server entity
+   * subclasses, hooks, or external handlers (such as sending emails, computing embeddings, enqueuing
+   * background jobs, calling external APIs, or broadcasting WebSocket / pub-sub invalidations).
+   * Likewise, writes made through another provider instance (e.g. an ambient per-request provider)
+   * commit independently.
+   *
+   * Authors of `BaseLiveCrudVerifier` implementations must design synthetic records to exercise
+   * safe, side-effect-free database paths, and must perform all writes exclusively through `txProvider`.
    *
    * Implementations should let unexpected exceptions propagate (do not catch-and-swallow); the
    * probe applies the same uniform RED-with-diagnostic fallback it uses for a thrown `Evaluate()`.
