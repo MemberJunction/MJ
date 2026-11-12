@@ -1504,7 +1504,7 @@ describe('ArtifactToolManager', () => {
                 },
             });
             expect(attempt1.result.success).toBe(false);
-            expect(rollbackCallCount).toBe(1);
+            expect(rollbackCallCount).toBe(0); // R14-2/X2/X3: preview never modified room, so rollback is not called
             expect(commitCallCount).toBe(0);
             expect(liveRoomText).toBe('# Line One (Human Edit)\n\n# Line Two'); // Live room untouched!
 
@@ -2866,7 +2866,242 @@ describe('ArtifactToolManager', () => {
 
                 expect(editRes.result.success).toBe(false);
                 expect(deleteSpy).not.toHaveBeenCalled();
-                expect(manager.ToJSON().artifacts[0].versionNumber).toBe(3);
+                expect(manager.ToJSON().artifacts[0].versionNumber).toBe(1);
+            });
+
+            it('X2 & X3: when persistOutcome.persisted is false (Save() fails or CanEdit revoked), hookResult.rollback is NOT called', async () => {
+                const artifactUuid = '55556666-7777-8888-9999-000011112222';
+                const user = new UserInfo();
+                user.ID = 'user-x2-x3';
+
+                const rollbackSpy = vi.fn().mockResolvedValue(undefined);
+                const mockVersionEntity = {
+                    ID: 'ver-x2-fail',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(false),
+                    Delete: vi.fn().mockResolvedValue(true),
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                SetArtifactLiveMutationHook(async () => ({
+                    applied: true,
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    rollback: rollbackSpy,
+                    commit: async () => ({ applied: true }),
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const b0 = (blocksRes.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Agent edit' },
+                });
+
+                expect(editRes.result.success).toBe(false);
+                expect(mockVersionEntity.Save).toHaveBeenCalledTimes(1);
+                expect(rollbackSpy).not.toHaveBeenCalled();
+            });
+
+            it('X4b: rollback Delete() failure clears trusted rollback mark in finally so subsequent Save() without edit rights is rejected', async () => {
+                const artifactUuid = '66667777-8888-9999-0000-111122223333';
+                const user = new UserInfo();
+                user.ID = 'user-x4b';
+
+                let deleteCalled = false;
+                let wasMarkedOnDelete = false;
+
+                const mockVersionEntity = {
+                    ID: 'ver-x4b',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: vi.fn().mockImplementation(async () => {
+                        deleteCalled = true;
+                        wasMarkedOnDelete = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(mockVersionEntity);
+                        return false;
+                    }),
+                };
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                SetArtifactLiveMutationHook(async () => ({
+                    applied: true,
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    commit: async () => {
+                        throw new Error('Commit failed intentionally');
+                    },
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const b0 = (blocksRes.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Agent edit' },
+                });
+
+                expect(editRes.result.success).toBe(false);
+                expect(deleteCalled).toBe(true);
+                expect(wasMarkedOnDelete).toBe(true);
+                expect(ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(mockVersionEntity)).toBe(false);
+            });
+
+            it('X5 & X6: when human restores v3 during agent v2 commit failure, v2 is NOT deleted, entry stays at v1, and subsequent edit without reload fails with concurrent modification error', async () => {
+                const artifactUuid = '77778888-9999-0000-1111-222233334444';
+                const user = new UserInfo();
+                user.ID = 'user-x5-x6';
+
+                const deleteSpy = vi.fn().mockResolvedValue(true);
+                const mockVersionEntity = {
+                    ID: 'ver-v2-x5',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# V2 Draft',
+                    NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: deleteSpy,
+                };
+
+                const roomRollbackSpy = vi.fn().mockResolvedValue(undefined);
+
+                const mockProvider = {
+                    RunView: async (params: { EntityName: string; ExtraFilter?: string }) => {
+                        if (params.EntityName === 'MJ: Artifacts') {
+                            return {
+                                Success: true,
+                                Results: [{ ID: artifactUuid, Name: 'Doc.md', UserID: user.ID }],
+                            };
+                        }
+                        if (params.EntityName === 'MJ: Artifact Versions') {
+                            return {
+                                Success: true,
+                                Results: [
+                                    { ID: 'ver-v3-human', VersionNumber: 3, ContentMode: 'Text' },
+                                ],
+                            };
+                        }
+                        return { Success: true, Results: [] };
+                    },
+                    GetEntityObject: async (entityName: string) => {
+                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
+                        return null;
+                    },
+                };
+
+                SetArtifactLiveMutationHook(async () => ({
+                    mergedContent: '# Doc\n\nAgent edit.\n',
+                    rollback: roomRollbackSpy,
+                    commit: async () => {
+                        throw new Error('Room commit failed');
+                    },
+                }));
+
+                const manager = new ArtifactToolManager();
+                manager.Initialize(
+                    [
+                        {
+                            name: 'Doc.md',
+                            typeName: 'Markdown Document',
+                            toolLibraryClass: 'DocumentToolLibrary',
+                            artifactId: artifactUuid,
+                            versionId: 'ver-initial',
+                            versionNumber: 1,
+                            content: '# Doc\n\nInitial.\n',
+                        },
+                    ],
+                    { contextUser: user, provider: Object.assign(Object.create(null) as IMetadataProvider, mockProvider) },
+                );
+
+                const blocksRes = await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'get_blocks', input: {} });
+                const b0 = (blocksRes.result.data as { blocks: Array<{ blockId: string }> }).blocks[0];
+
+                const editRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Agent edit.' },
+                });
+
+                expect(editRes.result.success).toBe(false);
+                expect(deleteSpy).not.toHaveBeenCalled();
+                expect(roomRollbackSpy).not.toHaveBeenCalled();
+                expect(manager.ToJSON().artifacts[0].versionNumber).toBe(1);
+
+                const secondEditRes = await manager.ExecuteSingleToolCall({
+                    artifactId: 'A',
+                    tool: 'replace_block',
+                    input: { blockId: b0.blockId, markdown: 'Agent edit 2.' },
+                });
+                expect(secondEditRes.result.success).toBe(false);
+                expect(secondEditRes.result.errorMessage).toContain('Artifact was modified concurrently (v3 > v1); call reload_artifact before mutating');
             });
         });
     });

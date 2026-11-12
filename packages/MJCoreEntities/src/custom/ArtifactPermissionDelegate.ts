@@ -346,12 +346,20 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         getTrustedServerVersionRollbacksWeakSet().add(versionEntity);
     }
 
+    public UnmarkTrustedServerVersionRollback(versionEntity: object): void {
+        getTrustedServerVersionRollbacksWeakSet().delete(versionEntity);
+    }
+
     public IsTrustedServerVersionRollback(versionEntity: object): boolean {
         return getTrustedServerVersionRollbacksWeakSet().has(versionEntity);
     }
 
     public static MarkTrustedServerVersionRollback(versionEntity: object): void {
         getTrustedServerVersionRollbacksWeakSet().add(versionEntity);
+    }
+
+    public static UnmarkTrustedServerVersionRollback(versionEntity: object): void {
+        getTrustedServerVersionRollbacksWeakSet().delete(versionEntity);
     }
 
     public static IsTrustedServerVersionRollback(versionEntity: object): boolean {

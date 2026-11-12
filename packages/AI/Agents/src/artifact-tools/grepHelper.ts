@@ -4,7 +4,7 @@ import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecov
 
 export type GrepRawToolInput = Parameters<BaseArtifactToolLibrary['InvokeTool']>[1];
 
-export const GREP_REGEX_BUDGET_MS = 180;
+export const GREP_REGEX_BUDGET_MS = 250;
 export const MAX_SEARCHABLE_LINE_BYTES = 65_536;
 const BATCH_REGEX_MAX_MS = 40;
 const MAX_BATCH_ITEMS = 512;
@@ -52,15 +52,22 @@ export interface StructuredGrepResultData {
 }
 
 function looksLikeRegexPattern(pattern: string): boolean {
-    return (
+    if (pattern.length > 256) {
+        return false;
+    }
+    if (
         /\\[dwsbDWSB](?![a-zA-Z])/.test(pattern) ||
         /\.\*|\.\+/.test(pattern) ||
         /^\^/.test(pattern) ||
-        /\[\^?[0-9a-zA-Z_]+-[0-9a-zA-Z_]+\]\+?/.test(pattern) ||
-        /[a-zA-Z0-9_)\]]\?[a-zA-Z0-9_]/.test(pattern) ||
-        /\{\d+(?:,\d*)?\}/.test(pattern) ||
-        /\((?:\?:|\?=|\?!)?[^()\s]*(?:\\[dwsbDWSB]|\[[^\]]+\]|[+*?])[^()]*\)/.test(pattern)
-    );
+        /\[\^?(?:[0-9a-zA-Z_]+-[0-9a-zA-Z_]+|\^[^\]]+)\]/.test(pattern) ||
+        /(?<![/.\w])[a-zA-Z]{2,}\?[a-zA-Z]+\b/.test(pattern) ||
+        /[a-zA-Z0-9_)\]]\{\d+(?:,\d*)?\}/.test(pattern) ||
+        /^\([a-zA-Z_][a-zA-Z0-9_]*(?:\|[a-zA-Z_][a-zA-Z0-9_]*)+\)$/.test(pattern) ||
+        /^\([a-zA-Z_][a-zA-Z0-9_]*\)$/.test(pattern)
+    ) {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -156,7 +163,8 @@ export async function ExecuteStructuredLineGrep(
     let budgetExpired = false;
     let lastProcessedLine = 0;
     const budgetMs = GREP_REGEX_BUDGET_MS;
-    const regexDeadline = performance.now() + budgetMs;
+    let cpuElapsedMs = 0;
+    let batchesSinceYield = 0;
 
     const recordUnsearchableLine = (
         lineNumber: number,
@@ -180,7 +188,9 @@ export async function ExecuteStructuredLineGrep(
 
     const flushLineBatch = (): void => {
         if (pendingLineNums.length === 0) return;
-        if (budgetExpired) {
+        const remainingMs = budgetMs - cpuElapsedMs;
+        if (remainingMs <= 0 || budgetExpired) {
+            budgetExpired = true;
             for (let k = 0; k < pendingLineNums.length; k++) {
                 recordUnsearchableLine(pendingLineNums[k], 'budget_expired');
             }
@@ -190,13 +200,16 @@ export async function ExecuteStructuredLineGrep(
             return;
         }
 
+        const batchStart = performance.now();
         const recRes = ExecuteSafeRegexBatchWithRecovery(
             safeRegex,
             pendingTexts,
-            regexDeadline,
+            batchStart + remainingMs,
             BATCH_REGEX_MAX_MS,
             MAX_REGEX_INPUT_BYTES
         );
+        cpuElapsedMs += performance.now() - batchStart;
+
         if (recRes.BudgetExpired) {
             budgetExpired = true;
         }
@@ -236,7 +249,10 @@ export async function ExecuteStructuredLineGrep(
         pendingChars += line.length;
         if (pendingLineNums.length >= MAX_BATCH_ITEMS || pendingChars >= MAX_BATCH_CHARS) {
             flushLineBatch();
-            await new Promise<void>((resolve) => setImmediate(resolve));
+            if (++batchesSinceYield >= 4) {
+                batchesSinceYield = 0;
+                await new Promise<void>((resolve) => setImmediate(resolve));
+            }
         }
     }
     flushLineBatch();
@@ -254,9 +270,13 @@ export async function ExecuteStructuredLineGrep(
             `${tooLongCount} line(s) exceeded the ${ MAX_SEARCHABLE_LINE_BYTES / 1024 } KB per-line safety limit and were skipped; results are partial.${!timedOut ? capNote : ''}`,
         );
     }
-    if (timedOut) {
+    if (budgetSkippedCount > 0) {
         warnings.push(
             `Grep execution exceeded the ${budgetMs}ms safety budget after line ${lastProcessedLine}; results are partial (${unsearchableCount} line(s) unsearched)${capNote}. Narrow the pattern or specify a smaller line range.`,
+        );
+    } else if (timeoutCount > 0) {
+        warnings.push(
+            `${timeoutCount} line(s) timed out during regex evaluation and were skipped; results are partial${capNote}. Narrow the pattern or specify a smaller line range.`,
         );
     }
 

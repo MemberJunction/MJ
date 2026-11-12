@@ -7180,8 +7180,36 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const server = ArtifactCollaborationServer.Instance;
         const testArtId = 'e8130000-0000-4000-8000-000000000002';
 
+        const extractRoomSerializedContent = (doc: Y.Doc): string => {
+            const fn = Reflect.get(server, 'extractRoomSerializedContent') as (d: Y.Doc) => string;
+            return fn.call(server, doc);
+        };
+        const applyDeterministicRestoreTextToDoc = (
+            doc: Y.Doc,
+            artId: string,
+            versionId: string | undefined,
+            versionNumber: number | undefined,
+            targetText: string
+        ): number => {
+            const fn = Reflect.get(server, 'applyDeterministicRestoreTextToDoc') as (
+                d: Y.Doc,
+                aId: string,
+                vId: string | undefined,
+                vNum: number | undefined,
+                txt: string
+            ) => number;
+            return fn.call(server, doc, artId, versionId, versionNumber, targetText);
+        };
+        const syncSlideDeckStructuresIfPresent = (doc: Y.Doc, rawContent: string): void => {
+            const fn = Reflect.get(server, 'syncSlideDeckStructuresIfPresent') as (
+                d: Y.Doc,
+                raw: string
+            ) => void;
+            fn.call(server, doc, rawContent);
+        };
+
         const serializeSlideDeckFromYDoc = (doc: Y.Doc, fallbackText = ''): string => {
-            return server.ExtractRoomSerializedContent(doc) || fallbackText;
+            return extractRoomSerializedContent(doc) || fallbackText;
         };
 
         const defaultTheme = SlideDeckEngine.Instance.CreateDefaultDeck().Theme;
@@ -7225,8 +7253,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         const docB = new Y.Doc();
         docB.clientID = 22222;
 
-        server.ApplyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
-        server.SyncSlideDeckStructuresIfPresent(docA, v1Content);
+        applyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
+        syncSlideDeckStructuresIfPresent(docA, v1Content);
 
         // Seed docB with the exact same initial state
         const initialBytes = Y.encodeStateAsUpdate(docA);
@@ -7249,11 +7277,11 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         docB.getMap<string>('slidesById').set('s3', JSON.stringify(s3ParsedB));
 
         // Both nodes independently restore v1
-        server.ApplyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
-        server.SyncSlideDeckStructuresIfPresent(docA, v1Content);
+        applyDeterministicRestoreTextToDoc(docA, testArtId, 'v1', 1, v1Content);
+        syncSlideDeckStructuresIfPresent(docA, v1Content);
 
-        server.ApplyDeterministicRestoreTextToDoc(docB, testArtId, 'v1', 1, v1Content);
-        server.SyncSlideDeckStructuresIfPresent(docB, v1Content);
+        applyDeterministicRestoreTextToDoc(docB, testArtId, 'v1', 1, v1Content);
+        syncSlideDeckStructuresIfPresent(docB, v1Content);
 
         // Heal partition by exchanging updates
         const updateA = Y.encodeStateAsUpdate(docA);
@@ -7369,15 +7397,331 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(room!.BaseVersionNumber).toBe(2);
         expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(v2Content);
 
-        // Now commit() fails or throws: ArtifactToolManager rolls back v2 in DB, and calls rollback()
+        // Now commit() fails or throws: ArtifactToolManager rolls back v2 in DB, and calls rollback(rolledBackVersionId)
         versions.pop();
-        await hookRes!.rollback!();
+        await hookRes!.rollback!('ver-r13-v2');
 
         // Verify the room reverted cleanly back to v1!
         expect(room!.BaseVersionID).toBe('ver-r13-v1');
         expect(room!.BaseVersionNumber).toBe(1);
         expect(room!.DirtyVersion).toBe(false);
         expect(await server.GetRoomContent(testArtifactId, editorUser)).toBe(v1Content);
+    });
+
+    it('X1: human edits line 6 while Save() is in flight, commit() throws -> agent edit on line 2 is undone and human edit is preserved', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtifactId = 'a1400000-0000-4000-8000-000000000001';
+        const v1Content = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\nBudget.\n';
+        const v2Content = '# Plan\nIntro (agent).\n## Goals\nShip.\n## Risks\nBudget.\n';
+
+        versions = [
+            {
+                ID: 'ver-x1-v1',
+                ArtifactID: testArtifactId,
+                VersionNumber: 1,
+                Content: v1Content,
+                ContentHash: 'hash-x1-v1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.clear();
+
+        const room = await server.GetOrCreateRoom(testArtifactId, editorUser);
+        expect(room).toBeTruthy();
+        expect(room!.BaseVersionID).toBe('ver-x1-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+
+        const store = GetGlobalObjectStore();
+        type LiveHook = (evt: {
+            artifactId: string;
+            alphaId: string;
+            versionId?: string;
+            versionNumber?: number;
+            previousContent?: string;
+            updatedContent: string;
+            tool: string;
+            deferCommit?: boolean;
+            contextUser?: UserInfo;
+        }) => Promise<ArtifactLiveMutationHookResult | void>;
+        const liveHook = store ? (store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] as LiveHook | undefined) : undefined;
+        expect(typeof liveHook).toBe('function');
+
+        // Agent initiates deferCommit mutation preview
+        const hookRes = await liveHook!({
+            artifactId: testArtifactId,
+            alphaId: 'alpha-x1',
+            updatedContent: v2Content,
+            previousContent: v1Content,
+            tool: 'test-tool',
+            deferCommit: true,
+            contextUser: editorUser
+        });
+        expect(hookRes).toBeTruthy();
+        expect(typeof hookRes?.rollback).toBe('function');
+
+        // While Save() is in flight, human edits line 6 in the room: 'Budget.' -> '$25k (human)'
+        const yText = room!.Doc.getText('content');
+        const humanEditedText = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\n$25k (human)\n';
+        room!.Doc.transact(() => {
+            yText.delete(0, yText.length);
+            yText.insert(0, humanEditedText);
+        }, 'human-edit');
+
+        // MJ_ARTIFACT_VERSION_SAVED reconciles v2 into the room
+        versions.push({
+            ID: 'ver-x1-v2',
+            ArtifactID: testArtifactId,
+            VersionNumber: 2,
+            Content: v2Content,
+            ContentHash: 'hash-x1-v2',
+            UserID: editorUser.ID
+        });
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: testArtifactId,
+                VersionID: 'ver-x1-v2',
+                VersionNumber: 2,
+                Content: v2Content,
+                UserID: editorUser.ID
+            }
+        });
+
+        // The room reconciled v2, so line 2 has agent edit and line 6 has human edit
+        const contentAfterReconcile = room!.Doc.getText('content').toString();
+        expect(contentAfterReconcile).toContain('Intro (agent).');
+        expect(contentAfterReconcile).toContain('$25k (human)');
+        expect(room!.BaseVersionID).toBe('ver-x1-v2');
+
+        // Now commit() throws: ArtifactToolManager deletes v2 in DB and invokes hookRes.rollback('ver-x1-v2')
+        versions.pop();
+        await hookRes!.rollback!('ver-x1-v2');
+
+        // Verify surgical rollback:
+        // Line 2 agent edit is undone ('Intro.' restored)
+        // Line 6 human edit '$25k (human)' is preserved!
+        const finalContent = room!.Doc.getText('content').toString();
+        expect(finalContent).toContain('Intro.');
+        expect(finalContent).not.toContain('Intro (agent).');
+        expect(finalContent).toContain('$25k (human)');
+        expect(room!.BaseVersionID).toBe('ver-x1-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+    });
+
+    it('X1b: same as X1 with MJ_ARTIFACT_VERSION_SAVED disabled -> rollback() is a no-op so human edit is preserved', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtifactId = 'a1400000-0000-4000-8000-000000000002';
+        const v1Content = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\nBudget.\n';
+        const v2Content = '# Plan\nIntro (agent).\n## Goals\nShip.\n## Risks\nBudget.\n';
+
+        versions = [
+            {
+                ID: 'ver-x1b-v1',
+                ArtifactID: testArtifactId,
+                VersionNumber: 1,
+                Content: v1Content,
+                ContentHash: 'hash-x1b-v1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.clear();
+
+        const room = await server.GetOrCreateRoom(testArtifactId, editorUser);
+        expect(room).toBeTruthy();
+        expect(room!.BaseVersionID).toBe('ver-x1b-v1');
+
+        const store = GetGlobalObjectStore();
+        type LiveHook = (evt: {
+            artifactId: string;
+            alphaId: string;
+            versionId?: string;
+            versionNumber?: number;
+            previousContent?: string;
+            updatedContent: string;
+            tool: string;
+            deferCommit?: boolean;
+            contextUser?: UserInfo;
+        }) => Promise<ArtifactLiveMutationHookResult | void>;
+        const liveHook = store ? (store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] as LiveHook | undefined) : undefined;
+
+        const hookRes = await liveHook!({
+            artifactId: testArtifactId,
+            alphaId: 'alpha-x1b',
+            updatedContent: v2Content,
+            previousContent: v1Content,
+            tool: 'test-tool',
+            deferCommit: true,
+            contextUser: editorUser
+        });
+
+        // Human edits line 6 in the room: 'Budget.' -> '$25k (human)'
+        const yText = room!.Doc.getText('content');
+        const humanEditedText = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\n$25k (human)\n';
+        room!.Doc.transact(() => {
+            yText.delete(0, yText.length);
+            yText.insert(0, humanEditedText);
+        }, 'human-edit');
+
+        // Notice: MJ_ARTIFACT_VERSION_SAVED is NOT raised. Room remains at BaseVersionID ver-x1b-v1.
+        expect(room!.BaseVersionID).toBe('ver-x1b-v1');
+
+        // commit() throws: ArtifactToolManager invokes rollback('ver-x1b-v2')
+        // Because the room never reconciled ver-x1b-v2, rollback is a no-op!
+        await hookRes!.rollback!('ver-x1b-v2');
+
+        // Human edit is 100% preserved
+        const finalContent = room!.Doc.getText('content').toString();
+        expect(finalContent).toBe(humanEditedText);
+        expect(room!.BaseVersionID).toBe('ver-x1b-v1');
+    });
+
+    it('X1c: CanEdit revoked before commit() causes commit() to return applied: false, and relay sync-state updates node2 room base version on rollback', async () => {
+        const server = ArtifactCollaborationServer.Instance;
+        const testArtifactId = 'a1400000-0000-4000-8000-000000000003';
+        const v1Content = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\nBudget.\n';
+        const v2Content = '# Plan\nIntro (agent).\n## Goals\nShip.\n## Risks\nBudget.\n';
+
+        versions = [
+            {
+                ID: 'ver-x1c-v1',
+                ArtifactID: testArtifactId,
+                VersionNumber: 1,
+                Content: v1Content,
+                ContentHash: 'hash-x1c-v1',
+                UserID: editorUser.ID
+            }
+        ];
+        workingStates.clear();
+
+        const room = await server.GetOrCreateRoom(testArtifactId, editorUser);
+        expect(room).toBeTruthy();
+        expect(room!.BaseVersionID).toBe('ver-x1c-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+
+        const store = GetGlobalObjectStore();
+        type LiveHook = (evt: {
+            artifactId: string;
+            alphaId: string;
+            versionId?: string;
+            versionNumber?: number;
+            previousContent?: string;
+            updatedContent: string;
+            tool: string;
+            deferCommit?: boolean;
+            contextUser?: UserInfo;
+        }) => Promise<ArtifactLiveMutationHookResult | void>;
+        const liveHook = store ? (store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] as LiveHook | undefined) : undefined;
+        expect(typeof liveHook).toBe('function');
+
+        // Agent initiates deferCommit mutation preview
+        const hookRes = await liveHook!({
+            artifactId: testArtifactId,
+            alphaId: 'alpha-x1c',
+            updatedContent: v2Content,
+            previousContent: v1Content,
+            tool: 'test-tool',
+            deferCommit: true,
+            contextUser: editorUser
+        });
+        expect(hookRes).toBeTruthy();
+        expect(typeof hookRes?.rollback).toBe('function');
+        expect(typeof hookRes?.commit).toBe('function');
+
+        // While Save() is in flight, human edits line 6 in the room: 'Budget.' -> '$25k (human)'
+        const yText = room!.Doc.getText('content');
+        const humanEditedText = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\n$25k (human)\n';
+        room!.Doc.transact(() => {
+            yText.delete(0, yText.length);
+            yText.insert(0, humanEditedText);
+        }, 'human-edit');
+
+        // MJ_ARTIFACT_VERSION_SAVED reconciles v2 into the room
+        versions.push({
+            ID: 'ver-x1c-v2',
+            ArtifactID: testArtifactId,
+            VersionNumber: 2,
+            Content: v2Content,
+            ContentHash: 'hash-x1c-v2',
+            UserID: editorUser.ID
+        });
+        MJGlobal.Instance.RaiseEvent({
+            component: null,
+            event: MJEventType.ComponentEvent,
+            eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+            args: {
+                ArtifactID: testArtifactId,
+                VersionID: 'ver-x1c-v2',
+                VersionNumber: 2,
+                Content: v2Content,
+                UserID: editorUser.ID
+            }
+        });
+
+        expect(room!.BaseVersionID).toBe('ver-x1c-v2');
+
+        // Now revoke CanEdit on editorUser before commit() is called
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: false });
+
+        // commit() must fail because CanEdit was revoked
+        const commitOutcome = await hookRes!.commit!({
+            versionId: 'ver-x1c-v2',
+            versionNumber: 2
+        });
+        expect(commitOutcome.applied).toBe(false);
+
+        // Restore permission for subsequent operations
+        permissionTable.set(editorUser.ID, { CanRead: true, CanEdit: true });
+
+        // ArtifactToolManager deletes v2 in DB and invokes rollback('ver-x1c-v2')
+        versions.pop();
+        await hookRes!.rollback!('ver-x1c-v2');
+
+        // Verify surgical rollback on node 1:
+        // Agent edit undone, human edit preserved, room base version back to v1
+        const finalContent = room!.Doc.getText('content').toString();
+        expect(finalContent).toContain('Intro.');
+        expect(finalContent).not.toContain('Intro (agent).');
+        expect(finalContent).toContain('$25k (human)');
+        expect(room!.BaseVersionID).toBe('ver-x1c-v1');
+        expect(room!.BaseVersionNumber).toBe(1);
+
+        // Verify syncRoomBaseVersionFromDocMetaOnRollback on a second node (Node 2):
+        // Node 2 has received v2 earlier, so its BaseVersionNumber was 2
+        const mockNode2Doc = new Y.Doc();
+        Y.applyUpdate(mockNode2Doc, Y.encodeStateAsUpdate(room!.Doc));
+        const mockNode2Room: CollaborationRoom = {
+            ArtifactID: testArtifactId,
+            Doc: mockNode2Doc,
+            Awareness: new awarenessProtocol.Awareness(mockNode2Doc),
+            Connections: new Set(),
+            LastActivityAt: Date.now(),
+            RoomEpoch: 1,
+            LastModifiedByUser: null,
+            BaseVersionID: 'ver-x1c-v2',
+            BaseVersionNumber: 2,
+            BaseVersionText: v2Content,
+            LastAppliedRestoreVersionID: null,
+            LastAppliedRestoreVersionNumber: 0,
+            DirtyVersion: false,
+            PreOutOfBandDocState: null,
+            LastReconciledOobVersionID: 'ver-x1c-v2',
+            LastReconciledOobContent: v2Content,
+            LastReconciledOobMergeResult: null,
+            LastReconciledBaselineText: v1Content
+        };
+
+        const syncRollbackFn = Reflect.get(server, 'syncRoomBaseVersionFromDocMetaOnRollback') as (
+            r: CollaborationRoom
+        ) => void;
+        syncRollbackFn.call(server, mockNode2Room);
+
+        // Node 2 room base version reverted to v1, BaseVersionText reverted to v1, and OOB fields cleared
+        expect(mockNode2Room.BaseVersionID).toBe('ver-x1c-v1');
+        expect(mockNode2Room.BaseVersionNumber).toBe(1);
+        expect(mockNode2Room.BaseVersionText).toBe(v1Content);
+        expect(mockNode2Room.LastReconciledOobVersionID).toBeNull();
     });
 
     it('R13-4: MJ_ARTIFACT_VERSION_SAVED payload with UpdatedByUserID targets MSG_MERGE_CONFLICT only to that actor and not to other editors', async () => {

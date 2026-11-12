@@ -3097,4 +3097,326 @@ describe('SpreadsheetEngine (Wave 3 — MJ Sheets § 6 & § 7.2)', () => {
         expect(patchedXml3).toContain('<f t="array" ref="C1:C3">A1:A3*10</f>');
         expect(patchedXml3).not.toMatch(/<c[^>]*\bcm="/);
     });
+
+    it('R14-4: Evaluates array literals and expressions in functions with Excel parity', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('R14-4', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+
+        // Set up A1:A3 and B1:B3
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb, s.SheetID, 'A3', { Value: 3 }, false);
+        engine.SetCell(wb, s.SheetID, 'B1', { Value: 10 }, false);
+        engine.SetCell(wb, s.SheetID, 'B2', { Value: 20 }, false);
+        engine.SetCell(wb, s.SheetID, 'B3', { Value: 30 }, true);
+
+        // 1) SUMPRODUCT({1,2,3},{4,5,6}) === 32
+        const c1 = engine.SetCell(wb, s.SheetID, 'C1', { Formula: '=SUMPRODUCT({1,2,3},{4,5,6})' }, true);
+        expect(c1.ComputedValue).toBe(32);
+
+        // 2) SUMPRODUCT({0.1,0.2},{1,1}) === 0.3 (float normalization)
+        const c2 = engine.SetCell(wb, s.SheetID, 'C2', { Formula: '=SUMPRODUCT({0.1,0.2},{1,1})' }, true);
+        expect(c2.ComputedValue).toBe(0.3);
+
+        // 3) SUMPRODUCT(A1:A3*B1:B3) === 140 (1*10 + 2*20 + 3*30 = 10 + 40 + 90 = 140)
+        const c3 = engine.SetCell(wb, s.SheetID, 'C3', { Formula: '=SUMPRODUCT(A1:A3*B1:B3)' }, true);
+        expect(c3.ComputedValue).toBe(140);
+
+        // 4) AND({TRUE,FALSE}) === false, OR({FALSE,TRUE}) === true
+        const c4a = engine.SetCell(wb, s.SheetID, 'C4', { Formula: '=AND({TRUE,FALSE})' }, true);
+        expect(c4a.ComputedValue).toBe(false);
+        const c4b = engine.SetCell(wb, s.SheetID, 'C5', { Formula: '=OR({FALSE,TRUE})' }, true);
+        expect(c4b.ComputedValue).toBe(true);
+
+        // 5) ROWS({1;2;3}) === 3, COLUMNS({1,2,3}) === 3
+        const c5a = engine.SetCell(wb, s.SheetID, 'C6', { Formula: '=ROWS({1;2;3})' }, true);
+        expect(c5a.ComputedValue).toBe(3);
+        const c5b = engine.SetCell(wb, s.SheetID, 'C7', { Formula: '=COLUMNS({1,2,3})' }, true);
+        expect(c5b.ComputedValue).toBe(3);
+
+        // 6) INDEX({10,20,30}, 2) === 20
+        const c6 = engine.SetCell(wb, s.SheetID, 'C8', { Formula: '=INDEX({10,20,30}, 2)' }, true);
+        expect(c6.ComputedValue).toBe(20);
+
+        // 7) TEXTJOIN(",", TRUE, {"a","b"}) === "a,b"
+        const c7 = engine.SetCell(wb, s.SheetID, 'C9', { Formula: '=TEXTJOIN(",", TRUE, {"a","b"})' }, true);
+        expect(c7.ComputedValue).toBe('a,b');
+
+        // 8) Scalar-only functions in non-CSE context return #VALUE!
+        const c8a = engine.SetCell(wb, s.SheetID, 'C10', { Formula: '=SUM(COUNTIF(A1:A3, {1,2}))' }, true);
+        expect(c8a.ComputedValue).toBe('#VALUE!');
+
+        const c8b = engine.SetCell(wb, s.SheetID, 'D1', { Formula: '=SUM(IF({1,0,1}, A1:A3))' }, true);
+        expect(c8b.ComputedValue).toBe('#VALUE!');
+    });
+
+    it('R14-5: Shifts and validates CSE array metadata across row/column insertions, deletions, and sorts', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const dec = new TextDecoder();
+        const enc = new TextEncoder();
+
+        // 1) Insert row above CSE cell C2 -> ref shifts to C3 in ExportToXlsxBytes and PatchXlsxBytes
+        const wb1 = engine.CreateEmptyWorkbook('R14-5-Wb1', ['Sheet1'], 10, 10);
+        const s1 = wb1.Worksheets[0];
+        engine.SetCell(wb1, s1.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'A2', { Value: 2 }, false);
+        engine.SetCell(wb1, s1.SheetID, 'C2', { Formula: '=SUM({1,2,3}*{4,5,6})' }, true);
+
+        // Build a seed xlsx containing <c r="C2"><f t="array" ref="C2">SUM({1,2,3}*{4,5,6})</f><v>32</v></c>
+        const expBytes1 = engine.ExportToXlsxBytes(wb1, false);
+        const zip1 = engine.ExtractZipArchive(expBytes1);
+        let sheetXml1 = dec.decode(zip1.get('xl/worksheets/sheet1.xml')!);
+        sheetXml1 = sheetXml1.replace(
+            /<c r="C2"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C2"><f t="array" ref="C2">SUM({1,2,3}*{4,5,6})</f><v>32</v></c>'
+        );
+        zip1.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml1));
+        const seedBytes1 = engine.BuildZipArchive(Array.from(zip1.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        // Import seed, insert 1 row at row 1 (above C2) -> cell moves to C3, ref shifts to C3
+        const imp1 = engine.ImportFromXlsxBytes(seedBytes1);
+        engine.InsertRows(imp1, imp1.Worksheets[0].SheetID, 1, 1);
+
+        // Check ExportToXlsxBytes
+        const expBytesShifted = engine.ExportToXlsxBytes(imp1, false);
+        const expXmlShifted = dec.decode(engine.ExtractZipArchive(expBytesShifted).get('xl/worksheets/sheet1.xml')!);
+        expect(expXmlShifted).toMatch(/<c r="C3"[^>]*><f t="array" ref="C3">/);
+
+        // 2) Insert column left of multi-cell CSE C1:C3 -> ref shifts to D1:D3
+        const wb2 = engine.CreateEmptyWorkbook('R14-5-Wb2', ['Sheet1'], 10, 10);
+        const s2 = wb2.Worksheets[0];
+        engine.SetCell(wb2, s2.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'C1', { Value: 2 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'C2', { Value: 4 }, false);
+        engine.SetCell(wb2, s2.SheetID, 'C3', { Value: 6 }, true);
+
+        const expBytes2 = engine.ExportToXlsxBytes(wb2, false);
+        const zip2 = engine.ExtractZipArchive(expBytes2);
+        let sheetXml2 = dec.decode(zip2.get('xl/worksheets/sheet1.xml')!);
+        sheetXml2 = sheetXml2.replace(
+            /<c r="C1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C1"><f t="array" ref="C1:C3">A1:A3*2</f><v>2</v></c>'
+        );
+        zip2.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml2));
+        const seedBytes2 = engine.BuildZipArchive(Array.from(zip2.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        const imp2 = engine.ImportFromXlsxBytes(seedBytes2);
+        engine.InsertColumns(imp2, imp2.Worksheets[0].SheetID, 2, 1); // Insert 1 col at col B (left of C)
+        const expBytesCol = engine.ExportToXlsxBytes(imp2, false);
+        const expXmlCol = dec.decode(engine.ExtractZipArchive(expBytesCol).get('xl/worksheets/sheet1.xml')!);
+        expect(expXmlCol).toMatch(/<c r="D1"[^>]*><f t="array" ref="D1:D3">/);
+
+        // 3) Delete row inside multi-cell CSE C1:C3 (delete row 2) -> ref shrinks to C1:C2
+        const imp3 = engine.ImportFromXlsxBytes(seedBytes2);
+        engine.DeleteRows(imp3, imp3.Worksheets[0].SheetID, 2, 1);
+        const expBytesDel = engine.ExportToXlsxBytes(imp3, false);
+        const expXmlDel = dec.decode(engine.ExtractZipArchive(expBytesDel).get('xl/worksheets/sheet1.xml')!);
+        expect(expXmlDel).toMatch(/<c r="C1"[^>]*><f t="array" ref="C1:C2">/);
+
+        // 4) Sort rows moving CSE anchor -> t="array" / stale ref is dropped so C3 has clean formula without ref="C1:C3"
+        const imp4 = engine.ImportFromXlsxBytes(seedBytes2);
+        // Sort descending by column C so C3 (6) moves to top and C1 (2) moves down
+        engine.SortWorksheet(imp4, imp4.Worksheets[0].SheetID, { ColumnLetter: 'C', Direction: 'desc', HeaderRows: 0 });
+        const expBytesSort = engine.ExportToXlsxBytes(imp4, false);
+        const expXmlSort = dec.decode(engine.ExtractZipArchive(expBytesSort).get('xl/worksheets/sheet1.xml')!);
+        expect(expXmlSort).not.toContain('ref="C1:C3"');
+    });
+
+    it('R14-7: Preserves vs drops CSE array metadata on formula/value edits', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const dec = new TextDecoder();
+        const enc = new TextEncoder();
+
+        const wb = engine.CreateEmptyWorkbook('R14-7', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wb, s.SheetID, 'C1', { Value: 2 }, false);
+        engine.SetCell(wb, s.SheetID, 'C2', { Value: 4 }, false);
+        engine.SetCell(wb, s.SheetID, 'C3', { Value: 6 }, true);
+
+        const expBytes = engine.ExportToXlsxBytes(wb, false);
+        const zip = engine.ExtractZipArchive(expBytes);
+        let sheetXml = dec.decode(zip.get('xl/worksheets/sheet1.xml')!);
+        sheetXml = sheetXml.replace(
+            /<c r="C1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C1"><f t="array" ref="C1:C3">A1:A3*2</f><v>2</v></c>'
+        );
+        zip.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml));
+        const seedBytes = engine.BuildZipArchive(Array.from(zip.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        // 1) Editing CSE cell C1 to =A1+1 drops t="array" and ref="C1:C3" in ExportToXlsxBytes and PatchXlsxBytes
+        const imp1 = engine.ImportFromXlsxBytes(seedBytes);
+        engine.SetCell(imp1, imp1.Worksheets[0].SheetID, 'C1', { Formula: '=A1+1' }, true);
+        const expXml1 = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp1, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml1).toContain('<f>A1+1</f>');
+        expect(expXml1).not.toContain('t="array"');
+
+        const patchXml1 = dec.decode(engine.ExtractZipArchive(engine.PatchXlsxBytes(seedBytes, imp1)).get('xl/worksheets/sheet1.xml')!);
+        expect(patchXml1).toContain('<f>A1+1</f>');
+        expect(patchXml1).not.toContain('t="array"');
+
+        // 2) Setting CSE cell C1 to { Value: 5 } and then to { Formula: '=B1+1' } does NOT resurrect t="array" ref="C1:C3"
+        const imp2 = engine.ImportFromXlsxBytes(seedBytes);
+        engine.SetCell(imp2, imp2.Worksheets[0].SheetID, 'C1', { Value: 5 }, true);
+        engine.SetCell(imp2, imp2.Worksheets[0].SheetID, 'C1', { Formula: '=B1+1' }, true);
+        const expXml2 = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp2, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml2).toContain('<f>B1+1</f>');
+        expect(expXml2).not.toContain('t="array"');
+
+        const patchXml2 = dec.decode(engine.ExtractZipArchive(engine.PatchXlsxBytes(seedBytes, imp2)).get('xl/worksheets/sheet1.xml')!);
+        expect(patchXml2).toContain('<f>B1+1</f>');
+        expect(patchXml2).not.toContain('t="array"');
+    });
+
+    it('R14-8: Never treats {=…} in SetCell input.Value or ImportFromCsv as a formula', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('R14-8', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+
+        const cellA = engine.SetCell(wb, s.SheetID, 'A1', { Value: '{=FirstName}' }, true);
+        expect(cellA.Formula).toBeNull();
+        expect(cellA.RawValue).toBe('{=FirstName}');
+        expect(cellA.ComputedValue).toBe('{=FirstName}');
+
+        const cellB = engine.SetCell(wb, s.SheetID, 'A2', { Value: '{=}' }, true);
+        expect(cellB.Formula).toBeNull();
+        expect(cellB.RawValue).toBe('{=}');
+        expect(cellB.ComputedValue).toBe('{=}');
+
+        const csv = 'Name,Formula\n"{=FirstName}","=1+1"';
+        const impWb = engine.ImportFromCsv(csv);
+        const ws = impWb.Worksheets[0];
+        expect(ws.Cells['A2']?.Formula ?? null).toBeNull();
+        expect(ws.Cells['A2']?.RawValue).toBe('{=FirstName}');
+        expect(ws.Cells['B2']?.Formula).toBe('=1+1');
+        expect(ws.Cells['B2']?.ComputedValue).toBe(2);
+    });
+
+    it('R14-9: SerializeWorkbook output does NOT contain _originalXmlMeta or FormulaDirty', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const wb = engine.CreateEmptyWorkbook('R14-9', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'A1', { Formula: '=SUM({1,2,3}*{4,5,6})' }, true);
+        engine.SetCell(wb, s.SheetID, 'A2', { Value: 'Hello' }, true);
+
+        const serialized = engine.SerializeWorkbook(wb);
+        expect(serialized).not.toContain('_originalXmlMeta');
+        expect(serialized).not.toContain('FormulaDirty');
+        expect(serialized).not.toContain('formulaDirty');
+    });
+
+    it('normalizes cm="1" and includes xl/metadata.xml in fresh ExportToXlsxBytes', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const dec = new TextDecoder();
+        const enc = new TextEncoder();
+
+        const wb = engine.CreateEmptyWorkbook('CmWb', ['Sheet1'], 10, 10);
+        const s = wb.Worksheets[0];
+        engine.SetCell(wb, s.SheetID, 'A1', { Value: 1 }, true);
+
+        const expBytes = engine.ExportToXlsxBytes(wb, false);
+        const zip = engine.ExtractZipArchive(expBytes);
+        let sheetXml = dec.decode(zip.get('xl/worksheets/sheet1.xml')!);
+        // Inject <c r="A1" cm="2"><f>SEQUENCE(3)</f><v>1</v></c> into seed
+        sheetXml = sheetXml.replace(
+            /<c r="A1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="A1" cm="2"><f>SEQUENCE(3)</f><v>1</v></c>'
+        );
+        zip.set('xl/worksheets/sheet1.xml', enc.encode(sheetXml));
+        const seedBytes = engine.BuildZipArchive(Array.from(zip.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        const imp = engine.ImportFromXlsxBytes(seedBytes);
+        const freshExpBytes = engine.ExportToXlsxBytes(imp, false);
+        const freshZip = engine.ExtractZipArchive(freshExpBytes);
+        const freshXml = dec.decode(freshZip.get('xl/worksheets/sheet1.xml')!);
+
+        expect(freshXml).toContain('cm="1"');
+        expect(freshZip.has('xl/metadata.xml')).toBe(true);
+    });
+
+    it('bridges CSE metadata across ParseWorkbook(SerializeWorkbook(wb)) for R13-5, R14-5, and R14-7', () => {
+        const engine = SpreadsheetEngine.Instance;
+        const dec = new TextDecoder();
+        const enc = new TextEncoder();
+
+        // 1) Seed workbook with multi-cell CSE C1:C3
+        const wbSeed = engine.CreateEmptyWorkbook('RoundTripCSE', ['Sheet1'], 10, 10);
+        const sSeed = wbSeed.Worksheets[0];
+        engine.SetCell(wbSeed, sSeed.SheetID, 'A1', { Value: 1 }, false);
+        engine.SetCell(wbSeed, sSeed.SheetID, 'C1', { Value: 2 }, false);
+        engine.SetCell(wbSeed, sSeed.SheetID, 'C2', { Value: 4 }, false);
+        engine.SetCell(wbSeed, sSeed.SheetID, 'C3', { Value: 6 }, true);
+
+        const expBytesSeed = engine.ExportToXlsxBytes(wbSeed, false);
+        const zipSeed = engine.ExtractZipArchive(expBytesSeed);
+        let sheetXmlSeed = dec.decode(zipSeed.get('xl/worksheets/sheet1.xml')!);
+        sheetXmlSeed = sheetXmlSeed.replace(
+            /<c r="C1"[^>]*>[\s\S]*?<\/c>/,
+            '<c r="C1"><f t="array" ref="C1:C3">A1:A3*2</f><v>2</v></c>'
+        );
+        zipSeed.set('xl/worksheets/sheet1.xml', enc.encode(sheetXmlSeed));
+        const seedBytes = engine.BuildZipArchive(Array.from(zipSeed.entries()).map(([Name, Data]) => ({ Name, Data })));
+
+        // R13-5 & Parse/Serialize round-trip: verify SpillRange is preserved and restores CELL_XML_META
+        let imp = engine.ImportFromXlsxBytes(seedBytes);
+        expect(imp.Worksheets[0].Cells['C1']?.SpillRange).toBe('C1:C3');
+
+        // Round-trip through JSON
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        expect(imp.Worksheets[0].Cells['C1']?.SpillRange).toBe('C1:C3');
+
+        // Export after JSON roundtrip still outputs t="array" ref="C1:C3"
+        let expXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml).toMatch(/<c r="C1"[^>]*><f t="array" ref="C1:C3">/);
+
+        // R14-5 with JSON round-trip: Insert 1 row at row 1 (shifts C1:C3 to C2:C4)
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        engine.InsertRows(imp, imp.Worksheets[0].SheetID, 1, 1);
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        expXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml).toMatch(/<c r="C2"[^>]*><f t="array" ref="C2:C4">/);
+
+        // Insert 1 column at col B (shifts C2:C4 to D2:D4)
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        engine.InsertColumns(imp, imp.Worksheets[0].SheetID, 2, 1);
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        expXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml).toMatch(/<c r="D2"[^>]*><f t="array" ref="D2:D4">/);
+
+        // Delete row inside range
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        engine.DeleteRows(imp, imp.Worksheets[0].SheetID, 3, 1);
+        imp = engine.ParseWorkbook(engine.SerializeWorkbook(imp));
+        expXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(imp, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXml).toMatch(/<c r="D2"[^>]*><f t="array" ref="D2:D3">/);
+
+        // Sort rows moving anchor: drops ref
+        let impSort = engine.ImportFromXlsxBytes(seedBytes);
+        impSort = engine.ParseWorkbook(engine.SerializeWorkbook(impSort));
+        engine.SortWorksheet(impSort, impSort.Worksheets[0].SheetID, { ColumnLetter: 'C', Direction: 'desc', HeaderRows: 0 });
+        impSort = engine.ParseWorkbook(engine.SerializeWorkbook(impSort));
+        const expXmlSort = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(impSort, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expXmlSort).not.toContain('ref="C1:C3"');
+
+        // R14-7 with JSON round-trip: edit to =A1+1 drops array meta
+        let impEdit = engine.ImportFromXlsxBytes(seedBytes);
+        impEdit = engine.ParseWorkbook(engine.SerializeWorkbook(impEdit));
+        engine.SetCell(impEdit, impEdit.Worksheets[0].SheetID, 'C1', { Formula: '=A1+1' }, true);
+        impEdit = engine.ParseWorkbook(engine.SerializeWorkbook(impEdit));
+        const expEditXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(impEdit, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expEditXml).toContain('<f>A1+1</f>');
+        expect(expEditXml).not.toContain('t="array"');
+
+        // Value edit followed by formula edit does NOT resurrect t="array"
+        let impVal = engine.ImportFromXlsxBytes(seedBytes);
+        impVal = engine.ParseWorkbook(engine.SerializeWorkbook(impVal));
+        engine.SetCell(impVal, impVal.Worksheets[0].SheetID, 'C1', { Value: 5 }, true);
+        impVal = engine.ParseWorkbook(engine.SerializeWorkbook(impVal));
+        engine.SetCell(impVal, impVal.Worksheets[0].SheetID, 'C1', { Formula: '=B1+1' }, true);
+        impVal = engine.ParseWorkbook(engine.SerializeWorkbook(impVal));
+        const expValXml = dec.decode(engine.ExtractZipArchive(engine.ExportToXlsxBytes(impVal, false)).get('xl/worksheets/sheet1.xml')!);
+        expect(expValXml).toContain('<f>B1+1</f>');
+        expect(expValXml).not.toContain('t="array"');
+    });
 });

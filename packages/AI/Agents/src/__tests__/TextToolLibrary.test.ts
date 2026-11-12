@@ -96,7 +96,17 @@ describe('TextToolLibrary', () => {
             const expectedHint = 'Pattern matched 0 literal occurrences; if you meant a regex, set use_regex: true.';
 
             // Plain patterns with 0 matches should NOT emit regex warnings
-            const plainPatterns = ['| Name |', 'Q1|Q2 plan', 'USD$', 'C:\\shared\\docs', '$100', '[DRAFT]'];
+            const plainPatterns = [
+                '| Name |',
+                'Q1|Q2 plan',
+                'USD$',
+                'C:\\shared\\docs',
+                '$100',
+                '[DRAFT]',
+                'index.php?id=5',
+                'format {0}',
+                '(n+1)'
+            ];
             for (const p of plainPatterns) {
                 const res = await lib.InvokeTool('grep', { pattern: p }, 'Some sample log text without matching tokens');
                 expect(res.success).toBe(true);
@@ -106,7 +116,24 @@ describe('TextToolLibrary', () => {
             }
 
             // Unambiguous regex patterns with 0 matches DOES emit hint
-            const regexPatterns = ['\\d+', 'foo.*bar', '[0-9]+', '<name>([^<]+)</name>'];
+            const regexPatterns = [
+                '\\d+',
+                '\\w',
+                '\\s',
+                '\\b',
+                '.*',
+                '.+',
+                '^foo',
+                'foo.*bar',
+                '[0-9]+',
+                '[a-z]',
+                '<name>([^<]+)</name>',
+                'colou?r',
+                'a{3}',
+                '\\d{2,4}',
+                '(foo)',
+                '(foo|bar)'
+            ];
             for (const p of regexPatterns) {
                 const res = await lib.InvokeTool('grep', { pattern: p }, 'Some sample log text without matching tokens');
                 expect(res.success).toBe(true);
@@ -114,6 +141,39 @@ describe('TextToolLibrary', () => {
                 expect(data.matchCount).toBe(0);
                 expect(data.warnings).toContain(expectedHint);
             }
+        });
+
+        it('R14-1: ReDoS input completes in < 10ms with no hint', async () => {
+            const longPattern = '(' + 'a+'.repeat(50_000) + 'b';
+            const t0 = performance.now();
+            const res = await lib.InvokeTool('grep', { pattern: longPattern }, 'Some sample log text without matching tokens');
+            const elapsed = performance.now() - t0;
+            expect(res.success).toBe(true);
+            const data = res.data as TextGrepResultData;
+            expect(data.matchCount).toBe(0);
+            expect(data.warnings).toEqual([]);
+            expect(elapsed).toBeLessThan(10);
+        });
+
+        it('R14-1: single-line catastrophic regex timeout + normal match produces per-line timeout warning', async () => {
+            const lines = [
+                'SAFE_PREFIX_LINE_0',
+                'a'.repeat(16_384),
+                'TARGET_MATCH_LINE_2'
+            ].join('\n');
+
+            const res = await lib.InvokeTool(
+                'grep',
+                { pattern: 'TARGET_MATCH|(a|b)+c', use_regex: true },
+                lines
+            );
+            expect(res.success).toBe(true);
+            const data = res.data as TextGrepResultData;
+            expect(data.matchCount).toBe(1);
+            expect(data.matches[0].lineNumber).toBe(2);
+            expect(data.timedOut).toBe(true);
+            expect(data.warnings.some(w => w.includes('1 line(s) timed out during regex evaluation and were skipped'))).toBe(true);
+            expect(data.warnings.some(w => w.includes('safety budget'))).toBe(false);
         });
 
         it('TextToolLibrary.grep 500,000-line log with match on line 499_999 returns matchCount: 1 in < 2500 ms', async () => {
