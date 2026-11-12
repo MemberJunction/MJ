@@ -661,6 +661,9 @@ export class AgentRunner {
                         const detail = agentResponseDetail;
                         const message: string = progress.message;
                         progressSaves = progressSaves.then(async () => {
+                            if (agentExecutionCompleted) {
+                                return;
+                            }
                             try {
                                 detail.Message = message;
                                 if (!(await detail.Save())) {
@@ -671,12 +674,13 @@ export class AgentRunner {
                                 LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
                             }
                         });
-                        await progressSaves;
                     }
-                    // Call original callback if provided
+                    // Call original callback immediately if provided so WebSocket progress is emitted without waiting on DB save
                     if (originalOnProgress) {
                         await originalOnProgress(progress);
                     }
+                    // Wait for in-flight progress saves to settle so callers that await onProgress still wait for the save
+                    await progressSaves;
                 }
                 : originalOnProgress;
 
