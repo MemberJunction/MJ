@@ -165,7 +165,7 @@ describe('VitestCatchTarget.Prepare', () => {
     expect((err as Error).message).toContain('build failed on Head'); expect((err as Error).message).not.toContain(token);
   });
   it('removes the worktree it added when the sandbox install fails, and still throws an InfrastructureError', async () => {
-    const { target, work } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE', ExitCode: 1 }));
+    const { target, work } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_NO_OFFLINE_TARBALL', ExitCode: 1 }));
     const removed: string[] = [];
     (target as never as { o: { Repo: { RemoveWorktree: (d: string) => Promise<void> } } }).o.Repo.RemoveWorktree = async (d: string) => { removed.push(d); };
     const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
@@ -181,11 +181,33 @@ describe('VitestCatchTarget.Prepare', () => {
     expect(removed).toEqual([join(work, 'head')]);
   });
   it('still throws the InfrastructureError when removing the worktree after a failed install throws too', async () => {
-    const { target } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE', ExitCode: 1 }));
+    const { target } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_NO_OFFLINE_TARBALL', ExitCode: 1 }));
     (target as never as { Cleanup: () => Promise<void> }).Cleanup = async () => { throw new Error('rm broke'); };
     const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(InfrastructureError);
     expect((err as Error).message).toContain('install failed on Head');
+  });
+  it('installs again without the frozen lockfile when pnpm reports an outdated lockfile, and prepares the revision', async () => {
+    let n = 0;
+    const { target, calls } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => (++n === 1 ? { Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile"', ExitCode: 1 } : { Stdout: '', ExitCode: 0 }));
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await expect(target.Prepare({ Kind: 'Head', SHA: 'd878d5451fe542d' })).resolves.toMatchObject({ Ref: { Kind: 'Head', SHA: 'd878d5451fe542d' } });
+      const commands = calls.map((c) => c.Command.join(' '));
+      expect(commands).toHaveLength(2);
+      expect(commands[0]).toMatch(/(^|\s)--frozen-lockfile/); expect(commands[0]).not.toContain('--no-frozen-lockfile');
+      expect(commands[1]).toContain('--no-frozen-lockfile'); expect(commands[1]).toContain('--offline'); expect(commands[1]).not.toMatch(/(^|\s)--frozen-lockfile/);
+      expect(stderr.mock.calls.map((c) => String(c[0]))).toContain('prepare Head d878d54: the lockfile is out of date with a package.json; installing offline without the frozen lockfile\n');
+    } finally { stderr.mockRestore(); }
+  });
+  it('throws the InfrastructureError of the second install when the install without the frozen lockfile fails too', async () => {
+    const { target, calls } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE', ExitCode: 1 }));
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(InfrastructureError); expect((err as Error).message).toContain('install failed on Head');
+      expect(calls.map((c) => c.Command.join(' '))).toHaveLength(2);
+    } finally { stderr.mockRestore(); }
   });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];
