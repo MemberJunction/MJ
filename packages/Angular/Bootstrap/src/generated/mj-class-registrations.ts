@@ -630,7 +630,7 @@ import {
     FieldSuggestionCardComponent,
 } from '@memberjunction/ng-base-forms';
 
-// @memberjunction/ng-artifacts (15 classes)
+// @memberjunction/ng-artifacts (17 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -643,6 +643,8 @@ import {
     MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
@@ -1500,6 +1502,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
@@ -1536,12 +1540,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricEngineBase,
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
-    AIAgentCategoryOverviewPanel,
-    AIPromptCategoryHierarchyPanel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
@@ -1740,12 +1744,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
-    MeetingsResource,
-    OmnibarAgentProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MeetingsResource,
+    OmnibarAgentProvider,
     OmnibarCommandProvider,
     OmnibarRecordProvider,
     OmnibarSearchProvider,
@@ -1767,7 +1771,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 806;
+export const CLASS_REGISTRATIONS_COUNT = 808;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
