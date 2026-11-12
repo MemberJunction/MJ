@@ -171,6 +171,7 @@ export function Derive(seeds: ThemeSeeds = MJ_DEFAULT_SEEDS): DerivedTheme {
   };
   const typeVars: Record<string, string> = {
     '--mj-font-family': s.fontFamily,
+    '--mj-font-family-display': s.fontFamilyDisplay,
     '--mj-font-family-mono': s.fontFamilyMono,
   };
 

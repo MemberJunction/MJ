@@ -352,7 +352,8 @@
      ======================================== */
 
   /* Font Family */
-  --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --mj-font-family-display: var(--mj-font-family);
   --mj-font-family-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
 
   /* Font Sizes */

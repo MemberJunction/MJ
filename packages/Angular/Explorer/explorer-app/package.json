@@ -23,6 +23,7 @@
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@fortawesome/fontawesome-free": "6.7.2",
     "@memberjunction/ai-agent-client": "6.3.0-edge.0",
     "@memberjunction/ai-core-plus": "6.3.0-edge.0",
     "@memberjunction/core": "6.3.0-edge.0",

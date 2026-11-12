@@ -108,7 +108,7 @@
     width: 100%;
     overflow-y: hidden; /* Hide scrollbar */
 
-    font-family: Söhne, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-family: var(--mj-font-family);
     font-size: 1rem;
 
     margin-left: 7px;
