@@ -56,10 +56,11 @@ export async function BuildExcelCatalog(provider: IMetadataProvider, user: UserI
     const entities = buildReadableEntities(provider.Entities ?? [], user);
     const canonicalEntityIdByLower = new Map<string, string>(entities.map(e => [e.ID.toLowerCase(), e.ID]));
     const applications = buildApplications(provider.Applications ?? [], canonicalEntityIdByLower);
-    await QueryEngine.Instance.Config(false, user, provider);
+    const queryEngine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await queryEngine.Config(false, user, provider);
     const { Categories: queryCategories, Queries: queries } = buildQueriesAndCategories(
-        QueryEngine.Instance.Queries ?? [],
-        QueryEngine.Instance.QueryCategories ?? [],
+        queryEngine.Queries ?? [],
+        queryEngine.QueryCategories ?? [],
         user,
     );
     return {

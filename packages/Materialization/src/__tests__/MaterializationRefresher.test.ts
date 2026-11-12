@@ -865,6 +865,7 @@ describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the stateme
     /** The deprecated provider query list stays empty: the query must come from `QueryEngine`. */
     const provider = { Queries: [] } as unknown as IMetadataProvider;
     let savedQueries: CachedQueryStub[];
+    let providerEngineLookup: ReturnType<typeof vi.spyOn>;
 
     const engineWith = (queries: CachedQueryStub[]) => {
         engineCache()._queries = queries;
@@ -878,6 +879,8 @@ describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the stateme
 
     beforeEach(() => {
         savedQueries = engineCache()._queries;
+        // The refresh provider's connection is bound to the engine under test.
+        providerEngineLookup = vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(QueryEngine.Instance);
     });
 
     afterEach(() => {
@@ -889,6 +892,15 @@ describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the stateme
         engineWith([variantQuery(QID)]);
         expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
         expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it("reads the QueryEngine bound to the refresh provider, not the process-wide one", () => {
+        const otherEngine = { FindQueryByID: () => variantQuery(QID) } as unknown as QueryEngine;
+        providerEngineLookup.mockReturnValue(otherEngine);
+        engineWith([]); // the global engine does not hold the query
+
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
+        expect(providerEngineLookup).toHaveBeenCalledWith(provider, QueryEngine);
     });
 
     it('matches the query case-insensitively, so platform resolution survives cross-platform ID casing', () => {

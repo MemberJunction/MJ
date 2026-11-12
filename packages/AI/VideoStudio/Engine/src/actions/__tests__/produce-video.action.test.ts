@@ -9,6 +9,7 @@ const {
     brandKits,
     savedQueries,
     queryEngineConfigMock,
+    queryEngineLookupMock,
 } = vi.hoisted(() => ({
     runAgentMock: vi.fn(),
     processAgentArtifactsMock: vi.fn(),
@@ -18,6 +19,8 @@ const {
     brandKits: [] as Array<Record<string, unknown>>,
     savedQueries: [] as Array<{ ID: string; Name: string }>,
     queryEngineConfigMock: vi.fn(),
+    /** QueryEngine.GetProviderInstance: records which provider's engine was asked for. */
+    queryEngineLookupMock: vi.fn(),
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -94,13 +97,20 @@ vi.mock('@memberjunction/core-entities', () => ({
             GetDefaultKit: vi.fn(() => brandKits.find((k) => k.IsDefault === true) ?? null),
         },
     },
-    QueryEngine: {
-        Instance: {
+    QueryEngine: (() => {
+        const engine = {
             Config: (...args: unknown[]) => queryEngineConfigMock(...args),
             FindQueryByName: (name: string) =>
                 savedQueries.find((q) => q.Name.trim().toLowerCase() === name.trim().toLowerCase()),
-        },
-    },
+        };
+        return {
+            Instance: engine,
+            GetProviderInstance: (...args: unknown[]) => {
+                queryEngineLookupMock(...args);
+                return engine;
+            },
+        };
+    })(),
 }));
 
 import { ProduceVideoAction } from '../produce-video.action.js';
@@ -131,6 +141,7 @@ describe('ProduceVideoAction', () => {
         brandKits.length = 0;
         savedQueries.length = 0;
         queryEngineConfigMock.mockReset().mockResolvedValue(undefined);
+        queryEngineLookupMock.mockReset();
 
         agents.push({
             ID: 'ag-video-studio',
@@ -375,6 +386,8 @@ describe('ProduceVideoAction', () => {
             await invokeAction(new ProduceVideoAction(), params);
 
             expect(queryEngineConfigMock).toHaveBeenCalledWith(false, params.ContextUser, provider);
+            // The engine is the one bound to the caller's provider, not the process-wide singleton.
+            expect(queryEngineLookupMock).toHaveBeenCalledWith(provider, expect.anything());
             const payload = (runAgentMock.mock.calls[0][0] as { payload: { DataBindings: Array<{ Source: { QueryID: string } }> } }).payload;
             expect(payload.DataBindings[0].Source.QueryID).toBe(QUERY_ID);
         });

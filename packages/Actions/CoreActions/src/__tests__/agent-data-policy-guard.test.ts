@@ -32,6 +32,7 @@ const {
     adhocAuthorizerMock,
     readOnlyProviderRunQueryMock,
     queryEngineStub,
+    providerEngineLookup,
 } = vi.hoisted(() => {
     const queries: StoredQueryStub[] = [];
     const normalize = (value: string) => value.trim().toLowerCase();
@@ -46,6 +47,8 @@ const {
             FindQueryByID: (id: string) => queries.find((q) => normalize(q.ID) === normalize(id)),
             FindQueryByName: (name: string) => queries.find((q) => normalize(q.Name) === normalize(name)),
         },
+        /** QueryEngine.GetProviderInstance: the engine bound to a provider's connection (the stub here). */
+        providerEngineLookup: vi.fn(),
     };
 });
 
@@ -56,7 +59,7 @@ function setEngineQueries(...queries: StoredQueryStub[]): void {
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
-    QueryEngine: { Instance: queryEngineStub },
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: providerEngineLookup },
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -281,6 +284,7 @@ describe('AgentDataPolicyGuard — Runtime Data-Access Narrowing across CRUD & Q
         readOnlyProviderRunQueryMock.mockReset();
         setEngineQueries();
         queryEngineStub.Config.mockReset().mockResolvedValue(undefined);
+        providerEngineLookup.mockReset().mockReturnValue(queryEngineStub);
         mockReadOnlyProvider = {
             PlatformKey: 'sqlserver',
             Entities: [employeesEntity, auditEntity],
@@ -1075,6 +1079,7 @@ describe('AgentDataPolicyGuard.EvaluateStoredQuery — stored query resolution t
         AgentUserPolicyEngine.Instance.ClearCache();
         setEngineQueries();
         queryEngineStub.Config.mockReset().mockResolvedValue(undefined);
+        providerEngineLookup.mockReset().mockReturnValue(queryEngineStub);
     });
 
     it('loads QueryEngine through the caller provider and finds the query by ID while the provider query list is empty', async () => {
@@ -1087,6 +1092,8 @@ describe('AgentDataPolicyGuard.EvaluateStoredQuery — stored query resolution t
 
         expect(outcome).toEqual({ Allowed: { Active: true, DeniedFieldPatterns: [] } });
         expect(queryEngineStub.Config).toHaveBeenCalledWith(false, params.ContextUser, provider);
+        // The engine is the one bound to the caller's provider, not the process-wide singleton.
+        expect(providerEngineLookup).toHaveBeenCalledWith(provider, expect.anything());
     });
 
     it('finds the query by trimmed, case-insensitive name when no ID matches', async () => {

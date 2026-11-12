@@ -48,7 +48,8 @@ const { queryEngineStub, engineState } = vi.hoisted(() => {
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
-    QueryEngine: { Instance: queryEngineStub },
+    // GetProviderInstance: the engine bound to the request provider's connection (the same stub here).
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: vi.fn(() => queryEngineStub) },
 }));
 
 const user = { ID: 'user-1', Name: 'Ada', Email: 'ada@example.org' } as UserInfo;

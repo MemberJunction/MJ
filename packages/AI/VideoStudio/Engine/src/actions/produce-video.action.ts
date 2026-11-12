@@ -11,7 +11,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type {
     AgentRunAudience,
     ExecuteAgentParams,
@@ -98,7 +98,7 @@ export class ProduceVideoAction extends BaseAction {
             AIEngine.Instance.Config(false, params.ContextUser, params.Provider),
             VideoStudioEngine.Instance.Config(false, params.ContextUser, params.Provider),
             BrandKitEngine.Instance.Config(false, params.ContextUser, params.Provider),
-            QueryEngine.Instance.Config(false, params.ContextUser, params.Provider),
+            this.queryEngineFor(params).Config(false, params.ContextUser, this.providerFor(params)),
         ]);
     }
 
@@ -125,7 +125,7 @@ export class ProduceVideoAction extends BaseAction {
             findArchetype: (nameOrId: string) => this.lookupArchetype(nameOrId, companyId),
             findBrandKit: (nameOrId: string) => this.lookupBrandKit(nameOrId, companyId),
             findDefaultBrandKit: (cid?: string | null) => BrandKitEngine.Instance.GetDefaultKit(cid ?? null),
-            findQueryByName: (name: string) => this.lookupQueryByName(name),
+            findQueryByName: (name: string) => this.lookupQueryByName(params, name),
             findPreset: (name: string) => AIEngine.Instance.FindActiveAgentConfigurationPreset(agentId, name),
             defaultPreset: () => AIEngine.Instance.GetDefaultAgentConfigurationPreset(agentId),
             presetNames: () => AIEngine.Instance.GetAgentConfigurationPresets(agentId, true).map((p) => p.Name),
@@ -161,9 +161,19 @@ export class ProduceVideoAction extends BaseAction {
         );
     }
 
-    /** Finds a saved query by name (trimmed, case-insensitive) in the `QueryEngine` cache. */
-    private lookupQueryByName(name: string): { ID: string; Name?: string } | undefined {
-        return QueryEngine.Instance.FindQueryByName(name);
+    /** Finds a saved query by name (trimmed, case-insensitive) in the caller's provider's `QueryEngine`. */
+    private lookupQueryByName(params: RunActionParams, name: string): { ID: string; Name?: string } | undefined {
+        return this.queryEngineFor(params).FindQueryByName(name);
+    }
+
+    /** The provider the action runs against: the caller's, or the process default. */
+    private providerFor(params: RunActionParams): IMetadataProvider {
+        return params.Provider ?? Metadata.Provider; // global-provider-ok: fallback when the caller passes none
+    }
+
+    /** The `QueryEngine` bound to the action's provider. */
+    private queryEngineFor(params: RunActionParams): QueryEngine {
+        return QueryEngine.GetProviderInstance(this.providerFor(params), QueryEngine) as QueryEngine;
     }
 
     private async handleRunResult(

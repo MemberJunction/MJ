@@ -624,7 +624,7 @@ export class AgentDataPolicyGuard {
         }
 
         const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
-        const lookup = await AgentDataPolicyGuard.findStoredQuery(params, queryId, queryName);
+        const lookup = await AgentDataPolicyGuard.findStoredQuery(params, md, queryId, queryName);
         if ('Blocked' in lookup) {
             return lookup;
         }
@@ -982,20 +982,22 @@ export class AgentDataPolicyGuard {
     }
 
     /**
-     * Finds the stored query a `Run Stored Query` call names, from the `QueryEngine` cache: by ID
-     * first, then by name (trimmed, case-insensitive). The engine is loaded on first use, through
-     * the caller's provider when one was passed. A load failure blocks the query (fail-closed),
-     * because the policy cannot be verified against metadata that could not be read.
+     * Finds the stored query a `Run Stored Query` call names, from the `QueryEngine` bound to the
+     * caller's provider (`md`): by ID first, then by name (trimmed, case-insensitive). The engine is
+     * loaded on first use. A load failure blocks the query (fail-closed), because the policy cannot
+     * be verified against metadata that could not be read.
      *
      * @returns The query, `{ Query: undefined }` when no query matches, or a block on load failure
      */
     private static async findStoredQuery(
         params: RunActionParams,
+        md: IMetadataProvider,
         queryId: string | undefined,
         queryName: string | undefined
     ): Promise<{ Query: MJQueryEntityExtended | undefined } | { Blocked: ActionResultSimple }> {
+        const engine = QueryEngine.GetProviderInstance(md, QueryEngine) as QueryEngine;
         try {
-            await QueryEngine.Instance.Config(false, params.ContextUser, params.Provider);
+            await engine.Config(false, params.ContextUser, md);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             LogError(`AgentDataPolicyGuard: loading query metadata failed: ${msg}`);
@@ -1009,7 +1011,6 @@ export class AgentDataPolicyGuard {
                 },
             };
         }
-        const engine = QueryEngine.Instance;
         const byId = queryId ? engine.FindQueryByID(queryId) : undefined;
         if (byId) {
             return { Query: byId };

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EntityFieldInfo, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, QueryEngine, ViewColumnInfo } from '@memberjunction/core-entities';
 
 /** The slice of a cached query that source resolution reads. */
 interface QueryStub {
@@ -24,7 +24,8 @@ const { queryEngineStub } = vi.hoisted(() => {
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
-    QueryEngine: { Instance: queryEngineStub },
+    // GetProviderInstance: the engine bound to the request provider's connection (the same stub here).
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: vi.fn(() => queryEngineStub) },
 }));
 import {
     DataTypeForEntityField,
@@ -178,6 +179,8 @@ describe('ResolveWorkbookSources — queries', () => {
         const provider = providerWith(viewStub());
         await ResolveSingleWorkbookSource({ Kind: 'Query', ID: QUERY_ID }, provider, user);
         expect(queryEngineStub.Config).toHaveBeenCalledWith(false, user, provider);
+        // The engine is the one bound to the request provider, not the process-wide singleton.
+        expect(QueryEngine.GetProviderInstance).toHaveBeenCalledWith(provider, expect.anything());
     });
 
     it('refuses a missing query and a denied query with the same message', async () => {

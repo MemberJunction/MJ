@@ -30,7 +30,8 @@ const { queryEngineStub } = vi.hoisted(() => ({
 
 vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
-    QueryEngine: { Instance: queryEngineStub },
+    // GetProviderInstance: the engine bound to the request provider's connection (the same stub here).
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: vi.fn(() => queryEngineStub) },
 }));
 import { BuildExcelCatalog, ExcelViewRunner, LoadExcelEntityViews } from '../catalog';
 import { ExcelSourceError } from '../sources';

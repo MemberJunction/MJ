@@ -301,8 +301,9 @@ function orderOf(column: ViewColumnInfo): number {
 async function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): Promise<ExcelResolvedWorkbookSource> {
     // Query roles plus read access to the entities it reads (UserCanRun). No rows are read here;
     // GetQueryData runs the full check on refresh.
-    await QueryEngine.Instance.Config(false, user, provider);
-    const query = QueryEngine.Instance.FindQueryByID(request.ID);
+    const engine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await engine.Config(false, user, provider);
+    const query = engine.FindQueryByID(request.ID);
     if (!query || !query.UserCanRun(user).canRun) {
         throw new ExcelSourceError('That saved query doesn\'t exist, or you don\'t have access to it.');
     }

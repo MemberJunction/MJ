@@ -144,20 +144,25 @@ export class MaterializationRefresher {
      * `GetPlatformSQL(PlatformKey)` on the cached query, whose precedence is: `MJ: Query SQLs` child row for
      * the platform → base SQL.
      *
-     * The query is looked up in the `QueryEngine` cache, which the caller must have loaded (see
+     * The query is looked up in the `QueryEngine` bound to `provider`, which the caller must have loaded (see
      * {@link resolveQuerySnapshotSQL}). Falls back to the entity's own SQL when the query isn't present in that
      * cache, which reproduces exactly the previous behavior rather than failing the refresh.
      *
-     * @param provider Unused. Kept so existing callers compile; the query metadata comes from `QueryEngine`.
+     * @param provider The provider of the database being refreshed; its connection's `QueryEngine` is read.
      * @returns the platform-resolved SQL, or null when neither source yields a non-empty statement.
      * @internal exposed for unit testing; not part of the supported surface.
      */
     public static ResolvePlatformQuerySQL(provider: IMetadataProvider, queryId: string, entitySql: string | null, isPostgres: boolean): string | null {
         const platform: DatabasePlatform = isPostgres ? 'postgresql' : 'sqlserver';
-        const query = QueryEngine.Instance.FindQueryByID(queryId);
+        const query = MaterializationRefresher.queryEngineFor(provider).FindQueryByID(queryId);
         const resolved = query ? query.GetPlatformSQL(platform) : null;
         const chosen = resolved && resolved.trim().length > 0 ? resolved : entitySql;
         return chosen && chosen.trim().length > 0 ? chosen : null;
+    }
+
+    /** The `QueryEngine` bound to `provider`'s connection. */
+    private static queryEngineFor(provider: IMetadataProvider): QueryEngine {
+        return QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
     }
 
     /** @deprecated Use {@link ResolvePlatformQuerySQL}. */
@@ -1044,7 +1049,7 @@ export class MaterializationRefresher {
      * snapshotting a statement that may differ from the one live serves.
      */
     private async resolveQuerySnapshotSQL(provider: IMetadataProvider, contextUser: UserInfo, queryId: string, entitySql: string | null, isPostgres: boolean): Promise<string | null> {
-        await QueryEngine.Instance.Config(false, contextUser, provider);
+        await MaterializationRefresher.queryEngineFor(provider).Config(false, contextUser, provider);
         return MaterializationRefresher.ResolvePlatformQuerySQL(provider, queryId, entitySql, isPostgres);
     }
 
