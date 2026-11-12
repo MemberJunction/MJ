@@ -289,5 +289,9 @@ describe('ClassUtils', () => {
       expect(typeof name).toBe('string');
       expect(name.length).toBeGreaterThan(0);
     });
+
+    it('should return name property for a token object', () => {
+      expect(GetClassName({ name: 'TestCommentFamilyDriver' })).toBe('TestCommentFamilyDriver');
+    });
   });
 });
