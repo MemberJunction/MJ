@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { ResolveOriginSessionId } from './requestSessionContext.js';
@@ -99,7 +99,8 @@ import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
-import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import { CronExpressionHelper, SchedulingEngine } from '@memberjunction/scheduling-engine';
+import { EventLoopStallMonitor } from './eventLoopStallMonitor.js';
 import {
   MJCompanyIntegrationEntity,
   MJIntegrationEntity,
@@ -375,6 +376,21 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
+/**
+ * Labels for the background work executing in THIS process — the suspects named when the event
+ * loop stalls (MJ #5510). Agent runs come from the run watchdog, which tracks every run it guards;
+ * scheduled jobs from the scheduling engine's in-flight set, named where the engine has the job.
+ */
+function describeBackgroundWorkInFlight(): string[] {
+  const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
+  const engine = SchedulingEngine.Instance;
+  const jobsByID = IndexByUUID(engine.ScheduledJobs);
+  const jobs = engine.InflightJobIDs.map((id) => {
+    const job = jobsByID.Get(id);
+    return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
+  });
+  return [...agentRuns, ...jobs];
+}
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -1477,7 +1493,18 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
-  MountHealthcheckRoute(app);
+  //
+  // The body carries the latest event-loop sample (MJ #5510) so a probe or poller can tell a server
+  // that just stalled from one that is fine. It cannot answer DURING a stall — nothing on a blocked
+  // loop can — so a timed-out probe is itself the stall signal.
+  const eventLoopMonitor = configInfo.eventLoopMonitor.enabled
+    ? new EventLoopStallMonitor({
+        SampleIntervalMs: configInfo.eventLoopMonitor.sampleIntervalMs,
+        WarnThresholdMs: configInfo.eventLoopMonitor.warnThresholdMs,
+        GetInFlightWork: describeBackgroundWorkInFlight,
+      })
+    : null;
+  MountHealthcheckRoute(app, eventLoopMonitor);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
@@ -1853,6 +1880,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Watch for event-loop stalls (MJ #5510). Started after boot so the synchronous work of startup
+  // itself is not reported as a stall; stopped by the gracefulShutdown drain below.
+  if (eventLoopMonitor) {
+    eventLoopMonitor.Start();
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'EventLoopStallMonitor',
+      Shutdown: () => eventLoopMonitor.Stop(),
+    });
+  }
 
   const resumeUser = UserCache.Instance.GetSystemUser();
 
