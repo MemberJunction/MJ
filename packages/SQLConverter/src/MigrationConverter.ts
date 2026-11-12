@@ -29,6 +29,7 @@ import { SplitByStatement, type StatementBatch, type StatementKind } from './Mig
 import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments } from './rules/ExpressionHelpers.js';
 import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 import { SP_REFRESHVIEW_CALL, DescribeRefreshView } from './rules/StatementClassifier.js';
+import { GetPGCatalogViewDefinition } from './rules/CatalogViewRule.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -451,9 +452,19 @@ export async function ConvertMigration(
     );
   }
 
-  const transpiled = await options.transpiler.transpile(kept.tsql);
   const schema = options.schema ?? '__mj';
   const coreSchema = options.coreSchema ?? '__mj';
+  // MJ's catalog wrapper views read `sys.*`; the AST dialect cannot translate them, so they take the
+  // legacy CatalogViewRule's hand-written PG text, and any other view over `sys.*` is a gap (#6538).
+  const catalog = ExtractCatalogViews(kept.tsql, coreSchema);
+  const astResult = catalog.tsql.trim()
+    ? await options.transpiler.transpile(catalog.tsql)
+    : { sql: [], unhandled: [], dropped: [] };
+  const transpiled: MJTranspileResult = {
+    ...astResult,
+    sql: [...astResult.sql, ...catalog.pgViews],
+    unhandled: [...catalog.unhandled, ...astResult.unhandled],
+  };
 
   const emittedStatements = transpiled.sql.filter((s) => s.trim().length > 0).length;
   const accountingLeak = transpiled.unhandled.some((u) => u.kind === 'ACCOUNTING-LEAK');
@@ -536,6 +547,48 @@ export async function ConvertMigration(
     },
     warnings,
   };
+}
+
+/** The catalog views found in kept T-SQL, and what is left for the AST transpiler. */
+export interface CatalogViewExtraction {
+  /** The kept T-SQL without the catalog-view batches. */
+  tsql: string;
+  /** PostgreSQL definitions for the catalog views that were removed. */
+  pgViews: string[];
+  /** A `CREATE VIEW` over `sys.*` that is not one of MJ's catalog views. */
+  unhandled: UnhandledStatement[];
+}
+
+const CREATE_VIEW_NAME = /\bCREATE\s+(?:OR\s+ALTER\s+)?VIEW\s+(?:(?:\[[^\]]+\]|"[^"]+"|[\w${}:]+)\.)?(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i;
+
+/**
+ * Splits MJ's catalog wrapper views (`vwSQLColumnsAndEntityFields`, `vwTableUniqueKeys`, …) out of
+ * kept T-SQL batches: each becomes the legacy {@link GetPGCatalogViewDefinition} text. Any other
+ * `CREATE VIEW` that reads `sys.*` is removed and reported, since its transpile would reach
+ * PostgreSQL naming SQL Server's catalog.
+ */
+export function ExtractCatalogViews(tsql: string, coreSchema: string = '__mj'): CatalogViewExtraction {
+  const keptBatches: string[] = [];
+  const pgViews: string[] = [];
+  const unhandled: UnhandledStatement[] = [];
+  for (const batch of tsql.split(/^\s*GO\s*;?\s*$/im)) {
+    const code = StripComments(batch);
+    const m = code.match(CREATE_VIEW_NAME);
+    if (m) {
+      const name = m[1] ?? m[2] ?? m[3];
+      const pg = GetPGCatalogViewDefinition(name, coreSchema);
+      if (pg !== undefined) {
+        pgViews.push(pg.trim());
+        continue;
+      }
+      if (/\bsys\.\w+/i.test(code)) {
+        unhandled.push({ kind: 'CATALOG-VIEW-UNMAPPED', snippet: `CREATE VIEW ${name} reads sys.* and has no PostgreSQL definition` });
+        continue;
+      }
+    }
+    keptBatches.push(batch);
+  }
+  return { tsql: keptBatches.join('\nGO\n'), pgViews, unhandled };
 }
 
 /** @deprecated Use {@link ConvertMigration}. */

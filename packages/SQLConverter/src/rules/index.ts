@@ -23,7 +23,7 @@ export {
 
 // Individual conversion rules
 export { CreateTableRule } from './CreateTableRule.js';
-export { CatalogViewRule } from './CatalogViewRule.js';
+export { CatalogViewRule, GetPGCatalogViewDefinition } from './CatalogViewRule.js';
 export { ViewRule } from './ViewRule.js';
 export { ProcedureToFunctionRule } from './ProcedureToFunctionRule.js';
 export { FunctionRule } from './FunctionRule.js';
@@ -55,6 +55,8 @@ export { PostProcess, postProcess } from './PostProcessor.js';
 
 // Batch converter (main orchestrator)
 export { ConvertFile, convertFile, PrintReport, printReport } from './BatchConverter.js';
+export { CollectTSQLBitColumns, MergeTableColumns } from './BitColumnRegistry.js';
+export type { TableColumnRegistry } from './BitColumnRegistry.js';
 export type { BatchConverterConfig, BatchConverterResult } from './BatchConverter.js';
 
 // EntityField sequence deduplicator (post-conversion fixup for UQ_EntityField_EntityID_Sequence)

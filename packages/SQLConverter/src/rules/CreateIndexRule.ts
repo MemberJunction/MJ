@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers, NeedsHandAuthoring } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, NeedsHandAuthoring, AddNullsNotDistinct } from './ExpressionHelpers.js';
 
 /** `DROP INDEX [IF EXISTS] name ON table`, after identifier conversion. One index per statement. */
 const DROP_INDEX_ON_TABLE = /^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?("[^"]+"|\w+)\s+ON\s+([^\s;(,]+)\s*;?$/i;
@@ -102,6 +102,9 @@ export class CreateIndexRule implements IConversionRule {
         return `${whereKw}${quotedClause}`;
       }
     );
+
+    // A SQL Server unique index treats NULLs as equal; keep that on PostgreSQL (#5194).
+    result = AddNullsNotDistinct(result);
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';

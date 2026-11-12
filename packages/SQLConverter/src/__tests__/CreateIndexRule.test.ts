@@ -199,6 +199,6 @@ describe('CreateIndexRule — index names and ASC/DESC columns (issue #5567)', (
 
   it('leaves lower-case columns and an already quoted name alone', () => {
     expect(convert('CREATE UNIQUE INDEX [UX_a] ON [dbo].[t] (id DESC, code)').trim())
-      .toBe('CREATE UNIQUE INDEX "UX_a" ON dbo."t" (id DESC, code);');
+      .toBe('CREATE UNIQUE INDEX "UX_a" ON dbo."t" (id DESC, code) NULLS NOT DISTINCT;');
   });
 });

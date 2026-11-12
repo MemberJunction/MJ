@@ -199,6 +199,44 @@ export interface BakedMigrationResult {
   mode: 'baked' | 'preserved' | 'gap-no-bake';
 }
 
+/** Options for one {@link IncrementalBaker.BakeMigration} call. */
+export interface BakeMigrationOptions {
+  /**
+   * Skip applying the migration to the working DB and only capture its CodeGen: the migration is
+   * already applied (a capture that failed after the apply, or a hand-finished file applied by
+   * hand). Used by `mj migrate rebake --file … --capture-only` (#6538 item 5, #6348).
+   */
+  CaptureOnly?: boolean;
+}
+
+/** The two regions of a baked `.pg.sql`: everything above the CodeGen section, and the section. */
+export interface BakedFileRegions {
+  /** Header, hand-written DDL and metadata DML — the part a person may have finished by hand. */
+  handRegion: string;
+  /** The baked CodeGen section, header line included; empty when the file has none. */
+  codeGenSection: string;
+}
+
+/** Line that opens the header {@link IncrementalBaker} writes on every baked file. */
+const BAKED_HEADER_MARKER = '-- Split-and-regenerate with INLINE NATIVE CodeGen baking';
+
+/**
+ * Split a committed `.pg.sql` that the baker wrote (or a `.needs-hand` artifact a person finished)
+ * at the CodeGen section header. Returns null for a file the baker did not write — a legacy
+ * conversion has no hand/CodeGen boundary to keep.
+ */
+export function SplitBakedFile(pgSql: string): BakedFileRegions | null {
+  if (!pgSql.includes(BAKED_HEADER_MARKER)) return null;
+  const at = pgSql.indexOf(CODEGEN_SECTION_HEADER);
+  if (at < 0) return { handRegion: pgSql.trimEnd(), codeGenSection: '' };
+  return { handRegion: pgSql.slice(0, at).trimEnd(), codeGenSection: pgSql.slice(at).trimEnd() };
+}
+
+/** The command that resumes a bake whose capture failed after the migration was applied. */
+export function CaptureOnlyResumeCommand(fileName: string): string {
+  return `mj migrate rebake --file ${fileName} --capture-only`;
+}
+
 const DEFAULT_SCHEMA = '__mj';
 /** MJ core's schema — the value `${mjSchema}` resolves to unless the caller overrides it. */
 const DEFAULT_CORE_SCHEMA = '__mj';
@@ -244,7 +282,13 @@ export class IncrementalBaker {
    * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
    * complete regardless and the caller authors them into the final `.pg.sql`.
    */
-  async BakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+  async BakeMigration(
+    ssSql: string,
+    fileName: string,
+    committedPgSql?: string,
+    options: BakeMigrationOptions = {},
+  ): Promise<BakedMigrationResult> {
+    const captureOnly = options.CaptureOnly === true;
     const conv = await ConvertMigration(ssSql, fileName, {
       transpiler: this.opts.transpiler,
       schema: this.schema,
@@ -267,9 +311,20 @@ export class IncrementalBaker {
     const transpiledArtifact = this.assemble(fileName, handBody, []);
 
     if (committedPgSql !== undefined) {
+      const regions = SplitBakedFile(committedPgSql);
       return this.applyAndCapture(fileName, committedPgSql, async () => {
-        await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
+        if (!captureOnly) await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
         await this.opts.db.refreshMetadata();
+        if (regions) {
+          // A file the baker wrote: keep its hand region byte for byte (a person may have finished
+          // it) and replace only the CodeGen section. Gaps in the fresh transpile no longer matter,
+          // because the transpile is not used (#3345 item 4, #6348).
+          if (entities.length === 0) return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
+          const captured = await this.captureEntities(entities);
+          return { ...base, pgSQL: this.withCodeGenSection(regions.handRegion, captured), mode: 'baked' };
+        }
+        // A legacy conversion has no hand/CodeGen boundary; rebuild it from the fresh transpile,
+        // which is only safe when the transpile has no gaps.
         if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
           return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
         }
@@ -297,24 +352,44 @@ export class IncrementalBaker {
     }
 
     return this.applyAndCapture(fileName, transpiledArtifact, async () => {
-      if (handBody) {
+      if (handBody && !captureOnly) {
         await this.opts.db.apply(this.withSearchPath(handBody));
       }
-      // Field sync between apply and capture (issue #5650): a default added to an existing column
-      // reaches the metadata the capture reads, and the change is baked into the file.
-      const defaults = this.opts.db.syncFieldDefaults && entities.length > 0
-        ? await this.opts.db.syncFieldDefaults(entities)
-        : [];
-      await this.opts.db.refreshMetadata();
-      const captured = await this.captureEntities(entities);
-      const body = [handBody, FieldDefaultUpdatesSQL(defaults, this.coreSchema)].filter((p) => p).join('\n\n');
-      return { ...base, pgSQL: this.assemble(fileName, body, captured), mode: 'baked' };
+      // From here on the working DB is advanced past this migration. A capture failure must say
+      // so and name the way to resume, or a re-run starts from an inconsistent state (#6538 item 5).
+      // (One transaction around apply + capture does not work: CodeGen reads metadata through
+      // other pool connections, which cannot see uncommitted DDL.)
+      try {
+        // Field sync between apply and capture (issue #5650): a default added to an existing column
+        // reaches the metadata the capture reads, and the change is baked into the file.
+        const defaults = this.opts.db.syncFieldDefaults && entities.length > 0
+          ? await this.opts.db.syncFieldDefaults(entities)
+          : [];
+        await this.opts.db.refreshMetadata();
+        const captured = await this.captureEntities(entities);
+        const body = [handBody, FieldDefaultUpdatesSQL(defaults, this.coreSchema)].filter((p) => p).join('\n\n');
+        return { ...base, pgSQL: this.assemble(fileName, body, captured), mode: 'baked' };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new BakeApplyError(
+          fileName,
+          transpiledArtifact,
+          `CodeGen capture failed after ${fileName} was applied to the working DB (${msg}). ` +
+            `The working DB is now past this migration. Finish the .needs-hand file, save it as the ` +
+            `.pg.sql counterpart, then resume with: ${CaptureOnlyResumeCommand(fileName)}`,
+        );
+      }
     });
   }
 
   /** @deprecated Use {@link BakeMigration}. */
-  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
-    return this.BakeMigration(ssSql, fileName, committedPgSql);
+  async bakeMigration(
+    ssSql: string,
+    fileName: string,
+    committedPgSql?: string,
+    options: BakeMigrationOptions = {},
+  ): Promise<BakedMigrationResult> {
+    return this.BakeMigration(ssSql, fileName, committedPgSql, options);
   }
 
   /**
@@ -363,6 +438,16 @@ export class IncrementalBaker {
       // Replacement functions, not strings — see MigrationConverter.assemblePgSQL (issue #3171).
       .replaceAll('${flyway:defaultSchema}', () => this.schema)
       .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
+  }
+
+  /** A committed hand region followed by a freshly captured CodeGen section. */
+  private withCodeGenSection(handRegion: string, captured: string[]): string {
+    const parts = [handRegion.trimEnd()];
+    if (captured.length > 0) {
+      parts.push(CODEGEN_SECTION_HEADER);
+      parts.push(captured.join('\n\n'));
+    }
+    return parts.join('\n\n') + '\n';
   }
 
   private bakedHeader(fileName: string): string {

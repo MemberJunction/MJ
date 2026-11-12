@@ -314,6 +314,17 @@ WHERE
 /** Set of catalog view names for quick lookup */
 const CATALOG_VIEW_NAMES = new Set(PG_CATALOG_VIEWS.keys());
 
+/**
+ * The hand-written PostgreSQL definition of one of MJ's catalog wrapper views (they read SQL
+ * Server's `sys.*` tables, which have no mechanical translation), or undefined for any other view.
+ * The definitions name the core schema `__mj`; `coreSchema` replaces it.
+ */
+export function GetPGCatalogViewDefinition(viewName: string, coreSchema: string = '__mj'): string | undefined {
+  const sql = PG_CATALOG_VIEWS.get(viewName);
+  if (sql === undefined || coreSchema === '__mj') return sql;
+  return sql.replace(/\b__mj\./g, () => `${coreSchema}.`);
+}
+
 export class CatalogViewRule implements IConversionRule {
   Name = 'CatalogViewRule';
   SourceDialect = 'tsql';

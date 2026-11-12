@@ -44,6 +44,10 @@ FLYWAY_MACRO = "${flyway:defaultSchema}"
 FLYWAY_SENTINEL = "__mj_flyway_default_schema__"
 
 
+# The stock PostgreSQL DATEDIFF generator, kept for units other than day.
+_PG_DATEDIFF_SQL = Postgres.Generator.TRANSFORMS[exp.DateDiff]
+
+
 class MJPostgres(Postgres):
     """PostgreSQL generation with MJ's type/function/boolean conventions baked in."""
 
@@ -54,6 +58,15 @@ class MJPostgres(Postgres):
             # JSON_EXTRACT_PATH_TEXT needs a json arg, but MJ stores JSON in text
             # columns; cast to jsonb and use ->> (single key) / #>> (nested).
             exp.JSONExtractScalar: lambda self, e: _json_extract_scalar_sql(self, e),
+            # SS DATEDIFF(day, s, e) counts date boundaries crossed; the stock PG form is epoch
+            # arithmetic over timestamps (fractional days truncated), which disagrees with SS
+            # across midnight. Subtracting dates matches SS and the legacy converter (#6348).
+            exp.DateDiff: lambda self, e: _datediff_sql(self, e),
+            # SS HASHBYTES('SHA2_256'|'SHA2_512', x) parses to SHA2. PG's sha256/sha512 take
+            # bytea, so the text argument is encoded first (#6538 item 3).
+            exp.SHA2: lambda self, e: _sha2_sql(self, e),
+            # SS HASHBYTES('MD5', x) parses to MD5 and returns bytes; PG md5() returns hex text.
+            exp.MD5: lambda self, e: f"DECODE(MD5({self.sql(e, 'this')}), 'hex')",
         }
         TYPE_MAPPING = {
             **Postgres.Generator.TYPE_MAPPING,
@@ -92,6 +105,33 @@ class MJPostgres(Postgres):
                 restored = expression.this.replace(FLYWAY_SENTINEL, FLYWAY_MACRO)
                 return f"{self.dialect.QUOTE_START}{self.escape_str(restored)}{self.dialect.QUOTE_END}"
             return super().literal_sql(expression)
+
+        def anonymous_sql(self, expression: exp.Anonymous) -> str:
+            # A user function keeps its written name. The stock generator upper-cases an
+            # unqualified unknown function (`fnBusinessToday()` → `FNBUSINESSTODAY()`), which
+            # PostgreSQL folds to `fnbusinesstoday` and cannot find. A mixed-case name is emitted
+            # quoted, the way CodeGen creates it (#6348).
+            name = expression.name or ""
+            if name and name != name.upper() and name != name.lower():
+                quoted = self.sql(exp.to_identifier(name, quoted=True))
+                return f"{quoted}({self.format_args(*expression.expressions)})"
+            return super().anonymous_sql(expression)
+
+        def indexparameters_sql(self, expression: exp.IndexParameters) -> str:
+            # A SQL Server unique index treats NULLs as equal; PostgreSQL's default does not, so a
+            # converted unique index would accept duplicates the source refuses. Every converted
+            # unique index keeps SQL Server semantics with NULLS NOT DISTINCT (PG 15+, #5194).
+            sql = super().indexparameters_sql(expression)
+            if not _is_unique_index_params(expression):
+                return sql
+            columns = self.expressions(expression, key="columns", flat=True)
+            include = self.expressions(expression, key="include", flat=True)
+            anchor = f"({columns})" + (f" INCLUDE ({include})" if include else "")
+            pos = sql.find(anchor)
+            if pos < 0:
+                return sql
+            end = pos + len(anchor)
+            return f"{sql[:end]} NULLS NOT DISTINCT{sql[end:]}"
 
         def datatype_sql(self, expression: exp.DataType) -> str:
             has_max = any(
@@ -174,6 +214,84 @@ def _json_extract_scalar_sql(self, expression: exp.JSONExtractScalar) -> str:
     return f"(({this})::jsonb ->> '{key}')"
 
 
+def _unwrap_time_str(x: exp.Expression) -> exp.Expression:
+    """The T-SQL reader wraps DATEDIFF arguments in TimeStrToTime; the date cast replaces it."""
+    return x.this if isinstance(x, exp.TimeStrToTime) else x
+
+
+def _datediff_sql(self, expression: exp.DateDiff) -> str:
+    """`DATEDIFF(day, s, e)` → `(CAST(e AS DATE) - CAST(s AS DATE))`; other units unchanged."""
+    unit = (expression.text("unit") or "").upper()
+    if unit not in ("DAY", "DD", "D"):
+        return _PG_DATEDIFF_SQL(self, expression)
+    end = self.sql(_unwrap_time_str(expression.this))
+    start = self.sql(_unwrap_time_str(expression.expression))
+    return f"(CAST({end} AS DATE) - CAST({start} AS DATE))"
+
+
+def _sha2_sql(self, expression: exp.SHA2) -> str:
+    """SHA2(x, 256|512) → `SHA256|SHA512(CONVERT_TO(x, 'UTF8'))`."""
+    length = expression.text("length") or "256"
+    fn = "SHA512" if length == "512" else "SHA256"
+    return f"{fn}(CONVERT_TO({self.sql(expression, 'this')}, 'UTF8'))"
+
+
+def _is_unique_index_params(params: exp.IndexParameters) -> bool:
+    """True when these index parameters belong to a `CREATE UNIQUE INDEX`."""
+    index = params.parent
+    if not isinstance(index, exp.Index):
+        return False
+    if index.args.get("unique"):
+        return True
+    create = index.parent
+    return isinstance(create, exp.Create) and bool(create.args.get("unique"))
+
+
+# Nodes that produce binary (varbinary) values: HASHBYTES parses to these, and an explicit cast.
+def _is_binary_expr(x: exp.Expression) -> bool:
+    x = _unwrap_paren(x)
+    if isinstance(x, (exp.SHA2, exp.MD5, exp.SHA)):
+        return True
+    if isinstance(x, exp.Cast) and x.to is not None and x.to.this in (exp.DataType.Type.VARBINARY, exp.DataType.Type.BINARY):
+        return True
+    return False
+
+
+def _convert_style(node: exp.Convert) -> str | None:
+    style = node.args.get("style")
+    return style.name if isinstance(style, exp.Literal) else None
+
+
+def _rewrite_binary_convert(node: exp.Expression) -> exp.Expression:
+    """SS `CONVERT(VARCHAR(n), <binary>, 2)` → `UPPER(ENCODE(<binary>, 'hex'))`; style 1 adds the
+    `0x` prefix. The stock generator reads the style as a DATE format (`TO_CHAR(…, 'YY.MM.DD')`),
+    which is wrong for a binary argument (#6538 item 3). Other styles are reported upstream."""
+    if not isinstance(node, exp.Convert) or not _is_binary_expr(node.expression):
+        return node
+    style = _convert_style(node)
+    if style not in ("1", "2"):
+        return node
+    hexed = exp.Upper(this=exp.func("ENCODE", node.expression.copy(), exp.Literal.string("hex")))
+    if style == "1":
+        hexed = exp.DPipe(this=exp.Literal.string("0x"), expression=hexed)
+    return exp.Cast(this=hexed, to=node.this.copy()) if isinstance(node.this, exp.DataType) else hexed
+
+
+def _unsupported_binary_convert(stmt: exp.Expression) -> bool:
+    """A CONVERT of a binary value with a style other than 1/2 has no mechanical PG form."""
+    for c in stmt.find_all(exp.Convert):
+        if _is_binary_expr(c.expression) and _convert_style(c) not in (None, "1", "2"):
+            return True
+    return False
+
+
+def _unique_constraints_nulls_not_distinct(node: exp.Expression) -> exp.Expression:
+    """Table-level / ALTER ADD `UNIQUE` constraints keep SQL Server NULL semantics (#5194)."""
+    if isinstance(node, exp.UniqueColumnConstraint):
+        node.set("nulls", True)
+    return node
+
+
 def _rewrite_insert_booleans(node: exp.Expression) -> exp.Expression:
     """In `INSERT INTO t (…cols…) VALUES (…)`, coerce 1/0 → TRUE/FALSE for any column
     known to be BIT/BOOLEAN (file-level + MJ_EXTRA_BIT_COLS registry). SS seeds bit
@@ -247,11 +365,10 @@ _UPDATE_FROM_KEY = "from_" if "from_" in exp.Update.arg_types else "from"
 
 
 def _update_alias_outer_join(stmt: exp.Update) -> bool:
-    """True when the self-aliased `UPDATE alias … FROM Target AS alias JOIN …` shape uses
-    a LEFT/RIGHT/FULL join. `_rewrite_update_from_alias` moves join ON conditions into
-    WHERE, which is only sound for INNER joins — an outer-join anti-join (`LEFT JOIN o …
-    WHERE o.ID IS NULL`) would silently become inner-join semantics and update zero rows.
-    There is no safe mechanical PG rewrite, so these are reported as unhandled instead."""
+    """True when the self-aliased `UPDATE alias … FROM Target AS alias JOIN …` shape uses an
+    outer join that `_rewrite_update_outer_join` cannot rewrite (RIGHT/FULL/explicit OUTER).
+    `_rewrite_update_from_alias` moves join ON conditions into WHERE, which is only sound for
+    INNER joins, and the ctid self-join rewrite covers LEFT joins; anything else is reported."""
     frm = stmt.args.get(_UPDATE_FROM_KEY)
     tgt = stmt.this
     if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
@@ -260,7 +377,65 @@ def _update_alias_outer_join(stmt: exp.Update) -> bool:
     joins = base.args.get("joins") or []
     if not base.alias or tgt.name != base.alias or not joins:
         return False
-    return any(_is_outer_join(j) for j in joins)
+    return any(_is_outer_join(j) for j in joins) and not _left_joins_only(joins)
+
+
+def _left_joins_only(joins: list) -> bool:
+    """True when every outer join is a plain LEFT [OUTER] join (inner joins may sit beside them)."""
+    for j in joins:
+        side = (j.side or "").upper()
+        if side in ("RIGHT", "FULL"):
+            return False
+        if (j.kind or "").upper() == "OUTER" and side != "LEFT":
+            return False
+    return True
+
+
+def _rewrite_update_outer_join(node: exp.Expression) -> exp.Expression:
+    """SS `UPDATE a SET a.c = … FROM T AS a LEFT JOIN o ON j WHERE w`
+    → PG `UPDATE T AS a SET c = … FROM T AS a_mj LEFT JOIN o ON j' WHERE a.ctid = a_mj.ctid AND w`.
+
+    PostgreSQL cannot name the target in FROM, and a join ON clause in FROM cannot reference the
+    target. Joining a second copy of the target and pinning it to the updated row by `ctid` keeps
+    the outer join's semantics (an anti-join `WHERE o.ID IS NULL` still matches the rows it did on
+    SQL Server); references to the alias inside the joins move to the copy (#6538 item 2)."""
+    if not isinstance(node, exp.Update):
+        return node
+    frm = node.args.get(_UPDATE_FROM_KEY)
+    tgt = node.this
+    if not frm or not isinstance(frm.this, exp.Table) or not isinstance(tgt, exp.Table):
+        return node
+    base = frm.this
+    alias = base.alias
+    joins = base.args.get("joins") or []
+    if not alias or tgt.name != alias or not joins:
+        return node
+    if not any(_is_outer_join(j) for j in joins) or not _left_joins_only(joins):
+        return node
+    self_alias = f"{alias}_mj"
+    new_target = base.copy()
+    new_target.set("joins", None)
+    node.set("this", new_target)
+    copy_src = base.copy()
+    copy_src.set("joins", None)
+    copy_src.set("alias", exp.TableAlias(this=exp.to_identifier(self_alias)))
+    new_joins = []
+    for j in joins:
+        jc = j.copy()
+        for col in jc.find_all(exp.Column):
+            if col.table == alias:
+                col.set("table", exp.to_identifier(self_alias))
+        new_joins.append(jc)
+    copy_src.set("joins", new_joins)
+    node.set(_UPDATE_FROM_KEY, exp.From(this=copy_src))
+    pin = exp.EQ(this=exp.column("ctid", table=alias), expression=exp.column("ctid", table=self_alias))
+    existing = node.args["where"].this if node.args.get("where") else None
+    node.set("where", exp.Where(this=exp.And(this=pin, expression=existing) if existing is not None else pin))
+    for assign in node.expressions:
+        lhs = assign.this if isinstance(assign, exp.EQ) else None
+        if isinstance(lhs, exp.Column) and lhs.table == alias:
+            lhs.set("table", None)
+    return node
 
 
 def _rewrite_update_from_alias(node: exp.Expression) -> exp.Expression:
@@ -1434,6 +1609,23 @@ def _transpile_alter_column(txt: str) -> str | None:
     return _drop_dependent_views_block(bare_tbl, col) + "\n" + f'ALTER TABLE {tbl_ref} ' + ", ".join(actions)
 
 
+def _drop_column_prelude(stmt: exp.Expression) -> str:
+    """For `ALTER TABLE t DROP COLUMN c`, the block that drops views depending on t.c first.
+    PostgreSQL refuses to drop a column a view reads (SQL Server drops it and leaves the view
+    stale); CodeGen regenerates the dropped views (#3345 item 3). Empty for any other statement."""
+    if not isinstance(stmt, exp.Alter):
+        return ""
+    tbl = stmt.this
+    if not isinstance(tbl, exp.Table):
+        return ""
+    blocks = [
+        _drop_dependent_views_block(tbl.name, a.this.name)
+        for a in (stmt.args.get("actions") or [])
+        if isinstance(a, exp.Drop) and (a.args.get("kind") or "").upper() == "COLUMN" and a.this is not None
+    ]
+    return "\n".join(blocks)
+
+
 def _drop_dependent_views_block(table: str, col: str) -> str:
     """DO block that drops every view depending on <table>.<col> (CodeGen regenerates them).
     Deterministic and a no-op when nothing depends on the column."""
@@ -1757,6 +1949,11 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             txt = stmt.sql(dialect="tsql")
             unhandled.append({"kind": "UPDATE-OUTER-JOIN", "snippet": txt[:80]})
             continue
+        # CONVERT of a binary value (HASHBYTES, a VARBINARY cast) with a style other than 1/2:
+        # no mechanical PG form, and the stock output reads the style as a date format.
+        if _unsupported_binary_convert(stmt):
+            unhandled.append({"kind": "CONVERT-BINARY-STYLE", "snippet": stmt.sql(dialect="tsql")[:80]})
+            continue
         # T-SQL `DELETE TOP (n) FROM t` misparses on BOTH versions into a spurious multi-table
         # DELETE (`DELETE "TOP" AS _t0(n) FROM t`) — invalid PG with no mechanical rewrite (PG
         # would need a ctid/CTE form). The signature is a DELETE carrying a `tables` list (PG puts
@@ -1877,7 +2074,10 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
         # parsed `stmt` is used once here and discarded, so in-place mutation is safe, and the
         # pass ordering is unchanged: each pass still sees the prior pass's edits.
         stmt = (
-            stmt.transform(_rewrite_update_from_alias, copy=False)  # restructures UPDATE before other rewrites
+            stmt.transform(_rewrite_update_outer_join, copy=False)  # LEFT-join self-aliased UPDATE → ctid self-join
+            .transform(_rewrite_update_from_alias, copy=False)  # restructures UPDATE before other rewrites
+            .transform(_rewrite_binary_convert, copy=False)  # CONVERT(VARCHAR, <binary>, 1|2) → hex text
+            .transform(_unique_constraints_nulls_not_distinct, copy=False)  # SS NULL semantics on UNIQUE
             .transform(_rewrite_insert_booleans, copy=False)  # seed-INSERT 1/0 → TRUE/FALSE for bit cols
             .transform(_fix_misparsed_table_constraint, copy=False)
             .transform(_rewrite_functions, copy=False)
@@ -1924,7 +2124,8 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             txt = stmt.sql(dialect="tsql")
             unhandled.append({"kind": "EMPTY-EMISSION", "snippet": txt[:80]})
             continue
-        out.append(rendered)
+        prelude = _drop_column_prelude(stmt)
+        out.append(f"{prelude}\n{rendered}" if prelude else rendered)
     # SOFT reconciliation (issue #3252 1d): every parsed statement must land in exactly one
     # bucket. A mismatch means a drop site was missed — surface it as a gap so it is loud and
     # gets artifacts, but NEVER raise (a raise would abort the whole conversion run with zero
