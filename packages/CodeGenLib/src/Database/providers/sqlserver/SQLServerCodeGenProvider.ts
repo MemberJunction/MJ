@@ -598,15 +598,18 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
-    FROM
-        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    IF NOT UPDATE([${EntityInfo.UpdatedAtFieldName}])
+    BEGIN
+        UPDATE
+            [${entity.SchemaName}].[${entity.BaseTable}]
+        SET
+            ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
+        FROM
+            [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    END
 END;
 GO`;
     }
@@ -871,12 +874,17 @@ RETURN
     )
     SELECT TOP 1
         a.[${primaryKey}] AS [RootID],
-        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
-        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
-        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
-        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+        a.[Depth] AS [Depth],
+        a.[Path] AS [Path],
+        CAST(CASE WHEN ch.[ChildCount] > 0 THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        ch.[ChildCount] AS [ChildCount]
     FROM
         CTE_Ancestors a
+    OUTER APPLY (
+        SELECT COUNT(1) AS [ChildCount]
+        FROM [${schemaName}].[${tableName}]
+        WHERE [${fieldName}] = @RecordID
+    ) ch
     WHERE
         a.[${fieldName}] IS NULL OR @ParentID IS NULL
     ORDER BY
