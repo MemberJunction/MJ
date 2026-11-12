@@ -907,7 +907,7 @@ export class ListOperations {
 
     const extraFilter = firstNonBlank(parsed.whereClause, parsed.smartFilterWhereClause);
     const altBaseView = parsed.alternateBaseView?.trim() || undefined;
-    if ((!extraFilter || extraFilter.trim().length === 0) && !altBaseView) return null;
+    if (!extraFilter && !altBaseView) return null;
 
     return {
       kind: 'adhoc',

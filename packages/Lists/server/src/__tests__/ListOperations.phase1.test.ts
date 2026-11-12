@@ -486,6 +486,7 @@ describe('ListOperations — Phase 1', () => {
       { label: 'CustomWhereClause false', snapshot: { whereClause: "Status='Active'", customWhereClause: false }, expected: "Status='Active'" },
       { label: 'CustomWhereClause true', snapshot: { whereClause: "Region='NE'", customWhereClause: true }, expected: "Region='NE'" },
       { label: 'only a smart filter clause', snapshot: { whereClause: '', customWhereClause: false, smartFilterWhereClause: "Score > 5" }, expected: 'Score > 5' },
+      { label: 'only an alternate base view', snapshot: { whereClause: null, customWhereClause: false, smartFilterWhereClause: null, alternateBaseView: 'ActiveOnly' }, expected: '' },
     ])('refreshes from a real captured snapshot: $label', async ({ snapshot, expected }) => {
       const list = makeMockList({
         ID: 'list-snap-bit',
