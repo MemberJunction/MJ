@@ -38,7 +38,7 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     FindDecisionCalibration,
     InterpretRoutingAnswers,
-    ROUTING_CONTINUES_CALIBRATION,
+    ROUTING_CONTINUES_CALIBRATION_KEY,
     ROUTING_CONTINUES_QUESTION,
     ROUTING_ROUTE_QUESTION,
     type DecisionAnsweringModel,
@@ -629,7 +629,7 @@ export function BuildDecisionEvalActualOutput(config: DecisionEvalConfig, prompt
         Answers: SummarizeDecisionEvalAnswers(answers),
         ContinuesProbability: continues?.Kind === 'Likelihood' ? continues.Probability : null,
         Route: route?.Kind === 'Choice' ? { Value: route.Value, Confidence: route.Confidence } : null,
-        RoutingVerdict: result.success ? InterpretRoutingAnswers(call.Input, { Success: true, Answers: answers, ...answeredBy }).Verdict : null,
+        RoutingVerdict: result.success ? InterpretRoutingAnswers(call.Input, { Success: true, Answers: answers, ...answeredBy }, AIEngine.Instance).Verdict : null,
         RoutingPolicy: result.success ? routingPolicyFor(answeredBy) : null,
         Model: modelRecord(config, result),
         Sampling: samplingRecord(config),
@@ -657,7 +657,7 @@ function answeringModelOf(result: AIDecisionRunResult): DecisionAnsweringModel {
  * @param answeredBy The model that answered.
  */
 function routingPolicyFor(answeredBy: DecisionAnsweringModel): DecisionEvalRoutingPolicy {
-    const calibration = FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION, answeredBy);
+    const calibration = FindDecisionCalibration(AIEngine.Instance, ROUTING_CONTINUES_CALIBRATION_KEY, answeredBy);
     return {
         MinConfidence: DECISION_ROUTING_MIN_CONFIDENCE,
         TimeoutMs: DECISION_ROUTING_TIMEOUT_MS,
@@ -785,7 +785,7 @@ export function BuildDiscoveryEvalActualOutput(
     // inject, and why not, come from production's own calibrated path.
     const verdict = result.success ? JudgeDecisionDiscovery(answers, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const answer = verdict?.Answer;
-    const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
+    const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, AIEngine.Instance, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const onTime = call.DiscoveryLatencyMs <= DECISION_DISCOVERY_TIMEOUT_MS;
     return {
         Decision: 'agent-discovery',

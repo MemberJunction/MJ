@@ -18,7 +18,8 @@ import {
     DescribeAnsweringModel,
     FindDecisionCalibration,
     type DecisionAnsweringModel,
-    type DecisionModelCalibration,
+    type DecisionCalibrationKey,
+    type DecisionCalibrationSource,
     type MJAIPromptEntityExtended
 } from '@memberjunction/ai-core-plus';
 import type { MJAIModelVendorEntity, MJAIPromptModelEntity } from '@memberjunction/core-entities';
@@ -61,8 +62,10 @@ export const MEMORY_NOTE_MAX_EXCERPT_CHARS = 4000;
 export const MEMORY_NOTE_MIN_PROBABILITY = 0.6;
 
 /**
- * Platt calibration of the memory-note Likelihood, each tied to the exact model it was fitted on (see
- * `FindDecisionCalibration` in `@memberjunction/ai-core-plus`): the MJ decision model that answered
+ * Which calibration the memory-note Likelihood reads: use `memory-note-gate`, question `note` (every
+ * note's Likelihood shares it, whatever its key `n1`, `n2`, …), in the answering model's
+ * `ModelConfiguration.Decision.Calibrations` (see `FindDecisionCalibration` in
+ * `@memberjunction/ai-core-plus`). Each fit is tied to the exact model it was fitted on: the MJ decision model that answered
  * (`ModelName`, from `modelInfo.modelName`) and the model its driver reports behind it
  * (`ResolvedModel`, from `DecisionResult.ResolvedModel`). Fitted on the memory-note gate measurement:
  * - **Jev** at its pinned `APIName`, `typesafe/jev-1.13-20260917`, which it reports back as the
@@ -72,11 +75,13 @@ export const MEMORY_NOTE_MIN_PROBABILITY = 0.6;
  * listed. LLM Decision was measured and left out: at any threshold it kept more wrong and speculative
  * notes than the proxy's `confidence >= 80` (at a calibrated 0.6, 11.5% of wrong notes). A batch answered by any other model, including Jev at another version,
  * falls back to the self-reported confidence rule, as a failed decision does. Refit, and add the new
- * pair, whenever a model, its version or the question changes.
+ * pair, whenever a model, its version or the question changes. The fit lives on the `Jev` row in
+ * `metadata/ai-models` (`A` 3.6391, `B` -5.7059).
  */
-export const MEMORY_NOTE_DECISION_CALIBRATION: readonly DecisionModelCalibration<PlattCalibration>[] = Object.freeze([
-    Object.freeze({ ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: Object.freeze({ A: 3.6391, B: -5.7059 }) })
-]);
+export const MEMORY_NOTE_CALIBRATION_KEY: DecisionCalibrationKey = Object.freeze({
+    Use: 'memory-note-gate',
+    Question: 'note',
+});
 
 /**
  * Shape of a candidate note evaluated by the decision gate.
@@ -371,17 +376,18 @@ function judgeCalibratedNote<T extends MemoryNoteCandidate>(
  * @param answers The answers returned by the decision runner.
  * @param notes The candidate notes evaluated.
  * @param answeredBy The model that answered: the MJ decision model and the model its driver resolved.
+ * @param calibrations Where the calibration is declared, normally `AIEngine.Instance`
+ * ({@link MEMORY_NOTE_CALIBRATION_KEY}). Without one every answer is uncalibrated.
  * @param threshold The calibrated probability at which a note is kept (default: {@link MEMORY_NOTE_MIN_PROBABILITY}, 0.6).
- * @param calibrations Optional calibration table override (defaults to {@link MEMORY_NOTE_DECISION_CALIBRATION}).
  */
 export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandidate>(
     answers: Record<string, DecisionAnswer> | undefined,
     notes: ReadonlyArray<T>,
-    answeredBy: DecisionAnsweringModel = {},
-    threshold: number = MEMORY_NOTE_MIN_PROBABILITY,
-    calibrations: readonly DecisionModelCalibration<PlattCalibration>[] = MEMORY_NOTE_DECISION_CALIBRATION
+    answeredBy: DecisionAnsweringModel,
+    calibrations: DecisionCalibrationSource | null | undefined,
+    threshold: number = MEMORY_NOTE_MIN_PROBABILITY
 ): MemoryNoteGateVerdict<T> {
-    const calibration = FindDecisionCalibration(calibrations, answeredBy);
+    const calibration = FindDecisionCalibration(calibrations, MEMORY_NOTE_CALIBRATION_KEY, answeredBy);
     const judgedNotes: JudgedMemoryNote<T>[] = [];
 
     for (let i = 0; i < notes.length; i++) {

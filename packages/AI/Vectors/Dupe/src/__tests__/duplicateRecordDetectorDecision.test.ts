@@ -115,14 +115,18 @@ vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: { Instance: {} },
 }));
 
-vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: {
-        Instance: {
-            Config: vi.fn().mockResolvedValue(undefined),
-            get Prompts() { return engineState.Prompts; },
+vi.mock('@memberjunction/aiengine', async () => {
+    const { ShippedDuplicateCalibrations } = await import('./helpers/decisionCalibration');
+    return {
+        AIEngine: {
+            Instance: {
+                Config: vi.fn().mockResolvedValue(undefined),
+                get Prompts() { return engineState.Prompts; },
+                GetDecisionCalibrations: ShippedDuplicateCalibrations,
+            },
         },
-    },
-}));
+    };
+});
 
 vi.mock('@memberjunction/ai-prompts', () => ({
     AIDecisionRunner: class { ExecuteDecision = mockExecuteDecision; },

@@ -15,6 +15,7 @@ import { LLMDecision, CreateLLMDecision } from '../decision/LLMDecision';
 
 // Mock package boundaries before imports
 const mockPromptsArray: Array<{ ID: string; Name: string }> = [];
+const mockModelsArray: Array<{ ID: string; Name: string }> = [];
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
@@ -23,6 +24,9 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
             Instance: {
                 get Prompts() {
                     return mockPromptsArray;
+                },
+                get Models() {
+                    return mockModelsArray;
                 },
             },
         },
@@ -862,6 +866,51 @@ describe('LLMDecision', () => {
             expect(result.ResolvedModel).toBe('claude-3-5-sonnet-20241022');
         });
 
+        it('reports the chat model that answered after a failover, not the one first selected', async () => {
+            mockModelsArray.splice(0, mockModelsArray.length, { ID: 'GPT-55-INSTANT-ID', Name: 'GPT 5.5 Instant' });
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult(
+                    { q1: 0.5 },
+                    {
+                        modelInfo: { modelId: 'gpt-oss-120b-id', modelName: 'GPT-OSS-120B' },
+                        promptRun: asPromptRun({ Cost: 0.001, DescendantCost: null, TotalCost: 0.001, CostCurrency: 'USD', ModelID: 'gpt-55-instant-id' }),
+                    }
+                )
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: { q1: { Kind: 'Likelihood', Instructions: 'Check' } },
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.ResolvedModel).toBe('GPT 5.5 Instant');
+            mockModelsArray.splice(0, mockModelsArray.length);
+        });
+
+        it('falls back to the selected model when the run has no model in the AI engine cache', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult(
+                    { q1: 0.5 },
+                    {
+                        modelInfo: { modelId: 'gpt-oss-120b-id', modelName: 'GPT-OSS-120B' },
+                        promptRun: asPromptRun({ Cost: 0.001, DescendantCost: null, TotalCost: 0.001, CostCurrency: 'USD', ModelID: 'unknown-model-id' }),
+                    }
+                )
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: { q1: { Kind: 'Likelihood', Instructions: 'Check' } },
+            });
+
+            expect(result.ResolvedModel).toBe('GPT-OSS-120B');
+        });
+
         it('populates Usage and ResolvedModel on mapping failure', async () => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
             // Invalid likelihood string causes mapping failure
@@ -1217,7 +1266,7 @@ describe('LLMDecision', () => {
 type ChatPromptRun = NonNullable<AIPromptRunResult['promptRun']>;
 
 /** The chat run's cost columns, and whether it was saved: what LLMDecision reads for its cost. */
-type ChatRunCost = Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'> & Partial<Pick<ChatPromptRun, 'IsSaved'>>;
+type ChatRunCost = Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'> & Partial<Pick<ChatPromptRun, 'IsSaved' | 'ModelID'>>;
 
 /** The seam onto the full prompt-run entity that `AIPromptRunResult.promptRun` is declared as. */
 function asPromptRun(run: ChatRunCost): ChatPromptRun {

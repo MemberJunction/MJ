@@ -1,7 +1,7 @@
 import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
-import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, DecisionCalibrationEntry, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -48,7 +48,7 @@ import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
-import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended, DecisionCalibrationSource } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
 
 /**
@@ -190,7 +190,7 @@ const DEFAULT_MAX_DIMENSION = 4096;
  * base-layer package consumes — need no delegate; the rule is about the server-side call path.)
  */
 @RegisterForStartup()
-export class AIEngineBase extends BaseEngine<AIEngineBase> {
+export class AIEngineBase extends BaseEngine<AIEngineBase> implements DecisionCalibrationSource {
     private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];
     private _vectorDatabases: MJVectorDatabaseEntity[] = [];
@@ -2076,6 +2076,38 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             ParseVendorConfiguration(vendor?.Configuration)?.ModelDefaults,
             ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
+    }
+
+    /**
+     * Every Platt calibration declared for a decision model: its effective
+     * `ModelConfiguration.Decision.Calibrations` at the model layer (the model type's bag, then the
+     * model's own), or an empty list when the model is unknown or declares none (before the engine
+     * loads, every model is unknown).
+     * Consumers look a fit up with `FindDecisionCalibration` from `@memberjunction/ai-core-plus`,
+     * which matches the use, the question and the exact resolved model.
+     *
+     * @param modelName The MJ decision model's name (`Jev`, `LLM Decision`), as the decision run
+     *   reports it. Matched case-insensitively, ignoring surrounding spaces.
+     */
+    public GetDecisionCalibrations(modelName: string): readonly DecisionCalibrationEntry[] {
+        const target = modelName?.trim().toLowerCase();
+        if (!target) {
+            return [];
+        }
+        let models: MJAIModelEntityExtended[];
+        try {
+            models = this.Models;
+        } catch (err: unknown) {
+            // A user who may not read AI Models gets no calibration, so every consumer treats the
+            // answer as unsure: the documented fail-safe, never a guess.
+            if (err instanceof PermissionConstrainedError) {
+                return [];
+            }
+            throw err;
+        }
+        const model = models.find(m => m.Name?.trim().toLowerCase() === target);
+        const calibrations = model ? this.GetEffectiveModelConfiguration(model.ID)?.Decision?.Calibrations : undefined;
+        return Array.isArray(calibrations) ? calibrations : [];
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {

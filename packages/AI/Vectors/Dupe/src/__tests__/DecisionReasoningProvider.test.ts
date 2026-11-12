@@ -22,14 +22,18 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/core-entities', () => ({
     MJEntityDocumentEntity: class {},
 }));
-vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: {
-        Instance: {
-            Config: mockEngineConfig,
-            get Prompts() { return engineState.Prompts; },
+vi.mock('@memberjunction/aiengine', async () => {
+    const { ShippedDuplicateCalibrations } = await import('./helpers/decisionCalibration');
+    return {
+        AIEngine: {
+            Instance: {
+                Config: mockEngineConfig,
+                get Prompts() { return engineState.Prompts; },
+                GetDecisionCalibrations: ShippedDuplicateCalibrations,
+            },
         },
-    },
-}));
+    };
+});
 // The real decision-calibration helpers, loaded on their own: the package index needs the parts of
 // @memberjunction/core this spec mocks away.
 vi.mock('@memberjunction/ai-core-plus', async () => vi.importActual<typeof import('@memberjunction/ai-core-plus/dist/decision-calibration.js')>(
@@ -43,11 +47,11 @@ vi.mock('@memberjunction/ai-prompts', () => ({
 import {
     CalibratedDuplicateProbability,
     DecisionReasoningProvider,
-    DUPLICATE_DECISION_CALIBRATION,
+    DUPLICATE_DECISION_CALIBRATION_KEY,
     DuplicateDecisionResult,
 } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningInput, DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
-import { ANSWERING_MODEL, ANSWERING_RESOLVED_MODEL, AnsweredBy, RawFor } from './helpers/decisionCalibration';
+import { ANSWERING_MODEL, ANSWERING_RESOLVED_MODEL, AnsweredBy, RawFor, SHIPPED_DUPLICATE_CALIBRATIONS } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
@@ -301,15 +305,26 @@ describe('DecisionReasoningProvider', () => {
     });
 
     describe('calibration', () => {
-        it.each(DUPLICATE_DECISION_CALIBRATION.map(entry => [entry.ModelName, entry] as const))(
+        it.each(Object.entries(SHIPPED_DUPLICATE_CALIBRATIONS).map(([modelName, [entry]]) => [modelName, entry] as const))(
             'CalibratedDuplicateProbability applies the Platt parameters of %s at the model it was fitted on',
-            (_modelName, entry) => {
-                const answeredBy: DecisionAnsweringModel = { ModelName: entry.ModelName, ResolvedModel: entry.ResolvedModel };
+            (modelName, entry) => {
+                const answeredBy: DecisionAnsweringModel = { ModelName: modelName, ResolvedModel: entry.ResolvedModel };
+                const calibration: PlattCalibration = { A: entry.A, B: entry.B };
                 // At a raw 0.5 the logit is 0, so the calibrated value is sigmoid(B).
-                expect(CalibratedDuplicateProbability(0.5, answeredBy)).toBeCloseTo(1 / (1 + Math.exp(-entry.Calibration.B)), 10);
-                expect(CalibratedDuplicateProbability(RawFor(0.8, entry.Calibration), answeredBy)).toBeCloseTo(0.8, 10);
+                expect(CalibratedDuplicateProbability(0.5, answeredBy)).toBeCloseTo(1 / (1 + Math.exp(-calibration.B)), 10);
+                expect(CalibratedDuplicateProbability(RawFor(0.8, calibration), answeredBy)).toBeCloseTo(0.8, 10);
             }
         );
+
+        it('reads the fit from the calibration source it is given, by use and question', () => {
+            expect(DUPLICATE_DECISION_CALIBRATION_KEY).toEqual({ Use: 'duplicate-detection', Question: 'duplicate' });
+            const answeredBy: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: ANSWERING_RESOLVED_MODEL };
+            const otherUse = { GetDecisionCalibrations: () => [{ Use: 'agent-discovery', Question: 'duplicate', ResolvedModel: ANSWERING_RESOLVED_MODEL, A: 1, B: 0 }] };
+            const ownSource = { GetDecisionCalibrations: () => [{ Use: 'duplicate-detection', Question: 'duplicate', ResolvedModel: ANSWERING_RESOLVED_MODEL, A: 1, B: 0 }] };
+            expect(CalibratedDuplicateProbability(0.9, answeredBy, otherUse)).toBeNull();
+            expect(CalibratedDuplicateProbability(0.9, answeredBy, ownSource)).toBeCloseTo(0.9, 10);
+            expect(CalibratedDuplicateProbability(0.9, answeredBy, null)).toBeNull();
+        });
 
         it('CalibratedDuplicateProbability trims both names', () => {
             const calibrated = CalibratedDuplicateProbability(0.9, { ModelName: 'Jev', ResolvedModel: ANSWERING_RESOLVED_MODEL });
@@ -423,11 +438,11 @@ describe('DecisionReasoningProvider', () => {
             expect(new DecisionReasoningProvider().UncertainAbove).toBe(0.7);
         });
 
-        it('ships the fitted Platt parameters for Jev and LLM Decision at the models they were fitted on, and no others', () => {
-            expect(DUPLICATE_DECISION_CALIBRATION).toEqual([
-                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: { A: 2.5855, B: -4.4485 } },
-                { ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: { A: 0.9918, B: -1.4843 } },
-            ]);
+        it('reads the fitted Platt parameters for Jev and LLM Decision at the models they were fitted on, and no others', () => {
+            expect(SHIPPED_DUPLICATE_CALIBRATIONS).toEqual({
+                'Jev': [{ Use: 'duplicate-detection', Question: 'duplicate', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 2.5855, B: -4.4485 }],
+                'LLM Decision': [{ Use: 'duplicate-detection', Question: 'duplicate', ResolvedModel: 'GPT-OSS-120B', A: 0.9918, B: -1.4843 }],
+            });
         });
 
         it.each([

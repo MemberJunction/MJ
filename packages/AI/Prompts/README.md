@@ -303,6 +303,34 @@ if (result.Success) {
 }
 ```
 
+### Decisions
+
+`AIDecisionRunner` runs typed decisions (Likelihood, Choice and Score questions) on `Decision`-type models. It does for a decision what `AIPromptRunner` does for a chat call: it picks a model from the decision prompt's bindings (`Default Decision` binds Jev, then LLM Decision), resolves credentials, fails over, and writes an `MJ: AI Prompt Runs` row with tokens and cost.
+
+- **Model limits.** Each request is fitted to the candidate model's declared `ModelConfiguration.Decision` limits:
+  - more questions than `MaxQuestionsPerCall`: the request is split into several calls to the same model, at most four at once (`MAX_CONCURRENT_CHUNK_CALLS`), and the answers are merged;
+  - more Choice options or Score levels than declared, or more estimated tokens than `MaxStateTokens` (state plus the largest chunk, at four characters a token): the request fails over to the next model.
+- **Timeout.** Each call is bounded by `timeoutMS`, else the prompt's `TimeoutMS`, else `DEFAULT_DECISION_TIMEOUT_MS` (60 s). A caller passing `0` opts out.
+- **Media.** `AIDecisionParams.Media` carries images, audio, video or PDFs alongside the text state. Only drivers whose `SupportedMediaTypes` include every item's type are tried; the others are skipped with failover. `GeminiDecision` reads all four. The run row records each item's type, MIME type and URI or size, never its data.
+- **The answering model.** `LLMDecision` reports the chat model that actually answered as the `ResolvedModel`, even after a failover inside its chat prompt, so the right calibration is applied.
+
+**Calibration.** A decision model's raw probabilities are not calibrated. Fits are model metadata: `ModelConfiguration.Decision.Calibrations` on the answering AI model, one entry per decision use, question and exact resolved model. A consumer looks one up with `FindDecisionCalibration(AIEngine.Instance, { Use, Question }, answeredBy)` from `@memberjunction/ai-core-plus`; an answer from a model with no fit is treated as unsure. The `fit-decision-calibration` rig in the integration test suite fits new entries from labelled runs.
+
+**Shadow decisions.** `StartShadowDecision` runs a decision beside the path that decides today, never lets it change the outcome, and records whether the two agreed. The decision's run is tagged `RunName = 'Shadow: <use>'` and its `Comments` hold the comparison as JSON. That is how a closed-set LLM call moves to a decision model: shadow first, then calibrate on the recorded runs, then switch.
+
+```typescript
+const shadow = StartShadowDecision<string>({
+    Use: 'feedback-classifier',
+    Decision: params,                       // an AIDecisionParams
+    Compare: (answers, primary) => {
+        const chosen = answers['category']?.Kind === 'Choice' ? answers['category'].Value : null;
+        return { Agreed: chosen === primary, Summary: `decision ${chosen}, prompt ${primary}` };
+    },
+});
+const category = await classifyWithPrompt(); // the existing path, unchanged
+void shadow.Record(category);               // fire and forget
+```
+
 ## Usage
 
 ### Basic Prompt Execution

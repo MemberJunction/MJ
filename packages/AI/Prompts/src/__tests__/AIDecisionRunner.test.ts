@@ -8,6 +8,7 @@ import {
   DecisionParams,
   DecisionResult,
   DecisionQuestion,
+  DecisionAnswer,
   ModelUsage,
   GetAIAPIKey,
 } from '@memberjunction/ai';
@@ -200,6 +201,18 @@ vi.mock('@memberjunction/templates', async (importOriginal) => {
 // ---------------------------------------------------------------------------
 // Controllable Decision Driver
 // ---------------------------------------------------------------------------
+/** A valid answer to any question kind: the first option or level, sure of it. */
+function answerFor(q: DecisionQuestion): DecisionAnswer {
+  if (q.Kind === 'Likelihood') {
+    return { Kind: 'Likelihood', Probability: 0.85 };
+  }
+  const keys = q.Kind === 'Choice' ? q.Options.map(o => o.Value) : q.Levels;
+  const probs = Object.fromEntries(keys.map((k, i) => [k, i === 0 ? 1 : 0]));
+  return q.Kind === 'Choice'
+    ? { Kind: 'Choice', Value: keys[0], Confidence: 0.9, Probabilities: probs }
+    : { Kind: 'Score', Value: 0, Confidence: 0.95, Probabilities: probs };
+}
+
 class MockDecisionDriver extends BaseDecision {
   public lastParams?: DecisionParams;
   public decideOverride?: (params: DecisionParams) => Promise<DecisionResult>;
@@ -641,12 +654,23 @@ describe('AIDecisionRunner', () => {
 
   // 6. Limit enforcement: rejects when questions count, choice options count, or score levels count exceed model config limits
   describe('6. limit enforcement against model configuration', () => {
-    it('6a. rejects when question count exceeds MaxQuestionsPerCall', async () => {
+    it('6a. splits a request over MaxQuestionsPerCall into several calls to the same model and merges them', async () => {
       h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), {
         Decision: {
           MaxQuestionsPerCall: 2,
         },
       });
+      const callSizes: number[] = [];
+      mockDriver.decideOverride = async (driverParams: DecisionParams) => {
+        callSizes.push(Object.keys(driverParams.Questions).length);
+        const result = new DecisionResult(true, new Date(), new Date());
+        for (const [key, q] of Object.entries(driverParams.Questions)) {
+          result.Answers[key] = answerFor(q);
+        }
+        result.Usage = new ModelUsage(100, 0, 0.001, 'USD');
+        result.ResolvedModel = 'decision-model-2026-11';
+        return result;
+      };
 
       const prompt = makeDecisionPrompt();
       const params = new AIDecisionParams();
@@ -657,8 +681,75 @@ describe('AIDecisionRunner', () => {
 
       const result = await runner.ExecuteDecision(params);
 
+      expect(result.success).toBe(true);
+      expect(callSizes.sort()).toEqual([1, 2]);
+      expect(Object.keys(result.Answers).sort()).toEqual(Object.keys(defaultQuestions).sort());
+      expect(result.DecisionResult?.Usage?.promptTokens).toBe(200);
+      expect(result.DecisionResult?.Usage?.cost).toBeCloseTo(0.002, 10);
+      expect(result.DecisionResult?.ResolvedModel).toBe('decision-model-2026-11');
+    });
+
+    it('6a2. fails the whole request when any chunk fails, keeping none of the answers', async () => {
+      h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxQuestionsPerCall: 1 } });
+      let calls = 0;
+      mockDriver.decideOverride = async (driverParams: DecisionParams) => {
+        calls++;
+        if (calls === 2) {
+          const failed = new DecisionResult(false, new Date(), new Date());
+          failed.errorMessage = 'chunk two failed';
+          return failed;
+        }
+        const result = new DecisionResult(true, new Date(), new Date());
+        for (const [key, q] of Object.entries(driverParams.Questions)) {
+          result.Answers[key] = answerFor(q);
+        }
+        return result;
+      };
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = defaultQuestions;
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+
+      const result = await runner.ExecuteDecision(params);
+
       expect(result.success).toBe(false);
-      expect(result.errorMessage).toMatch(/3 questions exceed the limit of 2/i);
+      expect(result.errorMessage).toContain('chunk two failed');
+      expect(result.Answers).toEqual({});
+    });
+
+    it('6d. refuses a request whose estimated tokens exceed MaxStateTokens', async () => {
+      h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxStateTokens: 10 } });
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = defaultQuestions;
+      params.State = 'x'.repeat(400);
+      params.provider = fakeProvider;
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toMatch(/tokens per call, over the limit of 10/);
+    });
+
+    it('6e. refuses media the driver cannot read, before calling it', async () => {
+      let called = false;
+      mockDriver.decideOverride = async () => {
+        called = true;
+        return new DecisionResult(true, new Date(), new Date());
+      };
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = defaultQuestions;
+      params.State = 'A photo of the counter';
+      params.Media = [{ Type: 'image', MimeType: 'image/png', Data: 'iVBORw0KGgo=' }];
+      params.provider = fakeProvider;
+
+      const result = await runner.ExecuteDecision(params);
+
+      expect(called).toBe(false);
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toMatch(/cannot take this request's media: .*reads text only, not image/);
     });
 
     it('6b. rejects when choice option count exceeds MaxChoiceOptions', async () => {
@@ -1036,12 +1127,12 @@ describe('AIDecisionRunner', () => {
   });
 
   it('9b. a limit breach on the first model fails over to the next, which answers', async () => {
-    h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxQuestionsPerCall: 1 } });
+    h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxStateTokens: 1 } });
     const prompt = makeDecisionPrompt({ FailoverStrategy: 'NextInList', MaxFailoverAttempts: 3 });
     const secondaryId = addSecondaryCandidate(prompt.ID);
     const params = new AIDecisionParams();
     params.prompt = prompt;
-    params.Questions = defaultQuestions; // 3 questions, over the first model's limit of 1
+    params.Questions = defaultQuestions; // far over the first model's token limit of 1
     params.State = 'Test state';
     params.provider = fakeProvider;
 
@@ -1115,9 +1206,61 @@ describe('AIDecisionRunner', () => {
     params.provider = fakeProvider;
     params.cancellationToken = controller.signal;
 
+    let abortedInDriver = false;
+    mockDriver.decideOverride = async (driverParams: DecisionParams) => {
+      controller.abort();
+      abortedInDriver = driverParams.CancellationToken?.aborted === true;
+      return new DecisionResult(false, new Date(), new Date());
+    };
+
     await runner.ExecuteDecision(params);
 
-    expect(mockDriver.lastParams?.CancellationToken).toBe(controller.signal);
+    // The driver gets the caller's signal composed with the default timeout, so aborting the
+    // caller's controller aborts the driver's signal.
+    expect(abortedInDriver).toBe(true);
+  });
+
+  it('12b. a decision with no timeout from the caller or the prompt is bounded by the default', async () => {
+    let driverSignal: AbortSignal | undefined;
+    mockDriver.decideOverride = async (driverParams: DecisionParams) => {
+      driverSignal = driverParams.CancellationToken;
+      const result = new DecisionResult(true, new Date(), new Date());
+      for (const [key, q] of Object.entries(driverParams.Questions)) {
+        result.Answers[key] = answerFor(q);
+      }
+      return result;
+    };
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt();
+    params.Questions = defaultQuestions;
+    params.State = 'Test state';
+    params.provider = fakeProvider;
+
+    await runner.ExecuteDecision(params);
+
+    expect(driverSignal).toBeDefined();
+  });
+
+  it('12c. a caller timeout of 0 opts the call out of any bound', async () => {
+    let driverSignal: AbortSignal | undefined = new AbortController().signal;
+    mockDriver.decideOverride = async (driverParams: DecisionParams) => {
+      driverSignal = driverParams.CancellationToken;
+      const result = new DecisionResult(true, new Date(), new Date());
+      for (const [key, q] of Object.entries(driverParams.Questions)) {
+        result.Answers[key] = answerFor(q);
+      }
+      return result;
+    };
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt();
+    params.Questions = defaultQuestions;
+    params.State = 'Test state';
+    params.provider = fakeProvider;
+    params.timeoutMS = 0;
+
+    await runner.ExecuteDecision(params);
+
+    expect(driverSignal).toBeUndefined();
   });
 
   it('13. a decision whose caller cancelled is reported as cancelled', async () => {

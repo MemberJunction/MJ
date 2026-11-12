@@ -33,10 +33,12 @@ import {
     DECISION_DISCOVERY_MIN_OPTIONS,
     DECISION_DISCOVERY_TIMEOUT_MS,
     SuggestedAgentMessage,
-    DECISION_DISCOVERY_CALIBRATION,
-    type DecisionDiscoveryCalibration,
+    DECISION_DISCOVERY_AGENT_QUESTION,
+    DECISION_DISCOVERY_APPLIES_QUESTION,
+    DECISION_DISCOVERY_USE,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
 } from '../decision-discovery';
+import { ShippedAgentCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
@@ -310,6 +312,7 @@ class DiscoveryHarness {
     public get engineInstance(): Record<string, unknown> {
         return {
             Config: async (): Promise<void> => undefined,
+            GetDecisionCalibrations: ShippedAgentCalibrations,
             Agents: [this.self, ...this.catalog],
             AgentRelationships: [],
             AgentCategories: [],
@@ -439,13 +442,12 @@ const ANSWERING_MODEL = 'Jev';
 /** The exact model the scripted answers come from: Jev at the version its calibration was fitted on. */
 const ANSWERING_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
 
-/** The answering model's discovery calibration. */
-function answeringCalibration(): DecisionDiscoveryCalibration {
-    const entry = DECISION_DISCOVERY_CALIBRATION.find(c => c.ModelName === ANSWERING_MODEL && c.ResolvedModel === ANSWERING_RESOLVED_MODEL);
-    if (!entry) {
-        throw new Error(`no discovery calibration for ${ANSWERING_MODEL} (${ANSWERING_RESOLVED_MODEL})`);
-    }
-    return entry.Calibration;
+/** The answering model's two shipped discovery fits. */
+function answeringCalibration(): { Confidence: PlattCalibration; AnyApplies: PlattCalibration } {
+    return {
+        Confidence: ShippedFit(ANSWERING_MODEL, DECISION_DISCOVERY_USE, DECISION_DISCOVERY_AGENT_QUESTION),
+        AnyApplies: ShippedFit(ANSWERING_MODEL, DECISION_DISCOVERY_USE, DECISION_DISCOVERY_APPLIES_QUESTION),
+    };
 }
 
 /** The raw probability that the answering model's calibration maps to `calibrated` (Platt, inverted). */

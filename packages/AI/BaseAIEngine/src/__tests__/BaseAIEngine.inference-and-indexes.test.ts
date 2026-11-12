@@ -330,3 +330,35 @@ describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade
         expect(cfg?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 });
+
+describe('AIEngineBase.GetDecisionCalibrations — calibrations are model metadata', () => {
+    const DECISION_TYPE_ID = 'decision-type-id';
+    const JEV = 'jev-model-id';
+    const jevCalibration = { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (AIEngineBase as unknown as { _instance: unknown })._instance = undefined;
+        seedVendorTypes();
+        set('_modelTypes', [{ ID: DECISION_TYPE_ID, Name: 'Decision', ModelConfiguration: '{"Decision":{"MaxChoiceOptions":255}}' }]);
+        set('_vendors', []);
+        set('_models', [
+            { ID: JEV, Name: 'Jev', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: JSON.stringify({ Decision: { MaxScoreLevels: 10, Calibrations: [jevCalibration] } }), ModelVendors: [] },
+            { ID: 'plain-model-id', Name: 'Plain Decision', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: null, ModelVendors: [] },
+            { ID: 'bad-model-id', Name: 'Bad Decision', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: '{"Decision":{"Calibrations":"not a list"}}', ModelVendors: [] },
+        ]);
+        set('_modelVendors', []);
+    });
+
+    it("returns the model's declared calibrations, found by name regardless of case and spacing", () => {
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Jev')).toEqual([jevCalibration]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('  jev ')).toEqual([jevCalibration]);
+    });
+
+    it('returns none for a model without calibrations, an unknown model, a blank name, or a malformed list', () => {
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Plain Decision')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('No Such Model')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('   ')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Bad Decision')).toEqual([]);
+    });
+});

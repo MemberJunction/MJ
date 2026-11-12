@@ -2,7 +2,8 @@
  * @fileoverview The Decision Eval driver with the runner and the engine faked: what it asks, how it
  * pins the model and turns failover off, what it records, and that it never throws.
  */
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { AIEngine } from '@memberjunction/aiengine';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -167,7 +168,22 @@ async function run(config: Partial<DecisionEvalConfig>, respond: () => Promise<A
     return { driver, result };
 }
 
+/**
+ * The conversation-routing calibrations shipped on the Jev and LLM Decision AI models
+ * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngine.Instance` would serve them.
+ */
+const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
+    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }],
+    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }],
+};
+
 describe('DecisionEvalDriver', () => {
+    beforeEach(() => {
+        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(
+            (modelName: string) => Object.hasOwn(SHIPPED_ROUTING_CALIBRATIONS, modelName) ? SHIPPED_ROUTING_CALIBRATIONS[modelName] : []
+        );
+    });
+
     describe('pinning and failover', () => {
         it('pins the cell\'s model and vendor through the runner\'s override, with failover off', async () => {
             const { driver, result } = await run({ modelId: PINNED_MODEL, vendorId: PINNED_VENDOR }, async () => decided(0.2));

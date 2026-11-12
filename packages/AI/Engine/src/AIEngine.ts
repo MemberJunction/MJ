@@ -9,7 +9,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          EmbeddingInputType,
          ApplyEmbeddingInputPrefix} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
-import { AIModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, DecisionCalibrationEntry } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
@@ -37,7 +37,7 @@ import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@member
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, DecisionCalibrationSource } from "@memberjunction/ai-core-plus";
 
 
 /**
@@ -73,7 +73,7 @@ export class EntityAIActionParams extends AIActionParams {
     deferredDelay: 15000,
     description: "Server-side AI Engine and Embeddings Pre-Warming"
 })
-export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
+export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink, DecisionCalibrationSource {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
 
@@ -360,6 +360,14 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
         return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
+
+    /**
+     * Every Platt calibration declared for a decision model. See
+     * {@link AIEngineBase.GetDecisionCalibrations}.
+     */
+    public GetDecisionCalibrations(modelName: string): readonly DecisionCalibrationEntry[] {
+        return this.Base.GetDecisionCalibrations(modelName);
     }
 
     // Modality helper methods - delegated from AIEngineBase

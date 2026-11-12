@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ApplyPlattCalibration, type LikelihoodAnswer, type PlattCalibration } from '@memberjunction/ai';
-import { FindDecisionCalibration, type DecisionAnsweringModel, type DecisionModelCalibration } from '@memberjunction/ai-core-plus';
+import { FindDecisionCalibration, type DecisionAnsweringModel, type DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
+import { SHIPPED_AGENT_CALIBRATIONS, SHIPPED_AGENT_SOURCE } from './helpers/shipped-decision-calibrations';
 import {
     BuildMemoryNoteQuestions,
     BuildMemoryNoteState,
@@ -13,7 +14,7 @@ import {
     MEMORY_NOTE_MAX_CONTENT_CHARS,
     MEMORY_NOTE_MAX_EXCERPT_CHARS,
     MEMORY_NOTE_MIN_PROBABILITY,
-    MEMORY_NOTE_DECISION_CALIBRATION,
+    MEMORY_NOTE_CALIBRATION_KEY,
     type MemoryNoteCandidate,
     type MemoryNoteConversation,
     type MemoryNoteEngineSource
@@ -24,7 +25,7 @@ const JEV: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: 'typesafe
 
 /** Jev's shipped memory-note calibration. */
 function jevCalibration(): PlattCalibration {
-    const calibration = FindDecisionCalibration(MEMORY_NOTE_DECISION_CALIBRATION, JEV);
+    const calibration = FindDecisionCalibration(SHIPPED_AGENT_SOURCE, MEMORY_NOTE_CALIBRATION_KEY, JEV);
     if (!calibration) {
         throw new Error('Jev has no memory-note calibration');
     }
@@ -110,14 +111,16 @@ describe('memory-note-gate', () => {
         });
     });
 
-    describe('MEMORY_NOTE_DECISION_CALIBRATION', () => {
-        it('holds only the models measured to beat the self-reported confidence, each at the exact model it was fitted on, frozen', () => {
-            expect(MEMORY_NOTE_DECISION_CALIBRATION.map(c => [c.ModelName, c.ResolvedModel])).toEqual([['Jev', 'typesafe/jev-1.13-20260917']]);
-            expect(Object.isFrozen(MEMORY_NOTE_DECISION_CALIBRATION)).toBe(true);
-            for (const entry of MEMORY_NOTE_DECISION_CALIBRATION) {
-                expect(Object.isFrozen(entry)).toBe(true);
-                expect(Object.isFrozen(entry.Calibration)).toBe(true);
-            }
+    describe('MEMORY_NOTE_CALIBRATION_KEY', () => {
+        it('reads use memory-note-gate, question note, from the answering model\'s calibrations, frozen', () => {
+            expect(MEMORY_NOTE_CALIBRATION_KEY).toEqual({ Use: 'memory-note-gate', Question: 'note' });
+            expect(Object.isFrozen(MEMORY_NOTE_CALIBRATION_KEY)).toBe(true);
+        });
+
+        it('is shipped only for the models measured to beat the self-reported confidence, at the exact model each was fitted on', () => {
+            const fitted = Object.entries(SHIPPED_AGENT_CALIBRATIONS).flatMap(([model, entries]) =>
+                entries.filter(c => c.Use === MEMORY_NOTE_CALIBRATION_KEY.Use && c.Question === MEMORY_NOTE_CALIBRATION_KEY.Question).map(c => [model, c.ResolvedModel]));
+            expect(fitted).toEqual([['Jev', 'typesafe/jev-1.13-20260917']]);
         });
     });
 
@@ -129,7 +132,7 @@ describe('memory-note-gate', () => {
         });
 
         it("holds Jev's measured Platt parameters, at the version they were fitted on", () => {
-            expect(FindDecisionCalibration(MEMORY_NOTE_DECISION_CALIBRATION, JEV)).toEqual({ A: 3.6391, B: -5.7059 });
+            expect(FindDecisionCalibration(SHIPPED_AGENT_SOURCE, MEMORY_NOTE_CALIBRATION_KEY, JEV)).toEqual({ A: 3.6391, B: -5.7059 });
         });
 
         it('puts the cut at a raw 0.8428 for Jev: raw 0.843 calibrates to 0.601, raw 0.842 to 0.595', () => {
@@ -149,7 +152,7 @@ describe('memory-note-gate', () => {
                 n1: { Kind: 'Likelihood', Probability: 0.843 },
                 n2: { Kind: 'Likelihood', Probability: 0.842 }
             };
-            const verdict = JudgeMemoryNotes(answers, notes, JEV);
+            const verdict = JudgeMemoryNotes(answers, notes, JEV, SHIPPED_AGENT_SOURCE);
             expect(verdict.KeptNotes).toEqual([notes[0]]);
         });
     });
@@ -205,9 +208,11 @@ describe('memory-note-gate', () => {
     describe('JudgeMemoryNotes', () => {
         // Identity calibration (A = 1, B = 0) maps logit(p) back to p: sigmoid(1 * logit(p) + 0) = p.
         const GPT_4O: DecisionAnsweringModel = { ModelName: 'gpt-4o', ResolvedModel: 'openai/gpt-4o-2024-08-06' };
-        const IDENTITY_CALIBRATIONS: DecisionModelCalibration<PlattCalibration>[] = [
-            { ModelName: 'gpt-4o', ResolvedModel: 'openai/gpt-4o-2024-08-06', Calibration: { A: 1, B: 0 } }
-        ];
+        const IDENTITY_SOURCE: DecisionCalibrationSource = {
+            GetDecisionCalibrations: (modelName: string) => modelName === 'gpt-4o'
+                ? [{ Use: 'memory-note-gate', Question: 'note', ResolvedModel: 'openai/gpt-4o-2024-08-06', A: 1, B: 0 }]
+                : [],
+        };
         const candidateNotes: MemoryNoteCandidate[] = [
             { type: 'Preference', content: 'Prefers dark mode' },
             { type: 'Issue', content: 'Printer offline' }
@@ -219,7 +224,7 @@ describe('memory-note-gate', () => {
         };
 
         it('drops all notes and marks Calibrated=false when model is uncalibrated', () => {
-            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, { ModelName: 'Claude 3.5 Sonnet', ResolvedModel: 'anthropic/claude-3.5-sonnet' });
+            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, { ModelName: 'Claude 3.5 Sonnet', ResolvedModel: 'anthropic/claude-3.5-sonnet' }, SHIPPED_AGENT_SOURCE);
             expect(verdict.Calibrated).toBe(false);
             expect(verdict.KeptNotes).toHaveLength(0);
             expect(verdict.JudgedNotes).toHaveLength(2);
@@ -228,7 +233,7 @@ describe('memory-note-gate', () => {
         });
 
         it('calibrates Jev at the version its calibration was fitted on, by default', () => {
-            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, JEV);
+            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, JEV, SHIPPED_AGENT_SOURCE);
             const jev = jevCalibration();
 
             expect(verdict.Calibrated).toBe(true);
@@ -246,7 +251,7 @@ describe('memory-note-gate', () => {
             ['a model named constructor', { ModelName: 'constructor', ResolvedModel: 'constructor' }],
             ['a model named constructor at the pinned Jev version', { ModelName: 'constructor', ResolvedModel: 'typesafe/jev-1.13-20260917' }]
         ])('leaves %s uncalibrated, keeping nothing', (_label, answeredBy) => {
-            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, answeredBy);
+            const verdict = JudgeMemoryNotes(confidentAnswers, candidateNotes, answeredBy, SHIPPED_AGENT_SOURCE);
 
             expect(verdict.Calibrated).toBe(false);
             expect(verdict.KeptNotes).toEqual([]);
@@ -258,7 +263,7 @@ describe('memory-note-gate', () => {
             const answers: Record<string, LikelihoodAnswer> = {
                 n1: { Kind: 'Likelihood', Probability: 0.95 }
             };
-            const verdict = JudgeMemoryNotes(answers, candidateNotes);
+            const verdict = JudgeMemoryNotes(answers, candidateNotes, {}, SHIPPED_AGENT_SOURCE);
             expect(verdict.Calibrated).toBe(false);
             expect(verdict.KeptNotes).toHaveLength(0);
             expect(verdict.JudgedNotes[0].Reason).toBe('No answering model was reported, so the gate keeps nothing');
@@ -270,13 +275,7 @@ describe('memory-note-gate', () => {
                 n2: { Kind: 'Likelihood', Probability: 0.3 }
             };
 
-            const verdict = JudgeMemoryNotes(
-                answers,
-                candidateNotes,
-                GPT_4O,
-                0.5,
-                IDENTITY_CALIBRATIONS
-            );
+            const verdict = JudgeMemoryNotes(answers, candidateNotes, GPT_4O, IDENTITY_SOURCE, 0.5);
 
             expect(verdict.Calibrated).toBe(true);
             expect(verdict.KeptNotes).toEqual([candidateNotes[0]]);
@@ -286,12 +285,12 @@ describe('memory-note-gate', () => {
             expect(verdict.JudgedNotes[1].CalibratedProbability).toBeCloseTo(0.3, 3);
         });
 
-        it('matches the answering model as the shared lookup does: exactly, after trimming', () => {
+        it('matches the answering model as the shared lookup does: the resolved model exactly, after trimming', () => {
             const answers: Record<string, LikelihoodAnswer> = {
                 n1: { Kind: 'Likelihood', Probability: 0.9 }
             };
-            const trimmed = JudgeMemoryNotes(answers, [candidateNotes[0]], { ModelName: ' gpt-4o ', ResolvedModel: 'openai/gpt-4o-2024-08-06\n' }, 0.5, IDENTITY_CALIBRATIONS);
-            const recased = JudgeMemoryNotes(answers, [candidateNotes[0]], { ModelName: 'GPT-4o', ResolvedModel: GPT_4O.ResolvedModel }, 0.5, IDENTITY_CALIBRATIONS);
+            const trimmed = JudgeMemoryNotes(answers, [candidateNotes[0]], { ModelName: ' gpt-4o ', ResolvedModel: 'openai/gpt-4o-2024-08-06\n' }, IDENTITY_SOURCE, 0.5);
+            const recased = JudgeMemoryNotes(answers, [candidateNotes[0]], { ModelName: 'gpt-4o', ResolvedModel: 'OpenAI/gpt-4o-2024-08-06' }, IDENTITY_SOURCE, 0.5);
 
             expect(trimmed.Calibrated).toBe(true);
             expect(trimmed.KeptNotes).toHaveLength(1);
@@ -303,13 +302,7 @@ describe('memory-note-gate', () => {
                 // n1 missing
                 n2: { Kind: 'Likelihood', Probability: NaN }
             };
-            const verdict = JudgeMemoryNotes(
-                answers,
-                candidateNotes,
-                GPT_4O,
-                0.5,
-                IDENTITY_CALIBRATIONS
-            );
+            const verdict = JudgeMemoryNotes(answers, candidateNotes, GPT_4O, IDENTITY_SOURCE, 0.5);
             expect(verdict.KeptNotes).toHaveLength(0);
             expect(verdict.JudgedNotes[0].Kept).toBe(false);
             expect(verdict.JudgedNotes[0].Reason).toContain('Missing or invalid Likelihood answer');
