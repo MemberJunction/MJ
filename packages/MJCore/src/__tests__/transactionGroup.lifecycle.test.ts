@@ -33,6 +33,7 @@ import {
     SaveContext,
     SaveSQLResult,
     TransactionGroupBase,
+    TransactionItem,
     TransactionResult,
     UserInfo,
 } from '../index';
@@ -574,6 +575,50 @@ describe('TransactionGroup pre-submit concurrency checks', () => {
         expect(stale.LatestResult?.Message).toContain('Concurrent modification conflict');
         expect(sibling.LatestResult?.Success).toBe(false);
         expect(sibling.LatestResult?.Message).toContain('another item in the group failed its pre-submit check');
+    });
+
+    /** An item queued directly into the group, whose callback records each call and may throw. */
+    function manualItem(group: TransactionGroupBase, calls: string[], label: string, throwInCallback = false): TransactionItem {
+        const item = new TransactionItem(newWidget(`${label}-id`, label), 'Update', `EXEC ${label}`, null, {}, (_result, success) => {
+            calls.push(`${label}:${success}`);
+            if (throwInCallback) {
+                throw new Error(`${label} callback failed`);
+            }
+        });
+        group.AddTransaction(item);
+        return item;
+    }
+
+    it('calls every callback once when a callback throws while a rejected group is failed', async () => {
+        const provider = useProvider();
+        const group = await provider.CreateTransactionGroup();
+        const calls: string[] = [];
+        manualItem(group, calls, 'first').CheckBeforeSubmit = async () => false;
+        manualItem(group, calls, 'second', true);
+        manualItem(group, calls, 'third');
+
+        expect(await group.Submit()).toBe(false);
+
+        expect(calls).toEqual(['first:false', 'second:false', 'third:false']);
+        expect(provider.Group.Events).toEqual(['begin', 'rollback']);
+    });
+
+    it('stops at a check that throws, rolls back, and fails every item once', async () => {
+        const provider = useProvider();
+        const group = await provider.CreateTransactionGroup();
+        const calls: string[] = [];
+        manualItem(group, calls, 'first').CheckBeforeSubmit = async () => {
+            throw new Error('connection lost during the locked read');
+        };
+        manualItem(group, calls, 'second').CheckBeforeSubmit = async () => {
+            provider.Group.Events.push('check:second');
+            return true;
+        };
+
+        expect(await group.Submit()).toBe(false);
+
+        expect(provider.Group.Events).toEqual(['begin', 'rollback']);
+        expect(calls).toEqual(['first:false', 'second:false']);
     });
 
     it('runs every check even after one rejects, so each conflicting item reports its own reason', async () => {

@@ -569,7 +569,10 @@ export abstract class TransactionGroupBase {
 
     /**
      * Runs every item's {@link TransactionItem.CheckBeforeSubmit} inside the open group transaction.
-     * Every check runs even after one fails, so each rejected item reports its own reason.
+     * Every check runs even after one returns `false`, so each rejected item reports its own reason.
+     * A check that throws stops here: the error (for example a lost connection or a deadlock during
+     * the locked read) usually leaves the transaction unusable, so it goes to `Submit()`'s failure
+     * path, which rolls back and fails every item with that error.
      *
      * @returns `true` when every check passed (or no item has one)
      */
@@ -587,12 +590,21 @@ export abstract class TransactionGroupBase {
      * Fails every item of a group that a {@link TransactionItem.CheckBeforeSubmit} rejected before
      * any statement ran. Items whose check failed keep the reason the check recorded; the others
      * are told the group was rolled back because of another item.
+     *
+     * Each callback is called exactly once: one that throws is logged and the rest still run, so
+     * the error never reaches `Submit()`'s outer failure path, which would call them all again.
      */
     private async failRejectedGroup(): Promise<void> {
         const reason = new Error('The transaction group was rolled back because another item in the group failed its pre-submit check.');
         const results = this._pendingTransactions.map((pending) => new TransactionResult(pending, reason, false));
         try {
-            await this.runInTransactionResults(results, false);
+            for (const result of results) {
+                try {
+                    await result.Transaction.CallBack(result.Result, false);
+                } catch (callbackError) {
+                    LogError(callbackError);
+                }
+            }
             this.notifyTransactionStatus(false, results);
         } finally {
             this._status = 'Failed';
