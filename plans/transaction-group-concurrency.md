@@ -1,116 +1,98 @@
 # TransactionGroup Server-Side Concurrency & Multi-Process Verification
 
-**Status:** Proposed
-**Date:** 2026-11-09
+**Status:** Implemented (WS1, WS2, WS3) on this branch
+**Date:** 2026-11-09 (proposed), 2026-11-11 (implemented)
 **Assignee / Owner:** Jordan Fanapour (`@jordanfanapour`)
-**Scope:** `@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/postgresql-dataprovider`, `@memberjunction/graphql-dataprovider`, `@memberjunction/server`, `@memberjunction/testing-integration`
-**Related:** PR [#6474](https://github.com/MemberJunction/MJ/pull/6474) (`plans/orm-improvements-ef-comparison.md`), PR [#6489](https://github.com/MemberJunction/MJ/pull/6489) (`plans/record-changes-post-save-snapshot.md`), [#6468](https://github.com/MemberJunction/MJ/issues/6468), [#4339](https://github.com/MemberJunction/MJ/issues/4339), [PR #6474 review comment](https://github.com/MemberJunction/MJ/pull/6474#issuecomment-6744739815), [#6468 review conditions](https://github.com/MemberJunction/MJ/issues/6468#issuecomment-6728103040)
+**Scope:** `@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/postgresql-dataprovider`, `@memberjunction/graphql-dataprovider`, `@memberjunction/server`, `@memberjunction/integration-test-suite`
+**Related:** PR [#6474](https://github.com/MemberJunction/MJ/pull/6474), PR [#6489](https://github.com/MemberJunction/MJ/pull/6489), [#6468](https://github.com/MemberJunction/MJ/issues/6468), [#4339](https://github.com/MemberJunction/MJ/issues/4339)
 
 ---
 
 ## Why this plan exists
 
-PR [#6474](https://github.com/MemberJunction/MJ/pull/6474) shipped two major server-side persistence improvements:
+PR #6474 made server updates send only the changed columns, and added a field-level concurrency
+check under a row lock (`ConcurrencyCheck` = `'off' | 'log' | 'enforce'`). `DatabaseProviderBase.Save`
+skipped that check for any update queued into a `TransactionGroup`, and logged a warning only when
+the caller passed `ConcurrencyBaseline` or `'enforce'` explicitly. A provider-wide `'log'` or
+`'enforce'` setting was skipped for grouped saves without any warning.
 
-1. **Delta-only `spUpdate*` / `fn_update*` execution (`DeltaUpdates = true` by default):** Entity updates against CodeGen-generated routines bind only dirty columns plus primary keys, resolving cross-process lost updates on disjoint columns ([#4339](https://github.com/MemberJunction/MJ/issues/4339), [#6468](https://github.com/MemberJunction/MJ/issues/6468)).
-2. **Atomic server-side field-level concurrency checking (`CheckUpdateConcurrency`):** Under `ConcurrencyCheck: 'log' | 'enforce'` (and automatically `'enforce'` on GraphQL `UpdateRecord` mutations carrying `OldValues___`), `DatabaseProviderBase.Save()` opens or joins an `EntityTransactionScope`, reads dirty columns with `WITH (UPDLOCK, ROWLOCK)` (SQL Server) / `FOR UPDATE` (PostgreSQL), and runs `DetectFieldConcurrencyConflicts` before `spUpdate*` executes.
+## What the investigation found
 
-Two intentional follow-ups were carved out of PR #6474 so they can be executed cleanly with focused review:
+- **No server-side caller of a `TransactionGroup` passes a concurrency option.** The Integration
+  engine, OpenApp install, integration-discovery admin deletes and DataContext all save bare.
+  MetadataSync push and agent runs use provider transactions, not groups.
+- **The browser path is where it mattered.** A form save normally goes through the single-record
+  `UpdateRecord` mutation, which sends `OldValues___` and runs in `'enforce'` mode. As soon as the
+  form has pending child records (`BaseFormComponent.InternalSaveRecord`: Action, AI Agent,
+  Templates, and the AI Prompt, Query and agent editors), it saves through a `GraphQLTransactionGroup`.
+  On that path the client discarded the old values it had already built, the resolver reloaded the
+  row immediately before saving (so a stale client could not be detected), and saved with no options.
+  The same edit was protected without child changes and unprotected with them.
+- **The flush changed after this plan was written.** Commit `64cc6f4127` (Wave 4.3a) sends a group
+  without variables as one batched request on both databases. A locked read per item inside the
+  execution loop, as first proposed, would have undone that batching.
+- **Record Change snapshots through groups were already right.** Grouped saves, including groups
+  with variables (whose SQL is regenerated at submit through `GetSaveSQL`), build `FullRecordJSON`
+  from the stored row, as direct saves do since #6489. A live test now pins this on both databases.
 
-1. **`TransactionGroup` concurrency checking:** Queued `TransactionGroup` saves already benefit from **delta-only `spUpdate*` parameter binding** (because `DatabaseProviderBase.Save` calls `GenerateSaveSQL` when queuing each `TransactionItem`), so disjoint-column edits inside a `TransactionGroup` already avoid overwriting concurrent updates. However, `DatabaseProviderBase.Save` currently skips `CheckUpdateConcurrency` when `entity.TransactionGroup` is set and logs a warning when `ConcurrencyBaseline` or `ConcurrencyCheck === 'enforce'` is supplied (`packages/MJCore/src/generic/databaseProviderBase.ts`, ~lines 2361–2369).
-2. **True multi-process (2-MJAPI + Redis) reproduction & CI/harness verification:** Validating the full cross-process credential-rotation / concurrent-entity-save workload from [#4339](https://github.com/MemberJunction/MJ/issues/4339) and [#6468](https://github.com/MemberJunction/MJ/issues/6468) across separate Node.js OS processes sharing SQL Server / PostgreSQL + Redis pub/sub cache invalidation.
+## Design as built
 
----
+### Provider (WS2)
 
-## What is true today
+- `TransactionItem.CheckBeforeSubmit?: () => Promise<boolean>`: an optional check that
+  `TransactionGroupBase.Submit()` runs for every item inside the open group transaction, after
+  `PrepareBeforeSubmit` and before `HandleSubmit()`. If any check returns `false`, the group rolls
+  back without running a single statement, every item's callback fails, and `Submit()` returns
+  `false`. All checks run even after one fails, so each conflicting item reports its own fields.
+- `DatabaseProviderBase.PrepareQueuedUpdateConcurrencyCheck(entity, user, options, entityResult)`:
+  a new hook (default `null`) called when an update is queued. It replaces the bypass warning.
+- `GenericDatabaseProvider` implements it by splitting `CheckUpdateConcurrency` into two steps:
+  collect each changed field's baseline and new value (now, at queue time) and run the locked read
+  and comparison (later, at submit). It returns `null` when checking is off, so a group with checking
+  off does no extra work. The read uses the existing `RenderLockedRowReadSQL` (`UPDLOCK, ROWLOCK` /
+  `FOR UPDATE`) through the provider, which runs on the group's own transaction.
+- Because every check runs before any of the group's writes, the plan's "same row twice in one
+  group" special case does not arise, and batched submits stay one batch after the locked reads.
 
-| Path | Delta-only `spUpdate*`? | Atomic locked-row overlap check (`UPDLOCK` / `FOR UPDATE`)? | Current gap |
-|---|---|---|---|
-| Direct `entity.Save()` on server | Yes (`DeltaUpdates = true`) | Yes when `ConcurrencyCheck` is `'log'` or `'enforce'` | Complete in PR #6474 |
-| GraphQL single-record `UpdateRecord` | Yes | Yes (`ResolverBase` sets `ConcurrencyCheck = 'enforce'` + `ConcurrencyBaseline` from `OldValues___`) | Complete in PR #6474 |
-| Composite entity graph (`RelatedRecordCollection` / `SaveEntityGraph`) | Yes | Yes (each node calls `entity.Save()` inside one `EntityTransactionScope`) | Complete in PR #6474 |
-| IS-A Table-Per-Type chains | Yes | Yes (per-level locked check + full chain DB & `UnitOfWork` rollback) | Complete in PR #6474 |
-| **`TransactionGroup` (server-side & GraphQL `ExecuteTransactionGroup`)** | **Yes** | **Bypassed with `LogWarning`** | **Target of WS1 & WS2 below** |
+### Wire (WS1)
 
-### Relevant files in `next` (post-#6474)
+- `GraphQLDataProvider.Save` carries the `OldValues___` it already builds for an update onto the
+  queued item (`ExtraData.oldValues`), unless the save used `SkipOldValuesCheck`.
+- `GraphQLTransactionGroup` sends them as a new optional `OldValues: [KeyValuePairInput]` field on
+  `TransactionItemInputType`, and copies the server's `ConcurrencyConflict` onto the entity's result
+  when the group fails.
+- `TransactionResolver.ApplyItemValues` handles an update that carries `OldValues` the way
+  `ResolverBase.UpdateRecord` does: `TestAndSetClientOldValuesToDBValues` compares them with the row
+  just loaded (a conflict refuses the item and the group is not submitted), and the save is queued
+  with `ConcurrencyCheck: 'enforce'` plus the client's baseline, so the provider repeats the
+  comparison under a lock at submit. A submit-time conflict writes the same `SAVE_INCONSISTENCY`
+  error log the single-record path writes.
 
-- `packages/MJCore/src/generic/transactionGroup.ts` — `TransactionGroupBase`, `TransactionItem`, `TransactionVariable`
-- `packages/MJCore/src/generic/databaseProviderBase.ts` (~lines 2359–2469) — `if (entity.TransactionGroup && !bReplay)` queuing branch
-- `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` (~lines 1132–1293) — `CheckUpdateConcurrency`, `getDirtyConcurrencyFields`, `RenderLockedRowReadSQL`
-- `packages/GenericDatabaseProvider/src/concurrency/fieldConflictDetector.ts` — `DetectFieldConcurrencyConflicts`
-- `packages/SQLServerDataProvider/src/SQLServerTransactionGroup.ts` — `HandleSubmit()` physical `mssql.Transaction` execution loop
-- `packages/PostgreSQLDataProvider/src/PostgreSQLTransactionGroup.ts` — `HandleSubmit()` physical `pg.PoolClient` `BEGIN`/`COMMIT`/`ROLLBACK` execution loop
-- `packages/GraphQLDataProvider/src/graphQLTransactionGroup.ts` & `packages/MJServer/src/resolvers/TransactionGroupResolver.ts` — wire serialization and server-side deserialization of `TransactionGroup` items
+### Deadlocks
 
----
+A group that checks several rows locks them in queue order. Two groups updating the same two rows
+in opposite order can deadlock, as they already could through their writes. Items are not reordered,
+because variable dependencies and foreign-key creation order are positional.
 
-## WS1 — Carry concurrency metadata on `TransactionItem` & across the GraphQL wire
+## WS3 — multi-process verification
 
-### Design
+- **2-MJAPI + Redis credential-rotation rig against `next` with #6474:** 0 of 50 rotations lost in
+  the database with defaults; 14 of 20 lost with `deltaUpdates` off in the readers
+  ([results](https://github.com/MemberJunction/MJ/pull/6490#issuecomment-6756104012)). The rig is
+  not committed; it needs two MJAPIs, Redis and several reader processes.
+- **Permanent, deterministic checks:**
+  - IT170 (`transaction-group-concurrency-client`, client transport): two GraphQL sessions, one
+    saving through a transaction group, against a real MJAPI.
+  - Env-gated live Vitest tests on both databases
+    (`transaction-group-concurrency-live-db.integration.test.ts`): two providers on separate
+    connection pools stand in for two servers.
 
-1. **Extend `TransactionItem` (or strongly-typed `ConcurrencySpec` on `TransactionItem`):**
-   When `DatabaseProviderBase.Save()` queues an `Update` item into `entity.TransactionGroup`, attach an optional strongly-typed concurrency descriptor instead of dropping `options.ConcurrencyCheck` / `options.ConcurrencyBaseline` and logging a warning:
-   ```typescript
-   export interface TransactionItemConcurrencySpec {
-       Mode: ConcurrencyCheckMode; // resolved via getEffectiveConcurrencyCheckMode(options)
-       Baseline?: Record<string, unknown>;
-       SkipOldValuesCheck?: boolean;
-   }
-   ```
-   - When `effectiveMode === 'off'` or `options?.SkipOldValuesCheck === true`, `ConcurrencySpec` is `undefined` and `HandleSubmit()` incurs **zero overhead** (matching direct `Save()` default behavior).
-   - Remove the temporary bypass `LogWarning` in `DatabaseProviderBase.Save` (~lines 2361–2369) once `HandleSubmit()` executes the check.
+## Acceptance criteria
 
-2. **Wire transport (`GraphQLTransactionGroup` -> `TransactionGroupResolver`):**
-   - Inspect how `GraphQLTransactionGroup` serializes `Update` items (`EntityObjectJSON`, `OldValues___` if present).
-   - When a browser client queues dirty entities into a `GraphQLTransactionGroup` without `SkipOldValuesCheck: true`, capture each dirty field's pre-edit `OldValue` on the wire item (mirroring `GraphQLDataProvider.Save`'s `OldValues___`), and in `TransactionGroupResolver` hydrate the server entity and populate `ConcurrencyBaseline` + `ConcurrencyCheck: 'enforce'` before queuing onto the server `TransactionGroup`.
-
----
-
-## WS2 — Execute locked-row concurrency checks inside `HandleSubmit()`
-
-### Execution model inside the physical transaction
-
-Both `SQLServerTransactionGroup.HandleSubmit()` and `PostgreSQLTransactionGroup.HandleSubmit()` already open a single physical database transaction (`BEGIN TRANSACTION` / `BEGIN`) and execute items **sequentially** on that pinned connection so `TransactionVariable` (`Define` -> `Use`) works between steps.
-
-For each `TransactionItem` with `OperationType === 'Update'` and a non-`'off'` `ConcurrencySpec`:
-
-1. **Apply any resolved `TransactionVariable` (`Use`) values first** so any FK/field populated by an earlier `Define` item in the same group has its final target value before checking or executing.
-2. **Intra-group awareness (same row updated twice in one group):**
-   - Track a `Set<string>` of `(EntityID, NormalizedPK)` keys already written earlier in the *same* `HandleSubmit()` transaction.
-   - For the **first** touch of `(EntityID, PK)` in the group: execute `provider.RenderLockedRowReadSQL(entityInfo, dirtyFields, pk)` **on the group's active transaction connection** (`new mssql.Request(transaction)` on SQL Server; `client.query(...)` on PostgreSQL). Because this runs inside the open transaction, `UPDLOCK, ROWLOCK` / `FOR UPDATE` locks the row until the entire `TransactionGroup` commits or rolls back!
-   - Run `PostProcessRows` + `DetectFieldConcurrencyConflicts` against `ConcurrencySpec.Baseline ?? field.OldValue`.
-   - If a second `TransactionItem` in the *same* `TransactionGroup` updates the *same* `(EntityID, PK)`, skip baseline comparison for fields modified by the earlier item in the same transaction (since the row lock is already held by our own transaction and the DB row now reflects our own step 1 write).
-3. **Conflict handling (`'log'` vs `'enforce'`):**
-   - `'log'`: emit the same structured `LogErrorEx` warning (`category: 'GenericDatabaseProvider.CheckUpdateConcurrency'`) and proceed with the update SQL.
-   - `'enforce'`:
-     1. Populate a `BaseEntityResult` on `item.BaseEntity` with `Success = false`, descriptive `Message`, and `ConcurrencyConflict: { ConflictingFields }`.
-     2. Roll back the entire physical transaction (`await transaction.rollback()` / `await client.query('ROLLBACK')`).
-     3. Emit failure through `TransactionNotifications$` so `BaseEntity._innerSave`'s subscription records failure cleanly on sibling entities without leaving dangling uncommitted state.
-     4. On `TransactionGroupResolver`, surface `CONCURRENT_MODIFICATION_CONFLICT` extensions (and `SAVE_INCONSISTENCY` error-log entry) matching `ResolverBase.UpdateRecord`.
-
-### Deadlock prevention note for multi-row locks
-
-Because a `TransactionGroup` can lock multiple rows across one transaction, two concurrent `TransactionGroup`s touching the same pair of rows in opposite order (`[Row1, Row2]` vs `[Row2, Row1]`) could deadlock in SQL. Document this in `guides/TRANSACTIONS_AND_BATCHING_GUIDE.md` (callers batching multi-row updates should order items deterministically by `(EntityName, PK)` when concurrent contention is expected; we should **not** silently reorder `TransactionGroup` items automatically because `TransactionVariable` dependencies and FK creation order are positional).
-
----
-
-## WS3 — Multi-process (2-MJAPI + Redis) Concurrent Save Verification
-
-Jordan built a 3-process reproduction harness during [#6468](https://github.com/MemberJunction/MJ/issues/6468) / [#4339](https://github.com/MemberJunction/MJ/issues/4339) (two MJAPI instances + Redis pub/sub cache invalidation + concurrent credential key rotation + `LastUsedAt` / usage updates, which reproduced lost updates in 13 of 20 trials on MJ 6.2.1).
-
-1. **Run the 3-process reproduction harness against `next` (with PR #6474 merged):**
-   - Scenario A: Process 1 rotates an encrypted credential field while Process 2 concurrently updates a metadata/timestamp field on the same credential record across 50+ trials -> **0 reverted keys** (`DeltaUpdates = true`, `ConcurrencyCheck = 'off'`).
-   - Scenario B: Two clients / processes edit the **same** field from the same baseline with `ConcurrencyCheck = 'enforce'` -> exactly one wins, the loser receives `ConcurrencyConflict` (`ConflictingFields`), and Redis cache invalidation converges both processes onto the winning value.
-   - Scenario C: Repeat Scenario A & B through `TransactionGroup` once WS1 + WS2 land.
-2. **Check in a deterministic multi-pool / multi-provider check bundle** in `packages/TestingFramework/integration-test-suite/src/checks/` (e.g. expanding `transaction-groups.checks.ts` and `concurrency-conflict-client.checks.ts`) so CI continuously guards both direct `Save()` and `TransactionGroup` concurrency semantics on SQL Server and PostgreSQL.
-
----
-
-## Acceptance Criteria
-
-- [ ] `DatabaseProviderBase.Save` no longer logs a bypass warning when queuing an entity with `ConcurrencyBaseline` or `ConcurrencyCheck: 'enforce'` into a `TransactionGroup`.
-- [ ] `SQLServerTransactionGroup` and `PostgreSQLTransactionGroup` perform `UPDLOCK, ROWLOCK` / `FOR UPDATE` reads inside the group transaction when `ConcurrencyCheck` is `'log'` or `'enforce'`, and incur zero extra queries when `'off'`.
-- [ ] A conflict on item $k$ of $N$ in `'enforce'` mode rolls back items $1 \dots k-1$ in SQL, populates `ConcurrencyConflict` on item $k$'s `BaseEntity.LatestResult`, and returns `false` from `tg.Submit()`.
-- [ ] GraphQL `ExecuteTransactionGroup` mutations honor client `OldValues` conflict detection end-to-end.
-- [ ] Unit tests in `@memberjunction/core`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/postgresql-dataprovider`, and `@memberjunction/server` pass, plus live SQL Server & PostgreSQL integration checks pass.
-- [ ] Multi-process (2-MJAPI + Redis) credential rotation reproduction passes 50/50 trials with zero reverted fields.
+- [x] No bypass warning; grouped updates with `ConcurrencyCheck` `'log'` / `'enforce'` (per save or
+      provider-wide) are checked.
+- [x] Locked reads run inside the group transaction on both databases, and only when checking is on.
+- [x] An `'enforce'` conflict rolls back the whole group, sets `ConcurrencyConflict` on the
+      conflicting entity, and `Submit()` returns `false`.
+- [x] `ExecuteTransactionGroup` honors client old values end to end.
+- [x] Unit tests in every touched package; live tests on SQL Server and PostgreSQL; IT170.
