@@ -1,5 +1,5 @@
 /**
- * gemini-decisions.checks.ts — IT170: Google's Gemini Decision 1 (`gemini-decision-1` on Google AI Studio's
+ * gemini-decisions.checks.ts — IT172: Google's Gemini Decision 1 (`gemini-decision-1` on Google AI Studio's
  * Gemini Decisions API through `GeminiDecision`, and `google/gemini-decision-1-20261111` on OpenRouter's
  * Decisions API through `OpenRouterDecision`) from synced metadata through `AIDecisionRunner` to the wire
  * request and response, with no network.

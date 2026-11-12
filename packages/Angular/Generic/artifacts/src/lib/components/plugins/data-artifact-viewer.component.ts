@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter, Type } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
@@ -6,7 +6,8 @@ import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@mem
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
+import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
+import { QueryVersionDiffComponent } from '../version-diff/query-version-diff.component';
 import { SaveQueryResult } from './save-query-dialog.component';
 import { CreateDataSnapshot, BuildMultiTableSql } from '../../snapshot-helpers';
 
@@ -148,6 +149,14 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   public override get hasDisplayContent(): boolean {
     return this.spec != null && (this.HasData || this.IsLoading || this.ResolvedTables.length > 0);
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return QueryVersionDiffComponent;
   }
 
   public override get parentShouldShowRawContent(): boolean {

@@ -124,6 +124,7 @@ import { MJArtifactTypeFormComponent } from "./Entities/MJArtifactType/mjartifac
 import { MJArtifactUseFormComponent } from "./Entities/MJArtifactUse/mjartifactuse.form.component";
 import { MJArtifactVersionAttributeFormComponent } from "./Entities/MJArtifactVersionAttribute/mjartifactversionattribute.form.component";
 import { MJArtifactVersionFormComponent } from "./Entities/MJArtifactVersion/mjartifactversion.form.component";
+import { MJArtifactWorkingStateFormComponent } from "./Entities/MJArtifactWorkingState/mjartifactworkingstate.form.component";
 import { MJAuditLogFormComponent } from "./Entities/MJAuditLog/mjauditlog.form.component";
 import { MJAuditLogTypeFormComponent } from "./Entities/MJAuditLogType/mjauditlogtype.form.component";
 import { MJAuthenticationProviderFormComponent } from "./Entities/MJAuthenticationProvider/mjauthenticationprovider.form.component";
@@ -1122,6 +1123,7 @@ declarations: [
     MJAIAgentStepPathFormComponent,
     MJAIPersonaFormComponent,
     MJActionExecutionLogFormComponent,
+    MJArtifactWorkingStateFormComponent,
     MJCompanyIntegrationSyncWatermarkFormComponent,
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,

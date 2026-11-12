@@ -247,20 +247,24 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (499 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -373,6 +377,7 @@ import {
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
@@ -736,11 +741,13 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -1047,10 +1054,11 @@ import {
     PandaDocSignatureProvider,
 } from '@memberjunction/esignature-pandadoc';
 
-// @memberjunction/excel-addin-server (7 classes)
+// @memberjunction/excel-addin-server (8 classes)
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -1280,7 +1288,7 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (25 classes)
+// @memberjunction/ai-agents (29 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -1288,6 +1296,7 @@ import {
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -1305,8 +1314,11 @@ import {
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
 
 // @memberjunction/action-runtime-host (1 classes)
@@ -1458,7 +1470,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (82 classes)
+// @memberjunction/core-entities-server (84 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1482,7 +1494,9 @@ import {
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
+    MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
@@ -1959,13 +1973,17 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -2075,13 +2093,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
-    MJArtifactUseEntity,
-    MJArtifactVersionAttributeEntity,
-    MJArtifactVersionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactUseEntity,
+    MJArtifactVersionAttributeEntity,
+    MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
@@ -2278,14 +2297,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
-    MJMLModelEntity,
-    MJMLModelScoringBindingEntity,
-    MJMLPredictionUnitEntity,
-    MJMLTrainingPipelineEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLPredictionUnitEntity,
+    MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
@@ -2449,11 +2468,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     LiveKitBridge,
@@ -2480,16 +2501,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
     LoopbackBridge,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     OpenAISipBridge,
     MSGraphProvider,
     SendGridProvider,
     DataContextItemServer,
     MJLibraryEntityExtended,
     MJLibraryItemEntityExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     EntityActionInvocationMultipleRecords,
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
@@ -2652,6 +2673,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PandaDocSignatureProvider,
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -2683,6 +2705,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordClonePlanServerOperation,
     RecordComparisonCompareServerOperation,
     SelfHostRemoteBrowser,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     RemoteBrowserChannel,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
@@ -2690,10 +2716,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AzureFileStorage,
     BoxFileStorage,
     DropboxFileStorage,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     GoogleDriveFileStorage,
     GoogleFileStorage,
     LocalFileSystemStorage,
@@ -2761,6 +2783,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ClientContextChannelServer,
     ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
+    DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
@@ -2778,8 +2801,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryBuilderAgent,
     RealtimeAgentType,
     SearchResultSetToolLibrary,
+    SlideDeckToolLibrary,
+    SpreadsheetToolLibrary,
     TextToolLibrary,
     WhiteboardChannelServer,
+    WhiteboardToolLibrary,
     DefaultRuntimeActionBridgeBuilder,
     AntigravityCliAdapter,
     AntigravityCloudAdapter,
@@ -2883,6 +2909,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -2894,10 +2924,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
     MJAIBridgeProviderEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJAIPromptEntityServer,
     MJAIPromptRunEntityServer,
     MJAIRemoteBrowserProviderEntityServer,
@@ -2907,7 +2933,9 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
+    MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
@@ -3085,6 +3113,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFormContributionsForEntityAction,
     GetGraphContextAction,
     GetListRecordsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     GetMetadataAction,
     GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
@@ -3098,10 +3130,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
     GitHubAddCommentAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     GitHubCommitFilesAndCreatePRAction,
     GitHubCommitFilesToBranchAction,
     GitHubCreateOrUpdateIssueAction,
@@ -3253,7 +3281,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1334;
+export const CLASS_REGISTRATIONS_COUNT = 1348;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

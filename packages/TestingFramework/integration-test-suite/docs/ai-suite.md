@@ -33,7 +33,7 @@ All fifteen deterministic bundles honor the family's **anti-vacuity / loud-skip 
 | `systemone-kev` | 10 | KV1–KV10 | deterministic | server | IT109 | Deterministic |
 | `perplexity-decider` | 5 | PX1–PX5 | deterministic | server | IT110 | Deterministic |
 | `subq-mercury-decisions` | 8 | SM1–SM8 | deterministic | server | IT121 (provisional) | Deterministic |
-| `gemini-decisions` | 8 | GD1–GD8 | deterministic | server | IT170 | Deterministic |
+| `gemini-decisions` | 8 | GD1–GD8 | deterministic | server | IT172 | Deterministic |
 | `agent-execution-primitives` | 6 | AEP1–AEP6 | deterministic (RequiresMutation) | server | IT147 | Deterministic |
 | `video-studio-production` | 5 | VSP1–VSP5 | deterministic | server | IT151 | Deterministic |
 | `prompt-runner` | 1 | PR1 | live-model | server | IT16 | Live Model |
@@ -494,7 +494,7 @@ The bundle covers each route from the synced metadata through `AIDecisionRunner`
 
 ---
 
-## 19. `gemini-decisions` (GD1–GD8) — `IT170 - Gemini Decision 1 Decision Model`
+## 19. `gemini-decisions` (GD1–GD8) — `IT172 - Gemini Decision 1 Decision Model`
 
 **Machinery under test.** Google's `Gemini Decision 1` (`metadata/ai-models/.gemini-decision-models.json`), served directly by Google AI Studio's Gemini Decisions API (`POST https://generativelanguage.googleapis.com/v1beta/decisions`) through `GeminiDecision` (`@memberjunction/ai-gemini`, preferred) and through OpenRouter's Decisions API (`google/gemini-decision-1-20261111`) via `OpenRouterDecision` (`@memberjunction/ai-openrouter`).
 

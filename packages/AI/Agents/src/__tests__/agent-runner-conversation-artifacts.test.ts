@@ -21,27 +21,35 @@ import type { ExecuteAgentParams, InputArtifact } from '@memberjunction/ai-core-
 const runViewCalls: Array<{ EntityName?: string; ExtraFilter?: string }> = [];
 let junctionVersionIds: string[] = [];
 let branchRows: Array<Record<string, unknown>> = [];
+let omitQueryArtifactId = false;
 const runQueryCalls: Array<{ QueryName?: string }> = [];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    class MockRunView {
+        public static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
+        async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
+            runViewCalls.push(params);
+            if (params.EntityName === 'MJ: Conversation Branches') {
+                return { Success: true, Results: branchRows };
+            }
+            if (params.EntityName === 'MJ: Conversation Details') {
+                return { Success: true, Results: [{ ID: 'detail-1' }] };
+            }
+            if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
+                return { Success: true, Results: junctionVersionIds.map((v, i) => ({ ID: `j-${i}`, ArtifactVersionID: v })) };
+            }
+            if (params.EntityName === 'MJ: Artifacts') {
+                return { Success: true, Results: [{ ID: '00000000-0000-4000-8000-000000000001', UserID: 'user-1' }] };
+            }
+            return { Success: true, Results: [] };
+        }
+    }
     return {
         ...actual,
-        RunView: class {
-            async RunView(params: { EntityName?: string; ExtraFilter?: string }) {
-                runViewCalls.push(params);
-                if (params.EntityName === 'MJ: Conversation Branches') {
-                    return { Success: true, Results: branchRows };
-                }
-                if (params.EntityName === 'MJ: Conversation Details') {
-                    return { Success: true, Results: [{ ID: 'detail-1' }] };
-                }
-                if (params.EntityName === 'MJ: Conversation Detail Artifacts') {
-                    return { Success: true, Results: junctionVersionIds.map((v, i) => ({ ID: `j-${i}`, ArtifactVersionID: v })) };
-                }
-                return { Success: true, Results: [] };
-            }
-        },
+        RunView: MockRunView,
         RunQuery: class {
             async RunQuery(params: { QueryName?: string }) {
                 runQueryCalls.push(params);
@@ -49,6 +57,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
                     Success: true,
                     Results: junctionVersionIds.map((v) => ({
                         VersionID: v,
+                        ...(omitQueryArtifactId ? {} : { ArtifactID: '00000000-0000-4000-8000-000000000001' }),
                         VersionName: `Artifact ${v}`,
                         ContentMode: 'Text',
                         FileID: null,
@@ -110,6 +119,7 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
         runQueryCalls.length = 0;
         junctionVersionIds = ['ver-1'];
         branchRows = [];
+        omitQueryArtifactId = false;
     });
 
     it('hydrates inputArtifacts from conversationDetailId alone', async () => {
@@ -202,5 +212,13 @@ describe('AgentRunner — conversation artifact hydration on the direct RunAgent
 
         const detailScan = runViewCalls.find((c) => c.EntityName === 'MJ: Conversation Details');
         expect(detailScan?.ExtraFilter?.endsWith('AND [ReplacedAt] IS NULL')).toBe(true);
+    });
+
+    it('skips query rows that lack ArtifactID instead of bypassing CanRead (D3)', async () => {
+        omitQueryArtifactId = true;
+        const { provider } = makeProvider();
+        const result = await bridge(provider).hydrateConversationArtifacts(makeParams({ conversationId: 'conv-99' }));
+
+        expect(result.inputArtifacts).toBeUndefined();
     });
 });
