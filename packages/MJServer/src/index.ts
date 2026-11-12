@@ -266,6 +266,7 @@ export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
 export * from './resolvers/QuerySystemUserResolver.js';
 export * from './resolvers/TelemetryResolver.js';
+export * from './resolvers/HealthObservatoryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
 export * from './resolvers/ActionResolver.js';

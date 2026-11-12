@@ -100,6 +100,7 @@
     "@memberjunction/generic-database-provider": "6.3.0-edge.0",
     "@memberjunction/global": "6.3.0-edge.0",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.0",
+    "@memberjunction/health": "6.3.0-edge.0",
     "@memberjunction/integration-engine": "6.3.0-edge.0",
     "@memberjunction/integration-engine-base": "6.3.0-edge.0",
     "@memberjunction/integration-progress-artifacts": "6.3.0-edge.0",

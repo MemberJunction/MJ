@@ -13991,6 +13991,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.3.0-edge.0
         version: link:../GraphQLDataProvider
+      '@memberjunction/health':
+        specifier: 6.3.0-edge.0
+        version: link:../Health
       '@memberjunction/integration-engine':
         specifier: 6.3.0-edge.0
         version: link:../Integration/engine
