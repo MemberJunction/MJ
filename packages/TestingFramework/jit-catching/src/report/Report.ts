@@ -1,5 +1,5 @@
 import { GetAgreement } from '@memberjunction/rubrics';
-import { UUIDMap, UUIDSet } from '@memberjunction/global';
+import { UUIDMap } from '@memberjunction/global';
 import type { BaseCatchStore } from '../contracts/BaseCatchStore';
 import type { BacktestLedger, LedgerEntry } from '../backtest/Ledger';
 import type { Corpus } from '../corpus/Corpus';
@@ -39,8 +39,6 @@ export interface ModelReport {
     Drops: Record<string, number>;
     Judges: { Model: string; Agreement: AgreementResult; HighOnIntended: number; LowOnBug: number }[];
     TPProb: Record<HumanLabel, { N: number; Mean: number | null }>;
-    /** Tests that passed on both revisions and have no coverage row. */
-    CoverageNotMeasured: number;
 }
 export interface GateReport { GeneratedAt: string; Models: ModelReport[]; }
 
@@ -52,7 +50,7 @@ export interface GateReportOptions {
 
 /** A catch with its human label (latest feedback by `At`), or null when it has none. */
 type LabeledCatch = Catch & { Label: HumanLabel | null };
-interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[]; CoverageNotMeasured: number;
+interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[];
     /** The analysis's fallback flag; null when the generation file is missing or unreadable. */
     Fallback: boolean | null; }
 /** A catch whose truth is known: +1 bug (label Bug or a matched test), −1 not a bug. `Intended` marks a label of Intended or TestFault. */
@@ -77,8 +75,7 @@ export async function BuildGateReport(o: GateReportOptions): Promise<GateReport>
 async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: string) => RunDir): Promise<RunData> {
     const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
     const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
-    const dir = runDirOf(id);
-    return { Run: run, Catches: labeled, Sessions: sessions, CoverageNotMeasured: coverageNotMeasured(catches, () => dir), Fallback: analyzerFallback(dir) };
+    return { Run: run, Catches: labeled, Sessions: sessions, Fallback: analyzerFallback(runDirOf(id)) };
 }
 
 /** The analysis's fallback flag, or null when the generation file is missing or unreadable (with one stderr line). */
@@ -95,14 +92,6 @@ export function LatestLabel(feedback: Feedback[]): HumanLabel | null {
     const latest = [...feedback].sort((a, b) => a.At.localeCompare(b.At)).at(-1);
     if (!latest) return null;
     return latest.Answer === 'AuthorChangedPR' ? 'Bug' : latest.Answer;
-}
-
-/** Catches that passed on both revisions and have no coverage row in the run's execution file. */
-function coverageNotMeasured(catches: Catch[], dir: () => RunDir): number {
-    const passing = catches.filter((c) => c.Verdict.Label === 'PassesBoth');
-    if (passing.length === 0) return 0;
-    const covered = new UUIDSet(dir().ReadExecution().Coverage.map((c) => c.CandidateTestID));
-    return passing.filter((c) => !covered.Has(c.CandidateTestID)).length;
 }
 
 /** Ledgers grouped by Model, in order of first appearance. */
@@ -129,7 +118,6 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
         AnalyzerFallbacks: { Fallbacks: runs.filter((r) => r.Fallback === true).length, Runs: runs.filter((r) => r.Fallback !== null).length, NoFile: runs.filter((r) => r.Fallback === null).length },
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
         Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
-        CoverageNotMeasured: runs.reduce((s, r) => s + r.CoverageNotMeasured, 0),
     };
 }
 
@@ -308,8 +296,7 @@ function renderCounts(title: string, counts: Record<string, number>, extra: stri
 function renderJudges(m: ModelReport): string[] {
     const judges = m.Judges.map((j) => `- ${MarkdownText(j.Model)}: ${agreement(j.Agreement)}; High on Intended/TestFault ${j.HighOnIntended}; Low on bugs ${j.LowOnBug}`);
     const tp = (['Bug', 'Intended', 'TestFault'] as const).map((l) => `- TPProb on ${l}: n=${m.TPProb[l].N}, mean ${m.TPProb[l].Mean === null ? 'n/a' : m.TPProb[l].Mean.toFixed(2)}`);
-    return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp,
-        `- Tests passing both revisions with no coverage measured: ${m.CoverageNotMeasured}`];
+    return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp];
 }
 
 function agreement(a: AgreementResult): string {

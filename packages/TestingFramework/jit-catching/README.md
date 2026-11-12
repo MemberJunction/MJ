@@ -17,7 +17,7 @@ Analyzer: one LLM call per run reads the diff and returns the intent, a summary,
 Options in brackets are optional; the usage text in `src/cli.ts` shows which command takes `--settings` and `--store`.
 
 - `generate` / `run` — `--pr <n>` or `--head <sha> [--base <sha>]`, optional `--trigger`. `generate` writes tests for one PR; `run` runs generate, execute and assess in one go.
-- `execute --run <run ID>` — runs the generated tests of a run on base and head. When the setting `Coverage` is `true` (the default), it also measures, for each test that passes on both, how many changed lines the test runs on head; `"Coverage": false` skips that step.
+- `execute --run <run ID>` — runs the generated tests of a run on base and head. When the setting `Coverage` is `true` (the default), it also measures, for each test that passes on both, how many changed lines the test runs on head; `"Coverage": false` skips that step, so the run offers no promotion candidates.
 - `assess --run <run ID>` — filters and judges the weak catches of a run and decides which to report.
 - `label --catch <catch ID> --answer Bug|Intended|TestFault --user <login>` — records one human label; `label --run <run ID>` prints the label packet of a run.
 - `corpus mine --since <YYYY-MM-DD> --until <YYYY-MM-DD> --out <file>` — mines bug-set and clean-set candidate PRs merged in the window.

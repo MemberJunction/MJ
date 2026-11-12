@@ -9,7 +9,7 @@ import { BuildGateReport, RenderMarkdown, type GateReport } from '../report/Repo
 import type { BacktestLedger, LedgerEntry, MatchRecord } from '../backtest/Ledger';
 import type { Corpus } from '../corpus/Corpus';
 import type { CandidateTest, Catch, ExecutionResult, Feedback, JudgeBucket, PromotionCandidate, Run, SessionRecord, TokenUsage } from '../types';
-import { analysis, candidate, generation } from './helpers/pipelineFixtures';
+import { analysis, generation } from './helpers/pipelineFixtures';
 
 const AT = '2026-11-09T10:00:00.000Z';
 const SHA = (c: string): string => c.repeat(40);
@@ -115,8 +115,6 @@ describe('BuildGateReport', () => {
   async function build(s: MemoryStore, extra: BacktestLedger[] = []): Promise<GateReport> {
     const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
     const redaction = new RedactionCheck([]);
-    const r12 = new RunDir(root, 'r12', redaction);
-    r12.WriteExecution({ RunID: 'r12', Tests: [candidate(P1), candidate(P2)], Results: [], Coverage: [{ CandidateTestID: P1, CoveredChangedLines: 2 }], TypeErrors: {} });
     return BuildGateReport({ Ledgers: [...ledgers(), ...extra], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES });
   }
 
@@ -190,12 +188,15 @@ describe('BuildGateReport', () => {
     expect(byModel.jB).toMatchObject({ HighOnIntended: 0, LowOnBug: 2 });
   });
 
-  it('groups TPProb by label with AuthorChangedPR as Bug, counts session end reasons, drop rules and unmeasured coverage', async () => {
+  it('groups TPProb by label with AuthorChangedPR as Bug, counts session end reasons and drop rules', async () => {
     const m1 = (await build(store())).Models[0];
     expect(m1.TPProb).toEqual({ Bug: { N: 1, Mean: 0.8 }, Intended: { N: 1, Mean: -0.5 }, TestFault: { N: 0, Mean: null } });
     expect(m1.Sessions).toEqual({ Done: 3, TurnLimit: 1 });
     expect(m1.Drops).toEqual({ NoAssertion: 2, Mocked: 1 });
-    expect(m1.CoverageNotMeasured).toBe(1);
+  });
+
+  it('renders no coverage line, since coverage is not a gate-1 input', async () => {
+    expect(RenderMarkdown(await build(store()))).not.toMatch(/coverage/i);
   });
 
   /** The report of runs ra (analyzer fallback) and rb, after `rb` sets up rb's run folder. */
