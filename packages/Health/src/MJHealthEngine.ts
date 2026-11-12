@@ -3,7 +3,7 @@ import { LogError } from '@memberjunction/core';
 import { BaseHealthProbe } from './BaseHealthProbe';
 import { BaseLiveCrudVerifier } from './LiveCrudVerifier';
 import { LIVE_ENTITY_CRUD_SIGNAL_CODE } from './probes/LiveEntityCrudProbe';
-import type { HealthEvaluateOptions, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, InstanceHealthReport } from './types';
+import type { HealthEvaluateOptions, HealthProbeContext, HealthSignalDefinition, HealthSignalEvaluation, HealthStatus, InstanceHealthReport, ProbeExecutionMode } from './types';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MODE = 'passive';
@@ -53,6 +53,32 @@ export class MJHealthEngine extends BaseSingleton<MJHealthEngine> {
    */
   public GetSignalCatalog(): readonly HealthSignalDefinition[] {
     return this.GetRegisteredProbes().flatMap((probe) => probe.SignalDefinitions);
+  }
+
+  /**
+   * Semantic health check runner supporting 'startup', 'readiness', 'live-test', and 'passive' checks.
+   * Dispatches to `Evaluate()` with the matching `Mode`, timeout budgets, and options.
+   */
+  public async RunCheck(
+    checkType: 'startup' | 'readiness' | 'live-test' | 'passive' = 'passive',
+    options?: Partial<HealthEvaluateOptions>,
+  ): Promise<InstanceHealthReport> {
+    const mode: ProbeExecutionMode = checkType === 'live-test' ? 'live-test' : 'passive';
+    const timeoutMs = options?.TimeoutMs ?? (checkType === 'startup' ? 5_000 : undefined);
+
+    const mergedOptions: HealthEvaluateOptions = {
+      DatabaseProvider: options?.DatabaseProvider!,
+      MetadataProvider: options?.MetadataProvider!,
+      SystemUser: options?.SystemUser!,
+      Mode: mode,
+      AppFilter: options?.AppFilter,
+      TimeoutMs: timeoutMs,
+      MJVersion: options?.MJVersion,
+      DatabasePlatform: options?.DatabasePlatform,
+      LiveCrudVerifier: options?.LiveCrudVerifier,
+    };
+
+    return this.Evaluate(mergedOptions);
   }
 
   /**
