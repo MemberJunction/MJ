@@ -12,7 +12,7 @@ import { DefaultRedaction, DefaultRunTarget } from '../pipeline/Deps';
 import { IsWeakUndropped } from '../pipeline/Label';
 import { RunDir } from '../pipeline/RunDir';
 import { LoadCorpus, type Corpus } from '../corpus/Corpus';
-import { ErrorLine } from './ErrorText';
+import { ErrorFirstLine, ErrorLine } from './ErrorText';
 import { LedgerFile, type BacktestLedger, type LedgerEntry, type MatchRecord } from './Ledger';
 
 /** The target methods the match check calls. */
@@ -35,11 +35,12 @@ export interface MatchOptions { LedgerID: string; CorpusPath: string; RepoRoot: 
 /**
  * For every Bug entry that is Assessed and has no Match: the weak, non-dropped catches of its run; none → NoCatch.
  * Else commits head plus the fix PR's diff with the host git in a scratch worktree under `<run dir>/match/work`
- * (ApplyFailed when it does not apply), then prepares that commit in the sandbox (Head 'Patched'). When that prepare
- * throws an InfrastructureError, it prepares the fix PR's merge commit instead (Head 'FixMerge'); when that throws one too,
- * the entry is PrepareFailed with the error and the step goes on. On the prepared head it builds the tested packages,
- * writes and runs those tests Settings.Repeats times; a test that passes every time matches. Host git never runs in the prepared worktree. ReportedMatched is true
- * when a Reported catch matched. The ledger is written after every entry; any other error from the target cleans head up (when prepared), removes the store and ends the step.
+ * and prepares that commit in the sandbox (Head 'Patched'). When the diff does not apply, or that prepare throws an
+ * InfrastructureError, it names the reason on stderr and prepares the fix PR's merge commit instead (Head 'FixMerge');
+ * when that throws an InfrastructureError, the entry is PrepareFailed with the error and the step goes on. On the prepared
+ * head it builds the tested packages, writes and runs those tests Settings.Repeats times; a test that passes every time
+ * matches. Host git never runs in the prepared worktree. ReportedMatched is true when a Reported catch matched. The ledger
+ * is written after every entry; any other error from the target cleans head up (when prepared), removes the store and ends the step.
  */
 export async function MatchStep(o: MatchOptions): Promise<BacktestLedger> {
     const redaction = o.Deps?.Redaction ?? DefaultRedaction();
@@ -83,7 +84,7 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
     const tests = catches.length > 0 ? testsOf(catches, new RunDir(o.RepoRoot, runID, deps.Redaction)) : [];
     if (tests.length === 0) return record('NoCatch');
     const fixed = await fixedCommit(entry.HeadSHA, fixSHA, new RunDir(o.RepoRoot, runID, deps.Redaction), deps.Repo);
-    if (fixed === null) return record('ApplyFailed');
+    if (fixed === null) process.stderr.write(`match ${o.LedgerID}: PR #${entry.PR}: the fix does not apply on head; trying the fix merge ${fixSHA.slice(0, 7)}\n`);
     await deps.EnsureImage?.();
     let head: PreparedRevision | null = null;
     try {
@@ -101,15 +102,17 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
 type HeadOutcome = { Revision: PreparedRevision; Head: NonNullable<MatchRecord['Head']> } | { Error: string };
 
 /**
- * Prepares the patched head `fixed`; on an InfrastructureError names it on stderr and prepares the fix merge `fixSHA`.
- * Returns the error text when the fix merge throws an InfrastructureError too; any other error is rethrown.
+ * Prepares the patched head `fixed` when there is one and returns it. When there is none, or it throws an InfrastructureError
+ * (named on stderr), prepares the fix merge `fixSHA` instead; returns the error text when that throws an InfrastructureError too.
+ * Any other error is rethrown.
  */
-async function prepareHead(pr: number, fixed: string, fixSHA: string, ledgerID: string, deps: MatchDeps): Promise<HeadOutcome> {
-    try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixed }), Head: 'Patched' }; }
-    catch (e) {
-        if (!(e instanceof InfrastructureError)) throw e;
-        const first = ErrorLine(e, deps.Redaction).split('\n')[0];
-        process.stderr.write(`match ${ledgerID}: PR #${pr}: the fix on head does not prepare (${first}); trying the fix merge ${fixSHA.slice(0, 7)}\n`);
+async function prepareHead(pr: number, fixed: string | null, fixSHA: string, ledgerID: string, deps: MatchDeps): Promise<HeadOutcome> {
+    if (fixed !== null) {
+        try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixed }), Head: 'Patched' }; }
+        catch (e) {
+            if (!(e instanceof InfrastructureError)) throw e;
+            process.stderr.write(`match ${ledgerID}: PR #${pr}: the fix on head does not prepare (${ErrorFirstLine(e, deps.Redaction)}); trying the fix merge ${fixSHA.slice(0, 7)}\n`);
+        }
     }
     try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixSHA }), Head: 'FixMerge' }; }
     catch (e) {
