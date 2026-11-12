@@ -32,8 +32,9 @@ import {
   ServerOperationScopeManager,
   UserInfo,
   ViewPropertyValues,
+  WellKnownUserSource,
 } from '@memberjunction/core';
-import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 
 /**
  * Extended RunViewResult carrying a non-enumerable reference to the resolved view entity
@@ -334,6 +335,52 @@ export class ResolverBase {
     }
   }
 
+  private async canMapEntityRecordForUser(
+    entityName: string,
+    dataObject: { ArtifactID?: string | null },
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<boolean> {
+    if (entityName === 'MJ: Artifact Working States') {
+      return false;
+    }
+    if (entityName !== 'MJ: Artifact Versions') {
+      return true;
+    }
+
+    const sysId = UserCache.Instance.GetSystemUser()?.ID;
+    const isSystem = Boolean(
+      contextUser &&
+        ((sysId && UUIDsEqual(contextUser.ID, sysId)) ||
+          WellKnownUserSource.Instance.IsSystemUser(contextUser))
+    );
+    if (isSystem) {
+      return true;
+    }
+
+    const artifactId = typeof dataObject.ArtifactID === 'string' ? dataObject.ArtifactID.trim() : '';
+    if (!contextUser || !artifactId) {
+      return false;
+    }
+
+    const aclProvider = provider ?? contextUser.OwningProvider ?? Metadata.Provider;
+    try {
+      return await ArtifactPermissionEngine.Instance.CheckPermission(
+        aclProvider,
+        artifactId,
+        contextUser,
+        'Read'
+      );
+    } catch (err) {
+      LogError(
+        `ResolverBase.MapFieldNamesToCodeNames failed to verify Read permission on artifact '${artifactId}': ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      return false;
+    }
+  }
+
   protected async MapFieldNamesToCodeNames(
     entityName: string,
     dataObject: any,
@@ -343,6 +390,9 @@ export class ResolverBase {
     recordChangeProjector?: RecordChangeFieldSecurityProjector
   ): Promise<any> {
     if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+    if (!(await this.canMapEntityRecordForUser(entityName, dataObject, contextUser, provider))) {
       return null;
     }
     const plan = this.buildFieldMappingPlan(entityName, contextUser, provider, deniedReadFields, recordChangeProjector);
@@ -409,6 +459,9 @@ export class ResolverBase {
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) {
       return dataObjectArray;
+    }
+    if (entityName === 'MJ: Artifact Working States') {
+      return [];
     }
     // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
     // and Record Changes projector ONCE for the whole array rather than per row.

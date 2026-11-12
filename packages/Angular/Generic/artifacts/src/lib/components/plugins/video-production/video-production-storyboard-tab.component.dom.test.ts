@@ -23,38 +23,96 @@ async function flush(): Promise<void> {
 function makeStoryboardSpec(
   overrides: Partial<VideoGenerationSpec> = {},
 ): VideoGenerationSpec {
-  return {
-    Title: 'Executive KPI Briefing',
+  const base: VideoGenerationSpec = {
+    SpecVersion: '1.0',
+    Status: 'Storyboarded',
+    Archetype: {
+      ArchetypeID: '11111111-1111-4111-8111-111111111111',
+      Name: 'KPI Briefing',
+    },
+    Film: {
+      OneSentence: 'Executive KPI Briefing',
+      Audience: 'Execs',
+      Purpose: 'Briefing',
+      DurationSeconds: 30,
+      Formats: ['16:9'],
+    },
+    Style: {
+      Palette: [],
+      Typography: [],
+      Composition: 'Clean',
+      Pacing: { AvgSecondsBetweenChanges: 3, HoldRules: 'None' },
+      MotionRules: [],
+      Texture: 'Clean',
+      Keep: [],
+      Avoid: [],
+      References: [],
+    },
+    DataBindings: [],
+    Render: {
+      Renderer: 'HyperFrames',
+      RendererVersion: '0.9.0',
+      Fps: 30,
+      Seed: 42,
+      Quality: 'standard',
+    },
+    Interaction: {
+      Mode: 'Autonomous',
+      MaxRepairRounds: 3,
+    },
+    Deliverables: {
+      Formats: ['16:9'],
+      Poster: false,
+      ContactSheets: false,
+      Source: false,
+      Captions: false,
+    },
+    Review: {
+      Gates: [],
+      Rounds: [],
+    },
     Beats: [
       {
         Key: 'hook',
         Label: 'Hook',
         StartSeconds: 0,
         EndSeconds: 10,
+        EntryState: 'start',
+        ExitState: 'end',
         Purpose: 'Capture attention with headline growth metric',
         OnScreenText: ['14% YoY Growth', 'Q3 Highlights'],
+        DataRefs: [],
         NarrationKey: 'nar-hook',
         AssetRefs: ['bg-hero'],
+        LayoutNotes: {},
       },
       {
         Key: 'cta',
         Label: 'Call to Action',
         StartSeconds: 10,
         EndSeconds: 30,
+        EntryState: 'mid',
+        ExitState: 'finish',
         Purpose: 'Direct viewers to the board pack',
         OnScreenText: [],
+        DataRefs: [],
         NarrationKey: 'nar-cta',
         AssetRefs: [],
+        LayoutNotes: {},
       },
     ],
     Audio: {
       Narration: {
         Enabled: true,
+        VoiceID: 'voice-1',
+        Provider: 'ElevenLabs',
         Script: [
           { Key: 'nar-hook', BeatKey: 'hook', Text: 'Revenue grew 14% year over year.' },
           { Key: 'nar-cta', BeatKey: 'cta', Text: 'Open the Q3 board pack for details.' },
         ],
       },
+      Cues: [],
+      Captions: 'None',
     },
     Assets: {
       Approved: [
@@ -82,12 +140,22 @@ function makeStoryboardSpec(
       NeverInvent: [],
     },
     Output: {
+      Videos: {},
       ContactSheetFileIDs: {
-        '16:9': '44444444-4444-4444-8444-444444444444',
+        '16:9': ['44444444-4444-4444-8444-444444444444'],
+      },
+      RenderMetadata: {
+        Renderer: 'HyperFrames',
+        RendererVersion: '1.0.0',
+        Seed: 1,
+        Fps: 30,
+        DurationByFormat: {},
+        RenderedAt: '2026-10-30T12:00:00Z',
       },
     },
     ...overrides,
   };
+  return base;
 }
 
 describe('VideoProductionStoryboardTabComponent (DOM)', () => {
@@ -96,7 +164,20 @@ describe('VideoProductionStoryboardTabComponent (DOM)', () => {
     const fixture = TestBed.createComponent(VideoProductionStoryboardTabComponent);
     fixture.componentRef.setInput(
       'Spec',
-      makeStoryboardSpec({ Output: { ContactSheetFileIDs: {} } }),
+      makeStoryboardSpec({
+        Output: {
+          Videos: {},
+          ContactSheetFileIDs: {},
+          RenderMetadata: {
+            Renderer: 'HyperFrames',
+            RendererVersion: '1.0.0',
+            Seed: 1,
+            Fps: 30,
+            DurationByFormat: {},
+            RenderedAt: '2026-10-30T12:00:00Z',
+          },
+        },
+      }),
     );
     fixture.detectChanges();
 
@@ -139,7 +220,21 @@ describe('VideoProductionStoryboardTabComponent (DOM)', () => {
     const fixture = TestBed.createComponent(VideoProductionStoryboardTabComponent);
     fixture.componentRef.setInput(
       'Spec',
-      makeStoryboardSpec({ Beats: [], Output: { ContactSheetFileIDs: {} } }),
+      makeStoryboardSpec({
+        Beats: [],
+        Output: {
+          Videos: {},
+          ContactSheetFileIDs: {},
+          RenderMetadata: {
+            Renderer: 'HyperFrames',
+            RendererVersion: '1.0.0',
+            Seed: 1,
+            Fps: 30,
+            DurationByFormat: {},
+            RenderedAt: '2026-10-30T12:00:00Z',
+          },
+        },
+      }),
     );
     fixture.detectChanges();
 

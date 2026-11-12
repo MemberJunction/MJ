@@ -1,15 +1,19 @@
-import { Component, ViewEncapsulation, OnDestroy, ViewChild } from '@angular/core';
+import { Component, ViewEncapsulation, ViewChild } from '@angular/core';
 import { CompositeKey, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
+import {
+  BuildAgentActivityTasksFilter,
+  BuildAgentBackedTaskExtraFilter,
+  TasksFullViewComponent,
+} from '@memberjunction/ng-conversations';
 /**
- * Chat Tasks Resource - displays the tasks full view for tab-based display
- * Extends BaseResourceComponent to work with the resource type system
- * Shows all tasks associated with conversations and artifacts
- * Supports URL deep-linking via taskId query parameter
+ * Chat Agent Activity Resource (`ChatTasksResource`) — displays live multi-agent orchestrations,
+ * step dependency DAGs, and background agent activity launched from conversations.
+ * Extends BaseResourceComponent to work with the resource type system and supports URL
+ * deep-linking via the `taskId` query parameter.
  */
 @RegisterClass(BaseResourceComponent, 'ChatTasksResource')
 @Component({
@@ -22,7 +26,8 @@ import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
           #tasksView
           [environmentId]="environmentId"
           [currentUser]="currentUser"
-          [baseFilter]="'1=1'"
+          [baseFilter]="AgentActivityBaseFilter"
+          [BaseFilterResolver]="AgentActivityFilterResolver"
           [activeTaskId]="activeTaskId"
           (taskSelected)="onTaskSelected($event)"
           (openEntityRecord)="OnOpenEntityRecord($event)"
@@ -50,7 +55,7 @@ import { TasksFullViewComponent } from '@memberjunction/ng-conversations';
   `],
   encapsulation: ViewEncapsulation.None
 })
-export class ChatTasksResource extends BaseResourceComponent implements OnDestroy {
+export class ChatTasksResource extends BaseResourceComponent {
   @ViewChild('tasksView') TasksView?: TasksFullViewComponent;
 
   /** @deprecated Use {@link TasksView}. */
@@ -74,30 +79,52 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   }
   public activeTaskId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
+  /**
+   * Default user-scoped `ExtraFilter` for `MJ: Tasks` in Agent Activity. Restricts to the
+   * current user's agent-backed workflows while excluding non-agent human deliverables.
+   */
+  public get AgentActivityBaseFilter(): string {
+    return BuildAgentBackedTaskExtraFilter(this.ProviderToUse, this.CurrentUser);
+  }
+
+  /**
+   * Resolves the user-scoped Agent Activity `ExtraFilter` (user's own tasks plus tasks linked to
+   * their conversations) via {@link BuildAgentActivityTasksFilter}, allowing organization-wide
+   * scope only when an authorized role explicitly activates `ScopeMode === 'all-users'`.
+   */
+  public readonly AgentActivityFilterResolver: () => Promise<string> = () =>
+    this.ResolveAgentActivityFilter();
+
+  public async ResolveAgentActivityFilter(): Promise<string> {
+    if (!this.CurrentUser) {
+      return '1 = 0';
+    }
+    return BuildAgentActivityTasksFilter(this.ProviderToUse, this.CurrentUser, {
+      includeAllUsers: this.TasksView?.ScopeMode === 'all-users',
+    });
+  }
+
   ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
     this.CurrentUser = md.CurrentUser;
 
-    // Apply initial state from query params or tab config
+    // Apply initial state from query params or tab config without clobbering URL on cold mount
     const params = this.GetQueryParams();
     const config = this.Data?.Configuration;
-    const taskId = params['taskId'] || (config?.taskId as string);
+    const configTaskId = typeof config?.['taskId'] === 'string' ? config['taskId'] : undefined;
+    const taskId = params['taskId'] || configTaskId;
     if (taskId) {
       this.activeTaskId = taskId;
+      if (!params['taskId']) {
+        this.UpdateQueryParams({ taskId });
+      }
     }
-
-    // Push initial state to URL
-    this.UpdateQueryParams({ taskId: this.activeTaskId ?? null });
 
     // Notify load complete after user is set
     setTimeout(() => {
       this.NotifyLoadComplete();
     }, 100);
-  }
-
-  ngOnDestroy() {
-    super.ngOnDestroy();
   }
 
   protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
@@ -145,16 +172,16 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
   }
 
   /**
-   * Get the display name for chat tasks
+   * Get the display name for Chat Agent Activity
    */
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return 'Tasks';
+    return data?.Name || 'Agent Activity';
   }
 
   /**
-   * Get the icon class for chat tasks
+   * Get the icon class for Chat Agent Activity
    */
-  async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-tasks';
+  async GetResourceIconClass(_data: ResourceData): Promise<string> {
+    return 'fa-solid fa-diagram-project';
   }
 }
