@@ -1506,8 +1506,8 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT170 - Transaction Group Concurrency over GraphQL",
-            "Sequence": 83,
+            "TestID": "@lookup:MJ: Tests.Name=IT173 - Transaction Group Concurrency over GraphQL",
+            "Sequence": 84,
             "Status": "Active"
           },
           "primaryKey": {

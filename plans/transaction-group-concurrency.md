@@ -81,7 +81,7 @@ because variable dependencies and foreign-key creation order are positional.
   ([results](https://github.com/MemberJunction/MJ/pull/6490#issuecomment-6756104012)). The rig is
   not committed; it needs two MJAPIs, Redis and several reader processes.
 - **Permanent, deterministic checks:**
-  - IT170 (`transaction-group-concurrency-client`, client transport): two GraphQL sessions, one
+  - IT173 (`transaction-group-concurrency-client`, client transport): two GraphQL sessions, one
     saving through a transaction group, against a real MJAPI.
   - Env-gated live Vitest tests on both databases
     (`transaction-group-concurrency-live-db.integration.test.ts`): two providers on separate
@@ -95,4 +95,4 @@ because variable dependencies and foreign-key creation order are positional.
 - [x] An `'enforce'` conflict rolls back the whole group, sets `ConcurrencyConflict` on the
       conflicting entity, and `Submit()` returns `false`.
 - [x] `ExecuteTransactionGroup` honors client old values end to end.
-- [x] Unit tests in every touched package; live tests on SQL Server and PostgreSQL; IT170.
+- [x] Unit tests in every touched package; live tests on SQL Server and PostgreSQL; IT173.

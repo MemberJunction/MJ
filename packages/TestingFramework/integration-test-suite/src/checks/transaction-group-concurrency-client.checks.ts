@@ -1,5 +1,5 @@
 /**
- * Optimistic concurrency for transaction groups over the wire (IT170, client transport, mutating).
+ * Optimistic concurrency for transaction groups over the wire (IT173, client transport, mutating).
  *
  * Two independent GraphQL sessions of the same user edit two `MJ: User Settings` rows. Session A
  * saves through a transaction group, the way a form with pending child records saves; session B
@@ -119,7 +119,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
         const sessionB = await OpenWireSession(false);
         const user = sessionA.CurrentUser;
         Assert(user != null, 'the system API key resolved no current user');
-        const tag = `it170-${Date.now()}`;
+        const tag = `it173-${Date.now()}`;
         const contestedID = await createSetting(sessionA, user, `${tag}-contested`);
         const siblingID = await createSetting(sessionA, user, `${tag}-sibling`);
         fixture = { SessionA: sessionA, SessionB: sessionB, User: user, Tag: tag, ContestedID: contestedID, SiblingID: siblingID };
