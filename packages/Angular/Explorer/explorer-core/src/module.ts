@@ -60,6 +60,7 @@ import {SingleListDetailComponent} from './lib/single-list-detail/single-list-de
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
 import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
+import { LibraryResource, LibraryDriveResource } from './lib/resource-wrappers/library-resource.component';
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
@@ -106,6 +107,8 @@ import {
     ListDetailResource,
     ChatConversationsResource,
     ChatCollectionsResource,
+    LibraryResource,
+    LibraryDriveResource,
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
@@ -181,7 +184,10 @@ import {
     ListDetailResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    MeetingsResource
+    MeetingsResource,
+    LibraryResource,
+    LibraryDriveResource,
+    ChatCollectionsResource
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },
