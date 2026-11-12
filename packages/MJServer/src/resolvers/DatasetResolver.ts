@@ -34,6 +34,11 @@ export class DatasetItemFilterTypeGQL {
   Filter: string;
 }
 
+export const datasetItemJsonCache = new WeakMap<
+  object,
+  { code: string; entityName: string; entityId: string; dateIso: string; rowCount: number; itemJson: string }
+>();
+
 /**
  * Request handling shared by the dataset queries. Every read runs as the session's user, so the
  * provider applies that user's entity read permission and row-level security per item, and every
@@ -88,6 +93,54 @@ export abstract class DatasetResolverBase extends ResolverBase {
       }),
     );
   }
+
+  /**
+   * Serializes dataset items to JSON, caching the JSON representation of items whose Results
+   * array is frozen and only contains standard fields.
+   */
+  protected SerializeDatasetItems(items: DatasetItemResultType[]): string {
+    const standardKeys = new Set(['Code', 'EntityName', 'EntityID', 'LatestUpdateDate', 'Results']);
+    const serializedItems: string[] = [];
+
+    for (const item of items) {
+      const isArrayAndFrozen = Array.isArray(item.Results) && Object.isFrozen(item.Results);
+      const hasOnlyStandardKeys = isArrayAndFrozen && Object.keys(item).every((k) => standardKeys.has(k));
+
+      if (hasOnlyStandardKeys) {
+        const dateIso = item.LatestUpdateDate instanceof Date
+          ? item.LatestUpdateDate.toISOString()
+          : String(item.LatestUpdateDate ?? '');
+        const cached = datasetItemJsonCache.get(item.Results);
+
+        if (
+          cached &&
+          cached.code === item.Code &&
+          cached.entityName === item.EntityName &&
+          cached.entityId === item.EntityID &&
+          cached.dateIso === dateIso &&
+          cached.rowCount === item.Results.length
+        ) {
+          serializedItems.push(cached.itemJson);
+          continue;
+        }
+
+        const itemJson = JSON.stringify(item);
+        datasetItemJsonCache.set(item.Results, {
+          code: item.Code,
+          entityName: item.EntityName,
+          entityId: item.EntityID,
+          dateIso,
+          rowCount: item.Results.length,
+          itemJson,
+        });
+        serializedItems.push(itemJson);
+      } else {
+        serializedItems.push(JSON.stringify(item));
+      }
+    }
+
+    return `[${serializedItems.join(',')}]`;
+  }
 }
 
 @Resolver(DatasetResultType)
@@ -113,7 +166,7 @@ export class DatasetResolverExtended extends DatasetResolverBase {
           Success: result.Success,
           Status: result.Status,
           LatestUpdateDate: result.LatestUpdateDate,
-          Results: JSON.stringify(await this.ProtectEncryptedFields(result.Results, md, user)),
+          Results: this.SerializeDatasetItems(await this.ProtectEncryptedFields(result.Results, md, user)),
         };
       } else {
         throw new Error('Error retrieving Dataset: ' + DatasetName);
