@@ -100,19 +100,29 @@ describe('MatchStep', () => {
     expect(file.Read().Entries[0].Match?.Status).toBe('NoCatch');
   });
 
-  it('records ApplyFailed when the fix does not apply on head, and prepares, builds and runs nothing', async () => {
-    const { root, corpus } = setup([entry(1)]);
-    const d = fakes({ applies: false });
+  it('tries the fix merge when the fix does not apply on head, and records Head FixMerge', async () => {
+    const { root, corpus, file } = setup([entry(1)]);
+    const d = fakes({ applies: false, passes: { [ID_A]: 3 } });
     const l = await match(root, corpus, d);
-    expect(l.Entries[0].Match).toEqual(record({ Status: 'ApplyFailed' }));
     expect(d.Repo.Diff).toHaveBeenCalledWith(sha('e'), sha('f'));
     const work = join(new RunDir(root, RUN_1, redaction).Path, 'match', 'work');
     expect(d.Repo.CommitWithPatch).toHaveBeenCalledWith(sha('a'), join(work, 'fix.patch'), join(work, 'fix'));
     expect(readFileSync(join(work, 'fix.patch'), 'utf8')).toBe('diff e..f\n');
-    expect(d.Target.Prepare).not.toHaveBeenCalled();
-    expect(d.Target.BuildPackages).not.toHaveBeenCalled();
+    expect(d.Target.Prepare.mock.calls.map((c) => c[0])).toEqual([{ Kind: 'Head', SHA: sha('f') }]);
+    expect(stderr.join('')).toContain(`match ${LEDGER_ID}: PR #1: the fix does not apply on head; trying the fix merge fffffff\n`);
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'FixMerge' }));
+    expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
+    expect(file.Read().Entries[0].Match?.Head).toBe('FixMerge');
+  });
+
+  it('records PrepareFailed with Head FixMerge when the fix does not apply on head and the fix merge does not prepare', async () => {
+    const { root, corpus } = setup([entry(1)]);
+    const d = fakes({ applies: false });
+    d.Target.Prepare.mockRejectedValueOnce(new InfrastructureError('install failed on Head: merge'));
+    const l = await match(root, corpus, d);
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'PrepareFailed', Head: 'FixMerge', Error: 'install failed on Head: merge' }));
+    expect(d.Target.Prepare.mock.calls.map((c) => c[0])).toEqual([{ Kind: 'Head', SHA: sha('f') }]);
     expect(d.Target.Run).not.toHaveBeenCalled();
-    expect(d.Target.Cleanup).not.toHaveBeenCalled();
   });
 
   it('records Matched with ReportedMatched and Head Patched when the reported catch passes every repeat on the patched head', async () => {
@@ -205,6 +215,17 @@ describe('MatchStep', () => {
     expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
     expect(removeStore).toHaveBeenCalledTimes(1);
     expect(file.Read().Entries[0].Match?.Head).toBe('FixMerge');
+  });
+
+  it('names the first line of the prepare error, not its tail, when the patched head does not prepare', async () => {
+    const { root, corpus } = setup([entry(1)]);
+    const d = fakes({ passes: { [ID_A]: 3 } });
+    const first = 'install failed on Head: Command failed: docker run --rm jit-sandbox pnpm install';
+    const progress = Array.from({ length: 60 }, (_, i) => `Progress: resolved ${3100 + i}, reused 3122, downloaded 0, added 2171`).join('\n');
+    expect(progress.length).toBeGreaterThan(3000);
+    d.Target.Prepare.mockRejectedValueOnce(new InfrastructureError(`${first}\n${progress}`));
+    await match(root, corpus, d);
+    expect(stderr.join('')).toContain(`match ${LEDGER_ID}: PR #1: the fix on head does not prepare (${first}); trying the fix merge fffffff\n`);
   });
 
   it('records PrepareFailed with the error and goes on to the next entry when the fix merge does not prepare either', async () => {
