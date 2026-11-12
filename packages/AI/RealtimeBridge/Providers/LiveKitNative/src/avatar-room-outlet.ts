@@ -86,12 +86,4 @@ export class RtcNodeAvatarOutlet implements AvatarVideoOutlet {
         }
         await track?.close?.();
     }
-
-    /** @inheritdoc */
-    public async SetAttributes(attributes: Record<string, string>): Promise<void> {
-        if (!this.participant.setAttributes) {
-            throw new Error('@livekit/rtc-node cannot set the local participant\'s attributes');
-        }
-        await this.participant.setAttributes(attributes);
-    }
 }

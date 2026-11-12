@@ -562,7 +562,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
-        'user-elevation': 4,
+        'user-elevation': 5,
         'user-routines': 18,
         'video-data-snapshot': 3,
         'video-generation-cost': 2,

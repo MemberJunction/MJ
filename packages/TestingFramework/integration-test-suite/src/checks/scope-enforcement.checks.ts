@@ -490,15 +490,13 @@ async function waitFor(probe: () => Promise<boolean>, timeoutMs: number): Promis
 export async function CheckSe6OutOfProcessScopeRevocation(ctx: IntegrationCheckContext): Promise<void> {
     const pool = ctx.Pool;
     if (!pool) {
-        console.warn('  ⚠ scope-enforcement.SE6 SKIPPED (pass) — no raw SQL pool on this transport, cannot simulate an out-of-process delete');
-        return;
+        SkipCheck('no raw SQL pool on this transport — cannot simulate an out-of-process delete');
     }
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!readScopeId) {
-        console.warn("  ⚠ scope-enforcement.SE6 SKIPPED (pass) — seeded scope 'entity:read' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' not present");
     }
     const previousTTL = engine.ScopeCacheTTLMs;
     const cleanup: Cleanup[] = [];
