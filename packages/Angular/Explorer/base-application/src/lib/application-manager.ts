@@ -192,18 +192,15 @@ export class ApplicationManager {
     if (engine.IsPermissionConstrained) return; // No data available — nothing to sync
     const userApps = engine.UserApplications;
 
-    // Build a map for quick lookup
-    const appMap = new Map<string, BaseApplication>();
-    for (const app of allApps) {
-      appMap.set(app.ID, app);
-    }
+    // Build a map for quick lookup (UUID case-insensitive)
+    const appMap = IndexByUUID(allApps);
 
     // Build user's filtered and ordered app list
     const userAppConfigs: UserAppConfig[] = [];
     const activeApps: BaseApplication[] = [];
 
     for (const userApp of userApps) {
-      const app = appMap.get(userApp.ApplicationID);
+      const app = appMap.Get(userApp.ApplicationID);
       if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
@@ -353,11 +350,8 @@ export class ApplicationManager {
     const md = this.Provider;
     const allApps = this.allApplications$.value;
 
-    // Build a map for quick lookup
-    const appMap = new Map<string, BaseApplication>();
-    for (const app of allApps) {
-      appMap.set(app.ID, app);
-    }
+    // Build a map for quick lookup (UUID case-insensitive)
+    const appMap = IndexByUUID(allApps);
 
     // Load user's UserApplication records using UserInfoEngine for caching
     const engine = UserInfoEngine.Instance;
@@ -385,7 +379,7 @@ export class ApplicationManager {
     const activeApps: BaseApplication[] = [];
 
     for (const userApp of userApps) {
-      const app = appMap.get(userApp.ApplicationID);
+      const app = appMap.Get(userApp.ApplicationID);
       if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,

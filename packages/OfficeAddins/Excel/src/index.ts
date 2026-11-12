@@ -10,6 +10,7 @@
  */
 export * from './contract';
 export * from './catalog-types';
+export * from './custom-functions';
 export * from './operations';
 export * from './handoff';
 export * from './office-connect';
