@@ -1,7 +1,8 @@
 # Regression Suite Automation — Design and Plan
 
 **Date:** 2026-11-12
-**Status:** Draft for review. Nothing is implemented.
+**Status:** Phases 0–3 done (PR #6613). The `mj test scripts` exit fix has unit tests but no run in
+the stack yet (Phase 4 uses it). The MoreCheese move (§8, M1–M5) is planned.
 **Scope:** The MJ Explorer regression suite (Computer Use tests in `metadata-optional/regression-test/`).
 
 ## 1. Goals
@@ -287,10 +288,17 @@ Every task writes its failing tests first, confirms they fail, then implements.
 | 3 | **Stack and CLI fixes** (B2, B3): `--format` on `mj test scripts`, `TEST_NAMES` + `up --test`, `.env.test.example`, design-doc fix. | 0 | M |
 | 4 | **Replay-script PR skill** (Part C) with `preflight.sh` and `harvest.sh`. Add it to the skills list in root `CLAUDE.md` (check `npm run check:claude-md`). | 0, 3 | M |
 | 5 | **Authoring skill** (A3). | 2, 3 | M |
-| 6 | **First real harvest.** Run the Part C skill on `next`. This is the first PR that commits replay scripts. Expect fewer than 155: a test whose run used an unmatched coordinate click records no script (§7). | 4 | L (run time) |
+| 6 | **First real harvest.** Run the Part C skill on `next`. This is the first PR that commits replay scripts. Expect fewer than 155: a test whose run used an unmatched coordinate click records no script (§7). | 4, M3 | L (run time) |
 | 7 | **Later:** a `workflow_dispatch` / nightly GitHub Action that runs Part C's helpers, copied from the `bizapps-guide.yml` PR pattern (GitHub App token, fixed branch, reuse an open PR). Needs Auth0 and LLM secrets and a large runner. | 6 | L |
+| M1 | **Split `mj app install`** into a package step and a database step (§8.4). | — | M |
+| M2 | **Stack installs Open Apps** from a pinned list: images run the package step, db-setup runs the database step (§8.4). | M1 | L |
+| M3 | **Move the suite's data to MoreCheese**: retarget the seeds, rewrite the 31 tests that use AssociationDB v1 data, run all 155 (§8.5). | M2 | L |
+| M4 | **New MoreCheese coverage** with `mj test regression new` (§8.6). | M3 | M |
+| M5 | **Optional:** a bacpac cache of the installed database to cut start time (§8.4). | M2 | M |
 
-Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in parallel.
+Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in parallel. M1 can run in
+parallel with Phases 3–5. Phase 6 waits for M3, so the first harvest records scripts against the
+MoreCheese data and not against data the suite is about to leave.
 
 ## 5. Risks and checks
 
@@ -306,6 +314,9 @@ Phases 1 and 2 touch different files from Phases 0 and 3, so they can run in par
 | Two feature PRs pick the same T number. | The parity guard fails the second PR after the first merges. Renumber on rebase. |
 | The parity guard fails on day one. | Phase 1 fixes current violations in the same PR. |
 | `AGENTS.md:511-525` ("Extend the suite with every feature") points to a folder that no longer exists, and `.claude/rules/testing.md:82` disagrees with `AGENTS.md:582` about the regression stack in CI. | Fix both in Phase 5 docs, so the rule says to add a regression test for UI changes and points to the new skill. |
+| The MoreCheese seed (377 MB of SQL in migrations) makes every `up` slow. | Measure in M2. If too slow, M5 adds a bacpac cache. |
+| Open App installs pull a second copy of `@memberjunction/*` packages, because app peer ranges (`^6.1.0`) do not include an `-edge` MJ version. | M2 checks `pnpm why @memberjunction/core` in the images: one copy only. |
+| MoreCheese's monthly data refresh changes the records that tests name. | Pin the app version (§8.4). Name records that the retention rule keeps (`base ⊆ head`, README "Monthly cadence"). |
 
 ## 6. Success criteria
 
@@ -416,3 +427,148 @@ entrypoint's write-back and the pull's rewrite of unchanged files make no git di
   app's) as path fragments, so a script works on any tenant and holds no tenant name. The other
   options were a rewrite in the harvester, or keeping the URLs as recorded. This is engine code, so
   it gets its own failing tests first and lands before the first real harvest (Phase 6).
+
+## 8. Move the suite to MoreCheese v2 (research 2026-11-12)
+
+### 8.1 Why
+
+Today the stack loads MJ's own AssociationDB v1 demo (`Demos/AssociationDB`, schema
+`AssociationDemo`, about 58 tables). [MoreCheese](https://github.com/MemberJunction/more-cheese)
+is the Open App that replaces it (`plans/association-db/v2-plan.md` in that repo calls it
+"AssociationDB v2"). Running the suite on an MJ instance with MoreCheese installed gives:
+
+- **Open App coverage.** MoreCheese depends on 10 other Open Apps (bizapps-common, -orders,
+  -accounting, -committees, -forms, -tasks, -issues, -secure-messaging, -sonar, and skip-client).
+  An install exercises the Open App engine, the apps' migrations, their server and client
+  packages, and their UI. All 11 repos are public.
+- **More test data.** For example 3,279 People, 2,330 member profiles, 4,276 course enrollments,
+  15 saved views, 34 saved queries, 3 Predictive Studio pipelines, 5 Sonar score models, and 4
+  Skip dashboards.
+
+### 8.2 How MoreCheese gets into an MJ instance
+
+`mj app install <repo> [--version] [--non-interactive]`
+(`packages/OpenApp/Engine/src/install/install-orchestrator.ts`, `InstallApp`):
+
+1. Reads `mj-app.json` from GitHub, checks it, checks the MJ version, and checks that the app's npm
+   packages exist.
+2. Installs the dependency apps first, deepest first.
+3. **Database step:** creates the schema and runs the app's migrations with Skyway. The data ships
+   inside the migrations (MoreCheese: 12 files, 377 MB). The install does not run `mj sync push`
+   or CodeGen.
+4. **Package step:** adds the app's packages to `packages/MJAPI` and `packages/MJExplorer`
+   `package.json`, runs `pnpm install` at the root, writes `dynamicPackages`,
+   `entityPackageName`, and `excludeSchemas` into `mj.config.cjs`, and updates `angular.json`.
+   Explorer's `prebuild` turns `dynamicPackages.client` into imports, so Explorer must be rebuilt.
+5. Runs post-install hooks and the template-user step (`MJ_INSTALL_USER_EMAIL` and related
+   variables in non-interactive mode).
+
+The version check passes: `6.3.0-edge.0` satisfies `>=6.1.0 <7.0.0`, because
+`CheckMJVersionCompatibility` drops the prerelease part first (`version-checker.ts:35-41`).
+
+### 8.3 Options
+
+| Option | Run against any MJ branch (G1) | Test installed Open Apps (G2) | More data (G3) | Cost |
+|---|---|---|---|---|
+| a. Install in the Docker stack, built from the branch under test | Yes | Yes | Yes | Engine split (M1), stack work (M2), a slow seed on each `up` |
+| b. Start from a bacpac of an installed database | Partly (branch migrations run on top) | No (the install path never runs) | Yes | The images still need the app packages; someone must make and refresh the bacpac |
+| c. Remote-target mode against a running MoreCheese instance | No (tests the deployed build) | Yes, for that build | Yes | Works today (`mj test regression remote`) |
+
+**Decision: option a**, because only it meets G1, the reason the skill runs in a worktree. Option c
+can run the suite on a hosted MoreCheese instance until M3 lands. Option b comes back as M5, as a
+cache for option a, not as a replacement.
+
+### 8.4 Design (M1, M2, M5)
+
+**The problem.** One `mj app install` does work that belongs at two times. The package step must
+run at image build time: the images run `pnpm install --frozen-lockfile`
+(`Dockerfile.api:37`, `Dockerfile.explorer:40`) and Explorer is compiled into the image. The
+database step needs SQL Server, which exists only at run time (db-setup). Compose builds the images
+before db-setup starts.
+
+**M1 — split the install.** Add two flags to `mj app install` (and to the engine's install
+options):
+
+- `--packages-only`: steps 1, 2 and 4. No database connection and no `MJ: Open Apps` records.
+- `--database-only`: steps 1, 2, 3 and 5. No `package.json`, lockfile, `mj.config.cjs` or
+  `angular.json` change.
+
+Both run the full dependency graph. Failing tests first, in the engine's test suite. This also
+helps the production `docker/MJAPI` image, which has the same build-time/run-time split.
+
+**M2 — the stack installs a pinned list of apps.**
+
+- A new file, `docker/regression/open-apps.json`, pins the apps and versions, for example
+  `[{ "repo": "https://github.com/MemberJunction/more-cheese", "version": "1.3.2" }]`. A version
+  bump is a reviewed PR, so a run is reproducible and a monthly data refresh does not move tests
+  silently.
+- `Dockerfile.api`, `Dockerfile.explorer`, `Dockerfile.db-setup` and `Dockerfile.test-runner` run
+  `mj app install … --packages-only --non-interactive` for each pinned app, after the
+  `--frozen-lockfile` install and before the build. `GITHUB_TOKEN` goes in as a BuildKit secret, not
+  a build argument, so it is not stored in an image layer. The `mj.config.cjs` the images copy in
+  then carries `dynamicPackages` and `excludeSchemas`.
+- `db-setup-entrypoint.sh` runs `mj app install … --database-only --non-interactive` after MJ's
+  migrate and CodeGen, and before the baseline metadata push. `MJ_INSTALL_USER_EMAIL` is the stack's
+  test user, so the template-user step copies the demo user's dashboards and conversations to it.
+- `.env.test.example` gains `GITHUB_TOKEN` and `MORECHEESE_SHARED_KEY` (optional: without it the
+  Skip dashboards and the Dropbox source do not load). Skyway gets a longer request timeout for the
+  seed (`migration-runner.ts:368`).
+- AssociationDB v1 leaves the stack: `db-setup` and `form-gen` stop installing
+  `Demos/AssociationDB` when M3 lands. Until then, an empty `open-apps.json` keeps today's stack.
+- Checks: one copy of `@memberjunction/core` in each image (`pnpm why`), the MoreCheese app and its
+  forms load in Explorer, and the time from `up` to the first test is measured.
+
+**M5 — optional bacpac cache.** If the seed makes `up` too slow, save the installed database as a
+bacpac keyed by the MJ migration head and the `open-apps.json` content, and start from it with
+`BACPAC_UPGRADE=true` (the existing bacpac path). A cache miss falls back to M2's full install.
+
+### 8.5 Effect on the 155 tests (M3)
+
+| Group | Count | What happens |
+|---|---|---|
+| A — MJ platform only (app tours, MJ core entities and queries) | 112 | No change. |
+| B — AssociationDB v1 data in the goal (Members, Events, Memberships, Event Registrations, Products) | 31 | Rewrite the goal, criteria and oracles. |
+| C — data the stack seeds, or an empty state that also passes | 12 | Retarget the seeds. Some tests then check real content. |
+
+The main mappings (to be checked on a live stack in M3):
+
+- **Members → `MJ_BizApps_Common: People`** (T002, T003, T006, T007, T009, T010, T012, T021, T026,
+  T040). There is no "Sarah Chen". Use a stable record such as **Elena Rodriguez** (member
+  ICF-000101).
+- **Events and Memberships were retired** in MoreCheese v1.2. Event edit tests (T011, T024, T025,
+  T027, T041, T042) → `Committees: Meetings` (for example "Location Text"). Memberships (T008) →
+  `Committees: Memberships`. Event Registrations (T031, T039) → `MoreCheese: Course Enrollments`.
+- **Products** (T034–T036, T038) → `MJ_BizApps_Orders: Products`.
+- Guesses to confirm: T011, T013, T024 (MoreCheese has no "Is Virtual" field), T040 (form section
+  names), and which People fields are required (T026).
+
+Seeds that read AssociationDB today, and must change in the same PR:
+
+- `docker/regression/test-metadata/users/.users.json`: lists and user views use
+  `@lookup:MJ: Entities.Name=Members` and `=Events`. On MoreCheese these lookups fail, and that can
+  stop the whole test-user sync (roles and apps too).
+- `scripts/setup-test-user.cjs` (`AssociationDemo.Member`, `AssociationDemo.Event`),
+  `scripts/seed-sample-data.cjs` (T120), and `scripts/set-demo-field-types.cjs` (T044; BizApps
+  Common may already mark Email fields).
+
+M3 is one PR: the seeds, the 31 rewrites, and a full run of all 155 tests on the MoreCheese stack.
+
+### 8.6 New coverage (M4)
+
+No test covers these today. Each is a small `mj test regression new` test:
+
+1. The MoreCheese Explorer app and its grids (for example `MoreCheese: Competition Entries`).
+2. One open-and-load smoke test for each BizApps app: Forms, Issues, Tasks, Secure Messaging,
+   Committees, Orders, Accounting.
+3. The Skip dashboards (need `MORECHEESE_SHARED_KEY`, and the template-user copy to the test user).
+4. Saved views (smart views, map views) and saved queries (for example "Membership Status").
+5. Predictive Studio pipelines (T067 and T070 can then check real content), and Sonar scheduled
+   jobs (T127–T129).
+
+### 8.7 Decisions (2026-11-12)
+
+- **Option a** (install in the stack from the branch under test), with the install split (M1). Option
+  c is the stopgap. Option b is a later cache (M5).
+- **MoreCheese replaces AssociationDB v1** as the stack's data. No second data set.
+- **Pin app versions in `docker/regression/open-apps.json`.**
+- **The move comes before the first harvest.** Phase 6 depends on M3.
