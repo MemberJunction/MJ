@@ -24,7 +24,7 @@ type Answer = z.infer<typeof AnswerSchema>;
 const PREFIX_TO_INTENT: Record<string, IntentType> = { feat: 'feature', fix: 'fix', refactor: 'refactor', perf: 'perf', chore: 'other', docs: 'other', test: 'other', build: 'config', ci: 'config' };
 const SOURCE_RE = /\.(ts|tsx)$/;
 const MAX_OUTPUT_TOKENS = 8000;
-/** Added to the system prompt of the second attempt, so a reply cut at the token cap fits. */
+/** Added to the system prompt of the second attempt. */
 const SHORTER_REPLY = 'At most 6 risks; keep each field under 300 characters.';
 /** Test, mock and fixture folder segments, `.test.` / `.spec.` basenames, and `.d.ts` files. */
 const TEST_RE = /(^|\/)(__tests__|__mocks__|__fixtures__|test|tests)\/|\.(test|spec)\.[^/]*$|\.d\.ts$/;

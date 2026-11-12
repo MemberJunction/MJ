@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { describe, it, expect, afterEach, afterAll, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BaseCatchStore } from '../contracts/BaseCatchStore';
@@ -56,7 +56,9 @@ function ledger(id: string, set: BacktestLedger['Set'], model: string, entries: 
 }
 
 /** Run folders under a root that holds none. */
-const noRunDirs = (id: string): RunDir => new RunDir(join(tmpdir(), 'jit-report-no-runs'), id, new RedactionCheck([]));
+const NO_RUNS_ROOT = mkdtempSync(join(tmpdir(), 'jit-report-no-runs-'));
+afterAll(() => { rmSync(NO_RUNS_ROOT, { recursive: true, force: true }); });
+const noRunDirs = (id: string): RunDir => new RunDir(NO_RUNS_ROOT, id, new RedactionCheck([]));
 
 const CORPUS: Corpus = {
   Version: 1, Seed: 1,
@@ -196,15 +198,36 @@ describe('BuildGateReport', () => {
     expect(m1.CoverageNotMeasured).toBe(1);
   });
 
-  it('counts the runs whose analyzer fell back and renders the count in the model section', async () => {
+  /** The report of runs ra (analyzer fallback) and rb, after `rb` sets up rb's run folder. */
+  async function fallbackReport(rb: (root: string, redaction: RedactionCheck) => void): Promise<string> {
     const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
     const redaction = new RedactionCheck([]);
     const s = new MemoryStore(); s.Runs = [runOf('ra'), runOf('rb')];
     new RunDir(root, 'ra', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Analysis: { ...analysis(), Fallback: true } });
-    new RunDir(root, 'rb', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Analysis: { ...analysis(), Fallback: false } });
+    rb(root, redaction);
     const l = ledger('c-Tuning-Clean-m9', 'Clean', 'm9', [entry(10, 'Clean', { RunID: 'ra' }), entry(11, 'Clean', { RunID: 'rb' })]);
-    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [l], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES }));
-    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 2 runs\n');
+    return RenderMarkdown(await BuildGateReport({ Ledgers: [l], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES }));
+  }
+
+  it('counts the runs whose analyzer fell back and renders the count in the model section', async () => {
+    const md = await fallbackReport((root, redaction) => new RunDir(root, 'rb', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Analysis: { ...analysis(), Fallback: false } }));
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 2 runs with a generation file\n');
+  });
+
+  it('leaves a run with no generation file out of the fallback count and names how many there are', async () => {
+    const md = await fallbackReport(() => {});
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 runs have no generation file\n');
+  });
+
+  it('skips an unreadable generation file with one stderr line and counts it as having no generation file', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const md = await fallbackReport((root, redaction) => {
+        const dir = new RunDir(root, 'rb', redaction); mkdirSync(dir.Path, { recursive: true }); writeFileSync(join(dir.Path, 'generation.json'), '{ not json');
+      });
+      expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 runs have no generation file\n');
+      expect(stderr.mock.calls.map((c) => String(c[0])).filter((l) => l === 'report: rb: generation.json unreadable, skipped\n')).toHaveLength(1);
+    } finally { stderr.mockRestore(); }
   });
 
   it('reads the run, the catches and the sessions of each run once', async () => {

@@ -10,7 +10,7 @@ Runs write to `<repo>/.jit-catch/runs/<RunID>/`.
 
 Generator models: a `claude-*` model runs on the Claude Agent SDK with `ANTHROPIC_API_KEY`; a `gemini-*` model runs on the MJ Gemini provider with `GEMINI_API_KEY`. Every generator model needs an entry in the settings `Prices`.
 
-Analyzer: one LLM call per run reads the diff and returns the intent, a summary, the risks and the packages to test, with a cap of 8000 output tokens. When the reply is not valid JSON, a second attempt asks for a shorter reply (at most 6 risks, each field under 300 characters). When both replies are invalid, the run continues with no risk notes: the analysis has `Fallback: true`, stderr gets the line `run <run ID>: analyzer reply was not valid JSON twice; continuing with no risk notes`, and the report counts the run under "Analyzer fallbacks (no risk notes)".
+Analyzer: one LLM call per run reads the diff and returns the intent, a summary, the risks and the packages to test, with a cap of 8000 output tokens. When the reply is not valid JSON, a second attempt asks for a shorter reply (at most 6 risks, each field under 300 characters). When both replies are invalid, the run continues with no risk notes: the analysis has `Fallback: true`, stderr gets the line `run <run ID>: analyzer reply was not valid JSON twice; continuing with no risk notes`, and the report counts the run under "Analyzer fallbacks (no risk notes)". That count covers only runs with a readable generation file; the report names how many runs have none, and writes one stderr line for each generation file it cannot read.
 
 ## Commands
 
