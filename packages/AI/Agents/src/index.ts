@@ -71,6 +71,7 @@ export * from './agent-pre-execution-rag';
 export * from './agent-audience';
 export * from './memory-manager-agent';
 export * from './memory-note-gate';
+export * from './memory-decision-uses';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './AgentWakeTriggerService';
@@ -83,6 +84,7 @@ export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
 export * from './realtime/bridge-session-transcript-sink';
 export * from './realtime/realtime-turn-moderator';
+export * from './realtime/realtime-moderator-decision';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a

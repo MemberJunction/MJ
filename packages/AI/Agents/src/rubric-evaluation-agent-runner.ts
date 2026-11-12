@@ -1,6 +1,7 @@
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import { RegisterRubricAgentRunner, WithAgentRun, type EvaluationAgentRunner } from '@memberjunction/rubrics';
+import { RegisterRubricAgentRunner, RegisterRubricDecisionCalibrations, WithAgentRun, type EvaluationAgentRunner } from '@memberjunction/rubrics';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
 
 const RUBRIC_EVALUATION_AGENT = 'Rubric Evaluation Agent';
@@ -46,3 +47,7 @@ class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
 }
 
 RegisterRubricAgentRunner((provider, user, executionScope) => new RubricEvaluationAgentRunner(provider, user, executionScope));
+
+// The rubric decision evaluators calibrate per criterion from the AI models' declared fits. Read
+// lazily, so importing this module does not construct the engine.
+RegisterRubricDecisionCalibrations({ GetDecisionCalibrations: (modelName: string) => AIEngine.Instance.GetDecisionCalibrations(modelName) });
