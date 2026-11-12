@@ -271,3 +271,6 @@ export { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './Chi
 export { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 export * from './ChiefOfStaff/chief-of-staff-agent-context';
 export * from './ChiefOfStaff/chief-of-staff-live-refresh';
+
+// Health & Telemetry Observatory
+export * from './HealthObservatory';
