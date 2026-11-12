@@ -58,6 +58,8 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * `pnpm install --ignore-scripts` would still load the revision's `.pnpmfile.cjs` and follow its
      * `packageManager`. The host fetches from a copy of the lockfile without patch information and reads
      * no patch file; the sandbox installs offline with the real lockfile and `patches/` and applies the patches.
+     * When pnpm reports `ERR_PNPM_OUTDATED_LOCKFILE`, the sandbox installs once more, still offline, without the frozen lockfile,
+     * so only workspace links and packages already in the store can resolve.
      * When the fetch or the install fails, the worktree is removed before the error is rethrown; a removal failure does not replace that error.
      */
     public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
@@ -67,14 +69,23 @@ export class VitestCatchTarget extends BaseCatchTarget {
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
         try {
             await this.hostFetch(revision);
-            const install = `pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
-            const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
+            let r = await this.installInSandbox(prepared, '--frozen-lockfile');
+            if (r.ExitCode !== 0 && tail(r).includes('ERR_PNPM_OUTDATED_LOCKFILE')) {
+                process.stderr.write(`prepare ${revision.Kind} ${revision.SHA.slice(0, 7)}: the lockfile is out of date with a package.json; installing offline without the frozen lockfile\n`);
+                r = await this.installInSandbox(prepared, '--no-frozen-lockfile');
+            }
             if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
         } catch (e) {
             await this.Cleanup(prepared).catch(() => undefined);
             throw e;
         }
         return prepared;
+    }
+
+    /** Offline `pnpm install` and `pnpm rebuild` in the sandbox, with the given lockfile flag. */
+    private installInSandbox(prepared: PreparedRevision, lockfileFlag: '--frozen-lockfile' | '--no-frozen-lockfile'): Promise<SandboxRunResult> {
+        const install = `pnpm install --offline ${lockfileFlag} --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
+        return this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
     }
 
     /**
