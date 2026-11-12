@@ -10,6 +10,8 @@ Runs write to `<repo>/.jit-catch/runs/<RunID>/`.
 
 Generator models: a `claude-*` model runs on the Claude Agent SDK with `ANTHROPIC_API_KEY`; a `gemini-*` model runs on the MJ Gemini provider with `GEMINI_API_KEY`. Every generator model needs an entry in the settings `Prices`.
 
+Analyzer: one LLM call per run reads the diff and returns the intent, a summary, the risks and the packages to test, with a cap of 8000 output tokens. When the reply is not valid JSON, a second attempt asks for a shorter reply (at most 6 risks, each field under 300 characters). When both replies are invalid, the run continues with no risk notes: the analysis has `Fallback: true`, stderr gets the line `run <run ID>: analyzer reply was not valid JSON twice; continuing with no risk notes`, and the report counts the run under "Analyzer fallbacks (no risk notes)".
+
 ## Commands
 
 Options in brackets are optional; the usage text in `src/cli.ts` shows which command takes `--settings` and `--store`.
@@ -22,7 +24,7 @@ Options in brackets are optional; the usage text in `src/cli.ts` shows which com
 - `clean --run <run ID>` or `clean --all-finished` — removes the worktrees, pnpm store and scratch folders of one run or of every finished run.
 - `backtest --corpus <file> --slice Tuning|HeldOut --set Bug|Clean|Both --model <generator> --max-usd <n>` — runs every chosen corpus PR into one ledger; the required `--max-usd <n>` caps the ledger cost and the command exits 3 when the cap or the failure limit stops it, `--only <n,n>` picks PRs, `--retry-failed` re-runs failed entries. The worst-case overshoot past the cap is about one PR (≈ 36 USD at the default limits plus the judges). A run cut off during Generate leaves no generation file, so a resume does not recover its spend and it does not count toward the cap.
 - `backtest match --ledger <ledger ID> --corpus <file>` — applies each fix PR on top of its bug PR and re-runs the catching tests to see which catches match the known bug. It tries the fix on the bug head first, and the fix PR's merge commit when the fix does not apply on the bug head or the patched head does not prepare. A pair where the fix merge does not prepare is recorded as `PrepareFailed` and blocks the gate. Older ledgers can hold `ApplyFailed`, which also blocks the gate.
-- `report --ledger <ledger ID>[,<ledger ID>…] --corpus <file> [--out <file.md>]` — writes the gate-1 report: rates with 95% intervals, costs and judge calibration.
+- `report --ledger <ledger ID>[,<ledger ID>…] --corpus <file> [--out <file.md>]` — writes the gate-1 report: rates with 95% intervals, costs, session end reasons, analyzer fallbacks and judge calibration.
 
 ## Gate 1 procedure
 

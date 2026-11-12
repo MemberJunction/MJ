@@ -16,7 +16,7 @@ export function run(): Run {
 }
 
 export function analysis(): ChangeAnalysis {
-  return { RunID: RUN_ID, IntentType: 'feature', Summary: 'adds Open to Svc', Risks: [], PackagesToTest: [PKG], CommitPrefix: 'feat', RiskScore: 1, Title: 'feat: open', Body: '',
+  return { RunID: RUN_ID, IntentType: 'feature', Summary: 'adds Open to Svc', Risks: [], PackagesToTest: [PKG], CommitPrefix: 'feat', RiskScore: 1, Title: 'feat: open', Body: '', Fallback: false,
     ChangedFiles: [{ Path: `${PKG_DIR}/src/svc.ts`, Package: PKG, AddedLines: [1, 2], RemovedLineCount: 0, Hunks: [] }] };
 }
 

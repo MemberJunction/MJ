@@ -30,9 +30,11 @@ export interface Run {
 export interface DiffHunk { Path: string; OldStart: number; OldLines: number; NewStart: number; NewLines: number; Lines: string[]; }
 export interface ChangedFile { Path: string; Package: string | null; AddedLines: number[]; RemovedLineCount: number; Hunks: DiffHunk[]; }
 export interface Risk { ID: string; File: string; Symbol: string; WhatCouldBreak: string; HowObserved: string; }
+/** `Fallback` is true when the analyzer reply was invalid twice; the analysis then has no risks and no LLM-ranked packages. */
 export interface ChangeAnalysis {
     RunID: string; IntentType: IntentType; Summary: string; Risks: Risk[]; PackagesToTest: string[];
     ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string;
+    Fallback: boolean;
 }
 
 export interface MutantEdit { File: string; Find: string; Replace: string; }

@@ -33,6 +33,8 @@ export interface ModelReport {
     Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; ByModel: Record<string, { RecordedUSD: number; TableUSD: number }>; UnpricedModels: string[] };
     /** Session end reason → count. */
     Sessions: Record<string, number>;
+    /** Runs whose analyzer reply was invalid twice, of the runs with data. A run with no generation file counts as no fallback. */
+    AnalyzerFallbacks: { Fallbacks: number; Runs: number };
     /** Drop rule → count. */
     Drops: Record<string, number>;
     Judges: { Model: string; Agreement: AgreementResult; HighOnIntended: number; LowOnBug: number }[];
@@ -50,7 +52,7 @@ export interface GateReportOptions {
 
 /** A catch with its human label (latest feedback by `At`), or null when it has none. */
 type LabeledCatch = Catch & { Label: HumanLabel | null };
-interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[]; CoverageNotMeasured: number; }
+interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[]; CoverageNotMeasured: number; Fallback: boolean; }
 /** A catch whose truth is known: +1 bug (label Bug or a matched test), −1 not a bug. `Intended` marks a label of Intended or TestFault. */
 interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
 
@@ -58,8 +60,8 @@ interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
  * The gate-1 report: one section per generator model, combining that model's ledgers.
  * The human label of a catch is its latest feedback by `At`; an AuthorChangedPR answer counts as Bug everywhere
  * (not a false alarm, score +1, grouped under Bug in TPProb). Bug-set catches take their truth from the match:
- * a matched test scores +1, an unmatched one −1. The store is read once per run ID; a run folder is read only
- * when the run has a test that passed on both revisions.
+ * a matched test scores +1, an unmatched one −1. The store is read once per run ID; each run's generation file
+ * is read for the analyzer fallback, and its execution file only when the run has a test that passed on both revisions.
  */
 export async function BuildGateReport(o: GateReportOptions): Promise<GateReport> {
     const runIDs = [...new Set(o.Ledgers.flatMap((l) => l.Entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID]))))];
@@ -72,7 +74,8 @@ export async function BuildGateReport(o: GateReportOptions): Promise<GateReport>
 async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: string) => RunDir): Promise<RunData> {
     const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
     const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
-    return { Run: run, Catches: labeled, Sessions: sessions, CoverageNotMeasured: coverageNotMeasured(catches, () => runDirOf(id)) };
+    const dir = runDirOf(id);
+    return { Run: run, Catches: labeled, Sessions: sessions, CoverageNotMeasured: coverageNotMeasured(catches, () => dir), Fallback: dir.HasGeneration() && dir.ReadGeneration().Analysis.Fallback };
 }
 
 /** The answer of the latest feedback by `At`, AuthorChangedPR as Bug; null when there is none. */
@@ -111,6 +114,7 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
         CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean' && cleanPRs.has(e.PR)), cleanPRs.size, data),
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
+        AnalyzerFallbacks: { Fallbacks: runs.filter((r) => r.Fallback).length, Runs: runs.length },
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
         Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
         CoverageNotMeasured: runs.reduce((s, r) => s + r.CoverageNotMeasured, 0),
@@ -246,7 +250,7 @@ function renderModel(m: ModelReport): string[] {
         ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
         `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
         `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
-        ...renderCost(m), ...renderCounts('Session end reasons', m.Sessions), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
+        ...renderCost(m), ...renderSessions(m), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
     ];
 }
 
@@ -275,6 +279,11 @@ function renderCost(m: ModelReport): string[] {
 /** Text on one Markdown line: CR and LF become spaces, and a leading heading, list, quote or ordered-list marker is escaped. */
 export function MarkdownText(text: string): string {
     return text.replace(/[\r\n]/g, ' ').replace(/^([#>*+-]|\d+[.)])/, '\\$1');
+}
+
+function renderSessions(m: ModelReport): string[] {
+    const f = m.AnalyzerFallbacks;
+    return [...renderCounts('Session end reasons', m.Sessions).slice(0, -1), `- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs`, ''];
 }
 
 function renderCounts(title: string, counts: Record<string, number>): string[] {

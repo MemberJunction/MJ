@@ -18,7 +18,7 @@ export const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z
 export const ChangeAnalysisSchema = z.object({
     RunID: z.string(), IntentType: z.enum(['feature', 'fix', 'refactor', 'perf', 'dead_code_removal', 'logging', 'config', 'other']),
     Summary: z.string(), Risks: z.array(RiskSchema), PackagesToTest: z.array(z.string()), ChangedFiles: z.array(ChangedFileSchema),
-    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(),
+    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(), Fallback: z.boolean().default(false),
 });
 
 /** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. Every path segment here and in `MutantEditSchema.File` starts with a letter, digit or underscore, so `.` and `..` are never segments. */
