@@ -24,10 +24,8 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     DescribeAnsweringModel,
-    FindDecisionCalibration,
     type DecisionAnsweringModel,
     type DecisionCalibrationKey,
-    type DecisionCalibrationSource,
     type MJAIPromptEntityExtended
 } from '@memberjunction/ai-core-plus';
 import { ApplyPlattCalibration, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
@@ -95,26 +93,17 @@ export const DUPLICATE_DECISION_CALIBRATION_KEY: DecisionCalibrationKey = Object
 /**
  * The calibration declared for the exact model that answered, or null when it has none.
  * @param answeredBy The model that answered.
- * @param calibrations Where the calibrations are declared; defaults to `AIEngine.Instance`.
  */
-export function DuplicateDecisionCalibrationFor(
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined = AIEngine.Instance
-): PlattCalibration | null {
-    return FindDecisionCalibration(calibrations, DUPLICATE_DECISION_CALIBRATION_KEY, answeredBy);
+export function DuplicateDecisionCalibrationFor(answeredBy: DecisionAnsweringModel): PlattCalibration | null {
+    return AIEngine.Instance.FindDecisionCalibration(DUPLICATE_DECISION_CALIBRATION_KEY, answeredBy);
 }
 
 /**
  * The duplicate Likelihood calibrated for the exact model that answered, or null when that model
  * has no calibration.
  */
-export function CalibratedDuplicateProbability(
-    probability: number,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined = AIEngine.Instance
-): number | null {
-    const calibration = DuplicateDecisionCalibrationFor(answeredBy, calibrations);
-    return calibration ? ApplyPlattCalibration(probability, calibration) : null;
+export function CalibratedDuplicateProbability(probability: number, answeredBy: DecisionAnsweringModel): number | null {
+    return AIEngine.Instance.CalibrateDecisionProbability(DUPLICATE_DECISION_CALIBRATION_KEY, probability, answeredBy);
 }
 
 /** Models already logged as having no calibration, so each is logged once per process. */

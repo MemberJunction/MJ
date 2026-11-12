@@ -3,10 +3,10 @@
  * detection, the options and the option cap, narrowing by search rank, the questions, how answers
  * are judged, and the injected message.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ApplyPlattCalibration, DecisionResult, type ChatMessage, type DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { SHIPPED_AGENT_CALIBRATIONS, SHIPPED_AGENT_SOURCE, ShippedFit } from './helpers/shipped-decision-calibrations';
+import { SHIPPED_AGENT_CALIBRATIONS, ServeDecisionCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import {
     AgentsWithoutDescription,
     BuildDecisionDiscoveryQuestions,
@@ -79,6 +79,10 @@ function calibrated(model: string, question: 'Confidence' | 'AnyApplies', p: num
 
 /** The exact model Jev's calibration was fitted on: its pinned APIName, which it reports back. */
 const JEV_RESOLVED_MODEL = 'typesafe/jev-1.13-20260917';
+
+// Calibrations are read from AIEngineBase.Instance; serve the shipped fits for every spec.
+beforeEach(() => ServeDecisionCalibrations());
+afterEach(() => vi.restoreAllMocks());
 
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
@@ -343,7 +347,7 @@ describe('DecisionDiscoveryFromResult', () => {
     }
 
     it('injects the suggestion for an answer whose calibrated values are confident', () => {
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.8)), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.8)), OPTIONS);
         const confidence = calibrated('Jev', 'Confidence', 0.99);
 
         expect(confidence).toBeGreaterThanOrEqual(DECISION_DISCOVERY_MIN_CONFIDENCE);
@@ -354,7 +358,7 @@ describe('DecisionDiscoveryFromResult', () => {
 
     it('judges the calibrated values, not the raw ones', () => {
         // Raw 0.84 and 0.9 clear the old raw 0.7; Jev's calibrated confidence for 0.84 is about 0.77.
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.84, 0.9)), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.84, 0.9)), OPTIONS);
 
         expect(calibrated('Jev', 'Confidence', 0.84)).toBeLessThan(DECISION_DISCOVERY_MIN_CONFIDENCE);
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
@@ -362,7 +366,7 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 
     it('injects nothing, as a success, for an unsure answer', () => {
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.5, 0.9)), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.5, 0.9)), OPTIONS);
 
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
         expect(outcome.Message).toBeUndefined();
@@ -373,7 +377,7 @@ describe('DecisionDiscoveryFromResult', () => {
         ['a model with no calibration', 'Some Other Model'],
         ['an unnamed model', null],
     ])('treats an answer from %s as unsure, and keeps the raw answer', (_label, modelName) => {
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName), OPTIONS);
 
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: `${modelName ?? 'an unnamed model'} (resolved model not reported)` });
         expect(outcome.Reason).toContain('has no discovery calibration');
@@ -381,7 +385,7 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 
     it("calibrates LLM Decision's answers with its parameters when its fitted chat model answered", () => {
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.95, 0.99), undefined, 'LLM Decision', LLM_DECISION_CHAT_MODEL), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.95, 0.99), undefined, 'LLM Decision', LLM_DECISION_CHAT_MODEL), OPTIONS);
 
         expect(outcome.UncalibratedModel).toBeUndefined();
         expect(outcome.Answer?.Confidence).toBeCloseTo(calibrated('LLM Decision', 'Confidence', 0.95), 10);
@@ -397,7 +401,7 @@ describe('DecisionDiscoveryFromResult', () => {
         ['a model named after an inherited member', 'constructor', 'toString', 'constructor (toString)'],
     ])('treats an answer from %s as unsure', (_label, modelName, resolvedModel, described) => {
         // Raw answers so confident that any calibration would inject them.
-        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName, resolvedModel), OPTIONS, SHIPPED_AGENT_SOURCE);
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName, resolvedModel), OPTIONS);
 
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true, UncalibratedModel: described });
         expect(outcome.Reason).toBe(`the answering model ${described} has no discovery calibration, so its answer is treated as unsure`);
@@ -405,12 +409,12 @@ describe('DecisionDiscoveryFromResult', () => {
     });
 
     it('fails for a failed call or an unusable answer', () => {
-        expect(DecisionDiscoveryFromResult(result(false, {}, 'No decision model'), OPTIONS, SHIPPED_AGENT_SOURCE)).toMatchObject({ Injected: false, Succeeded: false, Reason: 'No decision model' });
-        expect(DecisionDiscoveryFromResult(result(true, {}), OPTIONS, SHIPPED_AGENT_SOURCE)).toMatchObject({ Injected: false, Succeeded: false });
+        expect(DecisionDiscoveryFromResult(result(false, {}, 'No decision model'), OPTIONS)).toMatchObject({ Injected: false, Succeeded: false, Reason: 'No decision model' });
+        expect(DecisionDiscoveryFromResult(result(true, {}), OPTIONS)).toMatchObject({ Injected: false, Succeeded: false });
     });
 
     it('uses the threshold it is given', () => {
-        expect(DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.5, 0.5)), OPTIONS, SHIPPED_AGENT_SOURCE, 0.5).Injected).toBe(true);
+        expect(DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.5, 0.5)), OPTIONS, 0.5).Injected).toBe(true);
     });
 });
 
@@ -428,15 +432,15 @@ describe('the discovery calibration keys', () => {
     });
 
     it('treats a model with only one of the two fits as uncalibrated', () => {
-        const half = { GetDecisionCalibrations: () => [{ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION, ResolvedModel: JEV_RESOLVED_MODEL, A: 1, B: 0 }] };
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev', ResolvedModel: JEV_RESOLVED_MODEL }, half)).toBeNull();
+        ServeDecisionCalibrations(() => [{ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION, ResolvedModel: JEV_RESOLVED_MODEL, A: 1, B: 0 }]);
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev', ResolvedModel: JEV_RESOLVED_MODEL })).toBeNull();
     });
 });
 
 describe('CalibrateDiscoveryAnswers', () => {
     it('calibrates the Choice confidence and the Likelihood with the model\'s Platt parameters', () => {
         for (const [modelName, resolvedModel] of [['Jev', JEV_RESOLVED_MODEL], ['LLM Decision', LLM_DECISION_CHAT_MODEL]]) {
-            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: modelName, ResolvedModel: resolvedModel }, SHIPPED_AGENT_SOURCE);
+            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: modelName, ResolvedModel: resolvedModel });
             const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
             const applies = out?.[DECISION_DISCOVERY_APPLIES_QUESTION];
 
@@ -447,7 +451,7 @@ describe('CalibrateDiscoveryAnswers', () => {
 
     it('leaves the Choice value and distribution as they are, and trims the model name', () => {
         const given = answers(BILLING.ID, 0.6, 0.3);
-        const out = CalibrateDiscoveryAnswers(given, { ModelName: ' Jev ', ResolvedModel: ` ${JEV_RESOLVED_MODEL} ` }, SHIPPED_AGENT_SOURCE);
+        const out = CalibrateDiscoveryAnswers(given, { ModelName: ' Jev ', ResolvedModel: ` ${JEV_RESOLVED_MODEL} ` });
         const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
         const original = given[DECISION_DISCOVERY_AGENT_QUESTION];
 
@@ -456,10 +460,10 @@ describe('CalibrateDiscoveryAnswers', () => {
     });
 
     it('returns null for a model with no calibration', () => {
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Some Other Model', ResolvedModel: 'x' }, SHIPPED_AGENT_SOURCE)).toBeNull();
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), {}, SHIPPED_AGENT_SOURCE)).toBeNull();
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev' }, SHIPPED_AGENT_SOURCE)).toBeNull();
-        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }, SHIPPED_AGENT_SOURCE)).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Some Other Model', ResolvedModel: 'x' })).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), {})).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'Jev' })).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeNull();
     });
 });
 

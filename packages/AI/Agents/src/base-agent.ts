@@ -5499,7 +5499,7 @@ export class BaseAgent {
                 CancellationToken: signal,
                 ExecutionScope: this._runExecutionScope,
             });
-            return { ...DecisionDiscoveryFromResult(result, options, AIEngine.Instance, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
+            return { ...DecisionDiscoveryFromResult(result, options, DECISION_DISCOVERY_MIN_CONFIDENCE), ...sizes };
         } catch (error) {
             return FailedDecisionDiscovery(error instanceof Error ? error.message : String(error));
         }

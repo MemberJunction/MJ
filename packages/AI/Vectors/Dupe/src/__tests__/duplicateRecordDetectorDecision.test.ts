@@ -116,13 +116,13 @@ vi.mock('@memberjunction/templates', () => ({
 }));
 
 vi.mock('@memberjunction/aiengine', async () => {
-    const { ShippedDuplicateCalibrations } = await import('./helpers/decisionCalibration');
+    const { ShippedDuplicateCalibrations, CalibrationEngineMethods } = await import('./helpers/decisionCalibration');
     return {
         AIEngine: {
             Instance: {
                 Config: vi.fn().mockResolvedValue(undefined),
                 get Prompts() { return engineState.Prompts; },
-                GetDecisionCalibrations: ShippedDuplicateCalibrations,
+                ...CalibrationEngineMethods(ShippedDuplicateCalibrations),
             },
         },
     };

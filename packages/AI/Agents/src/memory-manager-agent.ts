@@ -1359,7 +1359,6 @@ export class MemoryManagerAgent extends BaseAgent {
             answers,
             batch,
             answeredBy,
-            AIEngine.Instance,
             MEMORY_NOTE_MIN_PROBABILITY
         );
         // Only a calibrated model replaces the self-reported confidence: one that answered without a

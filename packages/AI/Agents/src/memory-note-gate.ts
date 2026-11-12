@@ -16,12 +16,11 @@ import {
 } from '@memberjunction/ai';
 import {
     DescribeAnsweringModel,
-    FindDecisionCalibration,
     type DecisionAnsweringModel,
     type DecisionCalibrationKey,
-    type DecisionCalibrationSource,
     type MJAIPromptEntityExtended
 } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIModelVendorEntity, MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -369,25 +368,23 @@ function judgeCalibratedNote<T extends MemoryNoteCandidate>(
 /**
  * Evaluates decision answers against candidate notes using Platt calibration.
  *
- * The calibration is the one fitted on the exact model that answered (`FindDecisionCalibration`).
+ * The calibration is the one fitted on the exact model that answered
+ * (`AIEngine.Instance.FindDecisionCalibration`).
  * An answer from any other model, including a calibrated model at another version, is uncalibrated
  * and keeps nothing (fails safe toward writing no durable memory).
  *
  * @param answers The answers returned by the decision runner.
  * @param notes The candidate notes evaluated.
  * @param answeredBy The model that answered: the MJ decision model and the model its driver resolved.
- * @param calibrations Where the calibration is declared, normally `AIEngine.Instance`
- * ({@link MEMORY_NOTE_CALIBRATION_KEY}). Without one every answer is uncalibrated.
  * @param threshold The calibrated probability at which a note is kept (default: {@link MEMORY_NOTE_MIN_PROBABILITY}, 0.6).
  */
 export function JudgeMemoryNotes<T extends MemoryNoteCandidate = MemoryNoteCandidate>(
     answers: Record<string, DecisionAnswer> | undefined,
     notes: ReadonlyArray<T>,
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined,
     threshold: number = MEMORY_NOTE_MIN_PROBABILITY
 ): MemoryNoteGateVerdict<T> {
-    const calibration = FindDecisionCalibration(calibrations, MEMORY_NOTE_CALIBRATION_KEY, answeredBy);
+    const calibration = AIEngine.Instance.FindDecisionCalibration(MEMORY_NOTE_CALIBRATION_KEY, answeredBy);
     const judgedNotes: JudgedMemoryNote<T>[] = [];
 
     for (let i = 0; i < notes.length; i++) {

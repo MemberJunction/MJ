@@ -4,6 +4,7 @@
  */
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,7 +180,7 @@ const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question
 
 describe('DecisionEvalDriver', () => {
     beforeEach(() => {
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(
             (modelName: string) => Object.hasOwn(SHIPPED_ROUTING_CALIBRATIONS, modelName) ? SHIPPED_ROUTING_CALIBRATIONS[modelName] : []
         );
     });

@@ -25,14 +25,12 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     ConversationUtility,
     DescribeAnsweringModel,
-    FindDecisionCalibration,
     type DecisionAnsweringModel,
-    type DecisionCalibrationSource,
     type MentionContent,
     type SpecialContent
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import type { AIEngine } from '@memberjunction/aiengine';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { EntitySearchResult, IRunViewProvider, UserInfo } from '@memberjunction/core';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import { IsPlainObject, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -100,10 +98,9 @@ export const DECISION_DISCOVERY_USE = 'agent-discovery';
  */
 export function CalibrateDiscoveryAnswers(
     answers: Record<string, DecisionAnswer>,
-    answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    answeredBy: DecisionAnsweringModel
 ): Record<string, DecisionAnswer> | null {
-    const calibration = findDiscoveryCalibration(calibrations, answeredBy);
+    const calibration = findDiscoveryCalibration(answeredBy);
     if (!calibration) {
         return null;
     }
@@ -123,12 +120,9 @@ export function CalibrateDiscoveryAnswers(
  * Both discovery fits for the model that answered, or null when it lacks either: a half-calibrated
  * answer is as unsure as an uncalibrated one.
  */
-function findDiscoveryCalibration(
-    calibrations: DecisionCalibrationSource | null | undefined,
-    answeredBy: DecisionAnsweringModel
-): { Confidence: PlattCalibration; AnyApplies: PlattCalibration } | null {
-    const confidence = FindDecisionCalibration(calibrations, { Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION }, answeredBy);
-    const anyApplies = FindDecisionCalibration(calibrations, { Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_APPLIES_QUESTION }, answeredBy);
+function findDiscoveryCalibration(answeredBy: DecisionAnsweringModel): { Confidence: PlattCalibration; AnyApplies: PlattCalibration } | null {
+    const confidence = AIEngine.Instance.FindDecisionCalibration({ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_AGENT_QUESTION }, answeredBy);
+    const anyApplies = AIEngine.Instance.FindDecisionCalibration({ Use: DECISION_DISCOVERY_USE, Question: DECISION_DISCOVERY_APPLIES_QUESTION }, answeredBy);
     return confidence && anyApplies ? { Confidence: confidence, AnyApplies: anyApplies } : null;
 }
 
@@ -532,7 +526,6 @@ function probabilitiesByName(probabilities: Record<string, number> | undefined, 
 export function DecisionDiscoveryFromResult(
     result: AIDecisionRunResult,
     options: ReadonlyArray<DecisionDiscoveryOption>,
-    calibrations: DecisionCalibrationSource | null | undefined,
     minConfidence: number = DECISION_DISCOVERY_MIN_CONFIDENCE
 ): DecisionDiscoveryOutcome {
     if (!result.success) {
@@ -543,7 +536,7 @@ export function DecisionDiscoveryFromResult(
         return { Injected: false, Succeeded: false, Reason: raw.Reason, Result: result };
     }
     const answeredBy: DecisionAnsweringModel = { ModelName: result.modelInfo?.modelName, ResolvedModel: result.DecisionResult?.ResolvedModel };
-    const calibrated = CalibrateDiscoveryAnswers(result.Answers, answeredBy, calibrations);
+    const calibrated = CalibrateDiscoveryAnswers(result.Answers, answeredBy);
     if (!calibrated) {
         const described = DescribeAnsweringModel(answeredBy);
         const reason = `the answering model ${described} has no discovery calibration, so its answer is treated as unsure`;

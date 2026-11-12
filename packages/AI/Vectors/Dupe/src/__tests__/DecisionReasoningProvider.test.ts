@@ -23,13 +23,13 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityDocumentEntity: class {},
 }));
 vi.mock('@memberjunction/aiengine', async () => {
-    const { ShippedDuplicateCalibrations } = await import('./helpers/decisionCalibration');
+    const { ShippedDuplicateCalibrations, CalibrationEngineMethods } = await import('./helpers/decisionCalibration');
     return {
         AIEngine: {
             Instance: {
                 Config: mockEngineConfig,
                 get Prompts() { return engineState.Prompts; },
-                GetDecisionCalibrations: ShippedDuplicateCalibrations,
+                ...CalibrationEngineMethods(ShippedDuplicateCalibrations),
             },
         },
     };
@@ -48,10 +48,11 @@ import {
     CalibratedDuplicateProbability,
     DecisionReasoningProvider,
     DUPLICATE_DECISION_CALIBRATION_KEY,
+    DuplicateDecisionCalibrationFor,
     DuplicateDecisionResult,
 } from '../reasoning/DecisionReasoningProvider';
 import { DuplicateReasoningInput, DuplicateReasoningOutput } from '../reasoning/DuplicateReasoningTypes';
-import { ANSWERING_MODEL, ANSWERING_RESOLVED_MODEL, AnsweredBy, RawFor, SHIPPED_DUPLICATE_CALIBRATIONS } from './helpers/decisionCalibration';
+import { ANSWERING_MODEL, ANSWERING_RESOLVED_MODEL, AnsweredBy, RawFor, SHIPPED_DUPLICATE_CALIBRATIONS, ShippedCalibration } from './helpers/decisionCalibration';
 
 // ─────────────────────────────────────────────
 // Fixtures
@@ -316,14 +317,10 @@ describe('DecisionReasoningProvider', () => {
             }
         );
 
-        it('reads the fit from the calibration source it is given, by use and question', () => {
+        it('reads the fit declared for the duplicate-detection use from the AI engine', () => {
             expect(DUPLICATE_DECISION_CALIBRATION_KEY).toEqual({ Use: 'duplicate-detection', Question: 'duplicate' });
             const answeredBy: DecisionAnsweringModel = { ModelName: 'Jev', ResolvedModel: ANSWERING_RESOLVED_MODEL };
-            const otherUse = { GetDecisionCalibrations: () => [{ Use: 'agent-discovery', Question: 'duplicate', ResolvedModel: ANSWERING_RESOLVED_MODEL, A: 1, B: 0 }] };
-            const ownSource = { GetDecisionCalibrations: () => [{ Use: 'duplicate-detection', Question: 'duplicate', ResolvedModel: ANSWERING_RESOLVED_MODEL, A: 1, B: 0 }] };
-            expect(CalibratedDuplicateProbability(0.9, answeredBy, otherUse)).toBeNull();
-            expect(CalibratedDuplicateProbability(0.9, answeredBy, ownSource)).toBeCloseTo(0.9, 10);
-            expect(CalibratedDuplicateProbability(0.9, answeredBy, null)).toBeNull();
+            expect(DuplicateDecisionCalibrationFor(answeredBy)).toEqual(ShippedCalibration('Jev'));
         });
 
         it('CalibratedDuplicateProbability trims both names', () => {

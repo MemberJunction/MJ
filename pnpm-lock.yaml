@@ -16979,6 +16979,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/BaseAIEngine
       '@types/debug':
         specifier: ^4.1.12
         version: 4.1.12

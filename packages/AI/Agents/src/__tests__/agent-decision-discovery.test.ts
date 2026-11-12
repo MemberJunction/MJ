@@ -38,7 +38,7 @@ import {
     DECISION_DISCOVERY_USE,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
 } from '../decision-discovery';
-import { ShippedAgentCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
+import { CalibrationEngineMethods, ShippedAgentCalibrations, ShippedFit } from './helpers/shipped-decision-calibrations';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { DecisionResult, type ChatMessage, type ChoiceQuestion, type DecisionAnswer, type PlattCalibration } from '@memberjunction/ai';
@@ -312,7 +312,7 @@ class DiscoveryHarness {
     public get engineInstance(): Record<string, unknown> {
         return {
             Config: async (): Promise<void> => undefined,
-            GetDecisionCalibrations: ShippedAgentCalibrations,
+            ...CalibrationEngineMethods(ShippedAgentCalibrations),
             Agents: [this.self, ...this.catalog],
             AgentRelationships: [],
             AgentCategories: [],

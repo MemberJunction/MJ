@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { EntitySearchResult, UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
@@ -212,7 +213,7 @@ const SHIPPED_DISCOVERY_CALIBRATIONS: Record<string, Array<{ Use: string; Questi
 
 describe('DecisionEvalDriver — agent discovery', () => {
     beforeEach(() => {
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(
             (modelName: string) => Object.hasOwn(SHIPPED_DISCOVERY_CALIBRATIONS, modelName) ? SHIPPED_DISCOVERY_CALIBRATIONS[modelName] : []
         );
     });
