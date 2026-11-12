@@ -83,6 +83,27 @@ export function DeepFreeze<T>(obj: T, visited: WeakSet<object> = new WeakSet()):
 }
 
 /**
+ * Returns `true` when an L1 cache entry represents provider-internal metadata scaffolding
+ * that is exempt from freeze-on-write (mirroring `LocalCacheManager`'s
+ * `ProviderInternalScaffolding` contract and `cache-immutability.F14`).
+ */
+function isFreezeExempt<T>(category: string, key: string, value: T): boolean {
+    if (value === null || typeof value !== 'object') {
+        return false;
+    }
+    if (category === 'RunViewCache' && 'providerInternalScaffolding' in value) {
+        return value.providerInternalScaffolding === true;
+    }
+    if (category === 'DatasetCache') {
+        if ('DatasetName' in value && value.DatasetName === 'MJ_Metadata') {
+            return true;
+        }
+        return key.includes('__DATASET__MJ_Metadata');
+    }
+    return false;
+}
+
+/**
  * Fast approximate byte size estimator for L1 heap budget management.
  */
 function estimateSizeBytes(value: unknown): number {
@@ -268,7 +289,7 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Stores a value in L1 (if eligible, deep-frozen) and writes through to L2 Redis.
+     * Stores a value in L1 (if eligible, deep-frozen unless freeze-exempt) and writes through to L2 Redis.
      */
     public async SetItem<T>(
         key: string,
@@ -278,8 +299,7 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
     ): Promise<void> {
         const cat = category ?? 'default';
         if (this._categoriesInL1.has(cat)) {
-            const frozen = DeepFreeze(value);
-            this.setL1Entry(key, frozen, cat, options);
+            this.setL1Entry(key, value, cat, options);
         }
         await this._redis.SetItem(key, value, cat, options);
     }
@@ -321,9 +341,8 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
         updatedSlotValue: T,
         options?: ExtendedWriteOptions
     ): Promise<boolean> {
-        // Immediately store deep-frozen updated value into L1
-        const frozenSlot = DeepFreeze(updatedSlotValue);
-        this.setL1Entry(fingerprint, frozenSlot, 'RunViewCache', options);
+        // Immediately store updated value into L1 (deep-frozen unless freeze-exempt)
+        this.setL1Entry(fingerprint, updatedSlotValue, 'RunViewCache', options);
 
         // Delegate to L2 Redis
         const applied = await this._redis.ApplyRunViewRowDelta(
@@ -449,8 +468,8 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
         }
 
         const l1Key = this.buildL1Key(key, category);
-        const frozen = DeepFreeze(value);
-        const sizeBytes = estimateSizeBytes(frozen);
+        const storedValue = isFreezeExempt(category, key, value) ? value : DeepFreeze(value);
+        const sizeBytes = estimateSizeBytes(storedValue);
 
         if (sizeBytes > this._maxL1Bytes) {
             // Slot is larger than total L1 budget; do not store in L1
@@ -473,7 +492,7 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
 
         this._currentL1Bytes += sizeBytes;
         this._l1Map.set(l1Key, {
-            Value: frozen,
+            Value: storedValue,
             SizeBytes: sizeBytes,
             ExpiresAt: expiresAt,
             Category: category,
@@ -574,16 +593,17 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
                 }
             }
 
+            const exempt = isFreezeExempt('RunViewCache', cacheKey, currentData);
+
             // 2. Process upsertedRows
             if (Array.isArray(delta.upsertedRows)) {
                 for (const rawRow of delta.upsertedRows) {
-                    // Deep freeze only the mutated row
-                    const frozenRow = DeepFreeze(rawRow);
-                    const idx = nextResults.findIndex(row => rowsMatch(row, frozenRow, pkFields));
+                    const nextRow = exempt ? rawRow : DeepFreeze(rawRow);
+                    const idx = nextResults.findIndex(row => rowsMatch(row, nextRow, pkFields));
                     if (idx >= 0) {
-                        nextResults[idx] = frozenRow;
+                        nextResults[idx] = nextRow;
                     } else {
-                        nextResults.push(frozenRow);
+                        nextResults.push(nextRow);
                     }
                 }
             }
@@ -595,22 +615,22 @@ export class TwoTierCacheStorageProvider implements ILocalStorageProvider {
                 return;
             }
 
-            // 4. Construct updated frozen envelope
-            const updatedData: Record<string, unknown> = {
+            // 4. Construct updated envelope (frozen unless scaffolding-exempt)
+            const updatedData: CachedRunViewData = {
                 ...currentData,
-                results: Object.freeze(nextResults),
+                results: exempt ? nextResults : (Object.freeze(nextResults) as CachedRunViewData['results']),
                 maxUpdatedAt: delta.maxUpdatedAt,
                 totalRowCount: delta.totalRowCount,
             };
             if (delta.schemaHash !== undefined) {
                 updatedData.schemaHash = delta.schemaHash;
             }
-            const frozenUpdated = Object.freeze(updatedData);
+            const nextEntryValue = exempt ? updatedData : Object.freeze(updatedData);
 
             // Update in-place in L1
             const oldSize = entry.SizeBytes;
-            const newSize = estimateSizeBytes(frozenUpdated);
-            entry.Value = frozenUpdated;
+            const newSize = estimateSizeBytes(nextEntryValue);
+            entry.Value = nextEntryValue;
             entry.SizeBytes = newSize;
             this._currentL1Bytes = this._currentL1Bytes - oldSize + newSize;
             this.evictIfNeeded();

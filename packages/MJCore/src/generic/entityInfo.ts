@@ -6029,18 +6029,17 @@ export class EntityInfo extends BaseInfo {
                         break;
                     }
                 }
-                if (bHasSequence) {
-                    // sort by sequence if we have any populated sequence values
-                    er.sort((a, b) => {
+                const orderedEr = bHasSequence
+                    ? [...er].sort((a, b) => {
                         const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
                         const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
                         return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity, b.RelatedEntity) || ordinalCompare(a.ID, b.ID);
-                    }); 
-                }
+                    })
+                    : er;
 
-                // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
-                for (let j = 0; j < er.length; j++) {
-                    this._relatedEntities.push(new EntityRelationshipInfo(er[j]));
+                // now that we have prepared the ordered relationships array, load up the related entities
+                for (let j = 0; j < orderedEr.length; j++) {
+                    this._relatedEntities.push(new EntityRelationshipInfo(orderedEr[j]));
                 }
             }
 

@@ -378,7 +378,7 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'GenericDatabaseProvider/src/GenericDatabaseProvider.ts': 2,
     'MJCore/src/generic/baseEngine.ts': 1,
     'MJCore/src/generic/entityInfo.ts': 2,
-    'MJCore/src/generic/providerBase.ts': 3,
+    'MJCore/src/generic/providerBase.ts': 1,
     'MJCore/src/generic/securityInfo.ts': 1,
     'MJCoreEntities/src/custom/MJQueryEntityExtended.ts': 3,
     'MJCoreEntities/src/custom/PermissionProviders/AIAgentPermissionProvider.ts': 1,
