@@ -144,6 +144,17 @@ describe('BuildScaffold', () => {
     expect(members[1].primaryKey.ID).toMatch(UUID_UPPER);
   });
 
+  it('writes the same fields, in the same order and with the same defaults, as the committed tests', () => {
+    const committed = JSON.parse(readFileSync(path.join(REPO_ROOT, REGRESSION_TESTS_DIR, '.T001-login-smoke.json'), 'utf8'));
+    const record = JSON.parse(BuildScaffold(makeRepo(), OPTIONS).TestFileContent);
+    const authored = ['TypeID', 'Name', 'Description', 'InputDefinition', 'ExpectedOutcomes', 'Configuration', 'Status', 'Tags'];
+
+    expect(Object.keys(record.fields)).toEqual(Object.keys(committed.fields));
+    for (const key of Object.keys(committed.fields).filter((k) => !authored.includes(k))) {
+      expect(record.fields[key], key).toEqual(committed.fields[key]);
+    }
+  });
+
   it('keeps the login exclusion when the test starts at the app root', () => {
     const record = JSON.parse(BuildScaffold(makeRepo(), { ...OPTIONS, StartPath: '' }).TestFileContent);
     expect(JSON.parse(record.fields.ExpectedOutcomes).finalUrlPattern).toBe('^http://localhost:4200(?!/login|/callback)');

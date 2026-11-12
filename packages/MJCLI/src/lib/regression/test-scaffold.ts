@@ -36,9 +36,29 @@ type RegressionTestFile = {
     Configuration: JsonObject;
     Status: string;
     Tags: string;
+    Priority: number;
+    EstimatedDurationSeconds: null;
+    EstimatedCostUSD: null;
+    RepeatCount: null;
+    MaxExecutionTimeMS: null;
+    Variables: null;
+    SkipEmbeddings: boolean;
+    RubricID: null;
   };
   primaryKey: { ID: string };
 };
+
+/** The values `mj sync pull` writes for the `MJ: Tests` fields the scaffold does not author. */
+const PULLED_FIELD_DEFAULTS = {
+  Priority: 0,
+  EstimatedDurationSeconds: null,
+  EstimatedCostUSD: null,
+  RepeatCount: null,
+  MaxExecutionTimeMS: null,
+  Variables: null,
+  SkipEmbeddings: false,
+  RubricID: null,
+} as const;
 
 type RegressionSuiteMember = {
   fields: { SuiteID: string; TestID: string; Sequence: number; Status: string };
@@ -258,6 +278,7 @@ export function BuildScaffold(repoRoot: string, options: ScaffoldOptions): Scaff
       Configuration: buildConfiguration(options.MaxSteps, finalUrlPattern, source),
       Status: 'Active',
       Tags: buildTags(options.Priority, options.Tags),
+      ...PULLED_FIELD_DEFAULTS,
     },
     primaryKey: { ID: newRecordId() },
   };
