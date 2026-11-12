@@ -39,6 +39,7 @@
             "Status": "Active",
             "DriverClass": "GeminiImageGenerator",
             "APIName": "gemini-nano-banana-2.1",
+            "MaxInputTokens": 12000,
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,

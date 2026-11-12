@@ -350,7 +350,7 @@ export abstract class BaseModelRunner {
    * 2. Prompt-Model specific: AIPromptModel.CredentialID
    * 3. Model-Vendor specific: AIModelVendor.CredentialID
    * 4. Vendor default: AIVendor.CredentialID
-   * 5. Legacy: params.apiKeys[] array
+   * 5. Legacy: params.apiKeys[] array, then params.APIKeyResolver
    * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
@@ -394,8 +394,28 @@ export abstract class BaseModelRunner {
       this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
     }
 
-    // Priority 6 & 7: Legacy apiKeys array and environment variables (the latter only if the scope allows)
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose, params.CredentialScope);
+    // Priority 6 & 7: Legacy apiKeys array (then the run's key resolver) and environment variables (the latter only if the scope allows)
+    return this.resolveLegacyAPIKey(driverClass, params, verbose);
+  }
+
+  /**
+   * The legacy tier of credential resolution: the explicit {@link AIPromptParams.apiKeys} entry for
+   * the driver class, then {@link AIPromptParams.APIKeyResolver}, then the environment key when the
+   * run's {@link AIPromptParams.CredentialScope} allows it. Explicit keys win over the resolver; the
+   * resolver's answer is a runtime credential, so it applies under `'RuntimeOnly'` as well.
+   */
+  private resolveLegacyAPIKey(driverClass: string, params: AIPromptParams | undefined, verbose: boolean | undefined): string | undefined {
+    const hasExplicitKey = params?.apiKeys?.some(k => k.driverClass === driverClass) ?? false;
+    if (!hasExplicitKey && params?.APIKeyResolver) {
+      const resolved = params.APIKeyResolver(driverClass);
+      if (resolved) {
+        if (verbose) {
+          this.logStatus(`   Using the run's API key resolver for driver class: ${driverClass}`, true, params);
+        }
+        return resolved;
+      }
+    }
+    return GetAIAPIKey(driverClass, params?.apiKeys, verbose, params?.CredentialScope);
   }
 
   /**
@@ -474,7 +494,7 @@ export abstract class BaseModelRunner {
    * 3. ModelVendor bindings: AICredentialBinding WHERE BindingType='ModelVendor'
    * 4. Vendor bindings: AICredentialBinding WHERE BindingType='Vendor'
    * 5. Type-based default: Credential.IsDefault=1 matching AIVendor.CredentialTypeID
-   * 6. Legacy: params.apiKeys[] array
+   * 6. Legacy: params.apiKeys[] array, then params.APIKeyResolver
    * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * Each tier counts only if {@link CredentialScopeAllows} the run's scope to use its source: under
@@ -507,7 +527,7 @@ export abstract class BaseModelRunner {
     }
 
     // Priority 6 & 7: Legacy methods - check if API key is available (the environment only if the scope allows)
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose, params?.CredentialScope);
+    const apiKey = this.resolveLegacyAPIKey(driverClass, params, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }
 
@@ -1782,9 +1802,8 @@ export abstract class BaseModelRunner {
     // prompt's type crossed with every active inference vendor, which is 317 entries on a stock
     // tenant — and until now nothing consulted the configured cap, so a provider returning 5xx (or
     // stalling, where there is no per-call deadline either) was retried against candidate after
-    // candidate. The intended semantics are the ones `shouldAttemptFailover` documents:
-    // `attemptNumber` is 1-based and `attemptNumber > maxAttempts` is refused, i.e. maxAttempts is
-    // the TOTAL number of calls including the first, not the number of retries after it.
+    // candidate. maxAttempts is the TOTAL number of calls including the first, not the number of
+    // retries after it.
     // A non-positive value would stop the walk before the FIRST call and fail every prompt on the
     // tenant, so it is treated as "not configured" rather than "no calls allowed". `|| 3` in
     // getFailoverConfiguration already turns 0/null into 3; this covers a negative row.
@@ -1949,7 +1968,8 @@ export abstract class BaseModelRunner {
           }
 
           if (decision.shouldContinue) {
-            continue; // Try next candidate
+            i = decision.nextIndex - 1; // The loop's i++ lands on the next surviving candidate
+            continue;
           }
 
           // Otherwise break (fatal error or last candidate)
@@ -1957,17 +1977,31 @@ export abstract class BaseModelRunner {
         }
 
         // A failure that is not eligible for failover (structural error, or none diagnosed) is
-        // returned as-is — but never silently: callers often see only an empty result.
+        // returned as-is — but never silently: callers often see only an empty result. It is still
+        // an attempt on this candidate, so it is counted like a thrown or eligible failure.
         if (!result.success) {
           this.logError(
             `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
             { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
           );
+          this.recordFailoverAttempt(
+            this.failedResultError(result),
+            result.errorInfo?.errorType ?? 'Unknown',
+            candidate,
+            attemptStartTime,
+            i,
+            failoverAttempts
+          );
         }
 
-        // Update promptRun with failover information if we had prior failures
+        // Record the attempts on the prompt run. Only a successful result moves the run's
+        // ModelID / VendorID to this candidate: a failed one did not answer the prompt.
         if (failoverAttempts.length > 0 && promptRun) {
-          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
+          if (result.success) {
+            this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
+          } else {
+            this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+          }
         }
 
         return result;
@@ -2005,7 +2039,8 @@ export abstract class BaseModelRunner {
         }
 
         if (decision.shouldContinue) {
-          continue; // Try next candidate
+          i = decision.nextIndex - 1; // The loop's i++ lands on the next surviving candidate
+          continue;
         }
 
         // Otherwise break (fatal error or last candidate)
@@ -2162,10 +2197,10 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
-   * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
-   * with neither a timeout nor a cancellation token stays unbounded, exactly as before, so this
-   * change is behavior-preserving for existing callers.
+   * Engine-level default model-call timeout, in milliseconds, applied when neither the caller
+   * (`AIPromptParams.timeoutMS`) nor the prompt (`AIPrompt.TimeoutMS`) supplies one. `undefined`
+   * (the default) means NO implicit bound — a prompt run with no timeout from any source and no
+   * cancellation token stays unbounded.
    *
    * Subclasses (or a host application's runner subclass) can override this to impose a global
    * safety ceiling on every prompt call.
@@ -2175,20 +2210,21 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Resolves the per-model-call timeout: the caller's `AIPromptParams.timeoutMS`, else the runner's
-   * {@link DefaultPromptTimeoutMS}. Non-positive / non-numeric values mean "no timeout".
+   * Resolves the per-model-call timeout, most specific source first:
+   *
+   * 1. the caller's `AIPromptParams.timeoutMS`
+   * 2. the prompt's own `AIPrompt.TimeoutMS` column
+   * 3. the runner's {@link DefaultPromptTimeoutMS}
+   *
+   * The first source that is set wins, even when it is not positive: a caller passing `0` opts this
+   * call out of any bound. Non-positive / non-numeric results mean "no timeout".
    *
    * The bound is applied PER MODEL CALL (not per prompt execution), which mirrors the parallel
    * path's existing `taskTimeoutMS` semantics: each failover candidate / validation retry gets a
    * fresh budget rather than sharing one wall-clock window.
-   *
-   * NOTE (issue #3064): there is deliberately NO prompt-entity source here yet — the `AIPrompt`
-   * table has no `TimeoutMS` column today. Once a migration adds one and CodeGen regenerates the
-   * entity, this becomes `prompt.TimeoutMS ?? params.timeoutMS ?? this.DefaultPromptTimeoutMS`
-   * and every bound below starts honoring the per-prompt configuration with no other change.
    */
-  protected getEffectiveTimeoutMS(params: AIPromptParams): number | undefined {
-    const timeoutMS = params.timeoutMS ?? this.DefaultPromptTimeoutMS;
+  protected getEffectiveTimeoutMS(prompt: Pick<MJAIPromptEntityExtended, 'TimeoutMS'> | null | undefined, params: AIPromptParams): number | undefined {
+    const timeoutMS = params.timeoutMS ?? prompt?.TimeoutMS ?? this.DefaultPromptTimeoutMS;
     return typeof timeoutMS === 'number' && timeoutMS > 0 ? timeoutMS : undefined;
   }
 
@@ -2206,7 +2242,7 @@ export abstract class BaseModelRunner {
    * on Node 18 (where `AbortSignal.any` does not exist — it landed in Node 20.3).
    */
   protected createExecutionBound(prompt: MJAIPromptEntityExtended, params: AIPromptParams, cancellationToken?: AbortSignal): ExecutionBound {
-    const timeoutMS = this.getEffectiveTimeoutMS(params);
+    const timeoutMS = this.getEffectiveTimeoutMS(prompt, params);
     if (timeoutMS === undefined) {
       // No prompt timeout: use the caller's token as-is (or nothing at all).
       return { Signal: cancellationToken, TimeoutMS: undefined, TimedOut: () => false, Dispose: () => { /* nothing to release */ } };
@@ -2437,6 +2473,44 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * Records one failed call on a candidate as a failover attempt: its error, classification and
+   * duration. Every failed call is recorded, whether it threw or returned, and whether or not it
+   * was eligible for failover.
+   */
+  private recordFailoverAttempt(
+    error: Error,
+    errorType: string,
+    candidate: ModelVendorCandidate,
+    attemptStartTime: number,
+    attemptIndex: number,
+    failoverAttempts: FailoverAttempt[]
+  ): FailoverAttempt {
+    const failoverAttempt: FailoverAttempt = {
+      attemptNumber: attemptIndex + 1,
+      modelId: candidate.model.ID,
+      vendorId: candidate.vendorId,
+      error,
+      errorType,
+      duration: Date.now() - attemptStartTime,
+      timestamp: new Date()
+    };
+    failoverAttempts.push(failoverAttempt);
+    return failoverAttempt;
+  }
+
+  /**
+   * How many of `before[0..attemptIndex]` are still in `after`. A filter keeps the candidate
+   * objects themselves, so this is the index in `after` of the first candidate past the attempt.
+   */
+  private survivorsThrough(attemptIndex: number, before: ModelVendorCandidate[], after: ModelVendorCandidate[]): number {
+    if (after === before) {
+      return attemptIndex + 1;
+    }
+    const kept = new Set(after);
+    return before.slice(0, attemptIndex + 1).filter(c => kept.has(c)).length;
+  }
+
+  /**
    * Processes a failover error (either from catch block or from failed ChatResult).
    * Handles vendor filtering, rate limit retries, fatal error detection, and failover logic.
    *
@@ -2456,20 +2530,10 @@ export abstract class BaseModelRunner {
     shouldRetry: boolean;      // Retry same model/vendor (rate limit)
     shouldContinue: boolean;   // Continue to next candidate
     updatedCandidates: ModelVendorCandidate[];
+    /** Index in `updatedCandidates` of the next candidate to try. */
+    nextIndex: number;
   }> {
-    const attemptDuration = Date.now() - attemptStartTime;
-
-    // Create failover attempt record
-    const failoverAttempt: FailoverAttempt = {
-      attemptNumber: attemptIndex + 1,
-      modelId: candidate.model.ID,
-      vendorId: candidate.vendorId,
-      error: error,
-      errorType: errorInfo.errorType,
-      duration: attemptDuration,
-      timestamp: new Date()
-    };
-    failoverAttempts.push(failoverAttempt);
+    const failoverAttempt = this.recordFailoverAttempt(error, errorInfo.errorType, candidate, attemptStartTime, attemptIndex, failoverAttempts);
 
     // Vendor-level errors: filter out all candidates from this vendor
     let updatedCandidates = allCandidates;
@@ -2481,14 +2545,17 @@ export abstract class BaseModelRunner {
       );
     }
 
-    const isLastCandidate = attemptIndex === updatedCandidates.length - 1;
+    // The filter can remove candidates at or before the attempt index (this one included), which
+    // shifts the survivors left. The next candidate sits after the survivors up to this attempt.
+    const nextIndex = this.survivorsThrough(attemptIndex, allCandidates, updatedCandidates);
+    const isLastCandidate = nextIndex >= updatedCandidates.length;
 
     // Fatal errors: stop immediately
     if (errorInfo.severity === 'Fatal') {
       const errorMessage = error?.message || 'Unknown error';
       LogErrorEx(`Stopping failover: Fatal error (${errorInfo.errorType}): ${errorMessage}`);
       this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+      return { shouldRetry: false, shouldContinue: false, updatedCandidates, nextIndex };
     }
 
     // Check errorScope filter if configured
@@ -2496,7 +2563,7 @@ export abstract class BaseModelRunner {
       const matchesScope = this.errorMatchesScope(errorInfo.errorType, failoverConfig.errorScope);
       if (!matchesScope) {
         this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-        return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+        return { shouldRetry: false, shouldContinue: false, updatedCandidates, nextIndex };
       }
     }
 
@@ -2513,19 +2580,19 @@ export abstract class BaseModelRunner {
         failoverAttempt
       );
       if (shouldRetry) {
-        return { shouldRetry: true, shouldContinue: false, updatedCandidates };
+        return { shouldRetry: true, shouldContinue: false, updatedCandidates, nextIndex };
       }
     }
 
     // If this is the last candidate, we're done
     if (isLastCandidate) {
       this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-      return { shouldRetry: false, shouldContinue: false, updatedCandidates };
+      return { shouldRetry: false, shouldContinue: false, updatedCandidates, nextIndex };
     }
 
     // Log and signal to continue to next candidate
     this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
-    return { shouldRetry: false, shouldContinue: true, updatedCandidates };
+    return { shouldRetry: false, shouldContinue: true, updatedCandidates, nextIndex };
   }
 
   /**
@@ -2852,52 +2919,6 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Determines whether a failover attempt should be made based on the error and configuration.
-   *
-   * @param error - The error that occurred during execution
-   * @param config - The failover configuration
-   * @param attemptNumber - The current attempt number (1-based)
-   * @returns True if failover should be attempted, false otherwise
-   *
-   * @remarks
-   * This method uses the ErrorAnalyzer to classify errors and determine if they are
-   * eligible for failover based on the configured error scope. Override this method
-   * to implement custom failover decision logic.
-   */
-  protected shouldAttemptFailover(
-    error: Error,
-    config: FailoverConfiguration,
-    attemptNumber: number
-  ): boolean {
-    // Don't failover if strategy is None or we've exceeded max attempts
-    if (config.strategy === 'None' || attemptNumber > config.maxAttempts) {
-      return false;
-    }
-
-    // Analyze the error to determine if it's eligible for failover
-    const errorAnalysis = ErrorAnalyzer.analyzeError(error);
-    
-    // Check if error analysis allows failover
-    if (!errorAnalysis.canFailover) {
-      return false;
-    }
-
-    // Check error scope configuration
-    switch (config.errorScope) {
-      case 'NetworkOnly':
-        return errorAnalysis.errorType === 'NetworkError';
-      case 'RateLimitOnly':
-        return errorAnalysis.errorType === 'RateLimit';
-      case 'ServiceErrorOnly':
-        return errorAnalysis.errorType === 'ServiceUnavailable' || 
-               errorAnalysis.errorType === 'InternalServerError';
-      case 'All':
-      default:
-        return true;
-    }
-  }
-
-  /**
    * Checks if an error type matches the configured error scope
    *
    * @param errorType - The error type from ErrorAnalyzer
@@ -2916,189 +2937,6 @@ export abstract class BaseModelRunner {
       default:
         return true;
     }
-  }
-
-  /**
-   * Calculates the delay before the next failover attempt.
-   *
-   * @param attemptNumber - The current attempt number (1-based)
-   * @param baseDelaySeconds - The base delay in seconds from configuration
-   * @param previousError - The error from the previous attempt
-   * @returns Delay in milliseconds before the next attempt
-   *
-   * @remarks
-   * Implements exponential backoff with jitter by default. The delay increases
-   * exponentially with each attempt and includes random jitter to prevent
-   * thundering herd problems. Override this method to implement custom delay logic.
-   */
-  protected calculateFailoverDelay(
-    attemptNumber: number,
-    baseDelaySeconds: number
-  ): number {
-    // Exponential backoff: delay = base * 2^(attempt-1)
-    const exponentialDelay = baseDelaySeconds * Math.pow(2, attemptNumber - 1);
-    
-    // Add jitter (0-25% of delay) to prevent thundering herd
-    const jitter = exponentialDelay * 0.25 * Math.random();
-    
-    // Cap at 30 seconds to prevent excessive delays
-    const totalDelay = Math.min(exponentialDelay + jitter, 30);
-    
-    return totalDelay * 1000; // Convert to milliseconds
-  }
-
-  /**
-   * Selects candidate models for failover based on the strategy and current failure.
-   *
-   * @param currentModel - The model that just failed
-   * @param currentVendorId - The vendor ID that just failed
-   * @param strategy - The failover strategy to use
-   * @param modelStrategy - The model selection preference
-   * @param allCandidates - All available model-vendor candidates
-   * @param attemptHistory - History of previous failover attempts
-   * @returns Array of candidates sorted by priority (highest first)
-   *
-   * @remarks
-   * This method implements different strategies for selecting failover candidates:
-   * - SameModelDifferentVendor: Try the same model with different vendors
-   * - NextBestModel: Try different models in order of preference
-   * - PowerRank: Use the global power ranking of models
-   *
-   * Override this method to implement custom candidate selection logic.
-   */
-  protected selectFailoverCandidates(
-    currentModel: MJAIModelEntityExtended,
-    currentVendorId: string | undefined,
-    strategy: FailoverConfiguration['strategy'],
-    modelStrategy: FailoverConfiguration['modelStrategy'],
-    allCandidates: ModelVendorCandidate[],
-    attemptHistory: FailoverAttempt[]
-  ): ModelVendorCandidate[] {
-    // Filter out candidates that have already failed
-    // Note: Authentication errors are already filtered from allCandidates upstream,
-    // so we only need to filter out specific model/vendor pairs that have failed
-    const failedPairs = new Set(
-      attemptHistory.map(a => `${a.modelId}:${a.vendorId || 'default'}`)
-    );
-
-    const availableCandidates = allCandidates.filter(c => {
-      const key = `${c.model.ID}:${c.vendorId || 'default'}`;
-      return !failedPairs.has(key);
-    });
-
-    // Check if we have context length exceeded errors in the attempt history
-    const hasContextLengthError = attemptHistory.some(a => 
-      a.errorType === 'ContextLengthExceeded' || 
-      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
-    );
-
-    // Apply strategy-specific filtering and sorting
-    let candidates: ModelVendorCandidate[];
-    
-    switch (strategy) {
-      case 'SameModelDifferentVendor':
-        // Only consider same model with different vendors
-        candidates = availableCandidates.filter(c =>
-          UUIDsEqual(c.model.ID, currentModel.ID) && !UUIDsEqual(c.vendorId, currentVendorId)
-        );
-        break;
-        
-      case 'NextBestModel':
-        // Consider all models, apply model strategy preference
-        candidates = availableCandidates;
-        if (modelStrategy === 'RequireSameModel') {
-          candidates = candidates.filter(c => UUIDsEqual(c.model.ID, currentModel.ID));
-        } else if (modelStrategy === 'PreferSameModel') {
-          // Sort to put same model first
-          candidates.sort((a, b) => {
-            const aSameModel = UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
-            const bSameModel = UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
-            return bSameModel - aSameModel;
-          });
-        } else if (modelStrategy === 'PreferDifferentModel') {
-          // Sort to put different models first
-          candidates.sort((a, b) => {
-            const aDiffModel = !UUIDsEqual(a.model.ID, currentModel.ID) ? 1 : 0;
-            const bDiffModel = !UUIDsEqual(b.model.ID, currentModel.ID) ? 1 : 0;
-            return bDiffModel - aDiffModel;
-          });
-        }
-        break;
-        
-      case 'PowerRank':
-        // Use all candidates, they're already sorted by power rank
-        candidates = availableCandidates;
-        break;
-        
-      default:
-        candidates = [];
-    }
-
-    // If we have context length errors, prioritize models with larger context windows
-    if (hasContextLengthError) {
-      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ?
-        Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
-
-      // Filter out models with same or smaller context windows
-      candidates = candidates.filter(c => {
-        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ?
-          Math.max(...c.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
-        return candidateMaxTokens > currentMaxTokens;
-      });
-
-      // If no larger models exist, this is a fatal error - return empty to stop retrying
-      if (candidates.length === 0) {
-        LogStatusEx({
-          message: `❌ Context length exceeded and no models with larger context windows available. Current model: ${currentModel.Name} (${currentMaxTokens} max tokens). This is a fatal error.`,
-          category: 'AI',
-          additionalArgs: [{
-            currentModel: currentModel.Name,
-            currentMaxTokens,
-            availableModels: allCandidates.map(c => c.model.Name).join(', '),
-            reason: 'No models with larger context windows available for failover'
-          }]
-        });
-        // Return empty array - caller will see no candidates and stop retrying
-        return [];
-      }
-
-      // Sort by priority first (existing algorithm), then by context window size as tiebreaker
-      candidates.sort((a, b) => {
-        // Primary sort: priority (higher is better) - maintains existing algorithm
-        if (a.priority !== b.priority) {
-          return b.priority - a.priority;
-        }
-
-        // Secondary sort: context window size (largest first) - only as tiebreaker
-        const aMaxTokens = a.model.ModelVendors?.length > 0 ?
-          Math.max(...a.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-        const bMaxTokens = b.model.ModelVendors?.length > 0 ?
-          Math.max(...b.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-
-        return bMaxTokens - aMaxTokens;
-      });
-
-      // Log context-aware failover selection
-      const bestCandidate = candidates[0];
-      const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ?
-        Math.max(...bestCandidate.model.ModelVendors.map((mv: MJAIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-      LogStatusEx({
-        message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
-        category: 'AI',
-        additionalArgs: [{
-          currentModel: currentModel.Name,
-          currentMaxTokens,
-          selectedModel: bestCandidate.model.Name,
-          selectedMaxTokens: bestCandidateMaxTokens,
-          candidateCount: candidates.length
-        }]
-      });
-    } else {
-      // Final sort by priority (higher is better) for non-context-length errors
-      candidates.sort((a, b) => b.priority - a.priority);
-    }
-    
-    return candidates;
   }
 
   /**

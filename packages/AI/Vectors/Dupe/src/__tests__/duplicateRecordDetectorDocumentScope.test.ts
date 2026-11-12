@@ -25,7 +25,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
-vi.mock('@memberjunction/ai-prompts', () => ({ AIEmbeddingRunner: class {} }));
+vi.mock('@memberjunction/ai-prompts', () => ({ AIEmbeddingRunner: class {}, EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' } }));
 
 vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),

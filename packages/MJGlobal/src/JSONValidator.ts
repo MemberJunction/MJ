@@ -541,20 +541,36 @@ export class JSONValidator {
 
         // Process object
         const cleaned: Record<string, unknown> = {};
-        const dataObj = data as Record<string, unknown>;
+        const entries = Object.entries(data as Record<string, unknown>);
 
-        for (const [key, value] of Object.entries(dataObj)) {
-            // Parse the key to extract the clean field name
-            const parsed = this.parseFieldKey(key);
-            
-            // Recursively clean the value
-            const cleanedValue = this.CleanValidationSyntax(value);
-            
-            // Use the clean field name as the key
-            cleaned[parsed.fieldName] = cleanedValue;
+        // Keys whose clean names collide (`"time"` and `"time?"`, or `"a?"` and `"a*"`) keep their
+        // original names: renaming both onto one key would silently drop one value (#4827).
+        const cleanNames = entries.map(([key]) => this.parseFieldKey(key).fieldName);
+        const collidingNames = this.collidingCleanNames(cleanNames);
+        if (collidingNames.size > 0) {
+            const keys = entries.filter((_, i) => collidingNames.has(cleanNames[i])).map(([key]) => JSON.stringify(key));
+            console.warn(`JSONValidator: keys ${keys.join(', ')} clean to the same name; keeping them unchanged so no value is lost.`);
         }
 
+        entries.forEach(([key, value], i) => {
+            const name = collidingNames.has(cleanNames[i]) ? key : cleanNames[i];
+            cleaned[name] = this.CleanValidationSyntax(value);
+        });
+
         return cleaned as T;
+    }
+
+    /** The clean names that more than one key of an object maps to. */
+    private collidingCleanNames(cleanNames: string[]): Set<string> {
+        const seen = new Set<string>();
+        const colliding = new Set<string>();
+        for (const name of cleanNames) {
+            if (seen.has(name)) {
+                colliding.add(name);
+            }
+            seen.add(name);
+        }
+        return colliding;
     }
 
     /** @deprecated Use {@link CleanValidationSyntax}. */

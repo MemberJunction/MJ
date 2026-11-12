@@ -25,6 +25,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { AgentRunner } from '../AgentRunner';
 
 interface FakeEntity {
@@ -160,7 +161,37 @@ class TestableAgentRunner extends AgentRunner {
         this.DuplicateSpy(artifactId);
         return this.DuplicateVersionId;
     }
+
+    /** artifactId (lowercased) → TypeID for an existing artifact being versioned. */
+    public ExistingArtifactTypes = new Map<string, string>();
+
+    protected override async GetArtifactTypeIDForArtifact(artifactId: string): Promise<string | null> {
+        return this.ExistingArtifactTypes.get(artifactId.toLowerCase()) ?? null;
+    }
 }
+
+/** Artifact types the engine answers with; ids are the runner's built-in JSON type plus two others. */
+const JSON_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+const IMAGE_TYPE_ID = 'b1b2b3b4-c5c6-4d7d-8e8e-f9f9f0f0a1a1';
+const HTML_TYPE_ID = 'c1c2c3c4-d5d6-4e7e-8f8f-a9a9a0a0b1b1';
+type EngineTypes = { _artifactTypes: Array<{ ID: string; Name: string; ContentType: string }> };
+let priorEngineTypes: EngineTypes['_artifactTypes'];
+
+beforeEach(() => {
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    const internals = ArtifactMetadataEngine.Instance as unknown as EngineTypes;
+    priorEngineTypes = internals._artifactTypes;
+    internals._artifactTypes = [
+        { ID: JSON_TYPE_ID, Name: 'JSON', ContentType: 'application/json' },
+        { ID: IMAGE_TYPE_ID, Name: 'Image', ContentType: 'image/*' },
+        { ID: HTML_TYPE_ID, Name: 'HTML', ContentType: 'text/html' },
+    ];
+});
+
+afterEach(() => {
+    (ArtifactMetadataEngine.Instance as unknown as EngineTypes)._artifactTypes = priorEngineTypes;
+    vi.restoreAllMocks();
+});
 
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 
@@ -1256,3 +1287,65 @@ describe('QueryBuilderAgent — single-table vs multi-table payload normalizatio
 });
 
 
+
+/** Payload versions carry their artifact type's concrete ContentType so preview plugins can match it (#4597). */
+describe('AgentRunner.ProcessAgentArtifacts — payload version MimeType', () => {
+    it('stamps application/json on a new artifact of the default JSON type', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(JSON_TYPE_ID);
+        expect(version.MimeType).toBe('application/json');
+    });
+
+    it('leaves MimeType null when the artifact type is a wildcard (Image → image/*)', async () => {
+        engineAgents[0].DefaultArtifactTypeID = IMAGE_TYPE_ID;
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(IMAGE_TYPE_ID);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it("gives a new version of an existing artifact that artifact's type, not the agent default", async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+        runner.ExistingArtifactTypes.set(SOURCE_UUID, HTML_TYPE_ID);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(version.MimeType).toBe('text/html');
+    });
+
+    it('leaves MimeType null when the existing artifact type cannot be read', async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(info?.versionNumber).toBe(5);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it('PayloadVersionMimeType keeps concrete types and drops wildcards and blanks', () => {
+        expect(AgentRunner.PayloadVersionMimeType('application/json')).toBe('application/json');
+        expect(AgentRunner.PayloadVersionMimeType(' text/html ')).toBe('text/html');
+        expect(AgentRunner.PayloadVersionMimeType('image/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('*/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(null)).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(undefined)).toBeNull();
+    });
+});
