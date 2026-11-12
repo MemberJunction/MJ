@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { describe, it, expect, afterEach, afterAll, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BaseCatchStore } from '../contracts/BaseCatchStore';
@@ -9,7 +9,7 @@ import { BuildGateReport, RenderMarkdown, type GateReport } from '../report/Repo
 import type { BacktestLedger, LedgerEntry, MatchRecord } from '../backtest/Ledger';
 import type { Corpus } from '../corpus/Corpus';
 import type { CandidateTest, Catch, ExecutionResult, Feedback, JudgeBucket, PromotionCandidate, Run, SessionRecord, TokenUsage } from '../types';
-import { candidate } from './helpers/pipelineFixtures';
+import { analysis, generation } from './helpers/pipelineFixtures';
 
 const AT = '2026-11-09T10:00:00.000Z';
 const SHA = (c: string): string => c.repeat(40);
@@ -54,6 +54,11 @@ function entry(pr: number, set: LedgerEntry['Set'], o: Partial<LedgerEntry>): Le
 function ledger(id: string, set: BacktestLedger['Set'], model: string, entries: LedgerEntry[]): BacktestLedger {
   return { ID: id, CorpusPath: '/c.json', Slice: 'Tuning', Set: set, Model: model, CreatedAt: AT, Entries: entries };
 }
+
+/** Run folders under a root that holds none. */
+const NO_RUNS_ROOT = mkdtempSync(join(tmpdir(), 'jit-report-no-runs-'));
+afterAll(() => { rmSync(NO_RUNS_ROOT, { recursive: true, force: true }); });
+const noRunDirs = (id: string): RunDir => new RunDir(NO_RUNS_ROOT, id, new RedactionCheck([]));
 
 const CORPUS: Corpus = {
   Version: 1, Seed: 1,
@@ -110,8 +115,6 @@ describe('BuildGateReport', () => {
   async function build(s: MemoryStore, extra: BacktestLedger[] = []): Promise<GateReport> {
     const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
     const redaction = new RedactionCheck([]);
-    const r12 = new RunDir(root, 'r12', redaction);
-    r12.WriteExecution({ RunID: 'r12', Tests: [candidate(P1), candidate(P2)], Results: [], Coverage: [{ CandidateTestID: P1, CoveredChangedLines: 2 }], TypeErrors: {} });
     return BuildGateReport({ Ledgers: [...ledgers(), ...extra], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES });
   }
 
@@ -165,7 +168,7 @@ describe('BuildGateReport', () => {
     s.Runs = [runOf('r-new', [{ Model: 'gen', InputTokens: 1_000_000, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 3 }, { Model: 'other', InputTokens: 5, OutputTokens: 5, CacheReadTokens: 0, CostUSD: 0.25 }]),
       runOf('r-old', [{ Model: 'gen', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 9 }])];
     const retried = ledger('c-Tuning-Bug-m3', 'Bug', 'm3', [entry(1, 'Bug', { RunID: 'r-new', CostUSD: 12.25 })]);
-    const r = await BuildGateReport({ Ledgers: [retried], Corpus: CORPUS, Store: s, RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    const r = await BuildGateReport({ Ledgers: [retried], Corpus: CORPUS, Store: s, RunDirOf: noRunDirs, Prices: PRICES });
     const k = r.Models[0].Cost;
     expect(k.TotalUSD).toBeCloseTo(12.25);
     expect(k.RecordedUSD).toBeCloseTo(3.25);
@@ -185,12 +188,71 @@ describe('BuildGateReport', () => {
     expect(byModel.jB).toMatchObject({ HighOnIntended: 0, LowOnBug: 2 });
   });
 
-  it('groups TPProb by label with AuthorChangedPR as Bug, counts session end reasons, drop rules and unmeasured coverage', async () => {
+  it('groups TPProb by label with AuthorChangedPR as Bug, counts session end reasons and drop rules', async () => {
     const m1 = (await build(store())).Models[0];
     expect(m1.TPProb).toEqual({ Bug: { N: 1, Mean: 0.8 }, Intended: { N: 1, Mean: -0.5 }, TestFault: { N: 0, Mean: null } });
     expect(m1.Sessions).toEqual({ Done: 3, TurnLimit: 1 });
     expect(m1.Drops).toEqual({ NoAssertion: 2, Mocked: 1 });
-    expect(m1.CoverageNotMeasured).toBe(1);
+  });
+
+  it('renders no line about coverage measured, since coverage is not a gate-1 input', async () => {
+    expect(RenderMarkdown(await build(store()))).not.toMatch(/coverage measured/i);
+  });
+
+  /** The report of runs ra (analyzer fallback) and rb, after `rb` sets up rb's run folder. */
+  async function fallbackReport(rb: (root: string, redaction: RedactionCheck) => void): Promise<string> {
+    const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
+    const redaction = new RedactionCheck([]);
+    const s = new MemoryStore(); s.Runs = [runOf('ra'), runOf('rb')];
+    new RunDir(root, 'ra', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Analysis: { ...analysis(), Fallback: true } });
+    rb(root, redaction);
+    const l = ledger('c-Tuning-Clean-m9', 'Clean', 'm9', [entry(10, 'Clean', { RunID: 'ra' }), entry(11, 'Clean', { RunID: 'rb' })]);
+    return RenderMarkdown(await BuildGateReport({ Ledgers: [l], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES }));
+  }
+
+  it('counts the runs whose analyzer fell back and renders the count in the model section', async () => {
+    const md = await fallbackReport((root, redaction) => new RunDir(root, 'rb', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Analysis: { ...analysis(), Fallback: false } }));
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 2 runs that recorded the flag\n');
+  });
+
+  it('leaves a run with no generation file out of the fallback count and names how many there are', async () => {
+    const md = await fallbackReport(() => {});
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs that recorded the flag; 1 run has no generation file\n');
+  });
+
+  it('leaves a record written before the fallback flag out of the fallback count and names how many there are', async () => {
+    const md = await fallbackReport((root, redaction) => {
+      const dir = new RunDir(root, 'rb', redaction); mkdirSync(dir.Path, { recursive: true });
+      const { Fallback, ...old } = analysis(); void Fallback;
+      writeFileSync(join(dir.Path, 'generation.json'), JSON.stringify({ ...generation(join(root, 'base'), []), Analysis: old }));
+    });
+    expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs that recorded the flag; 1 run did not record the flag\n');
+  });
+
+  it('skips an unreadable generation file with one stderr line and counts it as having no generation file', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const md = await fallbackReport((root, redaction) => {
+        const dir = new RunDir(root, 'rb', redaction); mkdirSync(dir.Path, { recursive: true }); writeFileSync(join(dir.Path, 'generation.json'), '{ not json');
+      });
+      expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs that recorded the flag; 1 run has no generation file\n');
+      expect(stderr.mock.calls.map((c) => String(c[0])).filter((l) => l === 'report: rb: generation.json unreadable, skipped\n')).toHaveLength(1);
+    } finally { stderr.mockRestore(); }
+  });
+
+  it('renders the median minutes of each stage over the model\'s runs, n/a for a stage no run has', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
+    const redaction = new RedactionCheck([]); const min = 60_000;
+    const s = new MemoryStore(); s.Runs = [runOf('ra'), runOf('rb'), runOf('rc')];
+    const ra = new RunDir(root, 'ra', redaction); const rb = new RunDir(root, 'rb', redaction);
+    ra.WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 1 * min, PrepareBaseMs: 2 * min, BuildBaseMs: 0.5 * min, GenerateMs: 10 * min } });
+    rb.WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 2 * min } });
+    new RunDir(root, 'rc', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 6 * min } });
+    ra.WriteExecution({ RunID: 'ra', Tests: [], Results: [], Coverage: [], TypeErrors: {}, Timings: { PrepareHeadMs: 3 * min, BuildHeadMs: 1.25 * min, TypeCheckMs: 0.4 * min, RunMs: 4 * min } });
+    const l = ledger('c-Tuning-Clean-m9', 'Clean', 'm9', [entry(10, 'Clean', { RunID: 'ra' }), entry(11, 'Clean', { RunID: 'rb' }), entry(12, 'Clean', { RunID: 'rc' })]);
+    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [l], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES }));
+    expect(md).toContain(['#### Stage time (median minutes)', '', '- analyze: 2.0', '- prepare base: 2.0', '- build base: 0.5', '- generate: 10.0',
+      '- prepare head: 3.0', '- build head: 1.3', '- type-check: 0.4', '- run: 4.0', '- coverage: n/a', ''].join('\n'));
   });
 
   it('reads the run, the catches and the sessions of each run once', async () => {
@@ -203,7 +265,7 @@ describe('BuildGateReport', () => {
 
 describe('RenderMarkdown', () => {
   it('has one section per model and the interval next to each rate', async () => {
-    const r = await BuildGateReport({ Ledgers: ledgers().slice(0, 1).concat(ledgers()[2]), Corpus: CORPUS, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    const r = await BuildGateReport({ Ledgers: ledgers().slice(0, 1).concat(ledgers()[2]), Corpus: CORPUS, Store: store(), RunDirOf: noRunDirs, Prices: PRICES });
     const md = RenderMarkdown(r);
     expect(md.match(/^## /gm)).toHaveLength(2);
     expect(md).toContain('## m1');
@@ -220,7 +282,7 @@ describe('RenderMarkdown', () => {
   it('says the gate inputs are complete when every curated bug PR has run and has a match result', async () => {
     const corpus: Corpus = { ...CORPUS, Bug: CORPUS.Bug.slice(0, 2) };
     const done = ledger('c-Tuning-Bug-m1', 'Bug', 'm1', [entry(1, 'Bug', { RunID: 'r1', Match: match('Matched', true, { t1: true }) }), entry(2, 'Bug', { RunID: 'r2', Match: match('NoCatch', false, {}) })]);
-    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [done], Corpus: corpus, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES }));
+    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [done], Corpus: corpus, Store: store(), RunDirOf: noRunDirs, Prices: PRICES }));
     expect(md).toContain('gate inputs complete');
     expect(md).not.toContain('gate blocked');
   });
@@ -231,7 +293,7 @@ describe('RenderMarkdown', () => {
       entry(1, 'Bug', { RunID: 'r1', Match: { ...match('Matched', true, { t1: true }), Head: 'FixMerge' } }),
       entry(2, 'Bug', { RunID: 'r2', Match: { ...match('PrepareFailed', false, {}), Head: 'FixMerge', Error: 'install failed on Head' } }),
     ]);
-    const r = await BuildGateReport({ Ledgers: [l], Corpus: corpus, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    const r = await BuildGateReport({ Ledgers: [l], Corpus: corpus, Store: store(), RunDirOf: noRunDirs, Prices: PRICES });
     expect(r.Models[0].BugSet).toMatchObject({ AnyWeakMatched: 1, MatchedOnFixMerge: 1, PrepareFailed: 1 });
     const md = RenderMarkdown(r);
     expect(md).toContain('- Any weak catch matched: 1 (1 on the fix merge); not matched: 0; no catch: 0; fix did not apply: 0; fix did not prepare: 1\n');
@@ -239,7 +301,7 @@ describe('RenderMarkdown', () => {
   });
 
   it('puts model and rule names on one line and escapes a leading # or -', async () => {
-    const r = await BuildGateReport({ Ledgers: [ledgers()[2]], Corpus: CORPUS, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    const r = await BuildGateReport({ Ledgers: [ledgers()[2]], Corpus: CORPUS, Store: store(), RunDirOf: noRunDirs, Prices: PRICES });
     r.Models[0] = { ...r.Models[0], Model: '# evil\nmodel', Drops: { '- rule\r\nx': 1 } };
     const md = RenderMarkdown(r);
     expect(md).toContain('## \\# evil model\n');

@@ -9,6 +9,10 @@ describe('record schemas', () => {
     expect(RunSchema.parse(run)).toEqual(run);
     expect(() => RunSchema.parse({ ...run, Trigger: 'Comment' })).toThrow();
   });
+  it('reads an analysis written before the fallback flag as not recording it', () => {
+    const { Fallback, ...old } = analysis(); void Fallback;
+    expect(ChangeAnalysisSchema.parse(old).Fallback).toBeNull();
+  });
   it('accepts more packages to test than three: Settings.Limits.PackagesPerPR is the limit', () => {
     const a = { ...analysis(), PackagesToTest: ['@a/1', '@a/2', '@a/3', '@a/4'] };
     expect(ChangeAnalysisSchema.parse(a).PackagesToTest).toHaveLength(4);
@@ -36,6 +40,18 @@ describe('record schemas', () => {
     const run = { ID: 'r1', Trigger: 'Local', PRNumber: null, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated',
       GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
     expect(GenerationFileSchema.parse({ Run: run, Analysis: analysis(), Tests: [], BaseRootDir: '/work/base' }).Sessions).toEqual([]);
+  });
+  it('keeps partial stage timings in generation and execution files, reads files without them, and rejects negative or fractional times', () => {
+    const run = { ID: 'r1', Trigger: 'Local', PRNumber: null, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated',
+      GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
+    const gen = { Run: run, Analysis: analysis(), Tests: [], BaseRootDir: '/work/base' };
+    expect(GenerationFileSchema.parse({ ...gen, Timings: { AnalyzeMs: 5 } }).Timings).toEqual({ AnalyzeMs: 5 });
+    expect(GenerationFileSchema.parse(gen).Timings).toBeUndefined();
+    expect(() => GenerationFileSchema.parse({ ...gen, Timings: { GenerateMs: -1 } })).toThrow();
+    const exec = { RunID: 'r1', Tests: [], Results: [], Coverage: [], TypeErrors: {} };
+    expect(ExecutionFileSchema.parse({ ...exec, Timings: { RunMs: 7, CoverageMs: 0 } }).Timings).toEqual({ RunMs: 7, CoverageMs: 0 });
+    expect(ExecutionFileSchema.parse(exec).Timings).toBeUndefined();
+    expect(() => ExecutionFileSchema.parse({ ...exec, Timings: { RunMs: 1.5 } })).toThrow();
   });
 });
 

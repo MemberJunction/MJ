@@ -16,6 +16,8 @@ export const SettingsSchema = z.object({
         UsdPerSession: z.number().positive(),
     }),
     Repeats: z.number().int().positive(),
+    /** Whether job 2 measures changed-line coverage on head for tests that pass on both revisions. */
+    Coverage: z.boolean(),
     TestTimeoutMs: z.number().int().positive(),
     SequenceSeed: z.number().int(),
     Thresholds: z.object({
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
     Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
     Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 2_000_000, UsdPerSession: 3 },
     Repeats: 3,
+    Coverage: true,
     TestTimeoutMs: 30_000,
     SequenceSeed: 1,
     Thresholds: { Label: { MinMedian: 'Medium', MaxReported: 3 }, Nightly: { MinMedian: 'High', MediumWithBoosts: ['AccessChange', 'MatchesRisk'] } },
@@ -43,7 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
         'claude-opus-5-5': { Input: 4, Output: 20, CachedInput: 0.2 }, 'claude-sonnet-5-5': { Input: 2, Output: 10, CachedInput: 0.2 },
         'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.01 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
         'gpt-4.1-mini': { Input: 0.4, Output: 1.6, CachedInput: 0.1 }, 'gpt-5.1': { Input: 1.25, Output: 10, CachedInput: 0.125 },
-        'gemini-3.8-flash': { Input: 0.75, Output: 3.75, CachedInput: 0.075 },
+        'gemini-3.8-flash': { Input: 0.75, Output: 3.75, CachedInput: 0.075 }, 'gemini-4-hydrogen': { Input: 1.5, Output: 7.5, CachedInput: 0.075 },
     },
     // BuildExclude: packages left out of the sandbox build closure. The CLI's build copies a folder with a recursive
     // fs.cpSync, which fails with EACCES on a Docker Desktop bind mount; a Linux host can set this to [].

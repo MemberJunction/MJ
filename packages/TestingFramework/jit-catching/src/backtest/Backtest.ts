@@ -64,12 +64,14 @@ interface SelectedPR { PR: number; Set: 'Bug' | 'Clean'; MergeSHA: string; }
  * Each entry is written with its StartedAt before its run starts.
  * The cap counts the cost of the whole ledger, including every attempt of a retried entry, and is checked before each run, so the last run can take the total above it.
  * The run stops after 3 Failed entries in a row and leaves the rest Pending.
+ * Every run has Settings.Coverage off, and the start of the call prints `coverage off (backtest)` once.
  */
 export async function BacktestStep(o: BacktestOptions): Promise<BacktestResult> {
     const unpriced = UnpricedModel(o.Settings.Prices, o.Model);
     if (unpriced) throw new Error(unpriced);
     PreflightEnv(o.Settings, o.Env ?? process.env, 'Assess');
     const deps = o.Deps ?? defaultDeps(o);
+    process.stdout.write('coverage off (backtest)\n');
     await deps.Repo.Fetch('next');
     const file = new LedgerFile(o.RepoRoot, LedgerID(o.CorpusPath, o.Slice, o.Set, o.Model), deps.Redaction);
     const selected = selectedPRs(LoadCorpus(o.CorpusPath), o);
@@ -245,7 +247,7 @@ async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps
     try {
         runID = (await deps.RunAll({
             PR: entry.PR, BaseSHA: entry.BaseSHA, HeadSHA: entry.HeadSHA, Trigger: 'Backtest',
-            RepoRoot: o.RepoRoot, Settings: { ...o.Settings, GeneratorModel: o.Model }, StoreDir: o.StoreDir,
+            RepoRoot: o.RepoRoot, Settings: { ...o.Settings, GeneratorModel: o.Model, Coverage: false }, StoreDir: o.StoreDir,
         })).RunID;
         entry.Status = 'Assessed';
     } catch (e) {

@@ -34,6 +34,8 @@ export class UnsafePathError extends Error {}
 
 const CONTAINER_ROOT = '/work';
 const CONTAINER_STORE = '/pnpm-store';
+const CONTAINER_TURBO_CACHE = '/turbo-cache';
+const TURBO_CACHE_SUBDIR = 'turbo-cache';
 const JIT_SUBDIR = 'src/__tests__/jit';
 /**
  * Platforms `pnpm fetch` downloads native optional packages for: the host's own and the image's (linux x64 or arm64),
@@ -60,19 +62,22 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * no patch file; the sandbox installs offline with the real lockfile and `patches/` and applies the patches.
      * When pnpm reports `ERR_PNPM_OUTDATED_LOCKFILE`, the sandbox installs once more, still offline, without the frozen lockfile,
      * so only workspace links and packages already in the store can resolve.
+     * With `packages`, the install covers the root project and the named packages the revision has, with their dependencies
+     * (`--filter . --filter <name>...`); with none of them present, or no `packages`, it covers the whole workspace.
      * When the fetch or the install fails, the worktree is removed before the error is rethrown; a removal failure does not replace that error.
      */
-    public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
+    public async Prepare(revision: RevisionRef, packages: string[] = []): Promise<PreparedRevision> {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
         try {
             await this.hostFetch(revision);
-            let r = await this.installInSandbox(prepared, '--frozen-lockfile');
+            const present = this.PackagesAt(prepared, packages);
+            let r = await this.installInSandbox(prepared, '--frozen-lockfile', present);
             if (r.ExitCode !== 0 && tail(r).includes('ERR_PNPM_OUTDATED_LOCKFILE')) {
                 process.stderr.write(`prepare ${revision.Kind} ${revision.SHA.slice(0, 7)}: the lockfile is out of date with a package.json; installing offline without the frozen lockfile\n`);
-                r = await this.installInSandbox(prepared, '--no-frozen-lockfile');
+                r = await this.installInSandbox(prepared, '--no-frozen-lockfile', present);
             }
             if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
         } catch (e) {
@@ -82,9 +87,13 @@ export class VitestCatchTarget extends BaseCatchTarget {
         return prepared;
     }
 
-    /** Offline `pnpm install` and `pnpm rebuild` in the sandbox, with the given lockfile flag. */
-    private installInSandbox(prepared: PreparedRevision, lockfileFlag: '--frozen-lockfile' | '--no-frozen-lockfile'): Promise<SandboxRunResult> {
-        const install = `pnpm install --offline ${lockfileFlag} --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
+    /**
+     * Offline `pnpm install` and `pnpm rebuild` in the sandbox, with the given lockfile flag. With `packages`, the install is
+     * filtered to the root project (whose devDependencies hold vitest and turbo) and those packages with their dependencies.
+     */
+    private installInSandbox(prepared: PreparedRevision, lockfileFlag: '--frozen-lockfile' | '--no-frozen-lockfile', packages: string[]): Promise<SandboxRunResult> {
+        const filters = packages.length > 0 ? ` --filter . ${packages.map((p) => `--filter ${sq(`${p}...`)}`).join(' ')}` : '';
+        const install = `pnpm install --offline ${lockfileFlag} --ignore-scripts --store-dir ${CONTAINER_STORE}${filters} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
         return this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
     }
 
@@ -135,13 +144,17 @@ export class VitestCatchTarget extends BaseCatchTarget {
     /**
      * `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the
      * local cache only. Concurrency is one task per sandbox cpu: turbo's default of ten parallel compilers exceeds the memory cap.
+     * The local cache is `<WorkRoot>/turbo-cache`, shared by every build of the run, so a later build reuses the outputs of
+     * packages whose inputs did not change.
      */
     public async BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void> {
         if (packages.length === 0) return;
         const sandbox = this.o.Settings.Sandbox;
         const filters = [...packages.map((p) => `--filter=${p}...`), ...sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
         const cmd = `npx turbo run build ${filters} --concurrency=${Math.max(1, Math.floor(sandbox.Cpus))} --cache=local:rw,remote:r --log-order=stream --summarize`;
-        const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
+        const cache = join(this.o.WorkRoot, TURBO_CACHE_SUBDIR); mkdirSync(cache, { recursive: true });
+        const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: CONTAINER_TURBO_CACHE, TURBO_TELEMETRY_DISABLED: '1' }, [], [],
+            [{ Host: cache, Container: CONTAINER_TURBO_CACHE, Mode: 'rw' }]);
         this.keepTurboSummaries(revision);
         if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${RedactTail(tail(r))}`);
     }
@@ -245,9 +258,10 @@ export class VitestCatchTarget extends BaseCatchTarget {
         await this.o.Repo.RemoveWorktree(revision.RootDir).catch(() => rmSync(revision.RootDir, { recursive: true, force: true }));
     }
 
-    /** Removes the run's pnpm store and the `*-fetch` and `*-pnpm-version` folders under the work root. */
+    /** Removes the run's pnpm store, its turbo cache and the `*-fetch` and `*-pnpm-version` folders under the work root. */
     public async RemoveStore(): Promise<void> {
         rmSync(this.o.StoreDir, { recursive: true, force: true });
+        rmSync(join(this.o.WorkRoot, TURBO_CACHE_SUBDIR), { recursive: true, force: true });
         if (!existsSync(this.o.WorkRoot)) return;
         for (const e of readdirSync(this.o.WorkRoot, { withFileTypes: true })) {
             if (e.name.endsWith('-fetch') || e.name.endsWith('-pnpm-version')) rmSync(join(this.o.WorkRoot, e.name), { recursive: true, force: true });
@@ -267,14 +281,14 @@ export class VitestCatchTarget extends BaseCatchTarget {
     private packageDir(name: string): string { const p = this.o.PackageMap.Get(name); if (!p) throw new Error(`unknown package ${name}`); return p.Dir; }
 
     /**
-     * 'rw' is the prepare phase (install, rebuild, build) and also mounts the store. 'ro' is the test phase: the
+     * 'rw' is the prepare phase (install, rebuild, build) and also mounts the store and `extraMounts`. 'ro' is the test phase: the
      * worktree read-only, the jit folder of each package under test read-write, and the reporter read-only. After an
      * 'ro' run, every entry of those jit folders that is not a regular file is removed.
      */
-    private async inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = []): Promise<SandboxRunResult> {
+    private async inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = [], packageDirs: string[] = [], extraMounts: SandboxMount[] = []): Promise<SandboxRunResult> {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
         const jitDirs = mode === 'ro' ? packageDirs.map((d) => SafeDir(revision.RootDir, `${d}/${JIT_SUBDIR}`, false)) : [];
-        if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' });
+        if (mode === 'rw') mounts.push({ Host: this.o.StoreDir, Container: CONTAINER_STORE, Mode: 'rw' }, ...extraMounts);
         if (mode === 'ro') {
             packageDirs.forEach((d, i) => mounts.push({ Host: jitDirs[i], Container: `${CONTAINER_ROOT}/${d}/${JIT_SUBDIR}`, Mode: 'rw' }));
             mounts.push({ Host: this.reporterDir(), Container: JIT_REPORTER_MOUNT, Mode: 'ro' });

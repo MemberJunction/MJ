@@ -1,13 +1,13 @@
 import { GetAgreement } from '@memberjunction/rubrics';
-import { UUIDMap, UUIDSet } from '@memberjunction/global';
+import { UUIDMap } from '@memberjunction/global';
 import type { BaseCatchStore } from '../contracts/BaseCatchStore';
 import type { BacktestLedger, LedgerEntry } from '../backtest/Ledger';
 import type { Corpus } from '../corpus/Corpus';
 import type { RunDir } from '../pipeline/RunDir';
 import { BUCKET_SCORE } from '../judges/JudgePanel';
 import { DEFAULT_SETTINGS, type Settings } from '../settings';
-import type { Catch, Feedback, Run, SessionRecord, TokenUsage } from '../types';
-import { CountBy, MeanOf, RateOf, type RateWithInterval } from './Stats';
+import type { Catch, ExecutionTimings, Feedback, GenerationTimings, Run, SessionRecord, TokenUsage } from '../types';
+import { CountBy, MeanOf, MedianOf, RateOf, type RateWithInterval } from './Stats';
 
 export type AgreementResult = ReturnType<typeof GetAgreement>;
 /** The human label of a catch, with AuthorChangedPR counted as Bug. */
@@ -33,12 +33,17 @@ export interface ModelReport {
     Cost: { TotalUSD: number; PerPR: number | null; PerMatchedCatch: number | null; RecordedUSD: number; TableUSD: number; ByModel: Record<string, { RecordedUSD: number; TableUSD: number }>; UnpricedModels: string[] };
     /** Session end reason → count. */
     Sessions: Record<string, number>;
+    /**
+     * Fallbacks: runs whose analyzer reply was invalid twice, of the Runs whose analysis recorded the flag.
+     * NoFlag: runs with a readable generation file whose analysis did not record the flag. NoFile: runs with data but no readable generation file.
+     */
+    AnalyzerFallbacks: { Fallbacks: number; Runs: number; NoFlag: number; NoFile: number };
+    /** Per stage in pipeline order, the median minutes over the runs that recorded it; null when none did. */
+    StageMinutes: { Stage: string; Minutes: number | null }[];
     /** Drop rule → count. */
     Drops: Record<string, number>;
     Judges: { Model: string; Agreement: AgreementResult; HighOnIntended: number; LowOnBug: number }[];
     TPProb: Record<HumanLabel, { N: number; Mean: number | null }>;
-    /** Tests that passed on both revisions and have no coverage row. */
-    CoverageNotMeasured: number;
 }
 export interface GateReport { GeneratedAt: string; Models: ModelReport[]; }
 
@@ -48,9 +53,23 @@ export interface GateReportOptions {
     Prices?: Settings['Prices'];
 }
 
+/** The stages a run records, in pipeline order, with their report names. */
+const STAGES: { Name: string; Key: keyof StageTimings }[] = [
+    { Name: 'analyze', Key: 'AnalyzeMs' }, { Name: 'prepare base', Key: 'PrepareBaseMs' }, { Name: 'build base', Key: 'BuildBaseMs' }, { Name: 'generate', Key: 'GenerateMs' },
+    { Name: 'prepare head', Key: 'PrepareHeadMs' }, { Name: 'build head', Key: 'BuildHeadMs' }, { Name: 'type-check', Key: 'TypeCheckMs' }, { Name: 'run', Key: 'RunMs' },
+    { Name: 'coverage', Key: 'CoverageMs' },
+];
+type StageTimings = Partial<GenerationTimings & ExecutionTimings>;
+
 /** A catch with its human label (latest feedback by `At`), or null when it has none. */
 type LabeledCatch = Catch & { Label: HumanLabel | null };
-interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[]; CoverageNotMeasured: number; }
+interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[];
+    /** True when the generation file was read. */
+    HasGeneration: boolean;
+    /** The analysis's fallback flag; null when the analysis did not record it or the generation file is missing or unreadable. */
+    Fallback: boolean | null;
+    /** The stage times of the generation and execution files; empty when neither is readable. */
+    Timings: StageTimings; }
 /** A catch whose truth is known: +1 bug (label Bug or a matched test), −1 not a bug. `Intended` marks a label of Intended or TestFault. */
 interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
 
@@ -58,8 +77,9 @@ interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
  * The gate-1 report: one section per generator model, combining that model's ledgers.
  * The human label of a catch is its latest feedback by `At`; an AuthorChangedPR answer counts as Bug everywhere
  * (not a false alarm, score +1, grouped under Bug in TPProb). Bug-set catches take their truth from the match:
- * a matched test scores +1, an unmatched one −1. The store is read once per run ID; a run folder is read only
- * when the run has a test that passed on both revisions.
+ * a matched test scores +1, an unmatched one −1. The store is read once per run ID; each run's generation file
+ * is read for the analyzer fallback and the stage times, and its execution file for the stage times.
+ * A missing or unreadable generation file, or an analysis that did not record the flag, leaves the run out of the fallback count; an unreadable generation or execution file also writes one stderr line.
  */
 export async function BuildGateReport(o: GateReportOptions): Promise<GateReport> {
     const runIDs = [...new Set(o.Ledgers.flatMap((l) => l.Entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID]))))];
@@ -72,7 +92,18 @@ export async function BuildGateReport(o: GateReportOptions): Promise<GateReport>
 async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: string) => RunDir): Promise<RunData> {
     const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
     const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
-    return { Run: run, Catches: labeled, Sessions: sessions, CoverageNotMeasured: coverageNotMeasured(catches, () => runDirOf(id)) };
+    const dir = runDirOf(id);
+    const gen = readRunFile(dir, 'generation.json', () => (dir.HasGeneration() ? dir.ReadGeneration() : null));
+    const exec = readRunFile(dir, 'execution.json', () => (dir.HasExecution() ? dir.ReadExecution() : null));
+    return { Run: run, Catches: labeled, Sessions: sessions, HasGeneration: gen !== null, Fallback: gen?.Analysis.Fallback ?? null, Timings: { ...gen?.Timings, ...exec?.Timings } };
+}
+
+/** The file `read` returns, or null when it is missing or unreadable (with one stderr line). */
+function readRunFile<T>(dir: RunDir, name: string, read: () => T | null): T | null {
+    try { return read(); } catch {
+        process.stderr.write(`report: ${dir.RunID}: ${name} unreadable, skipped\n`);
+        return null;
+    }
 }
 
 /** The answer of the latest feedback by `At`, AuthorChangedPR as Bug; null when there is none. */
@@ -80,14 +111,6 @@ export function LatestLabel(feedback: Feedback[]): HumanLabel | null {
     const latest = [...feedback].sort((a, b) => a.At.localeCompare(b.At)).at(-1);
     if (!latest) return null;
     return latest.Answer === 'AuthorChangedPR' ? 'Bug' : latest.Answer;
-}
-
-/** Catches that passed on both revisions and have no coverage row in the run's execution file. */
-function coverageNotMeasured(catches: Catch[], dir: () => RunDir): number {
-    const passing = catches.filter((c) => c.Verdict.Label === 'PassesBoth');
-    if (passing.length === 0) return 0;
-    const covered = new UUIDSet(dir().ReadExecution().Coverage.map((c) => c.CandidateTestID));
-    return passing.filter((c) => !covered.Has(c.CandidateTestID)).length;
 }
 
 /** Ledgers grouped by Model, in order of first appearance. */
@@ -111,10 +134,19 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
         CleanSet: cleanSetOf(entries.filter((e) => e.Set === 'Clean' && cleanPRs.has(e.PR)), cleanPRs.size, data),
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
+        AnalyzerFallbacks: {
+            Fallbacks: runs.filter((r) => r.Fallback === true).length, Runs: runs.filter((r) => r.Fallback !== null).length,
+            NoFlag: runs.filter((r) => r.HasGeneration && r.Fallback === null).length, NoFile: runs.filter((r) => !r.HasGeneration).length,
+        },
+        StageMinutes: STAGES.map((s) => ({ Stage: s.Name, Minutes: medianMinutes(runs.flatMap((r) => { const ms = r.Timings[s.Key]; return ms === undefined ? [] : [ms]; })) })),
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
         Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
-        CoverageNotMeasured: runs.reduce((s, r) => s + r.CoverageNotMeasured, 0),
     };
+}
+
+function medianMinutes(ms: number[]): number | null {
+    const median = MedianOf(ms);
+    return median === null ? null : median / 60_000;
 }
 
 /** Entries of all ledgers, one per set and PR; a later ledger's entry wins. */
@@ -246,7 +278,7 @@ function renderModel(m: ModelReport): string[] {
         ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
         `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
         `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
-        ...renderCost(m), ...renderCounts('Session end reasons', m.Sessions), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
+        ...renderCost(m), ...renderStages(m), ...renderSessions(m), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
     ];
 }
 
@@ -272,21 +304,33 @@ function renderCost(m: ModelReport): string[] {
         ...(k.UnpricedModels.length > 0 ? [`- Unpriced models: ${k.UnpricedModels.map(MarkdownText).join(', ')} (recorded cost used at table prices)`] : []), ''];
 }
 
+/** The median minutes of each stage, with one decimal, or n/a. */
+function renderStages(m: ModelReport): string[] {
+    return [`#### Stage time (median minutes)`, '', ...m.StageMinutes.map((s) => `- ${s.Stage}: ${s.Minutes === null ? 'n/a' : s.Minutes.toFixed(1)}`), ''];
+}
+
 /** Text on one Markdown line: CR and LF become spaces, and a leading heading, list, quote or ordered-list marker is escaped. */
 export function MarkdownText(text: string): string {
     return text.replace(/[\r\n]/g, ' ').replace(/^([#>*+-]|\d+[.)])/, '\\$1');
 }
 
-function renderCounts(title: string, counts: Record<string, number>): string[] {
+function renderSessions(m: ModelReport): string[] {
+    const f = m.AnalyzerFallbacks;
+    const noFile = f.NoFile > 0 ? `; ${f.NoFile === 1 ? '1 run has' : `${f.NoFile} runs have`} no generation file` : '';
+    const noFlag = f.NoFlag > 0 ? `; ${f.NoFlag === 1 ? '1 run' : `${f.NoFlag} runs`} did not record the flag` : '';
+    return renderCounts('Session end reasons', m.Sessions, [`- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs that recorded the flag${noFile}${noFlag}`]);
+}
+
+/** A count section; `extra` lines follow the count rows. */
+function renderCounts(title: string, counts: Record<string, number>, extra: string[] = []): string[] {
     const rows = Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([k, n]) => `- ${MarkdownText(k)}: ${n}`);
-    return [`### ${title}`, '', ...(rows.length > 0 ? rows : ['- none']), ''];
+    return [`### ${title}`, '', ...(rows.length > 0 ? rows : ['- none']), ...extra, ''];
 }
 
 function renderJudges(m: ModelReport): string[] {
     const judges = m.Judges.map((j) => `- ${MarkdownText(j.Model)}: ${agreement(j.Agreement)}; High on Intended/TestFault ${j.HighOnIntended}; Low on bugs ${j.LowOnBug}`);
     const tp = (['Bug', 'Intended', 'TestFault'] as const).map((l) => `- TPProb on ${l}: n=${m.TPProb[l].N}, mean ${m.TPProb[l].Mean === null ? 'n/a' : m.TPProb[l].Mean.toFixed(2)}`);
-    return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp,
-        `- Tests passing both revisions with no coverage measured: ${m.CoverageNotMeasured}`];
+    return [`### Judge calibration`, '', ...(judges.length > 0 ? judges : ['- no judged catch with a known truth']), ...tp];
 }
 
 function agreement(a: AgreementResult): string {

@@ -86,7 +86,7 @@ export async function CleanupBase(dir: RunDir, gen: GenerationFile, cleanup: (r:
 
 /**
  * Copies the base sources of `packageDirs` to `<run dir>/base-src`, records that folder as `BaseSourceDir` in
- * `generation.json`, removes the base worktree, and removes the run's pnpm store and fetch folders. Writes a stderr
+ * `generation.json`, removes the base worktree, and removes the run's pnpm store, fetch folders and turbo cache. Writes a stderr
  * line when the snapshot holds no files.
  */
 export async function FinishRun(dir: RunDir, target: Pick<VitestCatchTarget, 'Cleanup' | 'RemoveStore'>, packageDirs: string[]): Promise<void> {

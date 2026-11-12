@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,8 @@ import type { ChangeAnalysis, GenerationRequest, GenerationResult, PreparedRevis
 import { analysis, BASE_SHA, candidate, FULL_ENV, HEAD_SHA, ID_A, PKG, PKG_DIR } from './helpers/pipelineFixtures';
 
 describe('GenerateStep', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
   it('without a PR takes the title from the head commit, sends one DodgyDiff and one IntentAware request per risk, and keeps the base worktree', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const order: string[] = []; const requests: GenerationRequest[] = []; let pr: { Title: string; Body: string } | null = null;
@@ -43,6 +45,25 @@ describe('GenerateStep', () => {
     expect(g.Run).toMatchObject({ PRNumber: null, Trigger: 'Backtest', BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Status: 'Generated' });
     expect(g.Run.TokensByModel).toEqual([{ Model: 'claude-sonnet-5-5', Role: 'Analyzer', InputTokens: 7, OutputTokens: 3, CacheReadTokens: 1, CostUSD: 0.25 }, { Model: 'm', Role: 'Generator', InputTokens: 6, OutputTokens: 3, CacheReadTokens: 0, CostUSD: 1.5 }]);
     expect(g.Tests.map((t) => t.ID)).toEqual([ID_A]);
+  });
+
+  it('analyzes the change before it prepares base, and prepares base for the packages under test', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const OTHER = '@memberjunction/other'; const order: string[] = [];
+    const a: ChangeAnalysis = { ...analysis(), PackagesToTest: [PKG, OTHER], Risks: [] };
+    const tools: GenerateTools = {
+      EnsureImage: async () => undefined,
+      Target: { Prepare: async (r: RevisionRef, p?: string[]): Promise<PreparedRevision> => { order.push(`prepare ${r.Kind} ${(p ?? []).join(',')}`); return { Ref: r, RootDir: '/work/base' }; },
+        BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
+      Analyzer: { Analyze: async () => { order.push('analyze'); return a; }, Usage: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => ({ Tests: [], Tokens: { Model: 'm', InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }) },
+      PackageMap: { Get: (n: string) => ({ Name: n, Dir: PKG_DIR, HasVitest: true, HasTests: true }), PackageForPath: () => null },
+    };
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 't' }, Redaction: redaction, ForRun: () => tools } });
+    expect(order).toEqual(['analyze', `prepare Base ${PKG},${OTHER}`]);
+    rmSync(root, { recursive: true, force: true });
   });
 
   it('builds and generates only for the packages that exist at base, and names the skipped ones on stderr', async () => {
@@ -190,6 +211,25 @@ describe('GenerateStep', () => {
     expect(fetches).toEqual(['next']);
     expect(pr).toEqual({ Title: 'fix(x): keep Open', Body: 'Open must stay open.' });
     expect(new RunDir(root, RunID, redaction).ReadGeneration().Run).toMatchObject({ PRNumber: 12, Trigger: 'Backtest', BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA });
+  });
+
+  it('records how long each stage took in generation.json and prints them on one stdout line', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    let now = 0;
+    const tools: GenerateTools = {
+      EnsureImage: async () => { now += 500; },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { now += 2000; return { Ref: r, RootDir: '/work/base' }; }, BuildPackages: async () => { now += 3000; }, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
+      Analyzer: { Analyze: async () => { now += 1000; return { ...analysis(), Risks: [] }; }, Usage: { Model: 'a', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => { now += 4000; return { Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
+      PackageMap: { Get: () => info, PackageForPath: () => null },
+    };
+    const stdout: string[] = []; vi.spyOn(process.stdout, 'write').mockImplementation((c) => { stdout.push(String(c)); return true; });
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools, Now: () => now } });
+    expect(new RunDir(root, RunID, redaction).ReadGeneration().Timings).toEqual({ AnalyzeMs: 1000, PrepareBaseMs: 2000, BuildBaseMs: 3000, GenerateMs: 4000 });
+    expect(stdout).toContain(`run ${RunID}: stages analyze 1s, prepare base 2s, build base 3s, generate 4s\n`);
+    rmSync(root, { recursive: true, force: true });
   });
 
   it('refuses before any GitHub, repo or target call when a key is missing or Claude Code is the parent', async () => {

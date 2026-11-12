@@ -28,8 +28,10 @@ export class RunDir {
 
     public WriteGeneration(f: GenerationFile): void { this.write('generation.json', GenerationFileSchema.parse(f)); }
     public ReadGeneration(): GenerationFile { return GenerationFileSchema.parse(this.read('generation.json')); }
+    public HasGeneration(): boolean { return existsSync(join(this.Path, 'generation.json')); }
     public WriteExecution(f: ExecutionFile): void { this.write('execution.json', ExecutionFileSchema.parse(f)); }
     public ReadExecution(): ExecutionFile { return ExecutionFileSchema.parse(this.read('execution.json')); }
+    public HasExecution(): boolean { return existsSync(join(this.Path, 'execution.json')); }
     public WriteAssessment(f: AssessmentFile): void { this.write('assessment.json', AssessmentFileSchema.parse(f)); }
 
     private write(name: string, data: GenerationFile | ExecutionFile | AssessmentFile): void {

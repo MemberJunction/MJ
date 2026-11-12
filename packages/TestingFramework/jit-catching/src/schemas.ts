@@ -15,10 +15,11 @@ export const RunSchema = z.object({
 export const DiffHunkSchema = z.object({ Path: z.string(), OldStart: z.number().int(), OldLines: z.number().int(), NewStart: z.number().int(), NewLines: z.number().int(), Lines: z.array(z.string()) });
 export const ChangedFileSchema = z.object({ Path: z.string(), Package: z.string().nullable(), AddedLines: z.array(z.number().int().positive()), RemovedLineCount: z.number().int().nonnegative(), Hunks: z.array(DiffHunkSchema) });
 export const RiskSchema = z.object({ ID: z.string(), File: z.string(), Symbol: z.string(), WhatCouldBreak: z.string(), HowObserved: z.string() });
+/** `Fallback` is null for an analysis written before the analyzer recorded it. */
 export const ChangeAnalysisSchema = z.object({
     RunID: z.string(), IntentType: z.enum(['feature', 'fix', 'refactor', 'perf', 'dead_code_removal', 'logging', 'config', 'other']),
     Summary: z.string(), Risks: z.array(RiskSchema), PackagesToTest: z.array(z.string()), ChangedFiles: z.array(ChangedFileSchema),
-    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(),
+    CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(), Fallback: z.boolean().nullable().default(null),
 });
 
 /** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. Every path segment here and in `MutantEditSchema.File` starts with a letter, digit or underscore, so `.` and `..` are never segments. */
@@ -52,12 +53,16 @@ export const CoverageResultSchema = z.object({ CandidateTestID: z.string(), Cove
 /** `BaseRootDir` is the base worktree the generate step prepared and kept; execute and assess reuse it. */
 export const SessionRecordSchema = z.object({ RunID: z.string(), Package: z.string(), Method: z.enum(['DodgyDiff', 'IntentAware']), RiskID: z.string().nullable(), EndReason: z.string(),
     Turns: z.number().int().nonnegative(), Tokens: TokenUsageSchema, TranscriptURL: z.string().nullable(), Produced: z.number().int().nonnegative(), Failed: z.number().int().nonnegative() });
+const ms = z.number().int().nonnegative();
+/** Stage times in milliseconds; every field and the object itself are optional. */
+export const GenerationTimingsSchema = z.object({ AnalyzeMs: ms, PrepareBaseMs: ms, BuildBaseMs: ms, GenerateMs: ms }).partial();
+export const ExecutionTimingsSchema = z.object({ PrepareHeadMs: ms, BuildHeadMs: ms, TypeCheckMs: ms, RunMs: ms, CoverageMs: ms }).partial();
 /** `BaseSourceDir` is the run's `base-src` copy of the tested packages' sources; null until the run finishes. */
 export const GenerationFileSchema = z.object({ Run: RunSchema, Analysis: ChangeAnalysisSchema, Tests: z.array(CandidateTestSchema), BaseRootDir: z.string().min(1), Sessions: z.array(SessionRecordSchema).default([]),
-    BaseSourceDir: z.string().nullable().default(null) });
+    BaseSourceDir: z.string().nullable().default(null), Timings: GenerationTimingsSchema.optional() });
 /** `TypeErrors` maps each test ID to its type-check errors on base and head (null when it compiles). */
 export const ExecutionFileSchema = z.object({ RunID: z.string(), Tests: z.array(CandidateTestSchema), Results: z.array(ExecutionResultSchema), Coverage: z.array(CoverageResultSchema),
-    TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() })) })
+    TypeErrors: z.record(z.string(), z.object({ Base: z.string().nullable(), Head: z.string().nullable() })), Timings: ExecutionTimingsSchema.optional() })
     .refine((f) => { const ids = new Set(f.Tests.map((t) => t.ID)); return f.Results.every((r) => ids.has(r.CandidateTestID)); }, { error: 'every result must name a test in Tests' });
 export const AssessmentFileSchema = z.object({ RunID: z.string(), Catches: z.array(CatchSchema), Promotions: z.array(PromotionCandidateSchema) });
 export type GenerationFile = z.infer<typeof GenerationFileSchema>;

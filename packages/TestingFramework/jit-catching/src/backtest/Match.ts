@@ -88,7 +88,7 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
     await deps.EnsureImage?.();
     let head: PreparedRevision | null = null;
     try {
-        const prepared = await prepareHead(entry.PR, fixed, fixSHA, o.LedgerID, deps);
+        const prepared = await prepareHead(entry.PR, fixed, fixSHA, o.LedgerID, deps, [...new Set(tests.map((t) => t.Package))]);
         if ('Error' in prepared) return record('PrepareFailed', {}, false, { Head: 'FixMerge', Error: prepared.Error });
         head = prepared.Revision;
         return { ...await runOnFixedHead(deps.Target, head, tests, catches, o.Settings.Repeats), Head: prepared.Head };
@@ -102,19 +102,19 @@ async function matchOne(entry: LedgerEntry, fixSHA: string, o: MatchOptions, dep
 type HeadOutcome = { Revision: PreparedRevision; Head: NonNullable<MatchRecord['Head']> } | { Error: string };
 
 /**
- * Prepares the patched head `fixed` when there is one and returns it. When there is none, or it throws an InfrastructureError
+ * Prepares the patched head `fixed` for `packages` when there is one and returns it. When there is none, or it throws an InfrastructureError
  * (named on stderr), prepares the fix merge `fixSHA` instead; returns the error text when that throws an InfrastructureError too.
  * Any other error is rethrown.
  */
-async function prepareHead(pr: number, fixed: string | null, fixSHA: string, ledgerID: string, deps: MatchDeps): Promise<HeadOutcome> {
+async function prepareHead(pr: number, fixed: string | null, fixSHA: string, ledgerID: string, deps: MatchDeps, packages: string[]): Promise<HeadOutcome> {
     if (fixed !== null) {
-        try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixed }), Head: 'Patched' }; }
+        try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixed }, packages), Head: 'Patched' }; }
         catch (e) {
             if (!(e instanceof InfrastructureError)) throw e;
             process.stderr.write(`match ${ledgerID}: PR #${pr}: the fix on head does not prepare (${ErrorFirstLine(e, deps.Redaction)}); trying the fix merge ${fixSHA.slice(0, 7)}\n`);
         }
     }
-    try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixSHA }), Head: 'FixMerge' }; }
+    try { return { Revision: await deps.Target.Prepare({ Kind: 'Head', SHA: fixSHA }, packages), Head: 'FixMerge' }; }
     catch (e) {
         if (!(e instanceof InfrastructureError)) throw e;
         return { Error: ErrorLine(e, deps.Redaction) };

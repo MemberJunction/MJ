@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { LoadSettings, DEFAULT_SETTINGS } from '../settings';
+import { UnpricedModel } from '../backtest/Backtest';
 
 describe('LoadSettings', () => {
   it('returns defaults when no file is given', () => {
@@ -22,6 +23,12 @@ describe('LoadSettings', () => {
     writeFileSync(p, JSON.stringify({ Repeats: 0 }));
     expect(() => LoadSettings(p)).toThrow(/Repeats/);
   });
+  it('measures coverage by default and a settings file can turn it off', () => {
+    expect(LoadSettings(undefined).Coverage).toBe(true);
+    const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json');
+    writeFileSync(p, JSON.stringify({ Coverage: false }));
+    expect(LoadSettings(p).Coverage).toBe(false);
+  });
   it('does not echo the content of a settings file that is not valid JSON', () => {
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json'); writeFileSync(p, `${token} is not json`);
@@ -32,5 +39,8 @@ describe('LoadSettings', () => {
     const s = DEFAULT_SETTINGS;
     const models = [s.GeneratorModel, s.AnalyzerModel, s.Judges.TpProbModel, ...s.Judges.BucketModels.map((b) => b.Model)];
     expect(models.filter((m) => !s.Prices[m])).toEqual([]);
+  });
+  it('prices the gemini-4-hydrogen generator', () => {
+    expect(UnpricedModel(DEFAULT_SETTINGS.Prices, 'gemini-4-hydrogen')).toBeNull();
   });
 });
