@@ -278,3 +278,30 @@ Ledgers: gate1-Tuning-Bug-gemini-3_8-flash
 - TPProb on TestFault: n=0, mean n/a
 - Tests passing both revisions with no coverage measured: 18
 
+
+### Diagnostics on the tuning runs (2026-11-12, no model spend)
+
+Three checks on the 70 run records, after the user asked why 42 USD bought one catch.
+
+**1. Did the generated tests look at the code the fix changed?** For each assessed bug PR, the files the fix PR changed (source only) against the relative imports of each generated test.
+
+| Model | Bug PRs | PRs with ≥ 1 test importing a fix file | Tests importing a fix file | Tests written from a risk note |
+|---|---|---|---|---|
+| Sonnet | 28 | 15 | 57 of 233 | 67 of 233 |
+| Gemini | 20 | 11 | 54 of 178 | 44 of 178 |
+
+Half of the PRs had no test that even imported a file the fix touched. Per-PR numbers: [`TUNING-DIAG-targeting.md`](TUNING-DIAG-targeting.md), produced by [`diag-targeting.js`](diag-targeting.js) from `generation.json` and `git diff` of the fix merge (run from the repo root with the scratch folder that holds the stage logs as its argument).
+
+**2. Did the analyzer's risk notes name the curated bug?** Graded by reading each PR's notes next to the curated description (Opus, medium effort; table in [`TUNING-DIAG-risk-notes.md`](TUNING-DIAG-risk-notes.md)).
+
+| Grade | PRs | Which |
+|---|---|---|
+| Named (a test from the note could reproduce the bug) | 5 | #4253, #3831, #5906, #4450, #5513 |
+| Adjacent (right file or symbol, different failure) | 5 | #5897, #4245, #6227, #6027, #3354 |
+| Missed | 18 | 16 with no risk notes at all, plus #3735 and #4317 whose notes stay on the files with the most changed lines |
+
+Of the 5 Named, only #3831 became a catch (Gemini). #4253 cannot be matched (fix not preparable), #4450 produced 0 tests on Gemini and a NotMatched test on Sonnet, #5906 and #5513 produced tests that did not reproduce the bug. So the generator converts a correctly named hazard into a catch about one time in four; the larger loss is upstream.
+
+**3. Why 16 PRs had no risk notes: the analyzer's silent fallback.** `ChangeAnalyzer.ask` calls the model with `maxOutputTokens: 2000`, retries once when the reply is not valid JSON, and otherwise returns intent from the commit prefix, the PR title as summary, and no risks. The run records show the signature: every such run has analyzer `OutputTokens` exactly 4000 (two attempts cut at the cap) and `Summary` equal to the PR title. 34 of the 70 tuning runs (49%) ran this way, 16 of the 28 Sonnet bug PRs among them; large diffs fail most (every PR over ~1000 diff lines except #3735 and #4317), and the same PR fails on one attempt and succeeds on another (#4253, #4828). Nothing on stderr, nothing in the report. Fix: plan `plans/catching-jittests-speed.md` Task 1 (8000-token cap, shorter second attempt, `Analysis.Fallback` recorded and reported).
+
+**Where the time goes** (PR #3602, 32 min, from file timestamps): prepare base and head ~10 min (two worktrees, two offline installs of all 313 workspace projects, two builds), analyze and generate ~4 min, execute ~14 min (head build, type-check, 42 vitest runs, 7 per-test coverage runs), judges ~1 min, teardown ~2 min. Coverage feeds only promotions, which gate 1 never reads. Plan `catching-jittests-speed.md` Tasks 3–6: coverage off in backtests, per-stage timings, one turbo cache per run, analyze first and install only the packages under test.
