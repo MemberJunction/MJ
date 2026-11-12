@@ -1,21 +1,30 @@
 /**
- * Pins the write-selection rule S34 depends on — the regression guard for #6537.
+ * Pins the write-selection and key-scoping rules S32–S34 depend on — the regression guard for #6537.
  *
  * S34 asserts two things about one `MJ: User Settings` save/delete pair: the save broadcasts a
  * compact `row_delta` upsert, and the delete broadcasts a `row_delta` removal that upserts nothing.
- * One save maintains more than one cache slot and issues those writes in the background,
- * fire-and-forget, so the ORDER they are recorded in is not the order the phases happened. Picking
- * "the most recent row_delta write" therefore read a save's late upsert as the delete's removal and
- * failed with `a delete upserts nothing — expected 0, got 1`, every night the mutation tier ran.
+ * One save maintains more than one cache slot (the plain unfiltered slot and the engine's `imr:1`
+ * slot) and issues those writes in the background, fire-and-forget, so neither phase ordering nor
+ * slot arrival ordering is guaranteed. Selecting by slot key (`IsPlainEntitySlot`) plus primary-key
+ * payload (`RowIsRecord`), after waiting for the write stream to go quiet (`WaitForRowDeltaQuiet`),
+ * isolates the exact baseline slot deterministically.
  *
- * These tests drive the selector over hand-built write records, so they prove the rule without a
- * database: the interleaving that broke S34 is reproduced directly.
+ * S32 and S33 assert that `CacheLocal: false` writes nothing while a default sibling caches once;
+ * scoping those assertions to each check's own `UniqueFilter` key (`WritesForEntityFilter`) keeps
+ * late background writes on unrelated entities from polluting the count.
  */
 import { describe, it, expect } from 'vitest';
 import type { CacheRowDeltaPayload } from '@memberjunction/core';
-import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { LastRowDeltaMatching, WaitForRowDeltaQuiet } from '../checks/server-cache.checks';
+import type { RecordedWrite } from '@memberjunction/testing-integration';
+import {
+    IsPlainEntitySlot,
+    LastRowDeltaMatching,
+    WaitForRowDeltaQuiet,
+    WritesForEntityFilter,
+    type RowDeltaStorageContext
+} from '../checks/server-cache.checks';
 
+const ENTITY = 'MJ: User Settings';
 const SAVED_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const OTHER_ID = 'bbbbbbbb-5555-6666-7777-888888888888';
 
@@ -35,100 +44,130 @@ function payload(over: Partial<CacheRowDeltaPayload>): CacheRowDeltaPayload {
 const upsertOf = (id: string, rowCount = 4) => payload({ upsertedRows: [{ ID: id, Setting: 'x' }], rowCount, totalRowCount: rowCount });
 const removalOf = (id: string, rowCount = 3) => payload({ deletedPrimaryKeys: [{ ID: id }], rowCount, totalRowCount: rowCount });
 
-/** A recorded write as the instrumented provider shapes it: only `Options.pubSubData` is read here. */
-function write(key: string, p: CacheRowDeltaPayload) {
+/** A recorded `row_delta` write as the instrumented provider shapes it. */
+function rowDeltaWrite(key: string, p: CacheRowDeltaPayload): RecordedWrite {
     return { Key: key, Category: 'RunViewCache', Options: { pubSubAction: 'row_delta', pubSubData: JSON.stringify(p) } };
 }
 
-/** A context whose Storage replays a fixed list of recorded `row_delta` writes. */
-function ctxWith(writes: ReturnType<typeof write>[]): IntegrationCheckContext {
-    return {
-        Storage: {
-            RowDeltaWrites: () => writes,
-            Writes: writes
-        }
-    } as unknown as IntegrationCheckContext;
+/** A plain `SetItem` write in `RunViewCache` (as S32/S33 observe on cache fill). */
+function cacheFillWrite(key: string, category: string = 'RunViewCache'): RecordedWrite {
+    return { Key: key, Category: category, Options: undefined };
 }
 
-/** The predicates S34 uses, over the saved record's key. */
-const isUpsertOfSaved = (p: CacheRowDeltaPayload) => p.upsertedRows.some(r => r['ID'] === SAVED_ID);
-const isRemovalOfSaved = (p: CacheRowDeltaPayload) => p.deletedPrimaryKeys.some(k => k['ID'] === SAVED_ID);
+/** A cast-free context whose Storage replays a fixed list of recorded writes. */
+function ctxWith(writes: RecordedWrite[]): RowDeltaStorageContext {
+    return {
+        Storage: {
+            RowDeltaWrites: () => writes.filter(w => w.Options?.pubSubAction === 'row_delta'),
+            Writes: writes
+        }
+    };
+}
+
+/** The predicates S34 uses: plain unfiltered slot key AND matching primary key in payload. */
+const isPlainUpsertOfSaved = (p: CacheRowDeltaPayload, w: RecordedWrite) =>
+    IsPlainEntitySlot(w.Key, ENTITY) && p.upsertedRows.some(r => r['ID'] === SAVED_ID);
+const isPlainRemovalOfSaved = (p: CacheRowDeltaPayload, w: RecordedWrite) =>
+    IsPlainEntitySlot(w.Key, ENTITY) && p.deletedPrimaryKeys.some(k => k['ID'] === SAVED_ID);
+
+describe('IsPlainEntitySlot', () => {
+    it('accepts unfiltered slots and excludes IgnoreMaxRows (imr:1), filtered, or other-entity slots', () => {
+        expect(IsPlainEntitySlot('MJ: User Settings|_|_|-1|0|_|_|conn', ENTITY)).toBe(true);
+        expect(IsPlainEntitySlot('MJ: User Settings|||||', ENTITY)).toBe(true);
+        expect(IsPlainEntitySlot('MJ: User Settings|_|_|-1|0|_|_|imr:1|conn', ENTITY)).toBe(false);
+        expect(IsPlainEntitySlot('MJ: User Settings||||imr:1|', ENTITY)).toBe(false);
+        expect(IsPlainEntitySlot("MJ: User Settings|UserID='u1'|_|-1|0|_|_", ENTITY)).toBe(false);
+        expect(IsPlainEntitySlot('MJ: Entities|_|_|-1|0|_|_', ENTITY)).toBe(false);
+    });
+});
 
 describe('LastRowDeltaMatching (S34 write selection, #6537)', () => {
     it('does NOT return a late upsert when the removal is what was asked for — the #6537 failure', () => {
-        // The interleaving that failed: the delete's removal is recorded, then the save's second,
-        // late slot write lands after it. "The last row_delta write" is the upsert, which is why
-        // AssertRemovalDelta reported `a delete upserts nothing — expected 0, got 1`.
         const ctx = ctxWith([
-            write('MJ: User Settings|||||', removalOf(SAVED_ID)),
-            write('MJ: User Settings||||imr:1|', upsertOf(SAVED_ID))
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(SAVED_ID)),
+            rowDeltaWrite('MJ: User Settings||||imr:1|', upsertOf(SAVED_ID))
         ]);
 
-        const selected = LastRowDeltaMatching(ctx, isRemovalOfSaved, 'S34 removal');
+        const selected = LastRowDeltaMatching(ctx, isPlainRemovalOfSaved, 'S34 removal');
 
         expect(selected.payload.upsertedRows).toEqual([]);
         expect(selected.payload.deletedPrimaryKeys).toEqual([{ ID: SAVED_ID }]);
+        expect(selected.key).toBe('MJ: User Settings|||||');
     });
 
-    it('returns the LAST matching write, which is the plain slot the baseline was read from', () => {
-        // Both slots broadcast a removal; the plain unfiltered slot is written last and is the one
-        // whose rowCount S34 compares against its own baseline.
-        const ctx = ctxWith([
-            write('MJ: User Settings||||imr:1|', removalOf(SAVED_ID, 99)),
-            write('MJ: User Settings|||||', removalOf(SAVED_ID, 3))
+    it('selects the plain unfiltered slot regardless of whether imr:1 arrives BEFORE or AFTER it', () => {
+        // When imr:1 lands first:
+        const imrFirst = ctxWith([
+            rowDeltaWrite('MJ: User Settings||||imr:1|', removalOf(SAVED_ID, 99)),
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(SAVED_ID, 3))
         ]);
+        expect(LastRowDeltaMatching(imrFirst, isPlainRemovalOfSaved, 'S34 removal').payload.rowCount).toBe(3);
 
-        expect(LastRowDeltaMatching(ctx, isRemovalOfSaved, 'S34 removal').payload.rowCount).toBe(3);
+        // When imr:1 lands LAST (the actual #6537 background arrival order) with a different rowCount:
+        const imrLast = ctxWith([
+            rowDeltaWrite('MJ: User Settings|_|_|-1|0|_|_|conn', removalOf(SAVED_ID, 3)),
+            rowDeltaWrite('MJ: User Settings|_|_|-1|0|_|_|imr:1|conn', removalOf(SAVED_ID, 99))
+        ]);
+        const picked = LastRowDeltaMatching(imrLast, isPlainRemovalOfSaved, 'S34 removal');
+        expect(picked.payload.rowCount).toBe(3);
+        expect(picked.key).toBe('MJ: User Settings|_|_|-1|0|_|_|conn');
     });
 
     it('ignores writes about a different record', () => {
         const ctx = ctxWith([
-            write('MJ: User Settings|||||', removalOf(OTHER_ID)),
-            write('MJ: User Settings|||||', removalOf(SAVED_ID))
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(OTHER_ID)),
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(SAVED_ID))
         ]);
 
-        expect(LastRowDeltaMatching(ctx, isRemovalOfSaved, 'S34 removal').payload.deletedPrimaryKeys).toEqual([{ ID: SAVED_ID }]);
+        expect(LastRowDeltaMatching(ctx, isPlainRemovalOfSaved, 'S34 removal').payload.deletedPrimaryKeys).toEqual([{ ID: SAVED_ID }]);
     });
 
-    it('selects the upsert phase by payload too', () => {
+    it('selects the upsert phase by payload and slot key', () => {
         const ctx = ctxWith([
-            write('MJ: User Settings|||||', upsertOf(SAVED_ID)),
-            write('MJ: User Settings|||||', removalOf(SAVED_ID))
+            rowDeltaWrite('MJ: User Settings|||||', upsertOf(SAVED_ID, 4)),
+            rowDeltaWrite('MJ: User Settings||||imr:1|', upsertOf(SAVED_ID, 99)),
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(SAVED_ID, 3))
         ]);
 
-        expect(LastRowDeltaMatching(ctx, isUpsertOfSaved, 'S34 upsert').payload.upsertedRows).toEqual([{ ID: SAVED_ID, Setting: 'x' }]);
+        const selected = LastRowDeltaMatching(ctx, isPlainUpsertOfSaved, 'S34 upsert');
+        expect(selected.payload.upsertedRows).toEqual([{ ID: SAVED_ID, Setting: 'x' }]);
+        expect(selected.payload.rowCount).toBe(4);
     });
 
-    it('fails the check, naming the counts, when nothing carried the expected row', () => {
-        const ctx = ctxWith([write('MJ: User Settings|||||', removalOf(OTHER_ID))]);
+    it('fails the check, naming the counts, when nothing carried the expected row on the plain slot', () => {
+        const ctx = ctxWith([
+            rowDeltaWrite('MJ: User Settings|||||', removalOf(OTHER_ID)),
+            rowDeltaWrite('MJ: User Settings||||imr:1|', removalOf(SAVED_ID, 99))
+        ]);
 
-        expect(() => LastRowDeltaMatching(ctx, isRemovalOfSaved, 'S34 removal'))
-            .toThrow(/S34 removal: no row_delta write carried the expected row.*1 row_delta write\(s\) out of 1 write\(s\)/s);
+        expect(() => LastRowDeltaMatching(ctx, isPlainRemovalOfSaved, 'S34 removal'))
+            .toThrow(/S34 removal: no row_delta write carried the expected row.*2 row_delta write\(s\) out of 2 write\(s\)/s);
     });
 });
 
 describe('WaitForRowDeltaQuiet', () => {
-    it('waits for a late write instead of returning on the first one', async () => {
-        // The property the old `WaitForRowDeltaWrite` lacked: it returned as soon as ONE write
-        // existed, so a save's remaining slot writes were still in flight when the delete began.
-        const writes = [write('MJ: User Settings|||||', upsertOf(SAVED_ID))];
+    it('waits for a late write instead of returning on the first one, while still picking the plain slot', async () => {
+        const plain = rowDeltaWrite('MJ: User Settings|_|_|-1|0|_|_', upsertOf(SAVED_ID, 4));
+        const lateImr = rowDeltaWrite('MJ: User Settings|_|_|-1|0|_|_|imr:1', upsertOf(SAVED_ID, 99));
+        const writes: RecordedWrite[] = [plain];
         const ctx = ctxWith(writes);
-        const late = write('MJ: User Settings||||imr:1|', upsertOf(SAVED_ID));
-        setTimeout(() => writes.push(late), 60);
+        setTimeout(() => writes.push(lateImr), 60);
 
         await WaitForRowDeltaQuiet(ctx, 100, 2000);
 
         expect(writes).toHaveLength(2);
-        expect(LastRowDeltaMatching(ctx, isUpsertOfSaved, 'S34 upsert').bytes).toBe((late.Options.pubSubData).length);
+        const selected = LastRowDeltaMatching(ctx, isPlainUpsertOfSaved, 'S34 upsert');
+        expect(selected.payload.rowCount).toBe(4);
+        expect(selected.key).toBe(plain.Key);
     });
 
     it('returns once the stream is quiet', async () => {
-        const ctx = ctxWith([write('MJ: User Settings|||||', upsertOf(SAVED_ID))]);
+        const ctx = ctxWith([rowDeltaWrite('MJ: User Settings|||||', upsertOf(SAVED_ID))]);
         const startedAt = Date.now();
 
         await WaitForRowDeltaQuiet(ctx, 100, 2000);
 
-        expect(Date.now() - startedAt).toBeLessThan(1500); // returned on quiet, not on the timeout
+        expect(Date.now() - startedAt).toBeLessThan(1500);
     });
 
     it('gives up at the timeout when no write ever arrives, leaving the selector to report it', async () => {
@@ -136,6 +175,24 @@ describe('WaitForRowDeltaQuiet', () => {
 
         await WaitForRowDeltaQuiet(ctx, 50, 150);
 
-        expect(() => LastRowDeltaMatching(ctx, isRemovalOfSaved, 'S34 removal')).toThrow(/no row_delta write carried the expected row/);
+        expect(() => LastRowDeltaMatching(ctx, isPlainRemovalOfSaved, 'S34 removal')).toThrow(/no row_delta write carried the expected row/);
+    });
+});
+
+describe('WritesForEntityFilter (S32/S33 key-scoped write counts, #6537)', () => {
+    it('ignores background writes on unrelated entities and sibling filters', () => {
+        const filterOptedOut = "(Name IS NOT NULL OR 's33a'='s33a')";
+        const filterDefault = "(Name IS NOT NULL OR 's33b'='s33b')";
+        const ctx = ctxWith([
+            // Late background write from an earlier mutation check (the 2026-11-12 S32 failure):
+            cacheFillWrite('MJ: Queries|_|_|-1|0|_|_|imr:1|conn'),
+            // Registry persistence in another category:
+            cacheFillWrite('__registry__', 'LocalCacheRegistry'),
+            // S33b's default index populating its superset slot:
+            cacheFillWrite(`MJ: Entities|${filterDefault}|_|-1|0|_|_|conn`)
+        ]);
+
+        expect(WritesForEntityFilter(ctx, 'MJ: Entities', filterOptedOut)).toHaveLength(0);
+        expect(WritesForEntityFilter(ctx, 'MJ: Entities', filterDefault)).toHaveLength(1);
     });
 });

@@ -10,7 +10,7 @@
  */
 import { BaseSingleton } from '@memberjunction/global';
 import { NamedCheck, BundleLifecycle } from './check';
-import type { AllowedSkip } from './skip-gate';
+import type { AllowedSkip, AllowedSkipTransport } from './skip-gate';
 
 export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegistry> {
     private checks = new Map<string, NamedCheck>();
@@ -105,15 +105,26 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
      */
     public AllowSkip(entry: AllowedSkip): void {
         const existing = this.allowedSkips.get(entry.CheckId);
-        if (existing && (existing.Gate !== entry.Gate || existing.Reason !== entry.Reason)) {
+        if (existing && (existing.Gate !== entry.Gate || existing.Reason !== entry.Reason || existing.Transport !== entry.Transport)) {
             throw new Error(`IntegrationCheckRegistry: check '${entry.CheckId}' is already on the skip allowlist with a different entry.`);
         }
         this.allowedSkips.set(entry.CheckId, entry);
     }
 
-    /** The allowlist entry for a check, or undefined when a skip of it is unexpected. */
-    public GetAllowedSkip(checkId: string): AllowedSkip | undefined {
-        return this.allowedSkips.get(checkId);
+    /**
+     * The allowlist entry for a check, or undefined when a skip of it is unexpected. When
+     * `transport` is passed and the entry declares a {@link AllowedSkip.Transport}, the entry
+     * applies only when the two match.
+     */
+    public GetAllowedSkip(checkId: string, transport?: AllowedSkipTransport): AllowedSkip | undefined {
+        const entry = this.allowedSkips.get(checkId);
+        if (!entry) {
+            return undefined;
+        }
+        if (entry.Transport !== undefined && transport !== undefined && entry.Transport !== transport) {
+            return undefined;
+        }
+        return entry;
     }
 
     /** Every allowlist entry, sorted by check Id. */

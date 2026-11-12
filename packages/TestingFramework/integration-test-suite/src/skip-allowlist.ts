@@ -274,54 +274,50 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'The end-to-end Save() leg needs an ACTIVE non-Owner principal that holds CanCreate on MJ: User Roles '
             + 'AND holds at least one role AND lacks at least one — a shape the stock catalog plus the CI fixtures do '
             + 'not produce. Unexercised, not violated: RE1-RE5 are ungated and RE2 proves the guard refuses the '
-            + 'escalation on every run. Seeding such a principal would un-park this leg.'
+            + 'escalation on every run. Seeding such a principal will un-park this leg (#6594).'
     },
     {
         CheckId: 'entity-server-invariants.ESI9',
         Gate: 'not-applicable',
+        Transport: 'client',
         Reason: 'Server-transport-only leg: MJTemplateContentEntityServer.Save wraps param-sync in a provider '
             + 'transaction, which the in-process SQLServerDataProvider has and the client GraphQL provider does not. '
-            + 'The skip is the client shard declining a leg the server shards run.'
+            + 'Scoped to Transport "client" so a skip on a server shard stays a hard failure.'
     },
     {
         CheckId: 'realtime-session-verification.RSV1',
         Gate: 'credentials',
         Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
-            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
-            + 'environment gap.'
+            + 'The deterministic lane boots MJAPI without them (#6595).'
     },
     {
         CheckId: 'realtime-session-verification.RSV2',
         Gate: 'credentials',
         Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
-            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
-            + 'environment gap.'
+            + 'The deterministic lane boots MJAPI without them (#6595).'
     },
     {
         CheckId: 'realtime-session-verification.RSV4',
         Gate: 'credentials',
         Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
-            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
-            + 'environment gap.'
+            + 'The deterministic lane boots MJAPI without them (#6595).'
     },
     {
         CheckId: 'realtime-session-verification.RSV5',
         Gate: 'credentials',
         Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
-            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
-            + 'environment gap.'
+            + 'The deterministic lane boots MJAPI without them (#6595).'
     },
     {
         CheckId: 'realtime-session-verification.RSV6',
         Gate: 'credentials',
         Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
             + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
-            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
-            + 'environment gap.'
+            + 'The deterministic lane boots MJAPI without them (#6595).'
     },
 ];
 
