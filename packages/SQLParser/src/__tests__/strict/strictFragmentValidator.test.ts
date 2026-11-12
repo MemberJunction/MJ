@@ -148,6 +148,35 @@ describe('StrictFragmentValidator.ValidateReadOnlyStatement', () => {
         expect(result).toMatchObject({ IsValid: false, Refusal: 'NotPlainSelect', StatementKind: 'select-into' });
     });
 
+    it.each([
+        ['UNION', 'SELECT ID FROM dbo.vwUsers UNION SELECT UserID FROM dbo.vwOrders'],
+        ['UNION ALL', 'SELECT ID FROM dbo.vwUsers UNION ALL SELECT UserID FROM dbo.vwOrders'],
+    ])('accepts a %s of reads on SQL Server and reports the reads of every branch', (_op, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, Refusal: null, StatementKind: 'set-op' });
+        expect(result.ParsedSQL).toBe(sql);
+        expect(result.Reads?.Relations.map(describeRelation)).toEqual(['dbo|vwUsers||table', 'dbo|vwOrders||table']);
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it.each(['UNION ALL', 'INTERSECT', 'EXCEPT'])('accepts a %s of reads on PostgreSQL', (op) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(`SELECT id FROM public.users ${op} SELECT user_id FROM public.orders`, pg, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, StatementKind: 'set-op' });
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it('accepts a set operation inside a CTE and reads every branch', () => {
+        const sql = 'WITH x AS (SELECT ID FROM dbo.vwUsers UNION SELECT UserID FROM dbo.vwOrders) SELECT * FROM x';
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result.IsValid).toBe(true);
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table', '|x||cte']);
+    });
+
+    it('refuses a set operation one of whose branches is a SELECT … INTO', () => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement('SELECT ID FROM dbo.vwUsers UNION SELECT ID INTO #t FROM dbo.vwOrders', ss);
+        expect(result).toMatchObject({ IsValid: false, Refusal: 'NotPlainSelect' });
+    });
+
     it('reports the same facts with and without the fallback parse for text that parses directly', () => {
         const sql = 'SELECT ID FROM dbo.vwUsers WHERE Name IN (SELECT Name FROM dbo.vwPeople)';
         const withFallback = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
