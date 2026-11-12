@@ -1,5 +1,5 @@
 /**
- * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA12, client
+ * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA13, client
  * transport, needs MJAPI): who a conversation message is from, enforced by the server and proven over the GraphQL
  * wire as two real users.
  *
@@ -53,6 +53,8 @@
  *   CA12: the grantee's agent turn still gets a reply, written by the server: the agent-turn mutation names the
  *        grantee's message, its acknowledgement names the reply row the server created, the server settles it, and
  *        the grantee cannot rewrite it. With no model keys the run itself fails fast; the check is about who writes.
+ *   CA13: the owner cannot hand the conversation to the grantee: a save with the grantee's `UserID` is refused, the
+ *        conversation keeps its owner, and the owner's message with no `UserID` still reads as the owner's (#5623).
  *
  * CA1–CA6 and CA10 save with entity objects from the acting user's own connection and assert both the
  * `Save()`/`Delete()` result and `LatestResult.CompleteMessage`. CA7–CA9 bypass the entity layer and send raw GraphQL,
@@ -106,7 +108,8 @@ const REFUSAL = {
     NoAccess: 'You do not have access to this conversation.',
     MovedConversation: 'A message cannot be moved to another conversation or fork.',
     TransactionVariable: 'A conversation message cannot take its values from a transaction variable.',
-    ServerWritesReplies: "Only the server writes an agent's reply."
+    ServerWritesReplies: "Only the server writes an agent's reply.",
+    OwnerUnchangeable: "A conversation's owner cannot be changed."
 } as const;
 
 /** How long CA12 waits for the server to settle the reply row it created (the run ends fast with no model to call). */
@@ -1035,6 +1038,36 @@ async function checkCa12AgentTurnGetsAServerWrittenReply(ctx: IntegrationCheckCo
     console.log(`      → reply ${created!.ID} created by the server before the ack, settled ${settled.Status}, and not rewritable by the grantee`);
 }
 
+/**
+ * CA13 — the owner cannot hand the conversation to the grantee (#5623). Uses only Setup's conversation and owner
+ * message; a passing run leaves both untouched.
+ */
+async function checkCa13OwnerCannotChangeOwner(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA13');
+    const before = await readOwnerMessage(ctx, fx, 'CA13');
+
+    const conversation = await fx.Owner.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, fx.Owner.Provider.CurrentUser);
+    Assert(await conversation.Load(fx.ConversationID), `CA13: ${fx.Owner.Email} could not load their conversation ${fx.ConversationID}`);
+    conversation.UserID = fx.Grantee.UserID;
+    let outcome: WriteOutcome;
+    try {
+        const done = await conversation.Save();
+        outcome = { Done: done, Message: conversation.LatestResult?.CompleteMessage ?? '' };
+    } catch (e) {
+        outcome = { Done: false, Message: errorText(e) };
+    }
+    assertRefusedWith(outcome, REFUSAL.OwnerUnchangeable, `CA13: ${fx.Owner.Email} handing the conversation to ${fx.Grantee.Email}`);
+
+    const stored = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJConversationEntity, 'ID' | 'UserID'>>(
+        { EntityName: CONVERSATIONS_ENTITY, ExtraFilter: `ID = '${fx.ConversationID}'`, Fields: ['ID', 'UserID'], ResultType: 'simple', BypassCache: true },
+        ctx.User
+    );
+    Assert(stored.Success && stored.Results.length === 1, `CA13: reading conversation ${fx.ConversationID} failed: ${stored.ErrorMessage}`);
+    Assert(sameUser(stored.Results[0].UserID, fx.Owner.UserID),
+        `CA13: the conversation's owner is now ${stored.Results[0].UserID}, expected ${fx.Owner.UserID}`);
+    await assertMessageUnchanged(ctx, before, "CA13: the owner's message after the refused owner change");
+}
+
 export const ConversationAuthorshipClientChecks: NamedCheck[] = [
     {
         Id: `${BUNDLE}.CA1`,
@@ -1107,6 +1140,12 @@ export const ConversationAuthorshipClientChecks: NamedCheck[] = [
         Name: "CA12: the grantee's agent turn gets a reply the server creates (named in the ack) and settles, and the grantee cannot rewrite it",
         RequiresMutation: true,
         Fn: checkCa12AgentTurnGetsAServerWrittenReply
+    },
+    {
+        Id: `${BUNDLE}.CA13`,
+        Name: "CA13: the owner handing the conversation to the grantee is refused; the owner and the owner's message stay as they were",
+        RequiresMutation: true,
+        Fn: checkCa13OwnerCannotChangeOwner
     }
 ];
 
