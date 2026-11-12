@@ -92,6 +92,21 @@ export interface RejectedAgentMergeHunk {
     RejectedIncomingText: string;
 }
 
+/**
+ * The per-key values a slide deck's room structures hold for one serialized deck, used to undo an agent
+ * change key by key: deck metadata, slides by `SlideID`, and slide order.
+ */
+interface StructureEntries {
+    Meta: Map<string, string>;
+    Items: Map<string, string>;
+    Order: string[];
+}
+
+/** {@link StructureEntries} for a workbook, plus its cells keyed `<SheetID>::<RowID>::<ColumnID>`. */
+interface WorkbookStructureEntries extends StructureEntries {
+    Cells: Map<string, string>;
+}
+
 /** Detailed 3-way merge outcome returned by {@link ArtifactCollaborationServer.MergeConcurrentDocumentEditsDetailed} (`R7-5`). */
 export interface ConcurrentDocumentMergeResult {
     MergedText: string;
@@ -355,7 +370,8 @@ interface RegisteredLiveMutationHookResult {
         RejectedAgentLines: string[];
     }>;
     commit?: (persisted?: { versionId?: string; versionNumber?: number }) => Promise<RegisteredLiveMutationHookResult | void>;
-    rollback?: () => Promise<void> | void;
+    /** Undoes the agent's change; `rolledBackVersionId` is the version row the manager is discarding, if it persisted one. */
+    rollback?: (rolledBackVersionId?: string) => Promise<void> | void;
 }
 export type ArtifactLiveMutationHookResult = RegisteredLiveMutationHookResult;
 
@@ -2574,8 +2590,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 if (!hasPeers) {
                     return false;
                 }
-            } catch {
-                // Proceed to PublishToRoom if HasRoomPeers fails
+            } catch (err) {
+                // Fall through to the normal sync-request: asking peers that may not exist only costs the
+                // wait, while skipping peers that do exist could miss their edits.
+                LogError(
+                    `ArtifactCollaborationServer: HasRoomPeers failed for artifact '${room.ArtifactID}'; requesting a peer sync anyway: ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
             }
         }
         const syncWaiter = this.createPendingSyncWaiter(room.ArtifactID, timeoutMs, isSatisfied);
@@ -2650,7 +2672,6 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     const existingRoom = this._rooms.get(evt.artifactId.trim().toLowerCase());
                     const preDeferVersionId = existingRoom?.BaseVersionID ?? null;
                     const preDeferVersionNumber = existingRoom?.BaseVersionNumber ?? 0;
-                    const preDeferDirty = existingRoom?.DirtyVersion ?? false;
                     const preDeferBaseVersionText = existingRoom?.BaseVersionText ?? null;
                     const preDeferContent = existingRoom
                         ? this.extractRoomSerializedContent(existingRoom.Doc)
@@ -2667,6 +2688,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (!preview.Success) {
                         return undefined;
                     }
+                    // What the room actually held once the agent's change landed (set by `commit`). A
+                    // later rollback undoes exactly this, so it needs the real post-commit text, not the
+                    // dry-run preview, which can differ when someone typed between preview and commit.
+                    let appliedAgentContent: string | undefined;
                     return {
                         mergedContent: preview.MergedContent,
                         hadConflict: Boolean(preview.HadConflict),
@@ -2727,6 +2752,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 if (currentTargetRoom.Connections.size === 0 && !this._shuttingDown) {
                                     this.scheduleIdleRoomDisposal(currentTargetRoom);
                                 }
+                                appliedAgentContent = actualRoomContent;
                                 return {
                                     applied: true,
                                     mergedContent: actualRoomContent,
@@ -2748,6 +2774,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     persistedContent: targetPersistedContent
                                 }
                             );
+                            if (commitRes.Success && typeof commitRes.MergedContent === 'string') {
+                                appliedAgentContent = commitRes.MergedContent;
+                            }
                             return {
                                 applied: commitRes.Success,
                                 mergedContent: commitRes.MergedContent,
@@ -2769,46 +2798,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                 return;
                             }
 
-                            const revertTargetBase = preDeferBaseVersionText || evt.previousContent || '';
-                            const targetPersistedContent = preview.MergedContent ?? evt.updatedContent;
-                            const yText = currentRoom.Doc.getText('content');
+                            // The room returns to the version it was based on before the agent call...
+                            const restoredBaseText = preDeferBaseVersionText || evt.previousContent || '';
+                            // ...but its CONTENT returns to what it held right before the agent call, not to
+                            // that saved text: anything typed and not yet saved was already part of the room
+                            // and is not the agent's to undo.
+                            const agentResultContent =
+                                appliedAgentContent ?? preview.MergedContent ?? evt.updatedContent;
                             currentRoom.Doc.transact(() => {
-                                this.applyMinimalTextDiff(
-                                    yText,
-                                    yText.toString(),
-                                    revertTargetBase,
-                                    targetPersistedContent
+                                this.revertAgentMutationInDoc(
+                                    currentRoom.Doc,
+                                    agentResultContent,
+                                    [agentResultContent, preview.MergedContent ?? '', evt.updatedContent],
+                                    preDeferContent
                                 );
-                            }, 'server-rollback');
-                            if (
-                                currentRoom.Doc.getMap('slidesById').size > 0 ||
-                                currentRoom.Doc.getMap('worksheetsById').size > 0
-                            ) {
-                                currentRoom.Doc.transact(() => {
-                                    this.syncSlideDeckStructuresIfPresent(currentRoom.Doc, revertTargetBase, {
-                                        preserveConcurrentAdditions: true,
-                                        baselineContent: targetPersistedContent
-                                    });
-                                    this.syncSpreadsheetStructuresIfPresent(currentRoom.Doc, revertTargetBase, null, {
-                                        preserveConcurrentAdditions: true,
-                                        baselineContent: targetPersistedContent
-                                    });
-                                }, 'server-rollback');
-                            }
-
-                            currentRoom.BaseVersionID = preDeferVersionId;
-                            currentRoom.BaseVersionNumber = preDeferVersionNumber;
-                            currentRoom.BaseVersionText = revertTargetBase;
-                            const postRollbackText = this.extractRoomSerializedContent(currentRoom.Doc);
-                            currentRoom.DirtyVersion = postRollbackText !== revertTargetBase;
-                            currentRoom.PreOutOfBandDocState = null;
-                            currentRoom.LastReconciledOobVersionID = null;
-                            currentRoom.LastReconciledOobContent = null;
-                            currentRoom.LastReconciledOobMergeResult = null;
-                            currentRoom.LastReconciledBaselineText = null;
-
-                            const meta = currentRoom.Doc.getMap('meta');
-                            currentRoom.Doc.transact(() => {
+                                const meta = currentRoom.Doc.getMap('meta');
                                 if (preDeferVersionId) {
                                     meta.set('versionId', preDeferVersionId);
                                     meta.set('baseVersionId', preDeferVersionId);
@@ -2817,8 +2821,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                                     meta.set('versionNumber', preDeferVersionNumber);
                                     meta.set('baseVersionNumber', preDeferVersionNumber);
                                 }
-                                meta.set('baseVersionText', revertTargetBase);
+                                meta.set('baseVersionText', restoredBaseText);
                             }, 'server-rollback');
+
+                            currentRoom.BaseVersionID = preDeferVersionId;
+                            currentRoom.BaseVersionNumber = preDeferVersionNumber;
+                            currentRoom.BaseVersionText = restoredBaseText;
+                            const postRollbackText = this.extractRoomSerializedContent(currentRoom.Doc);
+                            currentRoom.DirtyVersion = postRollbackText !== restoredBaseText;
+                            currentRoom.PreOutOfBandDocState = null;
+                            currentRoom.LastReconciledOobVersionID = null;
+                            currentRoom.LastReconciledOobContent = null;
+                            currentRoom.LastReconciledOobMergeResult = null;
+                            currentRoom.LastReconciledBaselineText = null;
 
                             const fullState = Y.encodeStateAsUpdate(currentRoom.Doc);
                             const encoder = encoding.createEncoder();
@@ -7068,6 +7083,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             const deck = SlideDeckEngine.Instance.ParseDeckSpec(trimmed);
             const deckMeta = doc.getMap<string>('deckMeta');
+            // On a merge, a value the incoming version left as it was in the baseline is not written,
+            // so a concurrent live edit to that slide or field survives the reconcile.
+            const baselineEntries = options?.preserveConcurrentAdditions && options.baselineContent
+                ? this.parseDeckStructureEntries(options.baselineContent)
+                : null;
+            const setDeckMeta = (key: string, value: string): void => {
+                if (deckMeta.get(key) !== value && !this.isUnchangedByIncoming(baselineEntries?.Meta, key, value)) {
+                    deckMeta.set(key, value);
+                }
+            };
             const slidesById = doc.getMap<string>('slidesById');
             const slideOrder = doc.getArray<string>('slideOrder');
 
@@ -7088,30 +7113,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const nextThemeJson = JSON.stringify(deck.Theme);
             const nextMasterJson = JSON.stringify(deck.Master);
 
-            if (deckMeta.get('DeckID') !== nextDeckId) {
-                deckMeta.set('DeckID', nextDeckId);
-            }
-            if (deckMeta.get('Title') !== nextTitle) {
-                deckMeta.set('Title', nextTitle);
-            }
-            if (deckMeta.get('Subtitle') !== nextSubtitle) {
-                deckMeta.set('Subtitle', nextSubtitle);
-            }
-            if (deckMeta.get('AspectRatio') !== nextAspectRatio) {
-                deckMeta.set('AspectRatio', nextAspectRatio);
-            }
-            if (deckMeta.get('Theme') !== nextThemeJson) {
-                deckMeta.set('Theme', nextThemeJson);
-            }
-            if (deckMeta.get('Master') !== nextMasterJson) {
-                deckMeta.set('Master', nextMasterJson);
-            }
+            setDeckMeta('DeckID', nextDeckId);
+            setDeckMeta('Title', nextTitle);
+            setDeckMeta('Subtitle', nextSubtitle);
+            setDeckMeta('AspectRatio', nextAspectRatio);
+            setDeckMeta('Theme', nextThemeJson);
+            setDeckMeta('Master', nextMasterJson);
 
             const nextIds = new Set<string>();
             for (const slide of deck.Slides) {
                 nextIds.add(slide.SlideID);
                 const slideJson = JSON.stringify(slide);
-                if (slidesById.get(slide.SlideID) !== slideJson) {
+                if (
+                    slidesById.get(slide.SlideID) !== slideJson &&
+                    !(slidesById.has(slide.SlideID) && this.isUnchangedByIncoming(baselineEntries?.Items, slide.SlideID, slideJson))
+                ) {
                     slidesById.set(slide.SlideID, slideJson);
                 }
             }
@@ -7129,7 +7145,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const currentOrder = slideOrder.toArray();
-            const targetOrder = deck.Slides.map((s) => s.SlideID);
+            const targetOrder = this.resolveMergedOrder(
+                currentOrder,
+                deck.Slides.map((s) => s.SlideID),
+                baselineEntries?.Order,
+                (id) => slidesById.has(id)
+            );
             if (preservedConcurrentSlideIds.size > 0) {
                 for (const id of currentOrder) {
                     if (preservedConcurrentSlideIds.has(id) && !targetOrder.includes(id)) {
@@ -7183,6 +7204,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             const workbookMeta = doc.getMap<string>('workbookMeta');
             const sheetOrder = doc.getArray<string>('sheetOrder');
+            // On a merge, a value the incoming version left as it was in the baseline is not written,
+            // so a concurrent live edit to that cell, sheet or field survives the reconcile.
+            const baselineEntries = options?.preserveConcurrentAdditions && options.baselineContent
+                ? this.parseWorkbookStructureEntries(options.baselineContent)
+                : null;
+            const setWorkbookMeta = (key: string, value: string): void => {
+                if (workbookMeta.get(key) !== value && !this.isUnchangedByIncoming(baselineEntries?.Meta, key, value)) {
+                    workbookMeta.set(key, value);
+                }
+            };
             const worksheetsById = doc.getMap<string>('worksheetsById');
             const sheetCellsByCoord = doc.getMap<string>('sheetCellsByCoord');
 
@@ -7211,25 +7242,20 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
             }
 
-            if (workbookMeta.get('WorkbookID') !== wb.WorkbookID) {
-                workbookMeta.set('WorkbookID', wb.WorkbookID);
-            }
-            if (workbookMeta.get('Title') !== wb.Title) {
-                workbookMeta.set('Title', wb.Title);
-            }
-            if (workbookMeta.get('ActiveSheetID') !== wb.ActiveSheetID) {
-                workbookMeta.set('ActiveSheetID', wb.ActiveSheetID);
-            }
-            const namedRangesJson = JSON.stringify(wb.NamedRanges ?? []);
-            if (workbookMeta.get('NamedRanges') !== namedRangesJson) {
-                workbookMeta.set('NamedRanges', namedRangesJson);
-            }
+            setWorkbookMeta('WorkbookID', wb.WorkbookID);
+            setWorkbookMeta('Title', wb.Title);
+            setWorkbookMeta('ActiveSheetID', wb.ActiveSheetID);
+            setWorkbookMeta('NamedRanges', JSON.stringify(wb.NamedRanges ?? []));
 
             const validSheetIds = new Set<string>();
             const validCellCoordKeys = new Set<string>();
 
             for (const ws of wb.Worksheets) {
                 validSheetIds.add(ws.SheetID);
+                const incomingSheetJson = JSON.stringify({ ...ws, Rows: ws.Rows, Columns: ws.Columns, Cells: {} });
+                const keepLiveSheet =
+                    worksheetsById.has(ws.SheetID) &&
+                    this.isUnchangedByIncoming(baselineEntries?.Items, ws.SheetID, incomingSheetJson);
                 let mergedRows = ws.Rows;
                 let mergedCols = ws.Columns;
 
@@ -7268,7 +7294,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     Cells: {}
                 };
                 const sheetStructJson = JSON.stringify(sheetStruct);
-                if (worksheetsById.get(ws.SheetID) !== sheetStructJson) {
+                if (!keepLiveSheet && worksheetsById.get(ws.SheetID) !== sheetStructJson) {
                     worksheetsById.set(ws.SheetID, sheetStructJson);
                 }
 
@@ -7276,7 +7302,10 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     const coordKey = `${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`;
                     validCellCoordKeys.add(coordKey);
                     const cellJson = JSON.stringify(cell);
-                    if (sheetCellsByCoord.get(coordKey) !== cellJson) {
+                    if (
+                        sheetCellsByCoord.get(coordKey) !== cellJson &&
+                        !(sheetCellsByCoord.has(coordKey) && this.isUnchangedByIncoming(baselineEntries?.Cells, coordKey, cellJson))
+                    ) {
                         sheetCellsByCoord.set(coordKey, cellJson);
                     }
                 }
@@ -7305,7 +7334,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
 
             const currentOrder = sheetOrder.toArray();
-            const targetOrder = wb.Worksheets.map((w) => w.SheetID);
+            const targetOrder = this.resolveMergedOrder(
+                currentOrder,
+                wb.Worksheets.map((w) => w.SheetID),
+                baselineEntries?.Order,
+                (id) => worksheetsById.has(id)
+            );
             if (preservedConcurrentSheetIds.size > 0) {
                 for (const sId of currentOrder) {
                     if (preservedConcurrentSheetIds.has(sId) && !targetOrder.includes(sId)) {
@@ -7329,6 +7363,248 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
         } catch {
             // Non-Spreadsheet content
+        }
+    }
+
+    /**
+     * Undoes one agent mutation in `doc` while keeping every edit other users made, before or after
+     * the agent's change (`R15-1`, `R15-3`). Call inside a transaction.
+     *
+     * - Plain text: a 3-way merge with the agent's result as the base, the live text as "ours" and
+     *   `revertToContent` (the room just before the agent call) as "theirs". Lines nobody else touched go
+     *   back; lines someone edited since keep their edit.
+     * - Slide decks and workbooks: per slide / sheet / cell / metadata key, a value is put back only when
+     *   the agent changed it AND the live value is still the agent's. `Y.Text('content')` is then
+     *   re-derived from the structures so the two never disagree.
+     *
+     * @param agentResultContent - the room's content right after the agent's change landed
+     * @param agentCandidateContents - every serialization the agent's values may have been written from
+     *   (the applied result, the dry-run preview, the raw tool output); a live value equal to any of them
+     *   counts as "still the agent's"
+     * @param revertToContent - the room's content right before the agent call
+     */
+    private revertAgentMutationInDoc(
+        doc: Y.Doc,
+        agentResultContent: string,
+        agentCandidateContents: string[],
+        revertToContent: string
+    ): void {
+        const yText = doc.getText('content');
+        const isStructured = doc.getMap('slidesById').size > 0 || doc.getMap('worksheetsById').size > 0;
+        if (!isStructured) {
+            this.applyMinimalTextDiff(yText, yText.toString(), revertToContent, agentResultContent);
+            return;
+        }
+        const candidates = agentCandidateContents.filter((c) => typeof c === 'string' && c.length > 0);
+        this.revertAgentSlideDeckChanges(doc, candidates, revertToContent);
+        this.revertAgentSpreadsheetChanges(doc, candidates, revertToContent);
+        this.applyMinimalTextDiff(yText, yText.toString(), this.extractRoomSerializedContent(doc));
+    }
+
+    /** Per-key revert of an agent's slide-deck change; see {@link revertAgentMutationInDoc}. */
+    private revertAgentSlideDeckChanges(doc: Y.Doc, agentContents: string[], revertToContent: string): void {
+        const revertDeck = this.parseDeckStructureEntries(revertToContent);
+        const agentDecks = agentContents
+            .map((c) => this.parseDeckStructureEntries(c))
+            .filter((d): d is StructureEntries => d !== null);
+        if (!revertDeck || agentDecks.length === 0) {
+            return;
+        }
+        const slidesById = doc.getMap<string>('slidesById');
+        this.revertKeyedMapAgentChanges(slidesById, agentDecks.map((d) => d.Items), revertDeck.Items);
+        this.revertKeyedMapAgentChanges(doc.getMap<string>('deckMeta'), agentDecks.map((d) => d.Meta), revertDeck.Meta);
+        this.revertOrderAgentChange(doc.getArray<string>('slideOrder'), slidesById, agentDecks.map((d) => d.Order), revertDeck.Order);
+    }
+
+    /** Per-key revert of an agent's workbook change; see {@link revertAgentMutationInDoc}. */
+    private revertAgentSpreadsheetChanges(doc: Y.Doc, agentContents: string[], revertToContent: string): void {
+        const revertBook = this.parseWorkbookStructureEntries(revertToContent);
+        const agentBooks = agentContents
+            .map((c) => this.parseWorkbookStructureEntries(c))
+            .filter((b): b is WorkbookStructureEntries => b !== null);
+        if (!revertBook || agentBooks.length === 0) {
+            return;
+        }
+        const worksheetsById = doc.getMap<string>('worksheetsById');
+        this.revertKeyedMapAgentChanges(worksheetsById, agentBooks.map((b) => b.Items), revertBook.Items);
+        this.revertKeyedMapAgentChanges(
+            doc.getMap<string>('sheetCellsByCoord'),
+            agentBooks.map((b) => b.Cells),
+            revertBook.Cells
+        );
+        this.revertKeyedMapAgentChanges(doc.getMap<string>('workbookMeta'), agentBooks.map((b) => b.Meta), revertBook.Meta);
+        this.revertOrderAgentChange(doc.getArray<string>('sheetOrder'), worksheetsById, agentBooks.map((b) => b.Order), revertBook.Order);
+    }
+
+    /**
+     * Puts each key of `map` back to its `revertEntries` value when the agent changed it and nobody has
+     * changed it since. A key whose live value is not one of the agent's values was edited by someone
+     * else after the agent and is left alone; that edit wins.
+     */
+    private revertKeyedMapAgentChanges(
+        map: Y.Map<string>,
+        agentEntryMaps: Map<string, string>[],
+        revertEntries: Map<string, string>
+    ): void {
+        const keys = new Set<string>(revertEntries.keys());
+        for (const agentEntries of agentEntryMaps) {
+            for (const key of agentEntries.keys()) {
+                keys.add(key);
+            }
+        }
+        for (const key of keys) {
+            const revertValue = revertEntries.get(key);
+            const liveValue = map.get(key);
+            if (liveValue === revertValue) {
+                continue;
+            }
+            const liveIsStillAgentValue = agentEntryMaps.some((entries) => entries.get(key) === liveValue);
+            if (!liveIsStillAgentValue) {
+                continue;
+            }
+            if (revertValue === undefined) {
+                map.delete(key);
+            } else {
+                map.set(key, revertValue);
+            }
+        }
+    }
+
+    /**
+     * Restores the pre-agent order of an order array when the live order is still the agent's. Ids that
+     * survived the revert but are not in the old order (someone edited an item the agent added) stay,
+     * appended in their live order; ids no longer in `itemsMap` are dropped.
+     */
+    private revertOrderAgentChange(
+        orderArray: Y.Array<string>,
+        itemsMap: Y.Map<string>,
+        agentOrders: string[][],
+        revertOrder: string[]
+    ): void {
+        const liveOrder = orderArray.toArray();
+        const sameOrder = (a: string[], b: string[]): boolean =>
+            a.length === b.length && a.every((id, idx) => id === b[idx]);
+        if (!agentOrders.some((order) => sameOrder(order, liveOrder))) {
+            return;
+        }
+        const target = revertOrder.filter((id) => itemsMap.has(id));
+        for (const id of liveOrder) {
+            if (itemsMap.has(id) && !target.includes(id)) {
+                target.push(id);
+            }
+        }
+        if (sameOrder(target, liveOrder)) {
+            return;
+        }
+        if (orderArray.length > 0) {
+            orderArray.delete(0, orderArray.length);
+        }
+        orderArray.insert(0, target);
+    }
+
+    /**
+     * True when the incoming version left `key` exactly as it was in the merge baseline, so the live
+     * room's value (possibly a concurrent edit) should be kept rather than overwritten.
+     */
+    private isUnchangedByIncoming(baseline: Map<string, string> | undefined, key: string, incomingValue: string): boolean {
+        return baseline !== undefined && baseline.get(key) === incomingValue;
+    }
+
+    /**
+     * The order to write during a merge. When the incoming version kept the baseline order, a concurrent
+     * live reorder wins: the live order is kept (minus removed items) and items the incoming version added
+     * are appended. Otherwise the incoming order wins, as before.
+     */
+    private resolveMergedOrder(
+        liveOrder: string[],
+        incomingOrder: string[],
+        baselineOrder: string[] | undefined,
+        exists: (id: string) => boolean
+    ): string[] {
+        const incomingKeptBaselineOrder =
+            baselineOrder !== undefined &&
+            baselineOrder.length === incomingOrder.length &&
+            baselineOrder.every((id, idx) => id === incomingOrder[idx]);
+        if (!incomingKeptBaselineOrder) {
+            return incomingOrder;
+        }
+        const merged = liveOrder.filter((id) => exists(id));
+        for (const id of incomingOrder) {
+            if (!merged.includes(id)) {
+                merged.push(id);
+            }
+        }
+        return merged;
+    }
+
+    /**
+     * The values {@link syncSlideDeckStructuresIfPresent} writes for `content`, keyed the same way, or
+     * `null` when `content` is not a slide deck.
+     */
+    private parseDeckStructureEntries(content: string): StructureEntries | null {
+        const trimmed = (content ?? '').trim();
+        if (!trimmed.startsWith('{')) {
+            return null;
+        }
+        try {
+            const raw = JSON.parse(trimmed) as Partial<SlideDeckSpec>;
+            if (!raw || !Array.isArray(raw.Slides) || raw.Slides.length === 0 || !raw.Theme) {
+                return null;
+            }
+            const deck = SlideDeckEngine.Instance.ParseDeckSpec(trimmed);
+            const meta = new Map<string, string>([
+                ['DeckID', deck.DeckID || 'deck-1'],
+                ['Title', deck.Title || 'Presentation'],
+                ['Subtitle', deck.Subtitle || ''],
+                ['AspectRatio', deck.AspectRatio === '4:3' ? '4:3' : '16:9'],
+                ['Theme', JSON.stringify(deck.Theme)],
+                ['Master', JSON.stringify(deck.Master)]
+            ]);
+            const items = new Map<string, string>(deck.Slides.map((s) => [s.SlideID, JSON.stringify(s)]));
+            return { Meta: meta, Items: items, Order: deck.Slides.map((s) => s.SlideID) };
+        } catch (err) {
+            LogError(`ArtifactCollaborationServer: could not parse slide deck structures: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+        }
+    }
+
+    /**
+     * The values {@link syncSpreadsheetStructuresIfPresent} writes for `content`, keyed the same way, or
+     * `null` when `content` is not a workbook.
+     */
+    private parseWorkbookStructureEntries(content: string): WorkbookStructureEntries | null {
+        const trimmed = (content ?? '').trim();
+        const looksLikeWorkbook =
+            (trimmed.startsWith('{') && trimmed.includes('"Worksheets"')) ||
+            trimmed.startsWith('data:') ||
+            trimmed.startsWith('UEsDB');
+        if (!looksLikeWorkbook) {
+            return null;
+        }
+        try {
+            const wb = SpreadsheetEngine.Instance.ParseWorkbook(content);
+            if (!wb || !Array.isArray(wb.Worksheets) || wb.Worksheets.length === 0) {
+                return null;
+            }
+            const meta = new Map<string, string>([
+                ['WorkbookID', wb.WorkbookID],
+                ['Title', wb.Title],
+                ['ActiveSheetID', wb.ActiveSheetID],
+                ['NamedRanges', JSON.stringify(wb.NamedRanges ?? [])]
+            ]);
+            const items = new Map<string, string>();
+            const cells = new Map<string, string>();
+            for (const ws of wb.Worksheets) {
+                const sheetStruct: WorksheetSpec = { ...ws, Rows: ws.Rows, Columns: ws.Columns, Cells: {} };
+                items.set(ws.SheetID, JSON.stringify(sheetStruct));
+                for (const cell of Object.values(ws.Cells)) {
+                    cells.set(`${ws.SheetID}::${cell.RowID}::${cell.ColumnID}`, JSON.stringify(cell));
+                }
+            }
+            return { Meta: meta, Items: items, Cells: cells, Order: wb.Worksheets.map((w) => w.SheetID) };
+        } catch (err) {
+            LogError(`ArtifactCollaborationServer: could not parse workbook structures: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
         }
     }
 
