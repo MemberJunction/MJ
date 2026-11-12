@@ -196,7 +196,7 @@ describe('HealthObservatoryComponent', () => {
         } as unknown as HealthObservatoryService;
 
         // Spy UserInfoEngine setting
-        vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(null);
+        vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
         vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockReturnValue(undefined);
 
         component = new HealthObservatoryComponent(
