@@ -852,7 +852,7 @@ export class RunViewGenericResultRow {
   Data: string;
 }
 
-export const frozenRowSerializationCache = new WeakMap<object, Map<string, RunViewResultRow>>();
+export const FrozenRowSerializationCache = new WeakMap<object, Map<string, RunViewResultRow>>();
 
 @ObjectType()
 export class RunViewResult {
@@ -1540,7 +1540,7 @@ export class RunViewResolver extends ResolverBase {
       const row = rawData[i];
 
       if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
-        const cached = frozenRowSerializationCache.get(row)?.get(entityId);
+        const cached = FrozenRowSerializationCache.get(row)?.get(entityId);
         if (cached) {
           returnResult.push(cached);
           continue;
@@ -1564,10 +1564,10 @@ export class RunViewResolver extends ResolverBase {
       };
 
       if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
-        let entityMap = frozenRowSerializationCache.get(row);
+        let entityMap = FrozenRowSerializationCache.get(row);
         if (!entityMap) {
           entityMap = new Map<string, RunViewResultRow>();
-          frozenRowSerializationCache.set(row, entityMap);
+          FrozenRowSerializationCache.set(row, entityMap);
         }
         entityMap.set(entityId, resultRow);
       }

@@ -34,7 +34,7 @@ export class DatasetItemFilterTypeGQL {
   Filter: string;
 }
 
-export const datasetItemJsonCache = new WeakMap<
+export const DatasetItemJsonCache = new WeakMap<
   object,
   { code: string; entityName: string; entityId: string; dateIso: string; rowCount: number; itemJson: string }
 >();
@@ -110,7 +110,7 @@ export abstract class DatasetResolverBase extends ResolverBase {
         const dateIso = item.LatestUpdateDate instanceof Date
           ? item.LatestUpdateDate.toISOString()
           : String(item.LatestUpdateDate ?? '');
-        const cached = datasetItemJsonCache.get(item.Results);
+        const cached = DatasetItemJsonCache.get(item.Results);
 
         if (
           cached &&
@@ -125,7 +125,7 @@ export abstract class DatasetResolverBase extends ResolverBase {
         }
 
         const itemJson = JSON.stringify(item);
-        datasetItemJsonCache.set(item.Results, {
+        DatasetItemJsonCache.set(item.Results, {
           code: item.Code,
           entityName: item.EntityName,
           entityId: item.EntityID,

@@ -16,11 +16,11 @@ import {
 import {
   RunViewResolver,
   RunViewResultRow,
-  frozenRowSerializationCache,
+  FrozenRowSerializationCache,
 } from '../generic/RunViewResolver.js';
 import {
   DatasetResolverBase,
-  datasetItemJsonCache,
+  DatasetItemJsonCache,
 } from '../resolvers/DatasetResolver.js';
 import { AppContext, UserPayload } from '../types.js';
 
@@ -262,7 +262,7 @@ describe('Wave 4.7 Wire, Schema Diet & Directives Optimizations', () => {
       expect(firstCall.length).toBe(1);
       expect(secondCall.length).toBe(1);
       expect(secondCall[0]).toBe(firstCall[0]);
-      expect(frozenRowSerializationCache.get(frozenRow)?.get('ent-1')).toBe(firstCall[0]);
+      expect(FrozenRowSerializationCache.get(frozenRow)?.get('ent-1')).toBe(firstCall[0]);
     });
 
     it('skips ReplaceByteArraysWithBase64 on non-binary entities while converting byte arrays on binary entities', () => {
@@ -325,7 +325,7 @@ describe('Wave 4.7 Wire, Schema Diet & Directives Optimizations', () => {
       };
 
       const firstOutput = resolver.testSerializeDatasetItems([frozenItem]);
-      const cached = datasetItemJsonCache.get(frozenResults);
+      const cached = DatasetItemJsonCache.get(frozenResults);
 
       expect(cached).toBeDefined();
       expect(cached?.code).toBe('CodeFrozen');
