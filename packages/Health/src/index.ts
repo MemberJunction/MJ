@@ -16,3 +16,5 @@ export * from './telemetry/LocalTelemetrySignalBridge';
 export * from './telemetry/BaseTelemetrySink';
 export * from './telemetry/ShareLayerPackager';
 export * from './otel/index';
+export * from './operations/index';
+
