@@ -10,6 +10,7 @@ import {
   XlsxOpenXmlAdapter,
 } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
@@ -1992,113 +1993,180 @@ export class ArtifactToolManager {
       return false;
     }
 
-    if (this.provider && entry.artifactId && versionEntity.VersionNumber != null) {
-      try {
-        const rv = RunView.FromMetadataProvider(this.provider);
-        const newerCheck = await rv.RunView<{
-          ID: string;
-          VersionNumber: number;
-          ContentMode?: 'File' | 'Text' | null;
-          FileID?: string | null;
-        }>(
-          {
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID = '${EscapeSQLString(entry.artifactId)}' AND VersionNumber > ${versionEntity.VersionNumber}`,
-            OrderBy: 'VersionNumber DESC',
-            MaxRows: 1,
-            ResultType: 'simple',
-          },
-          this.contextUser,
-        );
-        const newest = newerCheck.Results?.[0];
-        if (newerCheck.Success && newest && (newest.VersionNumber ?? 0) > (versionEntity.VersionNumber ?? 0)) {
-          // Newer version exists in DB. Leave entry at snapshot (v1) and do NOT delete versionEntity (v2).
-          return false;
-        }
-      } catch (err) {
+    const newerVersionExists = await this.hasNewerArtifactVersion(entry, versionEntity);
+    // The rollback undoes this call's own write, so it runs as the system user: the agent's user may have
+    // lost Edit or Delete during the call (`R15-2`), and the write is scoped to the one row we created or
+    // reused. It never touches any other version.
+    const rollbackEntity = await this.loadVersionForRollback(versionEntity);
+
+    if (snapshot.hadExistingAgentRunVersion) {
+      // A reused agent-run row held this run's earlier content before the failed call overwrote it. Put
+      // it back even when a newer version exists: that newer version is a separate row, and leaving the
+      // reused row changed would keep an edit the agent was told failed (`R15-4`).
+      await this.revertReusedAgentRunVersion(entry, rollbackEntity, snapshot);
+      return !newerVersionExists;
+    }
+
+    if (newerVersionExists) {
+      // Someone saved or restored after the agent's version. Keep it as history and leave the room where
+      // that newer version put it.
+      return false;
+    }
+
+    await this.deleteOrRevertNewAgentVersion(entry, rollbackEntity, previousContentStr ?? '');
+    return true;
+  }
+
+  /** True when the artifact has a version numbered above `versionEntity` (someone saved after the agent). */
+  private async hasNewerArtifactVersion(entry: ArtifactEntry, versionEntity: MJArtifactVersionEntity): Promise<boolean> {
+    if (!this.provider || !entry.artifactId || versionEntity.VersionNumber == null) {
+      return false;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.provider);
+      const newerCheck = await rv.RunView<{ ID: string; VersionNumber: number }>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          Fields: ['ID', 'VersionNumber'],
+          ExtraFilter: `ArtifactID = '${EscapeSQLString(entry.artifactId)}' AND VersionNumber > ${versionEntity.VersionNumber}`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'simple',
+        },
+        this.contextUser,
+      );
+      if (!newerCheck.Success) {
         LogError(
-          `ArtifactToolManager: exception checking for newer versions before rollback of '${versionEntity.ID}': ${
-            err instanceof Error ? err.message : String(err)
+          `ArtifactToolManager: could not check for versions newer than '${versionEntity.ID}' before rollback: ${newerCheck.ErrorMessage}`,
+        );
+        return false;
+      }
+      return (newerCheck.Results?.[0]?.VersionNumber ?? 0) > (versionEntity.VersionNumber ?? 0);
+    } catch (err) {
+      LogError(
+        `ArtifactToolManager: exception checking for newer versions before rollback of '${versionEntity.ID}': ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * The version row to undo, loaded as the server system user so the undo is not refused by the agent
+   * user's (possibly revoked) Edit/Delete rights. Falls back to the caller's own entity, with a log, when
+   * no provider or system user is available or the load fails.
+   */
+  private async loadVersionForRollback(versionEntity: MJArtifactVersionEntity): Promise<MJArtifactVersionEntity> {
+    const systemUser = UserCache.Instance.GetSystemUser();
+    if (!this.provider || !systemUser || !versionEntity.ID) {
+      return versionEntity;
+    }
+    try {
+      const systemEntity = await this.provider.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', systemUser);
+      if (await systemEntity.Load(versionEntity.ID)) {
+        return systemEntity;
+      }
+      LogError(
+        `ArtifactToolManager: could not load version '${versionEntity.ID}' as the system user for rollback: ${
+          systemEntity.LatestResult?.CompleteMessage ?? 'not found'
+        }`,
+      );
+    } catch (err) {
+      LogError(
+        `ArtifactToolManager: exception loading version '${versionEntity.ID}' as the system user for rollback: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    return versionEntity;
+  }
+
+  /** Deletes the version row this call created; if that fails, puts the previous content back into it. */
+  private async deleteOrRevertNewAgentVersion(
+    entry: ArtifactEntry,
+    versionEntity: MJArtifactVersionEntity,
+    previousContent: string,
+  ): Promise<void> {
+    const uploadedFileId = versionEntity.FileID;
+    let deleted = false;
+    try {
+      deleted = await versionEntity.Delete();
+      if (!deleted) {
+        LogError(
+          `ArtifactToolManager: failed to delete rolled-back version '${versionEntity.ID}' for artifact '${entry.artifactId}' (${
+            versionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
+          }); restoring previous content instead`,
+        );
+      }
+    } catch (delErr) {
+      LogError(
+        `ArtifactToolManager: exception deleting rolled-back version '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
+          delErr instanceof Error ? delErr.message : String(delErr)
+        }`,
+      );
+    }
+
+    if (!deleted) {
+      versionEntity.Content = previousContent;
+      versionEntity.ContentHash = createHash('sha256').update(previousContent, 'utf8').digest('hex');
+      versionEntity.ContentSizeBytes = Buffer.byteLength(previousContent, 'utf8');
+      await this.saveRollbackEntity(entry, versionEntity, 'restore previous content on');
+    }
+
+    if (uploadedFileId) {
+      await this.deleteUnreferencedArtifactFile(uploadedFileId);
+    }
+  }
+
+  /** Puts a reused agent-run version row back to the field values it had before this call. */
+  private async revertReusedAgentRunVersion(
+    entry: ArtifactEntry,
+    versionEntity: MJArtifactVersionEntity,
+    snapshot: PersistVersionRollbackSnapshot,
+  ): Promise<void> {
+    const failedUploadFileId = versionEntity.FileID;
+    versionEntity.Name = snapshot.entityName ?? '';
+    versionEntity.Comments = snapshot.entityComments ?? null;
+    versionEntity.Content = snapshot.entityContent ?? null;
+    versionEntity.Configuration = snapshot.entityConfiguration ?? null;
+    versionEntity.ContentHash = snapshot.entityContentHash ?? null;
+    versionEntity.ContentSizeBytes = snapshot.entityContentSizeBytes ?? null;
+    versionEntity.ContentMode = snapshot.entityContentMode ?? 'Text';
+    versionEntity.FileID = snapshot.entityFileID ?? null;
+    versionEntity.MimeType = snapshot.entityMimeType ?? null;
+    versionEntity.FileName = snapshot.entityFileName ?? null;
+
+    const reverted = await this.saveRollbackEntity(entry, versionEntity, 'revert reused');
+    if (reverted && failedUploadFileId && !UUIDsEqual(failedUploadFileId, snapshot.entityFileID)) {
+      await this.deleteUnreferencedArtifactFile(failedUploadFileId);
+    }
+  }
+
+  /** Saves a rollback write and logs any failure; returns whether it saved. */
+  private async saveRollbackEntity(
+    entry: ArtifactEntry,
+    versionEntity: MJArtifactVersionEntity,
+    action: string,
+  ): Promise<boolean> {
+    try {
+      const saved = await versionEntity.Save();
+      if (!saved) {
+        LogError(
+          `ArtifactToolManager: failed to ${action} version '${versionEntity.ID}' for artifact '${entry.artifactId}' during rollback: ${
+            versionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
           }`,
         );
       }
+      return saved;
+    } catch (err) {
+      LogError(
+        `ArtifactToolManager: exception trying to ${action} version '${versionEntity.ID}' for artifact '${entry.artifactId}' during rollback: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
     }
-
-    ArtifactPermissionEngine.Instance.MarkTrustedServerVersionRollback(versionEntity);
-    try {
-      if (!snapshot.hadExistingAgentRunVersion) {
-        let deleted = false;
-        try {
-          deleted = await versionEntity.Delete();
-        } catch (delErr) {
-          LogError(
-            `ArtifactToolManager: exception deleting rolled-back version record '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
-              delErr instanceof Error ? delErr.message : String(delErr)
-            }`,
-          );
-          deleted = false;
-        }
-
-        if (!deleted) {
-          LogError(
-            `ArtifactToolManager: failed to delete rolled-back version record '${versionEntity.ID}' for artifact '${entry.artifactId}'; restoring previous content`,
-          );
-          const prevContent = previousContentStr ?? '';
-          versionEntity.Content = prevContent;
-          versionEntity.ContentHash = createHash('sha256').update(prevContent, 'utf8').digest('hex');
-          versionEntity.ContentSizeBytes = Buffer.byteLength(prevContent, 'utf8');
-          try {
-            const fallbackSaved = await versionEntity.Save();
-            if (!fallbackSaved) {
-              LogError(`ArtifactToolManager: Fallback Save() during rollback of version ${versionEntity.ID} also failed.`);
-            }
-          } catch (saveErr) {
-            LogError(
-              `ArtifactToolManager: exception restoring previous content on version '${versionEntity.ID}' for artifact '${entry.artifactId}': ${
-                saveErr instanceof Error ? saveErr.message : String(saveErr)
-              }`,
-            );
-          }
-        }
-
-        if (versionEntity.FileID) {
-          await this.deleteUnreferencedArtifactFile(versionEntity.FileID);
-        }
-      } else {
-        const failedUploadFileId = versionEntity.FileID;
-        versionEntity.Name = snapshot.entityName ?? '';
-        versionEntity.Comments = snapshot.entityComments;
-        versionEntity.Content = snapshot.entityContent;
-        versionEntity.Configuration = snapshot.entityConfiguration;
-        versionEntity.ContentHash = snapshot.entityContentHash;
-        versionEntity.ContentSizeBytes = snapshot.entityContentSizeBytes;
-        versionEntity.ContentMode = snapshot.entityContentMode ?? 'Text';
-        versionEntity.FileID = snapshot.entityFileID;
-        versionEntity.MimeType = snapshot.entityMimeType;
-        versionEntity.FileName = snapshot.entityFileName;
-
-        try {
-          const revertedSaved = await versionEntity.Save();
-          if (!revertedSaved) {
-            LogError(
-              `ArtifactToolManager: failed to revert reused version '${versionEntity.ID}' fields for artifact '${entry.artifactId}'`,
-            );
-          } else if (failedUploadFileId && !UUIDsEqual(failedUploadFileId, snapshot.entityFileID)) {
-            await this.deleteUnreferencedArtifactFile(failedUploadFileId);
-          }
-        } catch (revErr) {
-          LogError(
-            `ArtifactToolManager: exception reverting reused version '${versionEntity.ID}' fields for artifact '${entry.artifactId}': ${
-              revErr instanceof Error ? revErr.message : String(revErr)
-            }`,
-          );
-        }
-      }
-    } finally {
-      ArtifactPermissionEngine.Instance.UnmarkTrustedServerVersionRollback(versionEntity);
-    }
-
-    return true;
   }
 
   /**

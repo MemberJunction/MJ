@@ -50,10 +50,10 @@ export class ChatCollectionsResource extends LibraryResource {
   }
 
   public override async GetResourceDisplayName(data: ResourceData): Promise<string> {
-    return data?.Name || 'Collections';
+    return data?.Name || 'Library';
   }
 
   public override async GetResourceIconClass(_data: ResourceData): Promise<string> {
-    return 'fa-solid fa-folder-open';
+    return 'fa-solid fa-book-open';
   }
 }
