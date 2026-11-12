@@ -1,7 +1,8 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, IMetadataProvider, RunView } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 
 import { MJArtifactPermissionEntity } from '../../generated/entity_subclasses';
+import { ArtifactPermissionEngine } from '../ArtifactPermissionDelegate';
 import {
     AssertCallerMayCreateShare,
     BuildActionsSummary,
@@ -51,8 +52,27 @@ export class MJArtifactPermissionEntityExtended extends MJArtifactPermissionEnti
                     ExtraConfiguration: { PermissionID: this.ID },
                 };
             });
+            await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({
+                ArtifactID: this.ArtifactID,
+                TargetUserID: this.UserID,
+                ChangedByUserID: this.ContextCurrentUser?.ID,
+            });
         }
         return saved;
+    }
+
+    override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const artifactId = this.ArtifactID;
+        const targetUserId = this.UserID;
+        const deleted = await super.Delete(options);
+        if (deleted && artifactId) {
+            await ArtifactPermissionEngine.Instance.NotifyPermissionsChanged({
+                ArtifactID: artifactId,
+                TargetUserID: targetUserId,
+                ChangedByUserID: this.ContextCurrentUser?.ID,
+            });
+        }
+        return deleted;
     }
 
     private actionsSummary(): string {

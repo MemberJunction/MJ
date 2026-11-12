@@ -14,6 +14,7 @@ import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/co
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 import { ConversationWorkspaceComponent } from '../lib/components/workspace/conversation-workspace.component';
+import { InvalidateAgentActivityScopeCache } from '../lib/services/conversation-tasks-filter';
 import { TasksFullViewComponent } from '../lib/components/task/tasks-full-view.component';
 import { MessageItemComponent } from '../lib/components/message/message-item.component';
 
@@ -101,10 +102,11 @@ async function workspaceTasksView(provider: IMetadataProvider): Promise<TasksFul
 
 describe('Conversation workspace — Tasks tab refresh & Command Center', () => {
   afterEach(() => {
+    InvalidateAgentActivityScopeCache();
     vi.restoreAllMocks();
   });
 
-  it('shows a task linked to a message created after the first load on the next refresh', async () => {
+  it('shows a task linked to a message created after the first load on the next refresh after scope cache invalidation or TTL', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const db = database();
     const view = await workspaceTasksView(db.provider);
@@ -115,6 +117,8 @@ describe('Conversation workspace — Tasks tab refresh & Command Center', () => 
     // An agent's task graph adds a message and a top-level task that has no user.
     db.messages.push({ ID: 'msg-2' });
     db.tasks.push({ ID: 'task-2', ConversationDetailID: 'msg-2', UserID: null, Name: 'Second Workflow', Status: 'In Progress' });
+    // Idle 4s background polls hit the 30s per-user TTL cache until invalidated (e.g. on message/run event) or TTL expires.
+    InvalidateAgentActivityScopeCache(USER.ID);
     await view.LoadTasks();
 
     expect(view.AllTasks.map((task) => task.ID).sort()).toEqual(['task-1', 'task-2']);
