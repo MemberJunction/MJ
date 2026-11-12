@@ -287,8 +287,7 @@ export class TransactionResolver extends ResolverBase {
             entity.SetMany(itemValues, true);
             return saveOptions;
         }
-        const mapper = new FieldMapper();
-        const oldValues = item.OldValues.map((kv) => ({ Key: mapper.ReverseMapFieldName(kv.Key), Value: kv.Value ?? null }));
+        const oldValues = this.MapOldValues(item.OldValues);
         const fieldValues = this.OnlyEntityFieldValues(entity.EntityInfo, itemValues);
         try {
             const baseline = await this.TestAndSetClientOldValuesToDBValues({ OldValues___: oldValues }, fieldValues, entity, user);
@@ -303,6 +302,14 @@ export class TransactionResolver extends ResolverBase {
             }
             return null;
         }
+    }
+
+    /**
+     * An item's `OldValues` with each key mapped back from its GraphQL form to the field's name.
+     */
+    protected MapOldValues(oldValues: KeyValuePairInput[]): Array<{ Key: string; Value: string | null }> {
+        const mapper = new FieldMapper();
+        return oldValues.map((kv) => ({ Key: mapper.ReverseMapFieldName(kv.Key), Value: kv.Value ?? null }));
     }
 
     /**
@@ -361,8 +368,8 @@ export class TransactionResolver extends ResolverBase {
     /**
      * Field-level security gate on everything the client sent, run before any item is applied.
      *
-     * Each create or update payload must name only fields the caller may read, and so must every transaction
-     * variable: a `Define` on a denied field would copy its value into another item's readable
+     * Each create or update payload must name only fields the caller may read, and so must an update's
+     * `OldValues` (they are compared with the stored row) and every transaction variable: a `Define` on a denied field would copy its value into another item's readable
      * field at `Submit()`, and a `Use` would write it. A key that names no field is refused with
      * the same message as a denied one (see `AssertClientInputWritableForUser`). Callers denied
      * nothing on an entity are not affected. A delete payload is not gated: only its primary key
@@ -375,6 +382,13 @@ export class TransactionResolver extends ResolverBase {
             }
             const values = SafeJSONParse<Record<string, unknown>>(item.EntityObjectJSON);
             AssertClientInputWritableForUser(entityObjects[index]?.EntityInfo, values, user);
+            if (item.OldValues?.length) {
+                const oldValueKeys: Record<string, unknown> = {};
+                for (const kv of this.MapOldValues(item.OldValues)) {
+                    oldValueKeys[kv.Key] = null;
+                }
+                AssertClientInputWritableForUser(entityObjects[index]?.EntityInfo, oldValueKeys, user);
+            }
         }
         for (const networkVar of group.Variables ?? []) {
             const target = entityObjects[networkVar.ItemIndex];
