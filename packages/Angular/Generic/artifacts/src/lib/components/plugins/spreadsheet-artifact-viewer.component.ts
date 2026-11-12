@@ -564,12 +564,14 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                         @let condTone = GetConditionalTone(cell);
                         @let peerColor = GetCellCollaboratorBorderColor(row.Index, col.Index);
                         @let peerBadge = GetCellPrimaryCollaboratorBadge(row.Index, col.Index);
+                        @let cellComments = GetCellCommentThreads(row.Index, col.Index);
                         <td
                           class="mj-sheets-cell"
                           [class.active]="addr === ActiveCellAddress"
                           [class.in-range]="IsAddressInSelectedRange(row.Index, col.Index)"
                           [class.has-peer-selection]="!!peerColor"
                           [style.--mj-sheets-peer-color]="peerColor"
+                          [class.has-comment]="cellComments.length > 0"
                           [class.has-formula]="!!cell?.Formula"
                           [class.is-bold]="!!cell?.Style?.Bold"
                           [class.is-italic]="!!cell?.Style?.Italic"
@@ -637,6 +639,38 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                                 </span>
                               }
                             </div>
+                            @if (cellComments.length > 0) {
+                              <span
+                                class="mj-sheets-comment-corner"
+                                [attr.data-testid]="'sheet-comment-corner-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              ></span>
+                              <div
+                                class="mj-sheets-comment-hover-bubble"
+                                [attr.data-testid]="'sheet-comment-bubble-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              >
+                                @for (thread of cellComments; track thread.ConversationID) {
+                                  <div class="mj-sheets-comment-bubble-thread">
+                                    <div class="mj-sheets-comment-bubble-header">
+                                      <span class="mj-sheets-comment-bubble-author">
+                                        <i class="fa-solid fa-comment-dots"></i>
+                                        {{ thread.Messages[0]?.UserName || 'Comment' }}
+                                      </span>
+                                      <span class="mj-sheets-comment-bubble-anchor">{{ thread.AnchorLabel }}</span>
+                                    </div>
+                                    <div class="mj-sheets-comment-bubble-body">
+                                      {{ thread.Messages[thread.Messages.length - 1]?.Message }}
+                                    </div>
+                                    @if (thread.Messages.length > 1) {
+                                      <div class="mj-sheets-comment-bubble-meta">
+                                        {{ thread.Messages.length }} messages · {{ thread.Status }}
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
                           }
                         </td>
                       }
@@ -1788,6 +1822,95 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         height: 0;
         border-left: 6px solid transparent;
         border-top: 6px solid var(--mj-brand-primary);
+      }
+
+      .mj-sheets-comment-corner {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-top: 8px solid var(--mj-status-warning, #f59e0b);
+        z-index: 3;
+        cursor: pointer;
+      }
+
+      .mj-sheets-comment-hover-bubble {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        max-width: 300px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-status-warning, #f59e0b);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+        padding: 8px 10px;
+        z-index: 30;
+        white-space: normal;
+        cursor: pointer;
+      }
+
+      .mj-sheets-cell:hover .mj-sheets-comment-hover-bubble {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-sheets-comment-bubble-thread {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .mj-sheets-comment-bubble-thread + .mj-sheets-comment-bubble-thread {
+        border-top: 1px solid var(--mj-border-subtle);
+        padding-top: 6px;
+      }
+
+      .mj-sheets-comment-bubble-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11px;
+      }
+
+      .mj-sheets-comment-bubble-author {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mj-sheets-comment-bubble-author i {
+        color: var(--mj-status-warning, #f59e0b);
+      }
+
+      .mj-sheets-comment-bubble-anchor {
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-comment-bubble-body {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--mj-text-primary);
+        word-break: break-word;
+      }
+
+      .mj-sheets-comment-bubble-meta {
+        font-size: 10px;
+        color: var(--mj-text-muted);
       }
 
       .mj-sheets-validation-badge {
@@ -4148,20 +4271,47 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public FocusRangeFromAnchorKey(anchorKey: string): void {
-    const sep = anchorKey.indexOf(':');
-    if (sep < 0) return;
-    const sheetId = anchorKey.slice(0, sep);
-    const range = anchorKey.slice(sep + 1);
-    if (this.Workbook.Worksheets.some((w) => w.SheetID === sheetId)) {
-      this.Workbook.ActiveSheetID = sheetId;
+    const parsed = this.ParseCollaboratorSheetRanges(anchorKey);
+    if (parsed.SheetID && this.Workbook.Worksheets.some((w) => w.SheetID === parsed.SheetID)) {
+      this.Workbook.ActiveSheetID = parsed.SheetID;
     }
-    this.SelectedRange = range;
-    const firstAddr = range.split(':')[0];
-    const pos = ParseCellAddress(firstAddr);
-    if (pos) {
-      this.ActiveRowIndex = pos.row;
-      this.ActiveColumnIndex = pos.col;
-      this.syncFormulaBarFromActiveCell();
+    if (parsed.Ranges.length > 0) {
+      this.SelectedRanges = [...parsed.Ranges];
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      const firstAddr = parsed.Ranges[0].split(':')[0];
+      const pos = ParseCellAddress(firstAddr);
+      if (pos) {
+        this.ActiveRowIndex = pos.row;
+        this.ActiveColumnIndex = pos.col;
+        this.syncFormulaBarFromActiveCell();
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public GetCellCommentThreads(rowIndex: number, colIndex: number): DocumentAnchoredThread[] {
+    if (!this.AnchoredThreads || this.AnchoredThreads.length === 0) {
+      return [];
+    }
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const matches: DocumentAnchoredThread[] = [];
+    for (const thread of this.AnchoredThreads) {
+      const parsed = this.ParseCollaboratorSheetRanges(thread.AnchorKey);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        continue;
+      }
+      if (parsed.Ranges.some((segment) => this.isCellInsideRangeString(rowIndex, colIndex, segment))) {
+        matches.push(thread);
+      }
+    }
+    return matches;
+  }
+
+  public OpenCommentThreadFromCell(thread: DocumentAnchoredThread | undefined, event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.ShowCommentsDrawer = true;
+    if (thread?.AnchorKey) {
+      this.FocusRangeFromAnchorKey(thread.AnchorKey);
     }
     this.cdr.markForCheck();
   }

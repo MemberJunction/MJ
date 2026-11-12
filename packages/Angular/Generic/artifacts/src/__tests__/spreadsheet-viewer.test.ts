@@ -12,6 +12,7 @@ import { SpreadsheetArtifactViewerComponent } from '../lib/components/plugins/sp
 import {
   DocumentCollaborationService,
   type CollaboratorPresence,
+  type DocumentAnchoredThread,
 } from '../lib/services/document-collaboration.service';
 import { ArtifactFileService } from '../lib/services/artifact-file.service';
 
@@ -456,6 +457,95 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
         `${component.ActiveSheet.SheetID}:B2:B3`,
       );
       expect(component.SyntheticAgentPresence?.IsAgent).toBe(true);
+    });
+  });
+
+  describe('5. Cell Comment Corner Indicator & Hover Comment Bubble', () => {
+    it('returns anchored comment threads covering a single cell or rectangular cell range on the active sheet', () => {
+      const sheetId = component.ActiveSheet.SheetID;
+      const singleCellThread: DocumentAnchoredThread = {
+        ConversationID: 'conv-1',
+        AnchorKey: `${sheetId}:B2`,
+        AnchorLabel: 'Sheet 1 • B2',
+        QuotedText: 'B2',
+        AgentMode: 'comment',
+        Status: 'Open',
+        CreatedAt: '2026-11-12T15:00:00Z',
+        Messages: [
+          {
+            DetailID: 'msg-1',
+            UserName: 'Amith Nagarajan',
+            Role: 'User',
+            Message: 'Verify Q4 margin assumption here.',
+            CreatedAt: '2026-11-12T15:00:00Z',
+          },
+        ],
+      };
+
+      const rangeThread: DocumentAnchoredThread = {
+        ConversationID: 'conv-2',
+        AnchorKey: `${sheetId}:C3:D4`,
+        AnchorLabel: 'Sheet 1 • C3:D4',
+        QuotedText: 'C3:D4',
+        AgentMode: 'suggest',
+        Status: 'Open',
+        CreatedAt: '2026-11-12T15:05:00Z',
+        Messages: [
+          {
+            DetailID: 'msg-2',
+            UserName: 'Sarah Finance',
+            Role: 'User',
+            Message: 'Should these two columns use YoY growth?',
+            CreatedAt: '2026-11-12T15:05:00Z',
+          },
+        ],
+      };
+
+      const otherSheetThread: DocumentAnchoredThread = {
+        ConversationID: 'conv-3',
+        AnchorKey: 'sheet-other:B2',
+        AnchorLabel: 'Other Sheet • B2',
+        QuotedText: 'B2',
+        AgentMode: 'comment',
+        Status: 'Open',
+        CreatedAt: '2026-11-12T15:10:00Z',
+        Messages: [],
+      };
+
+      component.AnchoredThreads = [singleCellThread, rangeThread, otherSheetThread];
+
+      // Cell B2 (row 2, col 2) matches singleCellThread only
+      expect(component.GetCellCommentThreads(2, 2)).toEqual([singleCellThread]);
+
+      // Cells inside C3:D4 (rows 3..4, cols 3..4) match rangeThread
+      expect(component.GetCellCommentThreads(3, 3)).toEqual([rangeThread]);
+      expect(component.GetCellCommentThreads(4, 4)).toEqual([rangeThread]);
+
+      // Cell A1 (row 1, col 1) has no comments
+      expect(component.GetCellCommentThreads(1, 1)).toEqual([]);
+    });
+
+    it('opens the comments drawer and focuses the thread range when clicking a cell comment bubble', () => {
+      const sheetId = component.ActiveSheet.SheetID;
+      const thread: DocumentAnchoredThread = {
+        ConversationID: 'conv-range',
+        AnchorKey: `${sheetId}:B3:D5`,
+        AnchorLabel: 'Sheet 1 • B3:D5',
+        QuotedText: 'B3:D5',
+        AgentMode: 'comment',
+        Status: 'Open',
+        CreatedAt: '2026-11-12T15:00:00Z',
+        Messages: [],
+      };
+
+      expect(component.ShowCommentsDrawer).toBe(false);
+      component.OpenCommentThreadFromCell(thread);
+
+      expect(component.ShowCommentsDrawer).toBe(true);
+      expect(component.SelectedRange).toBe('B3:D5');
+      expect(component.SelectedRanges).toEqual(['B3:D5']);
+      expect(component.ActiveRowIndex).toBe(3);
+      expect(component.ActiveColumnIndex).toBe(2); // B = 2
     });
   });
 });
