@@ -173,6 +173,9 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
+    "lib0": "^0.2.99",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.24",
     "zod": "^3.25.0",
     "@memberjunction/theme-engine": "6.3.0-edge.0"
   },
