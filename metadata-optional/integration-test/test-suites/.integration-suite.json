@@ -1623,6 +1623,17 @@
           "primaryKey": {
             "ID": "6C49D2E1-8B37-4A52-9E14-7F08A3C5D9B2"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT170 - Gemini Decision 1 Decision Model",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
+          }
         }
       ]
     },

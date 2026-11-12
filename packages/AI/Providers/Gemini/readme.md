@@ -157,9 +157,9 @@ in the driver:
 |---|---|---|
 | `x-goog-api-key` header | bearer token | `GetRequestHeaders` |
 | `input` (text or `Content` blocks) | `state` | `BuildRequestBody` sends the state as `input`; an object state as JSON text |
-| `usage.total_input_tokens` / `total_output_tokens` | `usage.input_tokens` / `output_tokens` | `UnwrapResponse` |
-| `prompt_feedback.block_reason` (no answers) | — | `UnwrapResponse` fails the call with the reason, allowing failover |
-| `400 INVALID_ARGUMENT` / `403 PERMISSION_DENIED` | — | `GetHTTPErrorType` pins both to a failover-eligible `ModelError`, so a rejected request or a bad key never ends `Default Decision`'s failover loop; `401` stays a fatal `Authentication` error |
+| `usage.total_input_tokens` / `total_output_tokens` | `usage.input_tokens` / `output_tokens` | `UnwrapResponse` (Google omits `model` and `cost`; `ResolvedModel` stays `undefined`) |
+| `prompt_feedback.block_reason` (no answers) | — | `UnwrapResponse` fails the call with the reason (`BLOCK_REASON_UNSPECIFIED` ignored), allowing failover |
+| `400 INVALID_ARGUMENT` or `invalid_request` / `403 PERMISSION_DENIED` | — | `GetHTTPErrorType` pins both to a failover-eligible `ModelError`, so a rejected request or a bad key never ends `Default Decision`'s failover loop; `401` stays a fatal `Authentication` error |
 
 ```typescript
 import { GeminiDecision } from "@memberjunction/ai-gemini";
@@ -188,13 +188,11 @@ const result = await decider.Decide({
 });
 ```
 
-The key comes from a bound `API Key` credential on the Google vendor, or the legacy
-`AI_VENDOR_API_KEY__GEMINIDECISION` variable. An `API Key with Endpoint` credential (or the constructor's second
-argument) overrides the endpoint, for a gateway. MJ sends text only: the API also accepts images, audio, video and
-PDFs in `input`, which `DecisionParams` cannot carry yet.
+**Two routes.** The `Gemini Decision 1` model (`metadata/ai-models/.gemini-decision-models.json`, type `Decision`, `PowerRank` 61, $0.10 per million input tokens, $0 output) has two Inference Provider rows:
+- **Google** (`GeminiDecision`, `APIName`: `gemini-decision-1`, `Priority`: 2, preferred): takes an `API Key` credential bound to the Google vendor, the model, or its Google row, or `AI_VENDOR_API_KEY__GEMINIDECISION` (note: `AI_VENDOR_API_KEY__GeminiLLM` is keyed to `GeminiLLM` and does not activate `GeminiDecision`). An `API Key with Endpoint` credential (or the constructor's second argument) overrides the endpoint for a gateway. MJ sends text only; the API also accepts images, audio, video and PDFs in `input`, which `DecisionParams` cannot carry yet.
+- **OpenRouter** (`OpenRouterDecision` in [`@memberjunction/ai-openrouter`](../OpenRouter/readme.md), `APIName`: `google/gemini-decision-1-20261111`, `Priority`: 1, 262,144-token context): takes an OpenRouter `API Key` credential or `AI_VENDOR_API_KEY__OPENROUTERDECISION` over OpenRouter's System One Decisions endpoint.
 
-The `Gemini Decision 1` model (type Decision) ships in `metadata/ai-models/.gemini-decision-models.json`. It is not
-bound to any prompt; add it to `Default Decision` (or another Decision prompt) to route decisions to it.
+**As a fallback.** `Gemini Decision 1` is not explicitly bound to `Default Decision` (which tries `Jev` and `LLM Decision` first), so without credentials it is skipped. Because it is an active `Decision` model (`PowerRank` 61, distance 4 from `Default Decision`'s target rank 57), any host with a credential bound to the `Google` vendor (for example, an existing Gemini API key bound at the vendor level) or to `OpenRouter` (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`) includes its matching route in `Default Decision`'s power-matched fallback list when the primary models ahead of it fail. To keep `Default Decision` off a route while retaining the vendor credential for other models, set `Status = 'Inactive'` on that `MJ: AI Model Vendors` row (or bind the credential to the specific models it is meant for rather than the vendor).
 
 ## Thinking Budget / Effort Level
 

@@ -178,11 +178,12 @@ describe('GeminiDecision', () => {
   });
 
   describe('the response', () => {
-    it('maps every answer kind and records usage', async () => {
+    it('maps every answer kind, leaves ResolvedModel undefined when Google omits model, and records usage', async () => {
       fakeFetch(() => jsonResponse(RESPONSE));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.success).toBe(true);
+      expect(result.ResolvedModel).toBeUndefined();
       expect(result.Usage?.promptTokens).toBe(418);
       expect(result.Usage?.completionTokens).toBe(0);
 
@@ -204,26 +205,38 @@ describe('GeminiDecision', () => {
       expect(severity.Probabilities['Minor localized spill.']).toBeCloseTo(0.75, 6);
     });
 
-    it('records the resolved model when the response names one', async () => {
+    it('records the resolved model when a proxy or later revision names one', async () => {
       fakeFetch(() => jsonResponse({ ...RESPONSE, model: 'gemini-decision-1-2026-11' }));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.ResolvedModel).toBe('gemini-decision-1-2026-11');
     });
 
-    it('fails, allowing failover, with the reason when the input filter blocks the request', async () => {
-      fakeFetch(() => jsonResponse({ prompt_feedback: { block_reason: 'safety', block_reason_message: 'Unsafe image' } }));
+    it('ignores BLOCK_REASON_UNSPECIFIED in prompt_feedback when answers are returned', async () => {
+      fakeFetch(() => jsonResponse({ ...RESPONSE, prompt_feedback: { block_reason: 'BLOCK_REASON_UNSPECIFIED' } }));
+      const result = await new GeminiDecision(API_KEY).Decide(params());
+
+      expect(result.success).toBe(true);
+      expect((result.Answers['has_spill'] as LikelihoodAnswer).Probability).toBe(0.95);
+    });
+
+    it('fails, allowing failover, with the reason (redacting any echoed API key) when the input filter blocks the request', async () => {
+      fakeFetch(() =>
+        jsonResponse({ prompt_feedback: { block_reason: 'safety', block_reason_message: `Unsafe image (${API_KEY})` } }),
+      );
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.success).toBe(false);
       expect(result.Answers).toEqual({});
-      expect(result.errorMessage).toBe('Gemini Decisions API blocked the input: safety (Unsafe image)');
+      expect(result.errorMessage).toBe('Gemini Decisions API blocked the input: safety (Unsafe image ([redacted]))');
+      expect(result.errorMessage).not.toContain(API_KEY);
+      expect(result.errorInfo?.errorType).toBe('ModelError');
       expect(result.errorInfo?.canFailover).toBe(true);
     });
 
     it('fails when an answer is missing', async () => {
-      const { has_spill: _dropped, ...rest } = RESPONSE.answers;
-      fakeFetch(() => jsonResponse({ ...RESPONSE, answers: rest }));
+      const partialAnswers = { next_action: RESPONSE.answers.next_action, severity: RESPONSE.answers.severity };
+      fakeFetch(() => jsonResponse({ ...RESPONSE, answers: partialAnswers }));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.success).toBe(false);
@@ -248,11 +261,12 @@ describe('GeminiDecision', () => {
     });
 
     it.each([
-      [400, 'INVALID_ARGUMENT', `API key not valid. Please pass a valid API key. (${API_KEY})`],
-      [400, 'INVALID_ARGUMENT', 'questions: at most 1000 questions are allowed.'],
-      [403, 'PERMISSION_DENIED', 'Generative Language API has not been used in project 123 before or it is disabled.'],
-    ])('classifies a %i %s as a failover-eligible ModelError, naming the cause and never the key', async (status, googleStatus, message) => {
-      fakeFetch(() => jsonResponse({ error: { code: status, message, status: googleStatus } }, status));
+      [400, { code: 400, message: `API key not valid. Please pass a valid API key. (${API_KEY})`, status: 'INVALID_ARGUMENT' }],
+      [400, { code: 'invalid_request', message: '* CreateDecisionRequest.questions: must have between 1 and 1000 questions\n' }],
+      [403, { code: 403, message: 'Permission denied on the service.', status: 'PERMISSION_DENIED' }],
+      [403, { code: 403, message: 'Generative Language API has not been used in project 123 before or it is disabled.', status: 'PERMISSION_DENIED' }],
+    ])('classifies HTTP %i (%j) as a failover-eligible ModelError, naming the cause and never the key', async (status, errorBody) => {
+      fakeFetch(() => jsonResponse({ error: errorBody }, status));
       const result = await new GeminiDecision(API_KEY).Decide(params());
 
       expect(result.success).toBe(false);
@@ -261,6 +275,22 @@ describe('GeminiDecision', () => {
       expect(result.errorInfo?.canFailover).toBe(true);
       expect(result.errorMessage).toContain(`Gemini Decisions API returned HTTP ${status}`);
       expect(result.errorMessage).not.toContain(API_KEY);
+    });
+
+    it("classifies Google's 404 not_found model error as a failover-eligible ModelError via ErrorAnalyzer", async () => {
+      fakeFetch(() =>
+        jsonResponse(
+          { error: { code: 'not_found', message: 'Requested model not found. Ensure the model name is valid and uses a supported Gemini Decision model.' } },
+          404,
+        ),
+      );
+      const result = await new GeminiDecision(API_KEY).Decide(params());
+
+      expect(result.success).toBe(false);
+      expect(result.errorInfo?.errorType).toBe('ModelError');
+      expect(result.errorInfo?.severity).toBe('Transient');
+      expect(result.errorInfo?.canFailover).toBe(true);
+      expect(result.errorMessage).toContain('Gemini Decisions API returned HTTP 404');
     });
 
     it('keeps a 401 a fatal Authentication error, as for every decision driver', async () => {
