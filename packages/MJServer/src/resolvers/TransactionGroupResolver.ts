@@ -1,7 +1,11 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { AssertClientInputWritableForUser, CompositeKey, EntityInfo, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, BaseEntityResult, CompositeKey, EntityInfo, EntitySaveOptions, IMetadataProvider, KeyValuePair, LogError, Metadata, RecordChangeMetadataSource, ServerOperationScopeManager, TransactionVariable, TransactionGroupBase, BaseEntity, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, ValuesEqual } from '@memberjunction/global';
+import { FieldMapper } from '@memberjunction/graphql-dataprovider';
+import { GraphQLError } from 'graphql';
+import { FindEntityFieldByCodeNameOrName } from '@memberjunction/generic-database-provider';
+import { KeyValuePairInput } from '../generic/KeyValuePairInput.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
@@ -53,6 +57,15 @@ export class TransactionItemInputType {
 
     @Field(() => TransactionOperationType)
     OperationType: TransactionOperationType;
+
+    /**
+     * For an Update, the values the client loaded for the fields it changed (plus the primary
+     * key), in the same form as a single-record update's `OldValues___`. When present, the server
+     * rejects the update if another writer changed any of those fields since the client loaded
+     * them.
+     */
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues?: KeyValuePairInput[] | null;
 }
   
 @InputType() 
@@ -183,9 +196,13 @@ export class TransactionResolver extends ResolverBase {
                             }
                         }
                         objectValues.push(itemValues);
-                        entity.SetMany(itemValues, true);
+                        const saveOptions = await this.ApplyItemValues(item, entity, itemValues, user);
+                        if (!saveOptions) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                            break;
+                        }
                         entity.TransactionGroup = tg;
-                        if (!await entity.Save()) {
+                        if (!await entity.Save(saveOptions)) {
                             refusals.push(describeRefusedItem(index, item, entity));
                         }
                         break;
@@ -237,6 +254,7 @@ export class TransactionResolver extends ResolverBase {
                 return await this.PrepareReturnValue(true, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
             else {
+                await this.LogConcurrencyConflicts(entityObjects, user);
                 // failure, send back the results
                 return await this.PrepareReturnValue(false, entityObjects, objectValues, group, preUpdateValues, md, user);
             }
@@ -246,6 +264,98 @@ export class TransactionResolver extends ResolverBase {
             throw new Error('TransactionResolver::ExecuteTransactionGroup --- Error\n\n' + err);
         }
         });
+    }
+
+    /**
+     * Applies one Create or Update item's values to its entity and returns the options to save it
+     * with.
+     *
+     * An Update that carries `OldValues` is handled like a single-record update: the client's old
+     * values are compared with the row just loaded, and the save runs with `ConcurrencyCheck:
+     * 'enforce'` and the client's baseline, so the provider repeats the comparison under a row lock
+     * when the group submits. A conflict found here is recorded on the entity's result and
+     * `null` is returned, so the caller refuses the item without submitting the group.
+     */
+    protected async ApplyItemValues(
+        item: TransactionItemInputType,
+        entity: BaseEntity,
+        itemValues: Record<string, unknown>,
+        user: UserInfo,
+    ): Promise<EntitySaveOptions | null> {
+        const saveOptions = new EntitySaveOptions();
+        if (item.OperationType !== TransactionOperationType.Update || !item.OldValues?.length) {
+            entity.SetMany(itemValues, true);
+            return saveOptions;
+        }
+        const mapper = new FieldMapper();
+        const oldValues = item.OldValues.map((kv) => ({ Key: mapper.ReverseMapFieldName(kv.Key), Value: kv.Value ?? null }));
+        const fieldValues = this.OnlyEntityFieldValues(entity.EntityInfo, itemValues);
+        try {
+            const baseline = await this.TestAndSetClientOldValuesToDBValues({ OldValues___: oldValues }, fieldValues, entity, user);
+            saveOptions.ConcurrencyCheck = 'enforce';
+            if (Object.keys(baseline).length > 0) {
+                saveOptions.ConcurrencyBaseline = baseline;
+            }
+            return saveOptions;
+        } catch (err) {
+            if (!this.RecordConcurrencyConflict(entity, err)) {
+                throw err;
+            }
+            return null;
+        }
+    }
+
+    /**
+     * The entries of a client payload that name a field of the entity. The group path has always
+     * ignored any other key, which a single-record update's typed input cannot carry.
+     */
+    protected OnlyEntityFieldValues(entityInfo: EntityInfo, values: Record<string, unknown>): Record<string, unknown> {
+        const fieldValues: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(values)) {
+            if (FindEntityFieldByCodeNameOrName(entityInfo, key)) {
+                fieldValues[key] = value;
+            }
+        }
+        return fieldValues;
+    }
+
+    /**
+     * When `err` is the concurrency-conflict error a single-record update returns, records it on
+     * the entity as a failed update result carrying the conflicting fields, and returns `true`.
+     * Any other error is left for the caller.
+     */
+    protected RecordConcurrencyConflict(entity: BaseEntity, err: unknown): boolean {
+        if (!(err instanceof GraphQLError) || err.extensions?.code !== 'CONCURRENT_MODIFICATION_CONFLICT') {
+            return false;
+        }
+        const fields = err.extensions.conflictingFields;
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = 'update';
+        result.Message = err.message;
+        result.ConcurrencyConflict = {
+            ConflictingFields: Array.isArray(fields) ? fields.filter((f): f is string => typeof f === 'string') : [],
+        };
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        entity.RegisterResultHistoryEntry(result);
+        return true;
+    }
+
+    /**
+     * Writes the same `SAVE_INCONSISTENCY` error log a single-record update writes, for each item
+     * the provider rejected at submit because its row changed after the group loaded it.
+     */
+    protected async LogConcurrencyConflicts(entityObjects: BaseEntity[], user: UserInfo): Promise<void> {
+        for (const entity of entityObjects) {
+            const conflict = entity.LatestResult?.ConcurrencyConflict;
+            if (conflict) {
+                await this.persistSaveInconsistencyErrorLog(entity, user, {
+                    Message: entity.LatestResult?.CompleteMessage ?? 'Concurrent modification conflict detected inside the transaction group.',
+                    ConflictingFields: conflict.ConflictingFields,
+                });
+            }
+        }
     }
 
     /**
