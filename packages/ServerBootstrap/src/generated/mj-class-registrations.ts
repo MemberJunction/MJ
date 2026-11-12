@@ -1053,10 +1053,11 @@ import {
     PandaDocSignatureProvider,
 } from '@memberjunction/esignature-pandadoc';
 
-// @memberjunction/excel-addin-server (7 classes)
+// @memberjunction/excel-addin-server (8 classes)
 import {
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -2689,6 +2690,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PandaDocSignatureProvider,
     ExcelAddinBuildWorkbookServerOperation,
     ExcelAddinCreateConnectionServerOperation,
+    ExcelAddinEvaluateCustomFunctionServerOperation,
     ExcelAddinGetCatalogServerOperation,
     ExcelAddinGetEntityViewsServerOperation,
     ExcelAddinGetStatusServerOperation,
@@ -2720,11 +2722,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LiveEntityCrudProbe,
     MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
-    QueueWorkerHeartbeatProbe,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    QueueWorkerHeartbeatProbe,
     SchemaMigrationParityProbe,
     RunSyncAction,
     AIActionQueue,
@@ -2924,11 +2926,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
     WorkflowValidateServerOperation,
-    SlackMessagingExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
@@ -3128,11 +3130,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FindCandidateSkillsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
-    GenerateIntegrationActionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    GenerateIntegrationActionAction,
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
@@ -3311,7 +3313,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1361;
+export const CLASS_REGISTRATIONS_COUNT = 1362;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
