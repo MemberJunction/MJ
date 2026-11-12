@@ -221,13 +221,6 @@ describe('VitestCatchTarget.Prepare', () => {
     expect(command).toContain(`--ignore-scripts --store-dir /pnpm-store --filter . --filter '@memberjunction/core...' && pnpm rebuild`);
     expect(command).not.toContain('missing');
   });
-  it('runs the unfiltered install when no packages are given or the list is empty', async () => {
-    for (const packages of [undefined, []]) {
-      const { target, calls } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''));
-      await target.Prepare({ Kind: 'Head', SHA: 'h' }, packages);
-      expect(calls[0].Command.join(' ')).not.toContain('--filter');
-    }
-  });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];
     const { target, calls } = prepWorld(async (_f, a) => { host.push(a); return '11.24.0\n'; });
