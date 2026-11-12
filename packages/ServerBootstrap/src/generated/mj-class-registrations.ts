@@ -1110,11 +1110,18 @@ import {
     HereGeocodingProvider,
 } from '@memberjunction/geo-core';
 
-// @memberjunction/health (8 classes)
+// @memberjunction/health (15 classes)
 import {
     AiProviderReadinessProbe,
     DbConnectivityProbe,
     EventLoopLagProbe,
+    HealthLiveCrudVerificationOperation,
+    HealthObservatoryMinuteSeriesOperation,
+    HealthOtelStatusOperation,
+    HealthPreviewSharePackageOperation,
+    HealthRecentRingBufferEventsOperation,
+    HealthRunCheckOperation,
+    HealthTelemetryAggregatesOperation,
     LiveEntityCrudProbe,
     MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
@@ -2683,6 +2690,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AiProviderReadinessProbe,
     DbConnectivityProbe,
     EventLoopLagProbe,
+    HealthLiveCrudVerificationOperation,
+    HealthObservatoryMinuteSeriesOperation,
+    HealthOtelStatusOperation,
+    HealthPreviewSharePackageOperation,
+    HealthRecentRingBufferEventsOperation,
+    HealthRunCheckOperation,
+    HealthTelemetryAggregatesOperation,
     LiveEntityCrudProbe,
     MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
@@ -2694,6 +2708,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseWellKnownUserSource,
     RequiredWhenValidator,
     SqlWhereClauseValidator,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     SubsetOfEntityFieldsValidator,
     RecordCloneDescribeServerOperation,
     RecordCloneExecuteServerOperation,
@@ -2701,10 +2719,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordClonePlanServerOperation,
     RecordComparisonCompareServerOperation,
     SelfHostRemoteBrowser,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     RemoteBrowserChannel,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
@@ -2898,6 +2912,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     RunUserRoutineNowAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -2905,10 +2923,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentRelationshipEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
@@ -3102,6 +3116,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetGraphContextAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     GetListRecordsAction,
     GetMetadataAction,
     GetMyCalendarAndAvailabilityAction,
@@ -3109,10 +3127,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetRecordAction,
     GetRecordListMembershipAction,
     GetRecordsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     GetSignatureStatusAction,
     GetSkillDetailsAction,
     GetStockPriceAction,
@@ -3271,7 +3285,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1341;
+export const CLASS_REGISTRATIONS_COUNT = 1348;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
