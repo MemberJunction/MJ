@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { LoadSettings, DEFAULT_SETTINGS } from '../settings';
+import { UnpricedModel } from '../backtest/Backtest';
 
 describe('LoadSettings', () => {
   it('returns defaults when no file is given', () => {
@@ -32,5 +33,8 @@ describe('LoadSettings', () => {
     const s = DEFAULT_SETTINGS;
     const models = [s.GeneratorModel, s.AnalyzerModel, s.Judges.TpProbModel, ...s.Judges.BucketModels.map((b) => b.Model)];
     expect(models.filter((m) => !s.Prices[m])).toEqual([]);
+  });
+  it('prices the gemini-4-hydrogen generator', () => {
+    expect(UnpricedModel(DEFAULT_SETTINGS.Prices, 'gemini-4-hydrogen')).toBeNull();
   });
 });
