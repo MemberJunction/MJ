@@ -16,10 +16,18 @@ vi.mock('../Misc/status_logging', () => ({
     get logWarning() { return this.LogWarning; }, StartSpinner: vi.fn(),
     get startSpinner() { return this.StartSpinner; }, SucceedSpinner: vi.fn(),
     get succeedSpinner() { return this.SucceedSpinner; },
+    UpdateSpinner: vi.fn(), FailSpinner: vi.fn(),
 }));
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
+import { SQLCodeGenBase } from '../Database/sql_codegen';
+
+class TestSQLCodeGen extends SQLCodeGenBase {
+    public callGenerateBaseViewJoins(entity: EntityInfo, fields: EntityFieldInfo[]): string {
+        return this.generateBaseViewJoins(entity, fields);
+    }
+}
 
 type FieldInit = Record<string, unknown>;
 const pkField = (name: string, type: string, extra: FieldInit = {}): FieldInit => ({
@@ -152,6 +160,207 @@ describe('SQLServerCodeGenProvider — composite primary keys are never truncate
             expect(createSQL).toContain('SELECT * FROM [dbo].[vwTestEntities] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)');
             expect(updateSQL).toContain('SELECT TOP 0 * FROM [dbo].[vwTestEntities] WHERE 1=0');
             expect(updateSQL).toContain('[dbo].[vwTestEntities]');
+        });
+    });
+});
+
+describe('Wave 4.3b — single-write spUpdate, hierarchy TVF, geo base-table join, and polymorphic FK indexing', () => {
+    const provider = new SQLServerCodeGenProvider();
+
+    describe('single-write spUpdate and guarded trgUpdate timestamp trigger', () => {
+        const updatableWithTimestamp: FieldInit[] = [
+            pkField('ID', 'uniqueidentifier'),
+            dataField('Name', false),
+            {
+                ID: 'f-updated',
+                Name: '__mj_UpdatedAt',
+                CodeName: '__mj_UpdatedAt',
+                Type: 'datetimeoffset',
+                Length: 10,
+                IsPrimaryKey: false,
+                AllowsNull: false,
+                AllowUpdateAPI: false,
+                IsVirtual: false,
+                AutoIncrement: false,
+                DefaultValue: 'getutcdate()',
+            },
+        ];
+
+        it('sets [__mj_UpdatedAt] = GETUTCDATE() in spUpdate when entity has updatable fields and __mj_UpdatedAt', () => {
+            const entity = createEntity({}, updatableWithTimestamp);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(updateSQL).toContain('[Name] = ISNULL(@Name, [Name]),\n        [__mj_UpdatedAt] = GETUTCDATE()');
+        });
+
+        it('guards trgUpdate with IF NOT UPDATE([__mj_UpdatedAt]) to prevent double clustered-index writes on spUpdate', () => {
+            const entity = createEntity({}, updatableWithTimestamp);
+            const triggerSQL = provider.generateTimestampTrigger(entity);
+
+            expect(triggerSQL).toContain('IF NOT UPDATE([__mj_UpdatedAt])');
+            expect(triggerSQL).toContain('BEGIN\n        UPDATE\n            [dbo].[TestEntity]\n        SET\n            __mj_UpdatedAt = GETUTCDATE()');
+        });
+
+        it('does not emit an invalid UPDATE in spUpdate for PK-only entities without updatable fields', () => {
+            const pkOnlyFields: FieldInit[] = [
+                pkField('ID', 'uniqueidentifier'),
+                {
+                    ID: 'f-updated',
+                    Name: '__mj_UpdatedAt',
+                    CodeName: '__mj_UpdatedAt',
+                    Type: 'datetimeoffset',
+                    Length: 10,
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: false,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    DefaultValue: 'getutcdate()',
+                },
+            ];
+            const entity = createEntity({}, pkOnlyFields);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(updateSQL).not.toContain('UPDATE\n        [dbo].[TestEntity]');
+            expect(updateSQL).toContain('No updatable fields (PK-only entity, e.g. junction table). Return the existing row.');
+        });
+
+        it('does not include [__mj_UpdatedAt] = GETUTCDATE() when entity has no __mj_UpdatedAt column', () => {
+            const noTimestampFields: FieldInit[] = [
+                pkField('ID', 'uniqueidentifier'),
+                dataField('Name', false),
+            ];
+            const entity = createEntity({}, noTimestampFields);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+            const triggerSQL = provider.generateTimestampTrigger(entity);
+
+            expect(updateSQL).not.toContain('[__mj_UpdatedAt] = GETUTCDATE()');
+            expect(triggerSQL).toBe('');
+        });
+    });
+
+    describe('collapsed fn*GetHierarchyMeta inline table-valued function', () => {
+        const hierarchyFields: FieldInit[] = [
+            pkField('ID', 'uniqueidentifier'),
+            {
+                ID: 'fk-parent',
+                Name: 'ParentID',
+                CodeName: 'ParentID',
+                Type: 'uniqueidentifier',
+                Length: 16,
+                IsPrimaryKey: false,
+                AllowsNull: true,
+                AllowUpdateAPI: true,
+                IsVirtual: false,
+                AutoIncrement: false,
+                RelatedEntityID: 'entity-1',
+                RelatedEntity: 'Test Entity',
+            },
+            dataField('Name', false),
+        ];
+
+        it('references CTE_Ancestors once in the outer query and projects Depth and Path directly with OUTER APPLY child count', () => {
+            const entity = createEntity({ BaseTable: 'Category', BaseTableCodeName: 'Category' }, hierarchyFields);
+            const parentField = entity.Fields.find(f => f.Name === 'ParentID')!;
+            const sql = provider.generateHierarchyMetaFunction(entity, parentField);
+
+            // Replaces redundant CTE evaluations with direct column references on 'a'
+            expect(sql).toContain('a.[Depth] AS [Depth]');
+            expect(sql).toContain('a.[Path] AS [Path]');
+            expect(sql).not.toContain('SELECT MAX([Depth]) FROM CTE_Ancestors');
+            expect(sql).not.toContain('SELECT TOP 1 [Path] FROM CTE_Ancestors');
+
+            // Replaces EXISTS and COUNT with a single OUTER APPLY
+            expect(sql).toContain('OUTER APPLY (\n        SELECT COUNT(1) AS [ChildCount]\n        FROM [dbo].[Category]\n        WHERE [ParentID] = @RecordID\n    ) ch');
+            expect(sql).toContain('CAST(CASE WHEN ch.[ChildCount] > 0 THEN 0 ELSE 1 END AS BIT) AS [IsLeaf]');
+            expect(sql).toContain('ch.[ChildCount] AS [ChildCount]');
+        });
+    });
+
+    describe('automatic foreign key indexing for polymorphic pairs (EntityIDFieldName)', () => {
+        it('indexes bounded polymorphic FK columns and skips unbounded ones with disclosure', () => {
+            const polymorphicFields: FieldInit[] = [
+                pkField('ID', 'uniqueidentifier'),
+                {
+                    ID: 'f-ent',
+                    Name: 'EntityID',
+                    CodeName: 'EntityID',
+                    Type: 'uniqueidentifier',
+                    Length: 16,
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                },
+                {
+                    ID: 'f-rec',
+                    Name: 'RecordID',
+                    CodeName: 'RecordID',
+                    Type: 'nvarchar',
+                    Length: 450,
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    EntityIDFieldName: 'EntityID',
+                },
+                {
+                    ID: 'f-rec-unbounded',
+                    Name: 'UnboundedRecordID',
+                    CodeName: 'UnboundedRecordID',
+                    Type: 'nvarchar',
+                    Length: -1,
+                    IsPrimaryKey: false,
+                    AllowsNull: true,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    EntityIDFieldName: 'EntityID',
+                },
+            ];
+
+            const entity = createEntity({}, polymorphicFields);
+            const indexes = provider.GenerateForeignKeyIndexes(entity);
+
+            // Bounded columns are indexed
+            expect(indexes.some(i => i.includes('CREATE INDEX IDX_AUTO_MJ_FKEY_TestEntity_RecordID') && i.includes('([RecordID])'))).toBe(true);
+            expect(indexes.some(i => i.includes('CREATE INDEX IDX_AUTO_MJ_FKEY_TestEntity_EntityID') && i.includes('([EntityID])'))).toBe(true);
+
+            // Unbounded column is skipped with disclosure
+            expect(indexes.some(i => i.includes('-- FK INDEX SKIPPED for dbo.TestEntity') && i.includes('UnboundedRecordID (nvarchar): unbounded'))).toBe(true);
+            expect(indexes.some(i => i.includes('IDX_AUTO_MJ_FKEY_TestEntity_UnboundedRecordID'))).toBe(false);
+        });
+    });
+
+    describe('generateBaseViewJoins joins physical RecordGeoCode table', () => {
+        it('joins RecordGeoCode instead of vwRecordGeoCodes for geo-enabled entities', () => {
+            const geoFields: FieldInit[] = [
+                pkField('ID', 'uniqueidentifier'),
+                {
+                    ID: 'f-address',
+                    Name: 'StreetAddress',
+                    CodeName: 'StreetAddress',
+                    Type: 'nvarchar',
+                    Length: 200,
+                    IsPrimaryKey: false,
+                    AllowsNull: true,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    ExtendedType: 'GeoAddress',
+                },
+            ];
+
+            const geoEntity = createEntity({ SupportsGeoCoding: true }, geoFields);
+            const codeGen = new TestSQLCodeGen();
+            codeGen.DBProvider = provider;
+
+            const joins = codeGen.callGenerateBaseViewJoins(geoEntity, geoEntity.Fields);
+
+            expect(joins).toContain('LEFT OUTER JOIN\n    [__mj].[RecordGeoCode] AS __mj_rgc');
+            expect(joins).not.toContain('vwRecordGeoCodes');
         });
     });
 });
