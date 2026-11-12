@@ -254,7 +254,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['self-avatar-client', SelfAvatarClientChecks, 6], // AV1-AV6 self-service avatar mutation over the wire via per-user API keys (IT106)
         ['view-properties-client', ViewPropertiesClientChecks, 5], // VP1-VP5 User View properties over the wire: values, locked refusal, token default, RLS on top, cache keying (IT136)
         ['calendar-event-links', CalendarEventLinksChecks, 2], // CL1 UI role over GraphQL reads but cannot create; CL2 links, sync with a moved time and an RSVP, resync on a refused token, cancel (IT127)
-        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 12], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies (IT115)
+        ['conversation-authorship-client', ConversationAuthorshipClientChecks, 13], // CA1-CA12 who a conversation message is from, owner + Edit grantee over the wire via per-user API keys; CA7-CA10 are the bypasses: forged OldValues___, transaction variables, role casing, moving a message; CA11-CA12 only the server writes agent replies; CA13 the owner cannot hand the conversation to someone else (IT115)
         ['conversation-delete-client', ConversationDeleteClientChecks, 3], // CD1-CD3 who may delete a conversation for everyone, over the wire via per-user API keys: View and Edit grantees refused, the owner deletes (IT170)
         ['metadata-sync-push', MetadataSyncPushChecks, 12], // MSP1-MSP12 sync push atomicity, in-transaction metadata reload, one row-level security filter, and declared folder overrides, mutation tier (IT94)
         ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
@@ -390,7 +390,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'concurrent': 2,
         'content-pipeline': 15,
         'content-vectorization': 10,
-        'conversation-authorship-client': 12,
+        'conversation-authorship-client': 13,
         'conversation-delete-client': 3,
         'conversation-compaction': 23,
         'dataset-cache': 4,
@@ -565,7 +565,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'trailing-runtime-state': 6,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
-        'user-elevation': 4,
+        'user-elevation': 5,
         'user-routines': 18,
         'video-data-snapshot': 3,
         'video-generation-cost': 2,
@@ -704,6 +704,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'conversation-authorship-client.CA10',
         'conversation-authorship-client.CA11',
         'conversation-authorship-client.CA12',
+        'conversation-authorship-client.CA13',
         'conversation-authorship-client.CA2',
         'conversation-authorship-client.CA3',
         'conversation-authorship-client.CA4',

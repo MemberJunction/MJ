@@ -545,15 +545,17 @@ interface ListContextMenu {
               <i class="fas fa-user-plus"></i>
               <span>Share</span>
             </button>
-            <button class="menu-item" (click)="ContextEditFolder($event)">
-              <i class="fas fa-pen"></i>
-              <span>{{ FolderEditLabel }}</span>
-            </button>
-            <div class="menu-divider"></div>
-            <button class="menu-item danger" (click)="ContextDeleteFolder($event)">
-              <i class="fas fa-trash"></i>
-              <span>Delete</span>
-            </button>
+            @if (CanManageFolder(ContextMenu.folder)) {
+              <button class="menu-item" (click)="ContextEditFolder($event)">
+                <i class="fas fa-pen"></i>
+                <span>{{ FolderEditLabel }}</span>
+              </button>
+              <div class="menu-divider"></div>
+              <button class="menu-item danger" (click)="ContextDeleteFolder($event)">
+                <i class="fas fa-trash"></i>
+                <span>Delete</span>
+              </button>
+            }
           }
           @default {
             <button class="menu-item" (click)="ContextNewConversation()">
@@ -2385,6 +2387,15 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private canDelete(conversation: MJConversationEntity | undefined): boolean {
     if (!conversation || !this.CurrentUser) return false;
     return this.engine.CanDeleteConversation(conversation, this.CurrentUser);
+  }
+
+  /**
+   * True when the current user may rename or delete the folder: they own it, or their folder writes are not
+   * row-filtered. A user whose writes are filtered to their own folders (the UI role) is refused on a Public
+   * folder or someone else's, so those actions are not offered.
+   */
+  public CanManageFolder(folder: MJProjectEntity | null | undefined): boolean {
+    return this.engine.CanManageProject(folder, this.CurrentUser);
   }
 
   /** True when the current user owns the folder or holds Owner permission on it. */

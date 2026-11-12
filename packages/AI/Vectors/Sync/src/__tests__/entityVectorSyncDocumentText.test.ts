@@ -55,6 +55,7 @@ vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
 // renderAndEmbedBatch embeds through the runner it is handed; the real module is never loaded.
 vi.mock('@memberjunction/ai-prompts', () => ({
+  EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
   AIEmbeddingRunner: class {},
 }));
 vi.mock('@memberjunction/ai-vectordb', () => ({

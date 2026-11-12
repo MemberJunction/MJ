@@ -34,7 +34,7 @@ import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProv
 import { MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
+import { ActionParam, MJActionEntityExtended, RunActionParams, type ActionRunScope } from '@memberjunction/actions-base';
 import {
     BaseRealtimeModel,
     BuildRealtimeRelayUrl,
@@ -68,6 +68,7 @@ import {
     MJAIPromptRunEntityExtended,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
+    type ExecuteAgentParams,
     AppContextSnapshot,
     FormatAppContextNote,
     ResolvePromptRunUserID,
@@ -213,6 +214,16 @@ export interface PrepareClientSessionInput {
      * environment key) is consulted. Absent ⇒ `'Any'`.
      */
     CredentialScope?: AICredentialScope;
+    /**
+     * The scope of the agent run that prepares the session (`BaseAgent.StartBridgeRealtimeSession` passes the run's
+     * validated scope, as every action call in that run is handed it). Direct tool calls and delegated target-agent
+     * runs carry it (#5624). Set only by server code from a run's validated scope, never from the session's
+     * owner-editable `Config`. Absent ⇒ the session is an unscoped run: direct tool calls still carry a `RunScope`,
+     * with every field null, so an action that scopes by tenant refuses one the model names.
+     */
+    RunScope?: ActionRunScope;
+    /** The skills active in the run that prepares the session, carried with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -684,6 +695,15 @@ export interface ExecuteRelayedToolInput {
      * from server-side state, never from a client-writable source such as a session's `Config`.
      */
     DirectActions?: RealtimeDirectActionsConfig;
+    /**
+     * The session's run scope ({@link PrepareClientSessionInput.RunScope}), passed to direct tool calls as
+     * `RunActionParams.RunScope` and to delegated target-agent runs as their scope (#5624). Pass it only from
+     * server-side state, never from a client-writable source such as a session's `Config`. Absent ⇒ an unscoped
+     * run: direct tool calls carry a `RunScope` with every field null.
+     */
+    RunScope?: ActionRunScope;
+    /** The session's active skills, passed with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The tool call the browser relayed from the provider. */
     Call: RealtimeToolCall;
     /**
@@ -1790,6 +1810,9 @@ export class RealtimeClientSessionService {
                             TargetAgentID: wiring.Input.TargetAgentID,
                             AllowedAgents: wiring.AllowedAgents,
                             DirectActions: wiring.Prep.EffectiveConfig?.realtime?.directActions,
+                            // The preparing run's scope and skills, from the server-built prep input.
+                            RunScope: wiring.Input.RunScope,
+                            ActiveSkillIDs: wiring.Input.ActiveSkillIDs,
                             OnProgress: (progress) => wiring.Narrator.HandleProgress(progress),
                             Call: call,
                         },
@@ -4381,11 +4404,32 @@ export class RealtimeClientSessionService {
                 data: input.AppContext ? { appContext: input.AppContext } : undefined,
                 onProgress: input.OnProgress,
                 lastRunId: input.ResumeRunID,
-                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined,
+                // The session's run scope and active skills (#5624), as BaseAgent hands a sub-agent its own.
+                ...this.delegatedRunScope(input)
             });
         } finally {
             combined.Dispose();
         }
+    }
+
+    /**
+     * The scope a delegated target-agent run starts with: the session's ({@link ExecuteRelayedToolInput.RunScope}) and
+     * its active skills, in the `ExecuteAgentParams` fields BaseAgent propagates to a sub-agent. Nothing for a session
+     * with no scope, so the delegated run is unscoped, as before.
+     */
+    private delegatedRunScope(input: ExecuteRelayedToolInput): Pick<
+        ExecuteAgentParams,
+        'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'SearchScopeIDs' | 'parentActivatedSkillIDs'
+    > {
+        const scope = input.RunScope;
+        return {
+            ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
+            ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
+            ...(scope?.SecondaryScopes ? { SecondaryScopes: { ...scope.SecondaryScopes } } : {}),
+            ...(scope?.SearchScopeIDs?.length ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+            ...(input.ActiveSkillIDs?.length ? { parentActivatedSkillIDs: [...input.ActiveSkillIDs] } : {}),
+        };
     }
 
     /**
@@ -4708,7 +4752,11 @@ export class RealtimeClientSessionService {
             runParams.ContextUser = executingUser;
             runParams.Params = actionParams;
             runParams.Filters = [];
-            runParams.Context = { AgentID: target.ID };
+            // The session's run scope and active skills, as BaseAgent stamps them on every action call in a run
+            // (#5624). The arguments are model-written, so without them a Scoped Search here runs as a direct call
+            // and searches whatever tenant and skill the model names.
+            runParams.RunScope = this.directToolRunScope(input);
+            runParams.Context = { AgentID: target.ID, ActiveSkillIDs: [...(input.ActiveSkillIDs ?? [])] };
 
             let timerHandle: ReturnType<typeof setTimeout> | undefined;
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -4746,6 +4794,22 @@ export class RealtimeClientSessionService {
                 Output: `Action '${action.Name}' failed: ${message}`
             };
         }
+    }
+
+    /**
+     * The `RunScope` a direct tool call carries: the session's ({@link ExecuteRelayedToolInput.RunScope}), copied so
+     * an action cannot change what the next call sees, or an unscoped run's (every field null) when the session has
+     * none. Never absent: an absent `RunScope` tells an action it is called outside any run.
+     */
+    private directToolRunScope(input: ExecuteRelayedToolInput): ActionRunScope {
+        const scope = input.RunScope;
+        if (!scope) {
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        }
+        const secondary = scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
+            : null;
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
     }
 
     /**

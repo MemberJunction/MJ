@@ -769,7 +769,7 @@ export class AIPromptParams extends AIModelRunParams {
    * 2. AIPromptModel.CredentialID (prompt-model specific)
    * 3. AIModelVendor.CredentialID (model-vendor specific)
    * 4. AIVendor.CredentialID (vendor default)
-   * 5. Legacy: apiKeys[] parameter
+   * 5. Legacy: apiKeys[] parameter, then `APIKeyResolver`
    * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * **Important**: When any credential ID is set (priorities 1-4), the system uses
@@ -837,8 +837,8 @@ export class AIPromptParams extends AIModelRunParams {
 
 /**
  * The {@link AIPromptParams} fields that decide who a prompt runs as and which credentials it may
- * spend: the user, the metadata provider, the AI configuration, the runtime keys, the per-request
- * credential and the credential scope.
+ * spend: the user, the metadata provider, the AI configuration, the runtime keys and key resolver,
+ * the per-request credential and the credential scope.
  *
  * A prompt the runner starts on a caller's behalf — AI JSON repair, the parallel result selector —
  * must run under the caller's scope. Each one copying these fields by hand is how JSON repair came to
@@ -847,7 +847,7 @@ export class AIPromptParams extends AIModelRunParams {
  */
 export type AIPromptExecutionScope = Pick<
   AIPromptParams,
-  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'credentialId' | 'CredentialScope'
+  'contextUser' | 'provider' | 'configurationId' | 'apiKeys' | 'APIKeyResolver' | 'credentialId' | 'CredentialScope'
 >;
 
 /**
@@ -863,6 +863,7 @@ export function PickPromptExecutionScope(params: AIPromptExecutionScope): AIProm
     provider: params.provider,
     configurationId: params.configurationId,
     apiKeys: params.apiKeys,
+    APIKeyResolver: params.APIKeyResolver,
     credentialId: params.credentialId,
     CredentialScope: params.CredentialScope,
   } satisfies Record<keyof AIPromptExecutionScope, AIPromptExecutionScope[keyof AIPromptExecutionScope]>;

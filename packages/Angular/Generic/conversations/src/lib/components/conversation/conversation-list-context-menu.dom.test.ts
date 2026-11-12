@@ -71,6 +71,7 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
   CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
   GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
+  CanManageProject: () => true,
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -240,6 +241,15 @@ describe('ConversationListComponent (DOM) — right-click menu on folders and em
     expect(labels.some(l => l.includes('New Subfolder'))).toBe(true);
     expect(labels.some(l => l.includes('Rename'))).toBe(true);
     expect(labels.some(l => l.includes('Delete'))).toBe(true);
+  });
+
+  it('hides Rename and Delete on a folder the user may not manage, keeping New Subfolder', () => {
+    const { f } = render(undefined, { CanManageProject: () => false });
+    rightClickOn(f, query(f, '.folder-row') as Element);
+    const labels = menuLabels(f);
+    expect(labels.some(l => l.includes('New Subfolder'))).toBe(true);
+    expect(labels.some(l => l.includes('Rename'))).toBe(false);
+    expect(labels.some(l => l.includes('Delete'))).toBe(false);
   });
 
   it('renders custom FolderEditLabel when configured', () => {

@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, EntityPermissionType, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -1964,6 +1964,44 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when one of the user's roles grants this kind of write on folders (`MJ: Projects`) with no row-level
+     * filter. A user whose folder writes are all filtered (the UI role: own folders only) writes only folders they
+     * own: they cannot make a folder Public (no owner) or rename, move or delete a Public folder or someone else's.
+     * Answers false when the folder entity's metadata is not loaded.
+     *
+     * @param provider the metadata provider the caller works against; defaults to the engine's.
+     */
+    public CanWriteAnyProject(
+        user: UserInfo | null | undefined,
+        type: Exclude<EntityPermissionType, 'Read'>,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!user) {
+            return false;
+        }
+        const entity = (provider ?? this.ProviderToUse)?.EntityByName('MJ: Projects');
+        return !!entity && entity.UserExemptFromRowLevelSecurity(user, type);
+    }
+
+    /**
+     * True when the user may rename or delete this folder from the sidebar: they own it, or their folder writes
+     * are not row-filtered (see {@link CanWriteAnyProject}).
+     */
+    public CanManageProject(
+        project: MJProjectEntity | null | undefined,
+        user: UserInfo | null | undefined,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!project || !user) {
+            return false;
+        }
+        if (project.OwnerUserID && UUIDsEqual(project.OwnerUserID, user.ID)) {
+            return true;
+        }
+        return this.CanWriteAnyProject(user, EntityPermissionType.Update, provider);
+    }
+
+    /**
      * Returns the three-tier visibility mode (`'Private' | 'Shared' | 'Public'`) for a folder:
      * - `'Public'`: `OwnerUserID == null` (environment-wide)
      * - `'Shared'`: `OwnerUserID != null` and the folder itself has approved `MJ: Resource Permissions` grants
@@ -2370,6 +2408,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   2. Reparents direct child folders to this folder's parent (one level up).
      *   3. Deletes the now-unreferenced folder.
      * Conversations and subfolders are preserved — only the folder itself is removed.
+     * Steps 1 and 2 cover the rows the caller can change; the server's folder delete
+     * (`MJProjectEntityServer.Delete`) moves the rest in the delete's transaction.
      *
      * Note: this does NOT reassign Tasks that reference the project; if a Task still
      * references it, the final delete will fail and this throws with the DB message.
@@ -2395,9 +2435,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const newParentId = project.ParentID ?? null;
 
         // 1. Unassign conversations directly in this folder that the caller can edit.
-        // View-only conversations owned by other users in a shared folder cannot be edited
-        // by this caller; if any still exist in the DB, the delete below will surface
-        // FK_Conversation_Project via ExplainProjectDeleteFailure.
+        // Conversations owned by other users in a shared folder cannot be edited by this
+        // caller; the server's folder delete takes them out of the folder in the delete's
+        // transaction (on a server without that, the delete below surfaces
+        // FK_Conversation_Project via ExplainProjectDeleteFailure).
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
@@ -2417,21 +2458,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
         // with a raw constraint message, about a row the user is not allowed to know exists.
         //
-        // The read carries NO ownership clause, deliberately. Deleting a folder needs
-        // CanDelete on the entity, which the UI role does not hold; the roles that do also
-        // hold unfiltered read, which makes them exempt from the row-level filter — so this
-        // read returns the complete child set for every principal that can actually reach
-        // here. Should a deployment grant delete to a filtered role anyway, the server still
-        // narrows the read, and step 3's guard turns the resulting FK failure into something
-        // legible rather than "Failed to save project".
+        // The read carries no ownership clause; the server narrows it to what the caller
+        // may read. A subfolder another user owns may refuse the move (only its owner moves
+        // it, and a row-filtered caller writes only their own folders): that one is left in
+        // place, and the server's folder delete moves it, as the system user and in the
+        // delete's transaction, once the caller's Delete permission and row filter pass. On a
+        // server without that, the delete below fails on the foreign key and step 3's guard
+        // explains it.
         const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
                 for (const child of childFolders) {
+                    const previousParentId = child.ParentID;
                     child.ParentID = newParentId;
                     const saved = await child.Save();
                     if (!saved) {
+                        const ownedByOther = !!child.OwnerUserID && !!contextUser?.ID && !UUIDsEqual(child.OwnerUserID, contextUser.ID);
+                        if (ownedByOther) {
+                            child.ParentID = previousParentId;   // left for the server's folder delete
+                            continue;
+                        }
                         throw new Error(child.LatestResult?.CompleteMessage || 'Failed to reparent subfolder');
                     }
                 }

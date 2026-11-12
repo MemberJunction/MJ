@@ -175,6 +175,46 @@
             "lastModified": "2026-10-03T06:55:22.717Z",
             "checksum": "8792bf4e56018136f27daf10ddf9b129a0b030694c21d1d6c107d4896b1043aa"
           }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "IT: Payload Malformed-Downstream Child",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+            "Description": "Scripted sub-agent identical to IT: Payload Child (same prompt) but seeded with PayloadDownstreamPaths set to text that is not JSON, so PG9 can pin the fail-open rule without overriding a shared agent at run time (a run-time save reaches the server only after its debounced engine refresh). (mj-integration-test — safe to delete)",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExposeAsAction": false,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "Never",
+            "IconClass": "fa-solid fa-vial",
+            "InjectNotes": false,
+            "InjectExamples": false,
+            "MaxIterationsPerRun": 3,
+            "ExecutionOrder": 3,
+            "PayloadDownstreamPaths": "not-valid-json {[",
+            "PayloadUpstreamPaths": [
+              "analysis.*:add,update"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=IT: Payload Child - System Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E0865534-6A45-4045-AFAB-26270CC9E72E"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "6C43D1C0-D61D-4EF7-8582-64367291966F"
+          }
         }
       ]
     },
