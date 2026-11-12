@@ -7,8 +7,15 @@ import type { RedactionCheck } from '../sandbox/Redaction';
 const sha = z.string().regex(/^[0-9a-f]{40}$/);
 const iso = z.iso.datetime();
 
-/** How one test run's catches compared with the fix of a bug pair. Filled by the matcher. */
-export const MatchRecordSchema = z.object({ Status: z.enum(['Matched', 'NotMatched', 'ApplyFailed', 'NoCatch']), ReportedMatched: z.boolean(), Tests: z.record(z.string(), z.boolean()), At: iso });
+/**
+ * How one test run's catches compared with the fix of a bug pair. Filled by the matcher.
+ * `Head` names the head the tests ran on: 'Patched' (bug head plus the fix PR's diff) or 'FixMerge' (the fix PR's merge commit);
+ * it is set on Matched, NotMatched and PrepareFailed records. `Error` is the prepare error of a PrepareFailed record.
+ */
+export const MatchRecordSchema = z.object({
+    Status: z.enum(['Matched', 'NotMatched', 'ApplyFailed', 'NoCatch', 'PrepareFailed']), ReportedMatched: z.boolean(), Tests: z.record(z.string(), z.boolean()),
+    Head: z.enum(['Patched', 'FixMerge']).optional(), Error: z.string().optional(), At: iso,
+});
 
 /** One corpus PR in a backtest: its revisions, the run made for it, its status and what it cost. */
 export const LedgerEntrySchema = z.object({

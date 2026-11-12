@@ -58,16 +58,22 @@ export class VitestCatchTarget extends BaseCatchTarget {
      * `pnpm install --ignore-scripts` would still load the revision's `.pnpmfile.cjs` and follow its
      * `packageManager`. The host fetches from a copy of the lockfile without patch information and reads
      * no patch file; the sandbox installs offline with the real lockfile and `patches/` and applies the patches.
+     * When the fetch or the install fails, the worktree is removed before the error is rethrown; a removal failure does not replace that error.
      */
     public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
-        await this.hostFetch(revision);
         const prepared: PreparedRevision = { Ref: revision, RootDir: dir };
-        const install = `pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
-        const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
-        if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
+        try {
+            await this.hostFetch(revision);
+            const install = `pnpm install --offline --frozen-lockfile --ignore-scripts --store-dir ${CONTAINER_STORE} && pnpm rebuild --store-dir ${CONTAINER_STORE}`;
+            const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', install], 30 * 60_000);
+            if (r.ExitCode !== 0) throw new InfrastructureError(`install failed on ${revision.Kind}: ${RedactTail(tail(r))}`);
+        } catch (e) {
+            await this.Cleanup(prepared).catch(() => undefined);
+            throw e;
+        }
         return prepared;
     }
 

@@ -164,6 +164,29 @@ describe('VitestCatchTarget.Prepare', () => {
     const err = await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: jitRoot() }, ['@memberjunction/core']).catch((e: Error) => e);
     expect((err as Error).message).toContain('build failed on Head'); expect((err as Error).message).not.toContain(token);
   });
+  it('removes the worktree it added when the sandbox install fails, and still throws an InfrastructureError', async () => {
+    const { target, work } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE', ExitCode: 1 }));
+    const removed: string[] = [];
+    (target as never as { o: { Repo: { RemoveWorktree: (d: string) => Promise<void> } } }).o.Repo.RemoveWorktree = async (d: string) => { removed.push(d); };
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError);
+    expect(removed).toEqual([join(work, 'head')]);
+  });
+  it('removes the worktree it added when the host fetch fails, and still throws an InfrastructureError', async () => {
+    const { target, work } = prepWorld(async (_f, a) => { if (a[0] === '--version') return '10.33.0'; throw new Error('fetch broke'); });
+    const removed: string[] = [];
+    (target as never as { o: { Repo: { RemoveWorktree: (d: string) => Promise<void> } } }).o.Repo.RemoveWorktree = async (d: string) => { removed.push(d); };
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError);
+    expect(removed).toEqual([join(work, 'head')]);
+  });
+  it('still throws the InfrastructureError when removing the worktree after a failed install throws too', async () => {
+    const { target } = prepWorld(async (_f, a) => (a[0] === '--version' ? '10.33.0' : ''), () => ({ Stdout: 'ERR_PNPM_OUTDATED_LOCKFILE', ExitCode: 1 }));
+    (target as never as { Cleanup: () => Promise<void> }).Cleanup = async () => { throw new Error('rm broke'); };
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError);
+    expect((err as Error).message).toContain('install failed on Head');
+  });
   it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
     const host: string[][] = [];
     const { target, calls } = prepWorld(async (_f, a) => { host.push(a); return '11.24.0\n'; });

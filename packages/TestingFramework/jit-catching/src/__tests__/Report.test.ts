@@ -122,7 +122,7 @@ describe('BuildGateReport', () => {
 
   it('counts a bug PR as caught only when a reported catch matched', async () => {
     const m1 = (await build(store())).Models[0];
-    expect(m1.BugSet).toMatchObject({ PRs: 6, Run: 4, Failed: 1, AnyWeakMatched: 2, NotMatched: 1, NoCatch: 0, ApplyFailed: 0 });
+    expect(m1.BugSet).toMatchObject({ PRs: 6, Run: 4, Failed: 1, AnyWeakMatched: 2, MatchedOnFixMerge: 0, NotMatched: 1, NoCatch: 0, ApplyFailed: 0, PrepareFailed: 0 });
     expect(m1.BugSet.Caught).toMatchObject({ K: 1, N: 3 });
   });
 
@@ -213,7 +213,7 @@ describe('RenderMarkdown', () => {
     expect(md).toMatch(/1 run PR has no match result yet/);
     expect(md).toContain('Unpriced models: mystery');
     expect(md).toContain('Gate caught (reported and matched, of every curated bug PR): 1/6');
-    expect(md).toContain('gate blocked: 1 failed, 1 not run, 1 not yet matched, 0 apply failed (needs a person)');
+    expect(md).toContain('gate blocked: 1 failed, 1 not run, 1 not yet matched, 0 apply failed, 0 prepare failed (needs a person)');
     expect(md).not.toContain('gate inputs complete');
   });
 
@@ -223,6 +223,19 @@ describe('RenderMarkdown', () => {
     const md = RenderMarkdown(await BuildGateReport({ Ledgers: [done], Corpus: corpus, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES }));
     expect(md).toContain('gate inputs complete');
     expect(md).not.toContain('gate blocked');
+  });
+
+  it('counts a match on the fix merge and a pair whose fix did not prepare, which blocks the gate', async () => {
+    const corpus: Corpus = { ...CORPUS, Bug: CORPUS.Bug.slice(0, 2) };
+    const l = ledger('c-Tuning-Bug-m1', 'Bug', 'm1', [
+      entry(1, 'Bug', { RunID: 'r1', Match: { ...match('Matched', true, { t1: true }), Head: 'FixMerge' } }),
+      entry(2, 'Bug', { RunID: 'r2', Match: { ...match('PrepareFailed', false, {}), Head: 'FixMerge', Error: 'install failed on Head' } }),
+    ]);
+    const r = await BuildGateReport({ Ledgers: [l], Corpus: corpus, Store: store(), RunDirOf: () => { throw new Error('no run dir'); }, Prices: PRICES });
+    expect(r.Models[0].BugSet).toMatchObject({ AnyWeakMatched: 1, MatchedOnFixMerge: 1, PrepareFailed: 1 });
+    const md = RenderMarkdown(r);
+    expect(md).toContain('- Any weak catch matched: 1 (1 on the fix merge); not matched: 0; no catch: 0; fix did not apply: 0; fix did not prepare: 1\n');
+    expect(md).toContain('gate blocked: 0 failed, 0 not run, 0 not yet matched, 0 apply failed, 1 prepare failed (needs a person)');
   });
 
   it('puts model and rule names on one line and escapes a leading # or -', async () => {

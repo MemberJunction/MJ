@@ -18,9 +18,12 @@ export interface ModelReport {
     /**
      * Caught = run bug PRs whose reported catch matched the fix ÷ run bug PRs with a match result (progress).
      * GateCaught = bug PRs whose reported catch matched ÷ every curated bug PR of the slices (the gate value).
-     * NotYetMatched = run bug PRs with no match result.
+     * NotYetMatched = run bug PRs with no match result. MatchedOnFixMerge = Matched PRs whose tests ran on the fix PR's merge commit.
      */
-    BugSet: { PRs: number; Run: number; Failed: number; Caught: RateWithInterval; GateCaught: RateWithInterval; AnyWeakMatched: number; NotMatched: number; NoCatch: number; ApplyFailed: number; NotYetMatched: number };
+    BugSet: {
+        PRs: number; Run: number; Failed: number; Caught: RateWithInterval; GateCaught: RateWithInterval; AnyWeakMatched: number; MatchedOnFixMerge: number;
+        NotMatched: number; NoCatch: number; ApplyFailed: number; PrepareFailed: number; NotYetMatched: number;
+    };
     /** FalseAlarms = run clean PRs with a reported catch labeled Intended or TestFault. */
     CleanSet: { PRs: number; Run: number; Failed: number; Reported: number; Labeled: number; Pending: number; FalseAlarms: RateWithInterval; RealBugs: number };
     /**
@@ -141,7 +144,8 @@ function bugSetOf(entries: LedgerEntry[], prs: Set<number>): ModelReport['BugSet
     return {
         PRs: prs.size, Run: run.length, Failed: entries.filter((e) => e.Status === 'Failed').length,
         Caught: RateOf(reportedMatched.length, matched.length), GateCaught: RateOf(reportedMatched.filter((e) => prs.has(e.PR)).length, prs.size),
-        AnyWeakMatched: status('Matched'), NotMatched: status('NotMatched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'),
+        AnyWeakMatched: status('Matched'), MatchedOnFixMerge: matched.filter((e) => e.Match?.Status === 'Matched' && e.Match.Head === 'FixMerge').length,
+        NotMatched: status('NotMatched'), NoCatch: status('NoCatch'), ApplyFailed: status('ApplyFailed'), PrepareFailed: status('PrepareFailed'),
         NotYetMatched: run.length - matched.length,
     };
 }
@@ -238,7 +242,7 @@ function renderModel(m: ModelReport): string[] {
         `## ${MarkdownText(m.Model)}`, '', `Ledgers: ${m.Ledgers.map(MarkdownText).join(', ')}`, '',
         `### Bug set`, '', `- ${prLine(b)}`, `- Caught (reported and matched, of run PRs with a match result): ${rate(b.Caught)}`,
         `- Gate caught (reported and matched, of every curated bug PR): ${rate(b.GateCaught)}`, ...(b.PRs > 0 ? [`- ${gateInputs(b)}`] : []),
-        `- Any weak catch matched: ${b.AnyWeakMatched}; not matched: ${b.NotMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}`,
+        `- Any weak catch matched: ${b.AnyWeakMatched} (${b.MatchedOnFixMerge} on the fix merge); not matched: ${b.NotMatched}; no catch: ${b.NoCatch}; fix did not apply: ${b.ApplyFailed}; fix did not prepare: ${b.PrepareFailed}`,
         ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
         `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
         `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
@@ -253,11 +257,11 @@ function prLine(s: { PRs: number; Run: number; Failed: number }): string {
 
 function notRun(s: { PRs: number; Run: number; Failed: number }): number { return Math.max(0, s.PRs - s.Run - s.Failed); }
 
-/** What keeps the gate value from being final: failed, not run, not yet matched and apply-failed bug PRs; "gate inputs complete" when there are none. Rendered when the slices hold a bug PR. */
+/** What keeps the gate value from being final: failed, not run, not yet matched, apply-failed and prepare-failed bug PRs; "gate inputs complete" when there are none. Rendered when the slices hold a bug PR. */
 function gateInputs(b: ModelReport['BugSet']): string {
-    const counts = [b.Failed, notRun(b), b.NotYetMatched, b.ApplyFailed];
+    const counts = [b.Failed, notRun(b), b.NotYetMatched, b.ApplyFailed, b.PrepareFailed];
     if (counts.every((n) => n === 0)) return 'gate inputs complete';
-    return `gate blocked: ${counts[0]} failed, ${counts[1]} not run, ${counts[2]} not yet matched, ${counts[3]} apply failed (needs a person)`;
+    return `gate blocked: ${counts[0]} failed, ${counts[1]} not run, ${counts[2]} not yet matched, ${counts[3]} apply failed, ${counts[4]} prepare failed (needs a person)`;
 }
 
 function renderCost(m: ModelReport): string[] {
