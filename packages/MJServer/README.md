@@ -904,6 +904,26 @@ mutation {
 
 All AI operations have system-user variants (e.g., `RunAIPromptSystemUser`) that use the `@RequireSystemUser` directive for server-to-server operations.
 
+### Decision-model modes
+
+Some closed-set calls MJServer makes can be answered by a decision model instead of a chat prompt (`RunDecisionUse` in `@memberjunction/ai-prompts`). Each has a mode: `Prompt` (the existing path only), `Shadow` (the existing path answers; the decision runs beside it, and its prompt run, named `Shadow: <use>`, records whether the two agreed) or `Decision` (the decision answers; the existing path runs when it fails, cannot be asked, or is unsure). Values are case-insensitive; anything else reads as the use's default.
+
+| Use | Setting | Env var | Default | Why that default |
+|---|---|---|---|---|
+| `feedback-classifier`: `ClassifyFeedback`'s category and severity | `feedbackSettings.decisionMode` | `MJ_FEEDBACK_DECISION_MODE` | `Decision` | Two Choice questions; the most likely option needs no calibration. The chat-completion classifier is the fallback. |
+| `restricted-field-classifier`: the semantic stage of the anchored-comment field-security check | `decisions.restrictedFieldClassifier` | `MJ_RESTRICTED_FIELD_CLASSIFIER_DECISION_MODE` | `Shadow` | One Likelihood per restricted field, flagged at a calibrated 0.2. No calibration is fitted yet; the shadow runs are its data. |
+| `tag-match`: a tag keyword in `TagEngine`'s suggestion band, just under the match threshold | `decisions.tagMatch` | `MJ_TAG_MATCH_DECISION_MODE` | `Shadow` | One Likelihood ("same concept?"); the tag is applied at a calibrated 0.8, otherwise the keyword is queued for review as before. No calibration is fitted yet. |
+
+```javascript
+// mj.config.cjs
+module.exports = {
+  feedbackSettings: { decisionMode: 'Decision' },
+  decisions: { restrictedFieldClassifier: 'Shadow', tagMatch: 'Shadow' },
+};
+```
+
+Each decision runs as the requesting user, through the `Default Decision` prompt.
+
 ## API Reference
 
 ### Core Exports
