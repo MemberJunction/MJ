@@ -2,13 +2,21 @@
   "$schema": "https://turbo.build/schema.json",
   "remoteCache": { "signature": true },
   "globalDependencies": [
-    "vitest.shared.ts",
-    "vitest.dom.shared.ts",
-    "vitest.dom.setup.ts"
+    "tsconfig.server.json"
   ],
   "tasks": {
     "build": {
       "outputs": ["build/**", "dist/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "!src/**/__tests__/**",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!**/*.spec.ts",
+        "!**/*.spec.tsx",
+        "!vitest.config.*"
+      ],
       "cache": true,
       "dependsOn": ["^build"],
       "persistent": false
@@ -32,7 +40,10 @@
         "src/**/__tests__/**",
         "vitest.config.*",
         "tsconfig.json",
-        "tsconfig.spec.json"
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/vitest.shared.ts",
+        "$TURBO_ROOT$/vitest.dom.shared.ts",
+        "$TURBO_ROOT$/vitest.dom.setup.ts"
       ],
       "cache": true
     },
