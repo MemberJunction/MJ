@@ -25,7 +25,8 @@ function makeMockQueryProvider(rows: Record<string, unknown>[]): {
     calls: Array<{ params: RunQueryParams; contextUser?: unknown }>;
 } {
     const calls: Array<{ params: RunQueryParams; contextUser?: unknown }> = [];
-    const provider: IRunQueryProvider = {
+    // Only the two members TypedQuery.Run reaches.
+    const provider = {
         RunQuery: async (params: RunQueryParams, contextUser?: unknown): Promise<RunQueryResult> => {
             calls.push({ params, contextUser });
             return {
@@ -40,7 +41,7 @@ function makeMockQueryProvider(rows: Record<string, unknown>[]): {
             };
         },
         RunQueries: async () => [],
-    };
+    } as unknown as IRunQueryProvider;
     return { provider, calls };
 }
 
@@ -140,7 +141,7 @@ describe('ComputeTypedQuerySignature & TypedQuery', () => {
         const result = await ActiveUsersQuery.Run(undefined, {
             provider,
             MaxRows: 25,
-            BypassCache: true,
+            CacheLocal: true,
         });
 
         expect(result.Success).toBe(true);
@@ -150,7 +151,7 @@ describe('ComputeTypedQuerySignature & TypedQuery', () => {
             QueryID: '11111111-2222-3333-4444-555555555555',
             Parameters: {},
             MaxRows: 25,
-            BypassCache: true,
+            CacheLocal: true,
         });
     });
 
