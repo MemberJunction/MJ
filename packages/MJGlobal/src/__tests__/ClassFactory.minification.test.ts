@@ -39,7 +39,8 @@ describe('ClassFactory Minification Safety', () => {
         it('ignores null, undefined, empty, or non-function in StampClassName', () => {
             const notAClass = { name: 'Foo' };
             StampClassName(notAClass, 'Foo');
-            expect(GetClassName(notAClass)).toBe('Unknown');
+            expect((notAClass as { __mjClassName?: unknown }).__mjClassName).toBeUndefined();
+            expect(GetClassName(notAClass)).toBe('Foo');
 
             class DummyClass {}
             StampClassName(DummyClass, '');

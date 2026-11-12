@@ -285,7 +285,7 @@ export function IsClassConstructor(value: any): boolean {
  * @returns The class name or a fallback string
  */
 export function GetClassName(ClassRef: unknown): string {
-    if (!ClassRef || typeof ClassRef !== 'function') {
+    if (!ClassRef || (typeof ClassRef !== 'function' && typeof ClassRef !== 'object')) {
         return 'Unknown';
     }
 
@@ -306,10 +306,12 @@ export function GetClassName(ClassRef: unknown): string {
     }
 
     // Try to extract from toString() as fallback
-    const fnString = ClassRef.toString();
-    const match = fnString.match(/^class\s+(\w+)/);
-    if (match && match[1]) {
-        return match[1];
+    if (typeof ClassRef === 'function') {
+        const fnString = ClassRef.toString();
+        const match = fnString.match(/^class\s+(\w+)/);
+        if (match && match[1]) {
+            return match[1];
+        }
     }
 
     return 'Anonymous';
