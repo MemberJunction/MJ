@@ -1,0 +1,26 @@
+---
+"@memberjunction/core": patch
+"@memberjunction/core-entities": patch
+"@memberjunction/generic-database-provider": patch
+"@memberjunction/sqlserver-dataprovider": patch
+"@memberjunction/postgresql-dataprovider": patch
+"@memberjunction/graphql-dataprovider": patch
+"@memberjunction/server": patch
+"@memberjunction/codegen-lib": patch
+"@memberjunction/core-actions": patch
+"@memberjunction/video-studio": patch
+"@memberjunction/materialization": patch
+"@memberjunction/excel-addin-server": patch
+"@memberjunction/conversations-runtime": patch
+"@memberjunction/ng-dashboard-viewer": patch
+"@memberjunction/ng-explorer-core": patch
+"@memberjunction/ng-dashboards": patch
+"@memberjunction/ng-code-editor": patch
+"@memberjunction/data-context": patch
+"@memberjunction/mobile-app": patch
+"@memberjunction/integration-test-suite": patch
+---
+
+Saved-query metadata is no longer loaded into the metadata object by default. Providers skip the query items of the `MJ_Metadata` dataset (no SQL runs for them, and their status stays constant), so saving a query no longer refreshes metadata on every server and client. The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters return empty arrays and log one warning; set `LoadQueryMetadata: true` on the provider configuration (`databaseSettings.loadQueryMetadata` on MJAPI) to restore them until 7.0. Use the same setting on every server that shares a metadata cache. Every MJ consumer of those getters now reads `QueryEngine`.
+
+The typed-query API (`DefineTypedQuery`, `TypedQuery`, `ComputeTypedQuerySignature`, `SetTypedQueryDriftMode`, …) moved from `@memberjunction/core` to `@memberjunction/core-entities`, and signature drift is checked against `QueryEngine`. Projects that generated typed queries for their own schema on a 6.3.0 edge build must re-run CodeGen, which now emits the new import.
