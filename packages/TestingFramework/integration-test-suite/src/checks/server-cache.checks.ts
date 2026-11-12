@@ -37,23 +37,63 @@ function KeyValuesOf(entity: BaseEntity): Record<string, string> {
     return Object.fromEntries(entity.PrimaryKey.KeyValuePairs.map(kv => [kv.FieldName, String(kv.Value)]));
 }
 
-/** Polls for at least one recorded `row_delta` write up to `timeoutMs` so fast local runs finish in ~25 ms instead of sleeping the full timeout. */
-async function WaitForRowDeltaWrite(ctx: IntegrationCheckContext, timeoutMs: number = 2000): Promise<void> {
+/**
+ * Waits until the `row_delta` writes have stopped arriving — at least one recorded, then none new for
+ * `quietMs` — so a mutation's full set of slot writes is on the record before anything selects from it.
+ *
+ * One save maintains MORE THAN ONE cache slot (the LocalCacheManager slot and the engine's own
+ * `imr:1` slot), and those writes are issued in the background, fire-and-forget. Waiting for the
+ * FIRST write therefore proves nothing about the rest: a save's second, late upsert can land after
+ * the following delete, where "the most recent row_delta write" reads as that delete's removal and
+ * the check fails claiming a delete upserted a row (#6537). Per-slot writes are serialized, so the
+ * cache itself ends correct — only the oracle's choice of write was wrong, which is why the symptom
+ * was intermittent and test-only.
+ */
+export async function WaitForRowDeltaQuiet(ctx: IntegrationCheckContext, quietMs: number = 150, timeoutMs: number = 3000): Promise<void> {
     const pollIntervalMs = 25;
-    let elapsed = 0;
-    while (ctx.Storage.RowDeltaWrites().length === 0 && elapsed < timeoutMs) {
+    let seen = -1;
+    let quietFor = 0;
+    for (let elapsed = 0; elapsed < timeoutMs; elapsed += pollIntervalMs) {
+        const count = ctx.Storage.RowDeltaWrites().length;
+        quietFor = count === seen ? quietFor + pollIntervalMs : 0;
+        seen = count;
+        if (count > 0 && quietFor >= quietMs) {
+            return;
+        }
         await Settle(pollIntervalMs);
-        elapsed += pollIntervalMs;
     }
 }
 
-/** The most recent write that asked for a `row_delta` broadcast, parsed; throws (fails the check) when there is none. */
-function LastRowDeltaWrite(ctx: IntegrationCheckContext, label: string): { payload: CacheRowDeltaPayload; bytes: number } {
-    const writes = ctx.Storage.RowDeltaWrites();
-    Assert(writes.length >= 1, `${label}: the in-place slot maintenance must write the slot with pubSubAction 'row_delta' (saw ${ctx.Storage.Writes.length} write(s), none row_delta)`);
-    const data = writes[writes.length - 1].Options?.pubSubData;
-    Assert(typeof data === 'string', `${label}: a row_delta write must carry pubSubData`);
-    return { payload: JSON.parse(data as string) as CacheRowDeltaPayload, bytes: (data as string).length };
+/**
+ * The LAST recorded `row_delta` write whose parsed payload satisfies `predicate`; fails the check when
+ * none does.
+ *
+ * Last rather than first because the mutation's writes land on several slots and only one of them is
+ * the slot the check's own baseline was read from — the plain unfiltered slot, which is written last.
+ * Taking the last MATCHING write keeps that slot while excluding the writes whose payload belongs to
+ * the other phase, which is the pair of properties the old "last write, whatever it carries" lacked.
+ */
+export function LastRowDeltaMatching(
+    ctx: IntegrationCheckContext,
+    predicate: (payload: CacheRowDeltaPayload) => boolean,
+    label: string
+): { payload: CacheRowDeltaPayload; bytes: number } {
+    let match: { payload: CacheRowDeltaPayload; bytes: number } | undefined;
+    for (const write of ctx.Storage.RowDeltaWrites()) {
+        const data = write.Options?.pubSubData;
+        if (typeof data !== 'string') {
+            continue;
+        }
+        const payload = JSON.parse(data) as CacheRowDeltaPayload;
+        if (predicate(payload)) {
+            match = { payload, bytes: data.length };
+        }
+    }
+    Assert(match !== undefined,
+        `${label}: no row_delta write carried the expected row — the in-place slot maintenance must write the slot `
+        + `with pubSubAction 'row_delta' (saw ${ctx.Storage.RowDeltaWrites().length} row_delta write(s) out of `
+        + `${ctx.Storage.Writes.length} write(s))`);
+    return match!;
 }
 
 /** A record-shaped payload row names the saved record when every primary-key field matches. */
@@ -1138,16 +1178,22 @@ export const ServerCacheChecks: NamedCheck[] = [
             const savedKey = KeyValuesOf(setting);
             let deleted = false;
             try {
-                await WaitForRowDeltaWrite(ctx);
-                const { payload, bytes } = LastRowDeltaWrite(ctx, 'S34 upsert');
-                AssertUpsertDelta(payload, entityInfo!, savedKey, baselineCount);
-                Assert(bytes < slotBytes + 2000, 'S34: the broadcast payload must be compact (one row), not the whole cached array');
+                // Let ALL of the save's slot writes land before reading any of them, then pick the one
+                // whose payload is the upsert of this record (#6537).
+                await WaitForRowDeltaQuiet(ctx);
+                const upsert = LastRowDeltaMatching(ctx, p => p.upsertedRows.some(r => RowIsRecord(r, entityInfo!, savedKey)), 'S34 upsert');
+                AssertUpsertDelta(upsert.payload, entityInfo!, savedKey, baselineCount);
+                Assert(upsert.bytes < slotBytes + 2000, 'S34: the broadcast payload must be compact (one row), not the whole cached array');
 
+                // ResetCounts() here so the removal is selected only from the delete's own writes: the
+                // save's are now all on the record (the quiet wait above), which is what makes
+                // discarding them safe — the old code reset while they were still in flight.
                 ctx.Storage.ResetCounts();
                 deleted = await setting.Delete();
                 Assert(deleted, `S34 delete failed: ${setting.LatestResult?.CompleteMessage ?? 'unknown'}`);
-                await WaitForRowDeltaWrite(ctx);
-                AssertRemovalDelta(LastRowDeltaWrite(ctx, 'S34 removal').payload, entityInfo!, savedKey, baselineCount);
+                await WaitForRowDeltaQuiet(ctx);
+                const removal = LastRowDeltaMatching(ctx, p => p.deletedPrimaryKeys.some(k => RowIsRecord(k, entityInfo!, savedKey)), 'S34 removal');
+                AssertRemovalDelta(removal.payload, entityInfo!, savedKey, baselineCount);
             } finally {
                 if (!deleted) {
                     await setting.Delete().catch(() => undefined); // best-effort cleanup; never masks the real failure

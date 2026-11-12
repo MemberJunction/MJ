@@ -7,6 +7,13 @@
  *   - `mutation`: the check writes to the database and runs only on the nightly lane
  *     (RUN_MUTATION_TESTS=1). A check flagged `RequiresMutation` is allowed by the driver without an
  *     entry; this list covers checks that test the gate themselves at run time.
+ *
+ * A `RequiresMutation` check is driver-allowed only while the tier is UNARMED. On the nightly the
+ * tier IS armed, so the check RUNS — and a secondary skip of its own (an environment it cannot
+ * exercise, a transport that cannot transact, a deferred product limitation) is then judged like any
+ * other skip and needs an entry below. This asymmetry is easy to miss, because every PR run stays
+ * green while the nightly is the only lane that can see the skip: the gate shipped with no entries
+ * for these and the nightly lane failed every night for over a month as a result.
  *   - `credentials`: the check needs model, service or database credentials the deterministic lane
  *     does not have. `RequiresLiveModel` checks are allowed by the driver without an entry.
  *
@@ -246,6 +253,75 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Gate: 'credentials',
         Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
             + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+
+    // ── Mutation-armed secondary skips ────────────────────────────────────────────────────────────
+    // The checks below are `RequiresMutation`, so a PR run skips them at the tier gate and the driver
+    // allows that without an entry. The nightly arms the tier, the check runs, and it then skips for
+    // a reason of its own — which is what these entries cover. See the asymmetry note in the header.
+    {
+        CheckId: 'server-cache.S30',
+        Gate: 'pending-ruling',
+        Reason: 'Cross-entity denormalization invalidation is not implemented: RunView cache invalidation keys on the '
+            + 'changed entity (MJ: Query Categories), not on dependent entities that denormalize its name (MJ: Queries), '
+            + 'so renaming a parent does not refresh cached child rows. Fanning invalidation out to every dependent '
+            + 'entity is a broad, higher-risk change for the cache owner to schedule. The check skips rather than '
+            + 'redding the tier and re-arms itself once the fan-out lands.'
+    },
+    {
+        CheckId: 'role-elevation.RE6',
+        Gate: 'not-applicable',
+        Reason: 'The end-to-end Save() leg needs an ACTIVE non-Owner principal that holds CanCreate on MJ: User Roles '
+            + 'AND holds at least one role AND lacks at least one — a shape the stock catalog plus the CI fixtures do '
+            + 'not produce. Unexercised, not violated: RE1-RE5 are ungated and RE2 proves the guard refuses the '
+            + 'escalation on every run. Seeding such a principal would un-park this leg.'
+    },
+    {
+        CheckId: 'entity-server-invariants.ESI9',
+        Gate: 'not-applicable',
+        Reason: 'Server-transport-only leg: MJTemplateContentEntityServer.Save wraps param-sync in a provider '
+            + 'transaction, which the in-process SQLServerDataProvider has and the client GraphQL provider does not. '
+            + 'The skip is the client shard declining a leg the server shards run.'
+    },
+    {
+        CheckId: 'realtime-session-verification.RSV1',
+        Gate: 'credentials',
+        Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
+            + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
+            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
+            + 'environment gap.'
+    },
+    {
+        CheckId: 'realtime-session-verification.RSV2',
+        Gate: 'credentials',
+        Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
+            + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
+            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
+            + 'environment gap.'
+    },
+    {
+        CheckId: 'realtime-session-verification.RSV4',
+        Gate: 'credentials',
+        Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
+            + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
+            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
+            + 'environment gap.'
+    },
+    {
+        CheckId: 'realtime-session-verification.RSV5',
+        Gate: 'credentials',
+        Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
+            + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
+            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
+            + 'environment gap.'
+    },
+    {
+        CheckId: 'realtime-session-verification.RSV6',
+        Gate: 'credentials',
+        Reason: 'Needs MJAPI configured for mid-session identity verification (realtime.identityVerification enabled, '
+            + 'a communicationProvider, an hmacSecret and deliveryMode "dry-run" so the email is logged, not sent). '
+            + 'The deterministic lane boots MJAPI without them, and the bundle skips loudly rather than failing for an '
+            + 'environment gap.'
     },
 ];
 
