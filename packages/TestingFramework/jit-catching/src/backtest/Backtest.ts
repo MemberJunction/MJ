@@ -5,16 +5,14 @@ import type { BaseCatchStore } from '../contracts/BaseCatchStore';
 import type { Run, TokenUsage } from '../types';
 import { GitRepo } from '../git/GitRepo';
 import { FileCatchStore } from '../store/FileCatchStore';
-import { RedactTail, type RedactionCheck } from '../sandbox/Redaction';
+import type { RedactionCheck } from '../sandbox/Redaction';
 import { DefaultRedaction } from '../pipeline/Deps';
 import { RunAll, RunAllError } from '../pipeline/Run';
 import { PreflightEnv } from '../pipeline/Preflight';
 import { IsValidRunID, RunDir } from '../pipeline/RunDir';
 import { LoadCorpus, RevisionsOf, type Corpus, type Slice } from '../corpus/Corpus';
+import { ErrorLine, ErrorText } from './ErrorText';
 import { LedgerFile, LedgerID, type BacktestLedger, type LedgerEntry } from './Ledger';
-
-/** Characters of an error's redacted text kept in the ledger and on stdout. */
-const ERROR_TEXT_CHARS = 2000;
 
 /** The run stops after this many Failed entries in a row, so an outage does not mark the whole corpus Failed. */
 const MAX_FAILED_IN_ROW = 3;
@@ -141,7 +139,7 @@ function selectedPRs(corpus: Corpus, o: BacktestOptions): SelectedPR[] {
 async function pendingEntry(p: SelectedPR, repo: BacktestDeps['Repo']): Promise<LedgerEntry> {
     let revisions: { BaseSHA: string; HeadSHA: string };
     try { revisions = await RevisionsOf(p.MergeSHA, repo); }
-    catch (e) { throw new Error(`PR #${p.PR}: cannot find the first parent of ${p.MergeSHA}: ${errorText(e)}`, { cause: e }); }
+    catch (e) { throw new Error(`PR #${p.PR}: cannot find the first parent of ${p.MergeSHA}: ${ErrorText(e)}`, { cause: e }); }
     return { PR: p.PR, Set: p.Set, ...revisions, RunID: null, Status: 'Pending', Error: null, CostUSD: 0, StartedAt: null, EndedAt: null, Match: null };
 }
 
@@ -253,7 +251,7 @@ async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps
     } catch (e) {
         if (e instanceof RunAllError) { runID = e.RunID; usage = e.Usage ?? []; }
         entry.Status = 'Failed';
-        entry.Error = errorLine(e instanceof RunAllError ? e.cause : e, deps.Redaction);
+        entry.Error = ErrorLine(e instanceof RunAllError ? e.cause : e, deps.Redaction);
     }
     entry.RunID = runID;
     entry.CostUSD += runID ? (await costOf(runID, deps)) ?? sumCost(usage) : 0;
@@ -264,24 +262,9 @@ async function runOne(entry: LedgerEntry, o: BacktestOptions, deps: BacktestDeps
 async function costOf(runID: string, deps: BacktestDeps): Promise<number | null> {
     try { return await deps.CostOfRun(runID); }
     catch (e) {
-        process.stderr.write(`backtest: cost of run ${runID} unknown, recorded as 0: ${errorLine(e, deps.Redaction)}\n`);
+        process.stderr.write(`backtest: cost of run ${runID} unknown, recorded as 0: ${ErrorLine(e, deps.Redaction)}\n`);
         return 0;
     }
-}
-
-/** The first non-empty line of the error with this process's secrets replaced. */
-/** The redacted message without stack frames, cut to its last ERROR_TEXT_CHARS characters. */
-function errorText(e: unknown): string {
-    const message = e instanceof Error ? e.message : String(e);
-    const lines = message.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith('at '));
-    return RedactTail((lines.join('\n') || 'failed').slice(-ERROR_TEXT_CHARS));
-}
-
-/** `errorText`, withheld when it still holds a secret the redaction check knows. */
-function errorLine(e: unknown, redaction: RedactionCheck): string {
-    const text = errorText(e);
-    const match = redaction.Check(text);
-    return match ? `[error withheld: ${match.Kind}]` : text;
 }
 
 function report(ledger: BacktestLedger, entry: LedgerEntry): void {

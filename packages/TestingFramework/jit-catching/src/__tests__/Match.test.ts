@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { MatchStep, type MatchDeps } from '../backtest/Match';
 import { LedgerFile, type BacktestLedger, type LedgerEntry, type MatchRecord } from '../backtest/Ledger';
 import { RedactionCheck } from '../sandbox/Redaction';
+import { InfrastructureError } from '../target/VitestCatchTarget';
 import { RunDir } from '../pipeline/RunDir';
 import { DEFAULT_SETTINGS } from '../settings';
 import type { CandidateTest, Catch, ExecutionResult, PreparedRevision, RevisionRef } from '../types';
@@ -114,11 +115,11 @@ describe('MatchStep', () => {
     expect(d.Target.Cleanup).not.toHaveBeenCalled();
   });
 
-  it('records Matched with ReportedMatched when the reported catch passes every repeat on the fixed head', async () => {
+  it('records Matched with ReportedMatched and Head Patched when the reported catch passes every repeat on the patched head', async () => {
     const { root, corpus, file } = setup([entry(1)]);
     const d = fakes({ passes: { [ID_A]: 3 } });
     const l = await match(root, corpus, d);
-    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false } }));
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'Patched' }));
     expect(d.Target.Prepare).toHaveBeenCalledWith({ Kind: 'Head', SHA: fixedOf(sha('a')) });
     expect(d.Target.BuildPackages).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-7' }), [PKG]);
     expect(d.Target.WriteTests.mock.calls[0]?.[1].map((t) => t.ID)).toEqual([ID_A, ID_B]);
@@ -152,13 +153,13 @@ describe('MatchStep', () => {
   it('records Matched without ReportedMatched when only an unreported catch passes', async () => {
     const { root, corpus } = setup([entry(1)]);
     const l = await match(root, corpus, fakes({ passes: { [ID_B]: 3 } }));
-    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: false, Tests: { [ID_A]: false, [ID_B]: true } }));
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: false, Tests: { [ID_A]: false, [ID_B]: true }, Head: 'Patched' }));
   });
 
-  it('records NotMatched when no catch passes every repeat on the fixed head', async () => {
+  it('records NotMatched with Head Patched when no catch passes every repeat on the patched head', async () => {
     const { root, corpus } = setup([entry(1)]);
     const l = await match(root, corpus, fakes({ passes: { [ID_A]: 2 } }));
-    expect(l.Entries[0].Match).toEqual(record({ Status: 'NotMatched', ReportedMatched: false, Tests: { [ID_A]: false, [ID_B]: false } }));
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'NotMatched', ReportedMatched: false, Tests: { [ID_A]: false, [ID_B]: false }, Head: 'Patched' }));
   });
 
   it('skips entries already matched, Clean entries and entries that are not Assessed', async () => {
@@ -189,5 +190,34 @@ describe('MatchStep', () => {
     await expect(match(root, corpus, { ...d, RemoveStore: removeStore })).rejects.toThrow('install failed');
     expect(removeStore).toHaveBeenCalledTimes(1);
     expect(d.Target.Cleanup).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the fix merge when the patched head does not prepare, and records Head FixMerge', async () => {
+    const { root, corpus, file } = setup([entry(1)]);
+    const d = fakes({ passes: { [ID_A]: 3 } });
+    d.Target.Prepare.mockRejectedValueOnce(new InfrastructureError('install failed on Head: ERR_PNPM_OUTDATED_LOCKFILE\n* 1 dependencies were added'));
+    const removeStore = vi.fn(async () => undefined);
+    const l = await match(root, corpus, { ...d, RemoveStore: removeStore });
+    expect(d.Target.Prepare.mock.calls.map((c) => c[0])).toEqual([{ Kind: 'Head', SHA: fixedOf(sha('a')) }, { Kind: 'Head', SHA: sha('f') }]);
+    expect(stderr.join('')).toContain(`match ${LEDGER_ID}: PR #1: the fix on head does not prepare (install failed on Head: ERR_PNPM_OUTDATED_LOCKFILE); trying the fix merge fffffff\n`);
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'FixMerge' }));
+    expect(d.Target.Run).toHaveBeenCalledWith(expect.objectContaining({ RootDir: '/work/head-f' }), expect.any(Array), DEFAULT_SETTINGS.Repeats);
+    expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
+    expect(removeStore).toHaveBeenCalledTimes(1);
+    expect(file.Read().Entries[0].Match?.Head).toBe('FixMerge');
+  });
+
+  it('records PrepareFailed with the error and goes on to the next entry when the fix merge does not prepare either', async () => {
+    const { root, corpus, file } = setup([entry(1), entry(3)]);
+    const d = fakes({ passes: { [ID_A]: 3 } });
+    d.Target.Prepare.mockRejectedValueOnce(new InfrastructureError('install failed on Head: patched')).mockRejectedValueOnce(new InfrastructureError('install failed on Head: merge\n    at prepare (x.ts:1:1)'));
+    const removeStore = vi.fn(async () => undefined);
+    const l = await match(root, corpus, { ...d, RemoveStore: removeStore });
+    expect(l.Entries[0].Match).toEqual(record({ Status: 'PrepareFailed', Head: 'FixMerge', Error: 'install failed on Head: merge' }));
+    expect(l.Entries[1].Match).toEqual(record({ Status: 'Matched', ReportedMatched: true, Tests: { [ID_A]: true, [ID_B]: false }, Head: 'Patched' }));
+    expect(d.Target.Prepare.mock.calls.map((c) => c[0].SHA)).toEqual([fixedOf(sha('a')), sha('f'), fixedOf(sha('c'))]);
+    expect(d.Target.Cleanup).toHaveBeenCalledTimes(1);
+    expect(removeStore).toHaveBeenCalledTimes(2);
+    expect(file.Read().Entries.map((e) => e.Match?.Status ?? null)).toEqual(['PrepareFailed', 'Matched']);
   });
 });
