@@ -83,6 +83,8 @@ Bug rows: 70 (Yes 19, Likely 38, Unlikely 13, No 0), plus the addendum below. Cl
 
 **Runnable.** 39 of the 70 rows have a pnpm-era base. Rows with a pre-pnpm base, unrunnable: 10 (#1893), 11 (#1287), 12 (#1143), 13 (#1213), 15 (#1062), 17 (#1232), 18 (#1129), 20 (#1281), 25 (#2330), 26 (#3279), 28 (#2426), 30 (#743), 33 (#3184), 40 (#1331), 42 (#2519), 45 (#804), 46 (#3339), 49 (#1888), 50 (#2101), 51 (#2683), 52 (#1162), 54 (#1188), 56 (#1718), 57 (#2709), 58 (#2058), 59 (#2854), 62 (#2065), 65 (#1996), 67 (#1136), 68 (#2539), 69 (#2715).
 
+**Found by the tuning backtest (task 2.17).** Three chosen pairs cannot run in the offline sandbox. #3748 (row 9) has a `pnpm-lock.yaml` at its base, and #4572 (row 35) at its head, that does not match the `package.json` files (`ERR_PNPM_OUTDATED_LOCKFILE`), so the frozen install fails. #4253 (row 1) runs, but its fix PR #4293 adds a dependency without updating the lockfile, and the unfrozen offline install then needs registry metadata the store lacks (`ERR_PNPM_NO_OFFLINE_META`), so the match check cannot prepare the fix and the pair can never count as caught. Whether to swap the three for other candidates is a curation decision.
+
 ## Bug candidates (addendum)
 
 The 34 ranked pairs with a pnpm-era base that the first pass did not judge, judged the same way. Two were skipped as feature changes (#5306 → #4847 adds a `judgeEvidence` input absent at the bug base; #5820 → #5527 is Login Studio preview scaling with only a comment outside Angular).
