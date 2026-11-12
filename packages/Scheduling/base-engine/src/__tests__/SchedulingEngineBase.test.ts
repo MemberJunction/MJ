@@ -104,7 +104,7 @@ describe('SchedulingEngineBase', () => {
       it('computes the interval from a string NextRunAt instead of throwing', () => {
         seed([{ ID: 'a', Status: 'Active', NextRunAt: '2026-08-13T12:03:20.000Z' }]); // 200s out
         expect(() => engine.UpdatePollingInterval()).not.toThrow();
-        expect(engine.ActivePollingInterval).toBe(100000); // half of 200s
+        expect(engine.ActivePollingInterval).toBe(200000); // the time until it is due (#6217)
       });
 
       it('picks the minimum across mixed Date and string NextRunAt values', () => {
@@ -113,8 +113,70 @@ describe('SchedulingEngineBase', () => {
           { ID: 'date-near', Status: 'Active', NextRunAt: new Date('2026-08-13T12:01:00.000Z') }, // 60s out
         ]);
         engine.UpdatePollingInterval();
-        expect(engine.ActivePollingInterval).toBe(30000); // half of the nearer 60s
+        expect(engine.ActivePollingInterval).toBe(60000); // the nearer 60s
       });
+    });
+  });
+
+  describe('UpdatePollingInterval wakes only when something is due (#6217)', () => {
+    type Row = { ID: string; Status: string; NextRunAt: Date | null };
+    const seed = (jobs: Row[]) => {
+      (engine as unknown as { _scheduledJobs: Row[] })._scheduledJobs = jobs;
+    };
+    const NOW = new Date('2026-11-03T12:00:00.000Z');
+    const at = (ms: number) => new Date(NOW.getTime() + ms);
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('arms for the due time, at least 1 s and at most MaxPollingIntervalMs', () => {
+      seed([{ ID: 'a', Status: 'Active', NextRunAt: at(300) }]);
+      engine.UpdatePollingInterval();
+      expect(engine.ActivePollingInterval).toBe(1_000);
+
+      seed([{ ID: 'a', Status: 'Active', NextRunAt: at(3 * 60 * 60_000) }]);
+      engine.UpdatePollingInterval();
+      expect(engine.ActivePollingInterval).toBe(60 * 60_000);
+
+      engine.MaxPollingIntervalMs = 2 * 60 * 60_000;
+      engine.UpdatePollingInterval();
+      expect(engine.ActivePollingInterval).toBe(2 * 60 * 60_000);
+    });
+
+    it('retries an overdue job every 10 s, as before', () => {
+      seed([{ ID: 'a', Status: 'Active', NextRunAt: at(-5_000) }]);
+      engine.UpdatePollingInterval();
+      expect(engine.ActivePollingInterval).toBe(10_000);
+    });
+
+    it('polls every 10 s while a job waits for NextRunAt seeding', () => {
+      seed([{ ID: 'a', Status: 'Active', NextRunAt: null }]);
+      engine.UpdatePollingInterval();
+      expect(engine.ActivePollingInterval).toBe(10_000);
+    });
+
+    it('ignores a gated job with nothing pending and sleeps to the ceiling', () => {
+      seed([{ ID: 'gated', Status: 'Active', NextRunAt: at(-60_000) }]);
+      engine.UpdatePollingInterval(() => null);
+      expect(engine.ActivePollingInterval).toBe(60 * 60_000);
+    });
+
+    it('counts a gated job at the later of NextRunAt and its work-due time', () => {
+      seed([
+        { ID: 'gated', Status: 'Active', NextRunAt: at(-60_000) },
+        { ID: 'plain', Status: 'Active', NextRunAt: at(30 * 60_000) },
+      ]);
+      engine.UpdatePollingInterval((job) => (job.ID === 'gated' ? at(10 * 60_000) : undefined));
+      expect(engine.ActivePollingInterval).toBe(10 * 60_000);
+
+      engine.UpdatePollingInterval((job) => (job.ID === 'gated' ? at(-1) : undefined));
+      expect(engine.ActivePollingInterval).toBe(10_000); // gated work due now, job overdue
     });
   });
 

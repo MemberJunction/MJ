@@ -268,6 +268,14 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     /**
+     * IDs of the runs this process is currently guarding — i.e. the agent runs executing here.
+     * A copy; read by MJAPI's event-loop stall monitor to name what was running during a stall.
+     */
+    public get TrackedRunIDs(): string[] {
+        return this.trackedIds();
+    }
+
+    /**
      * Returns true when the heartbeat and cancellation-poll timers are currently active.
      * Exposed for diagnostics and tests verifying idle-timer suspension.
      */
