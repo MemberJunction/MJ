@@ -29,8 +29,8 @@ const SP_CREATE = 'CREATE PROCEDURE [app].[spCreateOrderHeader] AS SELECT * FROM
 
 /** Stubs the parts of generation that read the database or metadata; everything else is real. */
 class StubbedSQLCodeGen extends SQLCodeGenBase {
-    public override async GenerateBaseView(): Promise<string> {
-        return INNER_VIEW_DDL;
+    public override async GenerateBaseViewPieces(): Promise<{ viewSQL: string; viewPermSQL: string }> {
+        return { viewSQL: INNER_VIEW_DDL, viewPermSQL: '' };
     }
     protected override generateViewPermissions(): string {
         return '';

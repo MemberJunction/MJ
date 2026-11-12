@@ -23,8 +23,6 @@ const seamClient = {
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'Anthropic',
     SupportsTools: true,
-    // Anthropic has never normalized this — it reports a constant on every non-tool turn.
-    OrdinaryFinishReason: 'completed',
     CreateLLM: () => {
         const llm = new AnthropicLLM('conformance-test-key');
         (llm as unknown as { _anthropic: typeof seamClient })._anthropic = seamClient;

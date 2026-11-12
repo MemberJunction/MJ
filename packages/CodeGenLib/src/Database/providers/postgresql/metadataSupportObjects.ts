@@ -598,16 +598,18 @@ BEGIN
   FROM _uef_filtered fr
   WHERE tgt."ID" = fr.entity_field_id;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _uef_filtered's pg_toast relation.
   RETURN QUERY
   SELECT
-    fr.entity_id, fr.entity_name::text, fr.entity_field_id, fr.entity_field_name::text,
-    fr.auto_update_description, fr.existing_description::text, fr.sql_description::text,
-    fr.new_type::text, fr.new_length::integer, fr.new_precision::integer, fr.new_scale::integer,
-    fr.new_allows_null, fr.new_default_value::text, fr.new_auto_increment,
+    fr.entity_id, (fr.entity_name || '')::text, fr.entity_field_id, (fr.entity_field_name || '')::text,
+    fr.auto_update_description, (fr.existing_description || '')::text, (fr.sql_description || '')::text,
+    (fr.new_type || '')::text, fr.new_length::integer, fr.new_precision::integer, fr.new_scale::integer,
+    fr.new_allows_null, (fr.new_default_value || '')::text, fr.new_auto_increment,
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
-    fr.related_entity_id, fr.related_entity_field_name::text,
+    fr.related_entity_id, (fr.related_entity_field_name || '')::text,
     fr.new_is_primary_key, fr.new_is_unique,
-    fr.is_material_change, fr.change_reasons::text
+    fr.is_material_change, (fr.change_reasons || '')::text
   FROM _uef_filtered fr
   -- Only material changes flag the entity as modified (for regen). Sequence-only
   -- renumbers were still applied by the UPDATE above but must not trigger a full
@@ -716,9 +718,11 @@ BEGIN
   FROM _ues_filtered fr
   WHERE tgt."ID" = fr.entity_id;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _ues_filtered's pg_toast relation.
   RETURN QUERY
-  SELECT fr.entity_id, fr.entity_name::text, fr.current_description::text,
-         fr.new_description::text, fr.entity_description::text, fr.schema_name
+  SELECT fr.entity_id, (fr.entity_name || '')::text, (fr.current_description || '')::text,
+         (fr.new_description || '')::text, (fr.entity_description || '')::text, (fr.schema_name || '')::text
   FROM _ues_filtered fr;
 
   -- Hand the storage back but KEEP the relations (and their OIDs) so the plans
@@ -881,8 +885,10 @@ BEGIN
   DELETE FROM __mj."EntityField" delf
   WHERE delf."ID" IN (SELECT d.field_id FROM _del_deleted d);
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _del_deleted's pg_toast relation.
   RETURN QUERY
-  SELECT d.field_id, d.entity_id, d.entity_name, d.field_name FROM _del_deleted d;
+  SELECT d.field_id, d.entity_id, (d.entity_name || '')::text, (d.field_name || '')::text FROM _del_deleted d;
 
   -- TRUNCATE, never DROP: frees the storage while keeping each relation's OID
   -- stable so the plans cached above survive the next call on this connection.
@@ -1210,8 +1216,10 @@ BEGIN
       v_row.schema_name, v_row.view_name, v_row.entity_name, v_row.missing_columns;
   END LOOP;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _rav_drift's pg_toast relation.
   RETURN QUERY
-  SELECT d.schema_name, d.view_name, d.entity_name, d.missing_columns
+  SELECT (d.schema_name || '')::text, (d.view_name || '')::text, (d.entity_name || '')::text, (d.missing_columns || '')::text
   FROM _rav_drift d
   ORDER BY d.schema_name, d.view_name;
 

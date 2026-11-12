@@ -3,7 +3,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 // `UserCache` moved to generic-database-provider upstream (dialect-neutral Refresh); the rest of
 // this line is this branch's PG-parity work, which the merged body below still uses.
-import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { UserCache, resolveDbPlatformFromEnv, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -264,8 +264,7 @@ async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> 
  * on PostgreSQL while it stays in this process on SQL Server.
  */
 async function runStartupEngines(provider: IMetadataProvider): Promise<void> {
-  const systemUser = UserCache.Instance.GetSystemUser()
-    ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type?.trim() === 'Owner');
+  const systemUser = GetServerPrincipal() ?? undefined;
   await StartupManager.Instance.Startup(false, systemUser, provider);
 }
 
@@ -338,44 +337,20 @@ export async function closeMJProvider(): Promise<void> {
 
 /**
  * Get a context user for CLI operations
- * Tries to get the "System" user first, falls back to first available user
+ * Tries the user named "System" first, then the active system user, then the lowest-ID active Owner
  */
 export async function GetContextUser(): Promise<import('@memberjunction/core').UserInfo> {
   // Try to get the System user like other CLIs do
   let user = UserCache.Instance.UserByName("System", false);
 
-  // Then the well-known System ID, then the first active Owner. `Type` is space-padded in both
-  // ledgers (`'Owner          '`) and UserInfo never trims it, so trim before comparing. Ordering
-  // the fallbacks this way keeps the resolved user identical on both platforms, rather than
-  // depending on whatever row the database happens to return first.
+  // Then the active system user, else the lowest-ID active Owner (`Type` is space-padded in both
+  // ledgers; the shared ladder trims it). Never an arbitrary cached user.
   if (!user) {
-    user = UserCache.Instance.GetSystemUser();
-  }
-  if (!user) {
-    user = UserCache.Instance.Users?.find(u => u.IsActive && u.Type?.trim() === 'Owner');
+    user = GetServerPrincipal() ?? undefined;
   }
 
   if (!user) {
-    // Fallback to first available user if System user doesn't exist
-    if (!UserCache.Instance.Users || UserCache.Instance.Users.length === 0) {
-      throw new Error(`❌ No users found in UserCache
-
-Problem: UserCache is empty or not properly initialized
-Likely cause: Database connection or UserCache refresh issue
-
-Next steps:
-1. Verify database connection is working
-2. Check that Users table has data
-3. Ensure UserCache.Refresh() was called during initialization
-
-This is typically a configuration or database setup issue.`);
-    }
-
-    user = UserCache.Instance.Users[0];
-  }
-
-  if (!user) {
-    throw new Error('No valid user found for execution context');
+    throw new Error('No active system user or Owner found for the execution context');
   }
 
   return user;

@@ -15,9 +15,10 @@ import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
 import { BuildPostgreSQLConnectionConfig, PostgreSQLReadOnlyPool, ResolvePostgreSQLEndpoint, ResolvePostgreSQLReadOnlyCredentials } from './postgresqlPoolSettings.js';
 import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
-import { DataSourceInfo, UserPayload } from './types.js';
+import { DataSourceInfo, ProviderInfo, UserPayload } from './types.js';
 import { ReadRequestOrigin } from './requestOrigin.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
+import { RunWithRequestSessionId, StampProviderOriginSessionId } from './requestSessionContext.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
@@ -764,7 +765,11 @@ export function CreateUnifiedAuthMiddleware(
       (req as unknown as Record<string, unknown>)['user'] = userPayload;
       (req as unknown as Record<string, unknown>)['mjUser'] = userPayload.userRecord;
 
-      next();
+      if (typeof RunWithRequestSessionId === 'function') {
+        RunWithRequestSessionId(userPayload.sessionId, () => next());
+      } else {
+        next();
+      }
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         res.status(401).json({
@@ -806,43 +811,184 @@ export function createUnifiedAuthMiddleware(
  * This function reads the payload and creates per-request database providers.
  */
 export const ContextFunction =
-  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
-  async ({ req }: { req: IncomingMessage }) => {
-    await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
-
-    // Log the GraphQL operation for debugging (skip introspection noise)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reqAny = req as any;
-    const operationName: string | undefined = reqAny.body?.operationName;
-    // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
-    // data is available when an operator opts into debug, but off by default.
-    if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
-      console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) => {
+    let isSetupComplete = false;
+    let setupSub: { unsubscribe(): void } | undefined;
+    setupSub = setupComplete$.subscribe({
+      next: () => {
+        isSetupComplete = true;
+        setupSub?.unsubscribe();
+      },
+    });
+    if (isSetupComplete) {
+      setupSub.unsubscribe();
     }
 
-    // Auth already happened in the unified auth middleware — just read the result
-    const expressReq = req as e.Request;
-    const userPayload = expressReq.userPayload;
-    if (!userPayload) {
-      throw new AuthenticationError('No user payload — auth middleware may not have run');
-    }
+    return async ({ req }: { req: IncomingMessage }) => {
+      if (!isSetupComplete) {
+        await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
+        isSetupComplete = true;
+      }
 
-    if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
-      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
-    }
+      // Log the GraphQL operation for debugging (skip introspection noise)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reqAny = req as any;
+      const operationName: string | undefined = reqAny.body?.operationName;
+      // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
+      // data is available when an operator opts into debug, but off by default.
+      if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
+        console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+      }
 
-    // Create per-request provider instance based on database type
-    const providers = await createPerRequestProviders(dataSource, dataSources);
+      // Auth already happened in the unified auth middleware — just read the result
+      const expressReq = req as e.Request;
+      const userPayload = expressReq.userPayload;
+      if (!userPayload) {
+        throw new AuthenticationError('No user payload — auth middleware may not have run');
+      }
 
-    return {
-      dataSource,
-      dataSources,
-      userPayload,
-      providers,
-      ClientIp: expressReq.ip,
-      RequestOrigin: ReadRequestOrigin(req.headers.origin),
+      if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
+        console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
+      }
+
+      const materializedProviders: DatabaseProviderBase[] = [];
+      const providers = await createLazyOrEagerPerRequestProviders(
+        dataSource,
+        dataSources,
+        userPayload.sessionId,
+        materializedProviders,
+      );
+
+      const responseEmitter = expressReq.res as { once?: (event: string, listener: () => void) => void } | undefined;
+      responseEmitter?.once?.('close', () => {
+        for (const provider of materializedProviders) {
+          provider.DetachInvalidationListeners();
+        }
+        materializedProviders.length = 0;
+      });
+
+      return {
+        dataSource,
+        dataSources,
+        userPayload,
+        providers,
+        ClientIp: expressReq.ip,
+        RequestOrigin: ReadRequestOrigin(req.headers.origin),
+      };
     };
   };
+
+function tryBuildLazySqlServerProviders(
+  dataSource: sql.ConnectionPool,
+  dataSources: DataSourceInfo[],
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): ProviderInfo[] | null {
+  if (resolveDbPlatformFromEnv() === 'postgresql') {
+    return null;
+  }
+
+  const stampOriginSession = (provider: DatabaseProviderBase): void => {
+    if (typeof StampProviderOriginSessionId === 'function') {
+      StampProviderOriginSessionId(provider, sessionId);
+    }
+  };
+
+  const buildRwSync = (): DatabaseProviderBase | null => {
+    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
+    config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    const sqlProvider = new SQLServerDataProvider();
+    if (!sqlProvider.ConfigureFromGlobalSync(config)) {
+      return null;
+    }
+    const dbProvider: DatabaseProviderBase = sqlProvider;
+    stampOriginSession(dbProvider);
+    materializedProviders.push(dbProvider);
+    return dbProvider;
+  };
+
+  let readOnlyPool: sql.ConnectionPool | null = null;
+  try {
+    readOnlyPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+  } catch {
+    readOnlyPool = null;
+  }
+
+  if (
+    typeof SQLServerDataProvider.CanConfigureFromGlobalSync !== 'function' ||
+    !SQLServerDataProvider.CanConfigureFromGlobalSync(dataSource)
+  ) {
+    return null;
+  }
+  if (readOnlyPool && !SQLServerDataProvider.CanConfigureFromGlobalSync(readOnlyPool)) {
+    return null;
+  }
+
+  const buildRoSync = (): DatabaseProviderBase | null => {
+    if (!readOnlyPool) {
+      return null;
+    }
+    const rConfig = new SQLServerProviderConfigData(readOnlyPool, mj_core_schema, 0, undefined, undefined, false);
+    const roProvider = new SQLServerDataProvider();
+    if (!roProvider.ConfigureFromGlobalSync(rConfig)) {
+      return null;
+    }
+    const dbProvider: DatabaseProviderBase = roProvider;
+    stampOriginSession(dbProvider);
+    materializedProviders.push(dbProvider);
+    return dbProvider;
+  };
+
+  let rwInstance: DatabaseProviderBase | null = null;
+  let roInstance: DatabaseProviderBase | null = null;
+
+  const lazyProviders: ProviderInfo[] = [
+    {
+      type: 'Read-Write',
+      get provider(): DatabaseProviderBase {
+        if (!rwInstance) {
+          rwInstance = buildRwSync() as DatabaseProviderBase;
+        }
+        return rwInstance;
+      },
+    },
+  ];
+
+  if (readOnlyPool) {
+    lazyProviders.push({
+      type: 'Read-Only',
+      get provider(): DatabaseProviderBase {
+        if (!roInstance) {
+          roInstance = buildRoSync() as DatabaseProviderBase;
+        }
+        return roInstance;
+      },
+    });
+  }
+
+  return lazyProviders;
+}
+
+async function createLazyOrEagerPerRequestProviders(
+  dataSource: sql.ConnectionPool,
+  dataSources: DataSourceInfo[],
+  sessionId: string | undefined,
+  materializedProviders: DatabaseProviderBase[],
+): Promise<ProviderInfo[]> {
+  const lazy = tryBuildLazySqlServerProviders(dataSource, dataSources, sessionId, materializedProviders);
+  if (lazy) {
+    return lazy;
+  }
+  const eager = await createPerRequestProviders(dataSource, dataSources);
+  for (const entry of eager) {
+    if (typeof StampProviderOriginSessionId === 'function') {
+      StampProviderOriginSessionId(entry.provider, sessionId);
+    }
+    materializedProviders.push(entry.provider);
+  }
+  return eager;
+}
 
 /** @deprecated Use {@link ContextFunction}. */
 export const contextFunction = ContextFunction;

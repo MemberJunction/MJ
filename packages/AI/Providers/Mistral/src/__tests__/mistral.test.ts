@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 
 // Hoisted mock variables
 const mockComplete = vi.hoisted(() => vi.fn());
@@ -81,7 +82,8 @@ vi.mock('@memberjunction/ai', () => {
         SummarizeResult: class {},
         ClassifyParams: ChatParams,
         ClassifyResult: class {},
-        ErrorAnalyzer: { analyzeError: vi.fn() }
+        ErrorAnalyzer: { analyzeError: vi.fn() },
+        NormalizeFinishReason: actualChatTypes.NormalizeFinishReason
     };
 });
 

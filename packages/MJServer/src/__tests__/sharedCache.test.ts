@@ -37,12 +37,16 @@ import {
     StartUserCacheChecks,
     StartMetadataSweep,
     WirePushStatusFanOut,
+    WireEntityInvalidationFanOut,
+    PublishEntityInvalidationToPeers,
+    ResetEntityInvalidationFanOutForTests,
 } from '../sharedCache.js';
 import { MJGlobal } from '@memberjunction/global';
 import type { PubSubEngine } from 'type-graphql';
 import { PublishStatusUpdate, SetPushStatusPublishHook } from '../generic/PushStatusResolver.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
+import { CacheInvalidationBroadcastManager, RedisStreamBroadcastProvider, type BaseCacheInvalidationBroadcastProvider } from '../broadcast/index.js';
 
 function settings(overrides: Partial<CacheSettingsConfig>): CacheSettingsConfig {
     return { maxMemoryMB: 150, maxPercentOfCachePerEntity: 50, maxEntryPercentOfCache: 'auto', defaultTTLSeconds: 0, evictionSweepIntervalSeconds: 300, verboseLogging: false, engineSweepIntervalSeconds: 300, ...overrides };
@@ -75,9 +79,18 @@ describe('shared cache event routing', () => {
     });
 
     it('dispatches a RunView change and relays it to browsers as an entity invalidation', () => {
-        RouteSharedCacheEvent(event({ CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1' }), provider(false));
+        // Pure read cache fill (Action: 'set') must dispatch locally but NOT publish to browsers
+        RouteSharedCacheEvent(event({ CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1', Action: 'set' }), provider(false));
         expect(dispatch).toHaveBeenCalledOnce();
-        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'set', primaryKeyValues: null }));
+        expect(publish).not.toHaveBeenCalled();
+
+        dispatch.mockClear();
+        publish.mockClear();
+
+        // Eviction / removal (Action: 'removed') dispatches locally AND relays to browsers
+        RouteSharedCacheEvent(event({ CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1', Action: 'removed' }), provider(false));
+        expect(dispatch).toHaveBeenCalledOnce();
+        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'removed', primaryKeyValues: null }));
     });
 
     it('dispatches a RunView row_delta to LocalCacheManager while normalizing browser CACHE_INVALIDATION action to set', () => {
@@ -335,5 +348,162 @@ describe('push-status fan-out wiring', () => {
         // No hook may be left pointing at a connection it could not subscribe on.
         PublishStatusUpdate(localTopic(), { sessionId: 's', ownerUserId: 'u', message: 'x' });
         expect(redis.PublishMessage).not.toHaveBeenCalled();
+    });
+});
+
+describe('entity invalidation fan-out wiring', () => {
+    class FakeSharedCache {
+        public SubscribedChannel: string | undefined;
+        public Published: Array<{ channel: string; payload: string }> = [];
+        private inboundHandler: ((raw: string) => void) | undefined;
+        constructor(private subscribeFails = false) {}
+
+        public SubscribeToChannel = vi.fn(async (channel: string, handler: (raw: string) => void) => {
+            if (this.subscribeFails) {
+                throw new Error('redis is down');
+            }
+            this.SubscribedChannel = channel;
+            this.inboundHandler = handler;
+            return () => undefined;
+        });
+
+        public PublishMessage = vi.fn((channel: string, payload: string) => {
+            this.Published.push({ channel, payload });
+        });
+
+        public Deliver(raw: string): void {
+            this.inboundHandler?.(raw);
+        }
+
+        public AsProvider(): RedisLocalStorageProvider {
+            return this as unknown as RedisLocalStorageProvider;
+        }
+    }
+
+    let originalProvider: BaseCacheInvalidationBroadcastProvider | undefined;
+
+    beforeEach(() => {
+        publish.mockReset();
+        ResetEntityInvalidationFanOutForTests();
+        originalProvider = CacheInvalidationBroadcastManager.Instance.Provider;
+    });
+    afterEach(() => {
+        ResetEntityInvalidationFanOutForTests();
+        if (originalProvider) {
+            CacheInvalidationBroadcastManager.Instance.SetProvider(originalProvider);
+        }
+    });
+
+    it('subscribes to the entity-cache-invalidation channel on the shared connection', async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        expect(redis.SubscribeToChannel).toHaveBeenCalledTimes(1);
+        expect(redis.SubscribedChannel).toBe('entity-cache-invalidation');
+    });
+
+    it("hands a PEER's invalidation to this process's local topic, preserving originSessionId and primaryKeyValues", async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"123"}',
+            action: 'save',
+            sourceServerId: 'peer-replica-99',
+            timestamp: '2026-11-11T12:00:00.000Z',
+            originSessionId: 'browser-session-abc',
+            recordData: '{"ID":"123","Name":"Alice"}',
+        }));
+
+        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', {
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"123"}',
+            action: 'save',
+            sourceServerId: 'peer-replica-99',
+            timestamp: new Date('2026-11-11T12:00:00.000Z'),
+            originSessionId: 'browser-session-abc',
+            recordData: '{"ID":"123","Name":"Alice"}',
+        });
+    });
+
+    it("drops this process's own invalidation echoed back, avoiding duplicate local processing", async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        redis.Deliver(JSON.stringify({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"123"}',
+            action: 'save',
+            sourceServerId: MJGlobal.Instance.ProcessUUID,
+            timestamp: '2026-11-11T12:00:00.000Z',
+            originSessionId: 'browser-session-abc',
+        }));
+
+        expect(publish).not.toHaveBeenCalled();
+    });
+
+    it('forwards a local entity invalidation onto the same channel via PublishEntityInvalidationToPeers', async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        PublishEntityInvalidationToPeers({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"456"}',
+            action: 'delete',
+            sourceServerId: MJGlobal.Instance.ProcessUUID,
+            timestamp: new Date('2026-11-11T12:00:00.000Z'),
+            originSessionId: 'session-xyz',
+        });
+
+        expect(redis.Published).toHaveLength(1);
+        expect(redis.Published[0].channel).toBe('entity-cache-invalidation');
+        expect(JSON.parse(redis.Published[0].payload)).toEqual({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"456"}',
+            action: 'delete',
+            sourceServerId: MJGlobal.Instance.ProcessUUID,
+            timestamp: '2026-11-11T12:00:00.000Z',
+            originSessionId: 'session-xyz',
+        });
+    });
+
+    it('degrades gracefully without throwing when Redis cannot subscribe', async () => {
+        const redis = new FakeSharedCache(true);
+
+        await expect(WireEntityInvalidationFanOut(redis.AsProvider())).resolves.toBeUndefined();
+
+        // No hook left pointing at a failed connection
+        PublishEntityInvalidationToPeers({
+            entityName: 'MJ: Users',
+            primaryKeyValues: null,
+            action: 'save',
+            sourceServerId: 'srv',
+            timestamp: new Date(),
+        });
+        expect(redis.PublishMessage).not.toHaveBeenCalled();
+    });
+
+    it('skips duplicate Redis channel publish when CacheInvalidationBroadcastManager.Instance.Provider exposes PublishClusterInvalidation', async () => {
+        const redis = new FakeSharedCache();
+        await WireEntityInvalidationFanOut(redis.AsProvider());
+
+        // Use a real RedisStreamBroadcastProvider (which exposes PublishClusterInvalidation)
+        const clusterProvider = new RedisStreamBroadcastProvider();
+        CacheInvalidationBroadcastManager.Instance.SetProvider(clusterProvider);
+
+        PublishEntityInvalidationToPeers({
+            entityName: 'MJ: Users',
+            primaryKeyValues: '{"ID":"789"}',
+            action: 'save',
+            sourceServerId: MJGlobal.Instance.ProcessUUID,
+            timestamp: new Date('2026-11-11T12:00:00.000Z'),
+            originSessionId: 'session-stream',
+        });
+
+        // Must skip publishing to the legacy entity-cache-invalidation Redis channel because
+        // cluster-sequenced invalidation is already handled by Redis Streams
+        expect(redis.Published).toHaveLength(0);
     });
 });

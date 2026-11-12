@@ -9,7 +9,7 @@
 
 import sql from 'mssql';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -168,9 +168,8 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   // Startup() entirely — adding it initializes LocalCacheManager and makes an
   // MJ_STARTUP_MODE=full opt-up actually pre-warm engines on PG too.
   const startupMode = ResolveStartupMode({ configValue: config.startup?.mode, defaultMode: 'task' });
-  const sysUser = UserCache.Instance.GetSystemUser();
-  const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-  await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
+  const startupUser = GetServerPrincipal() ?? undefined;
+  await StartupManager.Instance.Startup(false, startupUser, provider, { mode: startupMode.mode });
 
   return provider;
 }
