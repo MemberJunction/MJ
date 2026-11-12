@@ -87,6 +87,17 @@ export class PubSubManager extends BaseSingleton<PubSubManager> {
                 return;
             }
             if (payload.sequence === undefined) {
+                if (typeof provider.PublishClusterInvalidation === 'function') {
+                    void provider.PublishClusterInvalidation(
+                        payload as unknown as CacheInvalidationPayload,
+                        (sequencedPayload) => {
+                            if (this._pubSub) {
+                                void this._pubSub.publish(topic, sequencedPayload);
+                            }
+                        }
+                    );
+                    return;
+                }
                 provider.RecordInvalidation(payload as unknown as CacheInvalidationPayload);
             }
         }

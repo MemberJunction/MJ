@@ -1,7 +1,8 @@
 /**
  * @fileoverview {@link LiveKitParticipantService} — changes a participant in a live room through LiveKit's
  * `RoomServiceClient` (`livekit-server-sdk`). Today it records whether a person lets agents see their camera and shared
- * screen. A participant's token can't change its own attributes: MJ's tokens carry no `canUpdateOwnMetadata`, because
+ * screen, and marks an agent's bot audio-only when its avatar is taken down. A participant's token can't change its own
+ * attributes (agent bots included): MJ's tokens carry no `canUpdateOwnMetadata`, because
  * the same right would let anyone rename themselves and rewrite the metadata that carries their role. So the server
  * sets the attribute for them, once MJAPI has worked out who is asking.
  *
@@ -9,7 +10,7 @@
  */
 
 import { RoomServiceClient, TwirpError } from 'livekit-server-sdk';
-import { AgentVisionAttributes } from '@memberjunction/ai';
+import { AgentAvatarAudioOnlyAttributes, AgentVisionAttributes, type RealtimeAvatarUnavailableReason } from '@memberjunction/ai';
 import { LiveKitTokenService, type LiveKitServerConfig } from './livekit-token-service';
 import { WsToHttpUrl } from './livekit-egress-service';
 
@@ -55,6 +56,19 @@ export class LiveKitParticipantService {
    */
   public async SetAgentVision(roomName: string, identity: string, allow: boolean): Promise<ParticipantUpdateResult> {
     return this.updateAttributes(roomName, identity, AgentVisionAttributes(allow));
+  }
+
+  /**
+   * Marks an agent's bot audio-only in the room: sets its `mj.agentAvatar` attribute to `audio-only:<reason>`. The bot's
+   * own token cannot change its attributes, so the server does it when the bridge reports the avatar taken down.
+   *
+   * @param roomName The room the bot is in.
+   * @param botIdentity The bot's participant identity.
+   * @param reason Why the avatar can no longer be shown.
+   * @returns Whether LiveKit applied it; never throws.
+   */
+  public async SetAgentAvatarAudioOnly(roomName: string, botIdentity: string, reason: RealtimeAvatarUnavailableReason): Promise<ParticipantUpdateResult> {
+    return this.updateAttributes(roomName, botIdentity, AgentAvatarAudioOnlyAttributes(reason));
   }
 
   /** Sets (or, with `''`, removes) a participant's attributes; reports LiveKit's refusal instead of throwing. */

@@ -21,7 +21,8 @@ export class MJArtifactFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJArtifactVersions', sectionName: 'Artifact Versions', isExpanded: false },
             { sectionKey: 'mJArtifactPermissions', sectionName: 'Artifact Permissions', isExpanded: false },
-            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false }
+            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false },
+            { sectionKey: 'mJArtifactWorkingStates', sectionName: 'Artifact Working States', isExpanded: false }
         ]);
     }
 }

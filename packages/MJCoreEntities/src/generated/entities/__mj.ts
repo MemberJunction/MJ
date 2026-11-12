@@ -2515,7 +2515,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -2525,7 +2525,8 @@ detailed information about what validation rules failed.`),
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
     NativeToolCallCount: z.number().nullable().describe(`
         * * Field Name: NativeToolCallCount
         * * Display Name: Native Tool Call Count
@@ -6314,15 +6315,18 @@ export const MJAIModelSchema = z.object({
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.`),
     DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
         * * Display Name: API Name
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
         * * Display Name: Input Token Limit
@@ -7299,7 +7303,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
         * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -7309,7 +7313,8 @@ export const MJAIPromptRunSchema = z.object({
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
@@ -7747,7 +7752,7 @@ export const MJAIPromptSchema = z.object({
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-        * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
+        * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
         * * Display Name: Failover Max Attempts
@@ -7833,6 +7838,11 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * Referenced
         * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
+    TimeoutMS: z.number().nullable().describe(`
+        * * Field Name: TimeoutMS
+        * * Display Name: Timeout MS
+        * * SQL Data Type: int
+        * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.`),
     Template: z.string().nullable().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -11128,6 +11138,54 @@ export const MJArtifactVersionSchema = z.object({
 export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Working States
+ */
+export const MJArtifactWorkingStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+        * * Description: The Artifact whose active collaborative CRDT state is stored in this working state record (1:1 relationship).`),
+    YjsState: z.string().nullable().describe(`
+        * * Field Name: YjsState
+        * * Display Name: Yjs State
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: Compacted Yjs CRDT state vector (Y.encodeStateAsUpdate) stored as binary bytes (exposed as base64 in TypeScript entities). Periodically checkpointed during active editing and compacted into MJ: Artifact Versions on save or session close.`),
+    LastModifiedByUserID: z.string().nullable().describe(`
+        * * Field Name: LastModifiedByUserID
+        * * Display Name: Last Modified By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who most recently modified or checkpointed this working state.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact Name
+        * * SQL Data Type: nvarchar(255)`),
+    LastModifiedByUser: z.string().nullable().describe(`
+        * * Field Name: LastModifiedByUser
+        * * Display Name: Last Modified By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJArtifactWorkingStateEntityType = z.infer<typeof MJArtifactWorkingStateSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifacts
  */
 export const MJArtifactSchema = z.object({
@@ -11187,6 +11245,17 @@ export const MJArtifactSchema = z.object({
     *   * Always
     *   * System Only
         * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
+    DelegateEntityID: z.string().nullable().describe(`
+        * * Field Name: DelegateEntityID
+        * * Display Name: Delegate Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional foreign key to MJ: Entities identifying the host entity that delegates read/edit/delete/share permissions for this artifact via IArtifactPermissionDelegate (or parent artifact inheritance). Must be paired with DelegateRecordID.`),
+    DelegateRecordID: z.string().nullable().describe(`
+        * * Field Name: DelegateRecordID
+        * * Display Name: Delegate Record ID
+        * * SQL Data Type: nvarchar(700)
+        * * Description: Primary key or composite key string of the record in DelegateEntityID that governs permissions for this artifact. When NULL (along with DelegateEntityID), permissions are evaluated strictly from MJ: Artifact Permissions and artifact ownership.`),
     Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -11199,6 +11268,10 @@ export const MJArtifactSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    DelegateEntity: z.string().nullable().describe(`
+        * * Field Name: DelegateEntity
+        * * Display Name: Delegate Entity Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJArtifactEntityType = z.infer<typeof MJArtifactSchema>;
@@ -50104,12 +50177,13 @@ detailed information about what validation rules failed.
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -59876,6 +59950,16 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -60626,6 +60710,16 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -61572,6 +61666,16 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -62350,6 +62454,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverClass
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.
     */
     get DriverClass(): string | null {
         return this.Get('DriverClass');
@@ -62362,6 +62467,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverImportPath
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(255)
+    * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.
     */
     get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
@@ -62374,6 +62480,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: APIName
     * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.
     */
     get APIName(): string | null {
         return this.Get('APIName');
@@ -63237,6 +63344,16 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -65738,12 +65855,13 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -66127,6 +66245,16 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -67466,7 +67594,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.
     */
     get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor' {
         return this.Get('FailoverStrategy');
@@ -67653,6 +67781,19 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
         this.Set('TemplateDataCapture', value);
+    }
+
+    /**
+    * * Field Name: TimeoutMS
+    * * Display Name: Timeout MS
+    * * SQL Data Type: int
+    * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.
+    */
+    get TimeoutMS(): number | null {
+        return this.Get('TimeoutMS');
+    }
+    set TimeoutMS(value: number | null) {
+        this.Set('TimeoutMS', value);
     }
 
     /**
@@ -69601,6 +69742,16 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -77078,6 +77229,155 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
 
 /**
+ * MJ: Artifact Working States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactWorkingState
+ * * Base View: vwArtifactWorkingStates
+ * * @description Stores the live compacted Yjs CRDT binary working state (1:1 per Artifact) for active collaborative editing sessions across MJ Docs, Slides, Sheets, and inline OLE artifacts before compaction into immutable MJ: Artifact Versions checkpoints.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Working States')
+export class MJArtifactWorkingStateEntity extends BaseEntity<MJArtifactWorkingStateEntityType> {
+    /**
+    * Loads the MJ: Artifact Working States record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Working States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArtifactWorkingStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Artifact Working States - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactWorkingStateEntity
+    * @throws {Error} - Save is not allowed for MJ: Artifact Working States, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Artifact Working States, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Artifact Working States - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactWorkingStateEntity
+    * @throws {Error} - Delete is not allowed for MJ: Artifact Working States, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Artifact Working States, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    * * Description: The Artifact whose active collaborative CRDT state is stored in this working state record (1:1 relationship).
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: YjsState
+    * * Display Name: Yjs State
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: Compacted Yjs CRDT state vector (Y.encodeStateAsUpdate) stored as binary bytes (exposed as base64 in TypeScript entities). Periodically checkpointed during active editing and compacted into MJ: Artifact Versions on save or session close.
+    */
+    get YjsState(): string | null {
+        return this.Get('YjsState');
+    }
+    set YjsState(value: string | null) {
+        this.Set('YjsState', value);
+    }
+
+    /**
+    * * Field Name: LastModifiedByUserID
+    * * Display Name: Last Modified By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who most recently modified or checkpointed this working state.
+    */
+    get LastModifiedByUserID(): string | null {
+        return this.Get('LastModifiedByUserID');
+    }
+    set LastModifiedByUserID(value: string | null) {
+        this.Set('LastModifiedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: LastModifiedByUser
+    * * Display Name: Last Modified By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastModifiedByUser(): string | null {
+        return this.Get('LastModifiedByUser');
+    }
+}
+
+
+/**
  * MJ: Artifacts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Artifact
@@ -77238,6 +77538,33 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     }
 
     /**
+    * * Field Name: DelegateEntityID
+    * * Display Name: Delegate Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional foreign key to MJ: Entities identifying the host entity that delegates read/edit/delete/share permissions for this artifact via IArtifactPermissionDelegate (or parent artifact inheritance). Must be paired with DelegateRecordID.
+    */
+    get DelegateEntityID(): string | null {
+        return this.Get('DelegateEntityID');
+    }
+    set DelegateEntityID(value: string | null) {
+        this.Set('DelegateEntityID', value);
+    }
+
+    /**
+    * * Field Name: DelegateRecordID
+    * * Display Name: Delegate Record ID
+    * * SQL Data Type: nvarchar(700)
+    * * Description: Primary key or composite key string of the record in DelegateEntityID that governs permissions for this artifact. When NULL (along with DelegateEntityID), permissions are evaluated strictly from MJ: Artifact Permissions and artifact ownership.
+    */
+    get DelegateRecordID(): string | null {
+        return this.Get('DelegateRecordID');
+    }
+    set DelegateRecordID(value: string | null) {
+        this.Set('DelegateRecordID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -77262,6 +77589,15 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: DelegateEntity
+    * * Display Name: Delegate Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DelegateEntity(): string | null {
+        return this.Get('DelegateEntity');
     }
 }
 

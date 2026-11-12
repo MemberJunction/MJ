@@ -138,7 +138,7 @@ describe('LiveKitRtcNodeRoomClient — the agent\'s avatar', () => {
         expect(fake.cap.captured).toHaveLength(0); // voice decoded from before the barge-in is dropped
     });
 
-    it('when the avatar is taken down: camera unpublished, mj.agentAvatar set, the status reported; then the replacement\'s PCM retires it', async () => {
+    it('when the avatar is taken down: camera unpublished, the status reported, no attribute set by the bot; then the replacement\'s PCM retires it', async () => {
         const { fake, client, decoders, statuses } = await connected();
         send(client, 4);
         await Settle(); // the publisher probes ffmpeg at its first piece
@@ -153,16 +153,17 @@ describe('LiveKitRtcNodeRoomClient — the agent\'s avatar', () => {
         await Settle();
         expect(fake.cap.unpublished).toEqual(['TR_2']);
         expect(fake.cap.closedVideoTracks).toEqual(['agent-avatar']); // released with its source
-        expect(fake.cap.attributeSets).toEqual([{ 'mj.agentAvatar': 'audio-only:decoder-failed' }]);
+        expect(fake.cap.attributeSets).toEqual([]); // the server sets mj.agentAvatar; the bot's token cannot
         expect(statuses).toEqual([{ state: 'on' }, { state: 'audio-only', reason: 'decoder-failed' }]);
         expect(decoders.audio.Disposed).toBe(false);
         client.publishAudio(new Int16Array([1]).buffer);
         expect(decoders.audio.Disposed).toBe(true);
     });
 
-    it('rejoining after the avatar was taken down re-applies the attribute and publishes no avatar', async () => {
-        const { fake, client, decoders } = await connected({ AvatarStatus: { state: 'audio-only', reason: 'decoder-failed' } });
-        expect(fake.cap.attributeSets).toEqual([{ 'mj.agentAvatar': 'audio-only:decoder-failed' }]);
+    it('rejoining after the avatar was taken down reports the take-down again (so the server re-applies the attribute) and publishes no avatar', async () => {
+        const { fake, client, decoders, statuses } = await connected({ AvatarStatus: { state: 'audio-only', reason: 'decoder-failed' } });
+        expect(statuses).toEqual([{ state: 'audio-only', reason: 'decoder-failed' }]);
+        expect(fake.cap.attributeSets).toEqual([]);
         send(client, 4);
         await Settle();
         expect(decoders.Videos).toHaveLength(0);
