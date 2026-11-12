@@ -8,6 +8,7 @@ import {
     DecisionParams,
     IsSystemOneWireObject,
     NonEmptyString,
+    RedactSecret,
     SystemOneWireObject,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -27,16 +28,19 @@ import { RegisterClass } from '@memberjunction/global';
  *   with `DecisionParams.Media` sends a text block followed by one block per item, so the model reads
  *   them as one input.
  * - **Usage** is `total_input_tokens` / `total_output_tokens`, mapped here onto the System One names.
- *   No `cost` is returned; MJ prices the call from the model's cost rows.
+ *   No `model` or `cost` field is returned on Google's `200` wire response (`ResolvedModel` stays
+ *   `undefined` unless a proxy or later revision includes `model`); MJ prices the call from the model's
+ *   cost rows.
  *
  * Questions go out as System One questions keyed by name: a Likelihood as `noul`, a Choice's options as
  * `criteria: { value: description }`, a Score's levels as `criteria: [...]`, lowest first. Answers come
  * back keyed the same way, with Choice probabilities keyed by option value and Score probabilities by
- * 0-based level index, exactly as the System One mapping reads them. A Score answer's `legend` is
- * ignored: MJ already holds the level names.
+ * 0-based level index (`"0"`..`"254"`), exactly as the System One mapping reads them. A Score answer's
+ * `legend` is ignored: MJ already holds the level names.
  *
- * Google answers a request it rejects, and a key it does not accept, with `400 INVALID_ARGUMENT` or
- * `403 PERMISSION_DENIED`; {@link GetHTTPErrorType} keeps both failover-eligible.
+ * Google answers a request it rejects, and a key it does not accept, with gateway `400 INVALID_ARGUMENT`,
+ * service `400 invalid_request`, or `403 PERMISSION_DENIED`; {@link GetHTTPErrorType} keeps all of them
+ * failover-eligible.
  *
  * When Gemini's input filter blocks the request (`prompt_feedback.block_reason`), the response has no
  * answers; this driver fails the call with the block reason, as a failover-eligible error, since
@@ -47,7 +51,7 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
     /** The Gemini Decisions API endpoint (Gemini API, v1beta). */
     public static readonly DEFAULT_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/decisions';
 
-    /** The model used when DecisionParams.Model is empty. */
+    /** The model used when DecisionParams.Model is empty (Google accepts bare `gemini-decision-1` and `models/gemini-decision-1`). */
     public static readonly DEFAULT_MODEL = 'gemini-decision-1';
 
     protected get ServiceName(): string {
@@ -98,17 +102,17 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
      * Fixes two statuses whose `ErrorAnalyzer` reading is wrong for this API. `Default Decision` reaches
      * Gemini Decision 1 as a power-matched fallback, and a `Fatal` error there would end its failover
      * loop before the candidates behind it:
-     * - `400` (`INVALID_ARGUMENT`: a request Gemini rejects that passed MJ's own validation, such as a
-     *   limit it enforces, and also an invalid or expired API key) reads as a fatal `InvalidRequest`, or
-     *   as `Authentication`; it is `ModelError`, since another model may answer. The message still names
-     *   the cause.
-     * - `403` (`PERMISSION_DENIED`: the key is restricted, or the API is not enabled for its project)
-     *   reads as `Authentication` when the message names a permission; it is `ModelError` too.
+     * - `400` — both Google's gateway `INVALID_ARGUMENT` (an invalid or expired API key) and the
+     *   decisions service's `invalid_request` (`"* CreateDecisionRequest...: must have ..."`, which
+     *   `ErrorAnalyzer` would classify as `VendorValidationError` or `InvalidRequest`) — is `ModelError`,
+     *   since another model may answer. The message still names the cause.
+     * - `403` (`PERMISSION_DENIED`: missing key, restricted key, or API disabled for its project) reads
+     *   as `Authentication` when the message names a permission; it is `ModelError` too.
      *
      * Not `Authentication` or `VendorValidationError`: on those the runner drops the vendor's other
      * candidates, and the index it continues from then skips the next candidate (`BaseModelRunner`).
-     * `ErrorAnalyzer` keeps the rest: `401` stays a fatal `Authentication` error, as for every other
-     * decision driver; `429` (`RESOURCE_EXHAUSTED`) and `5xx` allow failover.
+     * `ErrorAnalyzer` keeps the rest: `401` stays a fatal `Authentication` error, `404` (`not_found` for
+     * an unknown model) reads as `ModelError`, and `429` (`RESOURCE_EXHAUSTED`) and `5xx` allow failover.
      */
     protected override GetHTTPErrorType(status: number): AIErrorType | undefined {
         return status === 400 || status === 403 ? 'ModelError' : undefined;
@@ -124,7 +128,8 @@ export class GeminiDecision extends BaseHostedSystemOneDecision {
         }
         const blockReason = readBlockReason(body['prompt_feedback']);
         if (blockReason) {
-            throw CreateSystemOneHTTPError(`${this.ServiceName} blocked the input: ${blockReason}`, status, 'ModelError');
+            const safeReason = RedactSecret(blockReason, this.Credential.APIKey);
+            throw CreateSystemOneHTTPError(`${this.ServiceName} blocked the input: ${safeReason}`, status, 'ModelError');
         }
         return { model: body['model'], answers: body['answers'], usage: toSystemOneUsage(body['usage']) };
     }
@@ -146,7 +151,7 @@ function readBlockReason(feedback: unknown): string | undefined {
         return undefined;
     }
     const reason = NonEmptyString(feedback['block_reason']);
-    if (!reason) {
+    if (!reason || reason.toUpperCase() === 'BLOCK_REASON_UNSPECIFIED') {
         return undefined;
     }
     const message = NonEmptyString(feedback['block_reason_message']);

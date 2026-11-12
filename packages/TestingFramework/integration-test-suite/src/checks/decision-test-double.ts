@@ -32,8 +32,8 @@ import {
 /**
  * The decision driver classes the shipped decision prompts can reach: LLM Decision and Jev, which they
  * bind to, and Clef, self-hosted Kev, the Perplexity Decider, GPT-6 Luna Decisions on OpenAI, SubQ Snap,
- * Mercury Decide on Inception and Gemini Decision 1 on Google, power-matched fallbacks (Kev-4B and Mercury Decide on OpenRouter use
- * Jev's driver).
+ * Mercury Decide on Inception and Gemini Decision 1 on Google, power-matched fallbacks (Kev-4B, Mercury Decide and
+ * Gemini Decision 1 on OpenRouter use Jev's driver).
  */
 export const SCRIPTED_DECISION_DRIVER_CLASSES: readonly string[] = [
     'LLMDecision',
