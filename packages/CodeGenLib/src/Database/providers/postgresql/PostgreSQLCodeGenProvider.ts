@@ -2608,6 +2608,7 @@ WHERE p.prokind IN ('f', 'p')
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult> {
         // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
         // the per-entity handshake that dominated manageSQLScriptsAndExecution).
@@ -2640,6 +2641,7 @@ WHERE p.prokind IN ('f', 'p')
                         CreateOrReplaceSQL: opts.viewSQL,
                         WillRegenerate: opts.willRegenerate,
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
+                        OnDependentViewUnrestored: opts.OnDependentViewUnrestored,
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                     await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);

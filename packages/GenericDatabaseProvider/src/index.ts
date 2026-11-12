@@ -7,6 +7,8 @@ export {
 } from './GenericDatabaseProvider.js';
 export type { SqlParameterSummary, SqlObservation, ISqlObserver } from './GenericDatabaseProvider.js';
 export { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
+export { RecordChangeSnapshotColumnKindOf } from './recordChangeSnapshot.js';
+export type { RecordChangeSnapshotColumnKind, RecordChangeSnapshotPlatform } from './recordChangeSnapshot.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
@@ -56,6 +58,8 @@ export { DescribeStatementFailure, DescribeStatementSuccess, BaseTypeOf } from '
 export type { DescribedColumn, DescribedColumnSource, DescribeStatementResult } from './describeStatement.js';
 export { TypedQueryParameter, IsTypedQueryParameterList, TypedBindValue, NamedQueryParameter, IsNamedQueryParameterList } from './typedQueryParameter.js';
 export type { TypedQueryParameterValue } from './typedQueryParameter.js';
+export { RowFilterParameterCollector } from './rowFilterParameters.js';
+export type { RowFilterBoundParameter } from './rowFilterParameters.js';
 export { StatementMemo } from './statementMemo.js';
 export { FindProjectionStars } from './fieldSecurity/projectionStars.js';
 export {

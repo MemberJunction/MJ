@@ -29,6 +29,7 @@ import { mssqlState, MockConnectionPool, RecordedInput, RecordedQuery } from './
 import type { ExecuteSQLOptions } from '../types';
 import {
   TEST_USER,
+  WIDGET_ENTITY_ID,
   TestEntity,
   makeWidgetEntityInfo,
   makeRecordChangesEntityInfo,
@@ -278,10 +279,11 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     const executed = mssqlState.Queries[0];
     expect(executed.sql).toContain('@UserID=@p$');
     expect(executed.sql).toContain('@ChangesJSON=@p$');
-    expect(executed.sql).toContain('@FullRecordJSON=@p$');
     expect(inputWithValue(executed, TEST_USER.ID).type).toEqual(mssql.UniqueIdentifier());
-    const fullRecord = executed.inputs.find((i) => typeof i.value === 'string' && i.value.includes('"Tracked Widget"'));
-    expect(fullRecord?.type).toEqual(mssql.NVarChar(mssql.MAX));
+    // The snapshot is built in the batch from the row the procedure returned, not sent from memory.
+    expect(executed.sql).toContain('@FullRecordJSON=@__mj_FullRecordJSON');
+    expect(executed.sql).toContain('DECLARE @__mj_FullRecordJSON NVARCHAR(MAX) = (SELECT ');
+    expect(executed.sql).toContain('FROM @ResultTable FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)');
 
     const sql = provider.LiteralSQL[0];
 
@@ -971,7 +973,11 @@ describe('SQLServerDataProvider save-call variable suffix (loom #12 WP3)', () =>
       for (const e of [same1, same2, other]) e.TransactionGroup = group;
       same1.Set('Name', 'One');
       same2.Set('Name', 'Two');
-      const saves = [same1, same2, other].map((e) => provider.Save(e, TEST_USER, new EntitySaveOptions()));
+      const saves: Promise<unknown>[] = [];
+      for (const e of [same1, same2, other]) {
+        saves.push(provider.Save(e, TEST_USER, new EntitySaveOptions()));
+        await Promise.resolve();
+      }
       mssqlState.QueueResult({
         recordsets: [
           [{ __mj_batch_item: 0 }], [{ ...savedWidgetRow(), Name: 'One' }],
@@ -1018,18 +1024,19 @@ describe('SQLServerDataProvider Record Change text is sent as Unicode (N\'…\')
 
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
-    // What runs binds the text as NVARCHAR(MAX) inputs, so it reaches SQL Server as Unicode.
+    // What runs binds the record's text as NVARCHAR inputs, so it reaches SQL Server as Unicode; the
+    // snapshot is built in the batch from the stored row into an NVARCHAR(MAX) variable.
     const executed = mssqlState.Queries[0];
     expect(executed.sql).toContain(`@EntityName=N'Widgets'`);
-    const fullRecord = executed.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{') && i.value.includes(UNICODE_NAME));
-    expect(fullRecord?.type).toEqual(mssql.NVarChar(mssql.MAX));
+    expect(inputWithValue(executed, UNICODE_NAME).type).toEqual(mssql.NVarChar(100));
+    expect(executed.sql).toContain('DECLARE @__mj_FullRecordJSON NVARCHAR(MAX)');
 
     // The literal form (SQL log, migration captures) writes N'…' literals.
     const sql = provider.LiteralSQL[0];
     expect(sql).toContain(`@EntityName=N'Widgets'`);
     expect(sql).toMatch(/@ChangesJSON=N'/);
     expect(sql).toMatch(/@ChangesDescription=N'/);
-    expect(sql).toMatch(/@FullRecordJSON=N'[^']*Zoë 😀 日本 Ωμέγα/);
+    expect(sql).toContain('@FullRecordJSON=@__mj_FullRecordJSON');
     expect(sql).not.toMatch(/@(EntityName|ChangesJSON|ChangesDescription|FullRecordJSON)='/);
   });
 
@@ -1363,25 +1370,50 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     return JSON.parse(String(input?.value)) as Record<string, unknown>;
   }
 
-  it('UPDATE: FullRecordJSON carries the stored value the object never held; ChangesJSON only the change', async () => {
+  /** The batch builds FullRecordJSON from the row the procedure returned. */
+  function expectSnapshotFromResultRow(query: RecordedQuery): void {
+    expect(query.sql).toContain('@FullRecordJSON=@__mj_FullRecordJSON');
+    expect(query.inputs.some((i) => typeof i.value === 'string' && i.value.startsWith('{"ID"'))).toBe(false);
+  }
+
+  function changesJSONInput(query: RecordedQuery): Record<string, { oldValue: unknown; newValue: unknown }> {
+    const input = query.inputs.find((i) => typeof i.value === 'string' && /^\{"(Description|Quantity)"/.test(i.value));
+    expect(input, 'expected a ChangesJSON input').toBeDefined();
+    return JSON.parse(String(input?.value)) as Record<string, { oldValue: unknown; newValue: unknown }>;
+  }
+
+  it('UPDATE: no stored-row read for a field the object never held; FullRecordJSON comes from the returned row', async () => {
     const provider = makeProvider();
     provider.SetTestEntities([makeRecordChangesEntityInfo()]);
     const entity = makeNarrowedWidget();
     entity.Set('Description', 'Second run');
-    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
     mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77, Description: 'Second run' }] }); // the save
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    const save = mssqlState.Queries[0];
+    expectSnapshotFromResultRow(save);
+    expect(Object.keys(changesJSONInput(save))).toEqual(['Description']);
+  });
+
+  it('UPDATE that writes a field the object never held: reads its stored value so the diff shows the real old value', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeNarrowedWidget();
+    entity.SetMany({ Quantity: 5 }); // write-only (the resolver-apply path): the saver never saw the stored 77
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 5 }] }); // the save
 
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(2);
     expect(mssqlState.Queries[0].sql).toBe(`SELECT [Quantity] FROM [dbo].[vwWidgets] WHERE [ID]='w-0001'`);
     const save = mssqlState.Queries[1];
-    const full = fullRecordJSONInput(save);
-    expect(full.Quantity).toBe(77);
-    expect(full.Description).toBe('Second run');
-    const changes = save.inputs.find((i) => typeof i.value === 'string' && i.value.startsWith('{"Description"'));
-    expect(changes, 'expected a ChangesJSON input naming only Description').toBeDefined();
-    expect(Object.keys(JSON.parse(String(changes?.value)))).toEqual(['Description']);
+    expectSnapshotFromResultRow(save);
+    const changes = changesJSONInput(save);
+    expect(changes.Quantity.oldValue).toBe(77);
+    expect(changes.Quantity.newValue).toBe(5);
   });
 
   it('UPDATE by a user denied nothing, of an object loaded without a column: one statement, no stored-row read', async () => {
@@ -1398,7 +1430,7 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(fullRecordJSONInput(mssqlState.Queries[0])).not.toHaveProperty('Quantity');
+    expectSnapshotFromResultRow(mssqlState.Queries[0]);
   });
 
   it('UPDATE of a full-width object: one statement, no stored-row read', async () => {
@@ -1411,7 +1443,32 @@ describe('SQLServerDataProvider Record Change snapshot of a narrowed object', ()
     await provider.Save(entity, TEST_USER, new EntitySaveOptions());
 
     expect(mssqlState.Queries).toHaveLength(1);
-    expect(fullRecordJSONInput(mssqlState.Queries[0]).Quantity).toBe(3);
+    expectSnapshotFromResultRow(mssqlState.Queries[0]);
+  });
+
+  it('UPDATE of an entity whose procedure returns datestamps only: FullRecordJSON is the object snapshot, widened as before', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entityInfo = makeWidgetEntityInfo({ trackRecordChanges: true, saveReturnMode: 'datestamps_only' });
+    vi.spyOn(entityInfo, 'FieldLevelSecurityApplies', 'get').mockReturnValue(true);
+    vi.spyOn(entityInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['quantity']));
+    const entity = new TestEntity(entityInfo);
+    entity.ContextCurrentUser = TEST_USER;
+    const row = savedWidgetRow();
+    delete row.Quantity;
+    entity.Hydrate(row);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Quantity: 77 }] }); // the stored row
+    mssqlState.QueueResult({ rows: [{ ID: 'w-0001', __mj_CreatedAt: new Date(), __mj_UpdatedAt: new Date() }] }); // the save
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    expect(mssqlState.Queries).toHaveLength(2);
+    const save = mssqlState.Queries[1];
+    expect(save.sql).not.toContain('@__mj_FullRecordJSON');
+    const full = fullRecordJSONInput(save);
+    expect(full.Quantity).toBe(77);
+    expect(full.Description).toBe('Second run');
   });
 
   it('DELETE: the delete snapshot (what a restore brings back) carries the stored value', async () => {
@@ -1679,5 +1736,81 @@ describe('SQLServerDataProvider server-side concurrency check', () => {
     expect(saveSQL.simpleSQL).toContain('$ENC$v1$AES256GCM$ciphertext-payload');
     expect(saveSQL.simpleSQL).not.toContain('top-secret-plaintext-token');
     encryptSpy.mockRestore();
+  });
+});
+
+describe('SQLServerDataProvider Record Change snapshot built from the returned row', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  /** A Widget field init row of the given SQL type, appended after the standard fields. */
+  function extraField(sequence: number, name: string, type: string, length: number): Record<string, unknown> {
+    return {
+      ID: `F0000000-0000-0000-0000-0000000001${String(sequence).padStart(2, '0')}`,
+      EntityID: WIDGET_ENTITY_ID, Sequence: 100 + sequence, Name: name, Type: type, Length: length,
+      Precision: 0, Scale: 0, AllowsNull: true, DefaultValue: null, AutoIncrement: false, IsVirtual: false,
+      IsPrimaryKey: false, IsUnique: false, AllowUpdateAPI: true, IsComputed: false, Status: 'Active',
+    };
+  }
+
+  async function snapshotSelectFor(extraFields: Record<string, unknown>[]): Promise<string> {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, extraFields }), TEST_USER);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+    const sql = mssqlState.Queries[0].sql;
+    const start = sql.indexOf('DECLARE @__mj_FullRecordJSON');
+    expect(start, 'expected the snapshot to be built in the batch').toBeGreaterThanOrEqual(0);
+    return sql.slice(start, sql.indexOf('INCLUDE_NULL_VALUES)', start));
+  }
+
+  it('writes date-times as UTC ISO-8601 with milliseconds and Z, as a loaded entity serializes them', async () => {
+    const select = await snapshotSelectFor([
+      extraField(1, 'RunAt', 'datetime2', 8),
+      extraField(2, 'LegacyAt', 'datetime', 8),
+      extraField(3, 'DueDate', 'date', 3),
+      extraField(4, 'StartsAt', 'time', 5),
+    ]);
+    expect(select).toContain(
+      `CONVERT(nvarchar(19), CAST([RunAt] AS datetime2(7)), 126) + '.' + RIGHT('00' + CONVERT(nvarchar(3), DATEPART(millisecond, CAST([RunAt] AS datetime2(7)))), 3) + 'Z' AS [RunAt]`,
+    );
+    expect(select).toContain(`CAST([LegacyAt] AS datetime2(3))`);
+    expect(select).toContain(`CAST(SWITCHOFFSET([LaunchedAt], '+00:00') AS datetime2(7))`);
+    expect(select).toContain(`CONVERT(nvarchar(10), [DueDate], 23) + 'T00:00:00.000Z' AS [DueDate]`);
+    expect(select).toContain(`'1970-01-01T' + CONVERT(nvarchar(8), [StartsAt], 108)`);
+  });
+
+  it('casts the types FOR JSON cannot serialize, and keeps bigint a string', async () => {
+    const select = await snapshotSelectFor([
+      extraField(1, 'Location', 'geography', -1),
+      extraField(2, 'Node', 'hierarchyid', 892),
+      extraField(3, 'Payload', 'xml', -1),
+      extraField(4, 'Big', 'bigint', 8),
+      extraField(5, 'Blob', 'varbinary', -1),
+    ]);
+    expect(select).toContain('[Location].ToString() AS [Location]');
+    expect(select).toContain('[Node].ToString() AS [Node]');
+    expect(select).toContain('CONVERT(nvarchar(max), [Payload]) AS [Payload]');
+    expect(select).toContain('CONVERT(nvarchar(20), [Big]) AS [Big]');
+    expect(select).toContain('CAST([Blob] AS varbinary(max)) AS [Blob]');
+    expect(select).toContain('[Name] AS [Name]');
+    expect(select).toContain('[IsActive] AS [IsActive]');
+  });
+
+  it('falls back to the object snapshot when a column name contains a dot, which FOR JSON PATH would nest', async () => {
+    const provider = makeProvider();
+    provider.SetTestEntities([makeRecordChangesEntityInfo()]);
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: true, extraFields: [extraField(1, 'Geo.Lat', 'decimal', 9)] }), TEST_USER);
+    entity.Set('Description', 'Second run');
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Description: 'Second run' }] });
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const save = mssqlState.Queries[0];
+    expect(save.sql).not.toContain('@__mj_FullRecordJSON');
+    expect(save.sql).toContain('@FullRecordJSON=@p$');
   });
 });
