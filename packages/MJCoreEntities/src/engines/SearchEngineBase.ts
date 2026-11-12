@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { RegisterForStartup } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { IsBrowser, UUIDsEqual } from "@memberjunction/global";
 import {
     MJSearchProviderEntity,
     MJSearchScopeEntity,
@@ -46,7 +46,7 @@ import {
  * // -> { Scope, Providers, ExternalIndexes, Entities, StorageAccounts }
  * ```
  */
-@RegisterForStartup({ deferred: typeof window !== 'undefined' })
+@RegisterForStartup({ deferred: IsBrowser() })
 export class SearchEngineBase extends BaseEngine<SearchEngineBase> {
     /**
      * Returns the global singleton instance.

@@ -13,7 +13,7 @@ import {
     RegisterForStartup,
     UserInfo
 } from "@memberjunction/core";
-import { GroupByUUID, IndexByUUID, UUIDMap, UUIDsEqual } from "@memberjunction/global";
+import { GroupByUUID, IndexByUUID, IsBrowser, UUIDMap, UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryCategoryEntity,
     MJQueryFieldEntity,
@@ -79,7 +79,7 @@ interface DefinitionIndexes {
     QuerySQLsByQuery: UUIDMap<MJQuerySQLEntity[]>;
 }
 
-@RegisterForStartup({ deferred: typeof window !== 'undefined' })
+@RegisterForStartup({ deferred: IsBrowser() })
 export class QueryEngine extends BaseEngine<QueryEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only one instance of it in the application.

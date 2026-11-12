@@ -1,6 +1,6 @@
 import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
+import { IsBrowser, UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
 import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
@@ -189,7 +189,7 @@ const DEFAULT_MAX_DIMENSION = 4096;
  * (Members intended to be reached ONLY through `AIEngineBase.Instance` — e.g. internals another
  * base-layer package consumes — need no delegate; the rule is about the server-side call path.)
  */
-@RegisterForStartup({ deferred: typeof window !== 'undefined' })
+@RegisterForStartup({ deferred: IsBrowser() })
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
     private _modelTypes: MJAIModelTypeEntity[] = [];

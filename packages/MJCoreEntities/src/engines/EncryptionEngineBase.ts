@@ -23,7 +23,7 @@
  */
 
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from "@memberjunction/core";
-import { ENCRYPTION_MARKER, UUIDsEqual } from "@memberjunction/global";
+import { ENCRYPTION_MARKER, IsBrowser, UUIDsEqual } from "@memberjunction/global";
 import {
     MJEncryptionKeyEntity,
     MJEncryptionAlgorithmEntity,
@@ -64,7 +64,7 @@ export interface EncryptionKeyConfiguration {
  * For actual encryption/decryption operations, use or extend the EncryptionEngine
  * class in the @memberjunction/encryption package, which extends this base class.
  */
-@RegisterForStartup({ deferred: typeof window !== 'undefined' })
+@RegisterForStartup({ deferred: IsBrowser() })
 export class EncryptionEngineBase extends BaseEngine<EncryptionEngineBase> {
     /**
      * Cached array of encryption keys loaded from the database.

@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, IRunViewProvider, RunView, UserInfo, RegisterForStartup } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IsBrowser, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJIntegrationEntity,
     MJIntegrationSourceTypeEntity,
@@ -53,7 +53,7 @@ type CatalogEdgeEnds = Pick<CatalogDependencyEdge, 'CompanyIntegrationObjectID' 
  * For server-side orchestration (sync execution), use the full IntegrationEngine
  * from @memberjunction/integration-engine which wraps this base via composition.
  */
-@RegisterForStartup({ deferred: typeof window !== 'undefined' })
+@RegisterForStartup({ deferred: IsBrowser() })
 export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
     // ── Cached entity arrays ──────────────────────────────────────────
     private _integrations: MJIntegrationEntity[] = [];
