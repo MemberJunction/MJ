@@ -77,3 +77,42 @@ export function ParseManifestEntryMime(line: string): string | null {
         from = bracket + 1;
     }
 }
+
+/** True for the characters a regex `.` refuses to match. */
+function isLineTerminator(ch: string): boolean {
+    return ch === '\n' || isNonNewlineTerminator(ch);
+}
+
+/**
+ * Whether one line of `text` holds `prefix`, then anything, then `suffix`, compared without regard
+ * to case. Equivalent to `new RegExp(escape(prefix) + '.*' + escape(suffix), 'i').test(text)` for
+ * ASCII `prefix` and `suffix`, in one pass: on each line the earliest `prefix` and the latest
+ * `suffix` are the only pair that needs checking.
+ */
+export function ContainsInOrderOnOneLine(text: string, prefix: string, suffix: string): boolean {
+    const lower = text.toLowerCase();
+    const p = prefix.toLowerCase();
+    const q = suffix.toLowerCase();
+    let lineStart = 0;
+    while (lineStart <= lower.length) {
+        let lineEnd = lineStart;
+        while (lineEnd < lower.length && !isLineTerminator(lower[lineEnd])) {
+            lineEnd++;
+        }
+        const line = lower.slice(lineStart, lineEnd);
+        const first = line.indexOf(p);
+        if (first >= 0 && line.lastIndexOf(q) >= first + p.length) {
+            return true;
+        }
+        lineStart = lineEnd + 1;
+    }
+    return false;
+}
+
+/**
+ * Whether a value reads like a template placeholder ("your name here", "insert the date here").
+ * Equivalent to `/your .* here|insert .* here/i.test(text)`, in linear time.
+ */
+export function ContainsPlaceholderPhrase(text: string): boolean {
+    return ContainsInOrderOnOneLine(text, 'your ', ' here') || ContainsInOrderOnOneLine(text, 'insert ', ' here');
+}

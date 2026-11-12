@@ -18,6 +18,9 @@
  *        escalation itself.
  *   UE3: as an Owner principal, the same row validates — clean AND with `Type` flipped in memory.
  *        The admin path must not have been closed.
+ *   UE5: `User.Email` carries a unique constraint or index. The guard leaves `Email` mutable on the
+ *        strength of that constraint (an Email edit cannot impersonate another user's identity), so
+ *        dropping it would silently reopen that path; this pins it on both platforms.
  *   UE4: the end-to-end leg. If a non-Owner principal that actually holds `CanUpdate` on
  *        'MJ: Users' exists, a real `Save()` of a `Type` change is attempted and must NOT succeed.
  *
@@ -369,7 +372,13 @@ export const UserElevationChecks: NamedCheck[] = [
             );
             console.log(`      → real Save() refused for ${caller.Email}; rollback verified, row unchanged`);
         }
-    }
+    },
+    {
+        Id: 'user-elevation.UE5',
+        Name: 'UE5: User.Email carries a unique constraint (the guard leaves Email mutable because of it)',
+        RequiresMutation: false,
+        Fn: checkEmailIsUnique,
+    },
 ];
 
 /**
@@ -396,6 +405,48 @@ async function restoreType(
             `${row.LatestResult?.CompleteMessage ?? 'no error detail'}`
         );
     }
+}
+
+/** The slice of a database provider UE5 needs to read the PostgreSQL catalog. */
+interface CatalogQueryProvider {
+    PlatformKey?: string;
+    ExecuteSQL?<T>(query: string): Promise<T[]>;
+}
+
+/**
+ * UE5 — `User.Email` is unique in the database. SQL Server: a unique index (a UNIQUE constraint is
+ * backed by one) whose only key column is `Email`. PostgreSQL: a unique index whose definition
+ * names only `Email`.
+ */
+async function checkEmailIsUnique(ctx: IntegrationCheckContext): Promise<void> {
+    if (ctx.Pool) {
+        const result = await ctx.Pool.request().query<{ name: string }>(`
+            SELECT i.name
+              FROM sys.indexes i
+              JOIN sys.tables t ON t.object_id = i.object_id
+              JOIN sys.schemas s ON s.schema_id = t.schema_id
+             WHERE s.name = '${ctx.Schema}' AND t.name = 'User' AND i.is_unique = 1
+               AND (SELECT COUNT(*) FROM sys.index_columns ic
+                     WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0) = 1
+               AND EXISTS (SELECT 1 FROM sys.index_columns ic
+                             JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                            WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND c.name = 'Email')
+        `);
+        Assert(result.recordset.length > 0, `UE5: no unique constraint or index on ${ctx.Schema}.User(Email)`);
+        console.log(`      → User.Email is unique (${result.recordset.map(r => r.name).join(', ')})`);
+        return;
+    }
+    const provider = ctx.Provider as unknown as CatalogQueryProvider;
+    if (provider?.PlatformKey !== 'postgresql' || typeof provider.ExecuteSQL !== 'function') {
+        SkipCheck('UE5: no catalog access on this run path (needs an mssql pool or a PostgreSQL provider with ExecuteSQL)');
+    }
+    const rows = await provider.ExecuteSQL!<{ indexname: string; indexdef: string }>(`
+        SELECT indexname, indexdef FROM pg_indexes
+         WHERE schemaname = '${ctx.Schema}' AND tablename = 'User'
+    `);
+    const unique = rows.filter(r => /UNIQUE INDEX/i.test(r.indexdef) && /\(\s*"?Email"?\s*\)/i.test(r.indexdef));
+    Assert(unique.length > 0, `UE5: no unique index on ${ctx.Schema}."User"("Email")`);
+    console.log(`      → User.Email is unique (${unique.map(r => r.indexname).join(', ')})`);
 }
 
 for (const check of UserElevationChecks) {
