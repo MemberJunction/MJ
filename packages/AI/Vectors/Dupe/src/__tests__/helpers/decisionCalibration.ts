@@ -26,6 +26,32 @@ export function ShippedDuplicateCalibrations(modelName: string): readonly Decisi
     return Object.hasOwn(SHIPPED_DUPLICATE_CALIBRATIONS, modelName) ? SHIPPED_DUPLICATE_CALIBRATIONS[modelName] : [];
 }
 
+/**
+ * The calibration methods of a mocked `AIEngine.Instance`, over `calibrations` (a model's declared
+ * entries by name). `FindDecisionCalibration` follows `AIEngineBase`'s rule: the use, question and
+ * resolved model match one entry exactly after trimming; a missing name or resolved model matches
+ * nothing. `BaseAIEngine`'s own spec tests the real method.
+ */
+export function CalibrationEngineMethods(calibrations: (modelName: string) => readonly DecisionCalibrationEntry[]) {
+    const find = (key: { Use: string; Question: string }, answeredBy: { ModelName?: string | null; ResolvedModel?: string | null }): PlattCalibration | null => {
+        const name = answeredBy.ModelName?.trim();
+        const resolved = answeredBy.ResolvedModel?.trim();
+        if (!name || !resolved) {
+            return null;
+        }
+        const entry = calibrations(name).find(c => c.Use === key.Use && c.Question === key.Question && c.ResolvedModel === resolved);
+        return entry ? { A: entry.A, B: entry.B } : null;
+    };
+    return {
+        GetDecisionCalibrations: calibrations,
+        FindDecisionCalibration: find,
+        CalibrateDecisionProbability: (key: { Use: string; Question: string }, p: number, answeredBy: { ModelName?: string | null; ResolvedModel?: string | null }): number | null => {
+            const fit = find(key, answeredBy);
+            return fit ? 1 / (1 + Math.exp(-(fit.A * Math.log(p / (1 - p)) + fit.B))) : null;
+        },
+    };
+}
+
 /** The model the mocked decision runs report as the one that answered. */
 export const ANSWERING_MODEL: ModelInfo = { modelId: 'model-jev', modelName: 'Jev' };
 

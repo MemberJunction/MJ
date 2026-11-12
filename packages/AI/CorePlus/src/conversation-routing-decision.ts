@@ -15,7 +15,8 @@ import { type ChoiceOption, type DecisionAnswer, type DecisionQuestion } from '@
 import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ConversationUtility } from './conversation-utility';
-import { CalibrateDecisionProbability, DescribeAnsweringModel, type DecisionAnsweringModel, type DecisionCalibrationKey, type DecisionCalibrationSource } from './decision-calibration';
+import { ApplyPlattCalibration, type PlattCalibration } from '@memberjunction/ai';
+import { DescribeAnsweringModel, type DecisionAnsweringModel, type DecisionCalibrationKey } from './decision-calibration';
 import type { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 
 /**
@@ -138,19 +139,25 @@ export const ROUTING_CONTINUES_CALIBRATION_KEY: DecisionCalibrationKey = Object.
 });
 
 /**
- * The thread Likelihood's calibrated probability for the model that answered, or null when that
- * exact model has no calibration, whose answer routing then treats as unsure.
+ * The thread Likelihood's calibrated probability, or null when the model that answered has no
+ * calibration, whose answer routing then treats as unsure.
  *
- * @param calibrations Where the calibrations are declared, normally `AIEngineBase.Instance`.
+ * @param calibration The fit for the model that answered: `AIEngineBase.Instance.FindDecisionCalibration(
+ *   ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`, or null when there is none.
  * @param probability The raw `continues` probability.
- * @param answeredBy The decision model that answered and the model behind it.
  */
-export function CalibratedContinuesProbability(
-    calibrations: DecisionCalibrationSource | null | undefined,
-    probability: number,
-    answeredBy: DecisionAnsweringModel
-): number | null {
-    return CalibrateDecisionProbability(calibrations, ROUTING_CONTINUES_CALIBRATION_KEY, probability, answeredBy);
+export function CalibratedContinuesProbability(calibration: PlattCalibration | null | undefined, probability: number): number | null {
+    return calibration ? ApplyPlattCalibration(probability, calibration) : null;
+}
+
+/**
+ * The model that answered a routing decision, to look its calibration up with
+ * `AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, answeredBy)`.
+ *
+ * @param result The decision's result.
+ */
+export function RoutingAnsweredBy(result: Pick<RoutingDecisionAnswers, 'ModelName' | 'ResolvedModel'>): DecisionAnsweringModel {
+    return { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
 }
 
 /** Question keys. They are labels for code; the model never reads them. */
@@ -592,14 +599,15 @@ export function BuildRoutingStateStructured(input: RoutingDecisionInput): Routin
  *
  * @param input The input the decision was asked about.
  * @param result The decision's result.
- * @param calibrations Where the thread Likelihood's calibration is declared, normally
- * `AIEngineBase.Instance`. Without one the thread Likelihood is treated as uncalibrated, so routing
- * keeps continuity (or, in a multi-person chat, starts no agent turn).
+ * @param calibration The thread Likelihood's fit for the model that answered
+ * (`AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result))`).
+ * Null means the thread Likelihood is uncalibrated, so routing keeps continuity (or, in a
+ * multi-person chat, starts no agent turn).
  */
 export function InterpretRoutingAnswers(
     input: RoutingDecisionInput,
     result: RoutingDecisionAnswers,
-    calibrations: DecisionCalibrationSource | null | undefined
+    calibration: PlattCalibration | null | undefined
 ): RoutingDecisionOutcome {
     const promptRunId = result.PromptRunID ?? null;
     if (!result.Success) {
@@ -607,10 +615,10 @@ export function InterpretRoutingAnswers(
         const failed = input.AllowNoAgentOption ? noAgent(reason) : keptContinuity(reason);
         return { ...failed, PromptRunID: promptRunId };
     }
-    const answeredBy: DecisionAnsweringModel = { ModelName: result.ModelName, ResolvedModel: result.ResolvedModel };
+    const answeredBy = RoutingAnsweredBy(result);
     const verdict = input.AllowNoAgentOption
-        ? readMultiPartyRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibrations)
-        : readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibrations);
+        ? readMultiPartyRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration)
+        : readRouteVerdict(input, result.Answers[ROUTE_QUESTION], result.Answers[CONTINUES_QUESTION], answeredBy, calibration);
     return {
         Verdict: verdict.Verdict,
         RoutedAgentId: verdict.RoutedAgentId,
@@ -795,7 +803,7 @@ function readRouteVerdict(
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    calibration: PlattCalibration | null | undefined
 ): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return keptContinuity('the answer is missing the agent choice or the thread likelihood');
@@ -806,7 +814,7 @@ function readRouteVerdict(
     if (UUIDsEqual(route.Value, input.ContinuityAgentId)) {
         return keptContinuity('the message continues the current thread');
     }
-    const continuing = CalibratedContinuesProbability(calibrations, continues.Probability, answeredBy);
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
     if (continuing === null) {
         return keptContinuity(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
     }
@@ -823,7 +831,7 @@ function readMultiPartyRouteVerdict(
     route: DecisionAnswer | undefined,
     continues: DecisionAnswer | undefined,
     answeredBy: DecisionAnsweringModel,
-    calibrations: DecisionCalibrationSource | null | undefined
+    calibration: PlattCalibration | null | undefined
 ): RouteVerdict {
     if (route?.Kind !== 'Choice' || continues?.Kind !== 'Likelihood') {
         return noAgent('the answer is missing the agent choice or the thread likelihood');
@@ -834,7 +842,7 @@ function readMultiPartyRouteVerdict(
     if (route.Confidence < DECISION_ROUTING_MIN_CONFIDENCE) {
         return noAgent(`the agent choice is unsure (confidence ${route.Confidence})`);
     }
-    const continuing = CalibratedContinuesProbability(calibrations, continues.Probability, answeredBy);
+    const continuing = CalibratedContinuesProbability(calibration, continues.Probability);
     if (continuing === null) {
         return noAgent(`the thread likelihood is uncalibrated for ${DescribeAnsweringModel(answeredBy)}`);
     }

@@ -168,7 +168,7 @@ vi.mock('@memberjunction/templates', () => ({
 }));
 
 vi.mock('@memberjunction/aiengine', async () => {
-    const { ShippedDuplicateCalibrations } = await import('./helpers/decisionCalibration');
+    const { ShippedDuplicateCalibrations, CalibrationEngineMethods } = await import('./helpers/decisionCalibration');
     return {
         AIEngine: {
             Instance: {
@@ -180,7 +180,7 @@ vi.mock('@memberjunction/aiengine', async () => {
                 GetVectorIndexByID: mocks.GetVectorIndexByID,
                 // Mirrors the real engine: the provider-side name is ExternalID, falling back to Name.
                 GetProviderIndexName: (v: { Name: string; ExternalID?: string | null }) => v.ExternalID?.trim() || v.Name,
-                GetDecisionCalibrations: ShippedDuplicateCalibrations,
+                ...CalibrationEngineMethods(ShippedDuplicateCalibrations),
             },
         },
     };

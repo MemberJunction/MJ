@@ -17,7 +17,7 @@ import { MemoryManagerAgent } from '../memory-manager-agent';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import * as MemoryNoteGate from '../memory-note-gate';
 import { FormatMemoryNoteExcerpt, MEMORY_NOTE_MAX_EXCERPT_CHARS } from '../memory-note-gate';
-import { ShippedAgentCalibrations } from './helpers/shipped-decision-calibrations';
+import { ServeDecisionCalibrations, ShippedAgentCalibrations } from './helpers/shipped-decision-calibrations';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -199,7 +199,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
     beforeEach(() => {
         agent = new TestMemoryManagerAgent();
         // The engine serves the calibrations shipped in metadata/ai-models.
-        vi.spyOn(AIEngine.Instance, 'GetDecisionCalibrations').mockImplementation(ShippedAgentCalibrations);
+        ServeDecisionCalibrations(ShippedAgentCalibrations);
     });
 
     afterEach(() => {
