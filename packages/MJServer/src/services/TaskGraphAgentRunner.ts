@@ -259,7 +259,15 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 'MJ: AI Agent Runs',
                 params.ContextUser,
             );
-            return (await run.Load(params.SubmittingAgentRunID)) ? run : undefined;
+            if (await run.Load(params.SubmittingAgentRunID)) return run;
+            // Not found is logged like a throw (#4623): with no parentRun a Flow agent takes the
+            // top-level default and dispatches, so this task would complete before its work runs.
+            LogError(
+                `[TaskGraphAgentRunner] Task ${params.TaskID}: submitting run ` +
+                `${params.SubmittingAgentRunID} was not found; the spawned run will have no parent ` +
+                `link, and a Flow agent in it will dispatch rather than run in this task.`,
+            );
+            return undefined;
         } catch (e) {
             LogError(
                 `[TaskGraphAgentRunner] Task ${params.TaskID}: submitting run ` +

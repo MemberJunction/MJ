@@ -11,7 +11,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { UserInfo } from '@memberjunction/core';
 import { HighlightSearchMatches } from '@memberjunction/global';
 import {
@@ -209,6 +209,19 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  /** Wait after the last key press before a typed query runs a search. */
+  public static readonly SearchDebounceMs = 250;
+
+  /** Typed queries, debounced into searches; see {@link OnSearchInput}. */
+  private typedQuery$ = new Subject<string>();
+
+  /**
+   * The query the last search ran for, or '' after a clear. A debounced query equal to it is
+   * skipped (typing "ab" then back to "a" inside the wait), while a query searched again after
+   * a clear, a recent-search pick or a filter change still runs.
+   */
+  private lastSearchedQuery = '';
+
   /** True only while ngOnInit subscribes — see applyState(). */
   private initializing = false;
 
@@ -243,6 +256,14 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     this.subscribeToSearchState();
     this.initializing = false;
     this.loadRecentSearches();
+    this.typedQuery$
+      .pipe(debounceTime(SearchPanelComponent.SearchDebounceMs), takeUntil(this.destroy$))
+      .subscribe(query => {
+        // Only the box's current text searches; an emptied box was cleared already.
+        if (query.trim() && query === this.SearchQuery && query !== this.lastSearchedQuery) {
+          this.performSearch();
+        }
+      });
   }
 
   ngOnDestroy(): void {
@@ -307,8 +328,10 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   public OnSearchInput(): void {
     if (this.SearchQuery.trim()) {
-      this.performSearch();
+      // Debounced: a search per key press would run five sub-searches each time.
+      this.typedQuery$.next(this.SearchQuery);
     } else {
+      this.lastSearchedQuery = '';
       this.searchService.clearResults();
     }
   }
@@ -322,6 +345,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    * Perform search
    */
   private async performSearch(): Promise<void> {
+    this.lastSearchedQuery = this.SearchQuery;
     await this.searchService.search(
       this.SearchQuery,
       this.EnvironmentId,
@@ -349,6 +373,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   public ClearSearch(): void {
     this.SearchQuery = '';
+    this.lastSearchedQuery = '';
     this.searchService.clearResults();
     this.focusSearchInput();
   }
@@ -426,7 +451,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       const seed = this.InitialQuery?.trim();
       if (seed && seed !== this.SearchQuery) {
         this.SearchQuery = seed;
-        this.OnSearchInput();
+        this.performSearch();
         this.cdr.detectChanges();
       }
       this.SearchInput?.nativeElement.focus();

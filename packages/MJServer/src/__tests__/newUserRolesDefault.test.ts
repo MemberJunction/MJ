@@ -25,6 +25,9 @@
  * auto-provisioned user no more than the end-user surface.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // config.ts evaluates `configInfo = loadConfig()` at module load, and `loadConfig` rejects a
 // configuration carrying no database credentials. Stubbing the cosmiconfig search — and ONLY that —
@@ -77,5 +80,34 @@ describe('DEFAULT_SERVER_CONFIG.userHandling.newUserRoles (issue #4260)', () => 
     // reconsidered — but not before, and never in the other order.
     expect(DEFAULT_SERVER_CONFIG.userHandling?.autoCreateNewUsers).toBe(true);
     expect(DEFAULT_SERVER_CONFIG.userHandling?.newUserLimitedToAuthorizedDomains).toBe(false);
+  });
+});
+
+/**
+ * The same default is written out in two templates operators copy from (issue #4285). Nothing
+ * else keeps them in step with `DEFAULT_SERVER_CONFIG`, so a template drifting back to a broader
+ * role list would hand copy-paste deployments the escalation above.
+ */
+describe('newUserRoles templates match the shipped default (issue #4285)', () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const templates: Array<{ Label: string; Path: string }> = [
+    { Label: 'packages/MJServer/README.md', Path: resolve(here, '../../README.md') },
+    { Label: 'packages/MJCLI/mj.config.cjs', Path: resolve(here, '../../../MJCLI/mj.config.cjs') },
+  ];
+
+  /** Reads the single `newUserRoles: [...]` line from a template; fails loudly if it is missing or repeated. */
+  function readTemplateRoles(path: string): string[] {
+    const matches = [...readFileSync(path, 'utf8').matchAll(/newUserRoles:\s*\[([^\]]*)\]/g)];
+    if (matches.length !== 1) {
+      throw new Error(`expected exactly one "newUserRoles: [...]" line in ${path}, found ${matches.length}`);
+    }
+    return matches[0][1]
+      .split(',')
+      .map(item => item.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(item => item.length > 0);
+  }
+
+  it.each(templates)('$Label carries the same newUserRoles as DEFAULT_SERVER_CONFIG', ({ Path }) => {
+    expect(readTemplateRoles(Path)).toEqual(DEFAULT_SERVER_CONFIG.userHandling?.newUserRoles);
   });
 });

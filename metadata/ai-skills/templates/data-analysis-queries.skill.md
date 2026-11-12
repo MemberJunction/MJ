@@ -15,7 +15,8 @@ This skill is **read-only**: only ever emit `SELECT` statements. Never write INS
 
 ## Schema Exploration & Fresh SQL
 
-- Use *Get Entity Details* with the **exact entity name** to inspect fields, foreign keys, and join paths before writing SQL.
+- **Find the exact entity name before you ask for details.** Call *Get Entity List* (or *Explore Database Schema* for a schema-level overview) first; do not guess names. Core MemberJunction entities carry the `MJ: ` prefix (`MJ: AI Agents`, `MJ: Users`); an unprefixed core name is not found.
+- Then use *Get Entity Details* with that **exact entity name** to inspect fields, foreign keys, and join paths before writing SQL.
 - Always query **base views**, never raw tables: `SchemaName.vwEntityName`.
 - **Never assume the `__mj` schema** — entities can live in any schema; read `SchemaName` from the entity metadata.
 - Use proper JOINs via the foreign keys reported by entity metadata; don't guess join columns.

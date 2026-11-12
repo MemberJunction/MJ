@@ -99,5 +99,83 @@
       "lastModified": "2026-04-06T11:01:31.385Z",
       "checksum": "4c13ef6b1eb790239bac14522fc39d7eba659621414485a49c69a5f3284d22da"
     }
+  },
+  {
+    "_comments": [
+      "Vector Sync Embedding — a carrier prompt for Entity vector sync (EntityVectorSyncer) (#4923).",
+      "Callers pass it by name (EmbeddingCarrierPrompts in @memberjunction/ai-prompts) and pin ModelID,",
+      "so the prompt has no MJ: AI Prompt Models rows; it only books the run under its own name for cost reports."
+    ],
+    "fields": {
+      "Name": "Vector Sync Embedding",
+      "Description": "Books the embedding calls entity vector sync makes, so bulk sync costs show apart from other embedding work. Carries no model bindings: vector sync pins the model of the index it writes to.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Embedding",
+      "TemplateText": "@file:templates/knowledge-hub/content-embedding.template.md",
+      "Status": "Active",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "16F4657C-7AC4-4A61-B433-AF7941DECBEF"
+    }
+  },
+  {
+    "_comments": [
+      "Duplicate Detection Embedding — a carrier prompt for Duplicate record detection (#4923).",
+      "Callers pass it by name (EmbeddingCarrierPrompts in @memberjunction/ai-prompts) and pin ModelID,",
+      "so the prompt has no MJ: AI Prompt Models rows; it only books the run under its own name for cost reports."
+    ],
+    "fields": {
+      "Name": "Duplicate Detection Embedding",
+      "Description": "Books the embedding calls duplicate record detection makes, so dedupe costs show apart from other embedding work. Carries no model bindings: detection pins the model of the index it compares against.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Embedding",
+      "TemplateText": "@file:templates/knowledge-hub/content-embedding.template.md",
+      "Status": "Active",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "CCAAAD36-95E2-4ECA-989C-1B1A79123DF4"
+    }
+  },
+  {
+    "_comments": [
+      "Vector Search Embedding — a carrier prompt for Vector search queries (VectorSearchProvider) (#4923).",
+      "Callers pass it by name (EmbeddingCarrierPrompts in @memberjunction/ai-prompts) and pin ModelID,",
+      "so the prompt has no MJ: AI Prompt Models rows; it only books the run under its own name for cost reports."
+    ],
+    "fields": {
+      "Name": "Vector Search Embedding",
+      "Description": "Books the query embeddings vector search makes, so interactive search costs show apart from bulk embedding work. Carries no model bindings: search pins each index's model.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Embedding",
+      "TemplateText": "@file:templates/knowledge-hub/content-embedding.template.md",
+      "Status": "Active",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "1A63AA97-5DD2-4CDD-B89A-E7E3E4AF4B70"
+    }
   }
 ]

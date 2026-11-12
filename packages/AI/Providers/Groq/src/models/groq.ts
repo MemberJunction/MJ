@@ -1,6 +1,7 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
-    type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+    CHAT_FINISH_REASON_TOOL_CALLS, type ChatToolCall, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+import { GetToolUseFailedGeneration, ParseFailedGeneration } from './failedGeneration';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
 import { ChatCompletion, ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart, ChatCompletionChunk } from 'groq-sdk/resources/chat/completions';
@@ -279,6 +280,10 @@ export class GroqLLM extends BaseLLM {
             if (this.IsCancellationError(error, params.cancellationToken)) {
                 return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
+            const recovered = this.recoverRejectedToolCalls(error, params, startTime);
+            if (recovered) {
+                return recovered;
+            }
             throw error;
         }
         const endTime = new Date();
@@ -367,6 +372,61 @@ export class GroqLLM extends BaseLLM {
         return result;
     }
     
+    /**
+     * Turns Groq's `tool_use_failed` rejection back into the tool call the model made (#5847).
+     *
+     * Groq checks tool arguments against the declared schema before answering and refuses a call
+     * whose types do not match — a boolean sent as the string "true", say — although MJ's argument
+     * coercion would accept it. The rejection's `failed_generation` still holds the call, so this
+     * returns it as an ordinary tool-call result flagged {@link ChatResult.ToolCallsRecovered}.
+     *
+     * Recovery happens only when every parsed call names a tool this request declared; anything
+     * else (no tools, an unparseable generation, a call to `json` or another undeclared name)
+     * returns undefined and the caller rethrows as before.
+     */
+    private recoverRejectedToolCalls(error: unknown, params: ChatParams, startTime: Date): ChatResult | undefined {
+        const declared = new Set((params.tools ?? []).map((t) => t.name));
+        if (declared.size === 0) {
+            return undefined;
+        }
+        const generation = GetToolUseFailedGeneration(error);
+        if (generation === undefined) {
+            return undefined;
+        }
+        const parsed = ParseFailedGeneration(generation);
+        if (parsed.length === 0 || parsed.some((c) => !declared.has(c.Name))) {
+            return undefined;
+        }
+        const toolCalls: ChatToolCall[] = parsed.map((c, i) => ({
+            id: `call_recovered_${startTime.getTime()}_${i}`,
+            name: c.Name,
+            arguments: c.Arguments
+        }));
+        console.warn(`Groq provider: recovered ${toolCalls.length} tool call(s) (${toolCalls.map((c) => c.name).join(', ')}) ` +
+            'from a tool_use_failed rejection; their arguments are passed on for coercion.');
+        const endTime = new Date();
+        const result = {
+            success: true,
+            statusText: 'OK',
+            startTime,
+            endTime,
+            timeElapsed: endTime.getTime() - startTime.getTime(),
+            data: {
+                choices: [{
+                    message: { role: ChatMessageRole.assistant, content: '', toolCalls },
+                    finish_reason: CHAT_FINISH_REASON_TOOL_CALLS,
+                    index: 0
+                }],
+                // The rejection reports no usage; the attempt is billed but not counted here.
+                usage: new ModelUsage(0, 0)
+            },
+            errorMessage: '',
+            exception: null,
+            ToolCallsRecovered: true
+        } as ChatResult;
+        return result;
+    }
+
     /**
      * Create a streaming request for Groq
      */

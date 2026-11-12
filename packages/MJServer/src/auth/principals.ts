@@ -198,6 +198,27 @@ function resolveFallback<T extends ResolvablePrincipal>(
 }
 
 /**
+ * The principal in-process server work runs as when there is no caller and no configured setting:
+ * the active system user, else the lowest-ID active Owner. Returns null — and logs one error per
+ * purpose — when the deployment has neither; callers skip the work rather than act as an
+ * arbitrary cached user.
+ *
+ * @param purpose short label for the work (e.g. `'RSU CodeGen'`), used in the log line and to
+ *                key de-duplication
+ */
+export function ResolveServerPrincipal(purpose: string): UserInfo | null {
+    const resolution = resolveFallback(UserCache.Instance.Users, UserCache.Instance.SYSTEM_USER_ID);
+    if (!resolution.user) {
+        const key = `${purpose} :: <server principal>`;
+        if (reportedMisconfigurations.Get(key) === undefined) {
+            reportedMisconfigurations.Set(key, true);
+            LogError(`[${purpose}] No active system user and no active Owner — skipping work that needs a server principal.`);
+        }
+    }
+    return resolution.user;
+}
+
+/**
  * How many distinct `purpose :: candidate` problems the tracker below remembers at once.
  *
  * Candidates come from static config today, so the real cardinality is the number of settings
@@ -252,6 +273,54 @@ export function ResolveConfiguredPrincipal(candidate: string | undefined, purpos
     }
 
     return resolution.user;
+}
+
+/** A config setting that names the principal new users are provisioned as. */
+export interface ProvisioningPrincipalSetting {
+    /** The setting's path, for the log line (e.g. `userHandling.contextUserForNewUserCreation`). */
+    Setting: string;
+    /** The configured value; blank means the setting is unset and the ladder's fallback applies. */
+    Candidate: string | undefined;
+}
+
+/**
+ * Settings whose resolved principal is not an Owner (and not the system user), with the message to
+ * log for each. Creating a user record needs an Owner-level principal, so such a setting starts
+ * cleanly and only fails at the first new user's login; this lets startup say so instead.
+ *
+ * Pure: reads only its arguments.
+ */
+export function FindNonOwnerProvisioningPrincipals<T extends ResolvablePrincipal>(
+    settings: readonly ProvisioningPrincipalSetting[],
+    users: readonly T[],
+    systemUserId: string,
+): string[] {
+    const problems: string[] = [];
+    for (const setting of settings) {
+        const resolved = ResolvePrincipalFrom(setting.Candidate, users, systemUserId).user;
+        if (!resolved) {
+            continue; // reported by the resolver's own warning at first use
+        }
+        const isSystem = normalize(resolved.ID) === normalize(systemUserId);
+        if (!isSystem && normalize(resolved.Type) !== 'owner') {
+            problems.push(
+                `${setting.Setting} resolves to '${resolved.Email || resolved.Name}' (Type '${resolved.Type?.trim() ?? ''}'), ` +
+                `which is not an Owner — new-user provisioning will fail at the first new user's login.`,
+            );
+        }
+    }
+    return problems;
+}
+
+/**
+ * Startup check for the provisioning principals: logs one error per setting that resolves to a
+ * non-Owner user. Warns only; the server still starts, like the resolver's other misconfiguration
+ * reports.
+ */
+export function ValidateProvisioningPrincipals(settings: readonly ProvisioningPrincipalSetting[]): void {
+    for (const problem of FindNonOwnerProvisioningPrincipals(settings, UserCache.Instance.Users, UserCache.Instance.SYSTEM_USER_ID)) {
+        LogError(`[Provisioning] ${problem}`);
+    }
 }
 
 function describeFallback(reason: PrincipalResolutionReason): string {

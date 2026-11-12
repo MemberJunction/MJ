@@ -5,13 +5,15 @@
  * for when the bot takes the avatar down mid-meeting.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TokenVerifier } from 'livekit-server-sdk';
+import { ParticipantInfo, TokenVerifier } from 'livekit-server-sdk';
 import type { IRealtimeSession, RealtimeAvatarStatus, RealtimeSessionCapabilities } from '@memberjunction/ai';
 import type { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { RegisterNativeRoomModule, type NativeAvatarVideoSupport, type NativeRoomClient, type NativeRoomModule } from '@memberjunction/ai-bridge-livekit';
 import type { ActiveBridgeSession, BridgeRealtimeSessionRecovery, StartBridgeSessionParams } from '@memberjunction/ai-bridge-server';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type AgentRoomHostOptions, type BridgeOps, type RealtimeSessionStartContext } from '../livekit-agent-room-coordinator';
 import { LiveKitTokenService } from '../livekit-token-service';
+import { LiveKitParticipantService } from '../livekit-participant-service';
+import { AgentParticipantIdentity } from '@memberjunction/ai';
 
 const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSecret: 'devsecretdevsecretdevsecret123456' };
 
@@ -125,6 +127,27 @@ describe('LiveKitAgentRoomCoordinator — the agent\'s avatar in a meeting', () 
         expect(replacement).toBe(audioOnly);
         expect(contexts[1].AvatarDelivery).toBeUndefined();
         expect(contexts[1].PriorTranscript).toBe('User: hi');
+    });
+
+    it('marks the bot audio-only through the room service when the bridge reports the avatar taken down', async () => {
+        const { ops, starts } = makeBridgeOps();
+        coordinator.SetBridgeOps(ops);
+        coordinator.SetNativeModuleSpecifier(registerModule({ Supported: true }));
+        const updates: Array<{ Room: string; Identity: string; Attributes: Record<string, string> | undefined }> = [];
+        coordinator.SetParticipantService(new LiveKitParticipantService(CONFIG, {
+            updateParticipant: vi.fn(async (roomName: string, identity: string, options?: { attributes?: Record<string, string> }) => {
+                updates.push({ Room: roomName, Identity: identity, Attributes: options?.attributes });
+                return new ParticipantInfo({ identity });
+            }),
+        }));
+        sessions(new AvatarModelSession({ Requested: true, Granted: true }));
+        await coordinator.StartAgentRoomSession({ AgentSessionID: 'avatar-mark', RoomName: 'avatar-mark-room', AgentName: 'Sage' });
+
+        await starts[0].OnAvatarUnavailable!('decoder-failed');
+
+        expect(updates).toEqual([
+            { Room: 'avatar-mark-room', Identity: AgentParticipantIdentity('avatar-mark'), Attributes: { 'mj.agentAvatar': 'audio-only:decoder-failed' } },
+        ]);
     });
 
     it('re-opens a recovered session without the avatar once it was taken down', async () => {

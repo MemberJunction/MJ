@@ -27,8 +27,6 @@ const seamClient = {
 RunLLMToolCallingConformanceSuite({
     ProviderName: 'Gemini',
     SupportsTools: true,
-    // Gemini passes its own uppercase vocabulary straight through on non-tool turns.
-    OrdinaryFinishReason: 'STOP',
     CreateLLM: () => {
         const llm = new GeminiLLM('conformance-test-key');
         (llm as unknown as { _gemini: typeof seamClient })._gemini = seamClient;
