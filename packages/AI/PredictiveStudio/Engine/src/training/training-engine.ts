@@ -43,7 +43,7 @@
  * is unit-testable with no live database and no live sidecar.
  */
 
-import { LogError, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -87,6 +87,11 @@ import {
   type TaskType,
   type TrainerRequest,
   type ProtocolExclusions,
+  type StoredFile,
+  Delivery,
+  RegisteredDelivery,
+  type OutputSemantics,
+  type ReturnedArtifact,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
@@ -247,6 +252,8 @@ interface ShippedArtifact {
   readonly Name: string;
   /** The baseline member that ships; null when the finalist ships. */
   readonly Member: BaselineResult | null;
+  /** The run's stored gate decision that ships it; the model row's registered delivery is built over it. */
+  readonly Gate: Exclude<GateDecision, { readonly outcome: 'no-signal' }>;
 }
 
 /**
@@ -533,15 +540,15 @@ export class TrainingEngine {
     TrainingEngine.checkSelection(result);
     const gate = TrainingEngine.buildGateRecord(x, result);
     const shipped = TrainingEngine.shippedArtifact(gate.decision, result);
-    const fileIds = await this.storeTrainerArtifacts(run, result, deps);
+    const stored = await this.storeTrainerArtifacts(run, result, deps);
     let model: MJMLModelEntity | null = null;
     try {
       const outcome = this.trainerOutcome(x, result, candidates, shipped);
-      model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
-      await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
+      model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(stored, shipped.Name));
+      await this.completeTrainerRun(x, request, outcome, gate, stored, model);
       return model;
     } catch (err) {
-      await TrainingEngine.discardStoredOutput(run, model, fileIds, deps);
+      await TrainingEngine.discardStoredOutput(run, model, stored, deps);
       throw err;
     }
   }
@@ -553,13 +560,13 @@ export class TrainingEngine {
    * features and hyperparameters are cleared too, so the Failed run never records a 'completed' result whose artifact
    * file references were just deleted. Each failure is logged; the caller rethrows the original error.
    */
-  private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, fileIds: ReadonlyMap<string, string>, deps: TrainingDeps): Promise<void> {
+  private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, stored: ReadonlyMap<string, StoredFile>, deps: TrainingDeps): Promise<void> {
     run.ResultingModelID = null;
     run.ValidationResults = null;
     run.FeaturesUsed = null;
     run.Hyperparameters = null;
     const stillReferenced = model === null ? null : await TrainingEngine.deleteModelRowOf(run, model);
-    const unreferenced = [...fileIds.values()].filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
+    const unreferenced = [...stored.values()].map((f) => f.fileId).filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
     await TrainingEngine.deleteArtifactFiles(run, unreferenced, deps);
   }
 
@@ -592,9 +599,10 @@ export class TrainingEngine {
    * and a held model's CALIBRATION HOLD note.
    */
   private async completeTrainerRun(
-    x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, fileIds: ReadonlyMap<string, string>, model: MJMLModelEntity | null,
+    x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, stored: ReadonlyMap<string, StoredFile>, model: MJMLModelEntity | null,
   ): Promise<void> {
     const run = x.Run;
+    const fileIds = new Map([...stored].map(([candidate, f]): [string, string] => [candidate, f.fileId]));
     const results: TrainingRunResults = {
       schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: x.Counts,
       trainer: TrainerContract.ToStoredTrainerResult(outcome.Result, fileIds), trainerRequest: TrainerRequestBuilder.TrainerRequestConfigOf(request),
@@ -638,7 +646,7 @@ export class TrainingEngine {
     if (!result.artifacts.some((a) => a.candidate === decision.shipped)) {
       throw new Error(`TrainingEngine: the trainer returned no artifact for the shipped '${decision.shipped}' (returned: ${result.artifacts.map((a) => a.candidate).join(', ') || 'none'})`);
     }
-    return { Name: decision.shipped, Member: member };
+    return { Name: decision.shipped, Member: member, Gate: decision };
   }
 
   /** The simple baseline whose member name the decision kept. */
@@ -649,10 +657,10 @@ export class TrainingEngine {
   }
 
   /** The stored file of the shipped artifact (checked to be among the returned artifacts before they were stored). */
-  private static storedFileOf(fileIds: ReadonlyMap<string, string>, name: string): string {
-    const fileId = fileIds.get(name);
-    if (fileId === undefined) throw new Error(`TrainingEngine: no stored file for the shipped artifact '${name}'`);
-    return fileId;
+  private static storedFileOf(stored: ReadonlyMap<string, StoredFile>, name: string): StoredFile {
+    const file = stored.get(name);
+    if (file === undefined) throw new Error(`TrainingEngine: no stored file for the shipped artifact '${name}'`);
+    return file;
   }
 
   /**
@@ -761,7 +769,7 @@ export class TrainingEngine {
     }
     for (const a of result.artifacts) {
       const actual = SnapshotHash.Sha256Hex(decodeArtifact(a.bytesBase64));
-      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes hash to ${actual}, not the stated ${a.sha256}`);
+      if (actual !== a.sha256) throw new Error(`TrainingEngine: artifact '${a.candidate}': its bytes have sha256 ${actual}, not the stated sha256 ${a.sha256}`);
       if (a.featureSchemaHash !== snapshot.Entity.FeatureSchemaHash) {
         throw new Error(`TrainingEngine: artifact '${a.candidate}' was built for feature schema ${a.featureSchemaHash}, not the snapshot's ${snapshot.Entity.FeatureSchemaHash}`);
       }
@@ -781,20 +789,37 @@ export class TrainingEngine {
   }
 
   /**
-   * Store every returned artifact's decoded bytes as an `MJ: Files` row; the file IDs by candidate. When any save
-   * fails, the artifacts already saved are deleted through the same store before the error is rethrown, so a failed run
-   * leaves no artifact nothing references.
+   * Store every returned artifact's decoded bytes, write-once, as an `MJ: Files` row, logging (verbose only) each stored
+   * key and the SHA-256 the store returned; the stored file by candidate. Each stored file's SHA-256 must equal the one
+   * its artifact declares (the hash the registry entry records): the declared hash was checked against the bytes before
+   * storing ({@link checkAnswerBelongsToRun}), so a difference here means the store wrote or reported other bytes. When
+   * any save fails or any hash differs, every artifact saved is deleted through the same store before the error is
+   * thrown, so a failed run leaves no artifact nothing references.
+   *
+   * @throws Error naming the candidate and both hashes when a stored file's SHA-256 is not the declared one
    */
-  private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
-    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
-      const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
-      return [a.candidate, fileId];
+  private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, StoredFile>> {
+    const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[ReturnedArtifact, StoredFile]> => {
+      const stored = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
+      return [a, stored];
     }));
     const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
     const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
-    if (failure === undefined) return new Map(saved);
-    await TrainingEngine.deleteArtifactFiles(run, saved.map(([, fileId]) => fileId), deps);
-    throw failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason));
+    const error = failure === undefined ? TrainingEngine.storedHashMismatch(saved) : (failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason)));
+    if (error === null) {
+      LogStatusEx({ message: `TrainingEngine: training run ${run.ID} stored ${saved.map(([a, f]) => `${a.candidate} at ${f.providerKey} (sha256 ${f.sha256})`).join(', ')}`, verboseOnly: true });
+      return new Map(saved.map(([a, f]) => [a.candidate, f]));
+    }
+    await TrainingEngine.deleteArtifactFiles(run, saved.map(([, f]) => f.fileId), deps);
+    throw error;
+  }
+
+  /** The error for the first stored file whose SHA-256 is not the one its artifact declares, or null when all match. */
+  private static storedHashMismatch(saved: ReadonlyArray<readonly [ReturnedArtifact, StoredFile]>): Error | null {
+    const mismatch = saved.find(([a, f]) => f.sha256 !== a.sha256);
+    if (mismatch === undefined) return null;
+    const [a, f] = mismatch;
+    return new Error(`TrainingEngine: artifact '${a.candidate}' was stored with sha256 ${f.sha256}, not its declared sha256 ${a.sha256}; every artifact of the run was deleted`);
   }
 
   /**
@@ -805,11 +830,16 @@ export class TrainingEngine {
    * `FeatureImportance` (`{}` when the trainer measured none, as for a forecast). For a kept baseline member: the
    * catalog algorithm of its driver ({@link shippedAlgorithmId}), its holdout score as `HoldoutMetrics`, and `{}` for
    * `Metrics` and `FeatureImportance` (a baseline has no inner score and no importance of its own; its Lineage's
-   * leakage audit carries the finalist's, {@link trainerLineage}).
+   * leakage audit carries the finalist's, {@link trainerLineage}). The row carries its registry entry
+   * ({@link applyRegistryEntry}): the shipped artifact's stored file and SHA-256, the lineage columns and the delivery
+   * registered over the run's stored gate decision ({@link registerDelivery}), built before the row is created.
+   *
+   * @throws Error when the delivery is refused or cannot be registered; no model row is saved
    */
-  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, artifactFileId: string): Promise<MJMLModelEntity> {
+  private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, stored: StoredFile): Promise<MJMLModelEntity> {
     const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
     const result = outcome.Result;
+    const registered = TrainingEngine.registerDelivery(x, result, shipped, stored);
     const content = snapshot.Content;
     const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
@@ -817,7 +847,7 @@ export class TrainingEngine {
     model.PipelineID = resolved.pipeline.ID;
     model.Version = version;
     model.AlgorithmID = await this.shippedAlgorithmId(x, outcome, shipped);
-    model.ArtifactFileID = artifactFileId;
+    TrainingEngine.applyRegistryEntry(model, x, result, stored, registered);
     model.FittedPreprocessing = '{}';
     model.FeatureSchema = JSON.stringify(content.Header.featureSchema);
     model.TargetVariable = PredictionUnit.DescribeLabelRule(x.Unit);
@@ -833,6 +863,48 @@ export class TrainingEngine {
     model.Status = 'Draft';
     await this.saveOrThrow(model, 'create ML Model');
     return model;
+  }
+
+  /**
+   * The registered delivery of what the run's stored gate decision ships: `Delivery.Create` over the trainer's returned
+   * artifacts and the unit's task (which refuses a missing or duplicated shipped artifact and a class order that is not
+   * the task's), registered with the shipped artifact's stored file (which refuses a stored hash that is not the
+   * delivered artifact's). Either refusal fails the run: a shipped artifact never gets a model row without a delivery.
+   *
+   * @throws Error naming the refusal (`DeliveryError.Kind`, or the registration's reason)
+   */
+  private static registerDelivery(x: TrainerRunInputs, result: TrainerCompleted, shipped: ShippedArtifact, stored: StoredFile): RegisteredDelivery {
+    const created = Delivery.Create(shipped.Gate, result.artifacts, x.Unit.label.outcome);
+    if (created.Ok === false) {
+      throw new Error(`TrainingEngine: the delivery of '${shipped.Name}' was refused (${created.Error.Kind}): ${JSON.stringify(created.Error)}`);
+    }
+    const registered = RegisteredDelivery.Register(created.Delivery, stored);
+    if (registered.Ok === false) throw new Error(`TrainingEngine: the delivery of '${shipped.Name}' could not be registered: ${registered.Reason}`);
+    return registered.Registered;
+  }
+
+  /**
+   * The registry entry's columns on a trainer model row (§5.1): the stored artifact file and its verified SHA-256, the
+   * lineage (run, snapshot and its hash, protocol and unit version rows, the feature schema hash, the trainer's code
+   * version), the output semantics (the unit's task), the registered delivery, and `ArtifactStatus = 'verified'` as of
+   * now: the stored hash was checked against the bytes the trainer returned and the registration checked it again.
+   */
+  private static applyRegistryEntry(model: MJMLModelEntity, x: TrainerRunInputs, result: TrainerCompleted, stored: StoredFile, registered: RegisteredDelivery): void {
+    const snapshot = x.Snapshot.Entity;
+    const semantics: OutputSemantics = { task: x.Unit.label.outcome };
+    model.ArtifactFileID = stored.fileId;
+    model.ArtifactSha256 = stored.sha256;
+    model.TrainingRunID = x.Run.ID;
+    model.TrainingSnapshotID = snapshot.ID;
+    model.SnapshotHash = snapshot.ContentHash;
+    model.FeatureSchemaHash = snapshot.FeatureSchemaHash;
+    model.EvaluationProtocolID = x.Training.Protocol.RowID;
+    model.PredictionUnitID = x.UnitLineage.predictionUnitId;
+    model.CodeVersion = JSON.stringify(result.codeVersion);
+    model.OutputSemantics = JSON.stringify(semantics);
+    model.Delivery = JSON.stringify(registered.View);
+    model.ArtifactStatus = 'verified';
+    model.ArtifactCheckedAt = new Date();
   }
 
   /**

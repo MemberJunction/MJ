@@ -43,6 +43,11 @@ export interface MLSidecarOptions {
    * (`…/Sidecar/.venv/bin/python`) when present, otherwise `python3`.
    */
   pythonPath?: string;
+  /**
+   * Port the managed service listens on (default `0`: the OS assigns an ephemeral port). A fixed port lets a restarted
+   * sidecar answer on the URL its remote clients already hold. Ignored in remote mode.
+   */
+  port?: number;
   /** Startup timeout in ms (default: 30000). */
   startupTimeoutMs?: number;
   /** Per-request timeout in ms (default: 300000 — training can be slow). */
@@ -128,7 +133,7 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  * Two topologies, chosen automatically:
  *
  * - **Managed mode (default):** {@link Start} spawns the bundled FastAPI service
- *   (`src/python/server.py`) on 127.0.0.1 with an ephemeral port, reads
+ *   (`src/python/server.py`) on 127.0.0.1 with an ephemeral port (or the `port` option), reads
  *   `PREDICTIVE_STUDIO_SIDECAR_PORT=<n>` from its stdout, polls `/health` until
  *   ready, and registers SIGINT/SIGTERM/exit cleanup. On macOS it injects
  *   `DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib` so xgboost/lightgbm load.
@@ -174,6 +179,8 @@ export class MLSidecar {
   private readonly serverPath: string;
   private readonly startupTimeoutMs: number;
   private readonly requestTimeoutMs: number;
+  /** The port passed to the managed service (`0`: ephemeral). */
+  private readonly requestedPort: number;
   private stopping = false;
   private cleanupRegistered = false;
   /**
@@ -194,6 +201,19 @@ export class MLSidecar {
     this.serverPath = DEFAULT_SERVER_PATH;
     this.startupTimeoutMs = options?.startupTimeoutMs ?? MLSidecar.DefaultStartupTimeoutMs;
     this.requestTimeoutMs = options?.requestTimeoutMs ?? MLSidecar.DefaultRequestTimeoutMs;
+    this.requestedPort = MLSidecar.ValidatePort(options?.port || 0);
+  }
+
+  /**
+   * A port the managed service can be asked to listen on: an integer from 0 (ephemeral) to 65535.
+   *
+   * @throws Error naming the value when it is not such an integer
+   */
+  public static ValidatePort(port: number): number {
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      throw new Error(`MLSidecar: port ${port} is not an integer from 0 (ephemeral) to 65535`);
+    }
+    return port;
   }
 
   /** Whether this client is in remote (connect-only) mode. */
@@ -241,7 +261,7 @@ export class MLSidecar {
 
   private async spawnManaged(): Promise<void> {
     await new Promise<void>((resolve, reject) => {
-      const proc = spawn(this.pythonPath, [this.serverPath, '0'], {
+      const proc = spawn(this.pythonPath, [this.serverPath, String(this.requestedPort)], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: this.buildSpawnEnv(),
       });

@@ -14,8 +14,9 @@
  * ## What
  * {@link PipelineAutoTrainer} is the production {@link IModelAutoTrainer}. When a run
  * finds its model needs training it:
- *   1. **reuses** the newest Published, artifact-backed model of the pipeline whose
- *      bytes load on this server (so concurrent or repeated runs don't retrain), or
+ *   1. **reuses** the newest Published model of the pipeline whose artifact loads
+ *      `verified` through the artifact registry (so concurrent or repeated runs don't
+ *      retrain; a lost, changed or unregistered artifact is never reused), or
  *   2. **trains** the pipeline through the real {@link TrainingEngine} path and
  *      **publishes** the result through the promotion gate (Draft → Validated →
  *      Published — a leakage-flagged or calibration-held model, or one whose artifact
@@ -39,10 +40,12 @@ import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
 import { MetadataEntityFactory } from '../training/seams';
 import { TrainingEngine } from '../training/training-engine';
+import { ArtifactRegistry, type IArtifactRegistry } from '../registry/artifact-registry';
+import type { RegistryContext } from '../registry/registry-context';
 import { StorageProviderArtifactLoader } from './storage-provider-artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
-import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
+import type { AutoTrainRequest, IModelAutoTrainer } from './types';
 
 /** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
 export type AutoTrainTrainFn = (pipelineId: string, provider: IMetadataProvider, user: UserInfo) => Promise<MJMLModelEntity>;
@@ -64,8 +67,12 @@ export interface PipelineAutoTrainerOptions {
   train?: AutoTrainTrainFn;
   /** The promotion gate used to publish (and archive the superseded model). */
   gate?: IModelPromotionGate;
-  /** Reads artifact bytes — used to confirm a reusable model actually loads on this server. */
-  artifactLoader?: IArtifactLoader;
+  /**
+   * The artifact registry a reusable model's artifact is loaded and verified through. Optional because a registry is
+   * built for one request's provider and user and the production auto-trainer is built once at startup with neither;
+   * when absent, each lookup builds `ArtifactRegistry.ForContext` over a `StorageProviderArtifactLoader` for its call.
+   */
+  registry?: IArtifactRegistry;
 }
 
 /**
@@ -74,12 +81,12 @@ export interface PipelineAutoTrainerOptions {
 export class PipelineAutoTrainer implements IModelAutoTrainer {
   private readonly train: AutoTrainTrainFn;
   private readonly gate: IModelPromotionGate;
-  private readonly artifactLoader: IArtifactLoader;
+  private readonly registry: IArtifactRegistry | null;
 
   constructor(options: PipelineAutoTrainerOptions = {}) {
     this.train = options.train || PipelineAutoTrainer.TrainThroughEngine;
     this.gate = options.gate ?? new ProductionModelPromotionGate();
-    this.artifactLoader = options.artifactLoader ?? new StorageProviderArtifactLoader();
+    this.registry = options.registry || null;
   }
 
   /**
@@ -112,16 +119,17 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   // ----- reuse --------------------------------------------------------------
 
   /**
-   * The newest Published model of the pipeline whose artifact `/predict` serves and loads on this server, if any (a
-   * forecast's series forecaster published before the gate refused one is skipped).
+   * The newest Published model of the pipeline whose artifact `/predict` serves and whose artifact load is `verified`,
+   * if any (a forecast's series forecaster published before the gate refused one is skipped, and so is a model whose
+   * artifact is missing, changed or unregistered).
    */
   protected async findReusableModel(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
-    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'Lineage'>>(
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'ArtifactSha256' | 'Lineage'>>(
       {
         EntityName: 'MJ: ML Models',
         ExtraFilter: `PipelineID='${pipelineId}' AND Status='Published' AND ArtifactFileID IS NOT NULL`,
         OrderBy: 'Version DESC',
-        Fields: ['ID', 'ArtifactFileID', 'Lineage'],
+        Fields: ['ID', 'ArtifactFileID', 'ArtifactSha256', 'Lineage'],
         ResultType: 'simple',
         MaxRows: 5,
       },
@@ -130,9 +138,11 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     if (!result.Success) {
       return null;
     }
+    const ctx: RegistryContext = { ContextUser: contextUser, Provider: provider };
+    const registry = this.registry || ArtifactRegistry.ForContext(ctx, new StorageProviderArtifactLoader());
     for (const row of result.Results) {
       const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
-      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser, provider))) {
+      if (servable && (await registry.Load(row, ctx)).Status === 'verified') {
         return row.ID;
       }
     }

@@ -12,6 +12,7 @@ import {
 } from '../evaluate-drift.action';
 import type { FeatureAndPredictionDriftReport } from '../../maintenance/psi-drift-detector';
 import { RunFeatureValueView, type FeatureValueDoubleRow } from '../../__tests__/feature-value-view-double';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 const TEST_USER = { ID: 'user-drift-test', Name: 'Drift Tester' } as UserInfo;
 
@@ -367,8 +368,12 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       const runParams = buildRunParams({ EmitAlertOnDrift: { value: false } });
       runParams.Provider = fakeProvider;
 
+      const errors = ConsoleCapture.Errors();
       const result = await action.Run(runParams);
       expect(result.Success).toBe(true);
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "Drift sweep: record process 'Broken' (rp-broken) was not evaluated: Failed to load MJ: Feature Values for drift evaluation: timeout",
+      ]);
       const processResults = getOutput(runParams, 'ProcessResults') as Array<{ RecordProcessID: string; ErrorMessage?: string }>;
       expect(processResults.map((p) => p.RecordProcessID)).toEqual(['rp-broken', 'rp-ok']);
       expect(processResults[0]?.ErrorMessage).toContain('timeout');
@@ -411,9 +416,13 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         CriticalPSIThreshold: { value: 0.2 },
       });
 
+      const errors = ConsoleCapture.Errors();
       const result = await action.Run(runParams);
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('INVALID_PARAMETER');
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        'Error: INVALID_PARAMETER: WarningPSIThreshold (0.4) must be strictly less than CriticalPSIThreshold (0.2).',
+      ]);
     });
 
     it('should return MISSING_PARAMETER when an explicit target parameter (RecordProcessID or ModelID) is passed with a blank value (R2)', async () => {
@@ -460,6 +469,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView([], v)),
       } as Partial<IMetadataProvider> as IMetadataProvider;
 
+      const errors = ConsoleCapture.Errors();
       for (const target of [{ RecordProcessID: { value: 'rp-1' } }, {}]) {
         const runParams = buildRunParams({ ...target, MaxRows: { value: 0 }, EmitAlertOnDrift: { value: false } });
         runParams.Provider = fakeProvider;
@@ -467,6 +477,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('INVALID_PARAMETER');
       }
+      expect(ConsoleCapture.Lines(errors)).toEqual(Array(2).fill('Error: INVALID_PARAMETER: MaxRows must be a positive whole number.'));
     });
 
     it('outputs Truncated when one record process is evaluated, true when a window exceeded MaxRows (P2)', async () => {
@@ -480,6 +491,7 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => views.map((v) => RunFeatureValueView(rows, v)),
       } as Partial<IMetadataProvider> as IMetadataProvider;
 
+      const errors = ConsoleCapture.Errors();
       for (const [maxRows, truncated] of [[30, true], [31, false]] as const) {
         const runParams = buildRunParams({ RecordProcessID: { value: 'rp-big' }, MaxRows: { value: maxRows }, EmitAlertOnDrift: { value: false } });
         runParams.Provider = fakeProvider;
@@ -487,6 +499,10 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
         expect(result.Success).toBe(true);
         expect(getOutput(runParams, 'Truncated')).toBe(truncated);
       }
+      // Only the capped run (MaxRows 30 under 31 rows) reports the truncation.
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "Drift evaluation for 'rp-big' was truncated at MaxRows (30) per window: the oldest rows of a full window were not read.",
+      ]);
     });
 
     it('reports a process whose window exceeded MaxRows as Truncated on its process result (P2)', async () => {
@@ -517,8 +533,12 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       const runParams = buildRunParams({ MaxRows: { value: 30 }, EmitAlertOnDrift: { value: false } });
       runParams.Provider = fakeProvider;
+      const errors = ConsoleCapture.Errors();
       const result = await new EvaluateFeatureAndPredictionDriftAction().Run(runParams);
       expect(result.Success).toBe(true);
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "Drift evaluation for 'rp-big' was truncated at MaxRows (30) per window: the oldest rows of a full window were not read.",
+      ]);
       const processResults = getOutput(runParams, 'ProcessResults') as Array<{ RecordProcessID: string; Truncated: boolean }>;
       expect(processResults.map((p) => [p.RecordProcessID, p.Truncated])).toEqual([
         ['rp-big', true],
@@ -669,23 +689,28 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
     });
 
     it('ignores NotifyUserID from a caller who is neither the system user nor an Owner, and notifies the caller', async () => {
+      const errors = ConsoleCapture.Errors();
       const { saved, runParams } = await runAlert(MEMBER, {
         RecordProcessID: { value: 'rp-alert-1' },
         NotifyUserID: { value: TARGET.ID },
       });
       expect(saved.map((n) => n.UserID)).toEqual([MEMBER.ID]);
       expect(getOutput(runParams, 'AlertEmitted')).toBe(true);
+      expect(ConsoleCapture.Lines(errors)).toEqual(['DefaultDriftAlertEmitter: NotifyUserID ignored — only the system user or an Owner may route drift alerts to another user; notifying the caller.']);
     });
 
     it('treats a user named and emailed "system" as an ordinary user: their NotifyUserID is ignored and they are notified themselves', async () => {
+      const errors = ConsoleCapture.Errors();
       const { saved } = await runAlert(NAMED_SYSTEM, {
         RecordProcessID: { value: 'rp-alert-1' },
         NotifyUserID: { value: TARGET.ID },
       });
       expect(saved.map((n) => n.UserID)).toEqual([NAMED_SYSTEM.ID]);
+      expect(ConsoleCapture.Lines(errors)).toEqual(['DefaultDriftAlertEmitter: NotifyUserID ignored — only the system user or an Owner may route drift alerts to another user; notifying the caller.']);
     });
 
     it('suppresses the alert for the system user without NotifyUserID, or with one naming no active user', async () => {
+      const errors = ConsoleCapture.Errors();
       const withoutTarget = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' } });
       expect(withoutTarget.saved).toHaveLength(0);
       expect(getOutput(withoutTarget.runParams, 'AlertEmitted')).toBe(false);
@@ -695,6 +720,10 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
       const unknownTarget = await runAlert(SYSTEM, { RecordProcessID: { value: 'rp-alert-1' }, NotifyUserID: { value: 'no-such-user' } });
       expect(unknownTarget.saved).toHaveLength(0);
+
+      const suppressed = 'DefaultDriftAlertEmitter: drift alert suppressed — the action ran as the system user without a NotifyUserID naming an active user.';
+      const noActiveUser = 'DefaultDriftAlertEmitter: NotifyUserID ignored — it names no active user.';
+      expect(ConsoleCapture.Lines(errors)).toEqual([suppressed, noActiveUser, suppressed, noActiveUser, suppressed]);
     });
 
     it('never puts input text in the title: a ModelID the caller cannot read gives a generic title and no link', async () => {
@@ -716,11 +745,15 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
 
     it('leaves the link off when no Records resource type is seeded', async () => {
       byNameSpy.mockReturnValue(undefined);
+      const errors = ConsoleCapture.Errors();
       const { saved } = await runAlert(MEMBER, { RecordProcessID: { value: 'rp-alert-1' } });
       expect(saved).toHaveLength(1);
       expect(saved[0].ResourceTypeID).toBeNull();
       expect(saved[0].ResourceRecordID).toBeNull();
       expect(saved[0].ResourceConfiguration).toBeNull();
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "DefaultDriftAlertEmitter: no 'Records' resource type is seeded; the drift alert has no record link.",
+      ]);
     });
   });
 });

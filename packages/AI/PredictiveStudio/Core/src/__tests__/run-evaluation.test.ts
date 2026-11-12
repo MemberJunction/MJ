@@ -14,7 +14,7 @@ const protocol: EvaluationProtocolSpec = {
   baselines: [{ kind: 'dummy', name: 'base-rate' }, { kind: 'one-feature', selection: 'best-single-feature-inner-cv' }, { kind: 'glm', family: 'logistic', penalty: 'l2' }],
   calibration: { kind: 'auto', thresholdRows: 2000, fitOn: 'disjoint-calibration-fold' }, resampling: { kind: 'none' },
   intervals: { level: 0.95, method: 'bootstrap', resamples: 2000, pairedTest: 'paired-bootstrap' },
-  promotion: { comparators: [], incumbent: 'current-published', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' },
+  promotion: { comparators: [], incumbent: 'current-published', margin: EvaluationProtocol.ToNonNegative(0), lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15', ...EvaluationProtocol.DefaultPromotionAdditions(EvaluationProtocol.ToNonNegative(0)) },
   allowedOutcomes: ['model', 'keep-simple-baseline', 'no-signal'],
   leakageAudit: { singleFeatureHeldOutAucMax: 0.95, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true },
   exclusions: { denyFields: [], denySources: [] }, slices: { outOfTime: true, subgroups: [] },

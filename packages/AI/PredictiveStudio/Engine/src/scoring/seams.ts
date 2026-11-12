@@ -21,8 +21,14 @@ import { TrainingKeys } from './training-keys';
 
 /**
  * `RunView`-backed {@link IMLModelLoader}. Loads the model as a full
- * `entity_object` (it is read for its frozen contract, not mutated) and returns
- * `null` when not found.
+ * `entity_object` and returns `null` when not found. The row carries every §5.1
+ * registry column the trainer writes (`ArtifactSha256`, `ArtifactStatus`,
+ * `ArtifactCheckedAt`, `Delivery`, `TrainingRunID`, `TrainingSnapshotID`,
+ * `EvaluationProtocolID`, `PredictionUnitID`, `SnapshotHash`, `FeatureSchemaHash`,
+ * `CodeVersion`, `OutputSemantics`): scoring verifies its artifact against
+ * `ArtifactSha256` and records `ArtifactStatus` on this same row, so it must be an
+ * entity. The validated `ModelRegistryEntry` of a row is a separate read,
+ * `RegistryEntries.Load` (`registry/registry-entry.ts`).
  */
 export class RunViewMLModelLoader implements IMLModelLoader {
   /** @inheritdoc */

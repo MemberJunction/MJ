@@ -92,10 +92,13 @@ export interface ModelRegistryEntry {
   /** The persisted status; only the lifecycle gate writes it. */
   readonly Status: PersistedModelStatus;
   /**
-   * What the gate delivered. Scoring loads its artifact: for keep-simple-baseline that is the simple member's artifact.
-   * A no-signal delivery has no artifact and no model row.
+   * What the gate delivered, as the model row stores it (`MJ: ML Models.Delivery`): the frozen view
+   * {@link RegisteredDelivery.Register} issued when the row was written. The entry is the audit record of that delivery,
+   * not a re-issuance: only the write path issues a {@link RegisteredDelivery}, and publish re-derives it from stored
+   * data ({@link PublishRules.ReverifyPublish}) rather than trusting this view (D4-83). Scoring loads its artifact: for
+   * keep-simple-baseline that is the simple member's artifact. A no-signal delivery has no artifact and no model row.
    */
-  readonly Delivery: RegisteredDelivery;
+  readonly Delivery: RegisteredDeliveryView;
   /** Where the model came from: the exact version rows and files it was trained and evaluated on. */
   readonly Lineage: {
     /** The `MJ: ML Training Snapshots` row the model was trained on. */

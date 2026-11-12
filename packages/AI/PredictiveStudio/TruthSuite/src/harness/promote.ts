@@ -66,6 +66,8 @@ export class HarnessModels {
       Algorithm: algoDriver,
       Status: m.Status,
       TrainingRowCount: m.TrainingRowCount,
+      ArtifactStatus: m.ArtifactStatus,
+      ArtifactSha256: m.ArtifactSha256,
       HoldoutRowCount: HarnessModels.parseHoldoutRowCount(m.Lineage),
       Metrics: HarnessModels.parseMetrics(m.Metrics),
       HoldoutMetrics: HarnessModels.parseMetrics(m.HoldoutMetrics),

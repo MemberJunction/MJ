@@ -14,6 +14,7 @@ import {
   PSIDriftDetector,
 } from '../psi-drift-detector';
 import { RunFeatureValueView, type FeatureValueDoubleRow } from '../../__tests__/feature-value-view-double';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /** A provider whose batched reads answer from `rows` as the database would; records every view it was asked for. */
 function featureValueProvider(rows: readonly FeatureValueDoubleRow[], views: RunViewParams[] = []): IMetadataProvider {
@@ -540,12 +541,16 @@ describe('psi-drift-detector', () => {
       // 25 processes -> batches of 10, 10, 5 processes (20, 20, 10 views)
       const processIds = [...Array.from({ length: 24 }, (_, i) => `rp-${i}`), 'rp-trunc'];
 
+      const errors = ConsoleCapture.Errors();
       const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(processIds, {
         Provider: fakeProvider,
         ContextUser: { ID: 'user-1' } as UserInfo,
         MaxRows: 50,
       });
 
+      expect(ConsoleCapture.Lines(errors)).toEqual([
+        "Drift evaluation for 'rp-trunc' was truncated at MaxRows (50) per window: the oldest rows of a full window were not read.",
+      ]);
       expect(loads).toHaveLength(25);
       expect(batchSizes).toEqual([20, 20, 10]);
       expect(loads.filter((l) => l.Input?.Truncated === true).map((l) => l.RecordProcessID)).toEqual(['rp-trunc']);
@@ -749,6 +754,7 @@ describe('psi-drift-detector', () => {
 
       it('keeps the newest MaxRows rows of each window, so a capped process still has an evaluation window', async () => {
         const rows = windowRows(80, 80);
+        const errors = ConsoleCapture.Errors();
         const input = await LoadFeatureAndPredictionDriftFromFeatureValues({
           RecordProcessID: 'rp-capped',
           Provider: featureValueProvider(rows),
@@ -757,6 +763,9 @@ describe('psi-drift-detector', () => {
           MinSampleSize: 10,
         });
 
+        expect(ConsoleCapture.Lines(errors)).toEqual([
+          "Drift evaluation for 'rp-capped' was truncated at MaxRows (50) per window: the oldest rows of a full window were not read.",
+        ]);
         expect(input.Truncated).toBe(true);
         expect(input.NumericFeatures?.['Score']?.Baseline).toHaveLength(50);
         expect(input.NumericFeatures?.['Score']?.Evaluation).toHaveLength(50);

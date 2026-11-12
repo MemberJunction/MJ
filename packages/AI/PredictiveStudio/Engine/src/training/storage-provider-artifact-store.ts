@@ -5,8 +5,11 @@
  * ({@link PredictiveStudioStorage}: `PS_STORAGE_PROVIDER`, default "Local File System"). Each artifact is an object
  * under `predictive-studio/model-artifacts/<fresh UUID>/<name>` and an `MJ: Files` row naming its provider and key.
  *
- * Every save gets a fresh key, so no other save shares its object: a save whose `MJ: Files` row fails removes the
- * object it just wrote, and a rollback ({@link StorageProviderArtifactStore.Delete}) removes the object, then the row.
+ * Every save gets a fresh key, so no other save shares its object, and storage is write-once: a save refuses a key that
+ * already holds an object, or that another save in this process is writing ({@link ObjectKeyReservations}), with
+ * {@link ArtifactAlreadyStoredError} before writing anything, so stored bytes are never replaced. A save returns the
+ * {@link StoredFile} it wrote, with the SHA-256 of the stored bytes. A save whose `MJ: Files` row fails removes the
+ * object it just wrote, and a rollback ({@link StorageProviderArtifactStore.delete}) removes the object, then the row.
  * Rows are written and read as the user of the {@link PredictiveStudioStorage} the store is built over.
  *
  * A model `MJ: Files` row with an empty `ProviderKey` was written before model files went through the storage provider:
@@ -17,11 +20,14 @@ import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 
 import { LogError, LogWarning } from '@memberjunction/core';
+import type { StoredFile } from '@memberjunction/predictive-studio-core';
 import { IsSafeStorageObjectKey } from '@memberjunction/storage';
 
+import { SnapshotHash } from '../snapshot/snapshot-hash';
 import { PredictiveStudioStorage, type StorageDriverBinding } from '../storage/ps-storage-provider';
 import { LocalArtifactPath, ResolveLocalArtifactBaseDir } from './artifact-store';
-import type { IArtifactStore, IEntityFactory } from './types';
+import { ObjectKeyReservations } from './object-key-reservations';
+import { ArtifactAlreadyStoredError, type IArtifactStore, type IEntityFactory } from './types';
 
 /** {@link IArtifactStore} over the configured MJ storage provider. */
 export class StorageProviderArtifactStore implements IArtifactStore {
@@ -58,15 +64,35 @@ export class StorageProviderArtifactStore implements IArtifactStore {
   }
 
   /**
-   * Stores the bytes under a fresh key and records the `MJ: Files` row.
+   * Stores the bytes under a fresh key, write-once, and records the `MJ: Files` row. Write-once is `ObjectExists` then
+   * `PutObject` (`FileStorageBase` has no conditional put), so the save first reserves its key in this process
+   * ({@link ObjectKeyReservations}) and holds it until the row is saved: a second save of the same key started meanwhile
+   * is refused instead of passing the same `ObjectExists` and overwriting. Across processes, the fresh UUID in every key
+   * is what keeps two saves off one key.
    *
+   * @returns the stored file: its row, provider and key, and the SHA-256 and size of the bytes written
+   * @throws ArtifactAlreadyStoredError when the key already holds an object, or another save in this process is writing
+   *   it (nothing is written)
    * @throws Error when the name is not one safe key segment (before anything is stored), when storage refuses the
    *   object, or when the row cannot be saved (the object is removed first)
    */
-  public async save(bytes: Uint8Array, name: string): Promise<string> {
+  public async save(bytes: Uint8Array, name: string): Promise<StoredFile> {
     const objectKey = StorageProviderArtifactStore.objectKeyFor(name);
-    const contentType = name.toLowerCase().endsWith('.json') ? 'application/json' : 'application/octet-stream';
     const binding = await this.storage.ConfiguredDriver();
+    const reservations = ObjectKeyReservations.Instance;
+    if (!reservations.TryReserve(binding.Provider.ID, objectKey)) throw new ArtifactAlreadyStoredError(objectKey);
+    try {
+      return await this.writeOnce(binding, objectKey, bytes, name);
+    } finally {
+      reservations.Release(binding.Provider.ID, objectKey);
+    }
+  }
+
+  /** The write-once write of a reserved key: refuse an existing object, put the bytes, record the row. */
+  private async writeOnce(binding: StorageDriverBinding, objectKey: string, bytes: Uint8Array, name: string): Promise<StoredFile> {
+    const contentType = name.toLowerCase().endsWith('.json') ? 'application/json' : 'application/octet-stream';
+    if (await binding.Driver.ObjectExists(objectKey)) throw new ArtifactAlreadyStoredError(objectKey);
+    const sha256 = SnapshotHash.Sha256Hex(bytes);
     if (!(await binding.Driver.PutObject(objectKey, Buffer.from(bytes), contentType))) {
       throw new Error(`Predictive Studio model artifacts: storage provider "${binding.Provider.Name}" refused ${objectKey}`);
     }
@@ -79,7 +105,7 @@ export class StorageProviderArtifactStore implements IArtifactStore {
       await StorageProviderArtifactStore.removeUnrecordedObject(binding, objectKey);
       throw new Error(`Predictive Studio model artifacts: saving the MJ: Files row for ${objectKey} failed: ${row.Error}`);
     }
-    return row.ID;
+    return { fileId: row.ID, storageProviderId: binding.Provider.ID, providerKey: objectKey, sha256, sizeBytes: bytes.byteLength, writeOnce: true };
   }
 
   /**

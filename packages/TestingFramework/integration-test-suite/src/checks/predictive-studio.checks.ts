@@ -76,7 +76,7 @@ async function loadModelRow(id: string, user: UserInfo): Promise<MJMLModelEntity
 function stubInferenceDeps(): MLInferenceDeps {
     return {
         modelLoader: { loadModel: async () => null },
-        artifactLoader: { load: async () => null },
+        artifactLoader: { load: async (fileId: string) => ({ Kind: 'absent', FileID: fileId }) },
         sidecar: {
             predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [], classOrder: null }),
         },

@@ -33,7 +33,7 @@ import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjun
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
-import type { MLInferenceDeps, IArtifactLoader } from '../scoring/types';
+import type { ArtifactBytesRead, MLInferenceDeps, IArtifactLoader } from '../scoring/types';
 import type { MLInferenceResultPayload } from '../scoring/ml-model-inference-processor';
 import type {
   IScoreRecordSetRunner,
@@ -357,7 +357,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
    */
   protected missingArtifactLoader(): IArtifactLoader {
     return {
-      async load(): Promise<Uint8Array | null> {
+      async load(): Promise<ArtifactBytesRead> {
         throw new Error(
           'Score Record Set: no artifact loader is configured. Supply MLInferenceDeps with a production ' +
             'IArtifactLoader (StorageProviderArtifactLoader) when constructing ProductionScoreRecordSetRunner.',

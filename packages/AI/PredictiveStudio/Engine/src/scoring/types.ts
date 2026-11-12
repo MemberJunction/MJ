@@ -69,10 +69,20 @@ export interface IMLModelLoader {
 }
 
 /**
+ * One read of a stored artifact's bytes: the bytes, or the file id whose `MJ: Files` row or stored object is gone. The
+ * read never verifies anything; the artifact registry (`ArtifactRegistry.Load`) turns it into a verified `ArtifactLoad`.
+ */
+export type ArtifactBytesRead =
+  | { readonly Kind: 'read'; readonly Bytes: Uint8Array }
+  | { readonly Kind: 'absent'; readonly FileID: string };
+
+/**
  * Read seam for fetching the serialized model artifact bytes by file id (the
  * read-side counterpart to the training `IArtifactStore.save`). Reads through the
  * storage provider the file's `MJ: Files` row names in production
- * (`StorageProviderArtifactLoader`); tests inject an in-memory map.
+ * (`StorageProviderArtifactLoader`); tests inject an in-memory map. Callers load through
+ * the artifact registry (`ArtifactRegistry.Load`), which verifies the bytes against the
+ * model's registered SHA-256.
  */
 export interface IArtifactLoader {
   /**
@@ -81,9 +91,9 @@ export interface IArtifactLoader {
    * @param fileId the `MLModel.ArtifactFileID` value
    * @param contextUser the acting user the file row is read as (required: a call site without one is a compile error)
    * @param provider the provider the file row is read through (required: no fallback to the global provider)
-   * @returns the artifact bytes, or `null` when not found
+   * @returns the bytes, or `absent` naming the file when its row or stored object is gone (never a quiet null)
    */
-  load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<ArtifactBytesRead>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

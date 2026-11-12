@@ -156,8 +156,11 @@ export type CleanupPredictionUnitRow = CleanupRow & Pick<MJMLPredictionUnitEntit
 /** An Evaluation Protocol row: a cleanup row with its version (later versions are deleted before their lineage root). */
 export type CleanupEvaluationProtocolRow = CleanupRow & Pick<MJMLEvaluationProtocolEntity, 'Version'>;
 
-/** A training run row: a cleanup row with the Training Snapshot it trained on and its stored results (which name the trainer's artifact files). */
-export type CleanupTrainingRunRow = CleanupRow & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID' | 'ValidationResults'>;
+/**
+ * A training run row: a cleanup row with the Training Snapshot it trained on, its stored results (which name the
+ * trainer's artifact files), and the model it produced, which cleanup clears and saves before that model is deleted.
+ */
+export type CleanupTrainingRunRow = CleanupRow & Pick<BaseEntity, 'Save'> & Pick<MJMLTrainingRunEntity, 'TrainingSnapshotID' | 'ValidationResults' | 'ResultingModelID'>;
 
 /** A Training Snapshot row: a cleanup row with its three stored files. */
 export type CleanupSnapshotRow = CleanupRow & Pick<MJMLTrainingSnapshotEntity, 'MatrixFileID' | 'RowManifestFileID' | 'ProvenanceFileID'>;
@@ -219,7 +222,9 @@ export class HarnessCleanup {
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
-   * runs, run details and watermarks; training runs; then models, the Training Snapshots the runs trained on and the
+   * runs, run details and watermarks; then the run/model cycle (a run names the model it produced in `ResultingModelID`,
+   * and the model names the run in `TrainingRunID`): each run's `ResultingModelID` that names a model being deleted is
+   * cleared and saved, then the models, then the training runs; then the Training Snapshots the runs trained on and the
    * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
    * artifact files and every artifact file a run's stored trainer result names (stored object, then row), pipelines,
    * the recorded Evaluation Protocol versions (pipelines, runs and snapshots reference them), and last the recorded
@@ -236,14 +241,30 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: Process Runs', r.ProcessRuns)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Process Watermarks', r.Watermarks)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Processes', r.Processes)),
-      ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', r.Runs)),
+      ...(await HarnessCleanup.detachRunsFromModels(r.Runs, new RecordIDSet(r.Models.map((m) => m.ID)))),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', r.Models, (id) => records.ModelIDs.Delete(id))),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', r.Runs)),
       ...(await HarnessCleanup.deleteSnapshots(store, r.Snapshots)),
       ...(await HarnessCleanup.deleteStoredFiles(store, r.Files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', r.Pipelines, (id) => records.PipelineIDs.Delete(id))),
       ...(await HarnessCleanup.deleteEvaluationProtocols(store, records)),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
     ];
+  }
+
+  /**
+   * Clears and saves `ResultingModelID` on every run that names one of `modelIds`, so the models can be deleted before
+   * the runs they reference (`MJ: ML Models.TrainingRunID`). Returns one line per run whose save failed; its model's
+   * delete then fails too and is reported on its own line.
+   */
+  private static async detachRunsFromModels(runs: readonly CleanupTrainingRunRow[], modelIds: RecordIDSet): Promise<string[]> {
+    const attached = runs.filter((r) => r.ResultingModelID !== null && modelIds.Has(r.ResultingModelID));
+    const failures = await Promise.all(attached.map(async (run) => {
+      run.ResultingModelID = null;
+      if (await run.Save()) return null;
+      return `MJ: ML Training Runs ${run.ID}: could not clear ResultingModelID before its model is deleted: ${run.LatestResult?.CompleteMessage || 'Save() returned false'}`;
+    }));
+    return failures.filter((f): f is string => f !== null);
   }
 
   /** Every row `DeleteRecorded` deletes before the protocol and unit versions: the models' side, then the runs' side. */

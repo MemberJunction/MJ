@@ -25,6 +25,7 @@ import type {
   TrainerResult,
   CandidateSpec,
   PREDICTOR_ARTIFACT_FORMAT,
+  StoredFile,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJMLTrainingPipelineEntity,
@@ -133,22 +134,34 @@ export interface ITrainerEvaluator {
 /** Builds a trainer request again with freshly pre-authorised snapshot downloads (the rest of the request is unchanged). */
 export type TrainerRequestReissue = () => Promise<TrainerRequest>;
 
+/** A save refused because its storage key already holds an object: model artifacts are write-once. */
+export class ArtifactAlreadyStoredError extends Error {
+  /** @param ProviderKey the storage key that already holds an object */
+  constructor(public readonly ProviderKey: string) {
+    super(`Predictive Studio model artifacts: ${ProviderKey} already holds an object, and model artifacts are write-once`);
+    this.name = 'ArtifactAlreadyStoredError';
+  }
+}
+
 /**
  * Artifact-storage seam (plan §11). The serialized model artifact is persisted
  * out-of-row and referenced by file id on the `MJ: ML Models` row
- * (`ArtifactFileID`). The production implementation writes a `MJ: Files` record;
- * tests use an in-memory map.
+ * (`ArtifactFileID`). Storage is write-once: no save replaces bytes already stored under a key. The production
+ * implementation writes a `MJ: Files` record; tests use an in-memory map.
  */
 export interface IArtifactStore {
   /**
-   * Persist the serialized artifact bytes under a name and return the storage
-   * file id to record on the model. The store writes as the user it was built for.
+   * Persist the serialized artifact bytes under a name, write-once, and return the stored file. The store writes as
+   * the user it was built for.
    *
    * @param bytes the serialized model artifact
    * @param name a human-readable artifact name (e.g. `model-<pipeline>-v<version>.bin`)
-   * @returns the file id to store in `MLModel.ArtifactFileID`
+   * @returns the stored file: its `fileId` (to store in `MLModel.ArtifactFileID`), provider and key, and the SHA-256
+   *   and size of the stored bytes
+   * @throws ArtifactAlreadyStoredError when the key the bytes would be written to already holds an object (nothing is
+   *   written)
    */
-  save(bytes: Uint8Array, name: string): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  save(bytes: Uint8Array, name: string): Promise<StoredFile>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that

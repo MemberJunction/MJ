@@ -24,7 +24,7 @@ import type {
   TrainerRequest,
   TrainerResult,
 } from '@memberjunction/predictive-studio-core';
-import { EvaluationProtocol } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocol, type JsonValue } from '@memberjunction/predictive-studio-core';
 import { TrainingEngine } from '../../training/training-engine';
 import { InMemoryArtifactStore } from '../../training/artifact-store';
 import type { IEntityFactory, IRecordLoader, ITrainerEvaluator, TrainModelResult, TrainingDeps } from '../../training/types';
@@ -89,6 +89,48 @@ export class FakeMLModel extends FakeEntity {
   public Version = 0;
   public AlgorithmID = '';
   public ArtifactFileID: string | null = null;
+  /** The registered SHA-256 of the model's artifact (the training engine records the stored file's). */
+  public ArtifactSha256: string | null = null;
+  /** The registry entry's lineage and delivery columns (§5.1), which the training engine records on a trainer model row. */
+  public TrainingRunID: string | null = null;
+  public TrainingSnapshotID: string | null = null;
+  public EvaluationProtocolID: string | null = null;
+  public PredictionUnitID: string | null = null;
+  public SnapshotHash: string | null = null;
+  public FeatureSchemaHash: string | null = null;
+  public CodeVersion: string | null = null;
+  public OutputSemantics: string | null = null;
+  public Delivery: string | null = null;
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'unverified';
+  public ArtifactCheckedAt: Date | null = null;
+
+  /** `Delivery` read as the generated `DeliveryObject` accessor reads it ({@link FakeMLModel.ReadJSONField}). */
+  public get DeliveryObject(): MJMLModelEntity['DeliveryObject'] {
+    return FakeMLModel.ReadJSONField<NonNullable<MJMLModelEntity['DeliveryObject']>>('Delivery', this.Delivery);
+  }
+
+  /** `CodeVersion` read as the generated `CodeVersionObject` accessor reads it ({@link FakeMLModel.ReadJSONField}). */
+  public get CodeVersionObject(): MJMLModelEntity['CodeVersionObject'] {
+    return FakeMLModel.ReadJSONField<NonNullable<MJMLModelEntity['CodeVersionObject']>>('CodeVersion', this.CodeVersion);
+  }
+
+  /**
+   * Exactly what a generated `<Field>Object` accessor does (`BaseEntity.GetJSONFieldObject` → `JSONFieldBinding.GetValue`,
+   * `MJCore/src/generic/jsonFieldBinding.ts` `parseRaw`): null for a null or empty column, a throw naming the field for
+   * text that is not JSON, and otherwise the parsed value, typed as the field's JSONType with no shape check (the
+   * accessor's own `as TObject`; this one deliberate test-double cast mirrors it). The accessor validates nothing, which
+   * is why `RegistryEntries.Load` checks the value it returns against Core's zod schemas (`RegistrySchemas`).
+   */
+  public static ReadJSONField<T>(fieldName: string, raw: string | null): T | null {
+    if (raw === null || raw === '') return null;
+    let parsed: JsonValue;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      throw new Error(`JSON field '${fieldName}' does not contain valid JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return parsed as unknown as T;
+  }
   public FittedPreprocessing: string | null = null;
   public FeatureSchema = '';
   public TargetVariable = '';

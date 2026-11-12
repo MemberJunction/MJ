@@ -28,6 +28,7 @@ import type { PersistedModelStatus } from '@memberjunction/predictive-studio-cor
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
+import { ConsoleCapture } from './fixtures/console-capture';
 
 /** The publish-record columns a case sets; every other column takes the valid value for the row's `Kind`. */
 type PublishRecordOverrides = Partial<
@@ -98,6 +99,23 @@ async function unsavedRow<T extends BaseEntity>(entityName: string, fill: (row: 
   row.NewRecord();
   fill(row);
   return row;
+}
+
+/**
+ * Saves a row the database should refuse, with the SQL provider's error log captured so it is asserted rather than
+ * printed: whether it saved, and the logged text.
+ */
+async function saveCapturingErrors(row: BaseEntity): Promise<{ Saved: boolean; Logged: string }> {
+  const save = await ConsoleCapture.During('error', () => row.Save());
+  return { Saved: save.Result, Logged: save.Lines.join('\n') };
+}
+
+/** The row's save is refused, and both its result and the provider's error log name `constraint`. */
+async function expectRefused(row: BaseEntity, constraint: string): Promise<void> {
+  const { Saved, Logged } = await saveCapturingErrors(row);
+  expect(Saved).toBe(false);
+  expect(row.LatestResult?.CompleteMessage).toContain(constraint);
+  expect(Logged).toContain(constraint);
 }
 
 /** Save a new row of `entityName` with `fill` applied; throws with the provider's message when the save fails. */
@@ -297,7 +315,9 @@ async function deleteFixtures(f: ServingFixtures): Promise<void> {
 const BOOTSTRAP_TIMEOUT_MS = 120_000;
 
 beforeAll(async () => {
-  server = await BootstrapIntegrationServer();
+  const boot = await ConsoleCapture.During('log', () => BootstrapIntegrationServer());
+  expect(ConsoleCapture.UnexpectedBootstrapLines(boot.Lines)).toEqual([]);
+  server = boot.Result;
   pool = await TruthConnection.OpenPool();
 }, BOOTSTRAP_TIMEOUT_MS);
 
@@ -318,39 +338,35 @@ describe('ML model publish records refuse inconsistent rows', () => {
 
   it('refuses a user approver without a user', async () => {
     const r = await NewPublishRecord(server, { Kind: 'publish', ApproverKind: 'user', UserID: null });
-    expect(await r.Save()).toBe(false);
-    expect(r.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_Approver');
+    await expectRefused(r, 'CK_MLModelPublishRecord_Approver');
     // the other half of the cell: an automated-gate approver that names a user
     const gateWithUser = await NewPublishRecord(server, { Kind: 'publish', ApproverKind: 'automated-gate', UserID: server.User.ID });
-    expect(await gateWithUser.Save()).toBe(false);
-    expect(gateWithUser.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_Approver');
+    await expectRefused(gateWithUser, 'CK_MLModelPublishRecord_Approver');
   });
 
   it('refuses a sign-off that overrides flags with an empty reason', async () => {
     const r = await NewPublishRecord(server, { Kind: 'sign-off', OverridesFlags: OVERRIDDEN_FLAGS, Reason: '   ' });
-    expect(await r.Save()).toBe(false);
-    expect(r.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_Reason');
+    await expectRefused(r, 'CK_MLModelPublishRecord_Reason');
   });
 
   it('refuses a refusal record without a Refusal', async () => {
     const r = await NewPublishRecord(server, { Kind: 'refusal', Refusal: null });
-    expect(await r.Save()).toBe(false);
-    expect(r.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_Refusal');
+    await expectRefused(r, 'CK_MLModelPublishRecord_Refusal');
   });
 
   it('refuses a sign-off whose approver is the automated gate', async () => {
     const r = await NewPublishRecord(server, { Kind: 'sign-off', ApproverKind: 'automated-gate', UserID: null });
-    expect(await r.Save()).toBe(false);
-    expect(r.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_SignOff');
+    await expectRefused(r, 'CK_MLModelPublishRecord_SignOff');
   });
 
   it('refuses a publish record for a missing model', async () => {
     const r = await NewPublishRecord(server, { Kind: 'publish', ModelID: randomUUID() });
-    const saved = await r.Save();
+    const { Saved, Logged } = await saveCapturingErrors(r);
     // without FK_MLModelPublishRecord_Model the row saves; its random ModelID is outside the teardown's predicates
-    if (saved) unexpectedlySavedPublishRecordIDs.push(r.ID);
-    expect(saved).toBe(false);
+    if (Saved) unexpectedlySavedPublishRecordIDs.push(r.ID);
+    expect(Saved).toBe(false);
     expect(r.LatestResult?.CompleteMessage).toContain('FK_MLModelPublishRecord_Model');
+    expect(Logged).toContain('FK_MLModelPublishRecord_Model');
   });
 
   it('refuses a refused scoring run that wrote a score', async () => {
@@ -362,30 +378,26 @@ describe('ML model publish records refuse inconsistent rows', () => {
       r.Refusal = JSON.stringify({ kind: 'leakage-unknown', modelId: fixtures.Model.ID });
       r.Written = 1;
     });
-    expect(await run.Save()).toBe(false);
-    expect(run.LatestResult?.CompleteMessage).toContain('CK_MLScoringRun_Refused');
+    await expectRefused(run, 'CK_MLScoringRun_Refused');
   });
 
   it('refuses a second monitoring result for one model and period', async () => {
     await NewMonitoringResult(fixtures.Model.ID, fixtures.Run.ID);
     const second = await unsavedRow<MJMLMonitoringResultEntity>('MJ: ML Monitoring Results', fillMonitoringResult(fixtures.Model.ID, fixtures.Run.ID));
-    expect(await second.Save()).toBe(false);
-    expect(second.LatestResult?.CompleteMessage).toContain('UQ_MLMonitoringResult_ModelPeriod');
+    await expectRefused(second, 'UQ_MLMonitoringResult_ModelPeriod');
   });
 
   it('refuses a second output binding for one model and surface', async () => {
     await createRow<MJMLOutputBindingEntity>('MJ: ML Output Bindings', fillOutputBinding(fixtures.Model.ID));
     const second = await unsavedRow<MJMLOutputBindingEntity>('MJ: ML Output Bindings', fillOutputBinding(fixtures.Model.ID));
-    expect(await second.Save()).toBe(false);
-    expect(second.LatestResult?.CompleteMessage).toContain('UQ_MLOutputBinding_ModelSurface');
+    await expectRefused(second, 'UQ_MLOutputBinding_ModelSurface');
   });
 
   it('refuses a second applied publish of one training run', async () => {
     const run = fixtures.Run;
     expect(await (await NewPublishRecord(server, { Kind: 'publish', TrainingRunID: run.ID })).Save()).toBe(true);
     const second = await NewPublishRecord(server, { Kind: 'publish', TrainingRunID: run.ID });
-    expect(await second.Save()).toBe(false);
-    expect(second.LatestResult?.CompleteMessage).toContain('UX_MLModelPublishRecord_OnePublishPerRun');
+    await expectRefused(second, 'UX_MLModelPublishRecord_OnePublishPerRun');
   });
 
   it('refuses a status outside the widened CHECK', async () => {
@@ -435,8 +447,7 @@ describe('ML model publish records refuse inconsistent rows', () => {
 
   it('refuses an adopt record that is not a publish', async () => {
     const r = await NewPublishRecord(server, { Kind: 'refusal', Purpose: 'adopt', TrainingRunID: fixtures.Run.ID });
-    expect(await r.Save()).toBe(false);
-    expect(r.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_Adopt');
+    await expectRefused(r, 'CK_MLModelPublishRecord_Adopt');
   });
 
   it('accepts a run-level refusal with no model and refuses any other row without one', async () => {
@@ -448,11 +459,9 @@ describe('ML model publish records refuse inconsistent rows', () => {
     // The orphan names the run without an applied publish: one naming publishedRun would be refused by
     // UX_MLModelPublishRecord_OnePublishPerRun before the CHECK is reached.
     const orphan = await NewPublishRecord(server, { Kind: 'publish', Purpose: 'publish', ModelID: null, TrainingRunID: noSignalRun.ID });
-    expect(await orphan.Save()).toBe(false);
-    expect(orphan.LatestResult?.CompleteMessage).toContain('CK_MLModelPublishRecord_RunLevel');
+    await expectRefused(orphan, 'CK_MLModelPublishRecord_RunLevel');
     const second = await NewPublishRecord(server, { Kind: 'refusal', Purpose: 'evaluate', ModelID: null, TrainingRunID: noSignalRun.ID });
-    expect(await second.Save()).toBe(false);
-    expect(second.LatestResult?.CompleteMessage).toContain('UX_MLModelPublishRecord_OneRunOutcome');
+    await expectRefused(second, 'UX_MLModelPublishRecord_OneRunOutcome');
   });
 
   it('the latest-value view returns the newest dated Champion row and never a Challenger', async () => {

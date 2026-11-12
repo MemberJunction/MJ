@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Registry and Gate",
+      "Description": "The PR 4 registry and lifecycle-gate gates: G3.1 (a lost artifact refuses loudly; a kept one scores bit-identically across a sidecar restart) and G3.2 (a swapped artifact is refused by SHA-256 mismatch). Needs MJAPI (STORAGE_LOCAL_ROOT set, PREDICTIVE_STUDIO_SIDECAR_URL at the truth sidecar), the truth sidecar running (pnpm run truth:sidecar, which writes .run/sidecar.url and .run/sidecar.pid) and `pnpm run truth:provision` done; the mj test process needs STORAGE_LOCAL_ROOT too. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Registry and Gate\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S7.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BC3E24A7-AF70-4EDA-915C-C6AC04212C14"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=R1 -> S7.1",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7DB65E9E-A8BE-40C7-90B9-2A967F493B0C"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B0ABE64F-71E4-4777-A67D-9232C6D07A38"
+    }
+  }
+]

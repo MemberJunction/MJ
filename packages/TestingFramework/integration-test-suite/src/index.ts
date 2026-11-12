@@ -147,6 +147,8 @@ export * from './checks/ps-gate-t2p-s-t-5.checks';
 export * from './checks/ps-gate-t2p-s-t-6.checks';
 export * from './checks/ps-gate-t1p-s-t-3.checks';
 export * from './checks/ps-gate-t2p-s-t-4.checks';
+export * from './checks/ps-gate-w1-s7-1.checks';
+export * from './checks/ps-gate-r1-s7-1.checks';
 export * from './checks/ps-truth-datasets.checks';
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';

@@ -4,7 +4,7 @@ import { PredictiveStudioRefusals } from '../refusals';
 import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
-import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../../scoring/model-readiness';
+import { ArtifactUnavailableError, ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../../actions/run-experiment.deps';
 
 describe('PredictiveStudioRefusals', () => {
@@ -16,6 +16,13 @@ describe('PredictiveStudioRefusals', () => {
     expect(PredictiveStudioRefusals.CodeOf(new ModelNotServableError('m1'))).toBe('MODEL_NOT_SERVABLE');
     expect(PredictiveStudioRefusals.CodeOf(new ExperimentSessionsUnavailableError())).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
     expect(PredictiveStudioRefusals.CodeOf(new InvalidMajorityBaselineRuleError('off'))).toBe('INVALID_EVALUATION_SETTING');
+  });
+
+  it('maps each artifact refusal to its own code', () => {
+    const refused = (refusal: ArtifactUnavailableError['Refusal']) => new ArtifactUnavailableError(refusal, 'MLModelInferenceProcessor', 'm1', 'f1');
+    expect(PredictiveStudioRefusals.CodeOf(refused({ kind: 'artifact-missing', fileId: 'f1' }))).toBe('ARTIFACT_MISSING');
+    expect(PredictiveStudioRefusals.CodeOf(refused({ kind: 'artifact-hash-mismatch', expected: 'a'.repeat(64), actual: 'b'.repeat(64) }))).toBe('ARTIFACT_HASH_MISMATCH');
+    expect(PredictiveStudioRefusals.CodeOf(refused({ kind: 'artifact-unverified', modelId: 'm1' }))).toBe('ARTIFACT_UNVERIFIED');
   });
 
   it('maps each training refusal kind that has a code, and leaves every other kind to the generic code', () => {

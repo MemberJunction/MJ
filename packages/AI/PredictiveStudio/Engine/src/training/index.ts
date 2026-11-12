@@ -12,6 +12,7 @@ export * from './unit-model-lineage';
 export * from './trainer-model-lineage';
 export * from './artifact-store';
 export * from './storage-provider-artifact-store';
+export * from './object-key-reservations';
 export * from './seams';
 export * from './as-of-refusal';
 export * from './training-refusal';

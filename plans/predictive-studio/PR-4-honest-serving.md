@@ -126,10 +126,14 @@ pnpm run build
 
 **One database, enforced (D-074).** Every `mj migrate`, `mj codegen`, `mj sync push`, `mj test` and MJAPI start in this
 PR runs as `"$PLANS/tools/ps-env.sh" <command>`, which loads `.env.MJ_PS_PR4_<agent>` (`PS_MJ`, `PS_AGENT`, or
-`PS_ENV_FILE` to override) and refuses with **exit 3** when `DB_DATABASE` does not start with `MJ_PS_PR4_`. For the
-mutating commands (`mj migrate`, `mj codegen`, `mj sync push`) and for an MJAPI start (a command line naming
-`packages/MJAPI` or `start:api`) it also refuses with **exit 4** when a session from another process is attached to that
-database; `mj test` skips that check because the client-transport suites need MJAPI running on the same database.
+`PS_ENV_FILE` to override) and refuses with **exit 3** when `DB_DATABASE` does not start with `MJ_PS_PR4_`. It refuses
+the root turbo form `pnpm run start:api` with **exit 5** (D4-84): turbo's strict env mode passes only `GRAPHQL_PORT` and
+the Redis variables to MJAPI, so the `DB_*` values are dropped and MJAPI opens `packages/MJAPI/.env`'s database (M2.4
+measured ~60 s against `MJ_BranchableRuns`, OF4-11). The only MJAPI start form is
+`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && <env vars> pnpm run start'`. For the mutating commands
+(`mj migrate`, `mj codegen`, `mj sync push`) and for an MJAPI start (a command line naming `packages/MJAPI`) it also
+refuses with **exit 4** when a session from another process is attached to that database; `mj test` skips that check
+because the client-transport suites need MJAPI running on the same database.
 
 Read the regenerated diff after CodeGen: append any `CodeGen_Run_*.sql` to the migration that caused it (after at least
 50 blank lines) or delete it if there was no DDL; restore `sync` blocks CodeGen writes back into `metadata/**/*.json`.
@@ -170,9 +174,19 @@ Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you di
   configured` (Prediction Units at M1's exit; 12 of 12 once exported). Run one suite at a time against one MJAPI. A scratch sidecar or pytest run
   that imports the truth suite needs its env: `PREDICTIVE_STUDIO_PYTHON=$MJ/packages/AI/PredictiveStudio/TruthSuite/.venv/bin/python`,
   `PYTHONPATH=$MJ/packages/AI/PredictiveStudio/TruthSuite/python`, `TRUTH_DATA_DIR=$MJ/packages/AI/PredictiveStudio/TruthSuite/.data`.
-- A running truth sidecar (`cd packages/AI/PredictiveStudio/TruthSuite && pnpm run truth:sidecar`, URL in
-  `TruthSuite/.run/sidecar.url`) keeps the Python it loaded: after any change under `Sidecar/src/python/` restart it and
-  restart MJAPI with the new `PREDICTIVE_STUDIO_SIDECAR_URL`. At M1's exit a sidecar started before M1.4 refused every
+- A running truth sidecar (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && PS_GIT_SHA=$(git rev-parse HEAD) TRUTH_SIDECAR_PORT=<port> pnpm run truth:sidecar'`,
+  URL in `TruthSuite/.run/sidecar.url`, pid in `.run/sidecar.pid`) keeps the Python it loaded: after any change under
+  `Sidecar/src/python/` restart it and restart MJAPI with the new `PREDICTIVE_STUDIO_SIDECAR_URL` (or the same one, when
+  `TRUTH_SIDECAR_PORT` pins the port). The sidecar stamps every trained model's `CodeVersion.psGitSha` from
+  `PS_GIT_SHA` and writes `"unrecorded"` when it is unset (`Sidecar/src/python/app/code_version.py:45`);
+  `scripts/sidecar.mts` sets it to the checkout's `git rev-parse HEAD` when the caller did not (M2's exit), so every
+  start path, `HarnessSidecar.Restart` included, records the real SHA. Models trained before M2's exit record
+  `"unrecorded"`.
+- The TruthSuite DB lane (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && STORAGE_LOCAL_ROOT=$HOME/.mj-ps/pr4-${AGENT}/storage pnpm run test:db -- <filter>'`)
+  runs every DB-lane file whatever the filter (`vitest.db.config.ts`; four files at M2: isolation 2, serving-schema 21,
+  artifact-registry 13, dataset-loader 2 = 38), and it loads Engine's `dist`, not its `src`: rebuild Engine
+  (`cd packages/AI/PredictiveStudio/Engine && pnpm run build`) after any Engine change, and after each guard flip and
+  each restore, before the lane can see it. At M1's exit a sidecar started before M1.4 refused every
   training request `422 extra_forbidden` on the four new `promotion` members (7 of 10 Containment gates red until it
   was restarted).
 
@@ -180,7 +194,10 @@ Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you di
 
 - **MJAPI** on `4041`, started from `packages/MJAPI` with the env loaded, never through the root turbo script (D-074):
   `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`; **Explorer** on `4241`. Wait for a real
-  connection: `until curl -s -o /dev/null --max-time 3 http://localhost:4041/; do sleep 5; done; echo UP`.
+  connection: `until curl -sf -o /dev/null --max-time 3 http://localhost:4041/healthcheck; do sleep 5; done; echo UP` (`-f`
+  and `/healthcheck`, measured at M2's exit: MJServer binds the port before its bootstrap finishes and answers every
+  request `503` with `Retry-After` until it is ready (`packages/MJServer/src/index.ts:462`), so a probe that accepts any
+  response passes ~10 s early and the first GraphQL call fails `GraphQL Error (Code: 503)`).
 - **Python sidecar** (Python 3.11; `numpy==1.26.4` does not install on ≥ 3.13). On macOS: `brew install libomp cmake`
   and `export DYLD_LIBRARY_PATH=/opt/homebrew/opt/libomp/lib`. Then
   `cd packages/AI/PredictiveStudio/Sidecar && python3.11 -m venv .venv && pnpm run setup:python` (the script reuses the
@@ -301,6 +318,8 @@ packages/React/runtime/src/utilities/runtime-utilities.ts
 packages/React/runtime/src/__tests__/runtime-utilities-ml.test.ts
 # M3.4: RD9's documentation row names ProductionModelPromotionGate (:340), which M3.4 deletes
 packages/TestingFramework/integration-test-suite/docs/platform-suite.md
+# M2.4: the unit test of PR 4's own new gate helper ps-gates/ps-gate-registry.ts (D-082, D4-70: a test of PR 4's own code)
+packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-registry.test.ts
 # The bundle barrel and the pinned bundle counts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
@@ -1940,6 +1959,11 @@ require and the frozen union (`psi | ks | chi-square`, block replay) cannot.
   model with no stored `FeatureImportance` to run the dominance test on, D4-61). A written `ScoredRow` is persisted as
   one `MJ: Feature Values` row (mapping in §5.8.1); its `modelVersion`, `artifactSha256` and `featureSchemaHash` are read
   through `MLModelID`/`MLScoringRunID`, not copied onto the row.
+- **D4-83 (M2.3, the stored delivery is the audit record).** `ModelRegistryEntry.Delivery` (PascalCase in the port,
+  above) is `RegisteredDeliveryView` — the frozen view `MJ: ML Models.Delivery` stores, parsed through the `DeliveryObject`
+  JSONType and validated against `RegistrySchemas` — not a re-issued `RegisteredDelivery`: only the write path
+  (`createTrainerModelRow`, `RegisteredDelivery.Register(Delivery.Create(…))`) issues one. The contract's
+  `readonly delivery: RegisteredDelivery` in §3.3 stays verbatim (D-028).
 - **D-035 (no SQL text in code).** `RegistryInvariantCheck.query` holds the name of a stored Query
   (`Predictive Studio: Pipelines With More Than One Published Model`, `metadata/queries/`, SQL Server only,
   ruling S2, D-057) instead of the SQL string; the registry driver runs it with `RunQuery` on its provider. The SQL text is
@@ -1992,11 +2016,15 @@ export interface ScoringContext extends RegistryContext {
 
 // Engine/src/registry/artifact-registry.ts — write-once provider storage + verification (replaces the local store)
 export interface IArtifactRegistry {
-  /** ObjectExists → throws ArtifactAlreadyStoredError; else PutObject; returns the SHA-256 of the stored bytes. */
+  /**
+   * Reserve the key (ObjectKeyReservations, D4-86) → ObjectExists → throws ArtifactAlreadyStoredError for an existing
+   * or reserved key; else PutObject and the file row; release; returns the SHA-256 of the stored bytes.
+   */
   Store(bytes: Uint8Array, name: string, ctx: RegistryContext): Promise<StoredFile>;
   /** Re-verifies the SHA-256 on every load; `missing` / `hash-mismatch` are values, never a quiet null. */
   Load(model: Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'ArtifactSha256'>, ctx: RegistryContext): Promise<ArtifactLoad>;
 }
+// Engine/src/training/types.ts, beside IArtifactStore (D4-81: in the store file it closed an import cycle)
 /** Typed so callers branch on `instanceof`, never on message text (standards §2). */
 export class ArtifactAlreadyStoredError extends Error {
   constructor(public readonly ProviderKey: string) { super(`artifact object already exists: ${ProviderKey}`); }
@@ -2948,6 +2976,14 @@ or nulled before those tables' `DELETE`. `Source = 'Model'` rows of a model bein
 `MLModelID` (§5.8.1); #6180's procedure (`V202611101901`) only nulled it, and PR 4's keeps that line after the delete.
 A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a milestone re-creates the procedure. The exact statement order and the policy entries are written in M1's task (kickoff design §8).
 
+**The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
+names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
+`DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
+(`V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql:661`) and `MLModel.TrainingRunID` for the doomed runs (`:739`),
+then deletes the runs (`:751`) and the models (`:752`). The TruthSuite `HarnessCleanup` mirrors that order through the
+entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
+then delete the models, then the runs), pinned by its two cleanup-order tests.
+
 ## 6. Milestones (Ready)
 
 Each milestone is sized for one agent session and is written in the Ready format (§8.3). Every milestone's exit
@@ -3552,8 +3588,12 @@ row is saved), `TrainingRunID`, `TrainingSnapshotID`, `EvaluationProtocolID`, `P
 `ArtifactLoad` — `verified`, `missing`, `hash-mismatch` (both hashes named) or `unverified` (no registered hash) — never a
 quiet `null`; the scoring loader refuses the three non-verified loads with a typed `ArtifactUnavailableError` carrying
 the `ScoringRefusal` (`artifact-missing`, `artifact-hash-mismatch`, `artifact-unverified`) and writes the model's
-`ArtifactStatus`; `ModelNeedsTrainingError` stays only for "no model configured" and "model not found", and the
-auto-train trigger keeps reacting to a missing artifact through the new error. G3.1 and G3.2 turn green.
+`ArtifactStatus`; `ModelNeedsTrainingError` stays only for "no model configured", "model not found" and a model row with
+no `ArtifactFileID` (never trained), so `artifact-missing` always names a real file id, and the auto-train trigger reacts
+to the never-trained error and to `ArtifactUnavailableError` with `artifact-missing` only (D4-82). The production
+registry is built per request by `ArtifactRegistry.ForContext(ctx, loader)` (the store writes as the request's user on
+its provider); the shadow challenger loads through it without writing its own `ArtifactStatus`. G3.1 and G3.2 turn
+green.
 
 **Decided at the tier upgrade (recorded in §9.1 by this milestone's commit):** no per-host local copy exists to keep:
 on `599c288dee` `StorageProviderArtifactLoader.load` (`scoring/storage-provider-artifact-loader.ts:24`) reads every
@@ -3596,7 +3636,7 @@ second write of a key as production does) · Test `Engine/src/training/__tests__
 read only) · Produces `ArtifactAlreadyStoredError(ProviderKey)` (typed, §5.2), `IArtifactStore.save(bytes, name):
 Promise<StoredFile>` (`StoredFile` from `Core/src/registry-contracts.ts`, camelCase, `writeOnce: true`)
 
-- [ ] Step 1: Write the failing test (the store over `MemoryStorageAccount`, the double the file already uses,
+- [x] Step 1: Write the failing test (the store over `MemoryStorageAccount`, the double the file already uses,
   `Engine/src/__tests__/fakes/storage-fakes.ts:17`; `KeyFor` and `Sha256Hex` are the file's own helpers):
   ```ts
   it('refuses to overwrite an existing object and writes nothing', async () => {
@@ -3610,19 +3650,22 @@ Promise<StoredFile>` (`StoredFile` from `Core/src/registry-contracts.ts`, camelC
     expect(local.Objects.get(stored.providerKey)).toEqual(bytes);
   });
   ```
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/training/__tests__/storage-provider-artifact-store.test.ts`
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/training/__tests__/storage-provider-artifact-store.test.ts`
   → 2 failed: `ArtifactAlreadyStoredError` is not exported; `save` resolves to a string.
-- [ ] Step 3: Implement `StorageProviderArtifactStore.save(bytes: Uint8Array, name: string): Promise<StoredFile>`
+- [x] Step 3: Implement `StorageProviderArtifactStore.save(bytes: Uint8Array, name: string): Promise<StoredFile>`
   (`Engine/src/training/storage-provider-artifact-store.ts`; the interface member `IArtifactStore.save` in
   `training/types.ts` gets the same return type) and `class ArtifactAlreadyStoredError extends Error { constructor(public
-  readonly ProviderKey: string) }` (same file, exported): `save` checks `binding.Driver.ObjectExists(objectKey)` first and throws
-  `ArtifactAlreadyStoredError(objectKey)`, hashes with `node:crypto` `createHash('sha256')`, puts, saves the file row
-  as today, and returns `{ fileId, storageProviderId: binding.Provider.ID, providerKey: objectKey, sha256, sizeBytes,
-  writeOnce: true }`; `storeTrainerArtifacts` keeps the `StoredFile` per candidate; every other `IArtifactStore`
-  implementation returns the same shape.
-- [ ] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 1246 (measured on
+  readonly ProviderKey: string) }` (in `Engine/src/training/types.ts` beside `IArtifactStore`, exported — in the store
+  file it closed an import cycle between the two store files, D4-81): `save` reserves the key in the process-wide
+  `ObjectKeyReservations` (`Engine/src/training/object-key-reservations.ts`, D4-86), checks
+  `binding.Driver.ObjectExists(objectKey)` and throws `ArtifactAlreadyStoredError(objectKey)` for an existing or reserved
+  key, hashes with `node:crypto` `createHash('sha256')`, puts, saves the file row as today, releases the key, and returns
+  `{ fileId, storageProviderId: binding.Provider.ID, providerKey: objectKey, sha256, sizeBytes, writeOnce: true }`;
+  `storeTrainerArtifacts` keeps the `StoredFile` per candidate and logs each stored key and hash verbose-only
+  (`LogStatusEx({ verboseOnly: true })`); every other `IArtifactStore` implementation returns the same shape.
+- [x] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 1246 (measured on
   `599c288dee`'s tree, 84 files) + the new cases, 0 failed.
-- [ ] Step 5: Runtime: train W1-signal s42 through MJAPI (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`,
+- [x] Step 5: Runtime: train W1-signal s42 through MJAPI (`"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'`,
   `PredictiveStudio.TrainModel`); `SELECT f.ProviderKey FROM __mj.[File] f JOIN __mj.MLModel m ON m.ArtifactFileID = f.ID WHERE m.ID = @model`
   → one key under `predictive-studio/model-artifacts/`; `shasum -a 256 "$STORAGE_LOCAL_ROOT/<key>"` equals Task M2.3's
   `ArtifactSha256`.
@@ -3646,7 +3689,7 @@ Promise<StoredFile>` (`StoredFile` from `Core/src/registry-contracts.ts`, camelC
 `ArtifactRegistry.ArtifactStatusOf(load: ArtifactLoad): MJMLModelEntity['ArtifactStatus']`,
 `ArtifactUnavailableError` (`Refusal: Extract<ScoringRefusal, { kind: 'artifact-missing' | 'artifact-hash-mismatch' | 'artifact-unverified' }>`)
 
-- [ ] Step 1: Write the failing tests:
+- [x] Step 1: Write the failing tests:
   ```ts
   it('names both hashes when the stored bytes changed', async () => {
     loader.Set(fileId, otherBytes);
@@ -3663,9 +3706,9 @@ Promise<StoredFile>` (`StoredFile` from `Core/src/registry-contracts.ts`, camelC
   });
   ```
   The file has one case per coverage-table row that names it (the table below), and `auto-train.test.ts` the reuse case.
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/registry src/scoring/__tests__/ml-model-inference-processor.test.ts src/scoring/__tests__/auto-train.test.ts`
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/registry src/scoring/__tests__/ml-model-inference-processor.test.ts src/scoring/__tests__/auto-train.test.ts`
   → the cases fail (`artifact-registry` not found; Preflight throws `ModelNeedsTrainingError`).
-- [ ] Step 3: Implement, in `Engine/src/registry/artifact-registry.ts`, `export interface IArtifactRegistry { Store(bytes:
+- [x] Step 3: Implement, in `Engine/src/registry/artifact-registry.ts`, `export interface IArtifactRegistry { Store(bytes:
   Uint8Array, name: string, ctx: RegistryContext): Promise<StoredFile>; Load(model: Pick<MJMLModelEntity, 'ID' |
   'ArtifactFileID' | 'ArtifactSha256'>, ctx: RegistryContext): Promise<ArtifactLoad> }` and `export class ArtifactRegistry
   implements IArtifactRegistry` (`constructor(store: IArtifactStore, loader: IArtifactLoader)`, plus `public static
@@ -3674,15 +3717,20 @@ Promise<StoredFile>` (`StoredFile` from `Core/src/registry-contracts.ts`, camelC
   with `export type ArtifactBytesRead = { readonly Kind: 'read'; readonly Bytes: Uint8Array } | { readonly Kind:
   'absent'; readonly FileID: string }`; in `Engine/src/scoring/model-readiness.ts` `export class ArtifactUnavailableError
   extends Error { constructor(public readonly Refusal: Extract<ScoringRefusal, { kind: 'artifact-missing' |
-  'artifact-hash-mismatch' | 'artifact-unverified' }>) }`. `loadModel` calls
+  'artifact-hash-mismatch' | 'artifact-unverified' }>, public readonly Source: string, public readonly ModelID: string,
+  public readonly FileID: string) }` (D4-82: the message names the model, its file and, on a mismatch, both hashes),
+  plus `ChallengerUserRequiredError` (`scoring/shadow-scoring.ts`: a shadow challenger run without an acting user) and
+  `RegistryContextMismatchError` (`registry/artifact-registry.ts`: a `ForContext` registry called with another user or
+  provider). `Load` decides in the order missing →
+  unverified → hash-mismatch → verified. `loadModel` calls
   `registry.Load`, throws `ArtifactUnavailableError` for every non-`verified` load after saving the model's
   `ArtifactStatus`/`ArtifactCheckedAt` (a save that changes no `Status`; a failed save is logged with
   `LatestResult.CompleteMessage` and does not mask the refusal); the auto-train trigger (`:197`) reacts to
   `ArtifactUnavailableError` with `artifact-missing` as it reacted to the missing-artifact `ModelNeedsTrainingError`;
   `OperationRefusals` maps the three refusals to the three new codes.
-- [ ] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed;
+- [x] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed;
   `cd packages/AI/PredictiveStudio/Core && pnpm test` → 0 failed.
-- [ ] Step 5: Runtime: Task M2.1's model; delete its object (`rm "$STORAGE_LOCAL_ROOT/<key>"`), restart MJAPI, call
+- [x] Step 5: Runtime: Task M2.1's model; delete its object (`rm "$STORAGE_LOCAL_ROOT/<key>"`), restart MJAPI, call
   `PredictiveStudio.ScoreRecordSet` for it → refused with code `ARTIFACT_MISSING` and 0 rows written;
   `SELECT ArtifactStatus FROM __mj.MLModel WHERE ID = @model` → `missing`.
 
@@ -3697,7 +3745,7 @@ fields) · Test `Engine/src/training/__tests__/trainer-model-row.test.ts`
 (`ValidationResults.gate`), the snapshot's `ContentHash`/`FeatureSchemaHash` · Produces the §5.1 `MLModel` columns on
 every trainer-path model
 
-- [ ] Step 1: Write the failing test:
+- [x] Step 1: Write the failing test:
   ```ts
   it('records the stored artifact hash, lineage columns and the registered delivery', async () => {
     const model = await TrainOnFixture(engine, { Outcome: 'model' });
@@ -3712,9 +3760,11 @@ every trainer-path model
   });
   ```
   The file has one case per coverage-table row that names it.
-- [ ] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/training/__tests__/trainer-model-row.test.ts`
-  → 2 failed (`ArtifactSha256` undefined; the corrupt artifact is stored).
-- [ ] Step 3: Implement, keeping the private signatures in `Engine/src/training/training-engine.ts` —
+- [x] Step 2: `cd packages/AI/PredictiveStudio/Engine && pnpm vitest run src/training/__tests__/trainer-model-row.test.ts`
+  → 2 failed (`ArtifactSha256` is null; the corrupt artifact is already refused before the store by
+  `checkAnswerBelongsToRun`, but its message does not name `sha256` — D4-83: that pre-store refusal now names it and
+  precedes the post-store `StoredFile.sha256` comparison and rollback).
+- [x] Step 3: Implement, keeping the private signatures in `Engine/src/training/training-engine.ts` —
   `storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps):
   Promise<ReadonlyMap<string, StoredFile>>` (was `ReadonlyMap<string, string>`), `createTrainerModelRow(x:
   TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, stored: StoredFile): Promise<MJMLModelEntity>`
@@ -3725,8 +3775,8 @@ every trainer-path model
   model row (PR 3's `shippedArtifact` returns null, `training-engine.ts:635`, `:637`, and the shipped tests
   `training-engine.test.ts:1007`, `:1049` pin it; keep-list row 2), so they have no `Delivery` here: M3's
   `LifecycleGate.Evaluate({ trainingRunId })` records their outcome per run (D4-56).
-- [ ] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed.
-- [ ] Step 5: `SELECT ArtifactSha256, ArtifactStatus, JSON_VALUE(Delivery, '$.artifact.sha256') FROM __mj.MLModel WHERE ID = @model`
+- [x] Step 4: Step 2's command → passes; `cd packages/AI/PredictiveStudio/Engine && pnpm test` → 0 failed.
+- [x] Step 5: `SELECT ArtifactSha256, ArtifactStatus, JSON_VALUE(Delivery, '$.artifact.sha256') FROM __mj.MLModel WHERE ID = @model`
   → the two hashes equal, `verified`.
 
 #### Task M2.4: Gates G3.1 `W1 -> S7.1` and G3.2 `R1 -> S7.1`
@@ -3735,6 +3785,8 @@ every trainer-path model
 `metadata-optional/integration-test/tests/gates/.gate-R1-S7.1.json`,
 `packages/TestingFramework/integration-test-suite/src/checks/ps-gate-w1-s7-1.checks.ts` (`PsGateW1S71Checks`, check
 `ps-gate-w1-s7-1.G3.1`), `…/checks/ps-gate-r1-s7-1.checks.ts` (`PsGateR1S71Checks`, `ps-gate-r1-s7-1.G3.2`),
+`…/checks/ps-gates/ps-gate-registry.ts` (`PsGateRegistry.ScoreAll`, `PredictionDigest.Of`, the servable fixture models)
+and its unit test `…/src/__tests__/ps-gate-registry.test.ts` (D-082, D4-70: a test of PR 4's own new helper),
 `metadata-optional/integration-test/test-suites/.ps-gates-registry-and-gate-suite.json` (`Predictive Studio Gates —
 Registry and Gate`, the first flip that needs it), `packages/AI/PredictiveStudio/TruthSuite/src/harness/artifact-objects.ts`
 (`ArtifactObjects.RemoveStoredObject(h: TruthHarness, modelId: string): Promise<string>` and
@@ -3754,7 +3806,7 @@ the same URL and waits for its health route; D4-59) · Modify `packages/AI/Predi
 "client", checks: [{type: "ps-gate-w1-s7-1"}]}`, `Status` `Active`, `uuidgen` key); breaking scenarios and mutation
 checks are §4.1a's rows G3.1 and G3.2, shipped in the same commit (D-064)
 
-- [ ] Step 1: Write the checks (`export const PsGateW1S71Checks: NamedCheck[]`, `export const PsGateR1S71Checks:
+- [x] Step 1: Write the checks (`export const PsGateW1S71Checks: NamedCheck[]`, `export const PsGateR1S71Checks:
   NamedCheck[]`, each registered with `IntegrationCheckRegistry.Instance.Register` and `RegisterLifecycle(…, PsGate.Lifecycle)`
   as the shipped `ps-gate-w2-c1-1.checks.ts` does):
   ```ts
@@ -3787,13 +3839,13 @@ checks are §4.1a's rows G3.1 and G3.2, shipped in the same commit (D-064)
   only a comment), so the MJAPI half of S7.1's "restart MJAPI and the sidecar" is M2's runtime exit step, which compares
   the same digest across a restart of both; D4-59.) G3.2 — train two R1 models, `ArtifactObjects.CopyStoredObject(h, second, first)`, score the first →
   `RefusalCode === 'ARTIFACT_HASH_MISMATCH'` and `ErrorMessage` naming both hashes (1 of 1).
-- [ ] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Registry and Gate"`
+- [x] Step 2: `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite "Predictive Studio Gates — Registry and Gate"`
   with Task M2.2 stashed → 2 failed (the attempt reports success after a quiet `null`; the swap scores).
-- [ ] Step 3: Restore Task M2.2; run the D-064 mutations of §4.1a (`**Mutation check G3.1:**`, `**Mutation check G3.2:**`)
+- [x] Step 3: Restore Task M2.2; run the D-064 mutations of §4.1a (`**Mutation check G3.1:**`, `**Mutation check G3.2:**`)
   one at a time and paste each failing assertion into §11 as `**Mutation output G3.1:**` / `**Mutation output G3.2:**`.
-- [ ] Step 4: Step 2's command → 2 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test`
+- [x] Step 4: Step 2's command → 2 passed, 0 failed; `cd packages/TestingFramework/integration-test-suite && pnpm test`
   → 0 failed (total measured at M2: the local tree's package differs from `599c288dee`).
-- [ ] Step 5: `SELECT t.Name, t.Status FROM __mj.Test t WHERE t.Name IN ('W1 -> S7.1','R1 -> S7.1')` → 2 rows `Active`.
+- [x] Step 5: `SELECT t.Name, t.Status FROM __mj.Test t WHERE t.Name IN ('W1 -> S7.1','R1 -> S7.1')` → 2 rows `Active`.
 
 **Coverage table**
 
@@ -3810,7 +3862,7 @@ checks are §4.1a's rows G3.1 and G3.2, shipped in the same commit (D-064)
 | multiclass | the delivery records the shipped artifact's class order | `trainer-model-row.test.ts › keeps the artifact's class order in the registered delivery` |
 | deleted parent or child | the `MJ: Files` row deleted, the object still present | `artifact-registry.test.ts › returns missing when the file row is gone` |
 | concurrent publish | two saves to one object key | `storage-provider-artifact-store.test.ts › refuses to overwrite an existing object and writes nothing` |
-| unauthorized user | a load as a user who cannot read the `MJ: Files` row | `artifact-registry.adversarial.db.test.ts › a user without read on the file row gets missing, not bytes` |
+| unauthorized user | a load as a user who cannot read the `MJ: Files` row (D4-85: refused loudly, not an artifact state) | `artifact-registry.adversarial.db.test.ts › a reader without read on MJ: Files is refused loudly, naming the permission; never bytes, never an ArtifactLoad; the model's ArtifactStatus is unchanged` |
 
 #### Task M2.5: Adversarial harness
 
@@ -3820,19 +3872,21 @@ milestone; counts, cells and claims go to §11.
 
 **Files:** Create `packages/AI/PredictiveStudio/TruthSuite/src/__tests__/artifact-registry.adversarial.db.test.ts`
 
-- [ ] Step 1: Write the harness over the real `StorageProviderArtifactStore`, `StorageProviderArtifactLoader` and
+- [x] Step 1: Write the harness over the real `StorageProviderArtifactStore`, `StorageProviderArtifactLoader` and
   `ArtifactRegistry` on `MJ_PS_PR4_<agent>`'s `Local File System` provider: one real artifact, then one row per
   coverage cell — a truncated object, a zero-byte object, the bytes of another model, a deleted `MJ: Files` row, a legacy
   row whose local file was edited, a key written twice in parallel (`Promise.all` of two `save`s with one forced key),
-  a reader user without read permission on `MJ: Files` (`MJ_TEST_USER_EMAIL` set to the suite's restricted user).
-- [ ] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- artifact-registry'`
+  a reader user without read permission on `MJ: Files` (the seeded `it-nogrant@integration.test` principal, 0 roles,
+  built through the bootstrap provider; D4-85).
+- [x] Step 2: The reviewer runs `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/AI/PredictiveStudio/TruthSuite && pnpm run test:db -- artifact-registry'`
   → every case's load is the cell's expected `ArtifactLoad` status and no case returns bytes that do not hash to the
   registered SHA-256; counts measured at M2.
-- [ ] Step 3: The reviewer flips each M2 guard (the `ObjectExists` refusal; the SHA-256 comparison at load; `missing`
-  returned as `null`; the trainer-hash comparison) → a named case of Step 2 or of the Engine tests fails each time.
-- [ ] Step 4: A claim the harness breaks is fixed at the invariant (one helper, a cross-surface test) before the milestone
+- [x] Step 3: The reviewer flips each M2 guard (the `ObjectExists` refusal; the SHA-256 comparison at load; `missing`
+  returned as `null`; the trainer-hash comparison) → a named case of Step 2 or of the Engine tests fails each time. The
+  lane loads Engine's `dist`: rebuild Engine after each flip and after each restore.
+- [x] Step 4: A claim the harness breaks is fixed at the invariant (one helper, a cross-surface test) before the milestone
   closes, and the harness re-run → 0 claims broken.
-- [ ] Step 5: Counts (cases, cells, claims broken), and each mutation's failing case, written to §11.
+- [x] Step 5: Counts (cases, cells, claims broken), and each mutation's failing case, written to §11.
 
 **Exit tests:**
 
@@ -3846,22 +3900,23 @@ milestone; counts, cells and claims go to §11.
   predictions files byte-identical by `shasum -a 256`, both hashes pasted into §11; D4-59);
   `SELECT ArtifactSha256 FROM __mj.MLModel WHERE ID = @model` equals `shasum -a 256` of the stored object.
 - `cd packages/TestingFramework/integration-test-suite && pnpm test` and the TruthSuite DB lane
-  (`pnpm run test:db -- artifact-registry`) → 0 failed (counts measured at M2); the sidecar and truth-suite pytest →
+  (`pnpm run test:db -- artifact-registry`, which runs all four DB-lane files: isolation 2, serving-schema 21,
+  artifact-registry 13, dataset-loader 2 = 38 at M2) → 0 failed (counts measured at M2); the sidecar and truth-suite pytest →
   0 failed (counts measured at M2; the sidecar suite also in CI, Task M1.6); `Integration Tests — Deterministic` (D4-79's two forms) and the §4.2 keep-list suites → 0 failed.
 
 **Milestone exit, in order (design §6.5; M2 ships no UI, so there is no UI step):**
 
-- [ ] exit tests above run, each count measured and written into §11
-- [ ] Task M2.5's harness run by the reviewer (D-071), its counts, cells and claims in §11
-- [ ] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
-- [ ] tasks ticked
-- [ ] §11 entry `### <date> — <agent> — M2` with the counts, the `**Mutation output G3.1:**` and `**Mutation output G3.2:**` lines
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
+- [x] exit tests above run, each count measured and written into §11
+- [x] Task M2.5's harness run by the reviewer (D-071), its counts, cells and claims in §11
+- [x] self-audit of every added and changed line against `reference/coding-standards.md`, findings fixed
+- [x] tasks ticked
+- [x] §11 entry `### <date> — <agent> — M2` with the counts, the `**Mutation output G3.1:**` and `**Mutation output G3.2:**` lines
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ"` (no `--edit-pr`) → §10's generated facts and
   `.changeset/ps-honest-serving.md` refreshed from the working-tree changes, before the commit (D-073)
-- [ ] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M2` → exit 0, summary in the commit body
-- [ ] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
-- [ ] `git push` through the pre-push hook (D-072)
-- [ ] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
+- [x] `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M2` → exit 0, summary in the commit body
+- [x] one checkpoint commit, each path staged by name (the plan and `.changeset/ps-honest-serving.md` among them)
+- [x] `git push` through the pre-push hook (D-072)
+- [x] `node $PLANS/tools/pr-body.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --edit-pr` → the open PR's body from §10 (the only file it changes is
   §10's `gen:head`, which rides in the next commit)
 
 **Milestone exit (UI first where the milestone ships UI, D-076):** `pr-body.mjs` (no `--edit-pr`) → `node $PLANS/tools/milestone-exit.mjs --plan plans/predictive-studio/PR-4-honest-serving.md --mj "$MJ" --milestone M2` → exit 0, summary in the commit body → one checkpoint commit (the plan and the changeset staged by name) → push (the pre-push hook runs `--mode pre-push`, D-072) → `pr-body.mjs --edit-pr`
@@ -8360,7 +8415,7 @@ checkpoint, and the pass is run again from Step 1)
 env loaded
 
 - [ ] Step 1: Rebuild and restart on the final head: `pnpm install` → `pnpm run build` → stop MJAPI and Explorer →
-  `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'` → `until curl -s -o /dev/null --max-time 3 http://localhost:4041/; do sleep 5; done; echo UP`
+  `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && pnpm run start'` → `until curl -sf -o /dev/null --max-time 3 http://localhost:4041/healthcheck; do sleep 5; done; echo UP`
   → `UP`; Explorer on :4241 started the same way; `git rev-parse --short HEAD` recorded.
 - [ ] Step 2: The UI walk first: `npx playwright test --config e2e/playwright.config.ts e2e/specs/ps-honest-serving-record-panel.spec.ts e2e/specs/ps-honest-serving-publish-flow.spec.ts`
   (env of Tasks M5b.9 and M7.6) → 7 passed, 0 failed; the screenshots and their database rows in §11.
@@ -9346,6 +9401,9 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   (`containment-probe.ts:56`, `ps-gate-w1-s7-3.checks.ts:47`, `:56`, `:62`, `ps-gate-w1-s7-5.checks.ts:27`, `:36`), and
   `LifecycleGate.Publish` checks the persisted status and the stored leakage flags after the idempotency short-circuit,
   under the locks (M3, M3.2). Alternative rejected: an owner flag per caller (D-033: nothing waits on a person).
+  Added at M2's exit (from the M2.5 review): `packages/TestingFramework/integration-test-suite/src/__tests__/ps-gate-registry.test.ts`,
+  the unit test of M2.4's own new helper `src/checks/ps-gates/ps-gate-registry.ts` (D-082: a test of PR 4's own code);
+  in M2.4's Files and §2.6.
 - **D4-71 · A virtual entity's grants and application link are metadata, not CodeGen output** (decided at M1, Task
   M1.2's review). CodeGen emits no `EntityPermission` or `ApplicationEntity` row for a virtual entity (the design and
   §5.8.4 said it would). `MJ: Latest Feature Values`' read-only grants live as metadata,
@@ -9441,6 +9499,59 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   failed `delete-entity-fk-coverage.test.ts` and next's `polymorphic-fk` standard). Alternatives rejected: a policy
   or test change for view-backed soft FKs (leaves the nondeterminism in place, and the test is outside the allowlist);
   dropping the LLM block alone (the next regeneration could infer it again).
+- **D4-81 · `ArtifactAlreadyStoredError` lives beside `IArtifactStore`; next's five Engine test type errors fixed as
+  caller maintenance** (decided at M2, Tasks M2.1/M2.2; recorded at M2's exit). The task text put the error class in
+  `storage-provider-artifact-store.ts`; `InMemoryArtifactStore` (`artifact-store.ts`) must throw it too and the store
+  file already imports `artifact-store.ts`, so that placement closed an import cycle between the two store files. It is
+  in `Engine/src/training/types.ts` beside `IArtifactStore`, and both stores import it from there. The five type errors
+  in Engine test files (`ml-model-inference-processor.test.ts:1059`, `shadow-scoring.test.ts:486`, `:635`, `:641`,
+  `:690`) are next's: PR 3's `74c0958863` (`Prediction.probabilities` and `PredictResponse.classOrder` required) and
+  `24beb8571f` (`IArtifactLoader.load` gained its `provider` argument) met #6180's tests (`721a714bae9`, `c4568212f75`,
+  `0758780a911`) written against the older types, and vitest does not typecheck; M2.2 fixed them as caller
+  maintenance (D-082), and the exit's test-inclusive typecheck (a scratch tsconfig extending Engine's with
+  `src/**/*`) reports 0 errors. Owner flag OF4-10: Engine's test files are typechecked by no gate.
+  `storeTrainerArtifacts`' per-run key and hash log is verbose-only (`LogStatusEx({ verboseOnly: true })`).
+- **D4-82 · `ModelNeedsTrainingError`'s three cases; the registry built per request** (decided at M2, Task M2.2 and its
+  fix round; recorded at M2's exit). `ModelNeedsTrainingError` covers no model configured, model not found, and a model
+  row with no `ArtifactFileID` (never trained), so `artifact-missing` always names a real file id; auto-train reacts to
+  the never-trained error and to `ArtifactUnavailableError` with `artifact-missing` only. `ArtifactRegistry.ForContext(ctx,
+  loader)` is the only production construction path (its store writes as the request's user on the request's
+  provider); `MLInferenceDeps` is unchanged and the auto-trainer takes a registry. The shadow challenger loads through
+  the registry and never writes its own `ArtifactStatus` (it is not the served model). `Load` decides missing →
+  unverified → hash-mismatch → verified. Fix round: `ArtifactUnavailableError(Refusal, Source, ModelID, FileID)`, whose
+  message names the model, its file and, on a mismatch, both hashes; `ChallengerUserRequiredError` (a shadow challenger
+  run without an acting user); `RegistryContextMismatchError` (a `ForContext` registry called with another user or
+  provider). The M2 Outcome and M2.2 Step 3 carry it.
+- **D4-83 · The stored delivery is the audit record; the registry entry is a separate read** (decided at M2, Task M2.3;
+  recorded at M2's exit). `ModelRegistryEntry.Delivery` is `RegisteredDeliveryView` (the stored view, parsed through the
+  `DeliveryObject` JSONType and validated against `RegistrySchemas`), not a re-issued `RegisteredDelivery`: issuing
+  happens only on the write path (§5.2's deviation list). `RegistryEntries.Load` returns `null` for an absent row and
+  throws `RegistryEntryIncompleteError(ModelID, MissingColumns)` for a row missing an entry column and
+  `RegistryEntryInvalidError(ModelID, Column, Errors)` for one whose column does not validate (legacy and `Unevaluated`
+  handling is M5's, R10); it is first consumed in M5, and `RunViewMLModelLoader` is unchanged (the row already carries
+  every §5.1 column). `Evaluation`/`LeakageFlags` come from the run's stored `ValidationResults.trainer`;
+  `PinnedFeatureVersions` is `[]` until PR 5. The trainer's pre-store `checkAnswerBelongsToRun` refusal (its message
+  now names `sha256`) precedes the post-store `StoredFile.sha256` comparison and its rollback of every stored artifact.
+  M2.3 Step 2's expected RED text is amended.
+- **D4-84 · `tools/ps-env.sh` refuses the turbo `start:api` form (exit 5)** (tooling, decided at M2, Task M2.4; plans
+  repo `4c67cd5`, with `2e38fcf` for `retime-migration` and `52ba0d1` for D-083's push gate). Turbo's strict env mode
+  passes only `GRAPHQL_PORT` and the Redis variables to the root `start` task, so `ps-env.sh pnpm run start:api` dropped
+  the `DB_*` values and MJAPI opened `packages/MJAPI/.env`'s `MJ_BranchableRuns` for ~60 s during M2.4 (OF4-11). The
+  only MJAPI start form is `"$PLANS/tools/ps-env.sh" bash -c 'cd packages/MJAPI && <env vars> pnpm run start'` (§2.3,
+  §2.4; no plan line used the turbo form through ps-env).
+- **D4-85 · An authorization failure is an error naming the permission, never an artifact state** (controller ruling at
+  M2, Task M2.5). A reader without read permission on `MJ: Files` gets the thrown error of
+  `PredictiveStudioStorage.LocationOf` (`ps-storage-provider.ts:104`, "User … does not have read permissions on MJ:
+  Files"): no bytes, no `ArtifactLoad`, and the model's `ArtifactStatus` unchanged. Mapping it to `missing` would write a
+  false status and let auto-train retrain over an intact artifact. The coverage table's unauthorized-user row names the
+  harness case that pins it.
+- **D4-86 · Write-once holds under concurrent saves of one key** (claim broken by Task M2.5's harness, fixed at the
+  invariant). Two concurrent `save`s of one forced key both passed `ObjectExists` before either `PutObject`, and two
+  `MJ: Files` rows named the key. `Engine/src/training/object-key-reservations.ts` (`ObjectKeyReservations`, a
+  `BaseSingleton` over `UUIDMap<Set<string>>`) reserves the key before the existence check and releases it after the
+  file row is saved; a reserved key is `ArtifactAlreadyStoredError`. Known limit (its JSDoc): the reservation set is per
+  process; across processes the fresh UUID in every production key prevents collisions. M2.1 Step 3 and §5.2's
+  write-once comment carry it.
 
 #### Kickoff review (D-070)
 
@@ -9534,7 +9645,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Five flags remain, each decided out of scope with its default implemented:
+updated as caller maintenance (§2.6). Seven flags remain, each decided out of scope with its default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
   (layering; D-062 (4): `ng-core-entity-forms` outside the `MLModels` and `model-predictions` folders is foundational,
@@ -9573,6 +9684,20 @@ updated as caller maintenance (§2.6). Five flags remain, each decided out of sc
   (`__mj_UpdatedAt` 19:57:27.29 / 19:57:27.31 on both entities), two `UPDATE [${flyway:defaultSchema}].[Entity]` statements at the
   head of `CodeGen_Run_2026-11-11_19-57-00.sql` (evidence copy in `.superpowers/sdd/PR-4-honest-serving/m2-start-evidence/`).
   **Default, implemented:** the run file is deleted (§2); nothing folded into PR 4's tail.
+- **OF4-10 · Engine's test files are typechecked by no gate** (recorded at M2's exit, D4-81). Engine's `tsconfig.json`
+  excludes `__tests__`, vitest transpiles without typechecking, and no CI step compiles them: five type errors from
+  next's own merge (`74c0958863`/`24beb8571f` × #6180's tests) sat in `next` unseen until M2.1's review compiled the
+  tests with a scratch config. Adding a test typecheck to the package or CI is outside PR 4's scope (D-062: a CI or
+  package-config change for every package). **Default, implemented:** each milestone exit runs the test-inclusive
+  typecheck by hand (Engine and Core, 0 errors) and records it in §11. (`CodeVersion.psGitSha` "unrecorded", the
+  candidate for this number, was fixed at the exit instead: `TruthSuite/scripts/sidecar.mts` sets `PS_GIT_SHA`.)
+- **OF4-11 · Rows written to `MJ_BranchableRuns` by one mis-started MJAPI are not cleaned** (recorded at M2's exit,
+  D4-84). The ~60 s MJAPI start of M2.4 (turbo `start:api`, `DB_*` dropped) wrote 4 `ScheduledJobRun` rows
+  (2026-11-11 23:05:26–27 UTC: Entity Vector Sync - Daily Completed, User Routine Dispatcher Completed, Agent Memory
+  Manager - Every 15 Minutes Failed, Geocoding Maintenance Completed with 0 rows changed), registered a Work Queue host and
+  a TaskGraphDispatcher instance, and created 0 agent runs there. That database belongs to another agent (D-074: never
+  write to a database you did not create), so PR 4 does not delete them. **Default, implemented:** the rows stay; the
+  owner of `MJ_BranchableRuns` decides; ps-env now refuses the form that caused it.
 
 ## 10. PR description draft
 
@@ -9618,10 +9743,10 @@ are monitored on real outcomes.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611110217__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
-- Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->0<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->c107293f26<!-- /gen:head -->
+- Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, STORAGE_LOCAL_ROOT<!-- /gen:env -->
+- Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->2<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
+- Head: <!-- gen:head -->c29e0150c7<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10270,6 +10395,109 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
 - **Gotchas / decisions:** OF4-9 (§9.4, §9.2). next's committed `sync.checksum` for ComponentLibrary ApexCharts
   (`91E9DB43…`) and Component DataGrid (`DB1253D8…`, `data-grid.spec.json` changed in `bb14d1845b` without one) are
   stale, so every `sync push` reports them "updated" and writes back — restore, no action.
+
+### 2026-11-12 07:28 CST — Claude (Opus 5.5, opus exit pass) — M2
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving` @ `c29e0150c7` before this commit; the checkpoint commit
+  `feat(ps): PR 4 M2 — write-once fingerprinted artifacts and verified loads` is pushed by this pass (D-072).
+  `origin/next` unchanged since M2's start (`7744b3eb1d`); no merge this pass.
+- **Database / ports:** `MJ_PS_PR4_claude` (truth suite, IT metadata, C1 corpus; 0 `PSTruth:` pipelines, 0 `MLModel`,
+  0 `MLTrainingRun`, 0 `MJ: Files` rows after the runs), MJAPI :4041 stopped after the runs; truth sidecar on
+  `http://127.0.0.1:64203` (`TRUTH_SIDECAR_PORT` pinned; pid in `TruthSuite/.run/sidecar.pid`) left running.
+- **Done this session:** Tasks M2.1–M2.5 (implemented and reviewed earlier, uncommitted) plus this exit pass in one
+  checkpoint commit. Plan: D4-81…D4-86 (§9.1), OF4-10/OF4-11 (§9.4), D4-70's list (+ `ps-gate-registry.test.ts`, also in
+  §2.6 and M2.4's Files), the M2 Outcome and M2.1/M2.2/M2.3/M2.5 task texts, §5.2 (D4-83 deviation; the registry
+  snippet's reservation and the error's file), §5.9 (the run/model cycle), §2.3 (ps-env exit 5, the only MJAPI start
+  form), §2 bootstrap (`PS_GIT_SHA`, the DB lane's four files and Engine `dist`), §2.4 and M8.3 (the readiness probe,
+  below), the coverage table's D4-85 row (11 of 12 cells matched an `it(...)` by grep; the 12th is renamed to the
+  harness case). Code at the exit: `TruthSuite/scripts/sidecar.mts` sets `PS_GIT_SHA` from `git rev-parse HEAD` when
+  unset; Engine's 25 stderr blocks captured and asserted (`evaluate-drift.action` 14, `shadow-scoring` 7,
+  `psi-drift-detector` 2, `ml-model-inference-processor` 1, `startup-register` 1, through `ConsoleCapture`); the DB
+  lane's 13 SQL-error blocks (serving-schema's refusal cases) and 6 bootstrap stdout blocks captured
+  (`TruthSuite/src/__tests__/fixtures/console-capture.ts`, shared by the four DB-lane files); self-audit fixes below.
+  Plans repo: `program/decisions.md` D-074 gains the exit-5 sentence (uncommitted there).
+- **Tests (measured at this exit, on the committed tree):**
+  - Engine `pnpm test` → `Test Files 92 passed (92)` / `Tests 1369 passed (1369)`; `stdout |` 0, `stderr |` 0 (25
+    before the capture). Engine baseline 1318 at M2's start (the plan's 1246 was `599c288dee`'s) → M2.1 1322 → M2.2 1345
+    (fix round 1353) → M2.3 1362 (fix round 1364) → M2.5 1369.
+  - Core `pnpm test` → `35 passed (35)` / `472 passed (472)` (468 at M2's start + M2.3's 4). TruthSuite `pnpm test` →
+    `21 passed (21)` / `120 passed (120)` (105 → 107 → 112 → 120). Sidecar vitest → `4 passed (4)` / `33 passed (33)`.
+    integration-test-suite `pnpm test` → `69 passed (69)` / `1021 passed (1021)` (1018 → 1021; bundle total 239).
+  - Typecheck with tests (scratch tsconfigs extending each package's, `src/**/*`): Engine 0 errors, Core 0, TruthSuite 0.
+    Builds: Core, Sidecar, Engine, TruthSuite, integration-test-suite `pnpm run build` → 0; root `pnpm run build` →
+    `Tasks: 321 successful, 321 total`.
+  - `Predictive Studio Gates — Registry and Gate` (`RUN_MUTATION_TESTS=1`) → **2 passed, 0 failed**
+    (`21C087D6-7FCB-4382-ADBF-1116297DC1FC`, 78 s): G3.1 "lost artifact refused ARTIFACT_MISSING after a warm score of
+    16776 of 16776 (ArtifactStatus missing); kept artifact scored 16776 (16776 predictions) before and 16776 (16776
+    predictions) of 16776 after a sidecar restart, predictions bit-identical"; G3.2 "the swapped artifact was refused
+    ARTIFACT_HASH_MISMATCH, naming both hashes" (`66747d5f…6ead` registered, `c60c43f1…061c` swapped in). The sidecar
+    `HarnessSidecar.Restart` brought back logged `PS_GIT_SHA c29e0150c7…` with none exported (the script's fallback).
+  - TruthSuite DB lane `test:db -- artifact-registry` (= `-- serving-schema`: the filter does not narrow it) →
+    `Test Files 4 passed (4)` / `Tests 38 passed (38)` (isolation 2, serving-schema 21, artifact-registry 13,
+    dataset-loader 2); `stdout |` 0, `stderr |` 0 (6 / 13 before the capture). Sidecar `test:python` → `495 passed`
+    (95.95 s); TruthSuite `test:python` → `24 passed`, mypy `no issues found in 48 source files`.
+  - Repo checks: `check-migration-entityfield-sequence.mjs` → exit 0 (`✓ no literal EntityField sequences in changed migrations`); `check:codegen-tail` → exit 0 (`460 entities across 3 generated artifacts; scanned all 794 migration(s)` … `OK`); `check:guards` → exit 0; `check:standards` → exit 0 (`✓ No errors. 14309 warning(s)`, 0 naming a file touched at this exit); `check:naming` → exit 0 (`✓ No errors.`).
+  - `Integration Tests — Deterministic`, CI's PR-lane form (no flag) → **122 passed / 0 failed / 23 skipped of 145,
+    skip gate PASSED** (261 allowed skips; `7BE76657-5B16-4D85-8DE5-DF13087B2CE9`, 1,112 s). With
+    `RUN_MUTATION_TESTS=1` → **143 / 1 / 1 of 145** (`DEDF4B33-5E7C-494A-AB80-0ADF97C86D20`, 1,329 s): the one failure is
+    next's `IT01` `server-cache.S34` ("a delete upserts nothing — expected 0, got 1", #6316's reload race, OF4-8; `ABV3`
+    passed this run); the skipped test is `IT52` (`RUN_SEARCH_TESTS` unset); skip gate FAILED on the same 8
+    environment skips as M1 (OF4-7: `server-cache.S30`, `role-elevation.RE6`, `realtime-session-verification.RSV1/2/4/5/6`,
+    `entity-server-invariants.ESI9`). 0 failures attributable to PR 4.
+  - §4.2 keep-list (`RUN_MUTATION_TESTS=1`, one at a time): Containment **10 / 0 / 0** (`741691D3-DB2C-4875-A3B6-9A37318A73F2`, 647 s); Prediction Units **12 / 0 / 0** (`8DC7224B-91BE-464C-B7B7-1F72A431B473`, 276 s); Training **35 / 0 / 0** (`E8F2783B-7679-4270-A581-51BE7A0B8505`, 1,116 s); Training (statistical) **6 / 0 / 0** (`F26EF48B-B7F0-41C2-996C-CC16D830CC8F`, 2,234 s); Feature Pipelines **0 / 5 / 0**, environment-blocked (D3-78: "Gate C1 → C2.x needs bizapps-common installed with its Feature Pipeline changes …", `fp-live-jobtitle.L1` "the job-title pipeline is installed (bizapps-common)"; `9F85737F-64F4-49C0-8B75-F59AF3F7E015`, 3 s). Each run rewrote `integration-test-suite/benchmark-logs/{history.jsonl,latest.json,latest.md}`; restored from the index (`git show :<path> > <path>`), not committed.
+- **M2.5 harness (reviewer, D-071; `task-M2.5-review.md`):** 13 cases (12 cells + the file-wide bytes check), 12 of
+  12 brief cells covered by the harness and the coverage table's other 3 by Engine unit tests (15 distinct M2 cells);
+  claims broken 2, fixed 2, open 0 (D4-86 write-once race → `ObjectKeyReservations`; D4-85 unauthorized reader →
+  ruled an error, row reworded). Guard flips, each with an Engine rebuild and a SHA-256-proven restore: `ObjectExists`
+  → "key written twice in parallel …" (`:516`); the load's SHA-256 comparison → 6 cases (hash-mismatch, legacy edited,
+  trainer path, truncated, zero-byte, every load); `missing` as `null` → "missing (object deleted) …", "deleted MJ:
+  Files row …", "every load …"; the trainer-hash comparison → the lane stays green (it runs no trainer) and Engine
+  `trainer-model-row.test.ts` fails 2 of 11; the D4-86 reservation → `:510` and Engine "refuses the second of two saves
+  of one key started together …"; the D4-85 mapping-to-missing → `:538`. Each harness run leaves 55
+  `__mj.RecordChange` rows (platform audit history of the rows it creates and deletes — not a leak).
+- **Mutation output G3.1:** `✗ ps-gate-w1-s7-1.G3.1: run fails loudly, 0 of 1: lost artifact not refused (the run succeeded: 0 scored, 16776 failed) after a warm score of 16776 of 16776 (ArtifactStatus verified); kept artifact scored 16776 (16776 predictions) before and 16776 (16776 predictions) of 16776 after a sidecar restart, predictions bit-identical, registered SHA-256 unchanged` (suite run `8D07A651-A7A5-4AFC-A761-8A1E0F40F4BA`; `artifact-registry.ts:112` → `if (read.Kind === 'absent') return { Status: 'verified', Sha256: model.ArtifactSha256 ?? '', Bytes: new Uint8Array() };`; G3.2 passed in the same run)
+- **Mutation output G3.2:** `✗ ps-gate-r1-s7-1.G3.2: refused by SHA-256 mismatch, 0 of 1: the swapped artifact scored 6000 of 6000 rows` (suite run `B28A0255-1E9B-47C8-9383-855B4726DF5B`; the comparison at `artifact-registry.ts:116` commented out; G3.1 passed in the same run). Restore hash-proven (`1a1f0220…bd32b`), suite green after.
+- **Runtime verification (G3.1 by hand, D4-59; MJAPI and sidecar through `tools/ps-env.sh`):** W1-signal s42 trained
+  and promoted Validated (`855B57AB-7B15-4B6F-97DC-12D3F0C1C7B7`): `ArtifactSha256` `a78ba176…b5c8` = `shasum -a 256` of
+  its object, `verified`, `CodeVersion.psGitSha` `c29e0150c7dc6adf24f00f83c0008c034591499c` (the real HEAD; every model
+  before this exit records `"unrecorded"`); warm score 16776 of 16776; object `rm`'d; MJAPI restarted → refused
+  `ARTIFACT_MISSING` ("… its model artifact file '10B6DE6C-…' is missing from storage …"), 0 scored;
+  `SELECT ArtifactStatus …` → `missing` (lifecycle `Status` still `Validated`). Retrained (`FFFC65FA-29BD-4078-987C-E8A7521EB884`),
+  scored 16776 of 16776 → predictions file; MJAPI **and** the sidecar restarted (`cached_models` 0) → 16776 of 16776 →
+  second file; both `shasum -a 256` **`ea13457a68efcf00c0467b29d5e1ad9e693faff51ecd1c44997955c1d6f068b6`**
+  (`cmp`: byte-identical, 16,776 lines of `RecordID⇥Score⇥Class`); `ArtifactSha256` unchanged (`a78ba176…b5c8` before and
+  after); `SELECT ArtifactSha256 FROM __mj.MLModel WHERE ID = @model` = `shasum -a 256` of the stored object
+  (`a78ba1764cb241649d0151abc6646f52498ca2e60c579beabf6bc4ee1193b5c8`). Cleanup by the harness: 0 `PSTruth:` pipelines,
+  0 models, 0 runs, 0 artifact `MJ: Files` rows; the empty key directories went in the orphan sweep. A first attempt
+  failed `GraphQL Error (Code: 503)` because the readiness probe accepted MJServer's startup-gate 503 (fixed in §2.4);
+  its two pipelines were adopted and deleted by the second run's cleanup.
+- **CI for `c29e0150c7`:** all 11 `pull_request` runs (Unit Tests `43095706911`, Integration Tier `43095706901`, MJ
+  standards `43095707141`, CLAUDE.md gate, Ensure migrations are valid, UI Sass trap, UI design tokens, Lockfile Guard,
+  Check Dependencies, Release Notes PR Gate, CodeQL) still `queued` with no conclusion at 2026-11-12T13:28Z — GitHub never
+  started them (created 2026-11-11T20:22:57Z; other branches' runs completed meanwhile; the PR's `mergeable` read
+  `UNKNOWN`). This push's runs supersede them; their result is read after the push (the next §11 entry records it).
+- **Orphan storage cleanup:** `MJ: Files` on `MJ_PS_PR4_claude` holds **0 rows** (any provider, any key) after the runs, so every object under `$HOME/.mj-ps/pr4-claude/storage` is unreferenced; every one is dated 2026-11-10 (before M1's rebuild). Decided by `comm` of the on-disk relative paths against the live `ProviderKey`s (0): orphans 300, live 0. Before: **300 files** (model-artifacts 147, training-snapshots 153) and **1,456 directories** under the two prefixes (model-artifacts 1,188, training-snapshots 268; 1,258 empty). Deleted the 300 files, then every empty directory below the two prefixes. After: **0 files**, the 3 prefix directories only; the DB lane twice afterwards → 38 / 38, storage still 0 files.
+- **Self-audit (`reference/coding-standards.md`, every added/changed line):** fixed — the store's module JSDoc (190-char
+  line wrapped; `{@link StorageProviderArtifactStore.Delete}` → `.delete`); the harness's module-local helpers camelCase
+  (`sha256Hex`, `artifactBytes`, `forceNextKeys`), `storedKeys` declared with the other file-level state, the double
+  blank line, the parallel case's rejected reasons narrowed with `instanceof ArtifactAlreadyStoredError` (no implicit
+  `any`); `options?.port ?? 0` and `?.has(…) ?? false` → `||`; the two `??` kept where `||` would be wrong commented
+  (`code ?? -1` — exit code 0; `v['task'] ?? null` — a falsy task refused as itself); three `views: unknown[]` fakes →
+  `RunViewParams[]`. Kept: the test-double `as unknown as IMetadataProvider/MJMLModelEntity` casts at fake seams (the
+  package's established pattern, each commented). No `any`, no `.Get()/.Set()`, no bare `new RunView()` /
+  `Metadata.Provider` in added production lines.
+- **State left behind:** the owner's 7 untracked files (never staged); truth sidecar running (above); MJAPI stopped;
+  the plans repo's `program/decisions.md` edit uncommitted; `benchmark-logs/{history.jsonl,latest.json,latest.md}`
+  restored from the index after the runs (not committed); OF4-11's rows in `MJ_BranchableRuns` untouched.
+- **Next step (exact):** M3, milestone start: `export PS_MJ="$MJ" PS_AGENT="$AGENT"`, then `git fetch origin next` and
+  `git rev-parse --short origin/next` recorded in §11 (M3's Milestone start list, first box).
+- **Gotchas / decisions:** D4-81 (error class beside `IArtifactStore`; next's test type errors; OF4-10), D4-82 (three
+  needs-training cases; `ForContext`; four-argument error), D4-83 (`RegisteredDeliveryView`; `RegistryEntries.Load`
+  null/throws), D4-84 (ps-env exit 5; the only MJAPI start form; OF4-11), D4-85 (authorization errors are errors), D4-86
+  (per-process key reservations). MJAPI is ready only when `/healthcheck` answers 200: the port is bound behind a 503
+  startup gate. The DB lane runs all four files and loads Engine's `dist`. Restarting the sidecar on the same URL needs
+  `TRUTH_SIDECAR_PORT`. A MJAPI restart through ps-env can be refused exit 4 for ~20 s while the previous process's or
+  a script's idle `node-mssql` sessions close.
 
 ## 12. Refresh log (append-only)
 

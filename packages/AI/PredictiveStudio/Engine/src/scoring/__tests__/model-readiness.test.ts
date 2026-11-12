@@ -11,7 +11,7 @@ import { InMemoryArtifactLoader } from '../artifact-loader';
 import {
   ModelHasTrainedArtifact,
   ModelNeedsTrainingMessage,
-  ModelArtifactMissingMessage,
+  ArtifactUnavailableError,
   ModelNeedsTrainingError,
   ModelNotServableError,
   ModelReadiness,
@@ -24,6 +24,9 @@ import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } fr
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { ArtifactRegistry } from '../../registry/artifact-registry';
+import { InMemoryArtifactStore } from '../../training/artifact-store';
+import { SnapshotHash } from '../../snapshot/snapshot-hash';
 
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
@@ -38,6 +41,13 @@ const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<strin
 
 const SCHEMA: FeatureSchemaEntry[] = [{ Name: 'tenure', Kind: 'numeric' }];
 
+/** The registered SHA-256 of the bytes each test stores under a file id (`setup` stores `file-1`, the auto-trainer `file-trained`). */
+const REGISTERED_SHA256: Record<string, string> = {
+  'file-1': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes')),
+  'file-trained': SnapshotHash.Sha256Hex(new TextEncoder().encode('trained-bytes')),
+  'file-elsewhere': SnapshotHash.Sha256Hex(new TextEncoder().encode('bytes stored on another host')),
+};
+
 /** A model fake exposing exactly what the processor reads. */
 class FakeModel {
   public Status: MJMLModelEntity['Status'] = 'Published';
@@ -51,7 +61,15 @@ class FakeModel {
     featureSteps: { Steps: [{ Id: 's1', Kind: 'select', Columns: ['tenure'] }] },
     asOfStrategy: { Mode: 'none' },
   });
-  constructor(public ID: string, public ArtifactFileID: string | null) {}
+  public ArtifactStatus: MJMLModelEntity['ArtifactStatus'] = 'verified';
+  public ArtifactCheckedAt: Date | null = null;
+  public ArtifactSha256: string | null;
+  constructor(public ID: string, public ArtifactFileID: string | null) {
+    this.ArtifactSha256 = ArtifactFileID === null ? null : REGISTERED_SHA256[ArtifactFileID] ?? null;
+  }
+  public async Save(): Promise<boolean> {
+    return true;
+  }
 }
 
 /** Loader fake keyed by model id. */
@@ -121,9 +139,8 @@ describe('model readiness helpers', () => {
     expect(ModelHasTrainedArtifact({ ID: 'm', ArtifactFileID: 'file-1' })).toBe(true);
   });
 
-  it('produces plain, actionable messages', () => {
+  it('produces a plain, actionable message', () => {
     expect(ModelNeedsTrainingMessage('m-1')).toMatch(/needs training/);
-    expect(ModelArtifactMissingMessage('m-1', 'f-1')).toMatch(/needs training on this server/);
   });
 });
 
@@ -174,10 +191,13 @@ describe('MLModelInferenceProcessor.Preflight — needs-training refusal', () =>
     expect((err as Error).message).toMatch(/needs training/);
   });
 
-  it('refuses a model whose artifact bytes are missing on this server', async () => {
+  it('refuses a model whose artifact bytes are missing on this server as artifact-missing, not "needs training"', async () => {
     const { deps } = setup([new FakeModel('model-1', 'file-elsewhere')]);
     const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler());
-    await expect(proc.Preflight(CTX)).rejects.toThrow(/needs training on this server/);
+    const attempt = proc.Preflight(CTX);
+    await expect(attempt).rejects.toBeInstanceOf(ArtifactUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ Refusal: { kind: 'artifact-missing', fileId: 'file-elsewhere' } });
+    await expect(attempt).rejects.toThrow("MLModelInferenceProcessor: ML Model 'model-1': its model artifact file 'file-elsewhere' is missing from storage");
   });
 
   it('ignores autoTrain when no trainer is wired (plain refusal)', async () => {
@@ -212,6 +232,29 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
     const proc = new MLModelInferenceProcessor({ modelId: '', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
     await proc.Preflight(CTX);
     expect(trainer.Requests[0].currentModelId).toBeNull();
+  });
+
+  it('trains when the configured model\'s artifact is missing (artifact-missing), then scores with the trained model', async () => {
+    const { deps, map, artifacts } = setup([new FakeModel('model-1', 'file-elsewhere')]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    const proc = new MLModelInferenceProcessor({ modelId: 'model-1', deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+    await proc.Preflight(CTX);
+    expect(trainer.Requests.map((r) => r.currentModelId)).toEqual(['model-1']);
+    expect((await proc.ProcessRecord(record('r1', 3), CTX)).Status).toBe('Succeeded');
+  });
+
+  it('does not train for an artifact that does not match its registered hash, or has none: a retrain must not paper over either', async () => {
+    const swapped = new FakeModel('model-1', 'file-1');
+    swapped.ArtifactSha256 = 'f'.repeat(64);
+    const unregistered = new FakeModel('model-2', 'file-1');
+    unregistered.ArtifactSha256 = null;
+    const { deps, map, artifacts } = setup([swapped, unregistered]);
+    const trainer = new FakeAutoTrainer(map, artifacts);
+    for (const [modelId, kind] of [['model-1', 'artifact-hash-mismatch'], ['model-2', 'artifact-unverified']] as const) {
+      const proc = new MLModelInferenceProcessor({ modelId, deps, autoTrain: { pipelineId: 'pipe-1' }, autoTrainer: trainer }, new TestAssembler());
+      await expect(proc.Preflight(CTX)).rejects.toMatchObject({ Refusal: { kind } });
+    }
+    expect(trainer.Requests).toHaveLength(0);
   });
 
   it('does not train for a model that is already trained', async () => {
@@ -349,8 +392,8 @@ describe('PipelineAutoTrainer.findReusableModel', () => {
     }
   }
   const rows = [
-    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
-    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
+    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('series')), Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
+    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', ArtifactSha256: SnapshotHash.Sha256Hex(new TextEncoder().encode('tabular')), Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
   ];
   const provider = {
     async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
@@ -363,7 +406,7 @@ describe('PipelineAutoTrainer.findReusableModel', () => {
     const artifacts = new InMemoryArtifactLoader();
     artifacts.Set('file-forecast', new TextEncoder().encode('series'));
     artifacts.Set('file-tabular', new TextEncoder().encode('tabular'));
-    expect(await new ReuseProbe({ artifactLoader: artifacts }).Reusable(provider)).toBe('tabular-model');
+    expect(await new ReuseProbe({ registry: new ArtifactRegistry(new InMemoryArtifactStore(), artifacts) }).Reusable(provider)).toBe('tabular-model');
   });
 });
 

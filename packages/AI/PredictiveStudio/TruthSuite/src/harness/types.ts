@@ -48,6 +48,8 @@ export interface CandidateModel {
   // Status unions are derived from the generated entities (never widened to string), so a value CodeGen adds reaches
   // every comparison as a compile-time change. `Trust` is Core's TrustVerdict: the model's training run's stored gate decision.
   ModelID: string; PipelineID: string; Algorithm: AlgorithmKey; Status: MJMLModelEntity['Status']; TrainingRowCount: number | null;
+  /** The registry columns (§5.2): the artifact's health as last checked and the SHA-256 the trainer registered. */
+  ArtifactStatus: MJMLModelEntity['ArtifactStatus']; ArtifactSha256: MJMLModelEntity['ArtifactSha256'];
   HoldoutRowCount: number | null; Metrics: Record<string, number>; HoldoutMetrics: Record<string, number>;
   Trust: TrustVerdict; TrainingRunStatus: MJMLTrainingRunEntity['Status'] | null; TrainingRunNotes: string | null; LineageJSON: string | null;
   ValidationResultsJSON: string | null;

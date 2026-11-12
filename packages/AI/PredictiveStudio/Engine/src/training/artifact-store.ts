@@ -11,7 +11,10 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { IArtifactStore } from './types';
+import type { StoredFile } from '@memberjunction/predictive-studio-core';
+
+import { SnapshotHash } from '../snapshot/snapshot-hash';
+import { ArtifactAlreadyStoredError, type IArtifactStore } from './types';
 
 /**
  * The base directory model files trained before 6.3 were written to: env `PS_ARTIFACT_DIR`
@@ -36,19 +39,32 @@ export function LocalArtifactPath(baseDir: string, fileId: string): string {
 }
 
 /**
- * In-memory {@link IArtifactStore} for unit tests. Stores bytes in a map keyed by
- * a generated id and returns that id. No database, no MJStorage.
+ * In-memory {@link IArtifactStore} for unit tests. Stores bytes in a map keyed by a generated file id, under the key
+ * `in-memory-artifacts/<file id>/<name>` (a fresh key per save, as production's), write-once as production storage is:
+ * a save whose key an entry of {@link Saved} already holds is refused with {@link ArtifactAlreadyStoredError} and
+ * writes nothing. Returns the {@link StoredFile} with the SHA-256 of the bytes. No database, no MJStorage.
  */
 export class InMemoryArtifactStore implements IArtifactStore {
+  /** The storage provider id every file this store returns names. */
+  public static readonly StorageProviderID = '00000000-0000-4000-8000-00000000A57E';
   /** Saved artifacts, keyed by the returned file id. */
-  public readonly Saved = new Map<string, { Name: string; Bytes: Uint8Array }>();
+  public readonly Saved = new Map<string, { Name: string; Key: string; Bytes: Uint8Array }>();
   private seq = 0;
 
   /** @inheritdoc */
-  public async save(bytes: Uint8Array, name: string): Promise<string> {
+  public async save(bytes: Uint8Array, name: string): Promise<StoredFile> {
     const id = `mem-file-${++this.seq}`;
-    this.Saved.set(id, { Name: name, Bytes: bytes });
-    return id;
+    const key = `in-memory-artifacts/${id}/${name}`;
+    if ([...this.Saved.values()].some((f) => f.Key === key)) throw new ArtifactAlreadyStoredError(key);
+    this.Saved.set(id, { Name: name, Key: key, Bytes: bytes });
+    return {
+      fileId: id,
+      storageProviderId: InMemoryArtifactStore.StorageProviderID,
+      providerKey: key,
+      sha256: SnapshotHash.Sha256Hex(bytes),
+      sizeBytes: bytes.byteLength,
+      writeOnce: true,
+    };
   }
 
   /** @inheritdoc An in-memory store can always write. */

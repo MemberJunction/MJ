@@ -52,6 +52,10 @@ function trainerResults(): string {
 interface FakeStoreOptions {
   readonly RunSnapshotID?: string | null;
   readonly RunValidationResults?: string | null;
+  /** The model RUN-1 produced (its `ResultingModelID`). */
+  readonly RunResultingModelID?: string | null;
+  /** RUN-1's save fails. */
+  readonly FailRunSave?: boolean;
   readonly Snapshots?: readonly string[];
   readonly FailObjects?: ReadonlySet<string>;
   readonly ThrowObjects?: ReadonlySet<string>;
@@ -100,7 +104,17 @@ class FakeStore implements CleanupStore {
   }
   public async TrainingRuns(filter: string): Promise<CleanupTrainingRunRow[]> {
     this.Filters.push(`MJ: ML Training Runs | ${filter}`);
-    return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null }];
+    const run: CleanupTrainingRunRow = {
+      ...this.row('MJ: ML Training Runs', 'RUN-1'),
+      TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null, ResultingModelID: this.options.RunResultingModelID || null,
+      LatestResult: new BaseEntityResult(false, 'RUN-1 save refused', 'update'),
+      Save: async () => {
+        if (this.options.FailRunSave) return false;
+        this.Deleted.push(`MJ: ML Training Runs:RUN-1 saved with ResultingModelID ${run.ResultingModelID === null ? 'null' : run.ResultingModelID}`);
+        return true;
+      },
+    };
+    return [run];
   }
   public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
     this.Filters.push(`MJ: ML Training Snapshots | ${filter}`);
@@ -170,11 +184,36 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(store.Filters.join(' ')).not.toMatch(/LIKE/i);
     expect(store.Deleted).toEqual([
       'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
-      `MJ: Record Processes:${RP1}`, 'MJ: ML Training Runs:RUN-1',
-      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
+      `MJ: Record Processes:${RP1}`,
+      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, 'MJ: ML Training Runs:RUN-1', `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
     ]);
     expect(store.Deleted.join(' ')).not.toContain(RP_OTHER);
     expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
+  });
+
+  it('clears and saves a run\'s ResultingModelID before deleting its model, and deletes the model before the run it names', async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { RunResultingModelID: M2.toUpperCase() });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
+    const at = (entry: string): number => store.Deleted.indexOf(entry);
+    expect(at('MJ: ML Training Runs:RUN-1 saved with ResultingModelID null')).toBeGreaterThan(-1);
+    expect(at('MJ: ML Training Runs:RUN-1 saved with ResultingModelID null')).toBeLessThan(at(`MJ: ML Models:${M2}`));
+    expect(at(`MJ: ML Models:${M2}`)).toBeLessThan(at('MJ: ML Training Runs:RUN-1'));
+  });
+
+  it("reports a run whose ResultingModelID could not be cleared, and still deletes the rest", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    const store = new FakeStore(new Set([M2, 'RUN-1']), { RunResultingModelID: M2, FailRunSave: true });
+    const failures = await HarnessCleanup.DeleteRecorded(store, records);
+    expect(failures).toEqual([
+      'MJ: ML Training Runs RUN-1: could not clear ResultingModelID before its model is deleted: RUN-1 save refused',
+      `MJ: ML Models ${M2}: ${M2} is still referenced`,
+      'MJ: ML Training Runs RUN-1: RUN-1 save refused',
+    ]);
+    expect(store.Deleted).toContain(`MJ: ML Models:${M1}`);
   });
 
   it("deletes the runs' and the pipelines' Training Snapshots after the runs, then each snapshot's stored objects and file rows", async () => {

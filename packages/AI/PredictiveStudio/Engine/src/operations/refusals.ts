@@ -3,7 +3,7 @@ import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } fr
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
-import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../scoring/model-readiness';
+import { ArtifactUnavailableError, ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
 
 /**
@@ -23,9 +23,19 @@ export class PredictiveStudioRefusals {
     if (e instanceof ModelNotScorableError) return 'MODEL_NOT_SCORABLE';
     if (e instanceof ModelNeedsTrainingError) return 'MODEL_NEEDS_TRAINING';
     if (e instanceof ModelNotServableError) return 'MODEL_NOT_SERVABLE';
+    if (e instanceof ArtifactUnavailableError) return PredictiveStudioRefusals.artifactRefusalCode(e);
     if (e instanceof ExperimentSessionsUnavailableError) return 'EXPERIMENT_SESSIONS_UNAVAILABLE';
     if (e instanceof InvalidMajorityBaselineRuleError) return 'INVALID_EVALUATION_SETTING';
     return null;
+  }
+
+  /** The code of an artifact that is not served, read off its refusal kind. */
+  private static artifactRefusalCode(e: ArtifactUnavailableError): PredictiveStudioRefusalCode {
+    switch (e.Refusal.kind) {
+      case 'artifact-missing': return 'ARTIFACT_MISSING';
+      case 'artifact-hash-mismatch': return 'ARTIFACT_HASH_MISMATCH';
+      case 'artifact-unverified': return 'ARTIFACT_UNVERIFIED';
+    }
   }
 
   /**

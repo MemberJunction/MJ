@@ -43,6 +43,10 @@ export * from './feature-pipelines';
 // Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
 export * from './training';
 
+// Model registry — RegistryContext (the request's user and the provider every registry, gate and scoring call runs on)
+// and ArtifactRegistry (write-once artifact storage, and a verified ArtifactLoad on every load).
+export * from './registry';
+
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
 export * from './scoring';
 

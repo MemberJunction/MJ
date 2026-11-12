@@ -50,6 +50,7 @@ export * from './protocol-edit';
 export * from './unit-edit';
 export * from './legacy-pipeline';
 export * from './registry-contracts';
+export * from './registry-schemas';
 export * from './governance-contracts';
 export * from './scoring-contracts';
 export * from './monitoring-contracts';
