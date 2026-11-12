@@ -76,11 +76,43 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
 
+    /** The running poll callback, kept so a due-time change can re-arm the timer for it (#6217). */
+    private pollTick?: () => Promise<void>;
+
+    /**
+     * One driver instance per DriverClass, used only to ask work-gated drivers when their work is
+     * due ({@link BaseScheduledJob.NextWorkDueAt}). Runs still get a fresh instance each.
+     * `null` records a DriverClass that does not resolve.
+     */
+    private readonly gateDrivers = new Map<string, BaseScheduledJob | null>();
+
+    /** Drivers whose {@link BaseScheduledJob.WorkGateChanged$} this engine already listens to. */
+    private readonly gateSubscriptions = new Map<BaseScheduledJob, Subscription>();
+
+    /**
+     * Longest the poll timer sleeps, and how stale a work gate's state may get before it is
+     * re-read (#6217). Without Redis, a change another server makes reaches this one only through
+     * that re-read, so this bounds how late such a change applies. Default 60 minutes
+     * (`scheduledJobs.routineIndexRefreshMinutes` in MJServer).
+     */
+    public get WorkGateRefreshMs(): number {
+        return this.Base.MaxPollingIntervalMs;
+    }
+    public set WorkGateRefreshMs(value: number) {
+        if (!Number.isFinite(value) || value < 60_000) {
+            throw new Error(`WorkGateRefreshMs must be at least 60000 ms; got ${value}`);
+        }
+        this.Base.MaxPollingIntervalMs = value;
+    }
+
     /**
      * How often a polling tick checks the `MJ: Scheduled Jobs` table for rows written behind the engine's back (#4822):
      * by a script, raw SQL, or a process that publishes no cache event. One cheap query (row count and newest
-     * `__mj_UpdatedAt`); a difference reloads the job list. The check rides existing ticks and adds no wake-ups, so
-     * when the tick interval is longer than this it simply runs on every tick. 0 turns it off.
+     * `__mj_UpdatedAt`); a difference reloads the job list. The baseline is taken when polling starts, and each tick
+     * checks before it dispatches. The check rides existing ticks and adds no wake-ups, so when the tick interval is
+     * longer than this it runs on every tick. Since the timer sleeps until the next due time (#6217), up to
+     * {@link WorkGateRefreshMs}, a job added or moved earlier without a cache event can be noticed that late; a job
+     * with `MissedRunPolicy = Skip` whose next occurrence passes in that time skips it. 0 turns it off.
      */
     public JobReconcileIntervalMs: number = 5 * 60_000;
 
@@ -303,9 +335,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         return this.Base.GetRunsForJob(jobId);
     }
 
-    /** Calculate and update the active polling interval. */
+    /** Calculate and update the active polling interval, counting work-gated jobs at their work-due time. */
     public UpdatePollingInterval(): void {
-        this.Base.UpdatePollingInterval();
+        this.Base.UpdatePollingInterval((job, now) => this.workDueAt(job, now));
     }
 
     // ========================================================================
@@ -371,6 +403,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         this.warnAboutHighFrequencyJobs();
+        await this.prepareWorkGates(contextUser);
+        this.UpdatePollingInterval();
 
         this.isPolling = true;
         this.acceptingDispatches = true;
@@ -391,6 +425,17 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 this.pollingTimer = setTimeout(poll, interval);
             }
 
+            // Reconcile before dispatching (#4822): the timer wakes exactly at a job's due time, so a job
+            // paused, removed or moved without a cache event must be reloaded before the due check reads it.
+            try {
+                await this.ReconcileJobsIfDue(contextUser);
+            } catch (error) {
+                this.logError('Error during scheduled job reconcile', error);
+            }
+
+            // Re-read gate state that has gone stale (cheap when it has not), before due checks use it.
+            await this.prepareWorkGates(contextUser);
+
             try {
                 const result = await this.DispatchScheduledJobs(contextUser);
                 if (result.swept > 0 || result.dispatched > 0 || result.lockedOut > 0 || result.skippedAtCapacity > 0) {
@@ -410,17 +455,25 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 // scheduled the next poll before any await could fire.
             }
 
-            try {
-                await this.ReconcileJobsIfDue(contextUser);
-            } catch (error) {
-                this.logError('Error during scheduled job reconcile', error);
-            }
+            // The timer armed at the top used the interval from before this tick's dispatch. Now that
+            // the tick has moved NextRunAt values on, arm it for the next due time instead (#6217).
+            this.rearmPollingTimer();
         };
+        this.pollTick = poll;
 
         // First poll fires on the timer (not immediate) so observers can stop
         // us between StartPolling returning and the first poll firing.
         this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
         this.log('Started scheduled job polling');
+
+        // Take the reconcile baseline now (#4822), so a job row written without a cache event before the
+        // first tick shows up as a change at that tick. After isPolling is set, so a change found here
+        // cannot re-enter StartPolling through onBaseJobsChanged.
+        try {
+            await this.ReconcileJobsIfDue(contextUser);
+        } catch (error) {
+            this.logError('Error during scheduled job reconcile', error);
+        }
     }
 
     /**
@@ -526,6 +579,19 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * IDs of the scheduled jobs this process is executing right now (a copy). Read by MJAPI's
+     * event-loop stall monitor to name what was running during a stall.
+     */
+    public get InflightJobIDs(): string[] {
+        return Array.from(this.inflightJobPromises.keys());
+    }
+
+    /** Alias for {@link InflightJobIDs}. */
+    public get ExecutingJobIDs(): string[] {
+        return this.InflightJobIDs;
+    }
+
+    /**
      * Handle job changes (create, update, delete)
      * Reloads job metadata and restarts polling if needed
      *
@@ -582,6 +648,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             this._jobsChangedSubscription.unsubscribe();
             this._jobsChangedSubscription = undefined;
         }
+        for (const subscription of this.gateSubscriptions.values()) {
+            subscription.unsubscribe();
+        }
+        this.gateSubscriptions.clear();
     }
 
     /**
@@ -594,6 +664,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async onBaseJobsChanged(): Promise<void> {
         try {
+            if (this._pollingContextUser) {
+                await this.prepareWorkGates(this._pollingContextUser);
+            }
             this.UpdatePollingInterval();
 
             // A job activated while polling is live arrives with a null NextRunAt, which
@@ -607,9 +680,100 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (!this.isPolling && this.ScheduledJobs.length > 0 && this._pollingContextUser) {
                 console.log(`📅 Scheduled Jobs: Job activated, starting polling`);
                 await this.StartPolling(this._pollingContextUser);
+            } else {
+                // A job that changed may now be due sooner than the armed timer (#6217).
+                this.UpdatePollingInterval();
+                this.rearmPollingTimer();
             }
         } catch (error) {
             this.logError('Error handling scheduled job change notification', error);
+        }
+    }
+
+    /**
+     * Re-arm the poll timer for the current {@link ActivePollingInterval} (#6217). The timer now
+     * sleeps until the next due time, up to an hour, so anything that moves a due time earlier
+     * (a job saved, a gated driver's work changing, a tick advancing NextRunAt) re-arms it.
+     * No-op when not polling; a null interval is left for the next tick to stop polling on.
+     */
+    private rearmPollingTimer(): void {
+        if (!this.isPolling || !this.pollTick) {
+            return;
+        }
+        const interval = this.ActivePollingInterval;
+        if (interval === null) {
+            return;
+        }
+        if (this.pollingTimer) {
+            clearTimeout(this.pollingTimer);
+        }
+        this.pollingTimer = setTimeout(this.pollTick, interval);
+    }
+
+    /**
+     * The driver instance for a job's type, used only for work-gate questions; null when the type
+     * or its DriverClass does not resolve.
+     */
+    private getGateDriver(job: MJScheduledJobEntity): BaseScheduledJob | null {
+        const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
+        const driverClass = jobType?.DriverClass;
+        if (!driverClass) {
+            return null;
+        }
+        if (!this.gateDrivers.has(driverClass)) {
+            let driver: BaseScheduledJob | null = null;
+            try {
+                driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseScheduledJob>(BaseScheduledJob, driverClass) ?? null;
+            } catch {
+                driver = null;
+            }
+            this.gateDrivers.set(driverClass, driver);
+        }
+        return this.gateDrivers.get(driverClass) ?? null;
+    }
+
+    /**
+     * When a job's driver says its work is due (#6217): `undefined` = not gated, `null` = nothing
+     * pending. Fails open: a driver that throws is treated as not gated, so the job keeps its cron.
+     */
+    private workDueAt(job: MJScheduledJobEntity, now: Date): Date | null | undefined {
+        const driver = this.getGateDriver(job);
+        if (!driver) {
+            return undefined;
+        }
+        try {
+            return driver.NextWorkDueAt(job, now);
+        } catch (error) {
+            this.logError(`Work gate for job ${job.Name} threw; running it on its cron`, error);
+            return undefined;
+        }
+    }
+
+    /**
+     * Let each active job's driver load or refresh its work-gate state, and listen once to each
+     * gated driver's changes so the timer re-arms when its work moves (#6217). Best-effort: a
+     * failure is logged and the driver keeps answering from what it has (or `undefined`).
+     */
+    private async prepareWorkGates(contextUser: UserInfo): Promise<void> {
+        const seen = new Set<BaseScheduledJob>();
+        for (const job of this.ScheduledJobs) {
+            const driver = this.getGateDriver(job);
+            if (!driver || seen.has(driver)) {
+                continue;
+            }
+            seen.add(driver);
+            try {
+                await driver.PrepareWorkGate(contextUser, this.Base.ProviderToUse, this.WorkGateRefreshMs);
+            } catch (error) {
+                this.logError(`Preparing the work gate for job ${job.Name} failed`, error);
+            }
+            const changed$ = driver.WorkGateChanged$;
+            if (changed$ && !this.gateSubscriptions.has(driver)) {
+                this.gateSubscriptions.set(driver, changed$.subscribe(() => {
+                    this.UpdatePollingInterval();
+                    this.rearmPollingTimer();
+                }));
+            }
         }
     }
 
@@ -755,7 +919,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt ? new Date(ToEpochMs(job.NextRunAt)).toISOString() : 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
-                if (this.shouldSkipMissedRun(job, evalTime)) {
+                if (this.appliesMissedRunPolicy(job, evalTime)) {
                     console.log(`    ⏭ Missed run skipped per MissedRunPolicy`);
                     await this.advancePastMissedRuns(job, evalTime);
                     continue;
@@ -891,7 +1055,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             // A job whose fire time passed while nothing was running asks a question the schedule
             // alone cannot answer — should the missed occurrences happen now? Its policy decides,
             // and 'Skip' answers by advancing past them without running.
-            if (this.shouldSkipMissedRun(job, evalTime)) {
+            if (this.appliesMissedRunPolicy(job, evalTime)) {
                 await this.advancePastMissedRuns(job, evalTime);
                 continue;
             }
@@ -988,7 +1152,25 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         // Job is due if NextRunAt is in the past or very close to now (within 1 second tolerance)
-        return ToEpochMs(job.NextRunAt) <= evalMs + 1000;
+        if (ToEpochMs(job.NextRunAt) > evalMs + 1000) {
+            return false;
+        }
+
+        // A work-gated job (#6217) is due only when its driver also has work due: an idle one sends
+        // nothing at all (no lock, no run row, no statistics write).
+        const workDue = this.workDueAt(job, evalTime);
+        if (workDue === null) {
+            return false;
+        }
+        return workDue === undefined || ToEpochMs(workDue) <= evalMs + 1000;
+    }
+
+    /**
+     * Whether the missed-run policy applies to a job. A work-gated job (#6217) does not take it:
+     * its NextRunAt passes long before it next has work, by design, so every run would look missed.
+     */
+    private appliesMissedRunPolicy(job: MJScheduledJobEntity, evalTime: Date): boolean {
+        return this.workDueAt(job, evalTime) === undefined && this.shouldSkipMissedRun(job, evalTime);
     }
 
     /**
