@@ -2269,7 +2269,24 @@ export class SlideDeckArtifactViewerComponent
       this.setupCollaborationSession(artifactId, SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck));
     }
     if (changes['readonly']) {
+      if (
+        !this.readonly &&
+        this.ConnectionStatus === 'readonly' &&
+        !this.AccessRevoked &&
+        !this.PermissionVerifyError &&
+        !this.LiveSyncUnavailable
+      ) {
+        if (!this.artifactVersion?.ArtifactID || this.ResolvedPermissions?.CanEdit === true) {
+          this.ConnectionStatus =
+            this.session?.Status && this.session.Status !== 'readonly'
+              ? this.session.Status
+              : 'local';
+        }
+      }
       this.session?.SetCanEdit(this.hasPermissionToEdit);
+      if (this.session) {
+        this.ConnectionStatus = this.session.Status;
+      }
       this.cdr.markForCheck();
     }
   }

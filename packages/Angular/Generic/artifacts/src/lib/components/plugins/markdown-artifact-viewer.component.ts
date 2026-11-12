@@ -4203,7 +4203,14 @@ export class MarkdownArtifactViewerComponent
       if (!this.artifactVersion?.ArtifactID) {
         this.HasEditPermission = !this.readonly;
       }
-      this.session?.SetCanEdit(this.hasPermissionToEdit);
+      const canEditNow = this.hasPermissionToEdit;
+      this.session?.SetCanEdit(canEditNow);
+      if (!this.readonly && canEditNow && this.ViewMode === 'preview') {
+        this.ViewMode = 'edit';
+      }
+      if (this.session && this.CollaborationStatus !== 'revoked') {
+        this.CollaborationStatus = this.session.Status;
+      }
       this.cdr.markForCheck();
     }
   }

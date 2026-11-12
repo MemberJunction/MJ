@@ -609,6 +609,9 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                               type="text"
                               class="mj-sheets-inline-cell-input"
                               [(ngModel)]="InlineEditValue"
+                              (mousedown)="$event.stopPropagation()"
+                              (click)="$event.stopPropagation()"
+                              (dblclick)="$event.stopPropagation()"
                               (blur)="CommitInlineCellEdit()"
                               (keydown.enter)="CommitInlineCellEdit()"
                               (keydown.escape)="CancelInlineCellEdit()"
@@ -2685,7 +2688,24 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     if (changes['readonly']) {
+      if (
+        !this.readonly &&
+        this.ConnectionStatus === 'readonly' &&
+        !this.AccessRevoked &&
+        !this.PermissionVerifyError &&
+        !this.LiveSyncUnavailable
+      ) {
+        if (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true) {
+          this.ConnectionStatus =
+            this.CollaborationSession?.Status && this.CollaborationSession.Status !== 'readonly'
+              ? this.CollaborationSession.Status
+              : 'local';
+        }
+      }
       this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
+      if (this.CollaborationSession) {
+        this.ConnectionStatus = this.CollaborationSession.Status;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -3168,6 +3188,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public OnCellClick(rowIndex: number, colIndex: number, event?: MouseEvent): void {
+    if (this.InlineEditingAddress) return;
     const now = Date.now();
     const addr = FormatCellAddress(rowIndex, colIndex);
     if (this.lastMouseDownCell === addr && now - this.lastMouseDownTimestamp < 500) {
@@ -3257,6 +3278,8 @@ export class SpreadsheetArtifactViewerComponent
 
   public BeginInlineCellEdit(rowIndex: number, colIndex: number): void {
     if (!this.CanEdit) return;
+    this.IsDraggingSelection = false;
+    this.isCtrlMultiSelectDrag = false;
     this.ActiveRowIndex = rowIndex;
     this.ActiveColumnIndex = colIndex;
     const addr = FormatCellAddress(rowIndex, colIndex);
@@ -3268,6 +3291,19 @@ export class SpreadsheetArtifactViewerComponent
         ? String(existing.RawValue)
         : '';
     this.cdr.markForCheck();
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        if (this.InlineEditingAddress !== addr || this.isComponentDestroyed) return;
+        const inputEl = document.querySelector<HTMLInputElement>(
+          '[data-testid="sheet-inline-cell-input"]',
+        );
+        if (inputEl) {
+          inputEl.focus();
+          const len = inputEl.value.length;
+          inputEl.setSelectionRange(len, len);
+        }
+      }, 0);
+    }
   }
 
   public CommitInlineCellEdit(): void {

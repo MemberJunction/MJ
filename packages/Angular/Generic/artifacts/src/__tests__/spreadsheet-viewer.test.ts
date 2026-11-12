@@ -3,7 +3,7 @@
  */
 import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Injector, runInInjectionContext, ChangeDetectorRef } from '@angular/core';
+import { Injector, runInInjectionContext, ChangeDetectorRef, SimpleChange } from '@angular/core';
 import {
   SpreadsheetEngine,
   type WorkbookSpec,
@@ -546,6 +546,41 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
       expect(component.SelectedRanges).toEqual(['B3:D5']);
       expect(component.ActiveRowIndex).toBe(3);
       expect(component.ActiveColumnIndex).toBe(2); // B = 2
+    });
+  });
+
+  describe('6. Read-Only to Edit Transition & Double-Click Inline Cell Editing', () => {
+    it('transitions out of readonly mode when [readonly] input flips from true to false and allows double-click inline cell editing', () => {
+      // Simulate host starting with readonly = true while permissions are loading
+      component.readonly = true;
+      const session = collabService.CreateSession(
+        'art-sheet-1',
+        SpreadsheetEngine.Instance.SerializeWorkbook(component.Workbook),
+        { id: 'user-1', name: 'Test User' },
+        false,
+        false,
+      );
+      component.CollaborationSession = session;
+      component.ConnectionStatus = 'readonly';
+      expect(component.CanEdit).toBe(false);
+
+      // Host finishes loading permissions and sets [readonly] = false
+      component.readonly = false;
+      component.ngOnChanges({
+        readonly: new SimpleChange(true, false, false),
+      });
+
+      expect(component.ConnectionStatus).toBe('local');
+      expect(component.CanEdit).toBe(true);
+
+      // Double-click cell B2 (row 2, col 2) to enter inline edit mode
+      component.BeginInlineCellEdit(2, 2);
+      expect(component.InlineEditingAddress).toBe('B2');
+      component.InlineEditValue = '42000';
+      component.CommitInlineCellEdit();
+
+      expect(component.InlineEditingAddress).toBeNull();
+      expect(component.ActiveSheet.Cells['B2']?.RawValue).toBe(42000);
     });
   });
 });
