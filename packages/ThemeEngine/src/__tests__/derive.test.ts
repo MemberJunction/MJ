@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCENT_SHAPE,
   BRAND_SHAPE,
+  CheckDerivedThemeContrast,
   contrastRatio,
   deltaEOK,
   derive,
+  DeriveThemeVars,
   emitOverlayCss,
   FAMILY_ANCHOR,
   generateBrandRamp,
@@ -171,7 +173,8 @@ describe('derived extras', () => {
 });
 
 describe('contrast validation', () => {
-  const report = derive(MJ_DEFAULT_SEEDS).contrast;
+  const derived = derive(MJ_DEFAULT_SEEDS);
+  const report = derived.contrast;
 
   it('passes every light-mode pair for the MJ default theme', () => {
     expect(report.light.every((c) => c.passes)).toBe(true);
@@ -185,6 +188,72 @@ describe('contrast validation', () => {
     expect(hover?.passes).toBe(false);
     expect(hover?.suggestion?.hex).toMatch(/^#[0-9a-f]{6}$/);
     expect(contrastRatio(hover!.fg, hover!.suggestion!.hex)).toBeGreaterThanOrEqual(hover!.required);
+  });
+
+  it('re-declares dark text tiers on elevated and overlay surfaces to clear WCAG AA (Ramp B contrast table)', () => {
+    // On dark elevated/overlay surfaces (neutral-700), global dark muted (neutral-400, ~4.04:1)
+    // and link (brand-300, ~3.99:1) fall under the 4.5:1 AA bar. Ramp B steps elevated and
+    // overlay text one primitive brighter while leaving base and sunken untouched.
+    const dark = derived.tokens.dark;
+    expect(contrastRatio(dark['--mj-text-muted'], dark['--mj-surface-elevated-bg'])).toBeLessThan(4.5);
+    expect(contrastRatio(dark['--mj-text-link'], dark['--mj-surface-elevated-bg'])).toBeLessThan(4.5);
+    expect(contrastRatio(dark['--mj-surface-base-text-muted'], dark['--mj-surface-base-bg'])).toBeGreaterThanOrEqual(4.5);
+
+    const elevatedPairs = [
+      'text-primary-on-elevated',
+      'text-secondary-on-elevated',
+      'text-muted-on-elevated',
+      'link-on-elevated',
+      'link-on-elevated (hover)',
+    ];
+    for (const pairName of elevatedPairs) {
+      const check = report.dark.find((c) => c.name === pairName);
+      expect(check, pairName).toBeDefined();
+      expect(check?.passes, `${pairName} (${check?.ratio}:1)`).toBe(true);
+      expect(check?.ratio).toBeGreaterThanOrEqual(4.5);
+    }
+
+    expect(dark['--mj-surface-overlay-text-secondary']).toBe(dark['--mj-surface-elevated-text-secondary']);
+    expect(dark['--mj-surface-overlay-text-muted']).toBe(dark['--mj-surface-elevated-text-muted']);
+    expect(dark['--mj-surface-overlay-text-link']).toBe(dark['--mj-surface-elevated-text-link']);
+    expect(dark['--mj-surface-overlay-text-link-hover']).toBe(dark['--mj-surface-elevated-text-link-hover']);
+  });
+
+  it('verifies WCAG AA contrast across all five Ramp B surfaces (canvas, sunken, base, elevated, overlay) in light and dark modes', () => {
+    const report2 = CheckDerivedThemeContrast(derived.tokens.light, derived.tokens.dark);
+    expect(report2).toBeDefined();
+
+    const expectedSurfaces = ['canvas', 'sunken', 'surface', 'elevated', 'overlay'];
+    for (const mode of ['light', 'dark'] as const) {
+      for (const surface of expectedSurfaces) {
+        const primaryCheck = report2[mode].find((c) => c.name === `text-primary-on-${surface}`);
+        expect(primaryCheck, `${mode} text-primary-on-${surface}`).toBeDefined();
+        expect(primaryCheck?.passes, `${mode} text-primary-on-${surface} (${primaryCheck?.ratio}:1)`).toBe(true);
+        expect(primaryCheck?.ratio).toBeGreaterThanOrEqual(4.5);
+
+        const secondaryCheck = report2[mode].find((c) => c.name === `text-secondary-on-${surface}`);
+        expect(secondaryCheck, `${mode} text-secondary-on-${surface}`).toBeDefined();
+        expect(secondaryCheck?.passes, `${mode} text-secondary-on-${surface} (${secondaryCheck?.ratio}:1)`).toBe(true);
+        expect(secondaryCheck?.ratio).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('provides selected surface tokens and ensures muted text promoted on selected surface clears WCAG AA', () => {
+    const derivedVars = DeriveThemeVars(MJ_DEFAULT_SEEDS);
+    const light = derivedVars.tokens.light;
+    const dark = derivedVars.tokens.dark;
+
+    expect(light['--mj-surface-base-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(light['--mj-surface-elevated-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(light['--mj-surface-overlay-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dark['--mj-surface-base-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dark['--mj-surface-elevated-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dark['--mj-surface-overlay-bg-selected']).toMatch(/^#[0-9a-f]{6}$/);
+
+    // Muted text promoted to secondary on selected surface clears 4.5:1 AA
+    expect(contrastRatio(light['--mj-surface-text-muted-selected'], light['--mj-surface-base-bg-selected'])).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(dark['--mj-surface-text-muted-selected'], dark['--mj-surface-base-bg-selected'])).toBeGreaterThanOrEqual(4.5);
   });
 });
 

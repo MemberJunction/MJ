@@ -94,15 +94,53 @@ export function BuildContrastReport(
   light: Record<string, string>,
   dark: Record<string, string>,
 ): ContrastReport {
-  const pairsFor = (t: Record<string, string>): PairSpec[] => [
-    { name: 'text-on-primary', fg: t['--mj-brand-on-primary'], bg: t['--mj-brand-primary'], required: AA_LARGE, clamp: 'bg' },
-    { name: 'text-on-primary (hover)', fg: t['--mj-brand-on-primary'], bg: t['--mj-brand-primary-hover'], required: AA_LARGE, clamp: 'bg' },
-    { name: 'text-on-accent', fg: t['--mj-brand-on-accent'], bg: t['--mj-brand-accent'], required: AA_LARGE, clamp: 'bg' },
-    { name: 'text-primary-on-surface', fg: t['--mj-text-primary'], bg: t['--mj-bg-surface'], required: AA_TEXT, clamp: 'fg' },
-    { name: 'text-secondary-on-surface', fg: t['--mj-text-secondary'], bg: t['--mj-bg-surface'], required: AA_TEXT, clamp: 'fg' },
-    { name: 'link-on-surface', fg: t['--mj-text-link'], bg: t['--mj-bg-surface'], required: AA_TEXT, clamp: 'fg' },
-    { name: 'link-on-surface (hover)', fg: t['--mj-text-link-hover'], bg: t['--mj-bg-surface'], required: AA_TEXT, clamp: 'fg' },
-  ];
+  const pairsFor = (t: Record<string, string>): PairSpec[] => {
+    const canvasBg = t['--mj-bg-canvas'];
+    const sunkenBg = t['--mj-surface-sunken-bg'] ?? t['--mj-bg-surface-sunken'];
+    const baseBg = t['--mj-surface-base-bg'] ?? t['--mj-bg-surface'];
+    const elevatedBg = t['--mj-surface-elevated-bg'] ?? t['--mj-bg-surface-elevated'] ?? t['--mj-bg-surface'];
+    const overlayBg = t['--mj-surface-overlay-bg'] ?? t['--mj-bg-surface-overlay'] ?? elevatedBg;
+
+    const pairs: PairSpec[] = [
+      { name: 'text-on-primary', fg: t['--mj-brand-on-primary'], bg: t['--mj-brand-primary'], required: AA_LARGE, clamp: 'bg' },
+      { name: 'text-on-primary (hover)', fg: t['--mj-brand-on-primary'], bg: t['--mj-brand-primary-hover'], required: AA_LARGE, clamp: 'bg' },
+      { name: 'text-on-accent', fg: t['--mj-brand-on-accent'], bg: t['--mj-brand-accent'], required: AA_LARGE, clamp: 'bg' },
+      { name: 'text-primary-on-surface', fg: t['--mj-text-primary'], bg: baseBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'text-secondary-on-surface', fg: t['--mj-surface-base-text-secondary'] ?? t['--mj-text-secondary'], bg: baseBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'text-muted-on-surface', fg: t['--mj-surface-base-text-muted'] ?? t['--mj-text-muted'] ?? t['--mj-text-secondary'], bg: baseBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'link-on-surface', fg: t['--mj-surface-base-text-link'] ?? t['--mj-text-link'], bg: baseBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'link-on-surface (hover)', fg: t['--mj-surface-base-text-link-hover'] ?? t['--mj-text-link-hover'], bg: baseBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'text-primary-on-elevated', fg: t['--mj-text-primary'], bg: elevatedBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'text-secondary-on-elevated', fg: t['--mj-surface-elevated-text-secondary'] ?? t['--mj-text-secondary'], bg: elevatedBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'text-muted-on-elevated', fg: t['--mj-surface-elevated-text-muted'] ?? t['--mj-text-muted'] ?? t['--mj-text-secondary'], bg: elevatedBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'link-on-elevated', fg: t['--mj-surface-elevated-text-link'] ?? t['--mj-text-link'], bg: elevatedBg, required: AA_TEXT, clamp: 'fg' },
+      { name: 'link-on-elevated (hover)', fg: t['--mj-surface-elevated-text-link-hover'] ?? t['--mj-text-link-hover'], bg: elevatedBg, required: AA_TEXT, clamp: 'fg' },
+    ];
+
+    if (canvasBg && t['--mj-text-primary'] && t['--mj-text-secondary']) {
+      pairs.push(
+        { name: 'text-primary-on-canvas', fg: t['--mj-text-primary'], bg: canvasBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'text-secondary-on-canvas', fg: t['--mj-text-secondary'], bg: canvasBg, required: AA_TEXT, clamp: 'fg' },
+      );
+    }
+    if (sunkenBg && t['--mj-text-primary']) {
+      pairs.push(
+        { name: 'text-primary-on-sunken', fg: t['--mj-text-primary'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'text-secondary-on-sunken', fg: t['--mj-surface-sunken-text-secondary'] ?? t['--mj-text-secondary'], bg: sunkenBg, required: AA_TEXT, clamp: 'fg' },
+      );
+    }
+    if (overlayBg && t['--mj-text-primary']) {
+      pairs.push(
+        { name: 'text-primary-on-overlay', fg: t['--mj-text-primary'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'text-secondary-on-overlay', fg: t['--mj-surface-overlay-text-secondary'] ?? t['--mj-surface-elevated-text-secondary'] ?? t['--mj-text-secondary'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'text-muted-on-overlay', fg: t['--mj-surface-overlay-text-muted'] ?? t['--mj-surface-elevated-text-muted'] ?? t['--mj-text-muted'] ?? t['--mj-text-secondary'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'link-on-overlay', fg: t['--mj-surface-overlay-text-link'] ?? t['--mj-surface-elevated-text-link'] ?? t['--mj-text-link'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
+        { name: 'link-on-overlay (hover)', fg: t['--mj-surface-overlay-text-link-hover'] ?? t['--mj-surface-elevated-text-link-hover'] ?? t['--mj-text-link-hover'], bg: overlayBg, required: AA_TEXT, clamp: 'fg' },
+      );
+    }
+
+    return pairs;
+  };
   const l = evaluate(pairsFor(light));
   const d = evaluate(pairsFor(dark));
   return { light: l, dark: d, passes: [...l, ...d].every((c) => c.passes) };
@@ -115,3 +153,6 @@ export function buildContrastReport(
 ): ContrastReport {
   return BuildContrastReport(light, dark);
 }
+
+/** Alias for {@link BuildContrastReport} matching Phase 0 WS6b spec naming. */
+export const CheckDerivedThemeContrast = BuildContrastReport;

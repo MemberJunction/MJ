@@ -135,6 +135,7 @@
 
   /* Background Colors */
   --mj-bg-page: var(--mj-color-neutral-50);
+  --mj-bg-canvas: var(--mj-color-neutral-100);
   --mj-bg-surface: var(--mj-color-neutral-0);
   --mj-bg-surface-elevated: var(--mj-color-neutral-0);
   --mj-bg-surface-card: var(--mj-color-neutral-50);
@@ -160,6 +161,63 @@
   --mj-border-strong: var(--mj-color-neutral-300);
   --mj-border-focus: var(--mj-color-brand-500);
   --mj-border-error: var(--mj-color-error-500);
+
+  /* Surface & Elevation Ramp B (Tier 2 role tokens — NAMING.md)
+     Four levels: sunken (wells, code blocks; no state tokens), base (default cards,
+     panels, form sections, table bodies), elevated (raised above base, still part of
+     the page), overlay (floats over the page: dialogs, sheets, popovers, menus, toasts).
+     Hover and selected are states at the end of the token name, not elevation changes. */
+  --mj-surface-sunken-bg: var(--mj-bg-surface-sunken);
+  --mj-surface-sunken-border: 1px solid var(--mj-border-subtle);
+  --mj-surface-sunken-shadow: var(--mj-shadow-inner);
+
+  --mj-surface-base-bg: var(--mj-bg-surface);
+  --mj-surface-base-border: 1px solid var(--mj-border-default);
+  --mj-surface-base-shadow: var(--mj-shadow-none);
+  --mj-surface-base-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  --mj-surface-base-border-selected: 1px solid var(--mj-brand-primary);
+
+  --mj-surface-elevated-bg: var(--mj-bg-surface-elevated);
+  --mj-surface-elevated-border: 1px solid var(--mj-border-default);
+  --mj-surface-elevated-shadow: var(--mj-shadow-md);
+  --mj-surface-elevated-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  --mj-surface-elevated-border-selected: 1px solid var(--mj-brand-primary);
+
+  --mj-surface-overlay-bg: var(--mj-bg-surface-elevated);
+  --mj-surface-overlay-border: 1px solid var(--mj-border-strong);
+  --mj-surface-overlay-shadow: var(--mj-shadow-xl);
+  --mj-surface-overlay-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  --mj-surface-overlay-border-selected: 1px solid var(--mj-brand-primary);
+
+  /* Surface-scoped text re-point tokens (Tier 2 — NAMING.md).
+     Each .mj-surface-* class re-points --mj-text-{secondary,muted,link,link-hover}
+     to its own level tokens so nested surfaces reset to their level's contrast tiers,
+     and selected surfaces promote muted text to secondary so subtitles stay >= AA on
+     the selected tint (6.80:1 on base, 6.61:1 on elevated in light). */
+  --mj-surface-text-muted-selected: var(--mj-text-secondary);
+  --mj-surface-base-text-secondary: var(--mj-text-secondary);
+  --mj-surface-base-text-muted: var(--mj-text-muted);
+  --mj-surface-base-text-link: var(--mj-text-link);
+  --mj-surface-base-text-link-hover: var(--mj-text-link-hover);
+  --mj-surface-sunken-text-secondary: var(--mj-surface-base-text-secondary);
+  --mj-surface-sunken-text-muted: var(--mj-surface-base-text-muted);
+  --mj-surface-sunken-text-link: var(--mj-surface-base-text-link);
+  --mj-surface-sunken-text-link-hover: var(--mj-surface-base-text-link-hover);
+  --mj-surface-elevated-text-secondary: var(--mj-text-secondary);
+  --mj-surface-elevated-text-muted: var(--mj-text-muted);
+  --mj-surface-elevated-text-link: var(--mj-text-link);
+  --mj-surface-elevated-text-link-hover: var(--mj-text-link-hover);
+  --mj-surface-overlay-text-secondary: var(--mj-surface-elevated-text-secondary);
+  --mj-surface-overlay-text-muted: var(--mj-surface-elevated-text-muted);
+  --mj-surface-overlay-text-link: var(--mj-surface-elevated-text-link);
+  --mj-surface-overlay-text-link-hover: var(--mj-surface-elevated-text-link-hover);
+
+  /* Ambient Layer — off by default in the stock theme. */
+  --mj-ambient: none;
+  --mj-ambient-strength: 0;
 
   /* Brand Colors (semantic) */
   --mj-brand-primary: var(--mj-color-brand-500);
@@ -416,6 +474,12 @@
   --mj-space-20: 5rem;        /* 80px */
   --mj-space-24: 6rem;        /* 96px */
 
+  /* Control Height Scale (NAMING.md)
+     32 / 40 / 52px on desktop; sm and md become 44px on coarse pointers (WCAG 2.5.5). */
+  --mj-control-height-sm: 32px;
+  --mj-control-height-md: 40px;
+  --mj-control-height-lg: 52px;
+
   /* ========================================
      EFFECTS
      ======================================== */
@@ -428,6 +492,12 @@
   --mj-radius-xl: 16px;
   --mj-radius-2xl: 24px;
   --mj-radius-full: 9999px;
+
+  /* Radius Roles (Tier 2 — NAMING.md) */
+  --mj-radius-control: var(--mj-radius-md);
+  --mj-radius-surface: var(--mj-radius-lg);
+  --mj-radius-overlay: var(--mj-radius-lg);
+  --mj-radius-pill: var(--mj-radius-full);
 
   /* Shadows */
   --mj-shadow-none: none;
@@ -533,6 +603,7 @@
   /* Background Colors */
   
   --mj-bg-page: var(--mj-color-neutral-900);
+  --mj-bg-canvas: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
   /* Card sits between surface (800) and elevated (700). Derived from the neutral
      primitives (not a literal) so org brand overlays re-tint it in dark mode; the
@@ -561,6 +632,61 @@
   --mj-border-strong: var(--mj-color-neutral-600);
   --mj-border-focus: var(--mj-color-brand-400);
   --mj-border-error: var(--mj-color-error-400);
+
+  /* Surface & Elevation Ramp B (dark mode)
+     Re-declared in [data-theme="dark"] so both document-level and scoped dark
+     containers (e.g. Theme Studio preview canvas) resolve the dark surface fills,
+     borders, shadows, and per-level text tiers. */
+  --mj-surface-sunken-bg: var(--mj-bg-surface-sunken);
+  --mj-surface-sunken-border: 1px solid var(--mj-border-subtle);
+  --mj-surface-sunken-shadow: none;
+
+  --mj-surface-base-bg: var(--mj-bg-surface);
+  --mj-surface-base-border: 1px solid var(--mj-border-default);
+  --mj-surface-base-shadow: var(--mj-shadow-none);
+  --mj-surface-base-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-base-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  --mj-surface-base-border-selected: 1px solid var(--mj-brand-primary);
+
+  --mj-surface-elevated-bg: var(--mj-bg-surface-elevated);
+  --mj-surface-elevated-border: 1px solid var(--mj-border-default);
+  --mj-surface-elevated-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.55);
+  --mj-surface-elevated-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-elevated-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  --mj-surface-elevated-border-selected: 1px solid var(--mj-brand-primary);
+
+  --mj-surface-overlay-bg: var(--mj-bg-surface-elevated);
+  --mj-surface-overlay-border: 1px solid var(--mj-border-strong);
+  --mj-surface-overlay-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.7);
+  --mj-surface-overlay-bg-hover: var(--mj-bg-surface-hover);
+  --mj-surface-overlay-bg-selected: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-elevated));
+  --mj-surface-overlay-border-selected: 1px solid var(--mj-brand-primary);
+
+  /* Dark text tiers on elevated and overlay surfaces step one primitive brighter
+     so they clear WCAG AA against --mj-bg-surface-elevated (neutral-700):
+       secondary:  neutral-300 -> neutral-200 (6.97:1 -> 8.40:1)
+       muted:      neutral-400 -> neutral-300 (4.04:1 -> 6.97:1)
+       link:       brand-300   -> brand-200   (3.99:1 -> 5.33:1)
+       link-hover: brand-200   -> brand-100   (5.33:1 -> 7.04:1)
+     Base and sunken keep the standard dark text tiers (muted is 5.71:1 on base).
+     Keep ThemeEngine derive.ts resolveSemantics in lockstep. */
+  --mj-surface-text-muted-selected: var(--mj-text-secondary);
+  --mj-surface-base-text-secondary: var(--mj-text-secondary);
+  --mj-surface-base-text-muted: var(--mj-text-muted);
+  --mj-surface-base-text-link: var(--mj-text-link);
+  --mj-surface-base-text-link-hover: var(--mj-text-link-hover);
+  --mj-surface-sunken-text-secondary: var(--mj-surface-base-text-secondary);
+  --mj-surface-sunken-text-muted: var(--mj-surface-base-text-muted);
+  --mj-surface-sunken-text-link: var(--mj-surface-base-text-link);
+  --mj-surface-sunken-text-link-hover: var(--mj-surface-base-text-link-hover);
+  --mj-surface-elevated-text-secondary: var(--mj-color-neutral-200);
+  --mj-surface-elevated-text-muted: var(--mj-color-neutral-300);
+  --mj-surface-elevated-text-link: var(--mj-color-brand-200);
+  --mj-surface-elevated-text-link-hover: var(--mj-color-brand-100);
+  --mj-surface-overlay-text-secondary: var(--mj-surface-elevated-text-secondary);
+  --mj-surface-overlay-text-muted: var(--mj-surface-elevated-text-muted);
+  --mj-surface-overlay-text-link: var(--mj-surface-elevated-text-link);
+  --mj-surface-overlay-text-link-hover: var(--mj-surface-elevated-text-link-hover);
 
   /* Brand Colors (adjusted for dark) */
   --mj-brand-primary: var(--mj-color-brand-400);
@@ -673,3 +799,97 @@
   --mj-logo-mark: url('/assets/mj-mark-dark.svg');
   --mj-logo-color: #4dabd5;
 }
+
+/* ========================================
+   TOUCH TARGET FLOOR (WCAG 2.5.5)
+   ======================================== */
+
+@media (pointer: coarse) {
+  :root {
+    --mj-control-height-sm: 44px;
+    --mj-control-height-md: 44px;
+  }
+}
+
+/* ========================================
+   SURFACE LEVEL CLASSES (Ramp B — NAMING.md)
+   ========================================
+   Each surface class sets background, border, and box-shadow from its level's
+   role tokens and re-points --mj-text-{secondary,muted,link,link-hover} so
+   nested surfaces always reset to their own contrast tiers. Hover and selected
+   states exist on base, elevated, and overlay (sunken is a well and has no
+   interactive state tokens). */
+
+.mj-surface-sunken {
+  background: var(--mj-surface-sunken-bg);
+  border: var(--mj-surface-sunken-border);
+  box-shadow: var(--mj-surface-sunken-shadow);
+  --mj-text-secondary: var(--mj-surface-sunken-text-secondary);
+  --mj-text-muted: var(--mj-surface-sunken-text-muted);
+  --mj-text-link: var(--mj-surface-sunken-text-link);
+  --mj-text-link-hover: var(--mj-surface-sunken-text-link-hover);
+}
+
+.mj-surface-base {
+  background: var(--mj-surface-base-bg);
+  border: var(--mj-surface-base-border);
+  box-shadow: var(--mj-surface-base-shadow);
+  --mj-text-secondary: var(--mj-surface-base-text-secondary);
+  --mj-text-muted: var(--mj-surface-base-text-muted);
+  --mj-text-link: var(--mj-surface-base-text-link);
+  --mj-text-link-hover: var(--mj-surface-base-text-link-hover);
+}
+
+.mj-surface-elevated {
+  background: var(--mj-surface-elevated-bg);
+  border: var(--mj-surface-elevated-border);
+  box-shadow: var(--mj-surface-elevated-shadow);
+  --mj-text-secondary: var(--mj-surface-elevated-text-secondary);
+  --mj-text-muted: var(--mj-surface-elevated-text-muted);
+  --mj-text-link: var(--mj-surface-elevated-text-link);
+  --mj-text-link-hover: var(--mj-surface-elevated-text-link-hover);
+}
+
+.mj-surface-overlay {
+  background: var(--mj-surface-overlay-bg);
+  border: var(--mj-surface-overlay-border);
+  box-shadow: var(--mj-surface-overlay-shadow);
+  --mj-text-secondary: var(--mj-surface-overlay-text-secondary);
+  --mj-text-muted: var(--mj-surface-overlay-text-muted);
+  --mj-text-link: var(--mj-surface-overlay-text-link);
+  --mj-text-link-hover: var(--mj-surface-overlay-text-link-hover);
+}
+
+.mj-surface-base[data-hover]:hover,
+.mj-surface-base.is-hover {
+  background: var(--mj-surface-base-bg-hover);
+}
+
+.mj-surface-elevated[data-hover]:hover,
+.mj-surface-elevated.is-hover {
+  background: var(--mj-surface-elevated-bg-hover);
+}
+
+.mj-surface-overlay[data-hover]:hover,
+.mj-surface-overlay.is-hover {
+  background: var(--mj-surface-overlay-bg-hover);
+}
+
+.mj-surface-base.is-selected {
+  background: var(--mj-surface-base-bg-selected);
+  border: var(--mj-surface-base-border-selected);
+  --mj-text-muted: var(--mj-surface-text-muted-selected);
+}
+
+.mj-surface-elevated.is-selected {
+  background: var(--mj-surface-elevated-bg-selected);
+  border: var(--mj-surface-elevated-border-selected);
+  --mj-text-muted: var(--mj-surface-text-muted-selected);
+}
+
+.mj-surface-overlay.is-selected {
+  background: var(--mj-surface-overlay-bg-selected);
+  border: var(--mj-surface-overlay-border-selected);
+  --mj-text-muted: var(--mj-surface-text-muted-selected);
+}
+
