@@ -12,7 +12,7 @@ reference:
 | Layer | Package | What it is |
 |---|---|---|
 | Math | [`@memberjunction/rubrics-base`](../packages/Rubrics/Base/README.md) | `RubricScoring`, `RubricVersionDiff`, snapshots. Pure functions, browser-safe |
-| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the evaluator registry and the LLM / Decision / Agent / Deterministic / Human evaluators, actions, `mj rubric` |
+| Engine + evaluators | [`@memberjunction/rubrics`](../packages/Rubrics/Engine/README.md) | `RubricEngine`, the evaluator registry and the LLM / Decision / DecisionThenLLM / Agent / Deterministic / Human evaluators, actions, `mj rubric` |
 | Server rules | `@memberjunction/core-entities-server` | Publish, submit, supersede, and validation on the entity subclasses |
 | Widgets | [`@memberjunction/ng-rubrics`](../packages/Angular/Generic/rubrics/README.md) | Author, answer, result, publish, diff, and comparison widgets |
 | Testing | [`@memberjunction/testing-engine`](../packages/TestingFramework/Engine/README.md) | `RubricOracle`, rubric resolution, the calibration test type |
@@ -394,14 +394,17 @@ pay for.
 ```json
 { "EvaluatorType": "AIPrompt", "PromptName": "Rubric Judge - Research Agent" }
 { "EvaluatorType": "AIPrompt", "EvaluatorName": "Decision", "ModelID": "<Jev's AI Model ID>" }
+{ "EvaluatorType": "AIPrompt", "EvaluatorName": "DecisionThenLLM", "PromptName": "Rubric Judge - Research Agent" }
 ```
 
 `EvaluatorName` names any registered evaluator ([section 8](#8-evaluators)), including one your application
 registered. Without it, `EvaluatorType` picks a built-in: `AIPrompt` is LLM, `Agent` is Agent, `Deterministic`
 is Deterministic. An empty config is LLM SinglePass with the default judge. `PromptID` / `PromptName` (the LLM
 judge, or the Decision prompt), `SystemPromptID` / `SystemPromptName`, `CriterionPromptID` /
-`CriterionPromptName`, `ModelID`, `ModelSelection`, `AgentID`, `Mode`, `Samples`, and `Extensions` are passed
-to the evaluator as its settings. Every core agent's link names a judge written for it; see
+`CriterionPromptName`, `ModelID`, `ModelSelection`, `AgentID`, `Mode`, `Samples`, `DecisionPromptID` /
+`DecisionPromptName`, `DecisionModelID`, `DecisionConfidenceThreshold`, and `Extensions` are passed
+to the evaluator as its settings. To score a link with the decision model, see
+[Scoring with a decision model](#scoring-with-a-decision-model). Every core agent's link names a judge written for it; see
 [The shipped judges](#the-shipped-judges). Agent eval tests, self-check and the sampling job all honor the whole selection.
 `PassThreshold` on the link overrides the version's threshold for that purpose.
 
@@ -560,25 +563,77 @@ graph LR
 | Name | Stored as | What runs | Settings it reads |
 |---|---|---|---|
 | `LLM` (default) | AIPrompt | The **Rubric Evaluator** prompt with a **judge** prompt composed into it ([below](#how-the-llm-evaluator-builds-its-prompt)). `SinglePass` asks once for the whole rubric; `PerCriterion` asks once per leaf | `PromptID` or `PromptName` (the judge), `SystemPromptID`/`Name`, `CriterionPromptID`/`Name`, `ModelID`, `ModelSelection`, `Mode`, `Samples` (at most 9) |
-| `Decision` | AIPrompt | Typed Score questions on a Decision-type model, all leaves in one call. **Default Decision** binds Jev and LLM Decision. Each question is the criterion as **Rubric Criterion** renders it | `PromptID` or `PromptName` (the decision prompt), `CriterionPromptID`/`Name`, `ModelID` |
+| `Decision` | AIPrompt | Typed Score questions on a Decision-type model, all leaves in one call (level scales, and numeric scales mapped onto levels). **Default Decision** binds Jev and LLM Decision. Each question is the criterion as **Rubric Criterion** renders it | `PromptID` or `PromptName` (the decision prompt), `CriterionPromptID`/`Name`, `ModelID` |
+| `DecisionThenLLM` | AIPrompt | The Decision pass first, then **one** LLM call for just the criteria it could not settle (evidence required, not askable, unanswered, or calibrated confidence under the threshold), merged into one score. Falls back to the LLM evaluator for the whole rubric when the decision fails | `DecisionPromptID`/`Name`, `DecisionModelID`, `DecisionConfidenceThreshold`, plus the LLM settings for the follow-up (`PromptID`/`Name` is the judge, `ModelID` its model) |
 | `Agent` | Agent | The **Rubric Evaluation Agent**, a Loop agent that can read the rubric and the subject | `AgentID` |
 | `Deterministic` | Deterministic | Each criterion's `EvaluatorConfig.Deterministic` rule. No model call | none |
 | `Human` | Human | A person, through the scoring form or the Submit Human Rubric action. The engine never runs it | — |
 
-`AI` is accepted as the old name for `Agent`, and `AIPrompt` as a name for `LLM`. Names are case-insensitive.
+`AI` is accepted as the old name for `Agent`, `AIPrompt` as a name for `LLM`, and `hybrid` as a name for
+`DecisionThenLLM`. Names are case-insensitive.
 
 Every LLM and Decision call goes through MJ's prompt system, so the prompt's model bindings, failover,
 credentials, and cost tracking all apply, and the prompt run is linked from the evaluation's `AIPromptRunID`.
 An Agent evaluation links its agent run from `AIAgentRunID`. Both columns point at the run that **produced** the
 evaluation, never at the subject.
 
-**LLM or Decision?** A Decision model answers with a calibrated probability for each level, which is cheaper
-and steadier than asking a chat model to emit JSON, and the chosen level's probability becomes the answer's
-`Confidence`. It returns no rationale and no quotes, so it suits rubrics whose levels are well anchored and whose
-criteria do not require evidence. The Decision evaluator refuses a rubric with an evidence-required criterion
-before calling anything, writes each rationale as the chosen level and its probability, and leaves a criterion
-on a numeric scale unanswered (it is listed in the run metadata as `UnaskedCriteria`). Use LLM when you need
-written rationale, quotes, or numeric scales.
+**LLM, Decision, or DecisionThenLLM?** A Decision model answers each criterion with a probability for each
+level in one forward pass, which is cheaper, faster and steadier than asking a chat model to emit JSON. It
+returns no rationale and no quotes. The Decision evaluator therefore refuses a rubric with an evidence-required
+criterion before calling anything, and writes each rationale as the chosen level and its probability.
+`DecisionThenLLM` is the practical way to use a decision model on a real rubric: the decision answers what it
+can, and one LLM call covers the rest. Use plain LLM when every criterion needs written rationale. See
+[Scoring with a decision model](#scoring-with-a-decision-model).
+
+### Scoring with a decision model
+
+**How each criterion is asked.** Every leaf becomes a typed Score question whose instructions are the rubric's
+instructions followed by the criterion as **Rubric Criterion** renders it.
+
+- A **level** scale is asked by its level labels, lowest first. The answer is the most probable level.
+- A **numeric** scale is asked as numbers. With a step that gives at most 11 levels (1–5, 0–10, 0–1 by 0.25)
+  every step is a level; otherwise it is bucketed into 5 evenly spaced values from Min to Max, snapped to the
+  step. The question says the range and whether higher is better. The answer maps back to the scale as the
+  probability-weighted value of those levels, snapped onto the step, and is stored as `RawValue`.
+- A numeric scale with no Min or Max cannot be asked. The Decision evaluator leaves it unanswered and lists it in
+  `UnaskedCriteria` (the score records it as unanswered, so completeness drops); DecisionThenLLM sends it to the LLM.
+
+**Confidence is raw unless a calibration exists.** A criterion's confidence is the model's own probability for
+the chosen level (for a numeric scale, the level nearest the value). When the engine has a calibration source
+and the decision model's `ModelConfiguration.Decision.Calibrations` hold a fit for use `rubric-evaluation`,
+question = the **criterion's key**, on the exact model that answered (`ModelName` + `ResolvedModel`), the
+confidence is calibrated with it and the criterion is listed in `CalibratedCriteria`. No such fits ship today, so
+every rubric confidence is raw until one is fitted with the `fit-decision-calibration` rig. A server registers
+the source once with `RegisterRubricDecisionCalibrations(AIEngine.Instance)`; without it, confidences stay raw.
+
+**DecisionThenLLM**, step by step:
+
+1. One decision call on `DecisionPromptID` / `DecisionPromptName` (default **Default Decision**), with
+   `DecisionModelID` pinning the model, asks every askable criterion that does not require evidence.
+2. The criteria it did not settle go to **one** SinglePass LLM call through the same prompts the LLM evaluator
+   uses (`PromptID` / `PromptName` is the judge, `ModelID` its model):
+   - `EvidenceRequired` — a decision model cannot quote;
+   - `NotAskable` — the scale cannot be a Score question;
+   - `Unanswered` — the decision returned nothing for it;
+   - `LowConfidence` — its confidence is **calibrated** and below `DecisionConfidenceThreshold` (0–1,
+     default 0.7). A raw confidence is never thresholded.
+
+   If the LLM leaves out a `LowConfidence` criterion, the decision's answer is kept (`KeptDecisionAnswers`).
+3. Both halves are scored together by RubricScoring.
+
+The decision never fails an evaluation. When the decision service is missing, the call throws, nothing can be
+asked, or its answers cannot be read, the whole rubric is scored by the LLM evaluator with the same settings and
+`FallbackReason` says why. An LLM failure fails the evaluation, as it does under the LLM evaluator.
+
+**Opting in.** `LLM` stays the default evaluator. Choose the decision model where it fits:
+
+| Where | How |
+|---|---|
+| One agent rubric link (Evaluation, SelfCheck or ProductionSampling) | `EvaluatorConfig`: `{ "EvaluatorType": "AIPrompt", "EvaluatorName": "DecisionThenLLM" }`, plus any of the settings above |
+| One call | `RubricEngine.EvaluateRecord({ ..., evaluator: 'DecisionThenLLM' })`, the `Evaluate Record Against Rubric` action's evaluator, or `mj rubric evaluate --evaluator DecisionThenLLM` |
+| A rubric calibration test | its `evaluator` selection: `{ "EvaluatorName": "DecisionThenLLM" }` |
+
+A rubric has no evaluator column of its own: the choice belongs to the link, call or test that scores it.
 
 The LLM evaluator sends the rubric as the system message and the subject as a separate, delimited user
 message, so subject text cannot rewrite the instructions. Its prompts are metadata you can swap, see
@@ -836,7 +891,7 @@ The testing framework's `llm-judge` oracle runs through the same prompts: its in
 | `EvaluatorType` | The evaluator's type: Human, AIPrompt, Agent, Deterministic, Self, or External |
 | `EvaluatorName` | The registered name, for example `Decision` or your own |
 | `AIPromptRunID` / `AIAgentRunID` | The run that produced it, when there was exactly one |
-| `Metadata.Evaluator` | `Name`, the `Settings` it ran with, and what the evaluator reported: for LLM the `SystemPrompt`, `JudgePrompt` and `CriterionPrompt` it used, every prompt run when there were several, the samples, dropped keys and quotes; for Decision the `Prompt`, `CriterionPrompt`, and `UnaskedCriteria` |
+| `Metadata.Evaluator` | `Name`, the `Settings` it ran with, and what the evaluator reported: for LLM the `SystemPrompt`, `JudgePrompt` and `CriterionPrompt` it used, every prompt run when there were several, the samples, dropped keys and quotes; for Decision the `Prompt`, `CriterionPrompt`, `UnaskedCriteria`, `CalibratedCriteria`, `DecisionModel` and `ResolvedModel`; for DecisionThenLLM `AnsweredBy` (`Decision`, `DecisionThenLLM` or `LLM`), `DecisionCriteria`, `LLMCriteria` with each reason, `KeptDecisionAnswers`, `ConfidenceThreshold`, `PromptRunIDs`, and `FallbackReason` when it fell back |
 
 `Self` and `External` are not run by the engine: they are another party's or another system's scores, stored
 and shown. **Self is never part of consensus.** A custom evaluator that is neither an AI prompt nor an agent

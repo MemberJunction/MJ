@@ -113,11 +113,12 @@ export interface IRubricVersionChangeDetails {
  * For the LLM evaluator three prompts compose one call: the evaluator prompt (the parent, which owns
  * the JSON reply contract), the judge prompt rendered into its `judgePrompt` slot, and the criterion
  * prompt that renders each criterion. PromptID/PromptName name the judge; for the Decision evaluator
- * they name the decision prompt instead.
+ * they name the decision prompt instead. DecisionThenLLM runs the decision first (DecisionPromptID/Name,
+ * DecisionModelID) and the LLM judge (PromptID/Name, ModelID) only for the criteria the decision did not settle.
  */
 export interface IRubricEvaluatorSelection {
     EvaluatorType: 'AIPrompt' | 'Agent' | 'Deterministic' | 'External' | 'Human' | 'Self';
-    /** A registered evaluator name (LLM, Decision, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
+    /** A registered evaluator name (LLM, Decision, DecisionThenLLM, Agent, Deterministic, or a custom one). Wins over EvaluatorType. */
     EvaluatorName?: string;
     /** LLM: the judge prompt. Decision: the decision prompt. */
     PromptID?: string;
@@ -137,6 +138,16 @@ export interface IRubricEvaluatorSelection {
     /** LLM: runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
     Mode?: 'SinglePass' | 'PerCriterion';
+    /** DecisionThenLLM: the decision prompt for its decision pass. Default `Default Decision`. PromptID/PromptName stay the LLM judge. */
+    DecisionPromptID?: string;
+    DecisionPromptName?: string;
+    /** DecisionThenLLM: pins the decision model. ModelID stays the LLM's model. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM: a criterion whose calibrated decision confidence is below this (0..1, default 0.7)
+     * goes to the LLM. Applies only where a calibration for use `rubric-evaluation` and the criterion's key exists.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, JsonValue>;
 }

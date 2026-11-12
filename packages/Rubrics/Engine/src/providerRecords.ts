@@ -1,4 +1,4 @@
-import { AIPromptParams, ChildPromptParam, PickPromptExecutionScope, type AIPromptExecutionScope } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ChildPromptParam, PickPromptExecutionScope, type AIPromptExecutionScope, type DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
 import { AIDecisionParams, AIDecisionRunner, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
 import type { RubricDecisionOutput, RubricDecisionService, RubricPromptRef, RubricPromptRequest, RubricPromptService } from './evaluatorServices.js';
@@ -472,7 +472,12 @@ export function ProviderDecisionService(provider: unknown, user: unknown, execut
                 if (answer.Kind !== 'Score') throw new Error(`The decision answered ${key} with a ${answer.Kind}, not a score.`);
                 answers[key] = answer;
             }
-            return { Answers: answers, PromptRunID: result.promptRun?.ID ?? null };
+            return {
+                Answers: answers,
+                PromptRunID: result.promptRun?.ID ?? null,
+                ModelName: result.modelInfo?.modelName ?? null,
+                ResolvedModel: result.DecisionResult?.ResolvedModel ?? null,
+            };
         },
     };
 }
@@ -484,6 +489,18 @@ let agentRunnerFactory: AgentRunnerFactory | undefined;
 /** Lets the agents package supply the runner without a package cycle. */
 export function RegisterRubricAgentRunner(factory: AgentRunnerFactory): void {
     agentRunnerFactory = factory;
+}
+
+let decisionCalibrations: DecisionCalibrationSource | undefined;
+
+/**
+ * Supplies where decision calibrations are declared (normally `AIEngine.Instance`) to every
+ * ProviderRubricEngine, so the Decision and DecisionThenLLM evaluators can calibrate their confidences.
+ * This package does not depend on the AI engine, so a server package that does registers it, the same
+ * way the agents package registers its evaluation runner. Unregistered, decision confidences stay raw.
+ */
+export function RegisterRubricDecisionCalibrations(source: DecisionCalibrationSource | undefined): void {
+    decisionCalibrations = source;
 }
 
 /**
@@ -499,6 +516,7 @@ export function ProviderRubricEngine(provider: unknown, user: unknown, execution
         Prompts: ProviderPromptService(data, user, executionScope),
         Decisions: ProviderDecisionService(data, user, executionScope),
         Agent: agentRunnerFactory?.(data, user, executionScope),
+        Calibrations: decisionCalibrations,
     });
 }
 

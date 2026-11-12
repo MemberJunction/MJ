@@ -1,4 +1,5 @@
 import type { ScoreAnswer, ScoreQuestion } from '@memberjunction/ai';
+import type { DecisionCalibrationSource } from '@memberjunction/ai-core-plus';
 import type { MJRubricEvaluationEntity } from '@memberjunction/core-entities';
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import type { EvaluationAgentRunner } from './AgentRubricEvaluator.js';
@@ -53,9 +54,31 @@ export interface RubricEvaluatorSettings {
     Mode?: RubricPromptMode;
     /** LLM only. Runs the rubric this many times and keeps each criterion's median level. */
     Samples?: number;
+    /**
+     * DecisionThenLLM only. The decision prompt for its decision pass, by `MJ: AI Prompts` ID
+     * (default `Default Decision`). PromptID and PromptName keep naming the LLM judge there.
+     */
+    DecisionPromptID?: string;
+    /** DecisionThenLLM only. The decision prompt by name. */
+    DecisionPromptName?: string;
+    /** DecisionThenLLM only. Pins the decision model. ModelID keeps pinning the LLM's model there. */
+    DecisionModelID?: string;
+    /**
+     * DecisionThenLLM only. A criterion whose CALIBRATED decision confidence is below this goes to
+     * the LLM follow-up call. Applies only where a calibration for use `rubric-evaluation` and that
+     * criterion's key exists for the model that answered; a raw confidence is never thresholded.
+     * Default {@link DEFAULT_DECISION_CONFIDENCE_THRESHOLD}.
+     */
+    DecisionConfidenceThreshold?: number;
     /** Settings for a custom evaluator, keyed by its evaluator name. */
     Extensions?: Record<string, RubricJsonValue>;
 }
+
+/** The calibrated confidence below which DecisionThenLLM sends a criterion to the LLM, when the settings name none. */
+export const DEFAULT_DECISION_CONFIDENCE_THRESHOLD = 0.7;
+
+/** The decision use rubric calibrations are fitted under. The question is the criterion's key. */
+export const RUBRIC_DECISION_USE = 'rubric-evaluation';
 
 /** Names a prompt by id or by name. */
 export interface RubricPromptRef {
@@ -105,6 +128,10 @@ export interface RubricPromptService {
 export interface RubricDecisionOutput {
     Answers: Record<string, ScoreAnswer>;
     PromptRunID?: string | null;
+    /** The MJ decision model that answered, after any failover (`Jev`, `LLM Decision`). Needed to find a calibration. */
+    ModelName?: string | null;
+    /** The exact model behind it, as the driver reports it. Needed to find a calibration. */
+    ResolvedModel?: string | null;
 }
 
 /** Asks a Decision-type model typed Score questions about the subject, all in one call. */
@@ -120,6 +147,11 @@ export interface RubricEvaluatorServices {
     Prompts?: RubricPromptService;
     Decisions?: RubricDecisionService;
     Agent?: EvaluationAgentRunner;
+    /**
+     * Where decision calibrations are declared, normally `AIEngine.Instance`. Without it, or without
+     * a fit for the model that answered, decision confidences stay raw.
+     */
+    Calibrations?: DecisionCalibrationSource;
 }
 
 /** Everything one evaluation run can read. */
