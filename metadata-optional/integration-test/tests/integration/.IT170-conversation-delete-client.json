@@ -2,7 +2,7 @@
   {
     "fields": {
       "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-      "Name": "IT169 - Conversation Delete Guard (client transport)",
+      "Name": "IT170 - Conversation Delete Guard (client transport)",
       "Description": "Who may delete a conversation for everyone, enforced by the server (MJConversationEntityServer.Delete, which runs inside MJAPI for every GraphQL delete) and proven over the GraphQL wire as two seeded users authenticated by their own minted API keys. Reuses the IT115 users and role: it-authorship-owner owns a conversation and grants it-authorship-grantee View on it; the role mirrors the UI role's unfiltered Delete on MJ: Conversations, so every refusal must come from the delete rule, and each check asserts the rule's own message. CD1: once MJAPI honours the View grant, the grantee's delete is refused and the row still exists. CD2: the owner raises the grant to Edit; the grantee's delete is still refused and the row still exists. CD3: the owner deletes the conversation and the row is gone. Mutation tier.",
       "InputDefinition": {},
       "ExpectedOutcomes": {
