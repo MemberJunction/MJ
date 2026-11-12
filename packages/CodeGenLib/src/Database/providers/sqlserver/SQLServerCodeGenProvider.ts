@@ -465,15 +465,12 @@ GO${permissions}
         // have no updatable fields. Generate a no-op SP that just returns the existing row
         // rather than emitting an invalid UPDATE with an empty SET clause.
         const hasUpdatableFields = updateFields.trim().length > 0;
-        const setClause = hasUpdatedAtField
-            ? `${updateFields},\n        [${EntityInfo.UpdatedAtFieldName}] = GETUTCDATE()`
-            : updateFields;
 
         const spBody = hasUpdatableFields
             ? `    UPDATE
         [${entity.SchemaName}].[${entity.BaseTable}]
     SET
-        ${setClause}
+        ${updateFields}
     WHERE
         ${pkWhereClause}
 

@@ -21,6 +21,7 @@ vi.mock('../Misc/status_logging', () => ({
 
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
+import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import { SQLCodeGenBase } from '../Database/sql_codegen';
 
 class TestSQLCodeGen extends SQLCodeGenBase {
@@ -361,6 +362,103 @@ describe('Wave 4.3b — single-write spUpdate, hierarchy TVF, geo base-table joi
 
             expect(joins).toContain('LEFT OUTER JOIN\n    [__mj].[RecordGeoCode] AS __mj_rgc');
             expect(joins).not.toContain('vwRecordGeoCodes');
+        });
+    });
+
+    describe('PostgreSQLCodeGenProvider shared base-class behavior', () => {
+        const pgProvider = new PostgreSQLCodeGenProvider();
+
+        it('emits "__mj_UpdatedAt" = (NOW() AT TIME ZONE \'UTC\') in generateCRUDUpdate via shared GenerateUpdateFieldString', () => {
+            const fields: FieldInit[] = [
+                pkField('ID', 'uuid'),
+                {
+                    ID: 'f-name',
+                    Name: 'Name',
+                    CodeName: 'Name',
+                    Type: 'text',
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                },
+                {
+                    ID: 'f-updated-at',
+                    Name: '__mj_UpdatedAt',
+                    CodeName: '__mj_UpdatedAt',
+                    Type: 'timestamptz',
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: false,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    IsSpecialDateField: true,
+                },
+            ];
+            const entity = createEntity({ SchemaName: 'public' }, fields);
+
+            const sql = pgProvider.generateCRUDUpdate(entity);
+            expect(sql).toContain('"__mj_UpdatedAt" = (NOW() AT TIME ZONE \'UTC\')');
+            expect(sql).toContain('UPDATE "public"."TestEntity"');
+        });
+
+        it('returns empty GenerateUpdateFieldString and emits no-op RETURN QUERY for PK-only entity with __mj_UpdatedAt', () => {
+            const fields: FieldInit[] = [
+                pkField('ID', 'uuid'),
+                {
+                    ID: 'f-updated-at',
+                    Name: '__mj_UpdatedAt',
+                    CodeName: '__mj_UpdatedAt',
+                    Type: 'timestamptz',
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: false,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    IsSpecialDateField: true,
+                },
+            ];
+            const entity = createEntity({ SchemaName: 'public' }, fields);
+
+            expect(pgProvider.GenerateUpdateFieldString(entity.Fields)).toBe('');
+            const sql = pgProvider.generateCRUDUpdate(entity);
+            expect(sql).toContain('RETURN QUERY');
+            expect(sql).not.toContain('UPDATE "public"."TestEntity"');
+        });
+
+        it('emits CREATE INDEX IF NOT EXISTS for polymorphic FK pairs (EntityIDFieldName) in generateForeignKeyIndexes', () => {
+            const polymorphicFields: FieldInit[] = [
+                pkField('ID', 'uuid'),
+                {
+                    ID: 'f-entity-id',
+                    Name: 'EntityID',
+                    CodeName: 'EntityID',
+                    Type: 'uuid',
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                },
+                {
+                    ID: 'f-record-id',
+                    Name: 'RecordID',
+                    CodeName: 'RecordID',
+                    Type: 'varchar',
+                    Length: 255,
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    EntityIDFieldName: 'EntityID',
+                },
+            ];
+            const entity = createEntity({ SchemaName: 'public' }, polymorphicFields);
+
+            const indexes = pgProvider.generateForeignKeyIndexes(entity);
+            expect(indexes.some(i => i.includes('CREATE INDEX IF NOT EXISTS') && i.includes('"RecordID"'))).toBe(true);
+            expect(indexes.some(i => i.includes('CREATE INDEX IF NOT EXISTS') && i.includes('"EntityID"'))).toBe(true);
         });
     });
 });

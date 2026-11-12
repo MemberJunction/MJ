@@ -1585,6 +1585,14 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }
         }
+        if (parts.length > 0) {
+            const updatedAtField = entityFields.find(
+                f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim()
+            );
+            if (updatedAtField) {
+                parts.push(`${dialect.QuoteIdentifier(updatedAtField.Name)} = ${dialect.CurrentTimestampUTC()}`);
+            }
+        }
         return parts.join(',\n        ');
     }
 
