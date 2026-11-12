@@ -318,7 +318,7 @@ function renderSessions(m: ModelReport): string[] {
     const f = m.AnalyzerFallbacks;
     const noFile = f.NoFile > 0 ? `; ${f.NoFile === 1 ? '1 run has' : `${f.NoFile} runs have`} no generation file` : '';
     const noFlag = f.NoFlag > 0 ? `; ${f.NoFlag === 1 ? '1 run' : `${f.NoFlag} runs`} did not record the flag` : '';
-    return renderCounts('Session end reasons', m.Sessions, [`- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs with a generation file${noFile}${noFlag}`]);
+    return renderCounts('Session end reasons', m.Sessions, [`- Analyzer fallbacks (no risk notes): ${f.Fallbacks} of ${f.Runs} runs that recorded the flag${noFile}${noFlag}`]);
 }
 
 /** A count section; `extra` lines follow the count rows. */
