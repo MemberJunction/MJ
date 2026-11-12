@@ -93,6 +93,14 @@ const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>(['s
  */
 @RegisterClass(BaseArtifactToolLibrary, 'SpreadsheetToolLibrary')
 export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
+    /**
+     * Wall-clock budget, in milliseconds, for one regex `search_cells` call. Cells not reached in time
+     * are reported as unsearchable and the result is marked `partial`. Defaults to
+     * {@link TOOL_REGEX_BUDGET_MS}; tests that assert a complete search raise it so a slow CI runner
+     * does not turn a timing margin into a failure.
+     */
+    public RegexBudgetMs: number = TOOL_REGEX_BUDGET_MS;
+
     protected override getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
@@ -1174,7 +1182,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         let tooLongCount = 0;
         let timeoutCount = 0;
         let budgetExpired = false;
-        const regexDeadline = regex ? performance.now() + TOOL_REGEX_BUDGET_MS : 0;
+        const regexDeadline = regex ? performance.now() + this.RegexBudgetMs : 0;
 
         const recordUnsearchableCell = (
             sheetName: string,
@@ -1365,7 +1373,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
         if (timeoutCount > 0) {
             warnings.push(
-                `${timeoutCount} cell(s) were skipped because regex evaluation reached the ${TOOL_REGEX_BUDGET_MS}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
+                `${timeoutCount} cell(s) were skipped because regex evaluation reached the ${this.RegexBudgetMs}ms tool time budget. Simplify the pattern or retry with use_regex: false for plain-text search.`
             );
         }
         if (unsearchableCount > unsearchableCells.length) {
