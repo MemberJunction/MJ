@@ -1115,7 +1115,7 @@ export class DiscoveryEngine {
     state: DatabaseDocumentation,
     phase: RelationshipDiscoveryPhase
   ): void {
-    // Apply ONE primary key per table: the best non-rejected candidate at or above the floor (#6004).
+    // Apply ONE primary key per table: the best surviving candidate.
     ApplyBestPrimaryKeys(state, phase.discovered.primaryKeys, this.config.confidence.primaryKeyMinimum * 100);
 
     // Apply high-confidence FKs and build table-level dependency graph

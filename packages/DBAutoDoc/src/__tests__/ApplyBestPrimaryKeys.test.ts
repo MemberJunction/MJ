@@ -1,12 +1,20 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'url';
 import { ApplyBestPrimaryKeys } from '../discovery/ApplyPrimaryKeys';
-import type { PKCandidate } from '../types/discovery';
-import type { ColumnDefinition, DatabaseDocumentation } from '../types/state';
+import { AnalysisEngine } from '../core/AnalysisEngine';
+import { PromptEngine } from '../prompts/PromptEngine';
+import type { StateManager } from '../state/StateManager';
+import type { IterationTracker } from '../state/IterationTracker';
+import type { DBAutoDocConfig } from '../types/config';
+import type { PKCandidate, RelationshipDiscoveryPhase } from '../types/discovery';
+import type { ColumnDefinition, ColumnStatistics, DatabaseDocumentation } from '../types/state';
 
 /**
- * #6004: discovery applies ONE primary key per table, the best non-rejected candidate at or above
- * the confidence floor, and a re-apply after pruning unflags the columns of a rejected candidate.
- * Columns no candidate names are never touched.
+ * Discovery applies ONE primary key per table: the best surviving candidate (not rejected, and
+ * confirmed or at or above the confidence floor; confirmed first, then highest confidence). A
+ * re-apply after pruning or after an LLM decision unflags the columns of the candidates that lost,
+ * and a table whose candidates were all rejected ends with none flagged. Columns no candidate names
+ * are never touched.
  */
 
 function column(name: string, isPrimaryKey = false): ColumnDefinition {
@@ -87,5 +95,65 @@ describe('ApplyBestPrimaryKeys', () => {
     const s = state([column('A'), column('B')]);
     ApplyBestPrimaryKeys(s, [candidate(['A'], 90), candidate(['B'], 90)], 70);
     expect(flagged(s)).toEqual(['A']);
+  });
+});
+
+describe('ApplyBestPrimaryKeys: confirmation and rejection', () => {
+  it('unflags every candidate column when pruning rejects the only candidate', () => {
+    const s = state([column('ID'), column('ProductKey'), column('TypeKey')]);
+    const candidates = [candidate(['ProductKey', 'TypeKey'], 95)];
+    ApplyBestPrimaryKeys(s, candidates, 70);
+    candidates[0].status = 'rejected';
+    const result = ApplyBestPrimaryKeys(s, candidates, 70);
+    expect(flagged(s)).toEqual([]);
+    expect(result).toEqual({ TablesFlagged: 0, ColumnsCleared: 2 });
+  });
+
+  it('prefers a confirmed candidate over a higher-scoring unconfirmed one', () => {
+    const s = state([column('ID'), column('A'), column('B')]);
+    ApplyBestPrimaryKeys(s, [candidate(['A', 'B'], 95), candidate(['ID'], 85, 'confirmed')], 70);
+    expect(flagged(s)).toEqual(['ID']);
+  });
+
+  it('keeps a confirmed candidate below the floor', () => {
+    const s = state([column('ID'), column('Code')]);
+    ApplyBestPrimaryKeys(s, [candidate(['Code'], 50, 'confirmed')], 70);
+    expect(flagged(s)).toEqual(['Code']);
+  });
+});
+
+describe("AnalysisEngine: an LLM primary-key decision replaces the table's other candidate", () => {
+  const uniqueStats: ColumnStatistics = { totalRows: 10, distinctCount: 10, uniquenessRatio: 1, nullCount: 0, nullPercentage: 0, sampleValues: [] };
+
+  function engineFor(s: DatabaseDocumentation): AnalysisEngine {
+    const promptEngine = new PromptEngine({ provider: 'gemini', model: 'm', apiKey: 'k' }, fileURLToPath(new URL('../../prompts', import.meta.url)));
+    const table = s.schemas[0].tables[0];
+    const stateManager = { findTable: () => table } as Partial<StateManager> as StateManager;
+    const config = {
+      ai: { provider: 'gemini', model: 'm', apiKey: 'k' },
+      analysis: { backpropagation: { maxDepth: 1 }, convergence: { maxIterations: 1, stabilityWindow: 1, confidenceThreshold: 0.8 } },
+    } as DBAutoDocConfig;
+    return new AnalysisEngine(config, promptEngine, stateManager, {} as IterationTracker);
+  }
+
+  function withCandidates(s: DatabaseDocumentation, candidates: PKCandidate[]): DatabaseDocumentation {
+    s.phases.keyDetection = { discovered: { primaryKeys: candidates, foreignKeys: [] } } as Partial<RelationshipDiscoveryPhase> as RelationshipDiscoveryPhase;
+    ApplyBestPrimaryKeys(s, candidates, 70);
+    return s;
+  }
+
+  it('confirming an existing candidate unflags the candidate discovery had applied', async () => {
+    const s = withCandidates(state([column('ID'), column('ProductKey'), column('TypeKey')]), [candidate(['ID'], 85), candidate(['ProductKey', 'TypeKey'], 60)]);
+    expect(flagged(s)).toEqual(['ID']);
+    await engineFor(s)['processPKInsightFromLLM'](s, 'dbo', 'Price', { columns: ['ProductKey', 'TypeKey'], confidence: 0.9, reasoning: 'r' });
+    expect(flagged(s)).toEqual(['ProductKey', 'TypeKey']);
+  });
+
+  it('a new key from an LLM proposal unflags the candidate discovery had applied', async () => {
+    const code = { ...column('Code'), statistics: uniqueStats };
+    const s = withCandidates(state([column('A'), column('B'), code]), [candidate(['A', 'B'], 90)]);
+    expect(flagged(s)).toEqual(['A', 'B']);
+    await engineFor(s)['processPKInsightFromLLM'](s, 'dbo', 'Price', { columns: ['Code'], confidence: 0.8, reasoning: 'r' });
+    expect(flagged(s)).toEqual(['Code']);
   });
 });
