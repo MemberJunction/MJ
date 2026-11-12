@@ -3,6 +3,7 @@ import { SQLParser, type SQLStatementKind } from '../sql-parser.js';
 import { RenderAggregateExpression } from './aggregateRenderer.js';
 import { CLAUSE_WRAPPER_TABLE, CollectReads, WrapperFromItem, type ReadableParse } from './statementReads.js';
 import { StrictGrammarOf, StrictParsingDialect } from './strictDialect.js';
+import { RewriteGrammarGaps } from './grammarGapRewrites.js';
 import type {
     StrictAggregateResult,
     StrictFilterOptions,
@@ -122,8 +123,21 @@ export class StrictFragmentValidator {
         const grammar = StrictGrammarOf(dialect);
         if (grammar === null) return { SQL: sql, Tree: null, Refusal: 'NoGrammar' };
         const parsing = StrictParsingDialect(dialect, grammar);
-        const tree = options?.AllowFallbackParse === false ? StrictFragmentValidator.directTree(sql, parsing) : new SQLParser(sql, parsing);
+        const tree = options?.AllowFallbackParse === false ? StrictFragmentValidator.directTree(sql, parsing) : StrictFragmentValidator.fallbackTree(sql, parsing);
         return tree && tree.AST !== null ? { SQL: sql, Tree: tree, Refusal: null } : { SQL: sql, Tree: null, Refusal: 'Unparseable' };
+    }
+
+    /**
+     * A `SQLParser` reading of `sql`, with its fallbacks. When that fails, one more reading of the
+     * text with the grammar's gaps rewritten ({@link RewriteGrammarGaps}: `STRING_AGG … WITHIN
+     * GROUP`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG`, `RANGE` frames, `LIKE … ESCAPE`,
+     * `TOP … WITH TIES`, a leading `;`), which reads the same relations.
+     */
+    private static fallbackTree(sql: string, dialect: SQLParserDialect): SQLParser {
+        const parser = new SQLParser(sql, dialect);
+        if (parser.AST !== null) return parser;
+        const rewritten = RewriteGrammarGaps(sql, dialect);
+        return rewritten === sql ? parser : new SQLParser(rewritten, dialect);
     }
 
     /** The direct reading of `sql`, with no fallback; null when it does not parse. */
