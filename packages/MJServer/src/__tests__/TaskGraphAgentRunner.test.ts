@@ -323,6 +323,41 @@ describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from
     });
 });
 
+describe('TaskGraphAgentRunner submitting run that does not resolve (#4623)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('logs when the submitting run is not found, and runs the agent with no parentRun', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams({ SubmittingAgentRunID: 'missing-run-1' }, 'parent-cfg-1', { LoadSuccess: false });
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent.mock.calls[0][0].parentRun).toBeUndefined();
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('missing-run-1') && m.includes('was not found'))).toBe(true);
+    });
+
+    it('does not log when there is no submitting run to load', async () => {
+        const runner = new TaskGraphAgentRunner();
+
+        await runner.RunAgentForTask(makeParams({ SubmittingAgentRunID: undefined }));
+
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('was not found'))).toBe(false);
+    });
+});
+
 describe('TaskGraphAgentRunner', () => {
     beforeEach(() => {
         vi.clearAllMocks();

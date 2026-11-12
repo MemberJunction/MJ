@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
+import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer, VoiceSettings, ModelUsage } from "@memberjunction/ai";
 import { ElevenLabs, ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
@@ -41,7 +41,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 const request: ElevenLabs.BodyTextToSpeechFullWithTimestamps = {
                     text: params.text,
                     modelId: params.model_id,
-                    voiceSettings: params.voice_settings,
+                    voiceSettings: ElevenLabsAudioGenerator.ToSdkVoiceSettings(params.voice_settings),
                     applyTextNormalization: params.apply_text_normalization,
                     pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
                 };
@@ -64,6 +64,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                         EndSeconds: alignment.characterEndTimesSeconds,
                     };
                 }
+                speechResult.usage = ElevenLabsAudioGenerator.CharacterUsage(params.text);
                 speechResult.success = true;
             } else {
                 // New API uses textToSpeech.convert instead of generate
@@ -72,7 +73,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                     {
                         text: params.text,
                         modelId: params.model_id,
-                        voiceSettings: params.voice_settings,
+                        voiceSettings: ElevenLabsAudioGenerator.ToSdkVoiceSettings(params.voice_settings),
                         applyTextNormalization: params.apply_text_normalization,
                         pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
                     },
@@ -82,6 +83,7 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
                 const audioBuffer = await this.readAudio(audioStream, signal);
                 speechResult.data = audioBuffer;
                 speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
+                speechResult.usage = ElevenLabsAudioGenerator.CharacterUsage(params.text);
                 speechResult.success = true;
             }
         } catch (error) {
@@ -94,6 +96,34 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;
+    }
+
+    /**
+     * MJ's snake_case voice settings in the camelCase shape the ElevenLabs SDK expects. The SDK
+     * serializer drops keys it does not know, so passing MJ's object straight through lost
+     * `similarity_boost` and `use_speaker_boost` (#4863). Keys left unset stay unset, so the voice's
+     * own defaults apply.
+     */
+    public static ToSdkVoiceSettings(settings: VoiceSettings | undefined): ElevenLabs.VoiceSettings | undefined {
+        if (!settings) {
+            return undefined;
+        }
+        const mapped: ElevenLabs.VoiceSettings = {};
+        if (settings.stability !== undefined) mapped.stability = settings.stability;
+        if (settings.similarity_boost !== undefined) mapped.similarityBoost = settings.similarity_boost;
+        if (settings.style !== undefined) mapped.style = settings.style;
+        if (settings.use_speaker_boost !== undefined) mapped.useSpeakerBoost = settings.use_speaker_boost;
+        if (settings.speed !== undefined) mapped.speed = settings.speed;
+        return mapped;
+    }
+
+    /**
+     * Usage for one synthesis: ElevenLabs bills text-to-speech by the characters of the input text
+     * (#4865), recorded in the `Characters` base measure. Counted in code points, as the
+     * text-to-speech runner counts them, so an emoji is one character, not two UTF-16 units.
+     */
+    public static CharacterUsage(text: string | undefined): ModelUsage {
+        return ModelUsage.ForMedia('Characters', Array.from(text ?? '').length, 0);
     }
 
     /**

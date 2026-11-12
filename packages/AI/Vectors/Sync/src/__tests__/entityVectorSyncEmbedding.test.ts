@@ -44,6 +44,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
 vi.mock('@memberjunction/ai-prompts', () => ({
+  EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
   AIEmbeddingRunner: class {
     RunEmbedding = h.runEmbedding;
   },
@@ -95,6 +96,8 @@ describe('EntityVectorSyncer embedding call', () => {
       ModelID: 'model-doc-1',
       Dimensions: 256,
       ContextUser: user,
+      // Booked under the vector sync carrier prompt (#4923).
+      PromptName: 'Vector Sync Embedding',
     }));
   });
 
