@@ -246,20 +246,24 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (492 classes)
+// @memberjunction/core-entities (499 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -372,6 +376,7 @@ import {
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
@@ -735,11 +740,13 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
 } from '@memberjunction/core-entities';
 
 // @memberjunction/actions-base (2 classes)
@@ -1476,7 +1483,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (82 classes)
+// @memberjunction/core-entities-server (84 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1500,7 +1507,9 @@ import {
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
+    MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
@@ -1976,13 +1985,17 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     AlternateBaseViewEdgeProvider,
     ApplicationRolePermissionProvider,
+    ArtifactDocumentBlock,
     ArtifactPermissionProvider,
     AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
+    DashboardPartDocumentBlock,
     DashboardPermissionProvider,
     EntityMetadataEdgeProvider,
     EntityPermissionProvider,
+    EntityViewDocumentBlock,
     ForeignKeyEdgeProvider,
+    InteractiveComponentDocumentBlock,
     JoinEntityEdgeProvider,
     MJAIActionEntity,
     MJAIAgentActionEntity,
@@ -2092,14 +2105,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
-    MJArtifactUseEntity,
-    MJArtifactVersionAttributeEntity,
-    MJArtifactVersionEntity,
-    MJAuditLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactUseEntity,
+    MJArtifactVersionAttributeEntity,
+    MJArtifactVersionEntity,
+    MJArtifactWorkingStateEntity,
+    MJAuditLogEntity,
     MJAuditLogTypeEntity,
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
@@ -2295,15 +2309,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJMLTrainingSnapshotEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
@@ -2466,11 +2480,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
+    SavedQueryDocumentBlock,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     LiveKitBridge,
@@ -2497,6 +2513,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
     LoopbackBridge,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     OpenAISipBridge,
     MSGraphProvider,
     SendGridProvider,
@@ -2504,10 +2524,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJLibraryEntityExtended,
     MJLibraryItemEntityExtended,
     EntityActionInvocationMultipleRecords,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     EntityActionInvocationSingleRecord,
     EntityActionInvocationValidate,
     ApolloCreateListAction,
@@ -2701,6 +2717,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MetadataCacheParityProbe,
     OpenAppFleetStatusProbe,
     QueueWorkerHeartbeatProbe,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     SchemaMigrationParityProbe,
     RunSyncAction,
     AIActionQueue,
@@ -2708,10 +2728,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseWellKnownUserSource,
     RequiredWhenValidator,
     SqlWhereClauseValidator,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     SubsetOfEntityFieldsValidator,
     RecordCloneDescribeServerOperation,
     RecordCloneExecuteServerOperation,
@@ -2905,6 +2921,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ActionLogRetentionScheduledJobDriver,
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     AgentScheduledJobDriver,
     EvaluateSampledAgentRunsDriver,
     IntegrationDiscoveryScheduledJobDriver,
@@ -2912,10 +2932,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MaterializationRefreshScheduledJobDriver,
     RecordProcessScheduledJobDriver,
     RunUserRoutineNowAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     UserRoutineDispatcherDriver,
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -2939,7 +2955,9 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
     MJApplicationEntityServer,
+    MJArtifactEntityServer,
     MJArtifactVersionEntityServer,
+    MJArtifactWorkingStateEntityServer,
     MJBrandKitEntityServer,
     MJCommentEntityServer,
     MJCompanyIntegrationEntityServer,
@@ -3107,6 +3125,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
     GetArchitectureDiagramReferenceAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -3116,10 +3138,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetGraphContextAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     GetListRecordsAction,
     GetMetadataAction,
     GetMyCalendarAndAvailabilityAction,
@@ -3285,7 +3303,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1348;
+export const CLASS_REGISTRATIONS_COUNT = 1357;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
