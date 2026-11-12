@@ -26,6 +26,7 @@ import {
 import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign, type LoginRegion, type PublicLoginScreen, type ThemeLogos } from '@memberjunction/theme-engine';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
+import { ValidateExplorerEnvironment } from './environment-validation';
 import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -1389,90 +1390,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * Validates that required environment variables are present before auth initialization.
    * Surfaces clear error messages via SystemValidationService instead of letting the app
    * crash with cryptic runtime errors like "can't read endsWith() on undefined".
+   * A provider resolved from the server's catalog supplies its own settings (see
+   * {@link ValidateExplorerEnvironment}).
    */
   private validateEnvironment(): boolean {
-    const env = this.environment;
-    let valid = true;
-
-    const requiredFields: { key: keyof MJEnvironmentConfig; label: string }[] = [
-      { key: 'GRAPHQL_URI', label: 'GraphQL HTTP endpoint URL' },
-      { key: 'GRAPHQL_WS_URI', label: 'GraphQL WebSocket endpoint URL' },
-      { key: 'AUTH_TYPE', label: 'Authentication provider type (msal or auth0)' },
-      { key: 'MJ_CORE_SCHEMA_NAME', label: 'MJ Core schema name' },
-    ];
-
-    for (const field of requiredFields) {
-      if (!env[field.key]) {
-        this.validationService.addIssue({
-          id: `env-missing-${String(field.key)}`,
-          message: `Missing required environment variable: ${String(field.key)}`,
-          severity: 'error',
-          details: `The "${String(field.key)}" property is empty or missing in your environment configuration file.`,
-          help: `Add ${String(field.key)} (${field.label}) to your environment.ts file. Example files are in src/environments/.`
-        });
-        valid = false;
-      }
+    const issues = ValidateExplorerEnvironment(this.environment, !!this.authResolution?.active);
+    for (const issue of issues) {
+      this.validationService.addIssue(issue);
     }
-
-    // Conditionally required based on AUTH_TYPE
-    const authType = env.AUTH_TYPE?.toLowerCase();
-    if (authType === 'msal') {
-      valid = this.validateMsalFields(env) && valid;
-    } else if (authType === 'auth0') {
-      valid = this.validateAuth0Fields(env) && valid;
-    }
-
-    return valid;
-  }
-
-  private validateMsalFields(env: MJEnvironmentConfig): boolean {
-    let valid = true;
-    if (!env.CLIENT_ID) {
-      this.validationService.addIssue({
-        id: 'env-missing-CLIENT_ID',
-        message: 'Missing required environment variable: CLIENT_ID',
-        severity: 'error',
-        details: 'MSAL authentication requires CLIENT_ID (Azure AD/Entra Application Client ID).',
-        help: 'Add your Azure AD Application (client) ID to the environment file.'
-      });
-      valid = false;
-    }
-    if (!env.TENANT_ID) {
-      this.validationService.addIssue({
-        id: 'env-missing-TENANT_ID',
-        message: 'Missing required environment variable: TENANT_ID',
-        severity: 'error',
-        details: 'MSAL authentication requires TENANT_ID (Azure AD/Entra Tenant ID).',
-        help: 'Add your Azure AD Directory (tenant) ID to the environment file.'
-      });
-      valid = false;
-    }
-    return valid;
-  }
-
-  private validateAuth0Fields(env: MJEnvironmentConfig): boolean {
-    let valid = true;
-    if (!env.AUTH0_DOMAIN) {
-      this.validationService.addIssue({
-        id: 'env-missing-AUTH0_DOMAIN',
-        message: 'Missing required environment variable: AUTH0_DOMAIN',
-        severity: 'error',
-        details: 'Auth0 authentication requires AUTH0_DOMAIN.',
-        help: 'Add your Auth0 domain (e.g. myapp.us.auth0.com) to the environment file.'
-      });
-      valid = false;
-    }
-    if (!env.AUTH0_CLIENTID) {
-      this.validationService.addIssue({
-        id: 'env-missing-AUTH0_CLIENTID',
-        message: 'Missing required environment variable: AUTH0_CLIENTID',
-        severity: 'error',
-        details: 'Auth0 authentication requires AUTH0_CLIENTID.',
-        help: 'Add your Auth0 Client ID to the environment file.'
-      });
-      valid = false;
-    }
-    return valid;
+    return issues.length === 0;
   }
 
   /**
