@@ -244,8 +244,8 @@ async function checkDsl1MetadataAndAppWiring(ctx: IntegrationCheckContext): Prom
     Assert(chatApp !== undefined, 'Chat application (7A873E1A-692E-43FA-97F8-57D8161A985C) must exist');
     const chatNav = parseNavItems(chatApp!.DefaultNavItems);
     Assert(
-        chatNav.some((item) => item.Label === 'Collections' && item.DriverClass === 'ChatCollectionsResource'),
-        'Chat DefaultNavItems must include "Collections" backed by ChatCollectionsResource',
+        chatNav.some((item) => (item.Label === 'Library' || item.Label === 'Collections') && item.DriverClass === 'ChatCollectionsResource'),
+        'Chat DefaultNavItems must include "Library" backed by ChatCollectionsResource',
     );
     Assert(
         chatNav.some((item) => item.Label === 'Agent Activity' && item.DriverClass === 'ChatTasksResource'),
