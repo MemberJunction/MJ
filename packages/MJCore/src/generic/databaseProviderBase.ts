@@ -8,7 +8,7 @@ import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
-import { LogError, LogWarning } from "./logging";
+import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
@@ -1561,6 +1561,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The `TransactionGroup` counterpart of {@link CheckUpdateConcurrency}, called when an UPDATE is
+     * queued into a group. The values the check compares (each changed field's baseline and new
+     * value) are captured now, when the save's SQL is generated; the returned function performs the
+     * locked row read and comparison later, inside the group's transaction before any of the
+     * group's statements run.
+     *
+     * The returned function resolves `true` when the save may proceed, or `false` when it is
+     * rejected (after populating `entityResult` the same way {@link CheckUpdateConcurrency} does).
+     *
+     * Default: `null`, meaning no check (and no extra work at submit).
+     */
+    protected PrepareQueuedUpdateConcurrencyCheck(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        return null;
+    }
+
+    /**
      * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
      * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
      * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
@@ -2375,15 +2396,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
-                    if (
-                        !bNewRecord &&
-                        !bReplay &&
-                        (options?.ConcurrencyBaseline !== undefined || options?.ConcurrencyCheck === 'enforce')
-                    ) {
-                        LogWarning(
-                            `DatabaseProviderBase.Save: entity "${entity.EntityInfo.Name}" is queued in a TransactionGroup; per-save concurrency checking (ConcurrencyBaseline / ConcurrencyCheck: 'enforce') is bypassed for TransactionGroup items.`,
-                        );
-                    }
+                    // Captured before GenerateSaveSQL, matching the direct path, which checks
+                    // before it generates the update.
+                    const concurrencyCheck = bNewRecord
+                        ? null
+                        : this.PrepareQueuedUpdateConcurrencyCheck(entity, user, options, entityResult);
                     let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
                     const preSaveValues = capturePreSaveValues();
                     entity.RaiseReadyForTransaction();
@@ -2485,6 +2502,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 groupAssignedFields = [];
                             }
                         };
+                    }
+                    if (concurrencyCheck) {
+                        txItem.CheckBeforeSubmit = concurrencyCheck;
                     }
                     entity.TransactionGroup.AddTransaction(txItem);
                     return true;

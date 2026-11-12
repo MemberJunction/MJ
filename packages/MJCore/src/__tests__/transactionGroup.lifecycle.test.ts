@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     BaseEntity,
+    BaseEntityResult,
     DatabaseProviderBase,
     DeleteSQLResult,
     EntityDeleteOptions,
@@ -470,5 +471,123 @@ describe('TransactionGroupBase & DatabaseProviderBase TransactionGroup lifecycle
             'onSaveCompleted',
             'rollback',
         ]);
+    });
+});
+
+/**
+ * A provider whose queued-update concurrency check is scripted per entity name value, recording
+ * when each check is prepared and run relative to the group's lifecycle events.
+ */
+class ConcurrencyCheckingProvider extends LifecycleTestProvider {
+    /** Name value of an update whose check rejects; every other check passes. */
+    public RejectName: string | null = null;
+    public readonly Prepared: string[] = [];
+
+    protected override PrepareQueuedUpdateConcurrencyCheck(
+        entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        const name = String(entity.Get('Name'));
+        this.Prepared.push(name);
+        return async () => {
+            this.Group.Events.push(`check:${name}`);
+            if (name !== this.RejectName) {
+                return true;
+            }
+            entityResult.Success = false;
+            entityResult.Message = `Concurrent modification conflict on Widgets for field(s): Name.`;
+            entityResult.ConcurrencyConflict = { ConflictingFields: ['Name'] };
+            return false;
+        };
+    }
+}
+
+describe('TransactionGroup pre-submit concurrency checks', () => {
+    const previousMetadataProvider = Metadata.Provider;
+    const previousEntityProvider = BaseEntity.Provider;
+    const testUser = { ID: 'user-1', Email: 'test@example.com', UserRoles: [] } as object as UserInfo;
+
+    afterEach(() => {
+        Metadata.Provider = previousMetadataProvider;
+        BaseEntity.Provider = previousEntityProvider;
+    });
+
+    function useProvider(): ConcurrencyCheckingProvider {
+        const provider = new ConcurrencyCheckingProvider();
+        Metadata.Provider = provider as object as IMetadataProvider;
+        BaseEntity.Provider = provider;
+        return provider;
+    }
+
+    async function loadedWidget(id: string, newName: string): Promise<TestWidgetEntity> {
+        const widget = new TestWidgetEntity(makeWidgetEntityInfo(false));
+        widget.ContextCurrentUser = testUser;
+        await widget.LoadFromData({ ID: id, Name: 'Loaded Name' }, true);
+        widget.Name = newName;
+        return widget;
+    }
+
+    function newWidget(id: string, name: string): TestWidgetEntity {
+        const widget = new TestWidgetEntity(makeWidgetEntityInfo(false));
+        widget.ContextCurrentUser = testUser;
+        widget.NewRecord();
+        widget.ID = id;
+        widget.Name = name;
+        return widget;
+    }
+
+    it('prepares a check for queued updates only, and runs it inside the transaction before any statement', async () => {
+        const provider = useProvider();
+        const created = newWidget('22222222-2222-2222-2222-222222222222', 'Created');
+        const updated = await loadedWidget('33333333-3333-3333-3333-333333333333', 'Updated');
+        const tg = await provider.CreateTransactionGroup();
+        created.TransactionGroup = tg;
+        updated.TransactionGroup = tg;
+        await created.Save();
+        await updated.Save();
+
+        expect(provider.Prepared).toEqual(['Updated']);
+        expect(await tg.Submit()).toBe(true);
+        expect(provider.Group.Events.slice(0, 3)).toEqual(['begin', 'check:Updated', 'execute']);
+        expect(provider.Group.Events).toContain('commit');
+    });
+
+    it('rolls back without executing any statement when a check rejects, and keeps the conflict on that item', async () => {
+        const provider = useProvider();
+        provider.RejectName = 'Stale';
+        const sibling = newWidget('44444444-4444-4444-4444-444444444444', 'Sibling');
+        const stale = await loadedWidget('55555555-5555-5555-5555-555555555555', 'Stale');
+        const tg = await provider.CreateTransactionGroup();
+        sibling.TransactionGroup = tg;
+        stale.TransactionGroup = tg;
+        await sibling.Save();
+        await stale.Save();
+
+        expect(await tg.Submit()).toBe(false);
+        expect(tg.Status).toBe('Failed');
+        expect(provider.Group.Events).toEqual(['begin', 'check:Stale', 'rollback']);
+        expect(provider.HookCalls).toEqual([]);
+        expect(stale.LatestResult?.Success).toBe(false);
+        expect(stale.LatestResult?.ConcurrencyConflict?.ConflictingFields).toEqual(['Name']);
+        expect(stale.LatestResult?.Message).toContain('Concurrent modification conflict');
+        expect(sibling.LatestResult?.Success).toBe(false);
+        expect(sibling.LatestResult?.Message).toContain('another item in the group failed its pre-submit check');
+    });
+
+    it('runs every check even after one rejects, so each conflicting item reports its own reason', async () => {
+        const provider = useProvider();
+        provider.RejectName = 'First';
+        const first = await loadedWidget('66666666-6666-6666-6666-666666666666', 'First');
+        const second = await loadedWidget('77777777-7777-7777-7777-777777777777', 'Second');
+        const tg = await provider.CreateTransactionGroup();
+        first.TransactionGroup = tg;
+        second.TransactionGroup = tg;
+        await first.Save();
+        await second.Save();
+
+        expect(await tg.Submit()).toBe(false);
+        expect(provider.Group.Events).toEqual(['begin', 'check:First', 'check:Second', 'rollback']);
     });
 });
