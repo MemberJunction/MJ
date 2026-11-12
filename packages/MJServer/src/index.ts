@@ -9,6 +9,7 @@ import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, Summarize
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { ResolveOriginSessionId } from './requestSessionContext.js';
 import { ImportResolverModules } from './resolverModuleImport.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
@@ -66,12 +67,12 @@ import { DataSourceInfo, raiseEvent } from './types.js';
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { IntegrationSyncWorkerService } from './services/IntegrationSyncWorkerService.js';
-import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
+import { InMemoryLocalStorageProvider, LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, LogStatus, LogError, SetVerboseLogging } from '@memberjunction/core';
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { CreateAdhocSQLAuthorizer } from './resolvers/AdhocQueryResolver.js';
-import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WirePushStatusFanOut, WireSharedCacheEvents, WrapSharedCacheWithL1 } from './sharedCache.js';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, PublishEntityInvalidationToPeers, StartEngineSweeper, StartMetadataSweep, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireEntityInvalidationFanOut, WirePushStatusFanOut, WireSharedCacheEvents, WrapSharedCacheWithL1 } from './sharedCache.js';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { StartOrphanedConversationDetailReconciler } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -118,7 +119,8 @@ import {
   GetCorsOwningServerExtensionRoots,
 } from '@memberjunction/server-extensions-core';
 import { CreateIsolatedProvider } from './isolatedProvider.js';
-import { ResolveConfiguredPrincipal } from './auth/principals.js';
+import { ResolveConfiguredPrincipal, ResolveServerPrincipal, ValidateProvisioningPrincipals } from './auth/principals.js';
+import type { ProvisioningPrincipalSetting } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -196,7 +198,7 @@ export * from './auth/actingContextResolver.js';
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom, ResolveServerPrincipal } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -551,12 +553,17 @@ const setupComplete$ = new ReplaySubject(1);
     // they reach into RoomHandoffEngine and RealtimeSessionEventService, and the cache module should not
     // acquire a dependency on either.
     await WirePushStatusFanOut(sharedCache);
+    await WireEntityInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
+  const effectiveStorageProvider = sharedCache
+    ? WrapSharedCacheWithL1(sharedCache, configInfo.cacheSettings)
+    : new InMemoryLocalStorageProvider();
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  await LocalCacheManager.Instance.Initialize(effectiveStorageProvider, cacheManagerConfig);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
 
   if (dbType === 'postgresql') {
@@ -621,7 +628,7 @@ const setupComplete$ = new ReplaySubject(1);
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
-    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
+    pgConfigData.LocalStorageProvider = effectiveStorageProvider;
     pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     const provider = new PostgreSQLDataProvider();
@@ -632,14 +639,14 @@ const setupComplete$ = new ReplaySubject(1);
     await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
-    const sysUser = UserCache.Instance.GetSystemUser();
-    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    const startupUser = ResolveServerPrincipal('PostgreSQL startup') ?? undefined;
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
+    await StartupManagerImport.Instance.Startup(false, startupUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -739,7 +746,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (PostgreSQL)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenPgProvider,
@@ -836,7 +846,7 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
-    config.LocalStorageProvider = sharedCache ?? undefined;
+    config.LocalStorageProvider = effectiveStorageProvider;
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
@@ -847,6 +857,7 @@ const setupComplete$ = new ReplaySubject(1);
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -899,7 +910,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (SQL Server)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenProvider,
@@ -985,10 +999,6 @@ const setupComplete$ = new ReplaySubject(1);
   // handed to it later). Unconditional on purpose: the guard that used to sit here
   // skipped exactly the case that needed it.
   await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
-  if (sharedCache) {
-    const wrappedStorage = WrapSharedCacheWithL1(sharedCache, configInfo.cacheSettings);
-    await LocalCacheManager.Instance.SetStorageProvider(wrappedStorage);
-  }
   // The derived per-entry ceiling, so the boot log says what the largest cacheable entry actually is.
   startupLog.LogIf('verbose', `LocalCacheManager: largest cacheable entry ${Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024)} MB (maxEntryPercentOfCache: ${configInfo.cacheSettings?.maxEntryPercentOfCache ?? 'auto'})`);
   const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
@@ -1186,13 +1196,13 @@ const setupComplete$ = new ReplaySubject(1);
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
         const entityName = beEvent.baseEntity.EntityInfo.Name;
-        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+        const invalidationPayload = {
           entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
-          originSessionId: null,
+          originSessionId: ResolveOriginSessionId(beEvent.baseEntity),
           // Opt-in only: this event reaches every connected client unfiltered, and this listener
           // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
           // the ones no browser session asked for.
@@ -1201,7 +1211,11 @@ const setupComplete$ = new ReplaySubject(1);
               // fls-guard: MayBroadcastRecordData refuses FLS entities and Record Changes
               ? JSON.stringify(beEvent.baseEntity.GetAll())
               : undefined,
-        });
+        };
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, invalidationPayload);
+        if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation !== 'function') {
+          PublishEntityInvalidationToPeers(invalidationPayload);
+        }
       }
     }
   });
@@ -2055,15 +2069,31 @@ async function ProcessPromoteColumnsPendingWork(
   }
 }
 
+/**
+ * Logs an error at startup for each provisioning setting that resolves to a non-Owner user, so the
+ * misconfiguration surfaces at boot rather than at the first new user's login.
+ */
+function validateProvisioningPrincipals(): void {
+  const settings: ProvisioningPrincipalSetting[] = [
+    { Setting: 'userHandling.contextUserForNewUserCreation', Candidate: configInfo.userHandling?.contextUserForNewUserCreation },
+  ];
+  // Unset, the magic-link setting falls back to the one above, already checked.
+  const magicLinkCandidate = configInfo.magicLink?.contextUserForProvisioning;
+  if (magicLinkCandidate) {
+    settings.push({ Setting: 'magicLink.contextUserForProvisioning', Candidate: magicLinkCandidate });
+  }
+  ValidateProvisioningPrincipals(settings);
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
 
   // Get system user for server-side operations — needed to read the queue itself
-  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  const systemUser = ResolveServerPrincipal('RSU pending work');
   if (!systemUser) {
-    console.warn(`[RSU] No system user found — cannot process pending work`);
+    console.warn(`[RSU] No active system user or Owner — cannot process pending work`);
     return;
   }
 
@@ -2574,7 +2604,15 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
 // session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
 // public-widget session mint remains the long-term replacement.
 export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
-export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export type {
+  MagicLinkJWTClaims,
+  CreateMagicLinkInviteParams,
+  CreateMagicLinkInviteBaseParams,
+  CreateEmailMagicLinkInviteParams,
+  CreateAnonymousMagicLinkInviteParams,
+  CreateMagicLinkInviteResult,
+  MintableMagicLinkInviteKind,
+} from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
