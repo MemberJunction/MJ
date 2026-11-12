@@ -1650,7 +1650,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
-            "Sequence": 84,
+            "Sequence": 49,
             "Status": "Active"
           },
           "primaryKey": {
