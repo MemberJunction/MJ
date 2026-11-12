@@ -23,6 +23,12 @@ describe('LoadSettings', () => {
     writeFileSync(p, JSON.stringify({ Repeats: 0 }));
     expect(() => LoadSettings(p)).toThrow(/Repeats/);
   });
+  it('measures coverage by default and a settings file can turn it off', () => {
+    expect(LoadSettings(undefined).Coverage).toBe(true);
+    const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json');
+    writeFileSync(p, JSON.stringify({ Coverage: false }));
+    expect(LoadSettings(p).Coverage).toBe(false);
+  });
   it('does not echo the content of a settings file that is not valid JSON', () => {
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json'); writeFileSync(p, `${token} is not json`);

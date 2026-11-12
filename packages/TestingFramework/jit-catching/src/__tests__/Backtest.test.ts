@@ -68,6 +68,14 @@ function options(root: string, corpus: string, deps: BacktestDeps, over: Partial
 async function backtest(o: BacktestOptions): Promise<BacktestLedger> { return (await BacktestStep(o)).Ledger; }
 
 describe('BacktestStep', () => {
+  it('runs every entry with Coverage off, even when the loaded settings turn it on, and says so once', async () => {
+    const { root, corpus } = setup();
+    const d = fakes();
+    await BacktestStep(options(root, corpus, d, { Set: 'Both', Settings: { ...SETTINGS, Coverage: true } }));
+    expect(d.calls).toHaveLength(3);
+    expect(d.calls.every((c) => c.Settings.Coverage === false)).toBe(true);
+    expect(stdout.filter((l) => l.includes('coverage off (backtest)'))).toHaveLength(1);
+  });
   it('creates a ledger with one entry per PR of the slice and set and runs each on its landing commit', async () => {
     const { root, corpus } = setup();
     const d = fakes();

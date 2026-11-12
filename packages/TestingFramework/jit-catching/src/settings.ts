@@ -16,6 +16,8 @@ export const SettingsSchema = z.object({
         UsdPerSession: z.number().positive(),
     }),
     Repeats: z.number().int().positive(),
+    /** Whether job 2 measures changed-line coverage on head for tests that pass on both revisions. */
+    Coverage: z.boolean(),
     TestTimeoutMs: z.number().int().positive(),
     SequenceSeed: z.number().int(),
     Thresholds: z.object({
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
     Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
     Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 2_000_000, UsdPerSession: 3 },
     Repeats: 3,
+    Coverage: true,
     TestTimeoutMs: 30_000,
     SequenceSeed: 1,
     Thresholds: { Label: { MinMedian: 'Medium', MaxReported: 3 }, Nightly: { MinMedian: 'High', MediumWithBoosts: ['AccessChange', 'MatchesRisk'] } },

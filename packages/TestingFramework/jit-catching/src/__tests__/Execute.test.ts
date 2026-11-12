@@ -56,6 +56,13 @@ describe('ExecuteStep', () => {
     expect(f.TypeErrors[ID_A]).toEqual({ Base: null, Head: null });
   });
 
+  it('measures no coverage when Settings.Coverage is false, even for tests that pass on both', async () => {
+    const { Target, Calls } = fakeTarget();
+    await ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: { ...DEFAULT_SETTINGS, Coverage: false }, Deps: { Target, Redaction: redaction } });
+    expect(Calls.Coverage).toEqual([]);
+    expect(dir.ReadExecution().Coverage).toEqual([]);
+  });
+
   it('an InfrastructureError from Prepare ends the step once and writes no execution.json', async () => {
     const { Target, Calls } = fakeTarget(new InfrastructureError('install failed on Head: offline'));
     await expect(ExecuteStep({ RunID: RUN_ID, RepoRoot: root, Settings: DEFAULT_SETTINGS, Deps: { Target, Redaction: redaction } })).rejects.toThrow(InfrastructureError);

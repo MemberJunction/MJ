@@ -19,7 +19,7 @@ type TypeErrors = ExecutionFile['TypeErrors'];
 
 /**
  * Job 2: prepares head, writes the produced tests into the base worktree kept by job 1 and into head, type-checks
- * and runs them on both, measures coverage on head for tests that pass on both, and writes `execution.json`.
+ * and runs them on both, measures coverage on head for tests that pass on both when `Settings.Coverage` is on, and writes `execution.json`.
  * Head is removed at the end. An error from the target (such as an `InfrastructureError`) ends the step with no file.
  */
 export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
@@ -34,24 +34,24 @@ export async function ExecuteStep(o: ExecuteOptions): Promise<void> {
     await d.EnsureImage?.();
     const head = await d.Target.Prepare({ Kind: 'Head', SHA: gen.Run.HeadSHA });
     try {
-        dir.WriteExecution(await executeOn(d.Target, gen, tests, base, head, o.Settings.Repeats));
+        dir.WriteExecution(await executeOn(d.Target, gen, tests, base, head, o.Settings));
     } finally {
         await d.Target.Cleanup(head);
     }
     process.stdout.write(`run ${o.RunID}: ${tests.length} tests run ${o.Settings.Repeats}× on base and head\n`);
 }
 
-/** Build head, write, type-check and run the tests on both revisions, then measure coverage for tests that pass on both. */
-async function executeOn(target: PipelineTarget, gen: GenerationFile, tests: CandidateTest[], base: PreparedRevision, head: PreparedRevision, repeats: number): Promise<ExecutionFile> {
+/** Build head, write, type-check and run the tests on both revisions, then measure coverage for tests that pass on both when `settings.Coverage` is on. */
+async function executeOn(target: PipelineTarget, gen: GenerationFile, tests: CandidateTest[], base: PreparedRevision, head: PreparedRevision, settings: Settings): Promise<ExecutionFile> {
     await target.BuildPackages(head, [...new Set(tests.map((t) => t.Package))]);
     await target.WriteTests(base, tests);
     await target.WriteTests(head, tests);
     const baseTypes = await target.TypeCheck(base, tests);
     const headTypes = await target.TypeCheck(head, tests);
     const typeErrors: TypeErrors = Object.fromEntries(tests.map((t) => [t.ID, { Base: baseTypes.get(t.ID) ?? null, Head: headTypes.get(t.ID) ?? null }]));
-    const results = [...await target.Run(base, tests, repeats), ...await target.Run(head, tests, repeats)];
+    const results = [...await target.Run(base, tests, settings.Repeats), ...await target.Run(head, tests, settings.Repeats)];
     const passing = tests.filter((t) => verdictOf(t.ID, results, typeErrors) === 'PassesBoth');
-    const coverage = passing.length ? await target.Coverage(head, passing, ChangedLinesOf(gen)) : [];
+    const coverage = settings.Coverage && passing.length ? await target.Coverage(head, passing, ChangedLinesOf(gen)) : [];
     return { RunID: gen.Run.ID, Tests: tests, Results: results, Coverage: coverage, TypeErrors: typeErrors };
 }
 
