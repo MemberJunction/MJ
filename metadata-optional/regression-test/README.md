@@ -21,8 +21,8 @@ mj test regression up
 # Compare the two most recent runs
 mj test regression compare
 
-# Validate test definitions without executing
-mj test validate --dir=metadata-optional/regression-test/tests
+# Check the test files and suite members (no database)
+pnpm run check:regression-suite
 
 # Run a single test (against your local DB / dev stack)
 mj test run --name "T001 - Login Smoke"
@@ -160,23 +160,18 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 
 ## Adding a New Test
 
-1. **Pick the next free test number** (T001–T155 are taken; start at T156).
-2. **Copy the closest existing test** that does something similar — it's almost always faster than starting from scratch.
+1. **Scaffold it.** The command picks the next free number, writes the test file, adds the suite member, and runs the parity check. It does not touch a database.
    ```bash
-   cp metadata-optional/regression-test/tests/regression/.T041-entity-form-edit-mode-dirty-field-banner.json \
-      metadata-optional/regression-test/tests/regression/.T156-my-new-test.json
+   pnpm mj test regression new --name "My new test" --priority P1 --tags my-area \
+     --start-path /app/my-app --goal "What success looks like on screen." \
+     --criteria "First visible proof" --criteria "Second visible proof"
    ```
-3. **Edit the new file**:
-   - Change `Name` (must be unique across all tests).
-   - Rewrite `Description`, `InputDefinition.goal`, and `ExpectedOutcomes.judgeValidationCriteria`.
-   - Update `finalUrlPattern` to match where the test should end up.
-   - Tune `maxSteps` based on a manual estimate (5 for a simple click, 15+ for multi-step workflows).
-   - Update `Tags` (priority + workflow area).
-   - Remove any copied `primaryKey` / `sync` blocks — `mj sync push` assigns them.
-4. **Add to the suite** — open `test-suites/.regression-suite.json` and append a `MJ: Test Suite Tests` entry under `relatedEntities` with the new `Sequence` number and `TestID`.
-5. **Validate locally**: `mj test validate --dir=metadata-optional/regression-test/tests`
-6. **Smoke test single-run**: `mj test run --name "T156 - My New Test"`
-7. **Push to DB**: `mj sync push --dir=metadata-optional/regression-test`
+   Add `--from T041` to copy the `Configuration` of a similar test (its replay scripts are not copied), and `--dry-run` to preview.
+2. **Read the new file** and sharpen `goal`, `judgeValidationCriteria`, `finalUrlPattern`, and `maxSteps` (5 for a simple click, 15+ for multi-step workflows). Keep the generated `primaryKey`: every record needs one.
+3. **Check the suite**: `pnpm run check:regression-suite`. CI runs the same check on every PR.
+4. **Push to your database**: `pnpm mj sync push --dir=metadata-optional/regression-test`
+5. **Smoke test a single run**: `pnpm mj test run --name "T156 - My new test"`
+6. **If another PR takes the same number first**, the parity check fails after you rebase. Renumber the file, its `Name`, and its suite member.
 
 ## Replay Scripts
 
