@@ -15,6 +15,7 @@ import {
     TransactionItemInputType,
     TransactionOperationType,
 } from '../resolvers/TransactionGroupResolver.js';
+import type { AppContext } from '../types.js';
 
 const ENTITY_ID = 'E0000000-0000-0000-0000-0000000000C1';
 
@@ -173,5 +174,84 @@ describe('TransactionResolver concurrency checking for update items', () => {
                 ConflictingFields: ['Name'],
             },
         ]);
+    });
+});
+
+/** Stands in for the provider's group: counts what enrols and whether it was submitted. */
+class FakeGroup {
+    public Enrolled = 0;
+    public Submitted = false;
+    public AddTransaction(): void { this.Enrolled++; }
+    public AddVariable(): void { /* no variables here */ }
+    public async Submit(): Promise<boolean> { this.Submitted = true; return true; }
+}
+
+/** A widget whose load returns `stored` and whose save records the options it was given. */
+class RecordingWidget extends WidgetEntity {
+    public SavedWith: EntitySaveOptions | undefined;
+    constructor(private readonly stored: Record<string, unknown>, private readonly group: FakeGroup) {
+        super(widgetEntityInfo());
+    }
+    public override async InnerLoad(): Promise<boolean> {
+        await this.LoadFromData(this.stored, true);
+        return true;
+    }
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        this.SavedWith = options;
+        this.group.AddTransaction();
+        return true;
+    }
+}
+
+function contextFor(entity: RecordingWidget, group: FakeGroup): AppContext {
+    const provider = {
+        CreateTransactionGroup: async () => group,
+        GetEntityObject: async () => entity,
+        Entities: [] as EntityInfo[],
+        EntityByID: () => undefined,
+    };
+    return {
+        providers: [{ type: 'Read-Write', provider }],
+        userPayload: { userRecord: USER, email: USER.Email },
+    } as unknown as AppContext;
+}
+
+describe('ExecuteTransactionGroup with client OldValues', () => {
+    function updateGroup(oldName: string) {
+        return {
+            Items: [{
+                EntityName: 'Widgets',
+                EntityObjectJSON: JSON.stringify({ ID: 'w-1', Name: 'Client New' }),
+                OperationType: TransactionOperationType.Update,
+                OldValues: [{ Key: 'ID', Value: 'w-1' }, { Key: 'Name', Value: oldName }],
+            }],
+            Variables: [],
+        };
+    }
+
+    it("queues the update with 'enforce' and the client's baseline, then submits", async () => {
+        const group = new FakeGroup();
+        const entity = new RecordingWidget({ ID: 'w-1', Name: 'Stored', Notes: null }, group);
+
+        const result = await new InspectableResolver().ExecuteTransactionGroup(updateGroup('Stored'), contextFor(entity, group));
+
+        expect(result.Success).toBe(true);
+        expect(entity.SavedWith?.ConcurrencyCheck).toBe('enforce');
+        expect(entity.SavedWith?.ConcurrencyBaseline).toEqual({ Name: 'Stored' });
+        expect(group.Submitted).toBe(true);
+    });
+
+    it('refuses a stale update without saving or submitting the group', async () => {
+        const group = new FakeGroup();
+        const entity = new RecordingWidget({ ID: 'w-1', Name: 'Changed By Someone Else', Notes: null }, group);
+        const resolver = new InspectableResolver();
+
+        const result = await resolver.ExecuteTransactionGroup(updateGroup('Stored'), contextFor(entity, group));
+
+        expect(result.Success).toBe(false);
+        expect(entity.SavedWith).toBeUndefined();
+        expect(group.Submitted).toBe(false);
+        expect(JSON.parse(result.ErrorMessages[0]).ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+        expect(resolver.ErrorLogs).toHaveLength(1);
     });
 });
