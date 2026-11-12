@@ -89,7 +89,9 @@ export function PrebundleRecordsOf(sentinel: SentinelReadResult): PrebundleExclu
  * `<scope>/*` for every scoped package a workspace member other than `shellRepo` provides, sorted
  * and unique. The shell's own repo is skipped: its scopes are its committed dev loop
  * (`@memberjunction/*` for MJ), and anything else it ships (test fixtures) is not linked in from
- * outside. Pure.
+ * outside. `@memberjunction/*` is included for any other shell: a distribution app does not commit
+ * it (it consumes MJ from npm), so linking MJ in must add it, and a shell that already lists it is
+ * left as it is because the plan only adds entries the file lacks. Pure.
  */
 export function CollectLinkedScopes(members: readonly CandidateRepo[], shellRepo: string): string[] {
   const scopes = new Set<string>();
@@ -99,7 +101,7 @@ export function CollectLinkedScopes(members: readonly CandidateRepo[], shellRepo
       const name = pkg.PackageJson.name;
       if (name === undefined || !name.startsWith('@') || !name.includes('/')) continue;
       const glob = `${name.slice(0, name.indexOf('/'))}/*`;
-      if (glob !== COMMITTED_PREBUNDLE_EXCLUDE) scopes.add(glob);
+      scopes.add(glob);
     }
   }
   return [...scopes].sort();

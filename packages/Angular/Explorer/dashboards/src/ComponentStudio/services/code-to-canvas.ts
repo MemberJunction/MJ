@@ -39,8 +39,8 @@ export function ParseCanvasFromCode(
     const fieldNamesInSchema = new Set(schema.fields.map(f => f.name));
 
     // 1) Find all <h3>...</h3> headings → section titles
-    const headings = Array.from(code.matchAll(/<h3[^>]*>([^<]+)<\/h3>/g))
-        .map(m => ({ index: m.index ?? 0, title: stripJsx(m[1]) }));
+    const headings = findSimpleElements(code, 'h3', '<')
+        .map(m => ({ index: m.Index, title: stripJsx(m.Text) }));
 
     // 2) Find all field references via value("FieldName") OR record.FieldName
     const fieldRefRegex = /(?:value\("([A-Za-z_][A-Za-z0-9_]*)"\)|record\.([A-Za-z_][A-Za-z0-9_]*))/g;
@@ -102,8 +102,8 @@ export function ParseCanvasFromCode(
     }
 
     // 5) Try to find the form title from <h2>...</h2>.
-    const titleMatch = code.match(/<h2[^>]*>([^<{}]+)<\/h2>/);
-    const title = titleMatch ? stripJsx(titleMatch[1]) : undefined;
+    const titleMatch = findSimpleElements(code, 'h2', '<{}', 1)[0];
+    const title = titleMatch ? stripJsx(titleMatch.Text) : undefined;
 
     return {
         Canvas: {
@@ -123,6 +123,46 @@ export function parseCanvasFromCode(
     schema: CuratedFormSchema,
 ): ParseResult {
     return ParseCanvasFromCode(code, schema);
+}
+
+/** One `<tag …>text</tag>` element found by {@link findSimpleElements}. */
+interface SimpleElement {
+    /** Offset of the opening `<`. */
+    Index: number;
+    /** The text between the tags. */
+    Text: string;
+}
+
+/**
+ * Elements written `<tag …>text</tag>` whose text is one or more characters, none of them in
+ * `stopChars`, in order, up to `limit` of them. The same matches as
+ * `/<h3[^>]*>([^<]+)<\/h3>/g` (tag `h3`, stop chars `<`), found by index: that regex rescans to
+ * the next `>` from every `<h3`, which is quadratic on text full of unclosed openings
+ * (CodeQL js/polynomial-redos). Openings that share one `>` share their outcome, so the next `>`
+ * and the text end after it are each found once.
+ */
+function findSimpleElements(code: string, tag: string, stopChars: string, limit = Number.POSITIVE_INFINITY): SimpleElement[] {
+    const opener = `<${tag}`;
+    const closer = `</${tag}>`;
+    const found: SimpleElement[] = [];
+    let open = code.indexOf(opener);
+    while (open !== -1 && found.length < limit) {
+        const tagEnd = code.indexOf('>', open + opener.length);
+        if (tagEnd === -1) {
+            break;
+        }
+        let textEnd = tagEnd + 1;
+        while (textEnd < code.length && !stopChars.includes(code[textEnd])) {
+            textEnd++;
+        }
+        if (textEnd > tagEnd + 1 && code.startsWith(closer, textEnd)) {
+            found.push({ Index: open, Text: code.slice(tagEnd + 1, textEnd) });
+            open = code.indexOf(opener, textEnd + closer.length);
+        } else {
+            open = code.indexOf(opener, tagEnd + 1);
+        }
+    }
+    return found;
 }
 
 function findSectionIndex(charIndex: number, headings: Array<{ index: number; title: string }>): number {

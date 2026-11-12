@@ -19,6 +19,7 @@ export default class Queue extends Command {
     this.log('  mj queue discard               - Discard a pending or dead-lettered delivery, or cancel one in flight');
     this.log('  mj queue backlog               - The autoscaler metric for one subscription');
     this.log('  mj queue work                  - Run subscriptions here: --once for a container job, or until stopped');
+    this.log('  mj queue sweep                 - Run one sweeper pass (lease expiry, retention, dedup purge), e.g. from cron');
     this.log('  mj queue export-topology       - Write the topology manifest for Terraform');
     this.log('  mj queue import-bindings       - Record cloud resource bindings from Terraform output');
     this.log('  mj queue validate-bindings     - Check topology and cloud bindings');

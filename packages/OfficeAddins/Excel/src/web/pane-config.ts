@@ -8,6 +8,51 @@
 import { EXCEL_WORKBOOK_CONTRACT_VERSION } from '../contract';
 
 const ACTIVE_SERVER_STORAGE_KEY = 'mj.excelAddin.activeServerUrl.v1';
+let memoryActiveServerUrl: string | null = null;
+
+function getLocalStorageSafe(): Storage | null {
+    try {
+        const g = globalThis as { localStorage?: Storage; window?: { localStorage?: Storage } };
+        return g.localStorage ?? g.window?.localStorage ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function getOfficeRuntimeStorageSafe(): {
+    getItem(key: string): Promise<string | null>;
+    setItem(key: string, value: string): Promise<void>;
+    removeItem(key: string): Promise<void>;
+} | null {
+    try {
+        const g = globalThis as {
+            OfficeRuntime?: {
+                storage?: {
+                    getItem(key: string): Promise<string | null>;
+                    setItem(key: string, value: string): Promise<void>;
+                    removeItem(key: string): Promise<void>;
+                };
+            };
+        };
+        return g.OfficeRuntime?.storage ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** Hydrates the active server URL from `OfficeRuntime.storage` when running in an isolated CustomFunctions worker. */
+export async function HydrateServerUrlFromOfficeStorage(): Promise<void> {
+    const officeStorage = getOfficeRuntimeStorageSafe();
+    if (!officeStorage) return;
+    try {
+        const val = await officeStorage.getItem(ACTIVE_SERVER_STORAGE_KEY);
+        if (val && val.trim().length > 0) {
+            memoryActiveServerUrl = val.trim();
+        }
+    } catch {
+        // Ignore OfficeRuntime storage errors
+    }
+}
 
 export interface PaneConfig {
     ContractVersion: number;
@@ -21,7 +66,16 @@ export interface PaneConfig {
 }
 
 export async function LoadPaneConfig(): Promise<PaneConfig> {
-    const response = await fetch('config.json', { cache: 'no-store' });
+    let configUrl = 'config.json';
+    try {
+        const loc = (globalThis as { location?: { href?: string } }).location?.href;
+        if (loc && /^https?:\/\//i.test(loc)) {
+            configUrl = new URL('config.json', loc).toString();
+        }
+    } catch {
+        configUrl = 'config.json';
+    }
+    const response = await fetch(configUrl, { cache: 'no-store' });
     if (!response.ok) {
         throw new Error(`The add-in's settings couldn't be loaded (HTTP ${response.status}).`);
     }
@@ -125,23 +179,43 @@ function trimTrailingSlashes(value: string): string {
 
 /** Reads the user's chosen custom MJ server add-in URL, or null when using the default host. */
 export function LoadSavedServerUrl(): string | null {
-    try {
-        const value = window.localStorage.getItem(ACTIVE_SERVER_STORAGE_KEY)?.trim();
-        return value ? value : null;
-    } catch {
-        return null;
+    const ls = getLocalStorageSafe();
+    if (ls) {
+        try {
+            const value = ls.getItem(ACTIVE_SERVER_STORAGE_KEY)?.trim();
+            if (value) {
+                memoryActiveServerUrl = value;
+                return value;
+            }
+        } catch {
+            // Fall through to memory mirror
+        }
     }
+    return memoryActiveServerUrl;
 }
 
 /** Persists or clears the user's chosen custom MJ server add-in URL on this device. */
 export function SaveServerUrl(addinUrl: string | null): void {
-    try {
-        if (addinUrl && addinUrl.trim().length > 0) {
-            window.localStorage.setItem(ACTIVE_SERVER_STORAGE_KEY, addinUrl.trim());
-        } else {
-            window.localStorage.removeItem(ACTIVE_SERVER_STORAGE_KEY);
+    const trimmed = addinUrl && addinUrl.trim().length > 0 ? addinUrl.trim() : null;
+    memoryActiveServerUrl = trimmed;
+    const ls = getLocalStorageSafe();
+    if (ls) {
+        try {
+            if (trimmed) {
+                ls.setItem(ACTIVE_SERVER_STORAGE_KEY, trimmed);
+            } else {
+                ls.removeItem(ACTIVE_SERVER_STORAGE_KEY);
+            }
+        } catch {
+            // Storage may be blocked in strict environments; session state still works in memory.
         }
-    } catch {
-        // Storage may be blocked in strict environments; session state still works in memory.
+    }
+    const officeStorage = getOfficeRuntimeStorageSafe();
+    if (officeStorage) {
+        if (trimmed) {
+            void officeStorage.setItem(ACTIVE_SERVER_STORAGE_KEY, trimmed).catch(() => undefined);
+        } else {
+            void officeStorage.removeItem(ACTIVE_SERVER_STORAGE_KEY).catch(() => undefined);
+        }
     }
 }

@@ -355,6 +355,25 @@ describe('RealtimeComposerComponent (DOM)', () => {
         const f = render({ ...NOTHING_TO_TUCK, ShowCamera: true, CameraOn: true, ShowShare: true, Sharing: true });
         expect(query(f, MORE)).toBeNull();
       });
+
+      // #6545: the closed sheet is transparent, but its buttons kept their place. Tab reached an invisible Type, and a
+      // click on its spot fell through to the hero behind it. Inert takes the closed sheet out of focus, the
+      // accessibility tree and hit-testing.
+      it('makes its closed sheet inert and the open one live', () => {
+        const f = render({ Compact: true, AllowTyping: true, ShowDetails: true });
+        const sheet = query(f, '.lean-sheet');
+        expect(sheet?.hasAttribute('inert')).toBe(true);
+
+        click(f, 'button' + MORE);
+        f.detectChanges();
+        expect(query(f, '.lean-sheet')?.hasAttribute('inert')).toBe(false);
+
+        const openChanges = capture(f.componentInstance.OpenChanged);
+        click(f, '.lean-sheet [aria-label="Open the typed-input composer"]');
+        f.detectChanges();
+        expect(openChanges).toEqual([true]);
+        expect(query(f, '.lean-sheet')?.hasAttribute('inert')).toBe(true);
+      });
     });
 
     it('keeps the dock hide control and Send when AllowTyping is false and the dock is already open', () => {

@@ -1,0 +1,30 @@
+{
+  "fields": {
+    "Name": "Library",
+    "Path": "library",
+    "Description": "Create, organize, and collaborate on documents, spreadsheets, presentations, collections, and connected cloud drives",
+    "Icon": "fa-solid fa-book-open",
+    "DefaultForNewUser": true,
+    "Color": "#0284c7",
+    "DefaultSequence": 2,
+    "Status": "Active",
+    "NavigationStyle": "Both",
+    "HideNavBarIconWhenActive": true,
+    "TopNavLocation": "Left of User Menu",
+    "DefaultNavItems": [
+      {
+        "Label": "Library",
+        "Icon": "fa-solid fa-book-open",
+        "ResourceType": "Custom",
+        "DriverClass": "LibraryResource",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "DB6B9D62-CB8E-417D-8A04-4CBC5F65CD9A"
+  }
+}

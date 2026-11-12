@@ -1,5 +1,92 @@
 # @memberjunction/generic-database-provider
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 1dd1af1: Add declarative entity lifecycle policies (`EntityLifecyclePolicyEngine` + `ServerOperationScopeManager` with state machines, per-state field-freeze rules, post-create immutability, and `'Standard' | 'AppendOnly' | 'ServerOperationOnly'` write authority), concurrency-safe scoped document auto-numbering (`DocumentNumberingEngine` + `DocumentSequenceCounter` table), batch/transaction-memoized cross-entity policies (`CrossEntityPolicyEngine` + `PreDelete` data hooks), and typed cross-app capabilities (`AppCapabilityRegistry` / `@RegisterAppCapability`).
+- b332459: Implement ORM improvements across three workstreams:
+  1. Server-side concurrency and delta-only `spUpdate*` / `fn_update*` bindings (`DeltaUpdates` / `databaseSettings.deltaUpdates`, default `true` with `false` kill-switch), `UPDLOCK, ROWLOCK` (SQL Server) / `FOR UPDATE` (PostgreSQL) row locking, shared `DetectFieldConcurrencyConflicts` detector, `ConcurrencyCheckMode` (`'off' | 'log' | 'enforce'`, default `'off'` server-wide and `'enforce'` on GraphQL `UpdateRecord` mutations supplying `OldValues___`), subclass-setter-routed `@JSONType` `JSONFieldBinding` flushes, and multi-level IS-A chain concurrency rollback & baseline propagation.
+  2. First-class structured `CompositeFilter` support in `RunView`, `BaseEngine` (`Where()` and in-memory/local-cache slot maintenance), `FilterOf<T>()` fluent builder, parameterized `CompositeFilterSQLCompiler` (with literal compilation and FLS enforcement for `MJUserViewEntityExtended.GenerateWhereClauseFromFilterState`), and GraphQL `RunView` inputs.
+  3. CodeGen-generated `TypedQuerySpec<TParams, TRow>` descriptors (`typed_query_codegen.ts`) and `RunQuery(spec, params, options)` overloads with SHA-256 signature drift detection (`typedQueryDrift: 'off' | 'warn' | 'throw'`).
+
+### Patch Changes
+
+- 2bf6237: Polish Citizen Agent Builder Docker runtime, audit CLI, and inactive credential decryption:
+  - Fix `mj ai audit agent-run --list` (`FormatRunList`) to handle plain objects returned by `ResultType: 'simple'` when formatting as JSON, and safely normalize `Date | string` step timestamps in `AgentAuditService`.
+  - Pass `-w /workspace` in `citizen-builder/scripts/query-run-history.sh` and `citizen-builder/scripts/sync-metadata.sh` so container CLI commands always resolve `/workspace/mj.config.cjs`.
+  - Pass `API_PORT` and `EXPLORER_PORT` into the `mj` container, sync `GRAPHQL_URI` and `GRAPHQL_WS_URI` in MJExplorer's environment files when `API_PORT` is non-default, and display actual host ports in the container startup banner.
+  - Cap SQL Server container memory (`MSSQL_MEMORY_LIMIT_MB`, default `3072`), run `mjapi` and `mjexplorer` directly under PM2 in `apps/MJAPI` and `apps/MJExplorer` so OOM exits are not masked by `turbo`, and add `globalPassThroughEnv` to `distribution.turbo.json`.
+  - Suppress false-alarm `LogError` messages when decrypting fields on explicitly inactive rows (`IsActive === false` or `0`) in `GenericDatabaseProvider`.
+- 87ac205: Add parameterized `RunView` support via `RunViewParams.Parameters`:
+  - `@memberjunction/core`: Add `RunViewParameterScalar`, `RunViewParameterValue`, `RunViewParameters`, `RunViewParametersKey`, and `RunViewParams.Parameters`. Include canonicalized parameters in `RunViewParams.Equals` and `LocalCacheManager.GenerateRunViewFingerprint` (`prm:` segment when non-empty). Teach `FieldSecuritySQLGate` to recognize `@paramName` parameter tokens on both SQL Server and PostgreSQL dialects.
+  - `@memberjunction/generic-database-provider`: Add `BindExtraFilterParameters` using `SqlTokens.Lex` and `EditSet` to rewrite `@paramName` tokens in `ExtraFilter` to dialect-native bound placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and `NamedQueryParameter` bindings (with array expansion for `IN (@list)`). Thread bound parameters through `executeRunViewCore`, `RunViewsWithCacheCheck`, `getBatchedServerCacheStatus`, `getUpdatedRowsSince`, and `IsCoalescibleCountBatch`.
+  - `@memberjunction/sqlserver-dataprovider`: Support `NamedQueryParameter` and `TypedQueryParameter` lists in `ExecuteSQLBatch` and `ExecuteSQLBatchStatic` with parameter deduplication across shared `mssql.Request` batches, and forward `queryParameters` in `executeSQLForUserViewRunLogging` and `getBatchedServerCacheStatus`.
+  - `@memberjunction/postgresql-dataprovider`: Exclude `@paramName` and `$1` parameter tokens from column auto-quoting in `quoteFieldNamesInToken`.
+  - `@memberjunction/server`: Accept and validate `Parameters` (`GraphQLJSONObject`) on `RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`, and `RunViewsWithCacheCheck`.
+  - `@memberjunction/graphql-dataprovider`: Forward `RunViewParams.Parameters` in `InternalRunView`, `InternalRunViews`, and `RunViewsWithCacheCheck`.
+
+- 6049806: ActionEngine's execution-log saves no longer join the transaction they were queued from. With a durable submitter registered, an After\* `Durable` Entity Action runs inside the save's transaction (#6198), and ActionEngine queued its "Submitted for durable execution" log row from there. The queued save inherited the caller's transaction membership, reached SQL behind the save's COMMIT, and was rejected (`The ambient transaction ended before this query ran`), so the run left no Action Execution Log row (#6251, EA6). `BaseEntitySaveQueue` gains an opt-in `detachFromTransaction` option that runs each save through the new optional `IEntityDataProvider.RunOutsideAmbientTransaction` (implemented by `GenericDatabaseProvider`), so the write runs on the pool and commits on its own. Only ActionEngine's log queue turns it on; other queues (agent run steps, prompt runs, process run details) keep joining the caller's transaction, since their owners flush them before commit and their rows reference rows that transaction wrote.
+- b2789ee: Metadata refresh reloads only what changed, and retries a failed refresh instead of escalating it to a full reload.
+  - **`@memberjunction/core`.** `ProviderBase.MetadataRefreshScope()` decides, from the local and remote timestamps, whether a refresh needs nothing, only the saved-query family, or everything (with a logged reason). It replaces `PartialRefreshItemCodes()`, which stays as a deprecated wrapper. A change to an MJ_Metadata item the metadata build never reads (`Dashboards`, `Dashboard_Categories`; see `ProviderBase.MetadataBuildItemCodes`) reloads nothing, and so does a write-event refresh whose timestamps show nothing changed. `RefreshAfterMetadataMemberChange`, `RefreshIfNeeded`, `Config`'s staleness check, `backgroundValidateAndRefresh` and `preValidateAndRefresh` all use it. The dataset item list is stored beside the metadata snapshot (`___MJCore_Metadata_DatasetItems`), so a process that starts from the snapshot can also reload only the saved-query family.
+  - **Retries (`@memberjunction/core`).** While metadata is loaded, a failed timestamp read, a failed scoped reload and a failed full reload keep that metadata and are retried after `ProviderBase.MetadataRefreshRetryDelaysMs` (15 s, 30 s, 60 s, 120 s, then every 5 min). A failed timestamp read never becomes a full reload. Only the third scoped failure in a row (`ProviderBase.MetadataScopedReloadAttempts`) runs the full reload. The retry shares the member-change timer, does not keep a Node process alive, and is cancelled by `CancelPendingMetadataMemberRefresh`. Every full reload logs `[Metadata] Full reload (<reason>) took <n> ms`. An explicit `Refresh()` is still a full reload, and a provider with no metadata loaded still loads everything.
+  - **`@memberjunction/generic-database-provider`.** `GetDatasetByName` answers an item whose ItemFilter is exactly `1=0` with an empty, successful result and runs no SQL for it. The scoped metadata reload sends `1=0` for every item it does not reload, and each of those items used to run its own empty `SELECT` on its own pool connection.
+
+- 7ace3ee: Searching for a phrase in double quotes now finds it on entities searched with LIKE. Agents quote their searches (`"Executive Steering Review"`), and the LIKE path matched the quote marks as text, so it returned nothing. A new `UnwrapPhraseQuotes` helper in `@memberjunction/global` drops one pair of straight or curly double quotes wrapping the whole term; a quote inside the term stays literal, and quotes around nothing but whitespace are left as typed. The built-in predicates (Contains, BeginsWith, EndsWith, Exact) search the unquoted term, a `UserSearchParamFormatAPI` format still gets the term as typed, and the full-text path is unchanged. Entity search scores and length-checks the term the same way, so a quoted one-word query no longer drops every row it fetched, and `"a"` counts as one character.
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/query-processor@6.3.0-edge.0
+  - @memberjunction/sql-parser@6.3.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/encryption@6.3.0-edge.0
+  - @memberjunction/queue@6.3.0-edge.0
+  - @memberjunction/geo-core@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

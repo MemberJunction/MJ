@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT169 - Record Change Snapshots Record the Stored Row",
+    "Description": "Server-transport saves write their Record Change FullRecordJSON from the row the save returned. RCS1 a create's snapshot holds the stored ID, both timestamps and the joined Parent display name; RCS2 a stale writer's update snapshot carries the change another writer committed after it loaded the record, and the stored __mj_UpdatedAt, while ChangesJSON lists only its own change; RCS3 an apostrophe is recorded as written; RCS4 an encrypted column (MJ: Credentials.Values) is recorded as its stored ciphertext on create and update, never the plaintext. Mutating; self-cleaning.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Every snapshot matches the stored row: server-set values, other writers' changes, text as written, and ciphertext for encrypted columns."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "record-change-snapshot"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "648425F8-DF9C-46FD-A3B9-9ABF4E97F224"
+  }
+}

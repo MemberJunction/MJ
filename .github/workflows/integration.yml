@@ -303,15 +303,23 @@ jobs:
       # so most runs can restore that database instead of rebuilding it.
       #
       # SCOPING — why the save is backstop-only. An Actions cache is readable from the run's own
-      # branch and from the default branch; one PR cannot read another's. PRs are therefore
-      # restore-only and the save runs on push/schedule, which is the same split test.yml uses
-      # for the turbo cache and for the same reason.
+      # branch, its PR's base branch and the default branch; one PR cannot read another's. PRs
+      # are therefore restore-only and the save runs on push/schedule, which is the same split
+      # test.yml uses for the turbo cache and for the same reason.
+      #
+      # SCOPED BY RELEASE LINE. Keys and the prefix fallback carry the line: the PR's base branch,
+      # or the branch itself on push/schedule/dispatch (`next`, `lts-6.2`, ...). Unscoped, a PR into
+      # `lts/6.2` fell back to `next`'s newest snapshot, which holds migrations `lts/6.2` never
+      # has; `mj migrate` only applies what is missing, so the tier ran `next`'s schema under the
+      # line's generated code and failed on CodeGen drift (IT50, IT141, IT144) that the PR did not
+      # cause. Each line now seeds only from its own push runs.
       #
       # THE SNAPSHOT IS A SEED, NEVER A SOURCE OF TRUTH. `mj migrate` runs on every path, warm
       # or cold. Flyway reads __mj.flyway_schema_history out of the restored database, so an
-      # exact-key restore is a no-op and a prefix-key restore (an older `next` snapshot) applies
-      # only the delta — including a migration this PR adds. Every failure path below falls back
-      # to cold provisioning rather than failing the job, so the worst case is today's runtime.
+      # exact-key restore is a no-op and a prefix-key restore (an older snapshot of the same line)
+      # applies only the delta — including a migration this PR adds. Every failure path below
+      # falls back to cold provisioning rather than failing the job, so the worst case is
+      # today's runtime.
       #
       # The nightly cron deliberately skips the restore (see its `if:`) so that one run a day
       # provisions from scratch and re-seeds the lineage, bounding how far a chain of
@@ -330,9 +338,18 @@ jobs:
           done
           # v2: every v1 entry saved after a restore holds the OLDER snapshot it restored (see
           # "Save the snapshot" below), so none of them may be read again.
-          KEY="mj-ci-db-v2-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          # v3: keys carry the release line (see SCOPING above). No v2 entry may be read again:
+          # they are unscoped, and every one of them is a `next` database.
+          LINE=$(printf '%s' "${BASE_REF:-$REF_NAME}" | tr -c 'A-Za-z0-9._-' '-')
+          PREFIX="mj-ci-db-v3-${LINE}-"
+          KEY="${PREFIX}$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          echo "prefix=${PREFIX}" >> "$GITHUB_OUTPUT"
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
           echo "Snapshot key: ${KEY}"
+        env:
+          # Set only on pull_request events; push, schedule and dispatch use the branch itself.
+          BASE_REF: ${{ github.base_ref }}
+          REF_NAME: ${{ github.ref_name }}
 
       - name: Restore the provisioned-DB snapshot
         id: dbcache
@@ -342,10 +359,10 @@ jobs:
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
-          # Prefix fallback to the newest `next` snapshot. `cache-hit` is 'true' ONLY on an
-          # exact key match, which is what gates the sync-push skip below; a prefix match
-          # leaves it 'false', so the full metadata reconcile still runs.
-          restore-keys: mj-ci-db-v2-
+          # Prefix fallback to the newest snapshot of the same release line. `cache-hit` is 'true'
+          # ONLY on an exact key match, which is what gates the sync-push skip below; a prefix
+          # match leaves it 'false', so the full metadata reconcile still runs.
+          restore-keys: ${{ steps.dbkey.outputs.prefix }}
 
       - name: Load the snapshot into SQL Server
         id: dbload
@@ -528,8 +545,11 @@ jobs:
       # in-process). Without one the save is refused and those bundles can only skip. A per-run
       # throwaway is enough — the database was provisioned for this run, so there is no earlier
       # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
-      - name: Generate a throwaway encryption key for this run
-        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
       # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
@@ -956,6 +976,11 @@ jobs:
           # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
           # land there or the server process never sees them (IT63's agent runs server-side).
           printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
+          COLLAB_SECRET="$(openssl rand -hex 32)"
+          FROZEN_SECRET="$(openssl rand -hex 32)"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$COLLAB_SECRET" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$FROZEN_SECRET" >> "$GITHUB_ENV"
+          printf 'MJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\nMJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$COLLAB_SECRET" "$FROZEN_SECRET" >> packages/MJAPI/.env
 
       - name: Boot MJAPI (wire-callback members)
         if: steps.prereq.outputs.READY == 'true'

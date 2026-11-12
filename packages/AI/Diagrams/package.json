@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-diagrams",
   "type": "module",
-  "version": "6.2.0",
+  "version": "6.3.0-edge.0",
   "description": "MemberJunction: spec schema, validator, server-side SVG renderer, and interactive viewer for workflow, lifecycle, sequence, and data-flow diagrams",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

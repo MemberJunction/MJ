@@ -1,10 +1,12 @@
 import { Resolver, Query, Arg, Ctx } from 'type-graphql';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJArtifactVersionEntity, MJFileEntity } from '@memberjunction/core-entities';
+import { IMetadataProvider } from '@memberjunction/core';
+import { ArtifactPermissionEngine, MJArtifactVersionEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+
+export const ARTIFACT_FILE_ACCESS_DENIED_MESSAGE = 'You do not have permission to view this artifact file.';
 
 /**
  * GraphQL resolver that produces a short-lived download URL for an artifact version
@@ -35,6 +37,17 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`Artifact version ${artifactVersionId} not found`);
         }
 
+        // Gate 1: Verify the caller has read permission on the parent MJ: Artifacts record
+        // (owner, delegated host entity, MJ: Artifact Permissions, or MJ: Collection Permissions).
+        const artifactPermissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            p,
+            artifactVersion.ArtifactID,
+            user,
+        );
+        if (!artifactPermissions.CanRead) {
+            throw new Error(ARTIFACT_FILE_ACCESS_DENIED_MESSAGE);
+        }
+
         if (artifactVersion.ContentMode !== 'File') {
             throw new Error(`Artifact version ${artifactVersionId} is not a file artifact (ContentMode=${artifactVersion.ContentMode})`);
         }
@@ -43,6 +56,7 @@ export class ArtifactFileResolver extends ResolverBase {
             throw new Error(`Artifact version ${artifactVersionId} has no associated file`);
         }
 
+        // Gate 2: Resolve the underlying MJ: Files object through the storage account & tracked-file gate.
         return this.buildDownloadUrl(artifactVersion.FileID, user, p);
     }
 

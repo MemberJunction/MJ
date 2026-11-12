@@ -364,7 +364,8 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
       expect(submitCalls).toHaveLength(1);
       expect(pollCalls).toHaveLength(1);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
+      // The one failed call is counted as an attempt; one submit is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
 
     it('retries transient poll throws (e.g. HTTP 429 on poll) and succeeds without failing over or losing the billed job', async () => {
@@ -415,7 +416,8 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
       expect(submitCalls).toHaveLength(1);
       expect(pollCalls).toHaveLength(AIVideoRunner.MAX_CONSECUTIVE_POLL_ERRORS);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
+      // The one failed call is counted as an attempt; one submit is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
   });
 
@@ -456,7 +458,8 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
       expect(submitCalls).toHaveLength(1);
       expect(pollCalls).toHaveLength(AIVideoRunner.MAX_POLL_ATTEMPTS);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
+      // The one failed call is counted as an attempt; one submit is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
 
     it('when TimeoutMS fires after submit, stops polling as Fatal without failing over to the second candidate', async () => {
@@ -474,7 +477,8 @@ describe('AIVideoRunner.RunGenerateVideo', () => {
       expect(result.ErrorMessage).toContain('billed');
       expect(submitCalls).toHaveLength(1);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts ?? 0).toBe(0);
+      // The one failed call is counted as an attempt; one submit is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
   });
 

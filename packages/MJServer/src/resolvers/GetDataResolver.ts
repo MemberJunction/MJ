@@ -177,8 +177,12 @@ export class GetDataResolver {
 
                         // SQL Server errors often have additional context in properties
                         // Try to get more context from the error object
+                        interface SqlServerErrorContext {
+                            precedingErrors?: Array<{ message?: string }>;
+                            lineNumber?: number;
+                        }
                         if (err && typeof err === 'object') {
-                            const sqlError = err as any;
+                            const sqlError = err as SqlServerErrorContext;
 
                             // SQL Server error objects may have a 'procName' with the problematic token
                             // or 'lineNumber' and other useful properties
@@ -218,14 +222,19 @@ export class GetDataResolver {
                                 Queries: input.Queries, 
                                 ErrorMessages: errorMessages }
 
-            RecordTokenUse(input.Token, {request: input, results: returnVal});
+            RecordTokenUse(input.Token, {
+                QueryCount: input.Queries.length,
+                Success: returnVal.Success,
+                ErrorCount: errorMessages.filter((e) => e !== null).length,
+            });
 
             // Success below is derived from having no errorMessages, check that array
             return returnVal;
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessages: [typeof err === 'string' ? err : (err as any).message], Results: [], Queries: input.Queries };
+            const msg = err instanceof Error ? err.message : String(err);
+            return { Success: false, ErrorMessages: [msg], Results: [], Queries: input.Queries };
         }
     }
 
@@ -266,7 +275,8 @@ export class GetDataResolver {
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessage: typeof err === 'string' ? err : (err as any).message, Results: [] };
+            const msg = err instanceof Error ? err.message : String(err);
+            return { Success: false, ErrorMessage: msg, Results: [] };
         }
     }
 
@@ -274,10 +284,12 @@ export class GetDataResolver {
 }
  
 
+export type TokenUsePayload = Record<string, string | number | boolean | null | undefined | object>;
+
 export class TokenUseLog {
     Token: string;
     UsedAt: Date;
-    UsePayload: any;
+    UsePayload: TokenUsePayload;
 }
 /**
  * Used to track all active access tokens that are requested by anyone within the server to be able to send to external services that can
@@ -291,7 +303,7 @@ export class GetDataAccessToken {
     /**
      * Can be used to store any payload to identify who requested the creation of the token, for example Skip might use this to put in a conversation ID to know which conversation a request is coming back for.
      */
-    RequestorPayload: any;
+    RequestorPayload?: TokenUsePayload;
     TokenUses: TokenUseLog[];
 }
 const __accessTokens: GetDataAccessToken[] = [];
@@ -353,7 +365,7 @@ export function getAccessTokenCount(): number {
     return GetAccessTokenCount();
 }
 
-export function RegisterAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+export function RegisterAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: TokenUsePayload): GetDataAccessToken {
     PruneExpiredTokens();
 
     const tokenToUse = token || uuidv4();
@@ -373,7 +385,7 @@ export function RegisterAccessToken(token?: string, lifeSpan: number = __default
 }
 
 /** @deprecated Use {@link RegisterAccessToken}. */
-export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: TokenUsePayload): GetDataAccessToken {
     return RegisterAccessToken(token, lifeSpan, requestorPayload);
 }
 export function DeleteAccessToken(token: string) {
@@ -410,12 +422,19 @@ export function IsTokenValid(token: string) {
 export function isTokenValid(token: string) {
     return IsTokenValid(token);
 } 
-export function RecordTokenUse(token: string, usePayload: any) {
+
+/** Maximum number of use logs kept per token to prevent unbounded memory growth. */
+export const MAX_TOKEN_USES_PER_TOKEN = 100;
+
+export function RecordTokenUse(token: string, usePayload: TokenUsePayload) {
     const index = findMatchingAccessTokenIndex(token);
     if (index >= 0) {
         const t = __accessTokens[index];
         if (!t.TokenUses) {
             t.TokenUses = [];
+        }
+        if (t.TokenUses.length >= MAX_TOKEN_USES_PER_TOKEN) {
+            t.TokenUses.shift();
         }
         t.TokenUses.push({ Token: t.Token, UsedAt: new Date(), UsePayload: usePayload });
     }
@@ -425,6 +444,15 @@ export function RecordTokenUse(token: string, usePayload: any) {
 }
 
 /** @deprecated Use {@link RecordTokenUse}. */
-export function recordTokenUse(token: string, usePayload: any) {
+export function recordTokenUse(token: string, usePayload: TokenUsePayload) {
     return RecordTokenUse(token, usePayload);
+}
+
+/** Helper exposed for tests to inspect token uses without exposing internal array. */
+export function GetTokenUsesForTest(token: string): ReadonlyArray<{ UsedAt: Date; UsePayload: TokenUsePayload }> | undefined {
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        return __accessTokens[index].TokenUses;
+    }
+    return undefined;
 }

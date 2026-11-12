@@ -32,8 +32,9 @@ import {
   ServerOperationScopeManager,
   UserInfo,
   ViewPropertyValues,
+  WellKnownUserSource,
 } from '@memberjunction/core';
-import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
+import { ArtifactPermissionEngine, MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 
 /**
  * Extended RunViewResult carrying a non-enumerable reference to the resolved view entity
@@ -92,6 +93,10 @@ import { Subscription } from 'rxjs';
  *
  * `mj: diagnostic sender registrations` is refused a change to its guarded fields by a rule that decides on
  * `Dirty`, so the baseline must be the stored row.
+ *
+ * `mj: graph edges` gates approval on the stored `Status`, on `Dirty` identity and content columns, and on the
+ * stored review stamp in `Attributes` (`MJGraphEdgeEntityServer`), so it must hold even if a host stops
+ * tracking the entity's changes.
  */
 const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: record changes',
@@ -102,6 +107,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: ai agent runs',
   'mj: projects',
   'mj: diagnostic sender registrations',
+  'mj: graph edges',
 ]);
 
 interface ActiveEntitySessionListener {
@@ -110,32 +116,65 @@ interface ActiveEntitySessionListener {
   lastSeenAt: number;
 }
 
-const ACTIVE_ENTITY_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+export const ACTIVE_ENTITY_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTIVE_ENTITY_SESSION_MAX_PER_ENTITY = 2048;
+
+interface SharedEntityListenerEntry {
+  Resolver: ResolverBase;
+  Sessions: Map<string, ActiveEntitySessionListener>;
+}
 
 export class ResolverBase {
   private static _emit = process.env.CLOUDEVENTS_HTTP_TRANSPORT ? emitterFor(httpTransport(process.env.CLOUDEVENTS_HTTP_TRANSPORT)) : null;
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
-  private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
-  private static _activeEntitySessionsKey: string = '___MJServer___ResolverBase___ActiveEntitySessions';
-  private get eventSubscriptions(): Map<string, Subscription> {
-    // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
-    // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
+  private static readonly _sharedEntityListenersKey = '___MJServer___ResolverBase___SharedEntityListeners';
+  private static readonly _sharedSubscriptionKey = '___MJServer___ResolverBase___SharedEventSubscription';
+
+  private static getSharedEntityListeners(): Map<string, SharedEntityListenerEntry> {
     const g = MJGlobal.Instance.GetGlobalObjectStore();
-    if (!g[ResolverBase._eventSubscriptionKey]) {
-      LogDebug(`>>>>> MJServer.ResolverBase.EventSubscriptions: Creating new Map - this should only happen once per server instance <<<<<<`);
-      g[ResolverBase._eventSubscriptionKey] = new Map<string, Subscription>();
+    if (!g[ResolverBase._sharedEntityListenersKey]) {
+      g[ResolverBase._sharedEntityListenersKey] = new Map<string, SharedEntityListenerEntry>();
     }
-    return g[ResolverBase._eventSubscriptionKey] as Map<string, Subscription>;
+    return g[ResolverBase._sharedEntityListenersKey] as Map<string, SharedEntityListenerEntry>;
   }
 
-  private get activeEntitySessions(): Map<string, Map<string, ActiveEntitySessionListener>> {
+  private static getSharedSubscription(): Subscription | null {
     const g = MJGlobal.Instance.GetGlobalObjectStore();
-    if (!g[ResolverBase._activeEntitySessionsKey]) {
-      g[ResolverBase._activeEntitySessionsKey] = new Map<string, Map<string, ActiveEntitySessionListener>>();
+    return (g[ResolverBase._sharedSubscriptionKey] as Subscription | undefined) ?? null;
+  }
+
+  private static setSharedSubscription(sub: Subscription | null): void {
+    const g = MJGlobal.Instance.GetGlobalObjectStore();
+    g[ResolverBase._sharedSubscriptionKey] = sub;
+  }
+
+  /**
+   * Resets process-shared entity message listeners and unsubscribes the shared MJGlobal listener.
+   * Exposed for tests to guarantee clean isolation.
+   */
+  public static ResetEntityMessageListenersForTests(): void {
+    const sub = ResolverBase.getSharedSubscription();
+    if (sub) {
+      sub.unsubscribe();
+      ResolverBase.setSharedSubscription(null);
     }
-    return g[ResolverBase._activeEntitySessionsKey] as Map<string, Map<string, ActiveEntitySessionListener>>;
+    const sharedMap = ResolverBase.getSharedEntityListeners();
+    sharedMap.clear();
+  }
+
+  /**
+   * Number of distinct entities currently registered for message listening.
+   */
+  public static get ActiveEntityListenerCount(): number {
+    return ResolverBase.getSharedEntityListeners().size;
+  }
+
+  /**
+   * Whether the single shared MJGlobal subscription is currently active.
+   */
+  public static get HasActiveSharedSubscription(): boolean {
+    return ResolverBase.getSharedSubscription() !== null;
   }
 
   /**
@@ -296,6 +335,52 @@ export class ResolverBase {
     }
   }
 
+  private async canMapEntityRecordForUser(
+    entityName: string,
+    dataObject: { ArtifactID?: string | null },
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<boolean> {
+    if (entityName === 'MJ: Artifact Working States') {
+      return false;
+    }
+    if (entityName !== 'MJ: Artifact Versions') {
+      return true;
+    }
+
+    const sysId = UserCache.Instance.GetSystemUser()?.ID;
+    const isSystem = Boolean(
+      contextUser &&
+        ((sysId && UUIDsEqual(contextUser.ID, sysId)) ||
+          WellKnownUserSource.Instance.IsSystemUser(contextUser))
+    );
+    if (isSystem) {
+      return true;
+    }
+
+    const artifactId = typeof dataObject.ArtifactID === 'string' ? dataObject.ArtifactID.trim() : '';
+    if (!contextUser || !artifactId) {
+      return false;
+    }
+
+    const aclProvider = provider ?? contextUser.OwningProvider ?? Metadata.Provider;
+    try {
+      return await ArtifactPermissionEngine.Instance.CheckPermission(
+        aclProvider,
+        artifactId,
+        contextUser,
+        'Read'
+      );
+    } catch (err) {
+      LogError(
+        `ResolverBase.MapFieldNamesToCodeNames failed to verify Read permission on artifact '${artifactId}': ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      return false;
+    }
+  }
+
   protected async MapFieldNamesToCodeNames(
     entityName: string,
     dataObject: any,
@@ -305,6 +390,9 @@ export class ResolverBase {
     recordChangeProjector?: RecordChangeFieldSecurityProjector
   ): Promise<any> {
     if (!dataObject || Object.keys(dataObject).length === 0) {
+      return null;
+    }
+    if (!(await this.canMapEntityRecordForUser(entityName, dataObject, contextUser, provider))) {
       return null;
     }
     const plan = this.buildFieldMappingPlan(entityName, contextUser, provider, deniedReadFields, recordChangeProjector);
@@ -371,6 +459,9 @@ export class ResolverBase {
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) {
       return dataObjectArray;
+    }
+    if (entityName === 'MJ: Artifact Working States') {
+      return [];
     }
     // Precompute the entity lookup, FieldMapper plan, denied-fields set, readable-fields list,
     // and Record Changes projector ONCE for the whole array rather than per row.
@@ -1730,19 +1821,29 @@ export class ResolverBase {
     }
   }
 
-  protected safeFirstArrayElement<T = any>(arr: T[]) {
+  protected safeFirstArrayElement<T>(arr: T[]) {
     if (arr && arr.length > 0) {
       return arr[0];
     }
     return null;
   }
 
-  protected packageSPParam(paramValue: any, quoteString: string) {
-    return paramValue === null || paramValue === undefined ? null : quoteString + paramValue + quoteString;
+  protected packageSPParam(paramValue: string | number | boolean | Date | null | undefined, quoteString: string) {
+    return paramValue === null || paramValue === undefined ? null : quoteString + String(paramValue) + quoteString;
+  }
+
+  private findCachedUserByEmail(email: string): UserInfo | undefined {
+    const cacheInstance = UserCache.Instance;
+    if (cacheInstance && typeof cacheInstance.UserByEmail === 'function') {
+      return cacheInstance.UserByEmail(email);
+    }
+    const normalizedTarget = email.toLowerCase().trim();
+    const fallbackUsers = cacheInstance?.Users ?? UserCache.Users;
+    return fallbackUsers?.find((u) => u.Email?.toLowerCase().trim() === normalizedTarget);
   }
 
   protected GetUserFromEmail(email: string): UserInfo | undefined {
-    return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === email.toLowerCase().trim());
+    return email ? this.findCachedUserByEmail(email) : undefined;
   }
   protected GetUserFromPayload(userPayload: UserPayload): UserInfo | undefined {
     if (!userPayload) 
@@ -1754,7 +1855,7 @@ export class ResolverBase {
     if (!userPayload.email) 
       return undefined;
 
-    return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
+    return this.findCachedUserByEmail(userPayload.email);
   }
 
   public get MJCoreSchema(): string {
@@ -1805,29 +1906,92 @@ export class ResolverBase {
     });
   }
 
-  protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
-    // Maintain a single MJGlobal event listener per entity name so CloudEvents are emitted once
-    // per event, while routing WebSocket status updates dynamically across all active user sessions
-    // that have interacted with this entity type (instead of closing over only the first caller).
-    const uniqueKey = entityObject.EntityInfo.Name;
-    const now = Date.now();
-    const isFreshSubscription = !this.eventSubscriptions.has(uniqueKey);
+  private static ensureSharedEventListener(): void {
+    if (ResolverBase.getSharedSubscription()) {
+      return;
+    }
+    LogDebug(`ResolverBase.ensureSharedEventListener: Subscribing shared MJGlobal listener`);
+    const sub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
+      if (!event) {
+        return;
+      }
+      const baseEntity = event.args?.baseEntity as BaseEntity | undefined;
+      const entityName = baseEntity?.EntityInfo?.Name;
+      if (!entityName) {
+        return;
+      }
 
-    let sessionsForEntity = isFreshSubscription ? undefined : this.activeEntitySessions.get(uniqueKey);
-    if (!sessionsForEntity) {
-      sessionsForEntity = new Map<string, ActiveEntitySessionListener>();
-      this.activeEntitySessions.set(uniqueKey, sessionsForEntity);
-    } else {
-      // Opportunistically evict expired session entries and enforce a safe per-entity cap
-      for (const [key, entry] of sessionsForEntity) {
-        if (now - entry.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
-          sessionsForEntity.delete(key);
+      const sharedMap = ResolverBase.getSharedEntityListeners();
+      const entry = sharedMap.get(entityName);
+      if (!entry) {
+        return;
+      }
+
+      const eventNow = Date.now();
+      for (const [sKey, session] of entry.Sessions) {
+        if (eventNow - session.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
+          entry.Sessions.delete(sKey);
         }
       }
-      if (sessionsForEntity.size >= ACTIVE_ENTITY_SESSION_MAX_PER_ENTITY) {
-        const oldestKey = sessionsForEntity.keys().next().value;
+
+      if (entry.Sessions.size === 0) {
+        sharedMap.delete(entityName);
+        if (sharedMap.size === 0) {
+          const activeSub = ResolverBase.getSharedSubscription();
+          if (activeSub) {
+            activeSub.unsubscribe();
+            ResolverBase.setSharedSubscription(null);
+          }
+        }
+        return;
+      }
+
+      const baseEntityValues = baseEntity
+        ? entry.Resolver.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined)
+        : null;
+      const eventToLog = { entityName, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
+      LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within shared MJGlobal callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
+      await entry.Resolver.EmitCloudEvent(event);
+      LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);
+
+      if (event.args && event.args instanceof BaseEntityEvent) {
+        let serializedMessage: string | undefined;
+        for (const [, session] of entry.Sessions) {
+          if (entry.Resolver.EntityEventBelongsToSession(event.args, session.userPayload)) {
+            LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
+            serializedMessage ??= entry.Resolver.EntityStatusMessage(event.args);
+            entry.Resolver.PublishStatusUpdate(session.pubSub, session.userPayload.sessionId, serializedMessage, session.userPayload);
+          }
+        }
+      }
+    });
+    ResolverBase.setSharedSubscription(sub);
+  }
+
+  protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
+    const uniqueKey = entityObject?.EntityInfo?.Name;
+    if (!uniqueKey) {
+      return;
+    }
+    const now = Date.now();
+    const sharedMap = ResolverBase.getSharedEntityListeners();
+
+    let entry = sharedMap.get(uniqueKey);
+    if (!entry) {
+      entry = { Resolver: this, Sessions: new Map<string, ActiveEntitySessionListener>() };
+      sharedMap.set(uniqueKey, entry);
+    } else {
+      entry.Resolver = this;
+      // Opportunistically evict expired session entries and enforce a safe per-entity cap
+      for (const [key, session] of entry.Sessions) {
+        if (now - session.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
+          entry.Sessions.delete(key);
+        }
+      }
+      if (entry.Sessions.size >= ACTIVE_ENTITY_SESSION_MAX_PER_ENTITY) {
+        const oldestKey = entry.Sessions.keys().next().value;
         if (oldestKey !== undefined) {
-          sessionsForEntity.delete(oldestKey);
+          entry.Sessions.delete(oldestKey);
         }
       }
     }
@@ -1836,50 +2000,10 @@ export class ResolverBase {
       const sessionKey = userPayload.sessionId
         ? `${userPayload.userRecord?.ID ?? ''}:${userPayload.sessionId}`
         : (userPayload.userRecord?.ID ?? '__anonymous__');
-      sessionsForEntity.set(sessionKey, { pubSub, userPayload, lastSeenAt: now });
+      entry.Sessions.set(sessionKey, { pubSub, userPayload, lastSeenAt: now });
     }
 
-    if (isFreshSubscription) {
-      // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
-      const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
-        if (event) {
-          const baseEntity = <BaseEntity>event.args?.baseEntity;
-
-          // Only process events for the entity type this subscription was created for
-          // This prevents duplicate CloudEvents when multiple entity types have active subscriptions
-          if (baseEntity?.EntityInfo?.Name !== uniqueKey) {
-            return;
-          }
-
-          const baseEntityValues = baseEntity ? this.EntityEventPayload(baseEntity, event.args instanceof BaseEntityEvent ? event.args.ChangedFieldNames : undefined) : null;
-          const eventToLog = { entityName: uniqueKey, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
-          LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
-          await this.EmitCloudEvent(event);
-          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);
-
-          if (event.args && event.args instanceof BaseEntityEvent) {
-            const activeSessions = this.activeEntitySessions.get(uniqueKey);
-            if (activeSessions && activeSessions.size > 0) {
-              const eventNow = Date.now();
-              let serializedMessage: string | undefined;
-              for (const [sKey, session] of activeSessions) {
-                if (eventNow - session.lastSeenAt > ACTIVE_ENTITY_SESSION_TTL_MS) {
-                  activeSessions.delete(sKey);
-                  continue;
-                }
-                if (this.EntityEventBelongsToSession(event.args, session.userPayload)) {
-                  LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-                  serializedMessage ??= this.EntityStatusMessage(event.args);
-                  this.PublishStatusUpdate(session.pubSub, session.userPayload.sessionId, serializedMessage, session.userPayload);
-                }
-              }
-            }
-          }
-        }
-      });
-      this.eventSubscriptions.set(uniqueKey, theSub);
-    }
+    ResolverBase.ensureSharedEventListener();
   }
 
   /**

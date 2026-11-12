@@ -5,7 +5,8 @@ import {
   MJConversationEntity,
   BuildProjectVisibilityFilter,
   PROJECTS_RESOURCE_TYPE_ID,
-  ResourcePermissionEngine
+  ResourcePermissionEngine,
+  ConversationEngine
 } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -34,7 +35,7 @@ export interface ProjectWithStats extends MJProjectEntity {
       </select>
 
       <div class="project-actions">
-        @if (selectedProject) {
+        @if (SelectedProject && CanManageSelectedProject) {
           <button mjButton
             variant="flat"
             size="sm"
@@ -211,6 +212,14 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
     this.ProjectsWithStats = value;
   }
   public SelectedProject: MJProjectEntity | null = null;
+
+  /**
+   * True when the current user may edit or delete the selected folder: they own it, or their folder writes are
+   * not row-filtered (see `ConversationEngine.CanManageProject`).
+   */
+  public get CanManageSelectedProject(): boolean {
+    return ConversationEngine.Instance.CanManageProject(this.SelectedProject, this.CurrentUser, this.ProviderToUse);
+  }
 
   /** @deprecated Use {@link SelectedProject}. */
   public get selectedProject(): MJProjectEntity | null {

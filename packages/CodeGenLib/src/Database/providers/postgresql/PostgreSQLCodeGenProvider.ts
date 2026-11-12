@@ -20,6 +20,7 @@ import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
     UserCache,
+    GetServerPrincipal,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -93,10 +94,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const conn = new PostgreSQLCodeGenConnection(pool);
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
         if (!currentUser) {
-            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+            throw new Error('No active system user or Owner found in PostgreSQL; CodeGen needs one to run as.');
         }
 
         // Run MJ startup with the same 'task' entry-point default as the SQL Server path
@@ -2608,6 +2608,7 @@ WHERE p.prokind IN ('f', 'p')
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult> {
         // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
         // the per-entity handshake that dominated manageSQLScriptsAndExecution).
@@ -2640,6 +2641,7 @@ WHERE p.prokind IN ('f', 'p')
                         CreateOrReplaceSQL: opts.viewSQL,
                         WillRegenerate: opts.willRegenerate,
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
+                        OnDependentViewUnrestored: opts.OnDependentViewUnrestored,
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                     await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);
@@ -2882,10 +2884,13 @@ WHERE p.prokind IN ('f', 'p')
             };
         }
 
-        // Composite keys or non-auto, non-UUID PKs
-        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
-        ).join(' AND ');
+        // Composite keys or non-auto, non-UUID PKs. #3526: a key column that allows NULL is matched
+        // NULL-safely (IS NOT DISTINCT FROM would not use a btree index).
+        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) => {
+            const col = pgDialect.QuoteIdentifier(k.Name);
+            const param = pgDialect.ParameterRef(k.CodeName);
+            return k.AllowsNull ? `(${col} = ${param} OR (${col} IS NULL AND ${param} IS NULL))` : `${col} = ${param}`;
+        }).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.

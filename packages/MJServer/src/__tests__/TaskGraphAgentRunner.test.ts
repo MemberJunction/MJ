@@ -63,8 +63,16 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIAgentEntityExtended: class {},
     MJAIAgentRunEntityExtended: class {},
+    TASK_SECURITY_ENVELOPE_VERSION: 1,
 }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
+
+const { mockActions } = vi.hoisted(() => ({
+    mockActions: [] as Array<{ ID: string; Config_Object: { disallowWhenTainted?: boolean } | null }>,
+}));
+vi.mock('@memberjunction/actions', () => ({
+    ActionEngineServer: { Instance: { Config: vi.fn(), get Actions() { return mockActions; } } },
+}));
 
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
@@ -96,7 +104,8 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-import { TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { TaintedActionRemovals, TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
 
 interface SubmittingRunOverrides {
     ID?: string;
@@ -104,6 +113,7 @@ interface SubmittingRunOverrides {
     Agent?: string | null;
     AgentID?: string | null;
     ParentRunID?: string | null;
+    UserID?: string | null;
     LoadSuccess?: boolean;
 }
 
@@ -137,6 +147,7 @@ function makeParams(
                 Agent: submittingRunOverrides.Agent ?? null,
                 AgentID: submittingRunOverrides.AgentID ?? null,
                 ParentRunID: submittingRunOverrides.ParentRunID ?? null,
+                UserID: submittingRunOverrides.UserID ?? null,
             };
         }),
     } as unknown as IMetadataProvider;
@@ -309,6 +320,41 @@ describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from
         expect(mockRunView).not.toHaveBeenCalled();
         expect(mockRunAgent).toHaveBeenCalledTimes(1);
         expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toBeUndefined();
+    });
+});
+
+describe('TaskGraphAgentRunner submitting run that does not resolve (#4623)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('logs when the submitting run is not found, and runs the agent with no parentRun', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams({ SubmittingAgentRunID: 'missing-run-1' }, 'parent-cfg-1', { LoadSuccess: false });
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent.mock.calls[0][0].parentRun).toBeUndefined();
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('missing-run-1') && m.includes('was not found'))).toBe(true);
+    });
+
+    it('does not log when there is no submitting run to load', async () => {
+        const runner = new TaskGraphAgentRunner();
+
+        await runner.RunAgentForTask(makeParams({ SubmittingAgentRunID: undefined }));
+
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('was not found'))).toBe(false);
     });
 });
 
@@ -519,4 +565,76 @@ describe('TaskGraphAgentRunner', () => {
     });
 });
 
+describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
+    const EGRESS_ACTION = 'e0000000-0000-4000-8000-000000000001';
+    const SAFE_ACTION = 'e0000000-0000-4000-8000-000000000002';
+    const SEARCH_SCOPE = 'e0000000-0000-4000-8000-000000000003';
+    const READER = 'e0000000-0000-4000-8000-000000000004';
 
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        mockRunAgent.mockResolvedValue({ success: true, agentRun: { ID: 'child-run-1' }, payload: {} });
+        mockActions.length = 0;
+        mockActions.push(
+            { ID: EGRESS_ACTION, Config_Object: { disallowWhenTainted: true } },
+            { ID: SAFE_ACTION, Config_Object: null },
+        );
+    });
+
+    it('starts the run with the same scope, search scopes, audience, bindings and envelope', async () => {
+        const env = {
+            Version: 1 as const,
+            IsRunTainted: false,
+            BoundActionParams: { [SAFE_ACTION]: { OrganizationID: 'org-A' } },
+            Audience: { ReaderUserIDs: [READER] },
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-A', SecondaryScopes: { Region: 'eu' }, SearchScopeIDs: [SEARCH_SCOPE] },
+        };
+        await new TaskGraphAgentRunner().RunAgentForTask(makeParams({ SecurityEnvelope: env }));
+        const runParams = mockRunAgent.mock.calls[0][0];
+        expect(runParams.SecurityEnvelope).toEqual(env);
+        expect(runParams.PrimaryScopeEntityName).toBe('Organizations');
+        expect(runParams.PrimaryScopeRecordID).toBe('org-A');
+        expect(runParams.SecondaryScopes).toEqual({ Region: 'eu' });
+        expect(runParams.SearchScopeIDs).toEqual([SEARCH_SCOPE]);
+        expect(runParams.Audience).toEqual({ Mode: 'Intersection', UserIDs: [READER] });
+        expect(runParams.boundActionParams).toEqual({ [SAFE_ACTION]: { OrganizationID: 'org-A' } });
+        expect(runParams.actionChanges).toBeUndefined();
+    });
+
+    it('takes the actions a tainted run may not call away from a tainted node, and reports its output tainted', async () => {
+        const result = await new TaskGraphAgentRunner().RunAgentForTask(makeParams({ SecurityEnvelope: { Version: 1, IsRunTainted: true } }));
+        expect(mockRunAgent.mock.calls[0][0].actionChanges).toEqual([{ scope: 'global', mode: 'remove', actionIds: [EGRESS_ACTION] }]);
+        expect(result.IsOutputTainted).toBe(true);
+    });
+
+    it('runs as the per-task clone the dispatcher handed it, not the shared cached user', async () => {
+        const shared = { ID: 'user-1' } as unknown as UserInfo;
+        const cached = UserCache.Instance.Users as UserInfo[];
+        cached.push(shared);
+        try {
+            const clone = { ID: 'user-1', TenantContext: { TenantID: 'org-A', Source: 'header' } } as unknown as UserInfo;
+            const params = makeParams(
+                { ContextUser: clone, SecurityEnvelope: { Version: 1, IsRunTainted: false, CallerTenantContext: { TenantID: 'org-A', Source: 'header' } } },
+                'parent-cfg-1',
+                { UserID: 'USER-1' },
+            );
+            await new TaskGraphAgentRunner().RunAgentForTask(params);
+            expect(mockRunAgent.mock.calls[0][0].contextUser).toBe(clone);
+        } finally {
+            cached.length = 0;
+        }
+    });
+
+    it('runs a step of an unconstrained graph under a clean envelope, so taint gained mid-run still gates egress (M1)', async () => {
+        await new TaskGraphAgentRunner().RunAgentForTask(makeParams());
+        const runParams = mockRunAgent.mock.calls[0][0];
+        expect(runParams.SecurityEnvelope).toEqual({ Version: 1, IsRunTainted: false });
+        expect(runParams.actionChanges).toBeUndefined();
+        expect(runParams.Audience).toBeUndefined();
+    });
+
+    it('lists no change when no action is gated', () => {
+        expect(TaintedActionRemovals([{ ID: SAFE_ACTION, Config_Object: null }])).toEqual([]);
+    });
+});

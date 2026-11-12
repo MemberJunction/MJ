@@ -79,10 +79,17 @@ echo ""
 #           Archiving, Realtime Recordings and Theme Studio visible in the
 #           header's app switcher — nothing backfills them, so without these
 #           the tests that switch into those apps never find the entry.
-#   conversations — pushed separately further below (needs the test user first).
+#   conversations — seeded separately further below (needs the test user first).
 # Tags must process first so any future UserTag references resolve.
+#
+# Pushed from a writable copy: /app/test-metadata is a read-only bind mount, and
+# a push writes each new record's primaryKey/sync block back into its file. An
+# atomic push treats that failed write as a push failure and rolls back every
+# row — tags, lists, views and all.
+TEST_METADATA_DIR="$(mktemp -d)/test-metadata"
+cp -R /app/test-metadata "$TEST_METADATA_DIR"
 echo "Syncing test user metadata..."
-node /app/packages/MJCLI/bin/run.js sync push --dir=/app/test-metadata --include="tags,users" 2>&1 || {
+node /app/packages/MJCLI/bin/run.js sync push --dir="$TEST_METADATA_DIR" --include="tags,users" 2>&1 || {
     echo "  WARNING: Test user metadata sync failed — falling back to SQL"
 }
 echo ""
@@ -95,16 +102,23 @@ echo "Ensuring test user, roles, apps, and example data via SQL..."
 node "$SCRIPTS/setup-test-user.cjs" 2>&1
 echo ""
 
-# Conversation fixture — deliberately pushed AFTER the SQL safety-net above,
-# because it resolves the test user with `@lookup:MJ: Users.Email=...`. Pushed
-# alongside `users` it would inherit that push's failure; here the user is
-# guaranteed to exist by either path. Seeds one conversation carrying a completed
-# AI message so T100 can exercise the per-message action controls (pin, thumbs
-# rating, reactions) without sending a live message and waiting on a real model
-# reply — which would mean an LLM call, its cost, and its flakiness every run.
-echo "Syncing conversation fixture..."
-node /app/packages/MJCLI/bin/run.js sync push --dir=/app/test-metadata --include="conversations" 2>&1 || {
-    echo "  WARNING: Conversation fixture sync failed — T100 will see an empty chat"
+# Communication logs a fresh DB never produces (T124). The integration connection
+# for T120 is seeded earlier, in db-setup, before MJAPI caches its engine.
+echo "Seeding sample communication logs..."
+node "$SCRIPTS/seed-sample-data.cjs" communication 2>&1 || {
+    echo "  WARNING: Communication log seed failed — T124 will see an empty log"
+}
+echo ""
+
+# Conversation fixture — seeded AFTER the SQL safety-net above, because it
+# resolves the test user by email. Seeds a conversation carrying a completed AI
+# message so T100 can exercise the per-message action controls without sending a
+# live message and waiting on a real model reply, plus T094's disposable target.
+# Seeded in SQL, not pushed: see seed-conversations.cjs for why a push as the
+# System user is refused.
+echo "Seeding conversation fixture..."
+CONVERSATION_FIXTURE="$TEST_METADATA_DIR/conversations/.conversations.json" node "$SCRIPTS/seed-conversations.cjs" 2>&1 || {
+    echo "  WARNING: Conversation fixture seed failed — T100 will see an empty chat"
 }
 echo ""
 
