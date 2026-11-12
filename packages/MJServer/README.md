@@ -1061,6 +1061,8 @@ databaseSettings: {
 }
 ```
 
+Saved-query metadata is not part of that cache. `QueryEngine` (`@memberjunction/core-entities`) loads and caches it, so by default the server neither reads the query items of the `MJ_Metadata` dataset nor refreshes metadata when a query is saved. Set `databaseSettings.loadQueryMetadata: true` only while code still reads the deprecated `Metadata.Queries`, `QueryFields`, … getters, which are empty otherwise; the setting is removed with them in 7.0. Use the same value on every server that shares a metadata cache.
+
 ### Authentication Token Caching
 
 Validated JWT tokens are cached using an LRU cache (`AuthCache`), storing both the `UserPayload` and the decoded `jwt.JwtPayload` claims to avoid repeated cryptographic verification and base64 decoding for the same token within its lifetime.

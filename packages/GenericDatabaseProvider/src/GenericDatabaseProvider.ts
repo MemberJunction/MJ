@@ -63,7 +63,6 @@ import {
     QueryCacheAuthorization,
     QueryDefinitionSignature,
     RunQueryCacheStatus,
-    QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
     CompositeKey,
@@ -142,6 +141,7 @@ import type { RecordChangePayload } from '@memberjunction/core';
 import {
     GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
+    MJQueryCategoryEntity,
     MJQueryEntityExtended,
     RenderedSQLCheckResult,
     MJQueryParameterEntity,
@@ -6827,17 +6827,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * Resolves a category path string to a QueryCategoryInfo ID.
+     * Resolves a category path string to a query category ID, from `QueryEngine`.
      */
     protected resolveCategoryPath(categoryPath: string): string | null {
         if (!categoryPath) return null;
         const segments = categoryPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return null;
 
-        let currentCategory: QueryCategoryInfo | null = null;
+        const categories = QueryEngine.Instance.QueryCategories;
+        let currentCategory: MJQueryCategoryEntity | null = null;
         for (const segment of segments) {
             const parentId: string | null = currentCategory !== null ? currentCategory.ID : null;
-            currentCategory = this.QueryCategories.find(cat =>
+            currentCategory = categories.find(cat =>
                 cat.Name.trim().toLowerCase() === segment.toLowerCase() && UUIDsEqual(cat.ParentID, parentId),
             ) ?? null;
             if (!currentCategory) return null;
@@ -8243,13 +8244,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // No enricher registered under this key (providing package not loaded) — no-op.
                 return rows;
             }
-            // Resolve the QueryInfo metadata for the executed query (best-effort; an enricher
-            // can use it to find the query's associated entity). Undefined is acceptable.
-            const queryInfo: QueryInfo | undefined = this.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            // The QueryInfo metadata exists only when this provider loads query metadata; the ID
+            // always reaches the enricher, which can resolve the query from QueryEngine.
+            const queryInfo: QueryInfo | undefined = this.LoadsQueryMetadata ? this.Queries.find(q => UUIDsEqual(q.ID, query.ID)) : undefined;
             return await enricher.EnrichResults({
                 rows,
                 config: enrichment.Config ?? {},
                 query: queryInfo,
+                queryID: query.ID,
                 contextUser,
                 provider: this,
             });

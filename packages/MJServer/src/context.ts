@@ -898,6 +898,7 @@ function tryBuildLazySqlServerProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     if (!sqlProvider.ConfigureFromGlobalSync(config)) {
       return null;
@@ -1010,6 +1011,7 @@ async function createPerRequestProviders(
     const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const sqlProvider = new SQLServerDataProvider();
     await sqlProvider.Config(config);
     p = sqlProvider as unknown as DatabaseProviderBase;
@@ -1054,6 +1056,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   );
   pgConfig.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
   pgConfig.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+  pgConfig.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
   const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)

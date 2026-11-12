@@ -791,6 +791,7 @@ export class SQLServerDataProvider
     );
     cfg.ConcurrencyCheck = this.ConcurrencyCheck;
     cfg.DeltaUpdates = this.DeltaUpdates;
+    cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
     await child.Config(cfg, this);
     return child;
   }

@@ -37,6 +37,7 @@ import {
     ProviderConfigDataBase,
 } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
+import type { BaseEntityEvent } from '../generic/baseEntity';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
@@ -178,16 +179,25 @@ class PartialRefreshProvider extends TestMetadataProvider {
         };
     }
 
-    public override async GetDatasetStatusByName(datasetName: string): Promise<DatasetStatusResultType> {
+    /** The item filters each status query carried. */
+    public statusFilters: DatasetItemFilterType[][] = [];
+
+    /**
+     * Status as the server reports it: an item asked for with a `1=0` filter has no rows, so it
+     * reports zero rows and the dataset definition's own stamp (T0), whatever its table holds.
+     */
+    public override async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         this.statusReads++;
+        this.statusFilters.push(itemFilters ?? []);
+        const suppressed = new Set((itemFilters ?? []).filter(f => f.Filter === '1=0').map(f => f.ItemCode));
         if (this.failStatus) {
             return { DatasetID: 'md', DatasetName: datasetName, Success: false, Status: 'No update dates found', LatestUpdateDate: new Date(0), EntityUpdateDates: [] };
         }
         const dates = ITEMS.map(item => ({
             EntityName: item.EntityName,
             EntityID: item.EntityID,
-            UpdateDate: this.stamps[item.Code].UpdatedAt,
-            RowCount: this.stamps[item.Code].RowCount,
+            UpdateDate: suppressed.has(item.Code) ? T0 : this.stamps[item.Code].UpdatedAt,
+            RowCount: suppressed.has(item.Code) ? 0 : this.stamps[item.Code].RowCount,
         }));
         return {
             DatasetID: 'md',
@@ -209,6 +219,13 @@ class PartialRefreshProvider extends TestMetadataProvider {
     }
 }
 
+/** A provider configuration; `loadQueryMetadata` is what `LoadQueryMetadata` is set to. */
+function queryMetadataConfig(loadQueryMetadata: boolean): ProviderConfigDataBase {
+    const config = new ProviderConfigDataBase({}, '__mj', [], [], true);
+    config.LoadQueryMetadata = loadQueryMetadata;
+    return config;
+}
+
 const QUERY_FAMILY = ['QueryCategories', 'Queries', 'QueryFields', 'QueryPermissions', 'QueryEntities', 'QueryParameters'];
 const EVERYTHING_ELSE = ITEMS.map(i => i.Code).filter(c => !QUERY_FAMILY.includes(c)).sort();
 
@@ -218,7 +235,7 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
 
     beforeEach(async () => {
         provider = new PartialRefreshProvider();
-        config = new ProviderConfigDataBase({}, '__mj', [], [], true);
+        config = queryMetadataConfig(true);
         await provider.Config(config);
         expect(provider.datasetReads).toHaveLength(1);
         expect(provider.suppressedCodes(provider.lastRead())).toEqual([]); // the first load is a full one
@@ -555,7 +572,7 @@ describe('ProviderBase — a failed metadata refresh is retried, not escalated',
 
     beforeEach(async () => {
         provider = new PartialRefreshProvider(new InProcessStore());
-        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
+        await provider.Config(queryMetadataConfig(true));
         expect(provider.datasetReads).toHaveLength(1);
         entitiesBefore = provider.Entities;
         vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -706,7 +723,7 @@ describe('ProviderBase — a failed metadata refresh is retried, not escalated',
 describe('ProviderBase — a process that started from the stored snapshot reloads only what changed', () => {
     let store: MockCacheStorageProvider;
     let warm: PartialRefreshProvider;
-    const config = () => new ProviderConfigDataBase({}, '__mj', [], [], true);
+    const config = () => queryMetadataConfig(true);
 
     beforeEach(async () => {
         store = new MockCacheStorageProvider();
@@ -780,5 +797,119 @@ describe('ProviderBase — a process that started from the stored snapshot reloa
         expect(warm.datasetReads).toHaveLength(1);
         expect(warm.suppressedCodes(warm.lastRead())).toEqual([]);
         expect(warm.Entities).not.toBe(entitiesBefore);
+    });
+});
+
+/**
+ * The default: the provider does not load the saved-query metadata. `QueryEngine` is the source of
+ * query metadata, so the provider neither reads those items nor refreshes when a query is saved —
+ * the write that agents make once per analysis step.
+ */
+describe('ProviderBase — query metadata not loaded (the default)', () => {
+    /** Every MJ_Metadata item that holds saved-query metadata. */
+    const QUERY_METADATA_CODES = ['Queries', 'QueryCategories', 'QueryDependencies', 'QueryEntities', 'QueryFields', 'QueryParameters', 'QueryPermissions', 'QuerySQLs', 'SQLDialects'];
+    let provider: PartialRefreshProvider;
+
+    beforeEach(async () => {
+        ProviderBase['_queryMetadataWarningLogged'] = false;
+        provider = new PartialRefreshProvider(new InProcessStore());
+        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
+        expect(provider.datasetReads).toHaveLength(1);
+    });
+
+    afterEach(() => provider['CancelPendingMetadataMemberRefresh']());
+
+    const touchQueries = () => provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+    const memberWrite = (entityName: string) =>
+        provider['handleMetadataMemberEntityEvent'](entityName.toLowerCase(), { type: 'save' } as BaseEntityEvent);
+
+    it('is off unless configured', () => {
+        expect(provider.LoadsQueryMetadata).toBe(false);
+        expect([...ProviderBase.QueryMetadataItemCodes].sort()).toEqual(QUERY_METADATA_CODES);
+    });
+
+    it('the load asks for no query rows, and the status query skips them too', () => {
+        expect(provider.suppressedCodes(provider.datasetReads[0])).toEqual(QUERY_METADATA_CODES);
+        expect(provider.statusFilters.length).toBeGreaterThan(0);
+        for (const filters of provider.statusFilters) {
+            expect(provider.suppressedCodes(filters)).toEqual(QUERY_METADATA_CODES);
+        }
+        expect(provider.Entities).toHaveLength(1);
+    });
+
+    it('the deprecated getters return empty arrays and warn once, naming QueryEngine', () => {
+        const warnings: LogEntry[] = [];
+        const unsubscribe = RegisterLogSink(entry => { if (entry.severity === 'warning') warnings.push(entry); });
+        try {
+            expect(provider.Queries).toEqual([]);
+            expect(provider.QueryFields).toEqual([]);
+            expect(provider.QueryCategories).toEqual([]);
+            expect(provider.SQLDialects).toEqual([]);
+            expect(provider.QuerySQLs).toEqual([]);
+        } finally {
+            unsubscribe();
+        }
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0].message).toContain('QueryEngine');
+    });
+
+    it('the query entities are not metadata members; the rest still are', () => {
+        expect(provider.IsMetadataDatasetMember('MJ: Queries')).toBe(false);
+        expect(provider.IsMetadataDatasetMember('MJ: Query Fields')).toBe(false);
+        expect(provider.IsMetadataDatasetMember('MJ: Entities')).toBe(true);
+    });
+
+    it('a saved query schedules no metadata refresh; an entity write still does', () => {
+        memberWrite('MJ: Queries');
+        expect(provider['_metadataMemberRefreshTimer']).toBeNull();
+        memberWrite('MJ: Entities');
+        expect(provider['_metadataMemberRefreshTimer']).not.toBeNull();
+    });
+
+    it('a saved query does not make the metadata stale: no reload, no dataset read', async () => {
+        touchQueries();
+        expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+        expect(await provider.RefreshIfNeeded(undefined, true)).toBe(true);
+        expect(provider.datasetReads).toHaveLength(1);
+    });
+
+    it('a query timestamp move the build does not read is scoped as nothing to reload', async () => {
+        // Remote stamps from a status read that did not skip the query items (a peer configured to
+        // load them, say): a moved query stamp is attributed to an item this provider never reads.
+        await provider.RefreshRemoteMetadataTimestamps();
+        const remote = provider['_latestRemoteMetadataTimestamps'].map(t =>
+            t.Type === 'MJ: Queries' ? { ...t, UpdatedAt: new Date(T0.getTime() + 5000), RowCount: 7 } : t);
+        provider['_latestRemoteMetadataTimestamps'] = remote;
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none', AnyItemMoved: true });
+    });
+});
+
+describe('ProviderBase — a snapshot saved with query metadata, restored without it', () => {
+    beforeEach(() => {
+        ProviderBase['_queryMetadataWarningLogged'] = false;
+    });
+
+    it('restores no query entities as members and no query rows, and reloads nothing for the query stamps', async () => {
+        const store = new MockCacheStorageProvider();
+        const writer = new PartialRefreshProvider(store);
+        await writer.Config(queryMetadataConfig(true)); // saves a snapshot that holds query rows and query members
+        expect(writer.IsMetadataDatasetMember('MJ: Queries')).toBe(true);
+
+        const warm = new PartialRefreshProvider(store);
+        await warm.Config(queryMetadataConfig(false));
+        try {
+            expect(warm.datasetReads).toHaveLength(0); // served from the snapshot
+            expect(warm.IsMetadataDatasetMember('MJ: Queries')).toBe(false);
+            expect(warm.IsMetadataDatasetMember('MJ: Entities')).toBe(true);
+            expect(warm['_localMetadata'].AllQueries).toEqual([]); // not held in memory either
+
+            // The stored stamps count query rows and the skipped status reports none. Those items are
+            // not built here, so the difference reloads nothing, and the snapshot is stamped current.
+            expect(await warm.RefreshIfNeeded(undefined, true)).toBe(true);
+            expect(warm.datasetReads).toHaveLength(0);
+            expect(await warm.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+        } finally {
+            warm['CancelPendingMetadataMemberRefresh']();
+        }
     });
 });

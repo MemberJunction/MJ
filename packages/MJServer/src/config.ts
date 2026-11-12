@@ -71,6 +71,13 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyPassword: z.string().optional(),
   concurrencyCheck: z.enum(['off', 'log', 'enforce']).optional().default('off'),
   deltaUpdates: z.boolean().optional().default(true),
+  /**
+   * Load the saved-query metadata into the metadata object, for code that still reads the
+   * deprecated `Metadata.Queries`, `QueryFields`, … getters. Off by default: `QueryEngine` is the
+   * source of query metadata, and saving a query then refreshes no metadata. Removed in 7.0. Every
+   * server sharing a metadata cache should use the same setting.
+   */
+  loadQueryMetadata: z.boolean().optional().default(false),
   typedQueryDrift: z.enum(['warn', 'throw']).optional().default('warn'),
   connectionPool: z.object({
     max: z.number().optional().default(50),
@@ -1198,6 +1205,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       : 180000,
     concurrencyCheck: 'off',
     deltaUpdates: true,
+    loadQueryMetadata: false,
     typedQueryDrift: 'warn',
     connectionPool: {
       max: 50,

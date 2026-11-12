@@ -52,7 +52,9 @@ export abstract class QueryResultEnricherBase {
      * @param opts.rows the assembled query result rows to enrich
      * @param opts.config the enricher-specific config from {@link RunQueryEnrichment.Config}
      * @param opts.query the loaded query metadata, when available (lets an enricher
-     *  read the query's associated entity, fields, etc.)
+     *  read the query's associated entity, fields, etc.). Undefined unless the provider is
+     *  configured with `LoadQueryMetadata`; prefer `queryID` with `QueryEngine`.
+     * @param opts.queryID the ID of the query whose rows these are, to look it up in `QueryEngine`
      * @param opts.contextUser the request user — required server-side for isolation/audit
      * @param opts.provider the owning provider for multi-provider-correct data access
      */
@@ -60,6 +62,7 @@ export abstract class QueryResultEnricherBase {
         rows: Record<string, unknown>[];
         config: Record<string, unknown>;
         query?: QueryInfo;
+        queryID?: string;
         contextUser?: UserInfo;
         provider?: IMetadataProvider;
     }): Promise<Record<string, unknown>[]>;
