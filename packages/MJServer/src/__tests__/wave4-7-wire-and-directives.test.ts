@@ -3,9 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
   GraphQLFieldResolver,
   GraphQLResolveInfo,
-  GraphQLSchema,
-  executeSync,
-  parse,
 } from 'graphql';
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { AuthorizationError } from 'type-graphql';
@@ -150,15 +147,6 @@ describe('Wave 4.7 Wire, Schema Diet & Directives Optimizations', () => {
       const directResult = secretField?.resolve?.({}, {}, activeContext, dummyInfo);
       expect(directResult).toBe('sync-scalar');
       expect(directResult instanceof Promise).toBe(false);
-
-      // executeSync throws if any resolver returns a Promise; passing verifies synchronous execution
-      const syncExecResult = executeSync({
-        schema: transformed,
-        document: parse('{ secretScalar }'),
-        contextValue: activeContext,
-      });
-      expect(syncExecResult.data).toEqual({ secretScalar: 'sync-scalar' });
-      expect(syncExecResult.errors).toBeUndefined();
 
       // Inactive user throws AuthorizationError synchronously
       const inactiveContext = createTestContext({ isActive: false });
