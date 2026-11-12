@@ -666,7 +666,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * data; the original caller still gets its own result, and the orphaned promise's stash
      * step no-ops safely.
      */
-    private ensureInflightViewInvalidation(): void {
+    private _invalidationTargetRef: WeakRef<ProviderBase> | null = null;
+
+    /**
+     * Number of live/uncollected `ProviderBase` instances currently registered for in-flight
+     * view invalidation callbacks.
+     */
+    public static get ActiveInvalidationTargetCount(): number {
+        return ProviderBase._invalidationTargets.size;
+    }
+
+    /**
+     * Immediately removes this provider instance from the global in-flight invalidation target set
+     * and clears per-instance mutation state. Call on short-lived per-request server providers
+     * when the HTTP response closes so `_invalidationTargets` does not accumulate thousands of
+     * `WeakRef`s between major garbage collections.
+     */
+    public DetachInvalidationListeners(): void {
+        if (this._invalidationTargetRef) {
+            ProviderBase._invalidationTargets.delete(this._invalidationTargetRef);
+            this._invalidationTargetRef = null;
+        }
+        this._lingerInvalidationWired = false;
+        this._entityMutationVersions.clear();
+    }
+
+    protected ensureInflightViewInvalidation(): void {
         // Deliberately ABOVE the per-instance guard: the static wiring is re-checked on every call,
         // not just the first. A long-lived provider (Explorer's client provider, MJServer's system
         // provider) that registered before a bus swap would otherwise stay wired to the dead Subject
@@ -678,7 +703,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         this._lingerInvalidationWired = true;
-        ProviderBase._invalidationTargets.add(new WeakRef(this));
+        const ref = new WeakRef(this);
+        this._invalidationTargetRef = ref;
+        ProviderBase._invalidationTargets.add(ref);
     }
 
     /**
@@ -6029,6 +6056,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param data - Configuration including schema filters and connection info
      * @returns True if configuration was successful
      */
+    /**
+     * Synchronously configures this provider from an already-initialized global `Metadata.Provider`
+     * without allocating promises or awaiting async cache initialization. Returns `false` if global
+     * metadata or `LocalCacheManager` has not finished initializing yet.
+     */
+    protected ConfigureFromGlobalMetadataSync(data: ProviderConfigDataBase): boolean {
+        if (!Metadata.Provider || data.IgnoreExistingMetadata || this._refresh || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: bootstrap checks for an existing global registration
+            return false;
+        }
+        this._ConfigData = data;
+        this._configLoadedFromServer = false;
+        return this.CopyMetadataFromGlobalProvider();
+    }
+
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
         // Describes THIS Config only: a flag left by an earlier Refresh() must not make the
@@ -7010,7 +7051,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // SaveLocalMetadataToStorage avoids a multi-MB JSON.stringify + gzip + IDB
                 // write pass on the main thread during startup.
                 if (previousUserJson !== JSON.stringify(user)) {
-                    void this.SaveLocalMetadataToStorage();
+                    if (Object.prototype.hasOwnProperty.call(this, 'SaveLocalMetadataToStorage')) {
+                        void this.SaveLocalMetadataToStorage();
+                    } else {
+                        this.ScheduleSaveLocalMetadataToStorage();
+                    }
                 }
                 return user;
             }
@@ -8578,6 +8623,99 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /** Guard for {@link logMetadataSnapshotDisabledOnce}. */
     private _metadataSnapshotSkipLogged = false;
+
+    /** Default debounce duration in milliseconds for coalesced metadata snapshot writes to local storage. */
+    public static MetadataSnapshotSaveDebounceMs: number = 250;
+    private _metadataSaveTimer: ReturnType<typeof setTimeout> | null = null;
+    private _inFlightMetadataSave: Promise<void> | null = null;
+    private _hasPendingMetadataSaveWhileInFlight: boolean = false;
+
+    /**
+     * Schedules a trailing-edge coalesced background call to `SaveLocalMetadataToStorage()`,
+     * deduplicating rapid back-to-back calls within the window and serializing execution if an
+     * in-flight save is already running.
+     *
+     * @param delayMs - Debounce window duration in milliseconds (defaults to `ProviderBase.MetadataSnapshotSaveDebounceMs`)
+     */
+    public ScheduleSaveLocalMetadataToStorage(delayMs: number = ProviderBase.MetadataSnapshotSaveDebounceMs): void {
+        if (!this.LocalStorageProvider) return;
+
+        if (!this.MetadataSnapshotPersistenceEnabled) {
+            this.logMetadataSnapshotDisabledOnce();
+            return;
+        }
+
+        if (this._inFlightMetadataSave) {
+            this._hasPendingMetadataSaveWhileInFlight = true;
+            return;
+        }
+
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+        }
+
+        this._metadataSaveTimer = setTimeout(() => {
+            this._metadataSaveTimer = null;
+            void this.triggerSerializedMetadataSave();
+        }, delayMs);
+
+        if (typeof this._metadataSaveTimer?.unref === 'function') {
+            this._metadataSaveTimer.unref();
+        }
+    }
+
+    /**
+     * Cancels any pending debounce timer and awaits `SaveLocalMetadataToStorage()` immediately
+     * (or awaits any in-flight save plus trailing save), so tests and shutdown hooks can
+     * deterministically flush pending writes.
+     */
+    public async FlushPendingMetadataStorageSave(): Promise<void> {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+            this._hasPendingMetadataSaveWhileInFlight = true;
+        }
+
+        if (this._inFlightMetadataSave) {
+            await this._inFlightMetadataSave;
+            return;
+        }
+
+        if (this._hasPendingMetadataSaveWhileInFlight) {
+            await this.triggerSerializedMetadataSave();
+        }
+    }
+
+    /**
+     * Clears any pending metadata snapshot save timer without saving.
+     */
+    public CancelPendingMetadataStorageSave(): void {
+        if (this._metadataSaveTimer) {
+            clearTimeout(this._metadataSaveTimer);
+            this._metadataSaveTimer = null;
+        }
+        this._hasPendingMetadataSaveWhileInFlight = false;
+    }
+
+    private triggerSerializedMetadataSave(): Promise<void> {
+        if (!this._inFlightMetadataSave) {
+            this._inFlightMetadataSave = this.executeSerializedMetadataSave().finally(() => {
+                this._inFlightMetadataSave = null;
+            });
+        }
+        return this._inFlightMetadataSave;
+    }
+
+    private async executeSerializedMetadataSave(): Promise<void> {
+        do {
+            this._hasPendingMetadataSaveWhileInFlight = false;
+            try {
+                await this.SaveLocalMetadataToStorage();
+            } catch {
+                // SaveLocalMetadataToStorage catches its own errors; guard here as well
+            }
+        } while (this._hasPendingMetadataSaveWhileInFlight);
+    }
 
     /**
      * Saves current metadata to local storage for caching.
