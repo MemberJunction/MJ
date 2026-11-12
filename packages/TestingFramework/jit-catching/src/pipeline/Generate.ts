@@ -9,13 +9,14 @@ import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
-import type { ChangeAnalysis, GenerationRequest, GenerationResult, PreparedRevision, Run, SessionRecord, TokenUsage, Trigger } from '../types';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, PreparedRevision, Run, SessionRecord, TokenUsage, Trigger } from '../types';
 import { NewID, NewRunID } from '../ids';
 import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
 import { RunWithConcurrency } from './concurrency';
 import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';
 import { PreflightEnv } from './Preflight';
+import { Seconds, Timed } from './Timing';
 
 /** The tools that write into one run's folder, built once the run ID is known. */
 export interface GenerateTools {
@@ -31,6 +32,8 @@ export interface GenerateDeps {
     Repo: Pick<GitRepo, 'Fetch' | 'MergeBase' | 'Subject'>;
     Redaction: RedactionCheck;
     ForRun: (dir: RunDir) => GenerateTools;
+    /** The clock the stage timers read; `Date.now` when not given. */
+    Now?: () => number;
 }
 /**
  * With `PR` null, `HeadSHA` is required. With `PR` set, `HeadSHA` (when given) replaces the PR's head and the PR still gives the title and body.
@@ -49,7 +52,8 @@ export class GenerateError extends Error {
 
 /**
  * Job 1: checks the environment, resolves the revisions, prepares and builds base, analyses the change, runs one generation session per
- * (package, method[, risk]) and writes `generation.json` with one record per session and the analyzer's and the sessions' tokens per role and model. The base worktree stays for the execute and assess jobs.
+ * (package, method[, risk]) and writes `generation.json` with one record per session, the analyzer's and the sessions' tokens per role and model, and the time of each stage,
+ * which it also prints on one stdout line. The base worktree stays for the execute and assess jobs.
  * A failure from the analyzer on is thrown as a `GenerateError`; an earlier failure is thrown as it is.
  */
 export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string }> {
@@ -63,35 +67,44 @@ export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string 
     dir.Create();
     const t = d.ForRun(dir);
     await t.EnsureImage();
-    const base = await t.Target.Prepare({ Kind: 'Base', SHA: BaseSHA });
+    const now = d.Now ?? Date.now;
+    const prepared = await Timed(now, () => t.Target.Prepare({ Kind: 'Base', SHA: BaseSHA }));
     const text = await pullRequestText(d, pr, HeadSHA);
     const finished: TokenUsage[] = [];
-    try { await analyzeAndGenerate(run, dir, t, base, text, o.Settings, finished); }
+    try { await analyzeAndGenerate(run, dir, t, prepared.Result, text, o.Settings, finished, { Now: now, PrepareBaseMs: prepared.Ms }); }
     catch (e) { throw new GenerateError(run.ID, SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...finished]), e); }
     return { RunID: run.ID };
 }
 
-/** Analyses the change, keeps the packages base has, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`. */
-async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, base: PreparedRevision, text: PullRequestText, settings: Settings, finished: TokenUsage[]): Promise<void> {
-    const found = await t.Analyzer.Analyze(run, text);
+/**
+ * Analyses the change, keeps the packages base has, builds base, runs the sessions (adding each finished session's usage to `finished`) and writes `generation.json`
+ * with the stage times: `clock.PrepareBaseMs` and the analyze, build and generate times on `clock.Now`.
+ */
+async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, base: PreparedRevision, text: PullRequestText, settings: Settings, finished: TokenUsage[],
+    clock: { Now: () => number; PrepareBaseMs: number }): Promise<void> {
+    const analyzed = await Timed(clock.Now, () => t.Analyzer.Analyze(run, text));
+    const found = analyzed.Result;
     const present = t.Target.PackagesAt(base, found.PackagesToTest);
     for (const name of found.PackagesToTest) if (!present.includes(name)) process.stderr.write(`run ${run.ID}: ${name} is not in base; skipped\n`);
     const analysis: ChangeAnalysis = { ...found, PackagesToTest: present };
-    await t.Target.BuildPackages(base, analysis.PackagesToTest);
+    const built = await Timed(clock.Now, () => t.Target.BuildPackages(base, analysis.PackagesToTest));
     const requests = buildRequests(run, analysis, base.RootDir, settings, t.PackageMap);
-    const results = await RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
+    const generated = await Timed(clock.Now, () => RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
         const result = await generateOrFail(t, r);
         finished.push({ ...result.Tokens, Role: 'Generator' });
         return result;
-    });
+    }));
+    const results = generated.Result;
+    const timings: GenerationTimings = { AnalyzeMs: analyzed.Ms, PrepareBaseMs: clock.PrepareBaseMs, BuildBaseMs: built.Ms, GenerateMs: generated.Ms };
     const tests = results.flatMap((r) => r.Tests);
     const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null, EndReason: results[i].EndReason,
         Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,
         Produced: results[i].Tests.filter((x) => x.GenerationOutcome === 'Produced').length, Failed: results[i].Tests.filter((x) => x.GenerationOutcome === 'Failed').length }));
     run.TokensByModel = SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...results.map((r) => ({ ...r.Tokens, Role: 'Generator' as const }))]); run.EndedAt = new Date().toISOString();
-    dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions, BaseSourceDir: null });
+    dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions, BaseSourceDir: null, Timings: timings });
     const produced = tests.filter((x) => x.GenerationOutcome === 'Produced').length;
     process.stdout.write(`run ${run.ID}: ${produced} produced, ${tests.length - produced} failed, ${requests.length} sessions\n`);
+    process.stdout.write(`run ${run.ID}: stages analyze ${Seconds(timings.AnalyzeMs)}, prepare base ${Seconds(timings.PrepareBaseMs)}, build base ${Seconds(timings.BuildBaseMs)}, generate ${Seconds(timings.GenerateMs)}\n`);
 }
 
 /**

@@ -192,6 +192,25 @@ describe('GenerateStep', () => {
     expect(new RunDir(root, RunID, redaction).ReadGeneration().Run).toMatchObject({ PRNumber: 12, Trigger: 'Backtest', BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA });
   });
 
+  it('records how long each stage took in generation.json and prints them on one stdout line', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    let now = 0;
+    const tools: GenerateTools = {
+      EnsureImage: async () => { now += 500; },
+      Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => { now += 2000; return { Ref: r, RootDir: '/work/base' }; }, BuildPackages: async () => { now += 3000; }, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
+      Analyzer: { Analyze: async () => { now += 1000; return { ...analysis(), Risks: [] }; }, Usage: { Model: 'a', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
+      Generator: { Generate: async (): Promise<GenerationResult> => { now += 4000; return { Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; } },
+      PackageMap: { Get: () => info, PackageForPath: () => null },
+    };
+    const stdout: string[] = []; vi.spyOn(process.stdout, 'write').mockImplementation((c) => { stdout.push(String(c)); return true; });
+    const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: DEFAULT_SETTINGS, Env: FULL_ENV,
+      Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools, Now: () => now } });
+    expect(new RunDir(root, RunID, redaction).ReadGeneration().Timings).toEqual({ AnalyzeMs: 1000, PrepareBaseMs: 2000, BuildBaseMs: 3000, GenerateMs: 4000 });
+    expect(stdout).toContain(`run ${RunID}: stages analyze 1s, prepare base 2s, build base 3s, generate 4s\n`);
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it('refuses before any GitHub, repo or target call when a key is missing or Claude Code is the parent', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-'));
     for (const env of [{ ...FULL_ENV, ANTHROPIC_API_KEY: undefined }, { ...FULL_ENV, CLAUDECODE: '1' }]) {

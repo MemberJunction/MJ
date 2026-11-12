@@ -100,3 +100,7 @@ export interface SessionRecord {
     RunID: string; Package: string; Method: GenerationMethod; RiskID: string | null; EndReason: string; Turns: number; Tokens: TokenUsage;
     TranscriptURL: string | null; Produced: number; Failed: number;
 }
+/** Milliseconds spent in each stage of the generate step. */
+export interface GenerationTimings { AnalyzeMs: number; PrepareBaseMs: number; BuildBaseMs: number; GenerateMs: number; }
+/** Milliseconds spent in each stage of the execute step; `CoverageMs` is 0 when coverage is not measured. */
+export interface ExecutionTimings { PrepareHeadMs: number; BuildHeadMs: number; TypeCheckMs: number; RunMs: number; CoverageMs: number; }

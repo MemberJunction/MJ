@@ -37,6 +37,18 @@ describe('record schemas', () => {
       GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
     expect(GenerationFileSchema.parse({ Run: run, Analysis: analysis(), Tests: [], BaseRootDir: '/work/base' }).Sessions).toEqual([]);
   });
+  it('keeps partial stage timings in generation and execution files, reads files without them, and rejects negative or fractional times', () => {
+    const run = { ID: 'r1', Trigger: 'Local', PRNumber: null, BaseSHA: 'a'.repeat(40), HeadSHA: 'b'.repeat(40), Status: 'Generated',
+      GeneratorModel: 'claude-haiku-5-5', TokensByModel: [], RunnerMinutes: 0, StartedAt: '2026-11-05T00:00:00.000Z', EndedAt: null };
+    const gen = { Run: run, Analysis: analysis(), Tests: [], BaseRootDir: '/work/base' };
+    expect(GenerationFileSchema.parse({ ...gen, Timings: { AnalyzeMs: 5 } }).Timings).toEqual({ AnalyzeMs: 5 });
+    expect(GenerationFileSchema.parse(gen).Timings).toBeUndefined();
+    expect(() => GenerationFileSchema.parse({ ...gen, Timings: { GenerateMs: -1 } })).toThrow();
+    const exec = { RunID: 'r1', Tests: [], Results: [], Coverage: [], TypeErrors: {} };
+    expect(ExecutionFileSchema.parse({ ...exec, Timings: { RunMs: 7, CoverageMs: 0 } }).Timings).toEqual({ RunMs: 7, CoverageMs: 0 });
+    expect(ExecutionFileSchema.parse(exec).Timings).toBeUndefined();
+    expect(() => ExecutionFileSchema.parse({ ...exec, Timings: { RunMs: 1.5 } })).toThrow();
+  });
 });
 
 describe('path schemas', () => {

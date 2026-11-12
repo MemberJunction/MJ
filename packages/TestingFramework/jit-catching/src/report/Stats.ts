@@ -24,6 +24,13 @@ export function MeanOf(values: number[]): number | null {
     return values.length === 0 ? null : values.reduce((s, v) => s + v, 0) / values.length;
 }
 
+/** Median of the values (the mean of the two middle values for an even count); null when there are none. */
+export function MedianOf(values: number[]): number | null {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 /** How many times each key occurs. */
 export function CountBy(keys: string[]): Record<string, number> {
     const out: Record<string, number> = {};

@@ -195,8 +195,8 @@ describe('BuildGateReport', () => {
     expect(m1.Drops).toEqual({ NoAssertion: 2, Mocked: 1 });
   });
 
-  it('renders no coverage line, since coverage is not a gate-1 input', async () => {
-    expect(RenderMarkdown(await build(store()))).not.toMatch(/coverage/i);
+  it('renders no line about coverage measured, since coverage is not a gate-1 input', async () => {
+    expect(RenderMarkdown(await build(store()))).not.toMatch(/coverage measured/i);
   });
 
   /** The report of runs ra (analyzer fallback) and rb, after `rb` sets up rb's run folder. */
@@ -229,6 +229,21 @@ describe('BuildGateReport', () => {
       expect(md).toContain('- Analyzer fallbacks (no risk notes): 1 of 1 runs with a generation file; 1 runs have no generation file\n');
       expect(stderr.mock.calls.map((c) => String(c[0])).filter((l) => l === 'report: rb: generation.json unreadable, skipped\n')).toHaveLength(1);
     } finally { stderr.mockRestore(); }
+  });
+
+  it('renders the median minutes of each stage over the model\'s runs, n/a for a stage no run has', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jit-report-')); dirs.push(root);
+    const redaction = new RedactionCheck([]); const min = 60_000;
+    const s = new MemoryStore(); s.Runs = [runOf('ra'), runOf('rb'), runOf('rc')];
+    const ra = new RunDir(root, 'ra', redaction); const rb = new RunDir(root, 'rb', redaction);
+    ra.WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 1 * min, PrepareBaseMs: 2 * min, BuildBaseMs: 0.5 * min, GenerateMs: 10 * min } });
+    rb.WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 2 * min } });
+    new RunDir(root, 'rc', redaction).WriteGeneration({ ...generation(join(root, 'base'), []), Timings: { AnalyzeMs: 6 * min } });
+    ra.WriteExecution({ RunID: 'ra', Tests: [], Results: [], Coverage: [], TypeErrors: {}, Timings: { PrepareHeadMs: 3 * min, BuildHeadMs: 1.25 * min, TypeCheckMs: 0.4 * min, RunMs: 4 * min } });
+    const l = ledger('c-Tuning-Clean-m9', 'Clean', 'm9', [entry(10, 'Clean', { RunID: 'ra' }), entry(11, 'Clean', { RunID: 'rb' }), entry(12, 'Clean', { RunID: 'rc' })]);
+    const md = RenderMarkdown(await BuildGateReport({ Ledgers: [l], Corpus: CORPUS, Store: s, RunDirOf: (id) => new RunDir(root, id, redaction), Prices: PRICES }));
+    expect(md).toContain(['#### Stage time (median minutes)', '', '- analyze: 2.0', '- prepare base: 2.0', '- build base: 0.5', '- generate: 10.0',
+      '- prepare head: 3.0', '- build head: 1.3', '- type-check: 0.4', '- run: 4.0', '- coverage: n/a', ''].join('\n'));
   });
 
   it('reads the run, the catches and the sessions of each run once', async () => {

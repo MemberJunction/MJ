@@ -6,8 +6,8 @@ import type { Corpus } from '../corpus/Corpus';
 import type { RunDir } from '../pipeline/RunDir';
 import { BUCKET_SCORE } from '../judges/JudgePanel';
 import { DEFAULT_SETTINGS, type Settings } from '../settings';
-import type { Catch, Feedback, Run, SessionRecord, TokenUsage } from '../types';
-import { CountBy, MeanOf, RateOf, type RateWithInterval } from './Stats';
+import type { Catch, ExecutionTimings, Feedback, GenerationTimings, Run, SessionRecord, TokenUsage } from '../types';
+import { CountBy, MeanOf, MedianOf, RateOf, type RateWithInterval } from './Stats';
 
 export type AgreementResult = ReturnType<typeof GetAgreement>;
 /** The human label of a catch, with AuthorChangedPR counted as Bug. */
@@ -35,6 +35,8 @@ export interface ModelReport {
     Sessions: Record<string, number>;
     /** Fallbacks: runs whose analyzer reply was invalid twice, of the Runs with a readable generation file. NoFile: runs with data but no readable generation file. */
     AnalyzerFallbacks: { Fallbacks: number; Runs: number; NoFile: number };
+    /** Per stage in pipeline order, the median minutes over the runs that recorded it; null when none did. */
+    StageMinutes: { Stage: string; Minutes: number | null }[];
     /** Drop rule → count. */
     Drops: Record<string, number>;
     Judges: { Model: string; Agreement: AgreementResult; HighOnIntended: number; LowOnBug: number }[];
@@ -48,11 +50,21 @@ export interface GateReportOptions {
     Prices?: Settings['Prices'];
 }
 
+/** The stages a run records, in pipeline order, with their report names. */
+const STAGES: { Name: string; Key: keyof StageTimings }[] = [
+    { Name: 'analyze', Key: 'AnalyzeMs' }, { Name: 'prepare base', Key: 'PrepareBaseMs' }, { Name: 'build base', Key: 'BuildBaseMs' }, { Name: 'generate', Key: 'GenerateMs' },
+    { Name: 'prepare head', Key: 'PrepareHeadMs' }, { Name: 'build head', Key: 'BuildHeadMs' }, { Name: 'type-check', Key: 'TypeCheckMs' }, { Name: 'run', Key: 'RunMs' },
+    { Name: 'coverage', Key: 'CoverageMs' },
+];
+type StageTimings = Partial<GenerationTimings & ExecutionTimings>;
+
 /** A catch with its human label (latest feedback by `At`), or null when it has none. */
 type LabeledCatch = Catch & { Label: HumanLabel | null };
 interface RunData { Run: Run | null; Catches: LabeledCatch[]; Sessions: SessionRecord[];
     /** The analysis's fallback flag; null when the generation file is missing or unreadable. */
-    Fallback: boolean | null; }
+    Fallback: boolean | null;
+    /** The stage times of the generation and execution files; empty when neither is readable. */
+    Timings: StageTimings; }
 /** A catch whose truth is known: +1 bug (label Bug or a matched test), −1 not a bug. `Intended` marks a label of Intended or TestFault. */
 interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
 
@@ -61,8 +73,8 @@ interface Truth { Catch: LabeledCatch; Score: 1 | -1; Intended: boolean; }
  * The human label of a catch is its latest feedback by `At`; an AuthorChangedPR answer counts as Bug everywhere
  * (not a false alarm, score +1, grouped under Bug in TPProb). Bug-set catches take their truth from the match:
  * a matched test scores +1, an unmatched one −1. The store is read once per run ID; each run's generation file
- * is read for the analyzer fallback, and its execution file only when the run has a test that passed on both revisions.
- * A missing or unreadable generation file leaves the run out of the fallback count; an unreadable one also writes one stderr line.
+ * is read for the analyzer fallback and the stage times, and its execution file for the stage times.
+ * A missing or unreadable generation file leaves the run out of the fallback count; an unreadable generation or execution file also writes one stderr line.
  */
 export async function BuildGateReport(o: GateReportOptions): Promise<GateReport> {
     const runIDs = [...new Set(o.Ledgers.flatMap((l) => l.Entries.flatMap((e) => (e.RunID === null ? [] : [e.RunID]))))];
@@ -75,14 +87,16 @@ export async function BuildGateReport(o: GateReportOptions): Promise<GateReport>
 async function loadRun(id: string, store: BaseCatchStore, runDirOf: (runID: string) => RunDir): Promise<RunData> {
     const [run, catches, sessions] = await Promise.all([store.GetRun(id), store.ListCatches(id), store.ListSessions(id)]);
     const labeled = await Promise.all(catches.map(async (c) => ({ ...c, Label: LatestLabel(await store.ListFeedback(c.ID)) })));
-    return { Run: run, Catches: labeled, Sessions: sessions, Fallback: analyzerFallback(runDirOf(id)) };
+    const dir = runDirOf(id);
+    const gen = readFile(dir, 'generation.json', () => (dir.HasGeneration() ? dir.ReadGeneration() : null));
+    const exec = readFile(dir, 'execution.json', () => (dir.HasExecution() ? dir.ReadExecution() : null));
+    return { Run: run, Catches: labeled, Sessions: sessions, Fallback: gen?.Analysis.Fallback ?? null, Timings: { ...gen?.Timings, ...exec?.Timings } };
 }
 
-/** The analysis's fallback flag, or null when the generation file is missing or unreadable (with one stderr line). */
-function analyzerFallback(dir: RunDir): boolean | null {
-    if (!dir.HasGeneration()) return null;
-    try { return dir.ReadGeneration().Analysis.Fallback; } catch {
-        process.stderr.write(`report: ${dir.RunID}: generation.json unreadable, skipped\n`);
+/** The file `read` returns, or null when it is missing or unreadable (with one stderr line). */
+function readFile<T>(dir: RunDir, name: string, read: () => T | null): T | null {
+    try { return read(); } catch {
+        process.stderr.write(`report: ${dir.RunID}: ${name} unreadable, skipped\n`);
         return null;
     }
 }
@@ -116,9 +130,15 @@ function modelReportOf(ledgers: BacktestLedger[], corpus: Corpus, data: Map<stri
         Cost: costOf(entries, assessed.length, bug.AnyWeakMatched, data, prices),
         Sessions: CountBy(runs.flatMap((r) => r.Sessions.map((s) => s.EndReason))),
         AnalyzerFallbacks: { Fallbacks: runs.filter((r) => r.Fallback === true).length, Runs: runs.filter((r) => r.Fallback !== null).length, NoFile: runs.filter((r) => r.Fallback === null).length },
+        StageMinutes: STAGES.map((s) => ({ Stage: s.Name, Minutes: medianMinutes(runs.flatMap((r) => { const ms = r.Timings[s.Key]; return ms === undefined ? [] : [ms]; })) })),
         Drops: CountBy(catches.flatMap((c) => (c.DroppedByRule === null ? [] : [c.DroppedByRule]))),
         Judges: judgesOf(truthsOf(assessed, data)), TPProb: tpProbOf(catches),
     };
+}
+
+function medianMinutes(ms: number[]): number | null {
+    const median = MedianOf(ms);
+    return median === null ? null : median / 60_000;
 }
 
 /** Entries of all ledgers, one per set and PR; a later ledger's entry wins. */
@@ -250,7 +270,7 @@ function renderModel(m: ModelReport): string[] {
         ...(b.NotYetMatched > 0 ? [`- Warning: ${b.NotYetMatched} run PR${b.NotYetMatched === 1 ? ' has' : 's have'} no match result yet; run \`backtest match\` and report again`] : []), '',
         `### Clean set`, '', `- ${prLine(c)}`, `- With a reported catch: ${c.Reported}; labeled ${c.Labeled}; pending ${c.Pending}`,
         `- False alarms (Intended or TestFault): ${rate(c.FalseAlarms)}`, `- Real bugs found: ${c.RealBugs}`, '',
-        ...renderCost(m), ...renderSessions(m), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
+        ...renderCost(m), ...renderStages(m), ...renderSessions(m), ...renderCounts('Drop rules', m.Drops), ...renderJudges(m), '',
     ];
 }
 
@@ -274,6 +294,11 @@ function renderCost(m: ModelReport): string[] {
     return [`### Cost`, '', `- Total, every attempt: ${usd(k.TotalUSD)}; current runs recorded ${usd(k.RecordedUSD)}, at table prices ${usd(k.TableUSD)}`, ...models,
         `- Per run PR: ${k.PerPR === null ? 'n/a' : usd(k.PerPR)}; per matched bug PR: ${k.PerMatchedCatch === null ? 'n/a' : usd(k.PerMatchedCatch)}`,
         ...(k.UnpricedModels.length > 0 ? [`- Unpriced models: ${k.UnpricedModels.map(MarkdownText).join(', ')} (recorded cost used at table prices)`] : []), ''];
+}
+
+/** The median minutes of each stage, with one decimal, or n/a. */
+function renderStages(m: ModelReport): string[] {
+    return [`#### Stage time (median minutes)`, '', ...m.StageMinutes.map((s) => `- ${s.Stage}: ${s.Minutes === null ? 'n/a' : s.Minutes.toFixed(1)}`), ''];
 }
 
 /** Text on one Markdown line: CR and LF become spaces, and a leading heading, list, quote or ordered-list marker is escaped. */
