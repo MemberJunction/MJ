@@ -48,6 +48,93 @@ describe('OpenAIEmbedding.EmbedTexts (real BaseEmbeddings dispatch → embedBatc
     // (graceful empty-on-error is unchanged provider behavior and is covered by the base embedPerText tests.)
 });
 
+/**
+ * The `dimensions` parameter (#5234). Entity vector sync and duplicate detection pass the vector
+ * index's `Dimensions` on every call, and MJ stamps one on every index it creates, so the driver sees
+ * it even for a model that only has one width. OpenAI supports `dimensions` only on the text-embedding-3
+ * models, so a call naming `text-embedding-ada-002` was rejected and the driver degraded it to an empty
+ * result. The mock below answers as the API does: it rejects `dimensions` for ada-002.
+ */
+describe('OpenAIEmbedding and the dimensions parameter', () => {
+    /** The real API's answer: ada-002 rejects `dimensions`, the text-embedding-3 models honor it. */
+    const openAIRules = (body: { input: string | string[]; model: string; dimensions?: number }) => {
+        if (body.model === 'text-embedding-ada-002' && body.dimensions !== undefined) {
+            return Promise.reject(new Error('400 This model does not support specifying dimensions.'));
+        }
+        const width = body.dimensions ?? (body.model === 'text-embedding-3-large' ? 3072 : 1536);
+        const inputs = Array.isArray(body.input) ? body.input : [body.input];
+        return Promise.resolve(embedResponse(inputs.map(() => Array<number>(width).fill(0.1)), body.model));
+    };
+
+    beforeEach(() => {
+        mockCreate.mockReset();
+        mockCreate.mockImplementation(openAIRules);
+    });
+
+    it('omits dimensions for ada-002 when asked for its own width, so an ada-002 index embeds', async () => {
+        const r = await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a', 'b'], model: 'text-embedding-ada-002', dimensions: 1536 });
+
+        expect(mockCreate.mock.calls[0][0]).not.toHaveProperty('dimensions');
+        expect(r.vectors).toHaveLength(2);
+        expect(r.vectors[0]).toHaveLength(1536);
+    });
+
+    it('does the same for a single text', async () => {
+        const r = await new OpenAIEmbedding('k').EmbedText({ text: 'a', model: 'text-embedding-ada-002', dimensions: 1536 });
+
+        expect(mockCreate.mock.calls[0][0]).not.toHaveProperty('dimensions');
+        expect(r.vector).toHaveLength(1536);
+    });
+
+    it('still sends dimensions to a model that honors it, so a reduced-width index keeps its width', async () => {
+        const r = await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-3-small', dimensions: 512 });
+
+        expect(mockCreate.mock.calls[0][0]).toMatchObject({ dimensions: 512 });
+        expect(r.vectors[0]).toHaveLength(512);
+    });
+
+    it('refuses a width ada-002 cannot produce before calling the API', async () => {
+        const e = new OpenAIEmbedding('k');
+
+        await expect(e.EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002', dimensions: 512 }))
+            .rejects.toMatchObject({ name: 'EmbeddingDimensionsError', errorInfo: { severity: 'Fatal', canFailover: false } });
+        await expect(e.EmbedText({ text: 'a', model: 'text-embedding-ada-002', dimensions: 512 }))
+            .rejects.toThrow(/can't produce 512-dimension vectors/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a width wider than a text-embedding-3 model produces', async () => {
+        await expect(new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-3-small', dimensions: 3072 }))
+            .rejects.toThrow(/supports 1 to 1536/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('applies the default model\'s widths when no model is named', async () => {
+        await expect(new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: '', dimensions: 3072 }))
+            .rejects.toThrow(/text-embedding-3-small/);
+        expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('sends the width as requested for a model it doesn\'t know', async () => {
+        await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-4-future', dimensions: 4096 });
+
+        expect(mockCreate.mock.calls[0][0]).toMatchObject({ model: 'text-embedding-4-future', dimensions: 4096 });
+    });
+
+    it('sends nothing when no width is requested', async () => {
+        await new OpenAIEmbedding('k').EmbedTexts({ texts: ['a'], model: 'text-embedding-ada-002' });
+
+        expect(mockCreate.mock.calls[0][0]).not.toHaveProperty('dimensions');
+    });
+
+    it('lists whether each model accepts dimensions alongside its native width', async () => {
+        const models = await new OpenAIEmbedding('k').GetEmbeddingModels();
+
+        expect(models.find((m) => m.Model === 'text-embedding-ada-002')).toMatchObject({ OutputDimension: 1536, AcceptsDimensions: false });
+        expect(models.find((m) => m.Model === 'text-embedding-3-small')).toMatchObject({ OutputDimension: 1536, AcceptsDimensions: true });
+    });
+});
+
 /** Builds the error `fetch` and the SDKs reject an aborted request with. */
 function abortError(): Error {
     const error = new Error('This operation was aborted');
