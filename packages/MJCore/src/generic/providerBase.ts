@@ -666,7 +666,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * data; the original caller still gets its own result, and the orphaned promise's stash
      * step no-ops safely.
      */
-    private ensureInflightViewInvalidation(): void {
+    private _invalidationTargetRef: WeakRef<ProviderBase> | null = null;
+
+    /**
+     * Number of live/uncollected `ProviderBase` instances currently registered for in-flight
+     * view invalidation callbacks.
+     */
+    public static get ActiveInvalidationTargetCount(): number {
+        return ProviderBase._invalidationTargets.size;
+    }
+
+    /**
+     * Immediately removes this provider instance from the global in-flight invalidation target set
+     * and clears per-instance mutation state. Call on short-lived per-request server providers
+     * when the HTTP response closes so `_invalidationTargets` does not accumulate thousands of
+     * `WeakRef`s between major garbage collections.
+     */
+    public DetachInvalidationListeners(): void {
+        if (this._invalidationTargetRef) {
+            ProviderBase._invalidationTargets.delete(this._invalidationTargetRef);
+            this._invalidationTargetRef = null;
+        }
+        this._lingerInvalidationWired = false;
+        this._entityMutationVersions.clear();
+    }
+
+    protected ensureInflightViewInvalidation(): void {
         // Deliberately ABOVE the per-instance guard: the static wiring is re-checked on every call,
         // not just the first. A long-lived provider (Explorer's client provider, MJServer's system
         // provider) that registered before a bus swap would otherwise stay wired to the dead Subject
@@ -678,7 +703,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         this._lingerInvalidationWired = true;
-        ProviderBase._invalidationTargets.add(new WeakRef(this));
+        const ref = new WeakRef(this);
+        this._invalidationTargetRef = ref;
+        ProviderBase._invalidationTargets.add(ref);
     }
 
     /**
@@ -5242,7 +5269,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
-            params = await hook(params, contextUser);
+            params = await hook(params, contextUser, this);
         }
         return params;
     }
@@ -5261,7 +5288,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
         const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
-            result = await hook(params, result, contextUser);
+            result = await hook(params, result, contextUser, this);
         }
         return result;
     }
@@ -6029,6 +6056,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param data - Configuration including schema filters and connection info
      * @returns True if configuration was successful
      */
+    /**
+     * Synchronously configures this provider from an already-initialized global `Metadata.Provider`
+     * without allocating promises or awaiting async cache initialization. Returns `false` if global
+     * metadata or `LocalCacheManager` has not finished initializing yet.
+     */
+    protected ConfigureFromGlobalMetadataSync(data: ProviderConfigDataBase): boolean {
+        if (!Metadata.Provider || data.IgnoreExistingMetadata || this._refresh || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: bootstrap checks for an existing global registration
+            return false;
+        }
+        this._ConfigData = data;
+        this._configLoadedFromServer = false;
+        return this.CopyMetadataFromGlobalProvider();
+    }
+
     public async Config(data: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean> {
         this._ConfigData = data;
         // Describes THIS Config only: a flag left by an earlier Refresh() must not make the

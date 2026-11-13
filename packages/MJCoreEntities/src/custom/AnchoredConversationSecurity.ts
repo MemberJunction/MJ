@@ -4,6 +4,7 @@ import type {
     MJConversationEntity,
     MJConversationEntity_IConversationAnchorMetadata
 } from '../generated/entity_subclasses';
+import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
 
 /**
  * Union of allowed `AnchorType` values on `MJ: Conversations`, derived directly
@@ -305,6 +306,20 @@ export async function UserCanReadLinkedRecord(
                 EntityInfo: entityInfo
             };
         }
+        if (entityInfo.Name.trim().toLowerCase() === 'mj: artifacts') {
+            const artifactPerm = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                linkedRecordId,
+                user
+            );
+            if (!artifactPerm.CanRead) {
+                return {
+                    Allowed: false,
+                    Reason: artifactPerm.Reason || 'You do not have permission to view this artifact.',
+                    EntityInfo: entityInfo
+                };
+            }
+        }
         return { Allowed: true, Reason: null, EntityInfo: entityInfo };
     } catch (error) {
         LogError(
@@ -380,6 +395,11 @@ export async function FilterAnchoredConversationsForUser<T extends AnchoredConve
 
     return visible;
 }
+
+/**
+ * Alias for {@link FilterAnchoredConversationsForUser} used by artifact viewer components.
+ */
+export const FilterReadableAnchoredConversations = FilterAnchoredConversationsForUser;
 
 /**
  * Deterministic Stage 1 detector for FLS-governed fields referenced by a comment.

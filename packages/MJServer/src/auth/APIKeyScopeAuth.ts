@@ -42,6 +42,81 @@ export interface ScopeAuthResult {
 }
 
 /**
+ * Outcome of the shared scope decision used by both public check functions.
+ * - `skipped`: no API key on the request, so scope checking does not apply.
+ * - `denied`: refused before the scope evaluator ran (key or application problem).
+ *   `ApplicationId` is set when the application row was found (e.g. it is inactive).
+ * - `evaluated`: the scope evaluator ran; its result decides access.
+ */
+type ScopeDecision =
+    | { Kind: 'skipped' }
+    | { Kind: 'denied'; Reason: string; ApplicationId?: string }
+    | { Kind: 'evaluated'; APIKeyId: string; ApplicationId: string; AuthResult: AuthorizationResult };
+
+/**
+ * The single decision path behind {@link CheckAPIKeyScope} and {@link CheckAPIKeyScopeAndLog}:
+ * key lookup, application lookup, the application-active ceiling, then the scope evaluator.
+ * Keeping it in one place means the two public variants cannot drift apart on what they enforce.
+ */
+async function decideAPIKeyScope(
+    apiKeyId: string | undefined,
+    scopePath: string,
+    contextUser: UserInfo,
+    applicationName: ApplicationName,
+    resource: string
+): Promise<ScopeDecision> {
+    // If no API key ID, not authenticated via API key - skip scope check
+    if (!apiKeyId) {
+        return { Kind: 'skipped' };
+    }
+
+    const rv = new RunView();
+    const keyResult = await rv.RunView<MJAPIKeyEntity>({
+        EntityName: 'MJ: API Keys',
+        ExtraFilter: `ID='${EscapeSQLString(apiKeyId)}'`,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!keyResult.Success || keyResult.Results.length === 0) {
+        return { Kind: 'denied', Reason: 'API key not found' };
+    }
+    const apiKey = keyResult.Results[0];
+
+    const appResult = await rv.RunView<MJAPIApplicationEntity>({
+        EntityName: 'MJ: API Applications',
+        ExtraFilter: `Name='${EscapeSQLString(applicationName)}'`,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!appResult.Success || appResult.Results.length === 0) {
+        return { Kind: 'denied', Reason: `Unknown application: ${applicationName}` };
+    }
+    const app = appResult.Results[0];
+
+    if (!app.IsActive) {
+        return { Kind: 'denied', Reason: `Application is not active: ${applicationName}`, ApplicationId: app.ID };
+    }
+
+    const request: AuthorizationRequest = {
+        APIKeyId: apiKeyId,
+        UserId: apiKey.UserID,
+        ApplicationId: app.ID,
+        ScopePath: scopePath,
+        Resource: resource
+    };
+
+    // Use the scope evaluator directly (since we already have the key ID)
+    const authResult = await GetAPIKeyEngine().GetScopeEvaluator().EvaluateAccess(request, contextUser);
+    return { Kind: 'evaluated', APIKeyId: apiKeyId, ApplicationId: app.ID, AuthResult: authResult };
+}
+
+/** Message thrown when the scope evaluator denies a request. */
+function scopeDeniedMessage(scopePath: string, resource: string, reason: string | undefined): string {
+    const scopeDisplay = resource !== '*' ? `${scopePath} (${resource})` : scopePath;
+    return `API key does not have permission for scope: ${scopeDisplay}. ${reason || ''}`;
+}
+
+/**
  * Check if an API key has the required scope for an operation.
  *
  * This function implements the three-tier permission model:
@@ -82,90 +157,21 @@ export async function CheckAPIKeyScope(
         throwOnDenied = true
     } = options;
 
-    // If no API key ID, not authenticated via API key - skip scope check
-    if (!apiKeyId) {
-        return {
-            Allowed: true,
-            Checked: false,
-            Reason: 'Not authenticated via API key'
-        };
+    const decision = await decideAPIKeyScope(apiKeyId, scopePath, contextUser, applicationName, resource);
+
+    if (decision.Kind === 'skipped') {
+        return { Allowed: true, Checked: false, Reason: 'Not authenticated via API key' };
     }
-
-    const engine = GetAPIKeyEngine();
-
-    // Get the API key to find the user ID
-    const rv = new RunView();
-    const keyResult = await rv.RunView<MJAPIKeyEntity>({
-        EntityName: 'MJ: API Keys',
-        ExtraFilter: `ID='${EscapeSQLString(apiKeyId)}'`,
-        ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!keyResult.Success || keyResult.Results.length === 0) {
-        const result: ScopeAuthResult = {
-            Allowed: false,
-            Checked: true,
-            Reason: 'API key not found'
-        };
+    if (decision.Kind === 'denied') {
         if (throwOnDenied) {
-            throw new AuthorizationError(result.Reason);
+            throw new AuthorizationError(decision.Reason);
         }
-        return result;
+        return { Allowed: false, Checked: true, Reason: decision.Reason };
     }
 
-    const apiKey = keyResult.Results[0];
-
-    // Get the application by name
-    const appResult = await rv.RunView<MJAPIApplicationEntity>({
-        EntityName: 'MJ: API Applications',
-        ExtraFilter: `Name='${EscapeSQLString(applicationName)}'`,
-        ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!appResult.Success || appResult.Results.length === 0) {
-        const result: ScopeAuthResult = {
-            Allowed: false,
-            Checked: true,
-            Reason: `Unknown application: ${applicationName}`
-        };
-        if (throwOnDenied) {
-            throw new AuthorizationError(result.Reason);
-        }
-        return result;
-    }
-
-    const app = appResult.Results[0];
-
-    if (!app.IsActive) {
-        const result: ScopeAuthResult = {
-            Allowed: false,
-            Checked: true,
-            Reason: `Application is not active: ${applicationName}`
-        };
-        if (throwOnDenied) {
-            throw new AuthorizationError(result.Reason);
-        }
-        return result;
-    }
-
-    // Build the authorization request
-    const request: AuthorizationRequest = {
-        APIKeyId: apiKeyId,
-        UserId: apiKey.UserID,
-        ApplicationId: app.ID,
-        ScopePath: scopePath,
-        Resource: resource
-    };
-
-    // Use the scope evaluator directly (since we already have the key ID)
-    const scopeEvaluator = engine.GetScopeEvaluator();
-    const authResult = await scopeEvaluator.EvaluateAccess(request, contextUser);
-
+    const authResult = decision.AuthResult;
     if (!authResult.Allowed && throwOnDenied) {
-        const scopeDisplay = resource !== '*' ? `${scopePath} (${resource})` : scopePath;
-        throw new AuthorizationError(
-            `API key does not have permission for scope: ${scopeDisplay}. ${authResult.Reason || ''}`
-        );
+        throw new AuthorizationError(scopeDeniedMessage(scopePath, resource, authResult.Reason));
     }
 
     return {
@@ -179,7 +185,8 @@ export async function CheckAPIKeyScope(
 /**
  * Check if an API key has the required scope and log usage.
  *
- * Same as CheckAPIKeyScope but also logs the authorization attempt.
+ * Same decision as CheckAPIKeyScope (including the application-active ceiling), plus a usage-log
+ * row for every request that reaches a known application.
  * Use this for operations where you want detailed audit trails.
  *
  * @param apiKeyId - The API key ID from context.userPayload.apiKeyId
@@ -210,82 +217,50 @@ export async function CheckAPIKeyScopeAndLog(
         throwOnDenied = true
     } = options;
 
-    // If no API key ID, not authenticated via API key - skip scope check
-    if (!apiKeyId) {
-        return {
-            Allowed: true,
-            Checked: false,
-            Reason: 'Not authenticated via API key'
-        };
+    const decision = await decideAPIKeyScope(apiKeyId, scopePath, contextUser, applicationName, resource);
+
+    if (decision.Kind === 'skipped') {
+        return { Allowed: true, Checked: false, Reason: 'Not authenticated via API key' };
     }
 
-    const engine = GetAPIKeyEngine();
-    const rv = new RunView();
+    const usageLogger = GetAPIKeyEngine().GetUsageLogger();
 
-    // Get the API key
-    const keyResult = await rv.RunView<MJAPIKeyEntity>({
-        EntityName: 'MJ: API Keys',
-        ExtraFilter: `ID='${EscapeSQLString(apiKeyId)}'`,
-        ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!keyResult.Success || keyResult.Results.length === 0) {
-        const result: ScopeAuthResult & { LogId?: string } = {
-            Allowed: false,
-            Checked: true,
-            Reason: 'API key not found'
-        };
-        if (throwOnDenied) {
-            throw new AuthorizationError(result.Reason);
+    if (decision.Kind === 'denied') {
+        // Key-not-found and unknown-application denials have no application row to attribute
+        // the log to, so only a denial with a known application (e.g. inactive) is logged.
+        let deniedLogId: string | undefined;
+        if (apiKeyId && decision.ApplicationId) {
+            deniedLogId = (await usageLogger.LogDenied(
+                apiKeyId,
+                decision.ApplicationId,
+                usageDetails.endpoint,
+                usageDetails.operationName || null,
+                usageDetails.method,
+                usageDetails.statusCode ?? 403,
+                usageDetails.responseTimeMs || null,
+                resource,
+                [],
+                decision.Reason,
+                usageDetails.ipAddress || null,
+                usageDetails.userAgent || null,
+                contextUser
+            )) || undefined;
         }
-        return result;
-    }
-
-    const apiKey = keyResult.Results[0];
-
-    // Get the application
-    const appResult = await rv.RunView<MJAPIApplicationEntity>({
-        EntityName: 'MJ: API Applications',
-        ExtraFilter: `Name='${EscapeSQLString(applicationName)}'`,
-        ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!appResult.Success || appResult.Results.length === 0) {
-        const result: ScopeAuthResult & { LogId?: string } = {
-            Allowed: false,
-            Checked: true,
-            Reason: `Unknown application: ${applicationName}`
-        };
         if (throwOnDenied) {
-            throw new AuthorizationError(result.Reason);
+            throw new AuthorizationError(decision.Reason);
         }
-        return result;
+        return { Allowed: false, Checked: true, Reason: decision.Reason, LogId: deniedLogId };
     }
 
-    const app = appResult.Results[0];
-
-    // Build the authorization request
-    const request: AuthorizationRequest = {
-        APIKeyId: apiKeyId,
-        UserId: apiKey.UserID,
-        ApplicationId: app.ID,
-        ScopePath: scopePath,
-        Resource: resource
-    };
-
-    // Evaluate access
-    const scopeEvaluator = engine.GetScopeEvaluator();
-    const authResult = await scopeEvaluator.EvaluateAccess(request, contextUser);
-
-    // Log the usage
-    const usageLogger = engine.GetUsageLogger();
+    const authResult = decision.AuthResult;
+    const appId = decision.ApplicationId;
     const statusCode = usageDetails.statusCode ?? (authResult.Allowed ? 200 : 403);
 
     let logId: string | undefined;
     if (authResult.Allowed) {
         logId = (await usageLogger.LogSuccess(
-            apiKeyId,
-            app.ID,
+            decision.APIKeyId,
+            appId,
             usageDetails.endpoint,
             usageDetails.operationName || null,
             usageDetails.method,
@@ -299,8 +274,8 @@ export async function CheckAPIKeyScopeAndLog(
         )) || undefined;
     } else {
         logId = (await usageLogger.LogDenied(
-            apiKeyId,
-            app.ID,
+            decision.APIKeyId,
+            appId,
             usageDetails.endpoint,
             usageDetails.operationName || null,
             usageDetails.method,
@@ -316,10 +291,7 @@ export async function CheckAPIKeyScopeAndLog(
     }
 
     if (!authResult.Allowed && throwOnDenied) {
-        const scopeDisplay = resource !== '*' ? `${scopePath} (${resource})` : scopePath;
-        throw new AuthorizationError(
-            `API key does not have permission for scope: ${scopeDisplay}. ${authResult.Reason || ''}`
-        );
+        throw new AuthorizationError(scopeDeniedMessage(scopePath, resource, authResult.Reason));
     }
 
     return {

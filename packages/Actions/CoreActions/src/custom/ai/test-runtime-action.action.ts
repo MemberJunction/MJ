@@ -192,7 +192,12 @@ export class TestRuntimeActionAction extends BaseAction {
             Filters: [],
             Params: inputParams,
             SkipActionLog: true,
-            AbortSignal: params.AbortSignal
+            AbortSignal: params.AbortSignal,
+            // The calling run's scope and audience (#5624). The code under test is model-written, and
+            // the bridge forwards both to its nested `utilities.actions.Invoke` calls: without them a
+            // nested Scoped Search runs as a direct call and searches whatever tenant the code names.
+            RunScope: params.RunScope,
+            Audience: params.Audience
         });
         const elapsed = Date.now() - start;
 

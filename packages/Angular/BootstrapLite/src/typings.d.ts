@@ -16,6 +16,8 @@ declare module '@memberjunction/ng-explorer-core' {
     export const DashboardResource: unknown;
     export const EntityRecordResource: unknown;
     export const HumanHandoffConsoleResource: unknown;
+    export const LibraryDriveResource: new (...args: never[]) => object;
+    export const LibraryResource: new (...args: never[]) => object;
     export const ListDetailResource: unknown;
     export const LiveKitRoomResource: unknown;
     export const MeetingsResource: unknown;

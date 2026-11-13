@@ -161,7 +161,14 @@ import { TransactionAffinity, type TransactionMembership } from './TransactionAf
 import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { IsSystemUser } from './systemUser.js';
-import { CreateSnapshots, FieldsLackingStoredValue, RecordChangeSnapshots, WidenDeleteSnapshot, WidenUpdateSnapshots } from './recordChangeSnapshot.js';
+import {
+    CreateSnapshots,
+    FieldsLackingStoredValue,
+    FieldsWrittenWithoutStoredValue,
+    RecordChangeSnapshots,
+    WidenDeleteSnapshot,
+    WidenUpdateSnapshots,
+} from './recordChangeSnapshot.js';
 import { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
 
 // Install Node AsyncLocalStorage-backed authority scope tracker on server startup so concurrent
@@ -224,6 +231,15 @@ interface QueryResultCacheSlot {
     readonly Key: string;
     /** The slot of one page of it. */
     PageKey(params: RunQueryParams): string;
+}
+
+/**
+ * The values a field-level concurrency check compares, keyed by field name: what the caller
+ * believes the database holds for each changed field, and what the save writes.
+ */
+interface ConcurrencyCheckValues {
+    baselineValues: Record<string, unknown>;
+    newValues: Record<string, unknown>;
 }
 
 /** The output columns a run must drop for its caller, and the description they were chosen from. */
@@ -516,7 +532,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     get LocalStorageProvider(): ILocalStorageProvider {
         if (!this._localStorageProvider) {
-            this._localStorageProvider = new InMemoryLocalStorageProvider();
+            this._localStorageProvider = this.ConfigData?.LocalStorageProvider ?? new InMemoryLocalStorageProvider();
         }
         return this._localStorageProvider;
     }
@@ -1193,8 +1209,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
             return true;
         }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        return this.runLockedConcurrencyCheck(entity, user, this.getEffectiveConcurrencyCheckMode(options), values, entityResult);
+    }
 
-        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+    protected override PrepareQueuedUpdateConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return null;
+        }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        if (Object.keys(values.baselineValues).length === 0) {
+            return null;
+        }
+        const mode = this.getEffectiveConcurrencyCheckMode(options);
+        return () => this.runLockedConcurrencyCheck(entity, user, mode, values, entityResult);
+    }
+
+    /**
+     * Collects, for each field the save changes, the value the caller believes the database holds
+     * (the `ConcurrencyBaseline` entry when one is supplied, otherwise the field's `OldValue`) and the
+     * value the save writes.
+     */
+    private collectConcurrencyCheckValues(entity: BaseEntity, options: EntitySaveOptions): ConcurrencyCheckValues {
         const baselineValues: Record<string, unknown> = {};
         const newValues: Record<string, unknown> = {};
 
@@ -1228,7 +1269,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 newValues[f.Name] = entityField.Value;
             }
         }
+        return { baselineValues, newValues };
+    }
 
+    /**
+     * Reads the stored values of the changed columns under a row lock held by the current
+     * transaction, and compares them with the caller's baseline. A conflict is logged; in
+     * `'enforce'` mode it also fails `entityResult` and returns `false`.
+     */
+    private async runLockedConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        effectiveMode: ConcurrencyCheckMode,
+        values: ConcurrencyCheckValues,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        const { baselineValues, newValues } = values;
         const columnsToRead = Object.keys(baselineValues);
         if (columnsToRead.length === 0) {
             return true;
@@ -2387,7 +2443,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         // Per-save suppression: a high-volume machine writer (integration sync) opts out of the
         // audit row for ITS writes only — the entity keeps TrackRecordChanges for everyone else.
         if (this.ShouldTrackRecordChanges(entity.EntityInfo) && options?.SkipRecordChanges !== true) {
-            const { NewData: newData, OldData: oldData } = await this.BuildRecordChangeSnapshots(entity, isUpdate, user);
+            const snapshotFromRow = this.BuildsFullRecordJSONFromResultRow(entity, returnContext);
+            const { NewData: newData, OldData: oldData } = await this.BuildRecordChangeSnapshots(entity, isUpdate, user, snapshotFromRow);
 
             const payload = this.BuildRecordChangePayload(
                 newData,
@@ -2436,6 +2493,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
+     * True when the dialect builds this save's Record Change `FullRecordJSON` in SQL from the row the
+     * save returned, instead of serializing the payload's snapshot. That row is what the database
+     * stored, including columns another writer changed after this object was loaded, so the snapshot
+     * cannot go stale. The base implementation never does; a dialect that can overrides this and
+     * renders the snapshot in `WrapSaveCallWithRecordChange` under the same conditions.
+     */
+    protected BuildsFullRecordJSONFromResultRow(_entity: BaseEntity, _returnContext: SaveReturnContext): boolean {
+        return false;
+    }
+
+    /**
      * The old and new snapshots a save's Record Change is built from. The audit trail stores
      * whole payloads and projects them per reader, so both snapshots describe the whole record
      * whoever saves it.
@@ -2449,17 +2517,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * - **Create**: there is no stored row yet. A field the INSERT omits because the user may
      *   not supply it is left out rather than recorded with a value the record never got.
      *
+     * With `snapshotFromRow` (see {@link BuildsFullRecordJSONFromResultRow}) the snapshots feed only
+     * the diff, so a restricted user's update reads stored values only for the fields their object
+     * wrote without having read them.
+     *
      * The read runs on the save's connection: inside an open transaction it reads that
      * transaction's state. A save queued in a transaction group is generated when `Save()` is
      * called, so its snapshot reflects the row as of then — the same moment the object's own
      * old values describe.
      */
-    protected async BuildRecordChangeSnapshots(entity: BaseEntity, isUpdate: boolean, user: UserInfo): Promise<RecordChangeSnapshots> {
+    protected async BuildRecordChangeSnapshots(
+        entity: BaseEntity,
+        isUpdate: boolean,
+        user: UserInfo,
+        snapshotFromRow: boolean = false,
+    ): Promise<RecordChangeSnapshots> {
         if (!isUpdate) {
             return CreateSnapshots(entity);
         }
         const narrow: RecordChangeSnapshots = { NewData: entity.GetAll(false), OldData: entity.GetAll(true) };
-        const lacking = FieldsLackingStoredValue(entity, user);
+        // When the dialect builds FullRecordJSON from the returned row, the snapshots feed only the
+        // diff, which needs a stored value only for a field the object wrote without having read it.
+        const allLacking = FieldsLackingStoredValue(entity, user);
+        const lacking = snapshotFromRow ? FieldsWrittenWithoutStoredValue(entity, allLacking) : allLacking;
         if (lacking.size === 0) {
             return narrow;
         }

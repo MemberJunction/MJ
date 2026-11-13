@@ -194,6 +194,29 @@
   },
   {
     "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Artifacts: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Artifacts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "DelegateEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=DelegateRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifacts"
+    }
+  },
+  {
+    "_comments": [
       "Polymorphic foreign key declaration(s) on MJ: Audit Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
     ],
     "fields": {
