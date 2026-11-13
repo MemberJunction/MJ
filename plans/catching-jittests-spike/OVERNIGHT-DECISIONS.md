@@ -143,6 +143,27 @@ Round 4 (thinking level medium, one session per risk, type check, staged judges)
 - **C. Go back to round 1 settings plus type check and staged judges.** Pro: known to catch. Con: about 2 USD per PR; only the judge saving is kept.
 - **Choice: B.** After it, the three PRs have a result for each of the four combinations that matter, and the default is chosen from that table.
 
+## N15. Round 5 result, match results, and the candidate setting
+
+Round 5 (default thinking, shared session): #3831 1.21 USD, 3 reported; #5906 1.02 USD, no catch; #5513 1.67 USD, 0 reported.
+
+Reported catch that is the known bug (match check), per PR:
+
+| Setting | #3831 | #5906 | #5513 | Mean USD per PR |
+|---|---|---|---|---|
+| Round 1: default thinking, one session per risk, no type check | Matched | Matched | no report | 2.41 |
+| Round 3: medium thinking, shared session | Matched | no catch | no report | 0.73 |
+| Round 4: medium thinking, one session per risk | not run | no catch | reported, NOT matched | about 1.00 |
+| Round 5: default thinking, shared session | Matched | no catch | no report | 1.30 |
+
+#5906 was caught once in five runs; no setting explains it. Its round 1 catch came from one risk note that later analyzer runs did not write again, so that catch depends on analyzer variation. The round 4 report on #5513 is not the known bug.
+
+- **A. Medium thinking + shared session (round 3).** Pro: cheapest (0.73 USD, 70% below round 1), keeps the stable catch, no false report in three PRs. Con: generate stage is longer (240 to 425 s) because risks run one after the other.
+- **B. Medium thinking + one session per risk (round 4).** Pro: shortest generate stage (about 220 s, sessions in parallel). Con: about 1.00 USD; its one extra report was not the bug.
+- **C. Default thinking + shared session (round 5).** Pro: full thinking. Con: 1.30 USD and no extra matched catch.
+- **D. Round 1 settings.** Pro: the only run that caught #5906. Con: 2.41 USD; one run in five is not a property of the setting.
+- **Choice: A as the candidate.** Next: a validation round with A on six more PRs whose risk notes name the bug (#4253, #4418, #4290, #3644, #5729, #4450), then the match check. If A matches clearly fewer bugs there than the notes predict, the next check is B on the same six.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -153,3 +174,5 @@ Round 4 (thinking level medium, one session per risk, type check, staged judges)
 | 2 | Hydrogen, all cost changes, thinking low: #3831, #5906, #5513 | 1.18 | 17.34 |
 | 3 | Hydrogen, thinking medium, shared session, type check: #3831, #5906, #5513 | 2.19 | 19.53 |
 | 4 | Hydrogen, thinking medium, one session per risk: #5906 (two attempts), #5513 | 2.83 | 22.36 |
+| 5 | Hydrogen, default thinking, shared session: #5906, #5513, #3831 | 3.90 | 26.26 |
+| M | Match checks, rounds 1 and 3 to 5 (no model spend) | 0.00 | 26.26 |
