@@ -431,7 +431,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
-        'metadata-consistency': 7,
+        'metadata-consistency': 8,
         'metadata-sync': 9,
         'metadata-sync-push': 12,
         'metadata-sync-queries': 10,

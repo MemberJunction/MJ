@@ -20,6 +20,7 @@ vi.mock('@memberjunction/global', async () => {
             static getInstance() { return new this(); }
         },
         ENCRYPTION_MARKER: '__MJ_ENCRYPTED__',
+        IsBrowser: actual.IsBrowser,
         UUIDsEqual: actual.UUIDsEqual,
         NormalizeUUID: actual.NormalizeUUID,
     };
