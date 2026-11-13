@@ -1223,4 +1223,43 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
 
     conflictService.ngOnDestroy();
   });
+
+  it('correctly sets IsAgent flag in GetCollaborators for isAgent boolean, role, and regex match on name', () => {
+    const session = service.CreateSession('art-agent-test', '{}', {
+      id: 'agent-1',
+      name: 'Sheets AI Agent',
+      isAgent: true,
+    });
+
+    const collabs = session.GetCollaborators();
+    expect(collabs).toHaveLength(1);
+    expect(collabs[0].IsAgent).toBe(true);
+
+    // Test with awareness state containing role === 'agent'
+    session.Awareness.setLocalStateField('user', {
+      userId: 'agent-2',
+      name: 'Worker 42',
+      role: 'agent',
+    });
+    const roleCollabs = session.GetCollaborators();
+    expect(roleCollabs[0].IsAgent).toBe(true);
+
+    // Test with awareness state matching /\bagent\b/i
+    session.Awareness.setLocalStateField('user', {
+      userId: 'agent-3',
+      name: 'Agent Smith',
+    });
+    const nameCollabs = session.GetCollaborators();
+    expect(nameCollabs[0].IsAgent).toBe(true);
+
+    // Test with regular human user
+    session.Awareness.setLocalStateField('user', {
+      userId: 'human-1',
+      name: 'Alice Developer',
+    });
+    const humanCollabs = session.GetCollaborators();
+    expect(humanCollabs[0].IsAgent).toBe(false);
+
+    session.Destroy();
+  });
 });

@@ -51,8 +51,8 @@ function entityStub() {
         BaseView: 'vwVectorThings',
         PrimaryKeys: [{ Name: 'ID' }],
         Fields: [
-            { Name: 'ID', CodeName: 'ID' },
-            { Name: 'Embedding', CodeName: 'Embedding' },
+            { Name: 'ID', CodeName: 'ID', IsBinaryFieldType: false },
+            { Name: 'Embedding', CodeName: 'Embedding', IsBinaryFieldType: true },
         ],
         EncryptedFields: [],
     };

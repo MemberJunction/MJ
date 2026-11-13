@@ -780,7 +780,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (120 classes)
+// @memberjunction/ng-dashboards (121 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -836,6 +836,7 @@ import {
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
+    HealthObservatoryComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -1672,6 +1673,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     GridWidthLabComponent,
+    HealthObservatoryComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
@@ -1744,11 +1746,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
-    LibraryResource,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    LibraryResource,
     ListDetailResource,
     MeetingsResource,
     OmnibarAgentProvider,
@@ -1773,7 +1775,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 809;
+export const CLASS_REGISTRATIONS_COUNT = 810;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

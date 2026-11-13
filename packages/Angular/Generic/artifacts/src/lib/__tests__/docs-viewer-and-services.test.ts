@@ -1929,4 +1929,239 @@ describe('Round 4 Punch List (#6779237352) — SlideDeckExportService, Docs C1 @
   });
 });
 
+describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transitions (Horizon 1)', () => {
+  function createEditableDocsViewer(initialMarkdown: string): MarkdownArtifactViewerComponent {
+    const collabService = new DocumentCollaborationService();
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        {
+          provide: MJNotificationService,
+          useValue: {
+            CreateSimpleNotification: () => {},
+          },
+        },
+      ],
+    });
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    viewer.readonly = false;
+    viewer.HasEditPermission = true;
+    viewer.ViewMode = 'edit';
+    viewer.OnMarkdownChanged(initialMarkdown, true);
+    return viewer;
+  }
+
+  function makeMockEditableElement(
+    text: string,
+    selectionStart = text.length,
+    selectionEnd = selectionStart,
+  ): HTMLElement {
+    return {
+      textContent: text,
+      selectionStart,
+      selectionEnd,
+      focus: () => {},
+      contains: () => false,
+    } as unknown as HTMLElement;
+  }
+
+  function makeKeyEvent(
+    key: string,
+    target: HTMLElement,
+    mods: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean } = {},
+  ): { event: KeyboardEvent; prevented: () => boolean } {
+    let defaultPrevented = false;
+    const event = {
+      key,
+      shiftKey: Boolean(mods.shiftKey),
+      metaKey: Boolean(mods.metaKey),
+      ctrlKey: Boolean(mods.ctrlKey),
+      altKey: Boolean(mods.altKey),
+      target,
+      preventDefault: () => {
+        defaultPrevented = true;
+      },
+    } as unknown as KeyboardEvent;
+    return { event, prevented: () => defaultPrevented };
+  }
+
+  it('pressing Enter at the end of a heading commits the heading and creates a focused draft paragraph below', () => {
+    const viewer = createEditableDocsViewer('# Quarterly Executive Summary');
+    expect(viewer.DocumentSegments).toHaveLength(1);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+
+    const headingEl = makeMockEditableElement('Quarterly Executive Summary Updated');
+    const { event, prevented } = makeKeyEvent('Enter', headingEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], event);
+
+    expect(prevented()).toBe(true);
+    expect(viewer.MarkdownContent).toBe('# Quarterly Executive Summary Updated');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('pressing Enter mid-heading or mid-paragraph splits the block at the caret into two blocks', () => {
+    const viewer = createEditableDocsViewer('# Product Strategy Overview\n\nFirst sentence. Second sentence.');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+
+    // 1. Split heading at offset 7 ("Product" | " Strategy Overview")
+    const headingEl = makeMockEditableElement('Product Strategy Overview', 7, 7);
+    const headingKey = makeKeyEvent('Enter', headingEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], headingKey.event);
+
+    expect(headingKey.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(3);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('# Product');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('Strategy Overview');
+
+    // 2. Split second paragraph ("First sentence." | " Second sentence.") at offset 15
+    const paraSeg = viewer.DocumentSegments[2];
+    const paraEl = makeMockEditableElement('First sentence. Second sentence.', 15, 15);
+    const paraKey = makeKeyEvent('Enter', paraEl);
+    viewer.OnEditableBlockKeydown(paraSeg, paraKey.event);
+
+    expect(paraKey.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(4);
+    expect(viewer.DocumentSegments[2].RawMarkdown).toBe('First sentence.');
+    expect(viewer.DocumentSegments[3].RawMarkdown).toBe('Second sentence.');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[3].SegmentID);
+  });
+
+  it('auto-converts paragraph blocks in place when typing Markdown prefixes (# , - , 1. , [] , > )', () => {
+    const viewer = createEditableDocsViewer('Initial paragraph');
+
+    // 1. Turn paragraph into H2 heading via "## "
+    const para0 = viewer.DocumentSegments[0];
+    viewer.OnEditableBlockInput(para0, {
+      target: makeMockEditableElement('## Key Milestones'),
+    } as unknown as Event);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[0].HeadingLevel).toBe(2);
+    expect(viewer.DocumentSegments[0].HeadingText).toBe('Key Milestones');
+
+    // 2. Append trailing paragraph and turn into bullet list via "- "
+    viewer.AppendOrFocusTrailingParagraph();
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[1], {
+      target: makeMockEditableElement('- Ship fluid block flow'),
+    } as unknown as Event);
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('list');
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[1])).toEqual([
+      {
+        Index: 0,
+        IsTask: false,
+        Checked: false,
+        Text: 'Ship fluid block flow',
+      },
+    ]);
+
+    // 3. Append trailing paragraph and turn into task checklist via "[] "
+    viewer.AppendOrFocusTrailingParagraph();
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[2], {
+      target: makeMockEditableElement('[] Verify smoke tests'),
+    } as unknown as Event);
+    expect(viewer.DocumentSegments[2].BlockKind).toBe('list');
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].IsTask).toBe(true);
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[2])[0].Text).toBe('Verify smoke tests');
+
+    // 4. Append trailing paragraph and turn into callout via "> "
+    viewer.AppendOrFocusTrailingParagraph();
+    viewer.OnEditableBlockInput(viewer.DocumentSegments[3], {
+      target: makeMockEditableElement('> Important rollout note'),
+    } as unknown as Event);
+    expect(viewer.DocumentSegments[3].BlockKind).toBe('callout');
+    expect(viewer.GetParsedCallout(viewer.DocumentSegments[3])).toEqual({
+      CalloutType: 'NOTE',
+      BodyText: 'Important rollout note',
+    });
+  });
+
+  it('inserts clean empty list items on Enter and exits the list into a paragraph when pressing Enter on an empty item', () => {
+    const viewer = createEditableDocsViewer('- First bullet');
+    expect(viewer.DocumentSegments).toHaveLength(1);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('list');
+
+    // 1. Press Enter at end of "First bullet" -> adds empty 2nd bullet (not "New item")
+    const item0El = makeMockEditableElement('First bullet');
+    const enter1 = makeKeyEvent('Enter', item0El);
+    viewer.OnListItemKeydown(viewer.DocumentSegments[0], 0, enter1.event);
+    expect(enter1.prevented()).toBe(true);
+    const itemsAfterFirstEnter = viewer.GetParsedListItems(viewer.DocumentSegments[0]);
+    expect(itemsAfterFirstEnter).toHaveLength(2);
+    expect(itemsAfterFirstEnter[0].Text).toBe('First bullet');
+    expect(itemsAfterFirstEnter[1].Text).toBe('');
+
+    // 2. Press Enter on the empty 2nd bullet -> removes empty bullet and creates paragraph block below list
+    const item1El = makeMockEditableElement('');
+    const enter2 = makeKeyEvent('Enter', item1El);
+    viewer.OnListItemKeydown(viewer.DocumentSegments[0], 1, enter2.event);
+    expect(enter2.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.GetParsedListItems(viewer.DocumentSegments[0])).toHaveLength(1);
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('supports Backspace at offset 0 to demote headings, delete empty paragraphs, and merge paragraphs across blocks', () => {
+    const viewer = createEditableDocsViewer('# Section Header\n\nFirst part.\n\nSecond part.');
+    expect(viewer.DocumentSegments).toHaveLength(3);
+
+    // 1. Backspace at offset 0 of "Second part." merges it into "First part."
+    const thirdSeg = viewer.DocumentSegments[2];
+    const thirdEl = makeMockEditableElement('Second part.', 0, 0);
+    const bsMerge = makeKeyEvent('Backspace', thirdEl);
+    viewer.OnEditableBlockKeydown(thirdSeg, bsMerge.event);
+    expect(bsMerge.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('First part. Second part.');
+
+    // 2. Backspace at offset 0 of "# Section Header" demotes it in-place to a paragraph
+    const firstSeg = viewer.DocumentSegments[0];
+    const firstEl = makeMockEditableElement('Section Header', 0, 0);
+    const bsDemote = makeKeyEvent('Backspace', firstEl);
+    viewer.OnEditableBlockKeydown(firstSeg, bsDemote.event);
+    expect(bsDemote.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Section Header');
+
+    // 3. Append empty trailing paragraph, then Backspace at offset 0 removes it and focuses previous block
+    viewer.AppendOrFocusTrailingParagraph();
+    expect(viewer.DocumentSegments).toHaveLength(3);
+    const draftSeg = viewer.DocumentSegments[2];
+    const draftEl = makeMockEditableElement('', 0, 0);
+    const bsDeleteEmpty = makeKeyEvent('Backspace', draftEl);
+    viewer.OnEditableBlockKeydown(draftSeg, bsDeleteEmpty.event);
+    expect(bsDeleteEmpty.prevented()).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+
+  it('navigates across adjacent blocks with ArrowDown at block end and ArrowUp at block start', () => {
+    const viewer = createEditableDocsViewer('# Title\n\nBody paragraph one.\n\nBody paragraph two.');
+    expect(viewer.DocumentSegments).toHaveLength(3);
+
+    // ArrowDown at end of Title moves selection to Body paragraph one
+    const titleEl = makeMockEditableElement('Title', 5, 5);
+    const downEvt = makeKeyEvent('ArrowDown', titleEl);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], downEvt.event);
+    expect(downEvt.prevented()).toBe(true);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+
+    // ArrowUp at start (offset 0) of Body paragraph two moves selection back to Body paragraph one
+    const para2El = makeMockEditableElement('Body paragraph two.', 0, 0);
+    const upEvt = makeKeyEvent('ArrowUp', para2El);
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[2], upEvt.event);
+    expect(upEvt.prevented()).toBe(true);
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+  });
+});
+
+
 
