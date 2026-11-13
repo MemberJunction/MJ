@@ -156,21 +156,23 @@ function buildProfileFromReport(report, commitSha, runnerLabel) {
     };
 }
 
+function readJsonFile(filePath, label) {
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`${label} could not be read at ${filePath}: ${msg}`);
+    }
+}
+
 function main() {
     const opts = parseArgs(process.argv);
     const sourcePath = opts.ghRun
         ? downloadFromGitHubRun(opts.ghRun)
         : path.resolve(opts.from || DEFAULT_LATEST_PATH);
 
-    if (!fs.existsSync(sourcePath)) {
-        throw new Error(`Source benchmark report not found at: ${sourcePath}`);
-    }
-    if (!fs.existsSync(BASELINE_PATH)) {
-        throw new Error(`Baseline file not found at: ${BASELINE_PATH}`);
-    }
-
-    const report = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
-    const baselineDoc = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
+    const report = readJsonFile(sourcePath, 'Source benchmark report');
+    const baselineDoc = readJsonFile(BASELINE_PATH, 'Baseline file');
     const commitSha = resolveCommitSha(opts.commit);
 
     if (opts.archiveAs && baselineDoc.Baseline) {
