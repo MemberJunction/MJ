@@ -164,6 +164,9 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         if (!entityInfo || !CanUserReadEntity(entityInfo, user)) {
             return empty;
         }
+        if (this.ResolveGraphIds(undefined).Size === 0) {
+            return { ...empty, EntityName: entityInfo.Name };
+        }
 
         const seed: GraphNodeRef = { EntityName: 'MJ: Entities', RecordID: entityInfo.ID };
         const subgraph = await GraphEngine.Instance.Subgraph(

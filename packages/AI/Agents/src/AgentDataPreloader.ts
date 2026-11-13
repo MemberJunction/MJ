@@ -12,9 +12,8 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityPermissionType, IsVerboseLoggingEnabled, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
-import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
 
@@ -388,11 +387,20 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         };
 
         // Parse FieldsToRetrieve if provided
+        let fieldsParseFailed = false;
         if (source.FieldsToRetrieve) {
             try {
                 params.Fields = JSON.parse(source.FieldsToRetrieve);
             } catch (error) {
+                fieldsParseFailed = true;
                 LogError(`Failed to parse FieldsToRetrieve JSON for data source '${source.Name}': ${error.message}`);
+            }
+        }
+
+        if (!fieldsParseFailed) {
+            const cachedEntitiesRows = this.tryExecuteCachedEntitiesView(source, params.Fields, contextUser);
+            if (cachedEntitiesRows !== null) {
+                return cachedEntitiesRows;
             }
         }
 
@@ -404,6 +412,88 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         }
 
         return result.Results || [];
+    }
+
+    /**
+     * Serves unfiltered, field-scoped `MJ: Entities` simple views directly from in-memory
+     * `Metadata.Provider.Entities` when the user has read permission and no RLS filter applies,
+     * avoiding a SQL query over entity metadata that is already resident in memory.
+     * Returns `null` to fall back to standard `RunView` execution for any unsupported query shape.
+     */
+    private tryExecuteCachedEntitiesView(
+        source: MJAIAgentDataSourceEntity,
+        requestedFields: string[] | undefined,
+        contextUser: UserInfo
+    ): Record<string, string | number | boolean | Date | null | undefined>[] | null {
+        if (source.EntityName?.trim().toLowerCase() !== 'mj: entities') {
+            return null;
+        }
+        if ((source.ResultType && source.ResultType !== 'simple') || source.ExtraFilter || source.MaxRows) {
+            return null;
+        }
+        if (!Array.isArray(requestedFields) || requestedFields.length === 0) {
+            return null;
+        }
+        const orderBy = source.OrderBy?.trim() ?? '';
+        if (orderBy.length > 0 && !/^\[?Name\]?(?:\s+(ASC|DESC))?$/i.test(orderBy)) {
+            return null;
+        }
+        if (!contextUser || !Array.isArray(contextUser.UserRoles)) {
+            return null;
+        }
+
+        const provider = Metadata.Provider;
+        const entities: EntityInfo[] | undefined = provider?.Entities;
+        const entitiesMeta = provider?.EntityByName('MJ: Entities');
+        if (!provider || !entitiesMeta || !entities || entities.length === 0) {
+            return null;
+        }
+
+        if (!entitiesMeta.GetUserPermisions(contextUser).CanRead) {
+            return null;
+        }
+        if (
+            !entitiesMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read) &&
+            entitiesMeta.GetUserRowLevelSecurityInfo(contextUser, EntityPermissionType.Read).length > 0
+        ) {
+            return null;
+        }
+
+        const sampleEntity = entities[0];
+        for (const field of requestedFields) {
+            if (typeof field !== 'string' || !Reflect.has(sampleEntity, field)) {
+                return null;
+            }
+            const sampleValue = Reflect.get(sampleEntity, field);
+            if (
+                sampleValue !== null &&
+                sampleValue !== undefined &&
+                typeof sampleValue !== 'string' &&
+                typeof sampleValue !== 'number' &&
+                typeof sampleValue !== 'boolean' &&
+                !(sampleValue instanceof Date)
+            ) {
+                return null;
+            }
+        }
+
+        const sortedEntities = orderBy.length > 0
+            ? [...entities].sort((a, b) => {
+                const cmp = (a.Name ?? '').localeCompare(b.Name ?? '');
+                return /desc$/i.test(orderBy) ? -cmp : cmp;
+            })
+            : entities;
+
+        const rows: Record<string, string | number | boolean | Date | null | undefined>[] = sortedEntities.map((entity) => {
+            const row: Record<string, string | number | boolean | Date | null | undefined> = {};
+            for (const field of requestedFields) {
+                const value = Reflect.get(entity, field);
+                row[field] = value as string | number | boolean | Date | null | undefined;
+            }
+            return row;
+        });
+
+        return ProjectEntityValueRowsForUser(provider, entitiesMeta, rows, contextUser) ?? rows;
     }
 
     /**

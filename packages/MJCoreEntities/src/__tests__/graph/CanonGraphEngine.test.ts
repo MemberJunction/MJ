@@ -154,6 +154,27 @@ describe('CanonGraphEngine', () => {
             expect(explained.DescribedConcepts).toEqual([]);
             expect(explained.Edges).toEqual([]);
         });
+
+        it('returns an empty explanation without calling Subgraph when no active canon graphs exist', async () => {
+            await setup({
+                'MJ: Graphs': CanonMetadataRows()['MJ: Graphs'].map((g) => ({ ...g, Status: 'Inactive' })),
+            });
+            const subgraphSpy = vi.spyOn(GraphEngine.Instance, 'Subgraph');
+            try {
+                const explained = await CanonGraphEngine.Instance.ExplainEntity('Invoices', analyst);
+                expect(explained).toEqual({
+                    EntityName: 'Invoices',
+                    DescribedConcepts: [],
+                    AlternateBaseViews: [],
+                    ReadingQueries: [],
+                    MeasuringQueries: [],
+                    Edges: [],
+                });
+                expect(subgraphSpy).not.toHaveBeenCalled();
+            } finally {
+                subgraphSpy.mockRestore();
+            }
+        });
     });
 
     describe('expansion service', () => {

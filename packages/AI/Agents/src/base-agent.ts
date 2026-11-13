@@ -2666,40 +2666,37 @@ export class BaseAgent {
                 return; // No step needed when there are no data sources at all
             }
 
-            // Create a step entity to track data preloading in the agent run
-            const stepEntity = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: 'Data Source Preloading',
-                contextUser: params.contextUser
-            });
-
-            // Surface any data source failures in the agent run step and agent run record
-            if (preloadedResult.failedSources.length > 0) {
+            const hasFailures = preloadedResult.failedSources.length > 0;
+            let warningMessage: string | undefined;
+            if (hasFailures) {
                 const failureDetails = preloadedResult.failedSources
                     .map(f => `${f.name}${f.entityName ? ` (Entity: ${f.entityName})` : ''}: ${f.errorMessage}`)
                     .join('; ');
 
-                const warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+                warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+            }
 
-                // Finalize step as completed but with error details captured
-                await this.finalizeStepEntity(stepEntity, true, warningMessage, {
-                    loadedSources: preloadedResult.loadedSources,
-                    failedSources: preloadedResult.failedSources
-                });
-
-                // Append warning to the agent run's ErrorMessage for top-level visibility
-                if (this._agentRun) {
-                    const existing = this._agentRun.ErrorMessage || '';
-                    this._agentRun.ErrorMessage = existing
-                        ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
-                        : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            // Record data preloading in a single INSERT now that its outcome is already known
+            await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Data Source Preloading',
+                contextUser: params.contextUser,
+                completed: {
+                    success: true,
+                    errorMessage: warningMessage,
+                    outputData: hasFailures
+                        ? { loadedSources: preloadedResult.loadedSources, failedSources: preloadedResult.failedSources }
+                        : { loadedSources: preloadedResult.loadedSources }
                 }
-            } else {
-                // All sources loaded successfully
-                await this.finalizeStepEntity(stepEntity, true, undefined, {
-                    loadedSources: preloadedResult.loadedSources
-                });
+            });
+
+            // Append warning to the agent run's ErrorMessage for top-level visibility
+            if (hasFailures && this._agentRun && warningMessage) {
+                const existing = this._agentRun.ErrorMessage || '';
+                this._agentRun.ErrorMessage = existing
+                    ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
+                    : `[Data Preloading Warning] ${warningMessage}`;
+                await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -7042,9 +7039,31 @@ export class BaseAgent {
         });
     }
 
+    private static readonly _messageFingerprintCache = new WeakMap<
+        ChatMessage,
+        {
+            role: ChatMessage['role'];
+            content: ChatMessage['content'];
+            toolCalls: AgentChatMessage['toolCalls'];
+            fingerprint: string;
+        }
+    >();
+
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
     private static messageFingerprint(m: ChatMessage): string {
-        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        const toolCalls = (m as AgentChatMessage).toolCalls;
+        const cached = BaseAgent._messageFingerprintCache.get(m);
+        if (cached && cached.role === m.role && cached.content === m.content && cached.toolCalls === toolCalls) {
+            return cached.fingerprint;
+        }
+        const fingerprint = JSON.stringify([m.role, m.content, toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        BaseAgent._messageFingerprintCache.set(m, {
+            role: m.role,
+            content: m.content,
+            toolCalls,
+            fingerprint,
+        });
+        return fingerprint;
     }
 
     /**
