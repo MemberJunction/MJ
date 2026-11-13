@@ -62,6 +62,11 @@ describe('StrictFragmentValidator.ValidateFilter', () => {
         expect(result.Reads).toBeNull();
     });
 
+    it.each(['INTERSECT', 'EXCEPT'])('refuses a fragment that breaks out into %s, which a whole statement may use', (op) => {
+        const result = StrictFragmentValidator.ValidateFilter(`1=1) ${op} SELECT Name FROM Users WHERE (1=1`, ss);
+        expect(result).toMatchObject({ Parsed: true, IsValid: false, Refusal: 'NotPlainSelect', Reads: null });
+    });
+
     it('refuses text the grammar cannot read', () => {
         const result = StrictFragmentValidator.ValidateFilter('Status = = ', ss);
         expect(result).toMatchObject({ IsValid: false, Parsed: false, Refusal: 'Unparseable', StatementKind: 'other' });
@@ -146,6 +151,89 @@ describe('StrictFragmentValidator.ValidateReadOnlyStatement', () => {
     it('refuses SELECT … INTO', () => {
         const result = StrictFragmentValidator.ValidateReadOnlyStatement('SELECT * INTO NewTable FROM Users', ss);
         expect(result).toMatchObject({ IsValid: false, Refusal: 'NotPlainSelect', StatementKind: 'select-into' });
+    });
+
+    it.each([
+        ['UNION', 'SELECT ID FROM dbo.vwUsers UNION SELECT UserID FROM dbo.vwOrders'],
+        ['UNION ALL', 'SELECT ID FROM dbo.vwUsers UNION ALL SELECT UserID FROM dbo.vwOrders'],
+        ['INTERSECT', 'SELECT ID FROM dbo.vwUsers INTERSECT SELECT UserID FROM dbo.vwOrders'],
+        ['EXCEPT', 'SELECT ID FROM dbo.vwUsers EXCEPT SELECT UserID FROM dbo.vwOrders'],
+    ])('accepts a %s of reads on SQL Server and reports the reads of every branch', (_op, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, Refusal: null, StatementKind: 'set-op' });
+        expect(result.ParsedSQL).toBe(sql);
+        expect(result.Reads?.Relations.map(describeRelation)).toEqual(['dbo|vwUsers||table', 'dbo|vwOrders||table']);
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it.each(['UNION ALL', 'INTERSECT', 'EXCEPT'])('accepts a %s of reads on PostgreSQL', (op) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(`SELECT id FROM public.users ${op} SELECT user_id FROM public.orders`, pg, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, StatementKind: 'set-op' });
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it('accepts a set operation inside a CTE and reads every branch', () => {
+        const sql = 'WITH x AS (SELECT ID FROM dbo.vwUsers EXCEPT SELECT UserID FROM dbo.vwOrders) SELECT * FROM x';
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result.IsValid).toBe(true);
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table', '|x||cte']);
+    });
+
+    it('refuses a set operation one of whose branches is a SELECT … INTO', () => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement('SELECT ID FROM dbo.vwUsers UNION SELECT ID INTO #t FROM dbo.vwOrders', ss);
+        expect(result).toMatchObject({ IsValid: false, Refusal: 'NotPlainSelect' });
+    });
+
+    it('refuses a set operation that hides a write behind INTERSECT or EXCEPT', () => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement('SELECT ID FROM dbo.vwUsers EXCEPT SELECT 1; DELETE FROM dbo.Users', ss);
+        expect(result).toMatchObject({ IsValid: false, Refusal: 'WriteStatement' });
+    });
+
+    it('accepts STRING_AGG … WITHIN GROUP and reads a subquery in its ORDER BY', () => {
+        const sql = "SELECT UserID, STRING_AGG(Name, ', ') WITHIN GROUP (ORDER BY (SELECT MAX(ID) FROM dbo.vwOrders)) AS Names FROM dbo.vwUsers GROUP BY UserID";
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, StatementKind: 'select', ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it('accepts TRY_CAST and reads a subquery in its argument', () => {
+        const sql = 'SELECT TRY_CAST((SELECT MAX(ID) FROM dbo.vwOrders) AS INT) AS MaxOrder, TRY_CAST(Code AS INT) AS CodeNumber FROM dbo.vwUsers';
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, StatementKind: 'select', ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
+        expect(result.Reads?.SelectCount).toBe(2);
+    });
+
+    it.each([
+        ['COUNT_BIG(*)', 'SELECT COUNT_BIG(*) AS n, (SELECT MAX(ID) FROM dbo.vwOrders) AS m FROM dbo.vwUsers'],
+        ['a RANGE frame', 'SELECT SUM(Amount) OVER (ORDER BY ID RANGE UNBOUNDED PRECEDING) AS s, (SELECT MAX(ID) FROM dbo.vwOrders) AS m FROM dbo.vwUsers'],
+        ['LIKE … ESCAPE', "SELECT ID FROM dbo.vwUsers WHERE Email LIKE '%!_%' ESCAPE '!' AND ID IN (SELECT UserID FROM dbo.vwOrders)"],
+        ['TOP n PERCENT WITH TIES', 'SELECT TOP 10 PERCENT WITH TIES ID, (SELECT MAX(ID) FROM dbo.vwOrders) AS m FROM dbo.vwUsers ORDER BY ID'],
+        ['a leading semicolon', ';WITH x AS (SELECT ID FROM dbo.vwUsers) SELECT * FROM x WHERE ID IN (SELECT UserID FROM dbo.vwOrders)'],
+    ])('accepts %s and reads every relation', (_case, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, ParsedSQL: sql });
+        const tables = result.Reads?.Relations.filter(r => !r.IsCTEReference).map(describeRelation).sort();
+        expect(tables).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
+    });
+
+    it.each([
+        ['OFFSET … ROWS without FETCH', 'SELECT ID FROM dbo.vwUsers WHERE ID IN (SELECT UserID FROM dbo.vwOrders) ORDER BY ID OFFSET 10 ROWS'],
+        ['OFFSET … FETCH FIRST', 'SELECT ID FROM dbo.vwUsers WHERE ID IN (SELECT UserID FROM dbo.vwOrders) ORDER BY ID OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY'],
+    ])('accepts %s on SQL Server and reads every relation', (_case, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, ss, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['dbo|vwOrders||table', 'dbo|vwUsers||table']);
+    });
+
+    it.each([
+        ['a RANGE frame', 'SELECT id, COUNT(*) OVER (ORDER BY created RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS n, (SELECT MAX(id) FROM public.orders) AS m FROM public.users'],
+        ['OFFSET … ROWS FETCH FIRST … ROWS ONLY', 'SELECT id, (SELECT MAX(id) FROM public.orders) AS m FROM public.users ORDER BY id OFFSET 5 ROWS FETCH FIRST 3 ROWS ONLY'],
+    ])('accepts %s on PostgreSQL and reads every relation', (_case, sql) => {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, pg, { CollectReads: true });
+        expect(result).toMatchObject({ IsValid: true, ParsedSQL: sql });
+        expect(result.Reads?.Relations.map(describeRelation).sort()).toEqual(['public|orders||table', 'public|users||table']);
     });
 
     it('reports the same facts with and without the fallback parse for text that parses directly', () => {

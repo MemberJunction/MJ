@@ -48,6 +48,8 @@ import {
     RunWithBoundedConcurrency,
 } from '../UserRoutineProcessor';
 import { WakeGateEvaluator, WakeGateEvaluationResult } from '../WakeGateEvaluator';
+import { UserRoutineScheduleIndex } from '../UserRoutineScheduleIndex';
+import type { Observable } from 'rxjs';
 
 interface GlobalUserCacheLookup {
     Users: UserInfo[];
@@ -192,6 +194,24 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     public override get IsHighFrequencyByDesign(): boolean {
         return true;
+    }
+
+    /**
+     * Work gate (#6217): the dispatcher has work only when a routine is due or needs seeding, so
+     * the engine runs it (and wakes the database for it) only then. Answered from the in-memory
+     * {@link UserRoutineScheduleIndex}; until that is loaded the dispatcher keeps its cron.
+     */
+    public override NextWorkDueAt(_job: MJScheduledJobEntity, now: Date): Date | null | undefined {
+        const index = UserRoutineScheduleIndex.Instance;
+        return index.IsLoaded ? index.NextDueAt(now) : undefined;
+    }
+
+    public override async PrepareWorkGate(contextUser: UserInfo, provider: IMetadataProvider, maxAgeMs: number): Promise<void> {
+        await UserRoutineScheduleIndex.Instance.EnsureFresh(contextUser, provider, maxAgeMs);
+    }
+
+    public override get WorkGateChanged$(): Observable<void> | null {
+        return UserRoutineScheduleIndex.Instance.Changed$;
     }
 
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
