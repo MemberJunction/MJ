@@ -1,4 +1,5 @@
 import type { AutoDocPluginConfigEntry } from '../plugins/types.js';
+import type { DataQualityCheck } from './data-quality.js';
 
 /**
  * Configuration types for DBAutoDoc
@@ -25,6 +26,64 @@ export interface KeyVerificationConfig {
      * genuinely sparse soft key in a connector schema full of orphans.
      */
     minContainment?: number;
+}
+
+/**
+ * Numeric thresholds for the data quality rules. Every field is optional and has a documented
+ * default. Keys are camelCase like every other key in a DBAutoDoc config file.
+ */
+export interface DataQualityThresholds {
+    /** HighNullRate at or above this percent of NULLs (below 100). Default 90. */
+    highNullRatePercent?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** ForeignKeyMostlyNull at or above this percent of NULLs. Default 90. */
+    foreignKeyMostlyNullPercent?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** NearUnique when distinct / non-null rows is at or above this and below 1. Default 0.99. */
+    nearUniqueRatio?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Non-null rows a column needs before NearUnique, UndeclaredUnique, OneToOne and NullableNeverNull apply. Default 100. */
+    minRowsForUniqueness?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Tables with fewer rows get no column findings. Default 10. */
+    minRowsForColumnChecks?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** NumericStoredAsText / DateStoredAsText: share of non-blank values that must parse. Default 0.9. */
+    storedAsTextShare?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Spelling variants are measured only for text columns with at most this many distinct values. Default 100. */
+    variantsMaxDistinct?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** FutureDate: days past the database clock before a value counts as in the future. Default 1. */
+    futureDateToleranceDays?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** OrphanedForeignKey on a discovered key is a warning at or above this percent of checked rows. Default 5. */
+    orphanWarningPercent?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** LengthAtCapacity only for declared character lengths at or above this. Default 8. */
+    lengthAtCapacityMinDeclared?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** StaleRowCountEstimate when |estimate - exact| / exact is at least this. Default 0.1. */
+    rowCountDriftRatio?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+}
+
+/**
+ * The data quality phase. Omitted means "use the defaults" (on); set `enabled: false` to skip it,
+ * `probes: false` to keep only the checks that need no extra SQL, or switch single checks off in
+ * `checks`. Defaults are resolved in `quality/DataQualityConfig.ts`.
+ */
+export interface DataQualityConfig {
+    /** Run the phase. Default true. */
+    enabled?: boolean; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Run the SQL probes. Default true. False keeps the statistics and catalog checks only: zero extra queries. */
+    probes?: boolean; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Timeout per probe statement in ms. Default 60000. A timed-out table is recorded as skipped, never as clean. */
+    probeTimeoutMs?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Tables with more rows are not probed. Default 20000000; 0 means no cap. */
+    maxRowsForProbe?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Columns per probe statement. Default 40. */
+    columnBatchSize?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Relationships per orphan-probe statement. Default 8. */
+    relationshipBatchSize?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Wall-clock cap on all probes in ms. Default 0 (none). Tables left over are skipped and the phase is partial. */
+    maxPhaseDurationMs?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Example values carried on a finding (spelling variants, the constant value, the placeholder date). Default 5; 0 for none. */
+    includeSampleValues?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Most findings shown per column in the table-analysis prompt. Default 3. */
+    promptMaxFindingsPerColumn?: number; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    /** Per-check switches. Every check defaults to on except ExactDuplicateRows and UnreferencedParentRows. */
+    checks?: Partial<Record<DataQualityCheck, boolean>>; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
+    thresholds?: DataQualityThresholds; // case-violation-ok-legacy-back-compat: config file keys are camelCase across DBAutoDoc
 }
 
 export interface DBAutoDocConfig {
@@ -222,6 +281,11 @@ export interface AnalysisConfig {
    * important columns (default true). Indexes often exist where no PK/FK is declared.
    */
   useExistingIndexes?: boolean;
+  /**
+   * Data quality findings from the statistics already collected plus one consolidated probe per
+   * table. Omitted means "use the defaults" (on); set `dataQuality.enabled: false` to skip it.
+   */
+  dataQuality?: DataQualityConfig; // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings and the state/config/prompt keys are camelCase
 }
 
 /**

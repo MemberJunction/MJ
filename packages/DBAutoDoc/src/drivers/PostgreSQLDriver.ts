@@ -8,6 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseAutoDocDriver, DriverProbeOutcome, ProbeNormalization, ProbeNormalizationPair } from './BaseAutoDocDriver.js';
 import { DescribeProbeFailure, ExtractSqlState } from './probeErrors.js';
 import { POSTGRESQL_INDEX_QUERY, PostgreSQLIndexRow, MapPostgreSQLIndexRows } from './IndexCatalog.js';
+import type { BoundedQueryOutcome } from '../types/data-quality.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -566,7 +567,8 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
         rn.nspname AS referenced_schema,
         rc.relname AS referenced_table,
         ra.attname AS referenced_column,
-        con.conname AS constraint_name
+        con.conname AS constraint_name,
+        con.convalidated AS is_validated
       FROM pg_catalog.pg_constraint con
       JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
       JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -588,18 +590,22 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
       referenced_table: string;
       referenced_column: string;
       constraint_name: string;
+      is_validated: boolean;
     }>(query, 3, [schemaName, tableName]);
 
     if (!result.success || !result.data) {
       return [];
     }
 
+    // A constraint added NOT VALID checks new rows only until VALIDATE CONSTRAINT runs.
     return result.data.map(row => ({
       columnName: row.column_name,
       referencedSchema: row.referenced_schema,
       referencedTable: row.referenced_table,
       referencedColumn: row.referenced_column,
-      constraintName: row.constraint_name
+      constraintName: row.constraint_name,
+      isTrusted: row.is_validated !== false,
+      isDisabled: false
     }));
   }
 
@@ -666,15 +672,16 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
 
     if (result.success && result.data && result.data.length > 0) {
       const row = result.data[0];
-      const totalCount = Number(row.total_count) || 1;
-      const distinctCount = Number(row.distinct_count);
-      const nullCount = Number(row.null_count);
+      // An empty table has 0 rows, not 1: the old `|| 1` made every empty table look like a one-row table.
+      const totalCount = Number(row.total_count) || 0;
+      const distinctCount = Number(row.distinct_count) || 0;
+      const nullCount = Number(row.null_count) || 0;
 
       return {
         distinctCount,
-        uniquenessRatio: distinctCount / totalCount,
+        uniquenessRatio: totalCount > 0 ? distinctCount / totalCount : 0,
         nullCount,
-        nullPercentage: (nullCount / totalCount) * 100,
+        nullPercentage: totalCount > 0 ? (nullCount / totalCount) * 100 : 0,
         totalCount
       };
     }
@@ -1008,6 +1015,38 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
           await client.query('RESET statement_timeout');
         } catch {
           // The client is being discarded anyway; a failed RESET must not mask the probe result.
+        }
+        client.release();
+      }
+    }
+  }
+
+  /**
+   * Run one read-only statement for the data quality probes on a dedicated connection with
+   * `statement_timeout`, which cancels the statement server-side, then reset it before the
+   * connection goes back to the pool (the same pattern as {@link ProbeJoinContainment}).
+   */
+  public override async ExecuteBounded<T extends Record<string, unknown>>(sqlText: string, timeoutMs: number): Promise<BoundedQueryOutcome<T>> {
+    let client: PoolClient | null = null;
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { Ok: false, Reason: 'no PostgreSQL connection pool available' };
+      }
+      client = await this.pool.connect();
+      await client.query(`SET statement_timeout = ${Math.max(1, Math.floor(timeoutMs))}`);
+      const result = await client.query<T>(sqlText);
+      return { Ok: true, Rows: result.rows };
+    } catch (error) {
+      return { Ok: false, Reason: DescribeProbeFailure(error), Code: ExtractSqlState(error) };
+    } finally {
+      if (client) {
+        try {
+          await client.query('RESET statement_timeout');
+        } catch {
+          // The result is already decided; a failed RESET must not mask it.
         }
         client.release();
       }

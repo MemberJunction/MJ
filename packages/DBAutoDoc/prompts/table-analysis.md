@@ -1,8 +1,8 @@
 You are analyzing a database table to generate comprehensive documentation. Your task is to infer the table's purpose based on the evidence provided.
 
 ## Table Information
-- **Name**: {{ tableName }}
-- **Schema**: {{ schemaName }}
+- **Name**: {{ table }}
+- **Schema**: {{ schema }}
 - **Row Count**: {{ rowCount }}
 {% if dependencyLevel is defined %}- **Dependency Level**: {{ dependencyLevel }} (0 = no dependencies){% endif %}
 
@@ -16,11 +16,12 @@ You are analyzing a database table to generate comprehensive documentation. Your
   {% if col.statistics %}- Distinct Values: {{ col.statistics.distinctCount }} ({{ (col.statistics.uniquenessRatio * 100) | round(1) }}% unique){% endif %}
   {% if col.statistics and col.statistics.nullPercentage > 0 %}- Nulls: {{ col.statistics.nullPercentage | round(1) }}%{% endif %}
   {% if col.possibleValues %}- Possible Values: {{ col.possibleValues | join(', ') }}{% endif %}
-  {% if col.statistics and col.statistics.min is defined %}- Range: {{ col.statistics.min }} to {{ col.statistics.max }}{% if col.statistics.avg %} (avg: {{ col.statistics.avg | round(2) }}){% endif %}{% endif %}
+  {% if col.statistics and col.statistics.min is defined and col.statistics.min !== null %}- Range: {{ col.statistics.min }} to {{ col.statistics.max }}{% if col.statistics.avg %} (avg: {{ col.statistics.avg | round(2) }}){% endif %}{% elif col.statistics and col.statistics.minValue is defined and col.statistics.minValue !== null %}- Range: {{ col.statistics.minValue }} to {{ col.statistics.maxValue }}{% endif %}
   {% if col.statistics and col.statistics.avgLength %}- Avg Length: {{ col.statistics.avgLength | round(1) }} chars{% endif %}
   {% if col.statistics.sampleValues and col.statistics.sampleValues.length > 0 %}- Sample Values: {{ col.statistics.sampleValues | jsoninline }}{% endif %}
+  {% if col.quality and col.quality.length > 0 %}- Data Quality: {{ col.quality | join(' ') }}{% endif %}
   {% if col.enumCandidate %}- **Enum Candidate**: Yes (pre-filter passed: distinctCount={{ col.enumCandidate.distinctCount }}, totalRows={{ col.enumCandidate.totalRows }}, cardinality={{ (col.enumCandidate.cardinalityRatio * 100) | round(1) }}%, dataType={{ col.enumCandidate.dataType }})
-  - **Candidate Values**: {{ col.enumCandidate.values | join(', ') }}{% endif %}
+  - **Candidate Values**: {{ col.enumCandidate.values | join(', ') }}{% if col.enumCandidate.variantsFolded %} ({{ col.enumCandidate.variantsFolded }} spellings that differ only by case or spaces were folded into these){% endif %}{% endif %}
 {% endfor %}
 
 ## Relationships
@@ -40,6 +41,14 @@ You are analyzing a database table to generate comprehensive documentation. Your
 
 {% if not dependsOn or dependsOn.length === 0 %}
 **Note**: This table has no foreign key dependencies (dependency level 0). It is likely a foundational/lookup table.
+{% endif %}
+
+{% if dataQuality and dataQuality.length > 0 %}
+## Data Quality Observations
+Measured from the data: counts, not opinions. Use them to describe what the data actually holds. An always-NULL column is unused; a mostly-NULL foreign key is an optional relationship; a placeholder date such as 9999-12-31 usually means "open-ended" or "unknown"; spellings that differ only by case mean the column is typed by hand. Do not invent a purpose the data does not support, and lower your confidence for an empty table.
+{% for line in dataQuality %}
+- {{ line }}
+{% endfor %}
 {% endif %}
 
 {% if parentDescriptions and parentDescriptions.length > 0 %}

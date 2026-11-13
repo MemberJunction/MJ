@@ -14,7 +14,7 @@ These FKs were identified by statistical analysis and/or LLM analysis. Some are 
 **NOTE**: FKs marked as **[LOCKED]** have very high confidence and CANNOT be removed. Only evaluate the unlocked ones.
 
 {% for fk in candidates %}
-{{ loop.index }}. {% if fk.locked %}**[LOCKED]** {% endif %}**{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (confidence: {{ fk.confidence }}%{% if fk.targetUniquelyIndexed === true %}; target column has a unique index{% elif fk.targetUniquelyIndexed === false %}; target column has no unique index{% endif %})
+{{ loop.index }}. {% if fk.locked %}**[LOCKED]** {% endif %}**{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (confidence: {{ fk.confidence }}%{% if fk.targetUniquelyIndexed === true %}; target column has a unique index{% elif fk.targetUniquelyIndexed === false %}; target column has no unique index{% endif %}{% if fk.orphanRate is defined %}; measured: {{ (fk.orphanRate * 100) | round(1) }}% of {{ fk.checkedRows }} non-null rows have no matching target row{% endif %})
 {% endfor %}
 
 {% if existingIndexes and existingIndexes.length > 0 %}
@@ -28,6 +28,8 @@ These indexes exist on this table in the database. Developers index the columns 
 {% endif %}
 
 *A real FK target is normally unique. A target column with a unique index or primary key supports the FK; one without is weaker evidence (but the database may simply not declare it).*
+
+*Orphan rates are measured over every row, not inferred. A high rate (above 5%) means the target rows were deleted or this is not a real reference; weigh it against the names and types. An FK with no orphan rate listed had no orphans, or was not measured.*
 
 {% if seedExcerpt %}
 ## Notes from the operator about this data

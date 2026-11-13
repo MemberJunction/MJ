@@ -349,8 +349,13 @@ export class ColumnStatsCache {
   }
 
   /**
-   * Merge cached stats into schema column definitions
-   * Replaces separate columnStatistics cache with embedded stats
+   * Merge cached stats into schema column definitions.
+   *
+   * A column the sampling pass already measured keeps its statistics: the cache only adds the
+   * fields sampling does not produce (`dataPattern`, `minValue`/`maxValue`). Replacing them dropped
+   * the value distribution, the numeric range and the length statistics, and wrote the cache's 0–1
+   * null fraction where the prompt expects a 0–100 percentage. A column sampling did not reach
+   * (sampling skipped) gets its statistics from the cache, with the percentage converted.
    */
   public MergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
     for (const schema of schemas) {
@@ -364,16 +369,31 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          // Merge cached stats into column.statistics
+          const existing = column.statistics;
+          if (existing) {
+            column.statistics = {
+              ...existing,
+              dataPattern: existing.dataPattern ?? cachedStats.dataPattern,
+              minValue: existing.minValue ?? cachedStats.minValue,
+              maxValue: existing.maxValue ?? cachedStats.maxValue,
+              computedAt: existing.computedAt ?? cachedStats.computedAt,
+              queryTimeMs: existing.queryTimeMs ?? cachedStats.queryTimeMs
+            };
+            continue;
+          }
+
           column.statistics = {
             totalRows: cachedStats.totalRows,
             distinctCount: cachedStats.distinctCount,
             uniquenessRatio: cachedStats.uniqueness,
             nullCount: cachedStats.nullCount,
-            nullPercentage: cachedStats.nullPercentage,
+            // The cache holds a 0–1 fraction (its detectors use it); column statistics hold 0–100.
+            nullPercentage: cachedStats.totalRows > 0 ? (cachedStats.nullCount / cachedStats.totalRows) * 100 : 0,
             dataPattern: cachedStats.dataPattern,
             sampleValues: cachedStats.sampleValues,
             valueDistribution: cachedStats.valueDistribution,
+            min: cachedStats.minValue,
+            max: cachedStats.maxValue,
             minValue: cachedStats.minValue,
             maxValue: cachedStats.maxValue,
             avgLength: cachedStats.avgLength,

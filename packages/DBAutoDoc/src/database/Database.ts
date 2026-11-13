@@ -129,8 +129,24 @@ export class Introspector {
           table: fk.referencedTable,
           column: fk.columnName,
           referencedColumn: fk.referencedColumn,
-          constraintName: fk.constraintName
+          constraintName: fk.constraintName,
+          ...(fk.isTrusted !== undefined ? { isTrusted: fk.isTrusted } : {}),
+          ...(fk.isDisabled !== undefined ? { isDisabled: fk.isDisabled } : {})
         }));
+
+        // The target of each declared FK column, so the prompt can say what it references. Same
+        // convention as the discovered keys: `column` and `referencedColumn` both name the target column.
+        const declaredTargets = new Map<string, ForeignKeyReference>();
+        for (const fk of autoDocTable.foreignKeys) {
+          if (declaredTargets.has(fk.columnName)) continue;
+          declaredTargets.set(fk.columnName, {
+            schema: fk.referencedSchema,
+            table: fk.referencedTable,
+            column: fk.referencedColumn,
+            referencedColumn: fk.referencedColumn,
+            constraintName: fk.constraintName
+          });
+        }
 
         // Convert columns
         const columns: ColumnDefinition[] = autoDocTable.columns.map(col => ({
@@ -139,6 +155,7 @@ export class Introspector {
           isNullable: col.isNullable,
           isPrimaryKey: col.isPrimaryKey,
           isForeignKey: col.isForeignKey,
+          ...(declaredTargets.has(col.name) ? { foreignKeyReferences: declaredTargets.get(col.name) } : {}),
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
           maxLength: col.maxLength,

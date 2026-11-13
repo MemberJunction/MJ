@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "database": {
+    "provider": "sqlserver",
+    "server": "${BENCH_SQL_HOST}",
+    "port": ${BENCH_SQL_PORT},
+    "database": "${BENCH_DB}",
+    "user": "${BENCH_SQL_USER}",
+    "password": "${BENCH_SQL_PASSWORD}",
+    "encrypt": true,
+    "trustServerCertificate": true,
+    "connectionTimeout": 30000
+  },
+  "ai": {
+    "provider": "gemini",
+    "model": "no-model-calls",
+    "apiKey": "unused-no-model-calls-in-this-run",
+    "temperature": 0.1
+  },
+  "analysis": {
+    "cardinalityThreshold": 100,
+    "sampleSize": 20,
+    "includeStatistics": true,
+    "includePatternAnalysis": true,
+    "convergence": { "maxIterations": 0, "stabilityWindow": 2, "confidenceThreshold": 0.85 },
+    "backpropagation": { "enabled": false, "maxDepth": 1 },
+    "sanityChecks": { "dependencyLevel": false, "schemaLevel": false, "crossSchema": false },
+    "relationshipDiscovery": { "enabled": false },
+    "dataQuality": { "checks": { "ExactDuplicateRows": true } }
+  },
+  "output": {
+    "stateFile": "${BENCH_OUTPUT_DIR}/state.json",
+    "outputDir": "${BENCH_OUTPUT_DIR}/output"
+  },
+  "schemas": { "exclude": ["sys", "INFORMATION_SCHEMA"] },
+  "tables": { "exclude": ["sysdiagrams", "__MigrationHistory"] },
+  "plugins": [{ "Name": "IndexAdvisor", "Enabled": false }]
+}
