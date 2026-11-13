@@ -67,6 +67,7 @@ import { MaterializedReadChecks } from '../checks/materialized-read.checks';
 import { MaterializedEntityReadChecks } from '../checks/materialized-entity-read.checks';
 import { FormContributionsChecks } from '../checks/form-contributions.checks';
 import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.checks';
+import { WidgetGuestIsolationChecks } from '../checks/widget-guest-isolation.checks';
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
@@ -234,6 +235,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['form-contributions', FormContributionsChecks, 17], // FC1-FC17 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims, component guard (IT104)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 7], // SA1-SA6 scoped-anonymous elevation permission contract + SA7 magic-link single-use consume (IT68)
+        ['widget-guest-isolation', WidgetGuestIsolationChecks, 6], // WG1-WG6 widget guests read and update only their own session's rows (IT156)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
         ['entity-graph-client', EntityGraphClientChecks, 9], // EGC1-EGC9 graph saves over the GraphQL wire (IT73)
@@ -583,6 +585,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'view-execution': 12,
         'view-properties-client': 5,
         'view-security': 4,
+        'widget-guest-isolation': 6,
         'work-bus-core': 10,
         'work-queue-runtime': 19,
         'workflow-demo-agents': 5,
@@ -609,7 +612,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(242);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(243);
     });
 });
 
