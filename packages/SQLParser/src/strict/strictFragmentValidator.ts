@@ -3,6 +3,7 @@ import { SQLParser, type SQLStatementKind } from '../sql-parser.js';
 import { RenderAggregateExpression } from './aggregateRenderer.js';
 import { CLAUSE_WRAPPER_TABLE, CollectReads, WrapperFromItem, type ReadableParse } from './statementReads.js';
 import { StrictGrammarOf, StrictParsingDialect } from './strictDialect.js';
+import { RewriteGrammarGaps } from './grammarGapRewrites.js';
 import type {
     StrictAggregateResult,
     StrictFilterOptions,
@@ -13,6 +14,7 @@ import type {
 } from './strictTypes.js';
 import {
     IsSingleTypedStatement,
+    SetOperationSelectsInto,
     TopLevelHasWriteStatement,
     TopLevelStatementKind,
     TreeContainsWriteNode,
@@ -69,9 +71,13 @@ export class StrictFragmentValidator {
         return StrictFragmentValidator.validateWrapped(`SELECT 1 FROM ${CLAUSE_WRAPPER_TABLE} ORDER BY ${orderBy}`, dialect, options);
     }
 
-    /** Reads a whole statement, which is valid when it is one plain read-only SELECT. */
+    /**
+     * Reads a whole statement, which is valid when it is one read-only SELECT, or a set operation
+     * (UNION, UNION ALL, INTERSECT, EXCEPT) whose branches are all read-only SELECTs. A fragment
+     * validator never accepts a set operation: there it is a fragment breaking out of its wrapper.
+     */
     public static ValidateReadOnlyStatement(sql: string, dialect: SQLParserDialect, options?: StrictParseOptions): StrictValidationResult {
-        return StrictFragmentValidator.resultOf(StrictFragmentValidator.parse(sql, dialect, options), options, false);
+        return StrictFragmentValidator.resultOf(StrictFragmentValidator.parse(sql, dialect, options), options, false, true);
     }
 
     /**
@@ -106,7 +112,7 @@ export class StrictFragmentValidator {
 
     /** Validates a fragment already placed in its parse wrapper, whose own FROM item the reads leave out. */
     private static validateWrapped(wrapped: string, dialect: SQLParserDialect, options: StrictParseOptions | undefined): StrictValidationResult {
-        return StrictFragmentValidator.resultOf(StrictFragmentValidator.parse(wrapped, dialect, options), options, true);
+        return StrictFragmentValidator.resultOf(StrictFragmentValidator.parse(wrapped, dialect, options), options, true, false);
     }
 
     /**
@@ -117,8 +123,22 @@ export class StrictFragmentValidator {
         const grammar = StrictGrammarOf(dialect);
         if (grammar === null) return { SQL: sql, Tree: null, Refusal: 'NoGrammar' };
         const parsing = StrictParsingDialect(dialect, grammar);
-        const tree = options?.AllowFallbackParse === false ? StrictFragmentValidator.directTree(sql, parsing) : new SQLParser(sql, parsing);
+        const tree = options?.AllowFallbackParse === false ? StrictFragmentValidator.directTree(sql, parsing) : StrictFragmentValidator.fallbackTree(sql, parsing);
         return tree && tree.AST !== null ? { SQL: sql, Tree: tree, Refusal: null } : { SQL: sql, Tree: null, Refusal: 'Unparseable' };
+    }
+
+    /**
+     * A `SQLParser` reading of `sql`, with its fallbacks. When that fails, one more reading of the
+     * text with the grammar's gaps rewritten ({@link RewriteGrammarGaps}: on SQL Server `STRING_AGG …
+     * WITHIN GROUP`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG`, `LIKE … ESCAPE`, `TOP … WITH TIES`,
+     * a leading `;`; on SQL Server and PostgreSQL `RANGE` frames and `OFFSET … ROWS` / `FETCH …`
+     * clauses), which reads the same relations.
+     */
+    private static fallbackTree(sql: string, dialect: SQLParserDialect): SQLParser {
+        const parser = new SQLParser(sql, dialect);
+        if (parser.AST !== null) return parser;
+        const rewritten = RewriteGrammarGaps(sql, dialect);
+        return rewritten === sql ? parser : new SQLParser(rewritten, dialect);
     }
 
     /** The direct reading of `sql`, with no fallback; null when it does not parse. */
@@ -135,8 +155,16 @@ export class StrictFragmentValidator {
         };
     }
 
-    /** The result for one parse; `skipWrapper` leaves the fragment wrapper's FROM item out of the reads. */
-    private static resultOf(parse: StrictParse, options: StrictParseOptions | undefined, skipWrapper: boolean): StrictValidationResult {
+    /**
+     * The result for one parse; `skipWrapper` leaves the fragment wrapper's FROM item out of the
+     * reads, and `allowSetOperation` accepts a set operation of read-only SELECTs as a read.
+     */
+    private static resultOf(
+        parse: StrictParse,
+        options: StrictParseOptions | undefined,
+        skipWrapper: boolean,
+        allowSetOperation: boolean,
+    ): StrictValidationResult {
         if (parse.Tree === null) return StrictFragmentValidator.unparsed(parse.SQL, parse.Refusal);
         const tree = parse.Tree;
         const facts = {
@@ -145,7 +173,8 @@ export class StrictFragmentValidator {
             ContainsNestedWrite: TreeContainsWriteNode(tree.AST),
             IsSingleTypedStatement: IsSingleTypedStatement(tree.AST),
         };
-        const refusal = StrictFragmentValidator.refusalOf(facts.HasWriteStatement, facts.StatementKind === 'select', facts.ContainsNestedWrite);
+        const isRead = StrictFragmentValidator.isReadStatement(facts.StatementKind, tree.AST, allowSetOperation);
+        const refusal = StrictFragmentValidator.refusalOf(facts.HasWriteStatement, isRead, facts.ContainsNestedWrite);
         const collectReads = refusal === null && options?.CollectReads === true;
         return {
             IsValid: refusal === null,
@@ -159,10 +188,19 @@ export class StrictFragmentValidator {
         };
     }
 
+    /**
+     * Whether a parsed statement reads: a plain SELECT, or, when `allowSetOperation`, a set
+     * operation none of whose branches is a SELECT … INTO.
+     */
+    private static isReadStatement(kind: SQLStatementKind, ast: unknown, allowSetOperation: boolean): boolean {
+        if (kind === 'select') return true;
+        return allowSetOperation && kind === 'set-op' && !SetOperationSelectsInto(ast);
+    }
+
     /** The first refusal a parsed text earns, in the order {@link StrictRefusal} lists them. */
-    private static refusalOf(hasWrite: boolean, isPlainSelect: boolean, nestedWrite: boolean): StrictRefusal | null {
+    private static refusalOf(hasWrite: boolean, isRead: boolean, nestedWrite: boolean): StrictRefusal | null {
         if (hasWrite) return 'WriteStatement';
-        if (!isPlainSelect) return 'NotPlainSelect';
+        if (!isRead) return 'NotPlainSelect';
         if (nestedWrite) return 'NestedWrite';
         return null;
     }
