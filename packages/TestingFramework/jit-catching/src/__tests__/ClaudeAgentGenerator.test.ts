@@ -27,7 +27,7 @@ function world() {
   return root;
 }
 const req = (root: string): GenerationRequest => ({ Run: { ID: 'r' } as never, Analysis: { IntentType: 'perf', Summary: 's', Title: 't', Body: '', ChangedFiles: [{ Path: 'packages/MJCore/src/a.ts', Package: '@memberjunction/core', AddedLines: [1], RemovedLineCount: 0, Hunks: [] }] } as never,
-  Package: '@memberjunction/core', PackageDir: join(root, 'packages/MJCore'), BaseRootDir: root, Method: 'DodgyDiff', Risk: null, Model: 'claude-haiku-5-5', Limits: { ...DEFAULT_SETTINGS.Limits, TestsPerPackage: 2 } });
+  Package: '@memberjunction/core', PackageDir: join(root, 'packages/MJCore'), BaseRootDir: root, Method: 'DodgyDiff', Risks: [], Model: 'claude-haiku-5-5', Limits: { ...DEFAULT_SETTINGS.Limits, TestsPerPackage: 2 } });
 
 /** The file IDs a session may write, as its system prompt lists them (`- <id>.jit.test.ts`). */
 function IdsFromPrompt(prompt: string): string[] { return [...prompt.matchAll(/- ([0-9a-f-]{36})\.jit\.test\.ts/g)].map((m) => m[1]); }
@@ -58,6 +58,13 @@ describe('ClaudeAgentGenerator', () => {
     const result = await gen.Generate(req(root));
     expect(result.EndReason).toBe('error_max_turns'); expect(result.Turns).toBe(31);
     expect(result.Tokens.Role).toBe('Generator');
+  });
+  it('passes the GeneratorEffort setting to the runner as Effort', async () => {
+    const root = world(); let effort: string | undefined = 'unset';
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: { ...DEFAULT_SETTINGS, GeneratorEffort: 'low' }, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: async function* (_p, _s, o) { effort = o.Effort; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; } });
+    await gen.Generate(req(root));
+    expect(effort).toBe('low');
   });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
@@ -154,6 +161,28 @@ describe('ClaudeAgentGenerator proof of the content that ran', () => {
       RunTestFactory: () => ({ Run: async () => { await new Promise((res) => setTimeout(res, 20)); return { Ran: true, Status: 'Pass', TestName: null, Failure: null, DurationMs: 20 }; }, LastMutant: null }) as never });
     const r = await gen.Generate(req(root));
     expect(r.Tests).toHaveLength(1); expect(r.Tests[0].Source).toBe('v2 never run'); expect(r.Tests[0].GenerationOutcome).toBe('Failed'); expect(r.Tests[0].FailureReason).toMatch(/never proved/);
+  });
+});
+
+describe('ClaudeAgentGenerator risk groups', () => {
+  const risk = (id: string) => ({ ID: id, File: 'packages/MJCore/src/a.ts', Symbol: `sym${id}`, WhatCouldBreak: `breaks ${id}`, HowObserved: 'seen' });
+  const group = (root: string, ids: string[]): GenerationRequest => ({ ...req(root), Method: 'IntentAware', Risks: ids.map(risk), Limits: { ...DEFAULT_SETTINGS.Limits, TestsPerRisk: 1, TurnsPerSession: 30, TokensPerSession: 1000, UsdPerSession: 2 } });
+  const proving = () => ({ Run: async (i: { Mutant?: unknown }) => ({ Ran: true, Status: i.Mutant ? 'Fail' : 'Pass', TestName: 't', Failure: null, DurationMs: 1 }),
+    LastMutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '1', Replace: '2' }], Patch: 'p', Failure: null } });
+  it('allocates TestsPerRisk files per risk and marks each produced test with its own risk', async () => {
+    const root = world();
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: scriptedRunner(async (h, ids) => { for (const id of ids) { const f = `${JIT}/${id}.jit.test.ts`; await h.WriteFile(f, `src ${id}`); await h.RunTest(f); await (h.RunTest as (file: string, m: object) => Promise<unknown>)(f, { Edits: [] }); } }),
+      RunTestFactory: () => proving() as never });
+    const r = await gen.Generate(group(root, ['R1', 'R2']));
+    expect(r.Tests.map((t) => [t.RiskID, t.RiskText, t.GenerationOutcome])).toEqual([['R1', 'breaks R1 (symR1)', 'Produced'], ['R2', 'breaks R2 (symR2)', 'Produced']]);
+  });
+  it('scales the turn, token and USD limits by the number of risks in the group', async () => {
+    const root = world(); let seen: number[] = [];
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: async function* (_p, _s, o) { seen = [o.MaxTurns, o.TokenBudget, o.BudgetUsd]; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; } });
+    await gen.Generate(group(root, ['R1', 'R2', 'R3']));
+    expect(seen).toEqual([90, 3000, 6]);
   });
 });
 

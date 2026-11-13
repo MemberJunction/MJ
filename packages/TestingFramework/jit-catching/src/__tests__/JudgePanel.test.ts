@@ -52,4 +52,31 @@ describe('JudgePanel', () => {
       { Model: 'b-model', InputTokens: 10, OutputTokens: 5, CacheReadTokens: 0, CostUSD: (10 * 1 + 5 * 4) / 1_000_000 },
       { Model: 'tp-model', InputTokens: 10, OutputTokens: 5, CacheReadTokens: 0, CostUSD: 0 }]);
   });
+  describe('staged', () => {
+    /** A bucket judge that answers `bucket` (or throws when null) and logs when it starts and ends. */
+    const logged = (log: string[], name: string, bucket: Bucket | null) => new (class extends BaseCatchJudge {
+      get Name() { return name; }
+      async Judge(): Promise<JudgeScore> {
+        log.push(`start ${name}`); await new Promise((r) => setTimeout(r, 5)); log.push(`end ${name}`);
+        if (bucket === null) throw new Error('503');
+        return { Judge: name, Model: name, Score: 0, Bucket: bucket, Reason: name, Usage: { Model: name, InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0, CostUSD: 0 } };
+      }
+    })();
+    it('a Low from the first bucket judge skips the other bucket judges', async () => {
+      const log: string[] = [];
+      const r = await new JudgePanel([logged(log, 'TpProb', null), logged(log, 'a', 'Low'), logged(log, 'b', 'High'), logged(log, 'c', 'High')], true).Judge(ctx());
+      expect(log).not.toContain('start b'); expect(log).not.toContain('start c');
+      expect(r.Buckets).toEqual([{ Model: 'a', Bucket: 'Low', Reason: 'a' }]); expect(r.Median).toBe('Low');
+      expect(r.Usage.map((u) => u.Model)).toEqual(['a']);
+    });
+    it('the other bucket judges run after the first answers Medium or errors, and the result keeps judge order', async () => {
+      for (const first of ['Medium', null] as const) {
+        const log: string[] = [];
+        const r = await new JudgePanel([logged(log, 'TpProb', null), logged(log, 'a', first), logged(log, 'b', 'High'), logged(log, 'c', 'High')], true).Judge(ctx());
+        expect(log.indexOf('start b')).toBeGreaterThan(log.indexOf('end a'));
+        expect(r.Buckets.map((b) => [b.Model, b.Bucket])).toEqual([['a', first], ['b', 'High'], ['c', 'High']]);
+        expect(r.Median).toBe('High');
+      }
+    });
+  });
 });

@@ -39,7 +39,7 @@ describe('GenerateStep', () => {
     expect(subject).toHaveBeenCalledWith(HEAD_SHA);
     expect(pr).toEqual({ Title: 'fix(x): keep Open', Body: '' });
     expect(order).toEqual(['image', `prepare Base ${BASE_SHA}`, `build ${PKG}`]);
-    expect(requests.map((r) => [r.Method, r.Risk?.ID ?? null, r.PackageDir])).toEqual([['DodgyDiff', null, join('/work/base', PKG_DIR)], ['IntentAware', 'R1', join('/work/base', PKG_DIR)], ['IntentAware', 'R3', join('/work/base', PKG_DIR)]]);
+    expect(requests.map((r) => [r.Method, r.Risks[0]?.ID ?? null, r.PackageDir])).toEqual([['DodgyDiff', null, join('/work/base', PKG_DIR)], ['IntentAware', 'R1', join('/work/base', PKG_DIR)], ['IntentAware', 'R3', join('/work/base', PKG_DIR)]]);
     const g = new RunDir(root, RunID, redaction).ReadGeneration();
     expect(g.BaseRootDir).toBe('/work/base');
     expect(g.Run).toMatchObject({ PRNumber: null, Trigger: 'Backtest', BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Status: 'Generated' });
@@ -188,6 +188,38 @@ describe('GenerateStep', () => {
     }
   });
 
+  describe('risks per session', () => {
+    const five = ['R1', 'R2', 'R3', 'R4', 'R5'].map((id) => ({ ID: id, File: `${PKG_DIR}/src/svc.ts`, Symbol: id, WhatCouldBreak: 'x', HowObserved: 'y' }));
+    const info = { Name: PKG, Dir: PKG_DIR, HasVitest: true, HasTests: true };
+    const settings = { ...DEFAULT_SETTINGS, Limits: { ...DEFAULT_SETTINGS.Limits, RisksPerPackage: 5, RisksPerSession: 3 } };
+    async function run(generate: GenerateTools['Generator']['Generate']) {
+      const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
+      const tools: GenerateTools = {
+        EnsureImage: async () => undefined,
+        Target: { Prepare: async (r: RevisionRef): Promise<PreparedRevision> => ({ Ref: r, RootDir: '/work/base' }), BuildPackages: async () => undefined, PackagesAt: (_r: PreparedRevision, p: string[]) => p },
+        Analyzer: { Analyze: async () => ({ ...analysis(), Risks: five }), Usage: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 } },
+        Generator: { Generate: generate }, PackageMap: { Get: () => info, PackageForPath: () => info },
+      };
+      vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const { RunID } = await GenerateStep({ PR: null, BaseSHA: BASE_SHA, HeadSHA: HEAD_SHA, Trigger: 'Local', RepoRoot: root, Settings: settings, Env: FULL_ENV,
+        Deps: { GitHub: { GetPullRequest: vi.fn() }, Repo: { Fetch: async () => undefined, MergeBase: vi.fn(), Subject: async () => 's' }, Redaction: redaction, ForRun: () => tools } });
+      return new RunDir(root, RunID, redaction).ReadGeneration();
+    }
+    it('groups the risks of a package into IntentAware sessions of at most RisksPerSession, and names each session by its joined risk IDs', async () => {
+      const requests: GenerationRequest[] = [];
+      const g = await run(async (r) => { requests.push(r); return { Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 }; });
+      expect(g.Sessions.map((s) => [s.Method, s.RiskID])).toEqual([['DodgyDiff', null], ['IntentAware', 'R1+R2+R3'], ['IntentAware', 'R4+R5']]);
+      expect(requests.map((r) => [r.Method, r.Risks.map((x) => x.ID)])).toEqual([['DodgyDiff', []], ['IntentAware', ['R1', 'R2', 'R3']], ['IntentAware', ['R4', 'R5']]]);
+    });
+    it('records a group session that throws as one failed test per risk of the group', async () => {
+      const g = await run(async (r) => {
+        if (r.Method === 'IntentAware') throw new Error('agent crashed');
+        return { Tests: [], Tokens: { Model: 'm', InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }, TranscriptPath: null, EndReason: 'success', Turns: 1 };
+      });
+      expect(g.Tests.map((t) => [t.RiskID, t.GenerationOutcome])).toEqual([['R1', 'Failed'], ['R2', 'Failed'], ['R3', 'Failed'], ['R4', 'Failed'], ['R5', 'Failed']]);
+      expect(g.Sessions.map((s) => s.Failed)).toEqual([0, 3, 2]);
+    });
+  });
   it('with a PR and an explicit head uses the given base and head, fetches next, and takes the text from the PR', async () => {
     const root = mkdtempSync(join(tmpdir(), 'jit-gen-')); const redaction = new RedactionCheck([]);
     const order: string[] = []; const fetches: string[] = []; let pr: { Title: string; Body: string } | null = null;
