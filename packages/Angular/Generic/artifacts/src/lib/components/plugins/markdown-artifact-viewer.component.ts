@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
+import { Component, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -6,7 +6,9 @@ import {
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
+  SpreadsheetEngine,
   UserInfoEngine,
+  type WorksheetSpec,
   type DocumentBlockColumn,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
@@ -209,6 +211,33 @@ interface DocsInlineToken {
               </button>
             }
           </div>
+
+          @if (CanUserEdit) {
+            <div class="mj-docs-undo-group" role="group" aria-label="Undo and Redo">
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon-only"
+                [disabled]="!CanUndo"
+                title="Undo (Cmd/Ctrl+Z)"
+                data-testid="docs-undo-btn"
+                (mousedown)="OnToolbarActionMousedown($event)"
+                (click)="UndoDocument()"
+              >
+                <i class="fas fa-rotate-left"></i>
+              </button>
+              <button
+                type="button"
+                class="mj-docs-btn mj-docs-btn--icon-only"
+                [disabled]="!CanRedo"
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                data-testid="docs-redo-btn"
+                (mousedown)="OnToolbarActionMousedown($event)"
+                (click)="RedoDocument()"
+              >
+                <i class="fas fa-rotate-right"></i>
+              </button>
+            </div>
+          }
 
           <!-- Active Non-Default Mode / Editing Style Chips (revealed only when active & not pinned) -->
           @if (CanUserEdit && (ViewMode === 'suggest' || PendingSuggestionsCount > 0) && !IsToolbarItemShownOnBar('suggest-mode')) {
@@ -1177,6 +1206,20 @@ interface DocsInlineToken {
                                   {{ seg.Descriptor.VersionID ? 'Pinned' : 'Latest' }}
                                 </span>
                               }
+                              @if (GetNewerEmbeddedArtifactVersion(seg.Descriptor); as newerVer) {
+                                <button
+                                  type="button"
+                                  class="mj-docs-btn mj-docs-btn--accent"
+                                  title="Update pinned snapshot to latest workbook version"
+                                  [attr.data-testid]="'update-from-source-workbook-btn-' + seg.Descriptor.BlockID"
+                                  (click)="UpdateEmbeddedArtifactToLatestVersion(seg.Descriptor)"
+                                >
+                                  <i class="fas fa-arrow-up-from-bracket"></i>
+                                  <span>
+                                    Update from Source Workbook (v{{ GetEmbeddedArtifactVersion(seg.Descriptor)?.VersionNumber || 1 }} → v{{ newerVer.VersionNumber }})
+                                  </span>
+                                </button>
+                              }
                             </div>
 
                             <div class="mj-docs-ole-block__actions">
@@ -2144,9 +2187,110 @@ interface DocsInlineToken {
                   <input
                     type="text"
                     [(ngModel)]="NewBlockArtifactTypeName"
-                    placeholder="e.g., Whiteboard"
+                    placeholder="e.g., Spreadsheet or Whiteboard"
                   />
                 </label>
+
+                @if (IsSpreadsheetArtifactPickerSelected) {
+                  <div class="mj-docs-field" data-testid="sheet-embed-guided-picker">
+                    <span>Step 2 · What to Embed from Workbook</span>
+                    <div class="mj-docs-mode-group" role="radiogroup" aria-label="Spreadsheet Embed Mode">
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'chart'"
+                        data-testid="sheet-embed-mode-chart"
+                        (click)="SetSheetEmbedMode('chart')"
+                      >
+                        <i class="fas fa-chart-column"></i> Chart
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'range'"
+                        data-testid="sheet-embed-mode-range"
+                        (click)="SetSheetEmbedMode('range')"
+                      >
+                        <i class="fas fa-table-cells"></i> Cell Range
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-docs-mode-btn"
+                        [class.mj-docs-mode-btn--active]="NewBlockSheetMode === 'full'"
+                        data-testid="sheet-embed-mode-full"
+                        (click)="SetSheetEmbedMode('full')"
+                      >
+                        <i class="fas fa-file-excel"></i> Full Workbook
+                      </button>
+                    </div>
+                  </div>
+
+                  @if (SelectedWorkbookSheets.length > 0 && NewBlockSheetMode !== 'full') {
+                    <label class="mj-docs-field">
+                      <span>Worksheet</span>
+                      <select
+                        [(ngModel)]="NewBlockSheetName"
+                        (ngModelChange)="OnSelectedWorkbookSheetChanged($event)"
+                        data-testid="sheet-embed-worksheet-select"
+                      >
+                        @for (ws of SelectedWorkbookSheets; track ws.SheetID) {
+                          <option [value]="ws.SheetID">{{ ws.Name }}</option>
+                        }
+                      </select>
+                    </label>
+                  }
+
+                  @if (NewBlockSheetMode === 'chart') {
+                    <label class="mj-docs-field">
+                      <span>Chart</span>
+                      @if (SelectedWorkbookSheetCharts.length > 0) {
+                        <select
+                          [(ngModel)]="NewBlockSheetChartID"
+                          data-testid="sheet-embed-chart-select"
+                        >
+                          @for (ch of SelectedWorkbookSheetCharts; track ch.ChartID) {
+                            <option [value]="ch.ChartID">{{ ch.Title || ch.ChartID }} ({{ ch.ChartType }})</option>
+                          }
+                        </select>
+                      } @else {
+                        <input
+                          type="text"
+                          [(ngModel)]="NewBlockSheetChartID"
+                          placeholder="Chart ID (e.g., chart-1)"
+                          data-testid="sheet-embed-chart-input"
+                        />
+                      }
+                    </label>
+                  } @else if (NewBlockSheetMode === 'range') {
+                    <label class="mj-docs-field">
+                      <span>Cell Range (e.g., A1:D8)</span>
+                      <input
+                        type="text"
+                        [(ngModel)]="NewBlockSheetRange"
+                        placeholder="A1:D8"
+                        data-testid="sheet-embed-range-input"
+                      />
+                    </label>
+                  }
+
+                  <div class="mj-docs-field">
+                    <span>Step 3 · Version Sync</span>
+                    <label class="mj-docs-checkbox-row">
+                      <input
+                        type="checkbox"
+                        [(ngModel)]="NewBlockPinToCurrentVersion"
+                        data-testid="sheet-embed-pin-version-checkbox"
+                      />
+                      <span>
+                        Pin to current version
+                        @if (SelectedArtifactLatestVersionNumber > 0) {
+                          (v{{ SelectedArtifactLatestVersionNumber }})
+                        }
+                        instead of tracking latest
+                      </span>
+                    </label>
+                  </div>
+                }
               }
 
               <!-- Block Display Title -->
@@ -2379,7 +2523,8 @@ interface DocsInlineToken {
       }
 
       .mj-docs-mode-group,
-      .mj-docs-format-group {
+      .mj-docs-format-group,
+      .mj-docs-undo-group {
         display: inline-flex;
         align-items: center;
         gap: 2px;
@@ -2387,6 +2532,15 @@ interface DocsInlineToken {
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-default);
         border-radius: 6px;
+      }
+
+      .mj-docs-btn--icon-only {
+        padding: 5px 8px;
+      }
+
+      .mj-docs-btn:disabled {
+        opacity: 0.42;
+        cursor: not-allowed;
       }
 
       .mj-docs-mode-btn,
@@ -4587,6 +4741,7 @@ export class MarkdownArtifactViewerComponent
   private userCollapsedBlockOverrides = new Map<string, boolean>();
   private collapsedHeadingIds = new Set<string>();
   private embeddedArtifactVersions = new Map<string, MJArtifactVersionEntity>();
+  private latestArtifactVersions = new Map<string, MJArtifactVersionEntity>();
   private inFlightEmbeddedVersionKeys = new Set<string>();
   private failedEmbeddedVersionMessages = new Map<string, string>();
   private inlineEditingBlockIds = new Set<string>();
@@ -4612,6 +4767,14 @@ export class MarkdownArtifactViewerComponent
   public NewBlockQueryName = '';
   public NewBlockArtifactID = '';
   public NewBlockArtifactTypeName = 'Whiteboard';
+  public NewBlockSheetMode: 'full' | 'chart' | 'range' = 'full';
+  public NewBlockSheetName = '';
+  public NewBlockSheetChartID = '';
+  public NewBlockSheetRange = 'A1:D8';
+  public NewBlockPinToCurrentVersion = false;
+  public SelectedWorkbookSheets: WorksheetSpec[] = [];
+  public SelectedArtifactLatestVersionID = '';
+  public SelectedArtifactLatestVersionNumber = 0;
   public ShowEntityPickerDropdown = false;
   public EntityPickerHighlightIndex = 0;
   public ShowAdvancedBlockOptions = false;
@@ -4681,6 +4844,63 @@ export class MarkdownArtifactViewerComponent
 
   public get CanUserEdit(): boolean {
     return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
+  }
+
+  public get CanUndo(): boolean {
+    return this.CanUserEdit && Boolean(this.session?.CanUndo);
+  }
+
+  public get CanRedo(): boolean {
+    return this.CanUserEdit && Boolean(this.session?.CanRedo);
+  }
+
+  public UndoDocument(): void {
+    if (!this.CanUndo || !this.session) {
+      return;
+    }
+    if (this.session.Undo()) {
+      this.cdr.markForCheck();
+    }
+  }
+
+  public RedoDocument(): void {
+    if (!this.CanRedo || !this.session) {
+      return;
+    }
+    if (this.session.Redo()) {
+      this.cdr.markForCheck();
+    }
+  }
+
+  @HostListener('keydown', ['$event'])
+  public OnViewerKeydown(event: KeyboardEvent): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const isMod = event.metaKey || event.ctrlKey;
+    if (!isMod || event.altKey) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    const target = event.target as HTMLElement | null;
+    const isModalOrCommentInput =
+      target !== null &&
+      (target.tagName === 'INPUT' ||
+        (target.tagName === 'TEXTAREA' && !target.classList.contains('mj-docs-source-editor')));
+    if (isModalOrCommentInput) {
+      return;
+    }
+    if (key === 'z' && !event.shiftKey) {
+      if (this.CanUndo) {
+        event.preventDefault();
+        this.UndoDocument();
+      }
+    } else if ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey && event.ctrlKey)) {
+      if (this.CanRedo) {
+        event.preventDefault();
+        this.RedoDocument();
+      }
+    }
   }
 
   /**
@@ -8486,8 +8706,26 @@ export class MarkdownArtifactViewerComponent
         this.NewBlockLabel = this.NewBlockQueryName;
       } else if (cmd.BlockType === 'Artifact') {
         this.NewBlockArtifactID = '';
-        this.NewBlockArtifactTypeName = 'Whiteboard';
-        this.NewBlockLabel = 'Embedded Artifact';
+        this.NewBlockArtifactTypeName = cmd.Command === '/sheet-chart' || cmd.Command === '/sheet-range' ? 'Spreadsheet' : 'Whiteboard';
+        this.NewBlockSheetMode =
+          cmd.Command === '/sheet-chart'
+            ? 'chart'
+            : cmd.Command === '/sheet-range'
+              ? 'range'
+              : 'full';
+        this.NewBlockSheetName = '';
+        this.NewBlockSheetChartID = '';
+        this.NewBlockSheetRange = 'A1:D8';
+        this.NewBlockPinToCurrentVersion = false;
+        this.SelectedWorkbookSheets = [];
+        this.SelectedArtifactLatestVersionID = '';
+        this.SelectedArtifactLatestVersionNumber = 0;
+        this.NewBlockLabel =
+          cmd.Command === '/sheet-chart'
+            ? 'Embedded Spreadsheet Chart'
+            : cmd.Command === '/sheet-range'
+              ? 'Embedded Spreadsheet Range'
+              : 'Embedded Artifact';
         void this.loadAvailableArtifactsForPicker();
       } else {
         this.NewBlockLabel = cmd.Label;
@@ -8539,7 +8777,16 @@ export class MarkdownArtifactViewerComponent
     } else if (block.Kind === 'Artifact') {
       this.NewBlockArtifactID = block.ArtifactID || '';
       this.NewBlockArtifactTypeName = block.ArtifactType || 'Whiteboard';
+      this.NewBlockSheetMode = block.SheetChartID ? 'chart' : block.SheetRange ? 'range' : 'full';
+      this.NewBlockSheetName = block.SheetID || '';
+      this.NewBlockSheetChartID = block.SheetChartID || '';
+      this.NewBlockSheetRange = block.SheetRange || 'A1:D8';
+      this.NewBlockPinToCurrentVersion = Boolean(block.VersionID);
+      this.SelectedWorkbookSheets = [];
       void this.loadAvailableArtifactsForPicker();
+      if (this.NewBlockArtifactID && this.IsSpreadsheetArtifactPickerSelected) {
+        void this.loadSelectedWorkbookSheets(this.NewBlockArtifactID);
+      }
     }
 
     this.cdr.markForCheck();
@@ -8713,7 +8960,83 @@ export class MarkdownArtifactViewerComponent
     this.NewBlockArtifactID = artOpt.ID;
     this.NewBlockArtifactTypeName = artOpt.Type || 'Whiteboard';
     this.NewBlockLabel = artOpt.Name;
+    if (this.IsSpreadsheetArtifactPickerSelected) {
+      if (this.NewBlockSheetMode === 'full' && !this.EditingBlockID) {
+        this.NewBlockSheetMode = 'chart';
+      }
+      void this.loadSelectedWorkbookSheets(artOpt.ID);
+    } else {
+      this.SelectedWorkbookSheets = [];
+    }
     this.cdr.markForCheck();
+  }
+
+  public get IsSpreadsheetArtifactPickerSelected(): boolean {
+    const t = (this.NewBlockArtifactTypeName || '').toLowerCase();
+    return t.includes('spreadsheet') || t.includes('sheet') || t.includes('workbook') || t.includes('excel');
+  }
+
+  public get SelectedWorkbookSheetCharts(): Array<{ ChartID: string; Title?: string; ChartType: string }> {
+    const ws =
+      this.SelectedWorkbookSheets.find((s) => s.SheetID === this.NewBlockSheetName || s.Name === this.NewBlockSheetName) ??
+      this.SelectedWorkbookSheets[0];
+    return (ws?.Charts ?? []).map((c) => ({
+      ChartID: c.ChartID,
+      Title: c.Title,
+      ChartType: c.ChartType,
+    }));
+  }
+
+  public SetSheetEmbedMode(mode: 'full' | 'chart' | 'range'): void {
+    this.NewBlockSheetMode = mode;
+    if (mode === 'chart' && !this.NewBlockSheetChartID && this.SelectedWorkbookSheetCharts.length > 0) {
+      this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnSelectedWorkbookSheetChanged(sheetName: string): void {
+    this.NewBlockSheetName = sheetName;
+    if (this.NewBlockSheetMode === 'chart' && this.SelectedWorkbookSheetCharts.length > 0) {
+      this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+    }
+    this.cdr.markForCheck();
+  }
+
+  private async loadSelectedWorkbookSheets(artifactId: string): Promise<void> {
+    const provider = this.getSafeProvider();
+    const user = this.getSafeCurrentUser();
+    if (!provider || !user || !artifactId) {
+      return;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(provider);
+      const res = await rv.RunView<MJArtifactVersionEntity>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        user,
+      );
+      const latest = res.Success ? res.Results?.[0] : undefined;
+      if (!latest) return;
+      this.SelectedArtifactLatestVersionID = latest.ID;
+      this.SelectedArtifactLatestVersionNumber = latest.VersionNumber ?? 1;
+      const wb = SpreadsheetEngine.Instance.ParseWorkbook(latest.Content || '{}');
+      this.SelectedWorkbookSheets = wb.Worksheets ?? [];
+      if (this.SelectedWorkbookSheets.length > 0 && !this.NewBlockSheetName) {
+        this.NewBlockSheetName = this.SelectedWorkbookSheets[0].SheetID;
+      }
+      if (this.NewBlockSheetMode === 'chart' && !this.NewBlockSheetChartID && this.SelectedWorkbookSheetCharts.length > 0) {
+        this.NewBlockSheetChartID = this.SelectedWorkbookSheetCharts[0].ChartID;
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      LogError(err);
+    }
   }
 
   public GetInsertModalTitle(): string {
@@ -8985,6 +9308,26 @@ export class MarkdownArtifactViewerComponent
           return;
         }
         descriptor.ArtifactID = artifactId;
+        if (this.IsSpreadsheetArtifactPickerSelected) {
+          if (this.NewBlockSheetMode !== 'full' && this.NewBlockSheetName.trim()) {
+            descriptor.SheetID = this.NewBlockSheetName.trim();
+          }
+          if (this.NewBlockSheetMode === 'chart' && this.NewBlockSheetChartID.trim()) {
+            descriptor.SheetChartID = this.NewBlockSheetChartID.trim();
+            descriptor.SheetRange = undefined;
+          } else if (this.NewBlockSheetMode === 'range' && this.NewBlockSheetRange.trim()) {
+            descriptor.SheetRange = this.NewBlockSheetRange.trim();
+            descriptor.SheetChartID = undefined;
+          } else {
+            descriptor.SheetChartID = undefined;
+            descriptor.SheetRange = undefined;
+          }
+          if (this.NewBlockPinToCurrentVersion && this.SelectedArtifactLatestVersionID) {
+            descriptor.VersionID = this.SelectedArtifactLatestVersionID;
+          } else if (!this.NewBlockPinToCurrentVersion) {
+            descriptor.VersionID = undefined;
+          }
+        }
       }
     }
 
@@ -9922,6 +10265,45 @@ export class MarkdownArtifactViewerComponent
    * Returns the loaded `MJArtifactVersionEntity` for an embedded OLE `Artifact` block, or `null`
    * while asynchronously fetching from `MJ: Artifact Versions` via `RunView` (or when unavailable).
    */
+  public GetNewerEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
+    const artifactId = block.ArtifactID?.trim();
+    const pinnedVersionId = block.VersionID?.trim();
+    if (!artifactId || !pinnedVersionId) {
+      return null;
+    }
+    const latest = this.latestArtifactVersions.get(artifactId);
+    if (!latest || UUIDsEqual(latest.ID, pinnedVersionId)) {
+      return null;
+    }
+    const current = this.GetEmbeddedArtifactVersion(block);
+    if (current && (latest.VersionNumber ?? 0) <= (current.VersionNumber ?? 0)) {
+      return null;
+    }
+    return latest;
+  }
+
+  public UpdateEmbeddedArtifactToLatestVersion(block: DocumentBlockSpec): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const newer = this.GetNewerEmbeddedArtifactVersion(block);
+    if (!newer) {
+      return;
+    }
+    const updatedDescriptor: DocumentBlockSpec = {
+      ...block,
+      VersionID: newer.ID,
+    };
+    const updatedRes = DocumentLiveBlockEngine.Instance.UpdateBlockInMarkdown(
+      this.MarkdownContent,
+      block.BlockID,
+      updatedDescriptor,
+    );
+    this.OnMarkdownChanged(updatedRes.Markdown);
+    this.StatusBannerMessage = `Updated ${block.Title || 'embedded workbook'} to v${newer.VersionNumber}.`;
+    this.cdr.markForCheck();
+  }
+
   public GetEmbeddedArtifactVersion(block: DocumentBlockSpec): MJArtifactVersionEntity | null {
     const artifactId = block.ArtifactID?.trim();
     if (!artifactId) {
@@ -9973,6 +10355,22 @@ export class MarkdownArtifactViewerComponent
         this.embeddedArtifactVersions.set(key, entity);
         if (!versionId && entity.ID) {
           this.embeddedArtifactVersions.set(this.getEmbeddedVersionCacheKey(artifactId, entity.ID), entity);
+          this.latestArtifactVersions.set(artifactId, entity);
+        } else if (versionId && !this.latestArtifactVersions.has(artifactId)) {
+          const latestRes = await rv.RunView<MJArtifactVersionEntity>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}'`,
+              OrderBy: 'VersionNumber DESC',
+              MaxRows: 1,
+              ResultType: 'entity_object',
+            },
+            user,
+          );
+          const latestEntity = latestRes.Success ? latestRes.Results?.[0] : undefined;
+          if (latestEntity) {
+            this.latestArtifactVersions.set(artifactId, latestEntity);
+          }
         }
         this.failedEmbeddedVersionMessages.delete(key);
       } else {
@@ -11354,6 +11752,16 @@ export class MarkdownArtifactViewerComponent
           return;
         }
         this.handleCollaborationMergeConflict(conflictEvt);
+      }),
+      this.session.CanUndo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
+      }),
+      this.session.CanRedo$.subscribe(() => {
+        if (!this.isComponentDestroyed) {
+          this.cdr.markForCheck();
+        }
       }),
     );
 
