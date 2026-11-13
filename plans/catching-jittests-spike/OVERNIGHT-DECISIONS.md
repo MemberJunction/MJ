@@ -245,6 +245,20 @@ Cuts that remain, each with a cost in catches or work that the user must weigh:
 - A cheaper first judge than Opus: not validated; the stored data only shows that an Opus Low is never reported.
 - Shorter test source in the judge input (12 000 characters now): changes what the judge sees.
 
+## N19. Phase 3 rehearsal (task 3.13) and the held-out run
+
+Rehearsal: all steps ran locally on PR #3831 with the real commands (select, the three jobs with bundles in three folders, comment, feedback, recheck). Nothing went to GitHub. 5 tests, 2 reported catches (all three judges High). Job 1 about 285 s, job 2 203 s, job 3 35 s, recheck 302 s. Spend 0.46 USD. One defect fixed with a failing test first: the mutant diff named its files by host folders (fix fc238f2e4f on the design branch). The record is `GATE2-REHEARSAL.md` on the local phase 3 branch.
+
+- Generator for the rehearsal. **A. Sonnet (as the plan said).** Pro: follows the plan. Con: not the model we keep; about 2 USD. **B. Hydrogen with the kept settings.** Pro: rehearses what would be deployed; 0.46 USD. Con: differs from the plan text. Choice: B.
+- Spend approval for the rehearsal. The plan asks for the user's approval of the figure. The overnight instruction covers it; ceiling set to 3 USD.
+
+Held-out run. The held-out slice has 15 bug PRs.
+
+- **A. All 15 now.** Pro: the full gate 1 figure. Con: about 25 USD and 4 hours; if the user changes the settings after reading this list (for example one package per PR), no unused held-out PR is left.
+- **B. The first 8 in corpus order, cap 16 USD.** Pro: a first held-out figure tonight; 7 PRs stay unused for the final settings; follows the user's earlier instruction to run half the PRs. Con: a smaller sample.
+- **C. No held-out run tonight.** Pro: nothing used. Con: no figure outside the tuning PRs.
+- **Choice: B.** No setting is changed after this run starts.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -261,3 +275,4 @@ Cuts that remain, each with a cost in catches or work that the user must weigh:
 | 7 | Smaller plan (N16 B): #4418, #4450, #4290, #3644, #5729 | 10.34 | 47.96 |
 | 8 | Smaller plan, low thinking: #3831, #4418, #4450 | 3.63 | 51.59 |
 | J | Judge-only rerun of the stored #4450 run (prompt cache check) | 0.34 | 51.93 |
+| R | Phase 3 rehearsal, PR #3831 (task 3.13) | 0.46 | 52.39 |
