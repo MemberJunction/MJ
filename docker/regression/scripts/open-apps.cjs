@@ -2,7 +2,8 @@
  * Installs the Open Apps pinned in docker/regression/open-apps.json, one step at a time:
  *
  *   node open-apps.cjs packages          Image build (no database). Builds the MJ CLI (concurrency 2,
- *                                        as the test-runner image needs), runs
+ *                                        as the test-runner image needs), points every workspace
+ *                                        @memberjunction package at its workspace copy, runs
  *                                        `mj app install <repo> --version <v> --packages-only` for
  *                                        each app, then fails if a workspace @memberjunction package
  *                                        now also has a registry copy.
@@ -25,6 +26,7 @@ const { spawnSync } = require('child_process');
 const LIST_PATH = process.env.OPEN_APPS_FILE || path.resolve(__dirname, '..', 'open-apps.json');
 const SECRET_PATH = '/run/secrets/github_token';
 const MJ_CLI = 'packages/MJCLI/bin/run.js';
+const ROOT_MANIFEST = 'package.json';
 
 /** Reads and checks the pinned list: an array of { repo, version }. */
 function readAppList() {
@@ -85,6 +87,22 @@ function workspacePackageNames(dir = 'packages', depth = 0, names = new Set()) {
 }
 
 /**
+ * Adds a `workspace:*` entry to the root `pnpm.overrides` for every workspace @memberjunction
+ * package, so the apps' dependencies and peers on those packages link to the workspace. App
+ * packages declare ranges such as `^6.1.2`, which a prerelease workspace version does not match.
+ */
+function linkWorkspacePackages() {
+    const manifest = JSON.parse(fs.readFileSync(ROOT_MANIFEST, 'utf8'));
+    const names = [...workspacePackageNames()].sort();
+    const pnpmSettings = manifest.pnpm || {};
+    const overrides = { ...(pnpmSettings.overrides || {}) };
+    for (const name of names) overrides[name] = 'workspace:*';
+    manifest.pnpm = { ...pnpmSettings, overrides };
+    fs.writeFileSync(ROOT_MANIFEST, JSON.stringify(manifest, null, 2) + '\n');
+    console.log(`Linked the ${names.length} workspace @memberjunction packages for the app install (pnpm.overrides).`);
+}
+
+/**
  * Fails when node_modules/.pnpm holds a registry copy (`@memberjunction+<name>@<version>…`) of a
  * workspace package. Workspace packages are linked, so any such entry is a second copy.
  */
@@ -118,6 +136,7 @@ function main() {
     const env = childEnv();
     if (step === 'packages') {
         run('pnpm', ['exec', 'turbo', 'build', '--concurrency=2', '--filter=@memberjunction/cli'], env);
+        linkWorkspacePackages();
         installAll(apps, '--packages-only', env);
         checkDuplicates();
     } else {
