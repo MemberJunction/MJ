@@ -49,6 +49,14 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
     return __globalObjectStore;
 }
 
+/**
+ * Returns `true` when executing in a browser environment (where the global `window` object is
+ * defined and non-null), and `false` in Node.js or other non-browser runtimes.
+ */
+export function IsBrowser(): boolean {
+    return typeof window !== 'undefined' && Boolean(window);
+}
+
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.

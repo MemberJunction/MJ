@@ -527,30 +527,28 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
      * 2) Automatically extract attributes from the Content field using the ExtractRules from the ArtifactType.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const isTrustedRollback = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this);
-        try {
-            const saveType: 'create' | 'update' = this.IsSaved ? 'update' : 'create';
-            const actor = this.ContextCurrentUser;
-            if (!isServerSystemUser(actor) && !isTrustedRollback) {
-                const provider = resolveMetadataProvider(this.ProviderToUse, actor);
-                if (!actor || !provider || !this.ArtifactID) {
-                    return this.recordPermissionFailure(
-                        saveType,
-                        'Permission denied: authenticated user context and target ArtifactID are required to save an artifact version.'
-                    );
-                }
-                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                    provider,
-                    this.ArtifactID,
-                    actor
+        const saveType: 'create' | 'update' = this.IsSaved ? 'update' : 'create';
+        const actor = this.ContextCurrentUser;
+        if (!isServerSystemUser(actor)) {
+            const provider = resolveMetadataProvider(this.ProviderToUse, actor);
+            if (!actor || !provider || !this.ArtifactID) {
+                return this.recordPermissionFailure(
+                    saveType,
+                    'Permission denied: authenticated user context and target ArtifactID are required to save an artifact version.'
                 );
-                if (!perms.CanEdit) {
-                    return this.recordPermissionFailure(
-                        saveType,
-                        `Permission denied: user '${actor.Email || actor.ID}' does not hold Edit permission on artifact '${this.ArtifactID}'.`
-                    );
-                }
             }
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                this.ArtifactID,
+                actor
+            );
+            if (!perms.CanEdit) {
+                return this.recordPermissionFailure(
+                    saveType,
+                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Edit permission on artifact '${this.ArtifactID}'.`
+                );
+            }
+        }
 
         const contentField = this.GetFieldByName('Content');
         const previousContentValue =
@@ -639,46 +637,34 @@ export class MJArtifactVersionEntityServer extends MJArtifactVersionEntity {
         }
 
         return saveResult;
-        } finally {
-            if (isTrustedRollback) {
-                ArtifactPermissionEngine.Instance.UnmarkTrustedServerVersionRollback(this);
-            }
-        }
     }
 
     /**
      * Enforces `ArtifactPermissionEngine` `CanDelete` on `this.ArtifactID` for non-system users (`Blocker 2`).
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const isTrustedRollback = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this);
-        try {
-            const actor = this.ContextCurrentUser;
-            if (!isServerSystemUser(actor) && !isTrustedRollback) {
-                const provider = resolveMetadataProvider(this.ProviderToUse, actor);
-                if (!actor || !provider || !this.ArtifactID) {
-                    return this.recordPermissionFailure(
-                        'delete',
-                        'Permission denied: authenticated user context and target ArtifactID are required to delete an artifact version.'
-                    );
-                }
-                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
-                    provider,
-                    this.ArtifactID,
-                    actor
+        const actor = this.ContextCurrentUser;
+        if (!isServerSystemUser(actor)) {
+            const provider = resolveMetadataProvider(this.ProviderToUse, actor);
+            if (!actor || !provider || !this.ArtifactID) {
+                return this.recordPermissionFailure(
+                    'delete',
+                    'Permission denied: authenticated user context and target ArtifactID are required to delete an artifact version.'
                 );
-                if (!perms.CanDelete) {
-                    return this.recordPermissionFailure(
-                        'delete',
-                        `Permission denied: user '${actor.Email || actor.ID}' does not hold Delete permission on artifact '${this.ArtifactID}'.`
-                    );
-                }
             }
-            return await super.Delete(options);
-        } finally {
-            if (isTrustedRollback) {
-                ArtifactPermissionEngine.Instance.UnmarkTrustedServerVersionRollback(this);
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                provider,
+                this.ArtifactID,
+                actor
+            );
+            if (!perms.CanDelete) {
+                return this.recordPermissionFailure(
+                    'delete',
+                    `Permission denied: user '${actor.Email || actor.ID}' does not hold Delete permission on artifact '${this.ArtifactID}'.`
+                );
             }
         }
+        return super.Delete(options);
     }
 
     /**

@@ -138,6 +138,7 @@
     "@memberjunction/feature-pipelines-engine": "6.3.0-edge.0",
     "@memberjunction/generic-database-provider": "6.3.0-edge.0",
     "@memberjunction/geo-core": "6.3.0-edge.0",
+    "@memberjunction/health": "6.3.0-edge.0",
     "@memberjunction/integration-actions": "6.3.0-edge.0",
     "@memberjunction/integration-engine": "6.3.0-edge.0",
     "@memberjunction/messaging-adapters": "6.3.0-edge.0",

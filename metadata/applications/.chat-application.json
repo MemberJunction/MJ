@@ -19,8 +19,8 @@
         "isDefault": true
       },
       {
-        "Label": "Collections",
-        "Icon": "fa-solid fa-folder-open",
+        "Label": "Library",
+        "Icon": "fa-solid fa-book-open",
         "ResourceType": "Custom",
         "DriverClass": "ChatCollectionsResource",
         "isDefault": false

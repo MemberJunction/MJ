@@ -852,6 +852,8 @@ export class RunViewGenericResultRow {
   Data: string;
 }
 
+export const FrozenRowSerializationCache = new WeakMap<object, Map<string, RunViewResultRow>>();
+
 @ObjectType()
 export class RunViewResult {
   @Field(() => [RunViewResultRow])
@@ -1104,7 +1106,7 @@ export class RunViewResolver extends ResolverBase {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
         const entity = input[index].EntityName ? provider.EntityByName(input[index].EntityName) : null;
 
-        const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
+        const returnData = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
         results.push({
           Results: returnData,
@@ -1529,24 +1531,48 @@ export class RunViewResolver extends ResolverBase {
     }
   }
 
-  protected processRawData(rawData: any[], entityId: string, entityInfo: EntityInfo): RunViewResultRow[] {
-    const returnResult = [];
+  protected processRawData(rawData: Record<string, unknown>[], entityId: string, entityInfo: EntityInfo): RunViewResultRow[] {
+    const returnResult: RunViewResultRow[] = [];
+    const pkFields = entityInfo?.PrimaryKeys ?? [];
+    const hasBinaryFields = entityInfo?.Fields ? entityInfo.Fields.some((f) => f.IsBinaryFieldType) : false;
+
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
 
+      if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
+        const cached = FrozenRowSerializationCache.get(row)?.get(entityId);
+        if (cached) {
+          returnResult.push(cached);
+          continue;
+        }
+      }
+
       // Build the primary key array from the entity's primary key fields
-      const primaryKey: KeyValuePairOutputType[] = entityInfo.PrimaryKeys.map(pk => ({
+      const primaryKey: KeyValuePairOutputType[] = pkFields.map(pk => ({
         FieldName: pk.Name,
-        Value: row[pk.Name]?.toString() || ''
+        Value: row[pk.Name] !== null && row[pk.Name] !== undefined ? String(row[pk.Name]) : ''
       }));
 
-      returnResult.push({
+      // Binary columns arrive as base64 from the providers; this is the safety net for any
+      // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
+      // Non-binary entities bypass ReplaceByteArraysWithBase64 entirely to avoid per-row clone allocations.
+      const rowForJson = hasBinaryFields ? ReplaceByteArraysWithBase64(row) : row;
+      const resultRow: RunViewResultRow = {
         PrimaryKey: primaryKey,
         EntityID: entityId,
-        // Binary columns arrive as base64 from the providers; this is the safety net for any
-        // row that still holds a byte array, which JSON.stringify would emit as {type,data}.
-        Data: JSON.stringify(ReplaceByteArraysWithBase64(row)),
-      });
+        Data: JSON.stringify(rowForJson),
+      };
+
+      if (row !== null && typeof row === 'object' && Object.isFrozen(row)) {
+        let entityMap = FrozenRowSerializationCache.get(row);
+        if (!entityMap) {
+          entityMap = new Map<string, RunViewResultRow>();
+          FrozenRowSerializationCache.set(row, entityMap);
+        }
+        entityMap.set(entityId, resultRow);
+      }
+
+      returnResult.push(resultRow);
     }
     return returnResult;
   }

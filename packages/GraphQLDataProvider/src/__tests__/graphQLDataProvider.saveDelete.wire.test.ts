@@ -1190,6 +1190,45 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             });
             expect(item.Vars).toEqual({ input: expect.objectContaining({ Name: 'Queued Co' }) });
         });
+
+        it('carries an update\'s OldValues on the queued TransactionItem so the group can send them', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+
+            expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
+
+            expect(GraphQLWire.Requests).toHaveLength(0);
+            expect(group.Pending[0].OperationType).toBe('Update');
+            expect(group.Pending[0].ExtraData.oldValues).toEqual([
+                { Key: 'ID', Value: 'CUST-0001' },
+                { Key: 'Name', Value: 'Old Name' },
+            ]);
+        });
+
+        it('carries no OldValues on a queued update when SkipOldValuesCheck is true', async () => {
+            class InspectableTransactionGroup extends GraphQLTransactionGroup {
+                public get Pending(): TransactionItem[] {
+                    return this.PendingTransactions;
+                }
+            }
+            const group = new InspectableTransactionGroup(provider);
+            const entity = loadedCustomer();
+            entity.TransactionGroup = group;
+            entity.Set('Name', 'New Name');
+            const options = new EntitySaveOptions();
+            options.SkipOldValuesCheck = true;
+
+            await provider.Save(entity, user, options);
+
+            expect(group.Pending[0].ExtraData.oldValues).toBeUndefined();
+        });
     });
 
     describe('Delete', () => {
