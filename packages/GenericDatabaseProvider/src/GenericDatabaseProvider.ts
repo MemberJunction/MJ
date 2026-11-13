@@ -233,6 +233,15 @@ interface QueryResultCacheSlot {
     PageKey(params: RunQueryParams): string;
 }
 
+/**
+ * The values a field-level concurrency check compares, keyed by field name: what the caller
+ * believes the database holds for each changed field, and what the save writes.
+ */
+interface ConcurrencyCheckValues {
+    baselineValues: Record<string, unknown>;
+    newValues: Record<string, unknown>;
+}
+
 /** The output columns a run must drop for its caller, and the description they were chosen from. */
 interface QueryColumnFilter {
     /** The description's key ({@link StatementMemo.KeyOf}). */
@@ -1200,8 +1209,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
             return true;
         }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        return this.runLockedConcurrencyCheck(entity, user, this.getEffectiveConcurrencyCheckMode(options), values, entityResult);
+    }
 
-        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+    protected override PrepareQueuedUpdateConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return null;
+        }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        if (Object.keys(values.baselineValues).length === 0) {
+            return null;
+        }
+        const mode = this.getEffectiveConcurrencyCheckMode(options);
+        return () => this.runLockedConcurrencyCheck(entity, user, mode, values, entityResult);
+    }
+
+    /**
+     * Collects, for each field the save changes, the value the caller believes the database holds
+     * (the `ConcurrencyBaseline` entry when one is supplied, otherwise the field's `OldValue`) and the
+     * value the save writes.
+     */
+    private collectConcurrencyCheckValues(entity: BaseEntity, options: EntitySaveOptions): ConcurrencyCheckValues {
         const baselineValues: Record<string, unknown> = {};
         const newValues: Record<string, unknown> = {};
 
@@ -1235,7 +1269,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 newValues[f.Name] = entityField.Value;
             }
         }
+        return { baselineValues, newValues };
+    }
 
+    /**
+     * Reads the stored values of the changed columns under a row lock held by the current
+     * transaction, and compares them with the caller's baseline. A conflict is logged; in
+     * `'enforce'` mode it also fails `entityResult` and returns `false`.
+     */
+    private async runLockedConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        effectiveMode: ConcurrencyCheckMode,
+        values: ConcurrencyCheckValues,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        const { baselineValues, newValues } = values;
         const columnsToRead = Object.keys(baselineValues);
         if (columnsToRead.length === 0) {
             return true;
