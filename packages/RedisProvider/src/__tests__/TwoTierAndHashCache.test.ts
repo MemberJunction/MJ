@@ -895,6 +895,19 @@ describe('TwoTierAndHashCache (Wave 4.4)', () => {
             expect(Object.isFrozen(otherHit!.Results[0].Results)).toBe(true);
             expect(Object.isFrozen(otherHit!.Results[0].Results[0])).toBe(true);
 
+            // 3. Without DatasetName the key decides: a filtered MJ_Metadata key is exempt, a longer name is not
+            const unnamed = () => ({ Results: [{ Code: 'Entities', Results: [{ ID: 'e-2', Name: 'Beta' }] }] });
+            const filteredKey = '__MJ_conn__DATASET__MJ_Metadata{"Queries":"1=0"}';
+            const longerKey = '__MJ_conn__DATASET__MJ_Metadata_Extended';
+            await twoTier.SetItem(filteredKey, unnamed(), 'DatasetCache');
+            await twoTier.SetItem(longerKey, unnamed(), 'DatasetCache');
+
+            const filteredHit = await twoTier.GetItem<ReturnType<typeof unnamed>>(filteredKey, 'DatasetCache');
+            const longerHit = await twoTier.GetItem<ReturnType<typeof unnamed>>(longerKey, 'DatasetCache');
+
+            expect(Object.isFrozen(filteredHit!.Results[0].Results)).toBe(false);
+            expect(Object.isFrozen(longerHit!.Results[0].Results)).toBe(true);
+
             twoTier.Dispose();
         });
     });

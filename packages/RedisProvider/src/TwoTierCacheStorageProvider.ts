@@ -83,6 +83,13 @@ export function DeepFreeze<T>(obj: T, visited: WeakSet<object> = new WeakSet()):
 }
 
 /**
+ * A dataset cache key for MJ_Metadata: the name is followed by the end of the key or by the item-filter
+ * suffix (`{...}`) a scoped metadata reload adds. A longer dataset name such as `MJ_Metadata_Extended`
+ * does not match.
+ */
+const MJ_METADATA_DATASET_KEY = /__DATASET__MJ_Metadata(?:\{|$)/;
+
+/**
  * Returns `true` when an L1 cache entry represents provider-internal metadata scaffolding
  * that is exempt from freeze-on-write (mirroring `LocalCacheManager`'s
  * `ProviderInternalScaffolding` contract and `cache-immutability.F14`).
@@ -98,7 +105,7 @@ function isFreezeExempt<T>(category: string, key: string, value: T): boolean {
         if ('DatasetName' in value && value.DatasetName === 'MJ_Metadata') {
             return true;
         }
-        return key.includes('__DATASET__MJ_Metadata');
+        return MJ_METADATA_DATASET_KEY.test(key);
     }
     return false;
 }

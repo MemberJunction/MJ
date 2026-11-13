@@ -1,5 +1,6 @@
 ---
 '@memberjunction/core': patch
+'@memberjunction/global': patch
 '@memberjunction/redis-provider': patch
 ---
 
