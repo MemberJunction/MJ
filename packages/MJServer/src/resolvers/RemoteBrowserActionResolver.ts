@@ -922,6 +922,49 @@ export class RemoteBrowserActionResolver extends ResolverBase {
   }
 
   /**
+   * Resizes the already-open remote browser page's viewport in place to match the client drawer's usable
+   * area, then pushes a fresh screencast frame. Ownership-gated.
+   *
+   * Never navigates, reloads, or launches a new browser: when no browser is currently open for the scope
+   * (or the dimensions are non-positive), resolves `false`.
+   *
+   * @param agentSessionID The `AIAgentSession` id or `Conversation` id the browser is bound to.
+   * @param width Target viewport width in CSS pixels.
+   * @param height Target viewport height in CSS pixels.
+   * @param instanceKey Optional multi-tab instance key.
+   * @returns `true` when an open browser session was resized, else `false`.
+   */
+  @Mutation(() => Boolean)
+  async ResizeRemoteBrowserViewport(
+    @Arg('agentSessionID', () => String) agentSessionID: string,
+    @Arg('width', () => Int) width: number,
+    @Arg('height', () => Int) height: number,
+    @Ctx() { userPayload, providers }: AppContext,
+    @Arg('instanceKey', () => String, { nullable: true }) instanceKey?: string,
+  ): Promise<boolean> {
+    const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
+    await this.loadOwnedSession(agentSessionID, contextUser, provider, instanceKey);
+
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      return false;
+    }
+
+    const liveSession = RemoteBrowserEngine.Instance.GetSessionForAgentSession(agentSessionID, instanceKey);
+    if (!liveSession || !liveSession.ResizeViewport) {
+      return false;
+    }
+
+    try {
+      await liveSession.ResizeViewport(width, height);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`ResizeRemoteBrowserViewport failed (${width}x${height}): ${message}`);
+      return false;
+    }
+  }
+
+  /**
    * Returns the remote page's CURRENT text selection — the copy-out half of human clipboard support. The
    * viewer captures a local `copy` / Cmd+C, calls this to read what the human selected on the live page, and
    * writes the result to the LOCAL clipboard (sidestepping the isolated remote clipboard, the mirror of the
