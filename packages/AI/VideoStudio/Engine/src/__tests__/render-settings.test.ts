@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as mjCore from '@memberjunction/core';
 import {
+    BuildDefaultAudioSettings,
     DEFAULT_DOCKER_CPUS,
     DEFAULT_DOCKER_MEMORY_MB,
     DEFAULT_DOCKER_PIDS_LIMIT,
@@ -14,6 +15,7 @@ import {
     DEFAULT_RENDER_STARTUP_TIMEOUT_MS,
     DEFAULT_RENDER_TIMEOUT_MS,
     DEFAULT_VIDEO_RENDER_DRIVER,
+    ReadAudioSettings,
     ReadVideoRenderSettings,
     ReadVideoStudioOutputSettings,
     VIDEO_STUDIO_INLINE_MAX_BYTES,
@@ -99,6 +101,7 @@ describe('ReadVideoRenderSettings', () => {
             },
             Remote: {},
             Docker: DEFAULT_DOCKER_SETTINGS,
+            Audio: BuildDefaultAudioSettings(),
         });
     });
 
@@ -119,6 +122,7 @@ describe('ReadVideoRenderSettings', () => {
             Local: {},
             Remote: {},
             Docker: DEFAULT_DOCKER_SETTINGS,
+            Audio: BuildDefaultAudioSettings(),
         });
     });
 
@@ -164,8 +168,52 @@ describe('ReadVideoRenderSettings', () => {
             Local: {},
             Remote: {},
             Docker: DEFAULT_DOCKER_SETTINGS,
+            Audio: BuildDefaultAudioSettings(),
         });
         expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('reads videoStudio.render.workers and videoStudio.render.audio, keeping defaults for omitted and invalid values', async () => {
+        const warnSpy = vi.spyOn(mjCore, 'LogWarning').mockImplementation(() => undefined);
+        const dir = await makeTempDir();
+        const configContent = `module.exports = {
+            videoStudio: {
+                render: {
+                    workers: 3,
+                    audio: {
+                        ducking: { duckDb: -9, attackMs: 50, releaseMs: 600 },
+                        loudness: { integratedLufs: -16, truePeakDb: -1, lra: 'wide' },
+                        checks: { minNarrationToMusicDb: 12 },
+                    },
+                },
+            },
+        };\n`;
+        await fs.writeFile(path.join(dir, 'mj.config.cjs'), configContent, 'utf8');
+
+        const settings = ReadVideoRenderSettings(dir);
+        const defaults = BuildDefaultAudioSettings();
+        expect(settings.Workers).toBe(3);
+        expect(settings.Audio).toEqual({
+            Ducking: { Enabled: true, DuckDb: -9, AttackSeconds: 0.05, ReleaseSeconds: 0.6 },
+            Loudness: { Enabled: true, IntegratedLufs: -16, TruePeakDb: -1, LoudnessRangeLu: defaults.Loudness.LoudnessRangeLu },
+            Checks: { ...defaults.Checks, MinNarrationToMusicDb: 12 },
+        });
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('videoStudio.render.audio.loudness.lra'));
+    });
+
+    it('ReadAudioSettings defaults to -7.5 dB ducking (80 ms / 400 ms) and -14 LUFS / -1.5 dBTP / LRA 11', () => {
+        expect(ReadAudioSettings(undefined)).toEqual({
+            Ducking: { Enabled: true, DuckDb: -7.5, AttackSeconds: 0.08, ReleaseSeconds: 0.4 },
+            Loudness: { Enabled: true, IntegratedLufs: -14, TruePeakDb: -1.5, LoudnessRangeLu: 11 },
+            Checks: {
+                LoudnessToleranceLu: 1.5,
+                MinNarrationToMusicDb: 10,
+                TruePeakToleranceDb: 0.5,
+                MinLinePauseSeconds: 0.15,
+                SilenceThresholdDb: -45,
+            },
+        });
+        expect(ReadAudioSettings({ loudness: { enabled: false } }).Loudness.Enabled).toBe(false);
     });
 
     it('reads videoStudio.render.docker from mj.config.cjs', async () => {

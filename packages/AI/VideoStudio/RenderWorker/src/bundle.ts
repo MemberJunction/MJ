@@ -537,6 +537,14 @@ async function stageBundledDefaultFonts(rootDir: string): Promise<void> {
     }
 }
 
+/**
+ * Resolves a bundle-relative path inside `rootDir`, throwing `InvalidBundle` when it is malformed or
+ * escapes the bundle directory.
+ */
+export function ResolveInsideBundleRoot(rootDir: string, relPath: string): string {
+    return resolveInsideRoot(rootDir, relPath);
+}
+
 function resolveInsideRoot(rootDir: string, relPath: string): string {
     ValidateBundleRelativePath(relPath, relPath);
     const resolvedRoot = path.resolve(rootDir);

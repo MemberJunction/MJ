@@ -344,6 +344,20 @@ export interface VideoStyleGuide {
     Avoid: string[];
     /** Structured takeaways and `DoNotCopy` lists from inspected reference media. */
     References: ReferenceAnalysis[];
+    /** Optional sound direction from the Art Director, which the Storyboard turns into `Audio` (§8). */
+    Sound?: VideoSoundDirection;
+}
+
+/**
+ * Art Director's sound direction (§8). The Storyboard owns `Audio` and carries this into it: a requested
+ * synthesized bed becomes `Audio.Music.Synthesized` when no licensed track is set, and the notes guide
+ * where `Sfx` cues go.
+ */
+export interface VideoSoundDirection {
+    /** Requested opt-in synthesized music bed, used only when no licensed music track is supplied. */
+    SynthesizedMusic?: VideoSynthesizedMusicSpec;
+    /** Sound-design intent (e.g., 'one whoosh per scene change, soft ticks on counting numbers'). */
+    Notes?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,8 +536,29 @@ export interface NarrationLine {
     StartSeconds?: number;
     /** Measured clip duration in seconds used to fit the beat's length. */
     DurationSeconds?: number;
-    /** Optional word-level alignment timings driving captions and audio cues. */
+    /**
+     * Optional word-level alignment timings driving captions, audio cues, and word-anchored visuals.
+     * Words are the line's display words (`Text` after placeholder substitution), even when the
+     * spoken text differs because of pronunciation normalization (see `SpokenText`).
+     */
     WordTimings?: NarrationWordTiming[];
+    /**
+     * Text actually sent to TTS after `{BindingKey}` substitution and pronunciation normalization
+     * (e.g., 'A.I.' becomes 'AI'). Set by Pre-Production only when it differs from the display text.
+     * Captions and on-screen copy always use `Text`, never `SpokenText`.
+     */
+    SpokenText?: string;
+    /**
+     * Optional silence in seconds before this line starts (0 to 3). Replaces the default 0.3 s lead-in
+     * for the first line of a beat, or the default 0.2 s gap before any later line. Use sparingly
+     * for dramatic beats, such as a pause before a reveal.
+     */
+    PauseBeforeSeconds?: number;
+    /**
+     * Optional silence in seconds after this line ends (0 to 3). Replaces the default 0.5 s tail
+     * for the last line of a beat, or the default 0.2 s gap after any earlier line.
+     */
+    PauseAfterSeconds?: number;
 }
 
 /**
@@ -541,14 +576,45 @@ export interface VideoNarrationSpec {
 }
 
 /**
- * Licensed background music configuration and optional beat grid (§8).
+ * Overall feel of a synthesized music bed.
+ */
+export type SynthesizedMusicMood =
+    | 'Calm'        // Soft major-key pad, gentle pulse; neutral explainers
+    | 'Uplifting'   // Bright major progression with a steady pulse; launches and good news
+    | 'Corporate'   // Clean, confident major progression; product and business films
+    | 'Reflective'  // Warm minor-leaning progression, slow pulse; stories and testimonials
+    | 'Tense';      // Dark minor progression with a firmer pulse; problem statements and risks
+
+/**
+ * Procedurally synthesized background music bed, rendered deterministically by the render worker
+ * when no licensed track is supplied (§8). Opt-in only. It is disclosed as synthesized audio in
+ * `Review.HumanReviewNotes` and in the Critic's timeline, and it is never presented as a licensed track.
+ */
+export interface VideoSynthesizedMusicSpec {
+    /** Overall feel, which selects the chord progression and pulse pattern. */
+    Mood: SynthesizedMusicMood;
+    /** Tempo in beats per minute (60 to 140). */
+    Bpm: number;
+    /** Optional tonal center such as 'C', 'F#', 'Bb', or 'Am' (defaults by mood). */
+    Key?: string;
+}
+
+/**
+ * Background music configuration (§8): either a licensed track from `Assets.Approved`, or an
+ * opt-in synthesized bed. When both are set, the licensed track wins.
  */
 export interface VideoMusicSpec {
-    /** Key in `Assets.Approved` pointing to a licensed music track. */
-    AssetKey: string;
+    /** Key in `Assets.Approved` pointing to a licensed music track (wins over `Synthesized`). */
+    AssetKey?: string;
+    /** Opt-in synthesized music bed used when no licensed track (`AssetKey`) is supplied. */
+    Synthesized?: VideoSynthesizedMusicSpec;
     /** Optional array of musical beat timestamps in seconds for cut and cue alignment. */
     BeatGrid?: number[];
-    /** Optional mix level in dB under narration (e.g., -18). */
+    /**
+     * Optional base music level in dB relative to full scale (e.g., -15). When omitted the worker uses
+     * about -15 dB with narration and about -2 dB without. Music is ducked automatically under every
+     * narration line on top of this level.
+     */
     GainDb?: number;
 }
 
@@ -562,6 +628,17 @@ export type AudioCueKind =
     | 'Silence';    // Intentional breath or pause on the audio timeline
 
 /**
+ * Standard procedurally synthesized sound effect, usable from an `'Sfx'` cue without a licensed asset.
+ */
+export type AudioSynthKind =
+    | 'Whoosh'  // Filtered air sweep for transitions and fast moves (about 0.8 s)
+    | 'Click'   // Short UI click for buttons and selections
+    | 'Tick'    // Bright tick for counters, list items, and checkmarks
+    | 'Impact'  // Low boom with a soft tail for reveals and hard cuts
+    | 'Chime'   // Bell-like chime for success states and end cards
+    | 'Riser';  // Rising noise sweep that ENDS at `TimestampSeconds` (length from `DurationSeconds`, default 1.5 s)
+
+/**
  * Timestamped sound effect or mix event on the same timeline as the picture (§8).
  */
 export interface AudioCue {
@@ -571,8 +648,20 @@ export interface AudioCue {
     TimestampSeconds: number;
     /** Type of audio event or mix change. */
     Kind: AudioCueKind;
-    /** Optional key in `Assets.Approved` when `Kind` is `'Sfx'`. */
+    /** Optional key in `Assets.Approved` when `Kind` is `'Sfx'` (a licensed sound file; wins over `Synth`). */
     AssetKey?: string;
+    /** Optional synthesized sound effect when `Kind` is `'Sfx'` and no `AssetKey` is supplied. */
+    Synth?: AudioSynthKind;
+    /**
+     * Optional span in seconds: how long a `'MusicDuck'` or `'MusicSwell'` holds (default 2 s), or the
+     * length of a synthesized `'Riser'` (default 1.5 s).
+     */
+    DurationSeconds?: number;
+    /**
+     * Optional level change in dB: the duck depth for `'MusicDuck'` (default -7.5, range -30 to 0), the
+     * boost for `'MusicSwell'` (default +3, range 0 to 12), or the effect level for `'Sfx'` (range -30 to 6).
+     */
+    GainDb?: number;
     /** Optional `VideoBeat.Key` associated with this cue for sync review. */
     BeatKey?: string;
     /** Mix or sync intent notes for the critic's "close your eyes" check. */
@@ -863,6 +952,24 @@ export interface VideoRenderMetadataSummary {
     DurationByFormat: Partial<Record<VideoFormat, number>>;
     /** ISO-8601 timestamp when the final render completed. */
     RenderedAt: string;
+    /** Measured audio of each delivered format (loudness, peaks, narration-to-music ratio, synthesized sources). */
+    AudioByFormat?: Partial<Record<VideoFormat, VideoRenderedAudioSummary>>;
+}
+
+/**
+ * Measured audio of one delivered format, recorded by Render after the worker's mix and loudness pass.
+ */
+export interface VideoRenderedAudioSummary {
+    /** Integrated loudness of the delivered mix in LUFS. */
+    IntegratedLufs?: number;
+    /** True peak of the delivered mix in dBTP. */
+    TruePeakDb?: number;
+    /** Loudness range of the delivered mix in LU. */
+    LoudnessRangeLu?: number;
+    /** Lowest narration-to-music ratio across narration lines, in dB. */
+    MinNarrationToMusicDb?: number;
+    /** Human-readable descriptions of procedurally synthesized music and sound effects in the mix (disclosure). */
+    Synthesized: string[];
 }
 
 /**

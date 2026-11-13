@@ -2,6 +2,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     DescribeGeneratedAssets,
+    DescribeSynthesizedAudio,
     type VideoDefect,
     type VideoGenerationSpec,
 } from '@memberjunction/video-studio-core';
@@ -13,6 +14,7 @@ import {
  * - Deferred defects from the newest critic round (`Deferred defects (n)` with one line per defect),
  *   or `No open defects.` when none remain.
  * - Generated asset disclosure when `Assets.Approved` contains generated assets.
+ * - Synthesized audio disclosure when the soundtrack uses a procedurally synthesized music bed or effects.
  * - Inline storage warning (`Storage`) when any `Output.Videos` entry uses `InlineBase64`.
  */
 export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): string {
@@ -50,6 +52,11 @@ export function ComposeHumanReviewNotes(spec: Partial<VideoGenerationSpec>): str
             return `- ${item.Key} (${item.Kind}, ${secondsPart}): beats [${beatsPart}], model ${modelLabel}, ${c2paLabel}`;
         });
         sections.push([`AI-generated assets (${disclosure.Items.length})`, ...lines].join('\n'));
+    }
+
+    const synthesizedAudio = DescribeSynthesizedAudio(spec);
+    if (synthesizedAudio.length > 0) {
+        sections.push(['Synthesized audio', ...synthesizedAudio.map((line) => `- ${line}`)].join('\n'));
     }
 
     const videos = spec.Output?.Videos ?? {};

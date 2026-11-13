@@ -17,6 +17,22 @@ module.exports = {
     render: {
       // 'LocalWorker' (default) | 'Remote' (VS-RND-3) | 'Docker' (VS-RND-4)
       driver: 'LocalWorker',
+      // Optional parallel HyperFrames capture workers per render, sent as RenderRequest.Workers.
+      // Omit to let the worker choose (VIDEO_STUDIO_RENDER_WORKERS, else half its CPUs, 1-4; Docker: --cpus).
+      // The worker clamps it to its CPU count and 8.
+      // workers: 4,
+      // Optional soundtrack settings sent with every render in RenderRequest.AudioMix (defaults shown).
+      audio: {
+        ducking: { enabled: true, duckDb: -7.5, attackMs: 80, releaseMs: 400 },   // music under narration
+        loudness: { enabled: true, integratedLufs: -14, truePeakDb: -1.5, lra: 11 }, // final loudnorm target
+        checks: {
+          loudnessToleranceLu: 1.5,     // MJ_AUDIO_LOUDNESS
+          minNarrationToMusicDb: 10,    // MJ_AUDIO_NARRATION_MASKED
+          truePeakToleranceDb: 0.5,     // MJ_AUDIO_TRUE_PEAK
+          minLinePauseSeconds: 0.15,    // MJ_AUDIO_LINE_PAUSE
+          silenceThresholdDb: -45,
+        },
+      },
       // Maximum output payload size in bytes for MP4 downloads (/videos/<VideoID>) and image-carrying JSON responses (/stills, /contact-sheet, /keyframes, which also stop at buffer.constants.MAX_STRING_LENGTH even when maxOutputBytes is higher); non-image JSON responses (/health, /check), NDJSON lines, and error bodies are capped at 1 MiB (512 MiB default)
       maxOutputBytes: 536870912,
       timeouts: {
@@ -110,5 +126,9 @@ docker run --rm -p 127.0.0.1:18080:8080 \
 - **Response size caps (`maxOutputBytes` vs `1 MiB`):** `RenderWorkerHttpClient` (used by both `RemoteRenderDriver` and `LocalWorkerRenderDriver`) caps `/health`, `/check`, NDJSON stream lines on `/render`, and all non-2xx error response bodies at `1 MiB` (`1,048,576` bytes), while capping successful `2xx` image-carrying JSON response bodies (`/stills`, `/contact-sheet`, `/keyframes`) at `Math.min(maxOutputBytes, buffer.constants.MAX_STRING_LENGTH)` (so JSON bodies always stop at V8's string limit `buffer.constants.MAX_STRING_LENGTH`, `536,870,888` bytes on 64-bit Node, even when `maxOutputBytes` is higher) and streamed MP4 downloads (`/videos/<VideoID>`, additionally verified against any claimed `VideoSizeBytes`) at `videoStudio.render.maxOutputBytes` (`512 MiB` / `536,870,912` bytes default). Responses exceeding their cap abort the socket stream immediately and reject with `BodyTooLarge`.
 - **Scaling & replica affinity:** Each worker runs one render job at a time by default (`VIDEO_STUDIO_RENDER_CONCURRENCY=1`) and keeps rendered MP4 bytes in memory inside that replica's ephemeral store until the immediate `GET /videos/<VideoID>` fetch completes. Both `POST /render` and `GET /videos/<VideoID>` for a job **must** reach the same worker replica (`RenderWorkerHttpClient` stores no cookies, so cookie stickiness and per-request load balancing lose the video with `NotFound`). The supported way to scale a pool is to list each worker replica URL in `videoStudio.render.remote.urls` (`urls` takes precedence if both `url` and `urls` are configured): `RemoteRenderDriver` selects one worker URL per job (round-robin) and pins both `POST /render` and `GET /videos/<VideoID>` to that same worker with no load balancer required, while `Health()` probes every worker in `urls` without advancing the job rotation and returns `Healthy: true` only when all workers are healthy. If you place a load balancer in front of multiple workers under a single `videoStudio.render.remote.url`, configure client-IP affinity (e.g., Kubernetes Service `sessionAffinity: ClientIP` or nginx `ip_hash`) so all requests from an MJAPI host reach the same replica.
 
+## Audio (§8)
 
-
+- **Soundtrack plan.** `BuildRenderAudioMix(spec, durationSeconds, settings.Audio)` turns `Audio` into the `RenderRequest.AudioMix` the worker mixes from: staged narration clips at their master-timeline starts, music (a licensed `Audio.Music.AssetKey`, else an opt-in `Audio.Music.Synthesized` bed) ducked under every line, `Sfx` cues (staged files or `Synth` kinds), and `MusicDuck` / `MusicSwell` events (`GainDb`, `DurationSeconds`). The render agent sends it with every render, fails the step on any audio check `Error` the worker returns (before the critic runs), and records each format's loudness, true peak, narration-to-music ratio, and synthesized sources in `Output.RenderMetadata.AudioByFormat`. Synthesized sources are also disclosed in `Review.HumanReviewNotes` and the critic's timeline.
+- **Pronunciation.** Before TTS, every narration line goes through `NormalizeNarrationText` (`narration/pronunciation.ts`): built-in rewrites (upper-case dotted acronyms such as `A.I.` → `AI`, `e.g.`, `i.e.`, `vs.`, `&`) plus the brand kit voice's `PronunciationNotes`, one `Written => Spoken` rule per line (`->` and `→` also work; lines without an arrow are notes for humans). The text sent to TTS is stored as `NarrationLine.SpokenText`; captions keep `Text`, and word timings are mapped back onto the display words.
+- **Pauses.** `NarrationLine.PauseBeforeSeconds` / `PauseAfterSeconds` (0 to 3 s) replace the default 0.3 s lead-in, 0.2 s gap, or 0.5 s tail on that side of the line (`ResolveBeatLinePauses`); two explicit sides of one gap add up. Unset, timing is unchanged.
+- **Word-anchored visuals.** Every bundle stages `mj/narration-cues.js` (word timings) and loads it from the entry file. Compositions call `window.mjCue('<line key>', '<word or phrase>', nth?)` for the second the word is spoken. `CheckProductionRules` fails a literal call that names an unknown line or a word the line never says (`UnresolvedNarrationCue`).

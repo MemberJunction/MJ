@@ -8,7 +8,7 @@ import {
 import { DockerRenderDriver } from './docker-render-driver.js';
 import { LocalWorkerRenderDriver } from './local-worker-render-driver.js';
 import { RemoteRenderDriver } from './remote-render-driver.js';
-import { ReadVideoRenderSettings } from './render-settings.js';
+import { ReadVideoRenderSettings, type VideoRenderSettings } from './render-settings.js';
 import {
     VideoRenderDriverBase,
     VideoRenderError,
@@ -44,6 +44,7 @@ export function ResetLocalWorkerWarningState(): void {
 export class VideoRenderEngine extends BaseSingleton<VideoRenderEngine> implements IShutdownable {
     private driver: VideoRenderDriverBase | null = null;
     private settingsSearchFrom?: string;
+    private settings: VideoRenderSettings | null = null;
 
     public readonly ShutdownName = 'VideoRenderEngine';
 
@@ -57,6 +58,17 @@ export class VideoRenderEngine extends BaseSingleton<VideoRenderEngine> implemen
      */
     public static get Instance(): VideoRenderEngine {
         return super.getInstance<VideoRenderEngine>();
+    }
+
+    /**
+     * The `videoStudio.render` settings (read once from `mj.config.cjs` and cached): the render agent reads
+     * the capture worker count and the soundtrack settings from here.
+     */
+    public get Settings(): VideoRenderSettings {
+        if (!this.settings) {
+            this.settings = ReadVideoRenderSettings(this.settingsSearchFrom);
+        }
+        return this.settings;
     }
 
     /**
@@ -109,6 +121,7 @@ export class VideoRenderEngine extends BaseSingleton<VideoRenderEngine> implemen
      */
     public SetSettingsSearchDir(searchFrom?: string): void {
         this.settingsSearchFrom = searchFrom;
+        this.settings = null;
     }
 
     /**

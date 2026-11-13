@@ -2,6 +2,9 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
+    ClampRenderCaptureWorkers,
+    DefaultRenderCaptureWorkers,
+    RENDER_WORKER_ENV,
     VIDEO_FORMATS,
     type CapturedStill,
     type CheckIssue,
@@ -340,9 +343,30 @@ export interface RunRenderJobOptions extends RunJobCommonOptions {
 }
 
 /**
+ * Resolves how many parallel HyperFrames capture workers a render uses: the request's `Workers`, else
+ * `VIDEO_STUDIO_RENDER_WORKERS`, else {@link DefaultRenderCaptureWorkers} for the host, always clamped to
+ * `[1, min(cpuCount, MAX_RENDER_CAPTURE_WORKERS)]`. HyperFrames' `workers` option splits the frame range
+ * across that many headless Chromium sessions and concatenates the segments, so it is the right lever.
+ */
+export function ResolveRenderCaptureWorkers(
+    requested: number | undefined,
+    env: Readonly<Record<string, string | undefined>> = process.env,
+    cpuCount: number = typeof os.availableParallelism === 'function' ? os.availableParallelism() : os.cpus().length,
+): number {
+    const fromRequest = ClampRenderCaptureWorkers(requested, cpuCount);
+    if (fromRequest !== undefined) {
+        return fromRequest;
+    }
+    const rawEnv = env[RENDER_WORKER_ENV.Workers]?.trim();
+    const fromEnv = rawEnv ? ClampRenderCaptureWorkers(Number(rawEnv), cpuCount) : undefined;
+    return fromEnv ?? DefaultRenderCaptureWorkers(cpuCount);
+}
+
+/**
  * Executes a `/render` job: stages the bundle, enforces the lint gate, injects the CSP and
- * `window.MJVideo` preamble, renders the MP4 via `backend.Render`, probes the output, and
- * returns a `RenderResult`.
+ * `window.MJVideo` preamble, renders the MP4 via `backend.Render` with the resolved capture worker
+ * count, finalizes the soundtrack via `backend.FinalizeAudio` (mix plan, loudness normalization,
+ * audio checks), probes the delivered file, and returns a `RenderResult`.
  */
 export async function RunRenderJob(
     req: RenderRequest,
@@ -391,6 +415,7 @@ export async function RunRenderJob(
             }
         }
 
+        const workers = ResolveRenderCaptureWorkers(req.Workers);
         const rendered = await backend.Render(
             {
                 RootDir: staged.RootDir,
@@ -400,13 +425,23 @@ export async function RunRenderJob(
                 Fps: req.Fps,
                 DurationSeconds: req.DurationSeconds,
                 Quality: req.Quality,
+                Workers: workers,
             },
             onProgress,
             signal,
         );
 
-        const videoBytes = await fs.readFile(rendered.OutputPath);
-        const probe = await backend.Probe(rendered.OutputPath);
+        const finalized = await backend.FinalizeAudio(
+            {
+                RootDir: staged.RootDir,
+                VideoPath: rendered.OutputPath,
+                DurationSeconds: req.DurationSeconds,
+                ...(req.AudioMix ? { Plan: req.AudioMix } : {}),
+            },
+            signal,
+        );
+        const videoBytes = await fs.readFile(finalized.OutputPath);
+        const probe = await backend.Probe(finalized.OutputPath);
         const rendererVersion = backend.GetRendererVersion();
 
         return {
@@ -421,6 +456,8 @@ export async function RunRenderJob(
             HasAudio: probe.HasAudio,
             RendererVersion: rendererVersion,
             RenderDurationMs: Math.max(1, Date.now() - startMs),
+            Workers: workers,
+            Audio: finalized.Report,
         };
     } finally {
         await staged.Cleanup();
