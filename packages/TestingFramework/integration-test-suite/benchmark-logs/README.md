@@ -15,9 +15,10 @@ Whenever the `performance-benchmark` bundle executes (either as part of the full
 
 - `MJ_PERF_BENCHMARK_LOG_DIR`: Override the output directory for persistent logs (defaults to `packages/TestingFramework/integration-test-suite/benchmark-logs`).
 - `MJ_PERF_BENCHMARK_OUT`: Optional file path to write an additional JSON report copy (e.g., `/tmp/pass2-benchmark.json`).
-- `RUN_AGENT_TESTS=1`: Include live-model agent benchmarks (`PB10`–`PB12`) in addition to the deterministic primitive (`PB1`–`PB6`, `PB13`) and deterministic `TestLLM` multi-turn agent (`PB7`–`PB9`) benchmarks.
+- `MJ_PERF_STRICT_TIMING=1`: Treat timing variances exceeding `+35%` over `wave4-baseline.json` as hard `FAIL` assertions in `PB18` (by default on shared CI VMs, timing variances emit GitHub Actions `::warning::` annotations while structural/algorithmic invariants and speedup ratios remain hard failure gates).
+- `RUN_AGENT_TESTS=1`: Include live-model agent benchmarks (`PB10`–`PB12`) in addition to the deterministic primitive (`PB1`–`PB6`, `PB13`–`PB18`) and deterministic `TestLLM` multi-turn agent (`PB7`–`PB9`) benchmarks.
 
-## Benchmark Checks (`PB1`–`PB13`)
+## Benchmark Checks (`PB1`–`PB18`)
 
 | Check | Category | What It Measures |
 |---|---|---|
@@ -27,10 +28,15 @@ Whenever the `performance-benchmark` bundle executes (either as part of the full
 | **PB4** | Templates | `TemplateEngineServer.RenderTemplateSimple` + `NunjucksSandbox` (1,000 renders) |
 | **PB5** | Actions & AI | `RedactParamsToJSON` + `AIEngineBase` permissions & catalog lookups (500 iterations) |
 | **PB6** | Agent Payload | `PayloadManager.applyAgentChangeRequest` + `DeepDiffer` across 50 turns on a 60-record nested payload |
-| **PB7** | Deterministic Agent | **Sage** 3-turn ambient loop (`TestLLM`, 0ms network jitter) — wall time, framework overhead, and SQL step storage bytes |
+| **PB7** | Deterministic Agent | **Sage** 4-turn ambient loop (`TestLLM`, 0ms network jitter) — wall time, framework overhead, and SQL step storage bytes |
 | **PB8** | Deterministic Agent | **Query Builder -> Query Strategist** sub-agent delegation (`TestLLM`) — wall time, framework overhead, and SQL step storage bytes |
 | **PB9** | Deterministic Agent | **Research Agent -> Research Report Writer** sub-agent synthesis (`TestLLM`) — wall time, framework overhead, and SQL step storage bytes |
 | **PB10** | Live Model Agent | **Sage** live LLM execution — wall time, LLM inference vs. framework overhead, and SQL step storage bytes |
 | **PB11** | Live Model Agent | **Query Builder** live LLM execution — wall time, LLM inference vs. framework overhead, and SQL step storage bytes |
 | **PB12** | Live Model Agent | **Research Agent** live LLM execution — wall time, LLM inference vs. framework overhead, and SQL step storage bytes |
 | **PB13** | DB Save Wire Protocol | `SaveReturnMode: 'datestamps_only'` catalog audit (verifying all configured entities across core `__mj` and OpenApps) + 10x 32 KB `MJ: Error Logs` save roundtrip benchmark |
+| **PB14** | Phase 2 Guards | Lazy `BaseEntity` `_raw` hydration on `RunView` `entity_object` (`_fieldsHydrated === false` during read-only access) & runtime `options.SaveReturnMode = 'datestamps_only'` on full-SP entities |
+| **PB15** | Wave 4 Cache & Engine | `LocalCacheManager.ApplyRowChanges` CoW (`50` updates on `5,000` rows), `BaseEngine` `PKMap` O(1) delta merge (`100` deltas on `2,000` rows), `GetEntityObjectWithOptions({ SkipNewRecord: true })` (`500` calls), & `UserCache.UserByEmail` secondary index (`10,000` lookups across `500` users) |
+| **PB16** | Wave 4 SQL & Views | `RunView` narrow `Fields: ['ID', 'Name']` + `UserSearchString` SQL column projection (`2` columns vs. `37`) & `CanCountFromBaseTable` base-table `COUNT(*)` compilation on `MJ: Record Changes` |
+| **PB17** | Wave 4 L1 CoW & Wire | `TwoTierCacheStorageProvider` L1 frozen CoW (`200` reads + `50` row deltas, zero-clone identity) & `FrozenRowSerializationCache` `WeakMap` wire serialization (`5,000` rows x `20` responses) |
+| **PB18** | Longitudinal Gate | Automated comparison against [`wave4-baseline.json`](./wave4-baseline.json) (tracking Pre-Wave-1, Wave 2, Wave 3, Pre-Wave-4, and Post-Wave-4 metrics) with hard structural/algorithmic failure gates and CI-aware timing variance warnings |

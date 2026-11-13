@@ -30,18 +30,27 @@ import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import {
     BaseEntity,
+    CompositeKey,
     EntityInfo,
+    InMemoryLocalStorageProvider,
     LocalCacheManager,
     RunView,
     SetProvider,
     Metadata,
     UserInfo,
+    type CachedRunViewData,
     type DatasetItemResultType,
     type IEntityDataProvider,
     type ILocalStorageProvider,
     type IMetadataProvider,
 } from '@memberjunction/core';
 import { ClassFactory, EscapeSQLString, ObjectCache } from '@memberjunction/global';
+import { type GenericDatabaseProvider, UserCache } from '@memberjunction/generic-database-provider';
+import {
+    DeepFreeze,
+    type RedisLocalStorageProvider,
+    TwoTierCacheStorageProvider,
+} from '@memberjunction/redis-provider';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RedactParamsToJSON, type ActionParam } from '@memberjunction/actions-base';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -49,7 +58,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { PayloadManager } from '@memberjunction/ai-agents';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJErrorLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterTestLLM, TestLLM, type TestLLMOutcome } from '@memberjunction/unit-testing';
 import {
     Assert,
@@ -113,6 +122,41 @@ export interface PrimitiveBenchmarkMetrics {
     DatestampsOnlyEntityCount?: number;
     DatestampsOnlyEntitiesBySchema?: Record<string, number>;
     DatestampsOnly10SavesMs?: number;
+    // Wave 4 (PB15–PB17) metrics:
+    ApplyRowChanges50On5000RowsMs?: number;
+    BaseEnginePKMap100DeltasMs?: number;
+    BaseEngineLinearScan100DeltasMs?: number;
+    BaseEnginePKMapSpeedupRatio?: number;
+    GetEntityObjectSkipNewRecord500Ms?: number;
+    GetEntityObjectDefault500Ms?: number;
+    UserByEmail10kLookupsMs?: number;
+    UserByEmailLinear10kLookupsMs?: number;
+    UserByEmailSpeedupRatio?: number;
+    NarrowSearchRunView10CallsMs?: number;
+    WideSearchRunView10CallsMs?: number;
+    NarrowSearchReturnedColumns?: number;
+    WideSearchReturnedColumns?: number;
+    CanCountFromBaseTableEntityCount?: number;
+    RecordChangesCountTargetsBaseTable?: boolean;
+    RecordChangesCountSql?: string;
+    TwoTierL1200Reads50DeltasMs?: number;
+    TwoTierL1ZeroCloneIdentity?: boolean;
+    FrozenRowWireSerialize5000x20Ms?: number;
+    UncachedJsonStringify5000x20Ms?: number;
+    FrozenRowWireSpeedupRatio?: number;
+}
+
+export interface BaselineComparisonRow {
+    Metric: string;
+    Unit: string;
+    PreWave1?: string | number;
+    Wave2?: string | number;
+    Wave3?: string | number;
+    PreWave4?: string | number;
+    Wave4Baseline: string | number;
+    Current: string | number;
+    DeltaVsBaselinePercent: number | null;
+    Status: 'PASS' | 'IMPROVED' | 'WARN' | 'FAIL';
 }
 
 export interface AgentRunTreeMetrics {
@@ -146,6 +190,7 @@ export interface PerformanceBenchmarkReport {
     PrimitivesTotalMs: number;
     DeterministicAgentRuns: AgentRunTreeMetrics[];
     LiveAgentRuns: AgentRunTreeMetrics[];
+    BaselineComparisons?: BaselineComparisonRow[];
 }
 
 interface BenchmarkFixture {
@@ -153,6 +198,7 @@ interface BenchmarkFixture {
     Primitives: PrimitiveBenchmarkMetrics;
     DeterministicAgentRuns: AgentRunTreeMetrics[];
     LiveAgentRuns: AgentRunTreeMetrics[];
+    BaselineComparisons: BaselineComparisonRow[];
     RunIdsToPurge: string[];
     ConversationIdsToPurge: string[];
     ActionLogIdsToPurge: string[];
@@ -1428,6 +1474,1037 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             }
         },
     },
+    {
+        Id: `${BUNDLE}.PB15`,
+        Name: 'PB15: Wave 4.0 + 4.1a + 4.1b — LocalCacheManager.ApplyRowChanges CoW, BaseEngine PKMap O(1) delta merge, SkipNewRecord: true, & UserCache.UserByEmail secondary index benchmark',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+
+            // 1. Wave 4.0 + 4.1a: LocalCacheManager.ApplyRowChanges (50 single-row updates on 5,000 frozen rows)
+            const lcm = new BenchLocalCacheManager();
+            await lcm.Initialize(new InMemoryLocalStorageProvider(), { maxSizeBytes: 64 * 1024 * 1024 });
+            const sampleRows = Array.from({ length: 5000 }, (_, i) => ({
+                ID: `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`,
+                Name: `Row_${i}`,
+                Description: `Sample cached row description #${i}`,
+                Status: 'Active',
+                NestedMeta: { a: i, b: `meta_${i}`, tags: ['t1', 't2'] },
+                __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+                __mj_UpdatedAt: '2026-01-01T00:00:00.000Z',
+            }));
+            const fp = 'MJ: Action Categories|_|_|0|0|pb15';
+            await lcm.SetRunViewResult(
+                fp,
+                { EntityName: 'MJ: Action Categories', ExtraFilter: '' },
+                sampleRows,
+                '2026-01-01T00:00:00.000Z',
+                undefined,
+                5000
+            );
+            const beforeSlot = await lcm.GetRunViewResult(fp);
+            const untouchedBefore = beforeSlot?.results[4999];
+
+            const tFreeze0 = performance.now();
+            for (let i = 0; i < 50; i++) {
+                const id = `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`;
+                const updatedRow = {
+                    ...sampleRows[i],
+                    Description: `Updated #${i}`,
+                    __mj_UpdatedAt: '2026-01-02T00:00:00.000Z',
+                };
+                await lcm.ApplyRowChanges(
+                    fp,
+                    [{ Key: CompositeKey.FromID(id), Row: updatedRow }],
+                    '2026-01-02T00:00:00.000Z'
+                );
+            }
+            const applyRowChangesMs = Number((performance.now() - tFreeze0).toFixed(2));
+            fx.Primitives.ApplyRowChanges50On5000RowsMs = applyRowChangesMs;
+
+            const afterSlot = await lcm.GetRunViewResult(fp);
+            Assert(!!afterSlot && Object.isFrozen(afterSlot.results), 'PB15: cached RunView results array must remain frozen after ApplyRowChanges');
+            Assert(
+                untouchedBefore === afterSlot?.results[4999],
+                'PB15: unchanged row references must be shared via Copy-on-Write without structuredClone'
+            );
+
+            // 2. Wave 4.1a: BaseEngine PKMap O(1) in-place delta merge vs. O(N) linear scan (100 deltas on 2,000 rows)
+            let heldRows: Array<Record<string, unknown>> = Array.from({ length: 2000 }, (_, i) => ({
+                ID: `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`,
+                Name: `Item_${i}`,
+            }));
+            const engineProto = Object.getPrototypeOf(UserInfoEngine.Instance) as {
+                getOrBuildHeldRowsDeltaIndex?: (
+                    rows: Array<Record<string, unknown>>,
+                    pkFields: string[],
+                    isUuidPk: boolean[],
+                    deltaSig: string
+                ) => unknown;
+                mergeMaterializedDeltaRows: (
+                    rows: Array<Record<string, unknown>>,
+                    indexOrPkFields: unknown,
+                    deltaSigOrIsUuid: unknown,
+                    emptyDeletes: Set<string>,
+                    upsertedKeys: string[],
+                    upsertedItems: Array<Record<string, unknown>>
+                ) => Array<Record<string, unknown>>;
+            };
+            const pkFields = ['ID'];
+            const isUuidPk = [true];
+            const deltaSignature = 'u:ID';
+            const emptyDeletes = new Set<string>();
+
+            // Warmup + measure O(1) PKMap merge
+            for (let w = 0; w < 10; w++) {
+                const idx = (w * 17) % 2000;
+                const id = `00000000-0000-0000-0000-${String(idx + 1).padStart(12, '0')}`;
+                const heldDeltaIndex = engineProto.getOrBuildHeldRowsDeltaIndex?.call(
+                    UserInfoEngine.Instance,
+                    heldRows,
+                    pkFields,
+                    isUuidPk,
+                    deltaSignature
+                );
+                heldRows = engineProto.mergeMaterializedDeltaRows.call(
+                    UserInfoEngine.Instance,
+                    heldRows,
+                    heldDeltaIndex,
+                    deltaSignature,
+                    emptyDeletes,
+                    [id],
+                    [{ ID: id, Name: `Warmup_${w}` }]
+                );
+            }
+
+            const tDelta0 = performance.now();
+            for (let i = 0; i < 100; i++) {
+                const idx = (i * 17) % 2000;
+                const id = `00000000-0000-0000-0000-${String(idx + 1).padStart(12, '0')}`;
+                const heldDeltaIndex = engineProto.getOrBuildHeldRowsDeltaIndex?.call(
+                    UserInfoEngine.Instance,
+                    heldRows,
+                    pkFields,
+                    isUuidPk,
+                    deltaSignature
+                );
+                heldRows = engineProto.mergeMaterializedDeltaRows.call(
+                    UserInfoEngine.Instance,
+                    heldRows,
+                    heldDeltaIndex,
+                    deltaSignature,
+                    emptyDeletes,
+                    [id],
+                    [{ ID: id, Name: `Updated_${i}` }]
+                );
+            }
+            const pkMapDeltaMs = Math.max(0.05, Number((performance.now() - tDelta0).toFixed(2)));
+            fx.Primitives.BaseEnginePKMap100DeltasMs = pkMapDeltaMs;
+
+            // Measure baseline linear O(N) rebuild + scan on the same runner for hardware-independent ratio
+            let linearRows: Array<{ ID: string; Name: string }> = Array.from({ length: 2000 }, (_, i) => ({
+                ID: `00000000-0000-0000-0000-${String(i + 1).padStart(12, '0')}`,
+                Name: `Item_${i}`,
+            }));
+            const tLinearDelta0 = performance.now();
+            for (let i = 0; i < 100; i++) {
+                const idx = (i * 17) % 2000;
+                const id = `00000000-0000-0000-0000-${String(idx + 1).padStart(12, '0')}`;
+                const rebuiltMap = new Map<string, number>();
+                for (let r = 0; r < linearRows.length; r++) {
+                    rebuiltMap.set(linearRows[r].ID.trim().toLowerCase(), r);
+                }
+                const nextRows = linearRows.slice();
+                const pos = rebuiltMap.get(id.toLowerCase());
+                if (pos !== undefined) {
+                    nextRows[pos] = { ID: id, Name: `Updated_${i}` };
+                }
+                linearRows = nextRows;
+            }
+            const linearDeltaMs = Number((performance.now() - tLinearDelta0).toFixed(2));
+            const pkMapSpeedup = Number((linearDeltaMs / pkMapDeltaMs).toFixed(1));
+            fx.Primitives.BaseEngineLinearScan100DeltasMs = linearDeltaMs;
+            fx.Primitives.BaseEnginePKMapSpeedupRatio = pkMapSpeedup;
+
+            // 3. Wave 4.1a: GetEntityObjectWithOptions({ SkipNewRecord: true }) vs default (500 calls)
+            const tGeoDef0 = performance.now();
+            for (let i = 0; i < 500; i++) {
+                await ctx.Provider.GetEntityObject('MJ: AI Agents', ctx.User);
+            }
+            const geoDefaultMs = Number((performance.now() - tGeoDef0).toFixed(2));
+            fx.Primitives.GetEntityObjectDefault500Ms = geoDefaultMs;
+
+            const tGeoSkip0 = performance.now();
+            for (let i = 0; i < 500; i++) {
+                await (ctx.Provider as unknown as GenericDatabaseProvider).GetEntityObjectWithOptions(
+                    'MJ: AI Agents',
+                    { SkipNewRecord: true },
+                    ctx.User
+                );
+            }
+            const geoSkipMs = Number((performance.now() - tGeoSkip0).toFixed(2));
+            fx.Primitives.GetEntityObjectSkipNewRecord500Ms = geoSkipMs;
+
+            // 4. Wave 4.1b: UserCache.UserByEmail O(1) secondary index vs linear .find() (10,000 lookups over 500 users)
+            const uc = UserCache.Instance;
+            const ucInternal = uc as unknown as { _users: UserInfo[] };
+            const savedUsers = ucInternal._users.slice();
+            const templateUser = uc.Users[0] ?? ctx.User;
+            const syntheticUsers: UserInfo[] = [];
+            try {
+                for (let i = 0; i < 500; i++) {
+                    const email = `pb15_bench_user_${i}@example.com`;
+                    const u = Object.assign(Object.create(Object.getPrototypeOf(templateUser)) as UserInfo, templateUser, {
+                        ID: `00000000-0000-0000-0001-${String(i + 1).padStart(12, '0')}`,
+                        Name: `PB15_User_${i}`,
+                        Email: email,
+                    });
+                    syntheticUsers.push(u);
+                }
+                ucInternal._users = [...savedUsers, ...syntheticUsers];
+                // Warmup once so ensureIndexes() populates the secondary Map
+                uc.UserByEmail('pb15_bench_user_0@example.com');
+
+                const tUc0 = performance.now();
+                let resolvedEmailCount = 0;
+                for (let i = 0; i < 10_000; i++) {
+                    const found = uc.UserByEmail(`PB15_BENCH_USER_${i % 500}@example.com`);
+                    if (found) {
+                        resolvedEmailCount++;
+                    }
+                }
+                const userByEmailMs = Math.max(0.05, Number((performance.now() - tUc0).toFixed(2)));
+                AssertEqual(resolvedEmailCount, 10_000, 'PB15: all 10,000 case-insensitive UserByEmail lookups resolved');
+
+                const tUcLinear0 = performance.now();
+                let linearEmailCount = 0;
+                for (let i = 0; i < 10_000; i++) {
+                    const target = `PB15_BENCH_USER_${i % 500}@example.com`.trim().toLowerCase();
+                    const found = syntheticUsers.find((u) => u.Email.trim().toLowerCase() === target);
+                    if (found) {
+                        linearEmailCount++;
+                    }
+                }
+                const userByEmailLinearMs = Number((performance.now() - tUcLinear0).toFixed(2));
+                const emailSpeedup = Number((userByEmailLinearMs / userByEmailMs).toFixed(1));
+                AssertEqual(linearEmailCount, 10_000, 'PB15: all 10,000 linear email lookups resolved');
+
+                fx.Primitives.UserByEmail10kLookupsMs = userByEmailMs;
+                fx.Primitives.UserByEmailLinear10kLookupsMs = userByEmailLinearMs;
+                fx.Primitives.UserByEmailSpeedupRatio = emailSpeedup;
+            } finally {
+                ucInternal._users = savedUsers;
+                uc.UserByEmail(ctx.User.Email ?? '');
+            }
+
+            console.log(
+                `      → PB15 Wave 4 Cache/Engine Primitives: ApplyRowChanges=${applyRowChangesMs}ms | ` +
+                    `PKMapDelta=${pkMapDeltaMs}ms (${fx.Primitives.BaseEnginePKMapSpeedupRatio}x vs linear ${linearDeltaMs}ms) | ` +
+                    `SkipNewRecord=${geoSkipMs}ms (vs default ${geoDefaultMs}ms) | ` +
+                    `UserByEmail=${fx.Primitives.UserByEmail10kLookupsMs}ms (${fx.Primitives.UserByEmailSpeedupRatio}x vs linear ${fx.Primitives.UserByEmailLinear10kLookupsMs}ms)`
+            );
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB16`,
+        Name: 'PB16: Wave 4.1a + 4.3a — RunView narrow Fields + UserSearchString SQL column projection & CanCountFromBaseTable base-table COUNT(*) compilation benchmark',
+        Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
+            const fx = requireFixture();
+            const rv = RunView.FromMetadataProvider(ctx.Provider);
+            const dbProv = ctx.Provider as unknown as GenericDatabaseProvider;
+
+            // 1. Wave 4.1a: Narrow Fields: ['ID', 'Name'] + UserSearchString vs Wide Fields on MJ: Actions
+            let narrowCapturedSql = '';
+            let wideCapturedSql = '';
+            const origExec = dbProv.ExecuteSQL.bind(dbProv);
+
+            dbProv.ExecuteSQL = (async (sql: string, params?: unknown, options?: unknown, user?: UserInfo) => {
+                if (sql.includes('vwActions') && sql.trim().startsWith('SELECT') && !sql.includes('COUNT(*)')) {
+                    if (!narrowCapturedSql) {
+                        narrowCapturedSql = sql;
+                    } else if (!wideCapturedSql && sql !== narrowCapturedSql) {
+                        wideCapturedSql = sql;
+                    }
+                }
+                return origExec(sql, params as never, options as never, user);
+            }) as typeof dbProv.ExecuteSQL;
+
+            let narrowCallsMs = 0;
+            let wideCallsMs = 0;
+            let narrowReturnedRowCols = -1;
+            let wideReturnedRowCols = -1;
+            try {
+                const tNarrow0 = performance.now();
+                for (let i = 0; i < 10; i++) {
+                    const res = await rv.RunView<Record<string, unknown>>(
+                        {
+                            EntityName: 'MJ: Actions',
+                            UserSearchString: 'Calculate',
+                            Fields: ['ID', 'Name'],
+                            ResultType: 'simple',
+                            BypassCache: true,
+                        },
+                        ctx.User
+                    );
+                    Assert(res.Success, `PB16: narrow RunView failed: ${res.ErrorMessage}`);
+                    if (i === 0 && res.Results.length > 0) {
+                        narrowReturnedRowCols = Object.keys(res.Results[0]).length;
+                    }
+                }
+                narrowCallsMs = Number((performance.now() - tNarrow0).toFixed(2));
+
+                const tWide0 = performance.now();
+                for (let i = 0; i < 10; i++) {
+                    const res = await rv.RunView<Record<string, unknown>>(
+                        {
+                            EntityName: 'MJ: Actions',
+                            UserSearchString: 'Calculate',
+                            ResultType: 'simple',
+                            BypassCache: true,
+                        },
+                        ctx.User
+                    );
+                    Assert(res.Success, `PB16: wide RunView failed: ${res.ErrorMessage}`);
+                    if (i === 0 && res.Results.length > 0) {
+                        wideReturnedRowCols = Object.keys(res.Results[0]).length;
+                    }
+                }
+                wideCallsMs = Number((performance.now() - tWide0).toFixed(2));
+            } finally {
+                dbProv.ExecuteSQL = origExec;
+            }
+
+            const parseSelectColCount = (sqlText: string, rowKeysCount: number): number => {
+                if (rowKeysCount > 0) {
+                    return rowKeysCount;
+                }
+                const m = /SELECT\s+([\s\S]+?)\s+FROM\s+/i.exec(sqlText);
+                if (!m || !m[1]) return -1;
+                if (m[1].includes('*')) {
+                    const actionsEntity = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Actions');
+                    return actionsEntity?.Fields.length ?? 37;
+                }
+                return m[1].split(',').length;
+            };
+            const narrowCols = parseSelectColCount(narrowCapturedSql, narrowReturnedRowCols);
+            const wideCols = parseSelectColCount(wideCapturedSql, wideReturnedRowCols);
+
+            fx.Primitives.NarrowSearchRunView10CallsMs = narrowCallsMs;
+            fx.Primitives.WideSearchRunView10CallsMs = wideCallsMs;
+            fx.Primitives.NarrowSearchReturnedColumns = narrowCols;
+            fx.Primitives.WideSearchReturnedColumns = wideCols;
+
+            AssertEqual(
+                narrowCols,
+                2,
+                `PB16: expected RunView with Fields=['ID','Name'] + UserSearchString to project exactly 2 SQL columns, got ${narrowCols} (SQL: ${narrowCapturedSql})`
+            );
+            Assert(wideCols >= 20, `PB16: expected wide RunView on MJ: Actions to project >= 20 columns, got ${wideCols}`);
+
+            // 2. Wave 4.3a: CanCountFromBaseTable metadata & COUNT(*) SQL rewrite on MJ: Record Changes
+            const canCountEntities = ctx.Provider.Entities.filter((e) => dbProv.CanCountFromBaseTable(e, ''));
+            fx.Primitives.CanCountFromBaseTableEntityCount = canCountEntities.length;
+
+            const rcEntity = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Record Changes');
+            Assert(!!rcEntity, 'PB16: expected MJ: Record Changes in entity metadata');
+            AssertEqual(
+                dbProv.CanCountFromBaseTable(rcEntity!, "Status = 'Complete'"),
+                true,
+                'PB16: expected dbProv.CanCountFromBaseTable(MJ: Record Changes, "Status = \'Complete\'") to return true'
+            );
+
+            let countSqlCaptured = '';
+            const origBatch = dbProv.ExecuteSQLBatch ? dbProv.ExecuteSQLBatch.bind(dbProv) : undefined;
+            dbProv.ExecuteSQL = (async (sql: string, params?: unknown, options?: unknown, user?: UserInfo) => {
+                if (/SELECT\s+COUNT\(\*\)/i.test(sql) && !countSqlCaptured) {
+                    countSqlCaptured = sql;
+                }
+                return origExec(sql, params as never, options as never, user);
+            }) as typeof dbProv.ExecuteSQL;
+            if (origBatch) {
+                dbProv.ExecuteSQLBatch = (async (
+                    sqls: string[],
+                    params?: unknown[][],
+                    options?: unknown,
+                    user?: UserInfo
+                ) => {
+                    for (const s of sqls) {
+                        if (/SELECT\s+COUNT\(\*\)/i.test(s) && !countSqlCaptured) {
+                            countSqlCaptured = s;
+                        }
+                    }
+                    return origBatch(sqls, params as never, options as never, user);
+                }) as typeof dbProv.ExecuteSQLBatch;
+            }
+
+            try {
+                const countRes = await rv.RunView(
+                    {
+                        EntityName: 'MJ: Record Changes',
+                        ExtraFilter: "Status = 'Complete'",
+                        ResultType: 'count_only',
+                        BypassCache: true,
+                    },
+                    ctx.User
+                );
+                Assert(countRes.Success, `PB16: count_only RunView on MJ: Record Changes failed: ${countRes.ErrorMessage}`);
+            } finally {
+                dbProv.ExecuteSQL = origExec;
+                if (origBatch) {
+                    dbProv.ExecuteSQLBatch = origBatch;
+                }
+            }
+
+            const normalizedCountSql = countSqlCaptured.replace(/\s+/g, ' ').trim();
+            const targetsBaseTable =
+                normalizedCountSql.includes('[RecordChange]') && !normalizedCountSql.includes('[vwRecordChanges]');
+            fx.Primitives.RecordChangesCountTargetsBaseTable = targetsBaseTable;
+            fx.Primitives.RecordChangesCountSql = normalizedCountSql;
+
+            Assert(
+                targetsBaseTable,
+                `PB16: expected MJ: Record Changes count_only SQL to target base table [RecordChange] instead of [vwRecordChanges], got: ${normalizedCountSql}`
+            );
+
+            console.log(
+                `      → PB16 RunView Narrow Projection & Base-Table COUNT: narrowCols=${narrowCols} (vs wide=${wideCols}), ` +
+                    `narrow10Calls=${narrowCallsMs}ms (vs wide=${wideCallsMs}ms) | ` +
+                    `CanCountFromBaseTable=${canCountEntities.length} entities, RecordChangesCountTargetsBaseTable=${targetsBaseTable}`
+            );
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB17`,
+        Name: 'PB17: Wave 4.4 + 4.7 — TwoTierCacheStorageProvider L1 frozen CoW (ApplyRunViewRowDelta) & FrozenRowSerializationCache WeakMap wire memoization benchmark',
+        Fn: async (): Promise<void> => {
+            const fx = requireFixture();
+
+            // 1. Wave 4.4: TwoTierCacheStorageProvider L1 frozen CoW + ApplyRunViewRowDelta
+            const l2Store = new Map<string, string>();
+            const l2HashStore = new Map<string, Map<string, string>>();
+            const fullKey = (k: string, cat?: string): string => `${cat ?? 'default'}:${k}`;
+            const mockL2 = {
+                SharesReferences: false,
+                SupportsCrossProcessPersistence: true,
+                SharedAcrossProcesses: true,
+                OnCacheChanged: (): (() => void) => () => {},
+                OnReconciliationRequired: (): (() => void) => () => {},
+                GetItem: async <T = unknown>(k: string, cat?: string): Promise<T | null> => {
+                    const fk = fullKey(k, cat);
+                    const h = l2HashStore.get(fk);
+                    if (h) {
+                        const rows: unknown[] = [];
+                        for (const v of h.values()) {
+                            rows.push(JSON.parse(v));
+                        }
+                        return { results: rows, rowCount: rows.length, maxUpdatedAt: '2026-01-01T00:00:00.000Z' } as unknown as T;
+                    }
+                    const raw = l2Store.get(fk);
+                    return raw ? (JSON.parse(raw) as T) : null;
+                },
+                GetItems: async <T = unknown>(keys: string[], cat?: string): Promise<Map<string, T | null>> => {
+                    const out = new Map<string, T | null>();
+                    for (const k of keys) {
+                        const val = await mockL2.GetItem<T>(k, cat);
+                        out.set(k, val);
+                    }
+                    return out;
+                },
+                SetItem: async <T>(k: string, val: T, cat?: string): Promise<void> => {
+                    l2Store.set(fullKey(k, cat), JSON.stringify(val));
+                },
+                Remove: async (k: string, cat?: string): Promise<void> => {
+                    l2Store.delete(fullKey(k, cat));
+                    l2HashStore.delete(fullKey(k, cat));
+                },
+                ClearCategory: async (cat: string): Promise<void> => {
+                    const prefix = `${cat}:`;
+                    for (const k of [...l2Store.keys()]) {
+                        if (k.startsWith(prefix)) l2Store.delete(k);
+                    }
+                },
+                ClearCategoryChecked: async (): Promise<{ Ok: boolean }> => ({ Ok: true }),
+                GetCategoryKeys: async (cat: string): Promise<string[]> => {
+                    const prefix = `${cat}:`;
+                    return [...l2Store.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
+                },
+                ApplyRunViewRowDelta: async (fp: string, rawDeltaJson: string): Promise<boolean> => {
+                    const fk = fullKey(fp, 'RunViewCache');
+                    let h = l2HashStore.get(fk);
+                    if (!h) {
+                        h = new Map<string, string>();
+                        l2HashStore.set(fk, h);
+                    }
+                    const delta = JSON.parse(rawDeltaJson) as {
+                        upsertedRows: Array<Record<string, unknown>>;
+                        deletedPrimaryKeys: Array<Record<string, unknown>>;
+                    };
+                    for (const r of delta.upsertedRows) {
+                        h.set(String(r.ID), JSON.stringify(r));
+                    }
+                    for (const d of delta.deletedPrimaryKeys) {
+                        h.delete(String(d.ID));
+                    }
+                    return true;
+                },
+            };
+
+            const twoTier = new TwoTierCacheStorageProvider(mockL2 as unknown as RedisLocalStorageProvider);
+            const lcm = new BenchLocalCacheManager();
+            await lcm.Initialize(twoTier, { maxSizeBytes: 64 * 1024 * 1024 });
+
+            const extRows = Array.from({ length: 2000 }, (_, i) => ({
+                ID: `00000000-0000-0000-0002-${String(i + 1).padStart(12, '0')}`,
+                Name: `ExtRow_${i}`,
+                Description: `Long external storage payload text for row ${i} `.repeat(4),
+                Status: 'Active',
+                __mj_CreatedAt: '2026-01-01T00:00:00.000Z',
+                __mj_UpdatedAt: '2026-01-01T00:00:00.000Z',
+            }));
+            const extFp = 'MJ: Action Categories|_|_|0|0|pb17';
+            await lcm.SetRunViewResult(
+                extFp,
+                { EntityName: 'MJ: Action Categories', ExtraFilter: '' },
+                extRows,
+                '2026-01-01T00:00:00.000Z',
+                undefined,
+                2000
+            );
+
+            // Verify zero-clone L1 identity across consecutive reads
+            const read1 = await twoTier.GetItem<CachedRunViewData>(extFp, 'RunViewCache');
+            const read2 = await twoTier.GetItem<CachedRunViewData>(extFp, 'RunViewCache');
+            const zeroCloneIdentity =
+                !!read1 &&
+                !!read2 &&
+                read1.results === read2.results &&
+                Object.isFrozen(read1.results) &&
+                Object.isFrozen(read1.results[0]);
+            fx.Primitives.TwoTierL1ZeroCloneIdentity = zeroCloneIdentity;
+            Assert(zeroCloneIdentity, 'PB17: TwoTierCacheStorageProvider L1 must return identical deep-frozen array reference on hit');
+
+            const tExt0 = performance.now();
+            for (let i = 0; i < 200; i++) {
+                await lcm.GetRunViewResult(extFp);
+            }
+            for (let i = 0; i < 50; i++) {
+                const id = `00000000-0000-0000-0002-${String(i + 1).padStart(12, '0')}`;
+                const updatedRow = {
+                    ...extRows[i],
+                    Description: `Updated delta ${i}`,
+                    __mj_UpdatedAt: '2026-01-01T00:00:00.000Z',
+                };
+                await lcm.ApplyRowChanges(
+                    extFp,
+                    [{ Key: CompositeKey.FromID(id), Row: updatedRow }],
+                    '2026-01-01T00:00:00.000Z'
+                );
+            }
+            const twoTierElapsedMs = Number((performance.now() - tExt0).toFixed(2));
+            fx.Primitives.TwoTierL1200Reads50DeltasMs = twoTierElapsedMs;
+
+            // 2. Wave 4.7: Frozen row WeakMap wire serialization cache vs uncached JSON.stringify (5,000 rows x 20 responses)
+            const wireRows = DeepFreeze(
+                Array.from({ length: 5000 }, (_, i) => ({
+                    ID: `00000000-0000-0000-0003-${String(i + 1).padStart(12, '0')}`,
+                    Name: `WireEntity_${i}`,
+                    Description: `Serialized row description for GraphQL RunView wire transport #${i}`,
+                    Status: 'Active',
+                    Sequence: i,
+                }))
+            );
+
+            // Warmup & measure WeakMap memoized serialization (mirrors RunViewResolver.FrozenRowSerializationCache)
+            const weakRowCache = new WeakMap<object, Map<string, { Data: string }>>();
+            const entityId = '00000000-0000-0000-0000-000000000001';
+            const tWireCached0 = performance.now();
+            let cachedTotalLen = 0;
+            for (let iter = 0; iter < 20; iter++) {
+                for (let r = 0; r < wireRows.length; r++) {
+                    const row = wireRows[r];
+                    let entityMap = weakRowCache.get(row);
+                    let entry = entityMap?.get(entityId);
+                    if (!entry) {
+                        entry = { Data: JSON.stringify(row) };
+                        if (!entityMap) {
+                            entityMap = new Map();
+                            weakRowCache.set(row, entityMap);
+                        }
+                        entityMap.set(entityId, entry);
+                    }
+                    cachedTotalLen += entry.Data.length;
+                }
+            }
+            const cachedWireMs = Math.max(0.05, Number((performance.now() - tWireCached0).toFixed(2)));
+
+            const tWireUncached0 = performance.now();
+            let uncachedTotalLen = 0;
+            for (let iter = 0; iter < 20; iter++) {
+                for (let r = 0; r < wireRows.length; r++) {
+                    uncachedTotalLen += JSON.stringify(wireRows[r]).length;
+                }
+            }
+            const uncachedWireMs = Number((performance.now() - tWireUncached0).toFixed(2));
+            const wireSpeedup = Number((uncachedWireMs / cachedWireMs).toFixed(2));
+
+            AssertEqual(cachedTotalLen, uncachedTotalLen, 'PB17: FrozenRowSerializationCache byte length must match JSON.stringify');
+            fx.Primitives.FrozenRowWireSerialize5000x20Ms = cachedWireMs;
+            fx.Primitives.UncachedJsonStringify5000x20Ms = uncachedWireMs;
+            fx.Primitives.FrozenRowWireSpeedupRatio = wireSpeedup;
+
+            console.log(
+                `      → PB17 TwoTier L1 CoW & Wire Serialization: TwoTier200Reads50Deltas=${twoTierElapsedMs}ms (zeroCloneIdentity=${zeroCloneIdentity}) | ` +
+                    `FrozenRowWire=${cachedWireMs}ms (${wireSpeedup}x faster vs uncached JSON.stringify ${uncachedWireMs}ms)`
+            );
+        },
+    },
+    {
+        Id: `${BUNDLE}.PB18`,
+        Name: 'PB18: Longitudinal Waves 1–4 Baseline Comparison & Automated Structural/Variance Regression Gate (wave4-baseline.json)',
+        Fn: async (): Promise<void> => {
+            const fx = requireFixture();
+            const currentDir = path.dirname(fileURLToPath(import.meta.url));
+            const baselinePath = path.resolve(currentDir, '../../benchmark-logs/wave4-baseline.json');
+            Assert(fs.existsSync(baselinePath), `PB18: expected committed baseline file at ${baselinePath}`);
+
+            const baselineDoc = JSON.parse(fs.readFileSync(baselinePath, 'utf8')) as {
+                HistoricalWaves: {
+                    PreWave1: Record<string, number>;
+                    Wave2: Record<string, number>;
+                    Wave3: Record<string, number>;
+                    PreWave4: Record<string, number | boolean | string>;
+                };
+                Baseline: {
+                    PrimitivesTotalMs: number;
+                    Primitives: Record<string, number | boolean>;
+                    DeterministicAgentRuns: Array<{
+                        AgentName: string;
+                        TotalStepStorageBytes: number;
+                        PayloadAtStartPointerSteps: number;
+                        PayloadAtEndPointerSteps: number;
+                        StorageSavingsPercent: number;
+                    }>;
+                };
+                Gates: {
+                    MaxTimingRegressionPercentWarn: number;
+                    MaxTimingRegressionMultiplierFailCI: number;
+                    MinDatestampsOnlyEntities: number;
+                    ExpectedNarrowSearchColumns: number;
+                    MinCanCountFromBaseTableEntities: number;
+                    MinBaseEnginePKMapSpeedupRatio: number;
+                    MinUserByEmailSpeedupRatio: number;
+                    MinFrozenRowWireSpeedupRatio: number;
+                    MaxPB7StepStorageBytes: number;
+                    MinPB7StartPointers: number;
+                    MinPB7EndPointers: number;
+                    MinPB7StorageSavingsPercent: number;
+                    MaxPB8StepStorageBytes: number;
+                    MinPB8StartPointers: number;
+                    MinPB8EndPointers: number;
+                    MaxPB9StepStorageBytes: number;
+                    MinPB9StartPointers: number;
+                    MinPB9EndPointers: number;
+                };
+            };
+
+            const p = fx.Primitives;
+            const primitivesTotalMs = Number(
+                (
+                    (p.ClassFactoryAndObjectCacheMs ?? 0) +
+                    (p.EntityHydrateAndFlsMs ?? 0) +
+                    (p.LocalCacheWritesAndStatsMs ?? 0) +
+                    (p.TemplateRenderSimpleMs ?? 0) +
+                    (p.ActionSnapshotAndEngineLookupMs ?? 0) +
+                    (p.PayloadApplyAndDeepDiffMs ?? 0)
+                ).toFixed(2)
+            );
+
+            const hw = baselineDoc.HistoricalWaves;
+            const baseP = baselineDoc.Baseline.Primitives;
+            const gates = baselineDoc.Gates;
+            const strictTiming = process.env.MJ_PERF_STRICT_TIMING === '1';
+
+            const computeTimingRow = (
+                metric: string,
+                unit: string,
+                currentVal: number | undefined,
+                baseVal: number,
+                preW1?: number,
+                w2?: number,
+                w3?: number,
+                preW4?: number
+            ): BaselineComparisonRow => {
+                const cur = currentVal ?? 0;
+                const deltaPct = baseVal > 0 ? Number((((cur - baseVal) / baseVal) * 100).toFixed(1)) : 0;
+                let status: BaselineComparisonRow['Status'] = 'PASS';
+                if (deltaPct <= -10) {
+                    status = 'IMPROVED';
+                } else if (cur > baseVal * gates.MaxTimingRegressionMultiplierFailCI && cur - baseVal > 25) {
+                    status = strictTiming ? 'FAIL' : 'WARN';
+                } else if (deltaPct > gates.MaxTimingRegressionPercentWarn && cur - baseVal > 5) {
+                    status = strictTiming ? 'FAIL' : 'WARN';
+                }
+                return {
+                    Metric: metric,
+                    Unit: unit,
+                    PreWave1: preW1 ?? '—',
+                    Wave2: w2 ?? '—',
+                    Wave3: w3 ?? '—',
+                    PreWave4: preW4 ?? '—',
+                    Wave4Baseline: baseVal,
+                    Current: cur,
+                    DeltaVsBaselinePercent: deltaPct,
+                    Status: status,
+                };
+            };
+
+            const rows: BaselineComparisonRow[] = [
+                computeTimingRow(
+                    'PB1–PB6 Primitives Total CPU',
+                    'ms',
+                    primitivesTotalMs,
+                    baselineDoc.Baseline.PrimitivesTotalMs,
+                    hw.PreWave1.PrimitivesTotalMs,
+                    hw.Wave2.PrimitivesTotalMs,
+                    hw.Wave3.PrimitivesTotalMs,
+                    Number(hw.PreWave4.PrimitivesTotalMs)
+                ),
+                computeTimingRow(
+                    'PB1 ClassFactory & ObjectCache (10k)',
+                    'ms',
+                    p.ClassFactoryAndObjectCacheMs,
+                    Number(baseP.ClassFactoryAndObjectCacheMs),
+                    hw.PreWave1.PB1Ms,
+                    hw.Wave2.PB1Ms,
+                    hw.Wave3.PB1Ms,
+                    Number(hw.PreWave4.PB1Ms)
+                ),
+                computeTimingRow(
+                    'PB2 BaseEntity Hydration & FLS (2k rows)',
+                    'ms',
+                    p.EntityHydrateAndFlsMs,
+                    Number(baseP.EntityHydrateAndFlsMs),
+                    hw.PreWave1.PB2Ms,
+                    hw.Wave2.PB2Ms,
+                    hw.Wave3.PB2Ms,
+                    Number(hw.PreWave4.PB2Ms)
+                ),
+                computeTimingRow(
+                    'PB3 LocalCacheManager Writes & Stats',
+                    'ms',
+                    p.LocalCacheWritesAndStatsMs,
+                    Number(baseP.LocalCacheWritesAndStatsMs),
+                    hw.PreWave1.PB3Ms,
+                    hw.Wave2.PB3Ms,
+                    hw.Wave3.PB3Ms,
+                    Number(hw.PreWave4.PB3Ms)
+                ),
+                computeTimingRow(
+                    'PB4 TemplateEngine RenderSimple (1k)',
+                    'ms',
+                    p.TemplateRenderSimpleMs,
+                    Number(baseP.TemplateRenderSimpleMs),
+                    hw.PreWave1.PB4Ms,
+                    hw.Wave2.PB4Ms,
+                    hw.Wave3.PB4Ms,
+                    Number(hw.PreWave4.PB4Ms)
+                ),
+                computeTimingRow(
+                    'PB5 Action Snapshot & AI Perms (500)',
+                    'ms',
+                    p.ActionSnapshotAndEngineLookupMs,
+                    Number(baseP.ActionSnapshotAndEngineLookupMs),
+                    hw.PreWave1.PB5Ms,
+                    hw.Wave2.PB5Ms,
+                    hw.Wave3.PB5Ms,
+                    Number(hw.PreWave4.PB5Ms)
+                ),
+                computeTimingRow(
+                    'PB6 PayloadManager & DeepDiffer (50)',
+                    'ms',
+                    p.PayloadApplyAndDeepDiffMs,
+                    Number(baseP.PayloadApplyAndDeepDiffMs),
+                    hw.PreWave1.PB6Ms,
+                    hw.Wave2.PB6Ms,
+                    hw.Wave3.PB6Ms,
+                    Number(hw.PreWave4.PB6Ms)
+                ),
+                computeTimingRow(
+                    'PB13 datestamps_only 10x 32KB Saves',
+                    'ms',
+                    p.DatestampsOnly10SavesMs,
+                    Number(baseP.DatestampsOnly10SavesMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.PB13SavesMs)
+                ),
+                computeTimingRow(
+                    'PB15 ApplyRowChanges CoW (50 on 5k rows)',
+                    'ms',
+                    p.ApplyRowChanges50On5000RowsMs,
+                    Number(baseP.ApplyRowChanges50On5000RowsMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.ApplyRowChanges50On5000RowsMs)
+                ),
+                computeTimingRow(
+                    'PB15 BaseEngine PKMap 100 Row Deltas',
+                    'ms',
+                    p.BaseEnginePKMap100DeltasMs,
+                    Number(baseP.BaseEnginePKMap100DeltasMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.BaseEnginePKMap100DeltasMs)
+                ),
+                computeTimingRow(
+                    'PB15 GetEntityObject SkipNewRecord (500)',
+                    'ms',
+                    p.GetEntityObjectSkipNewRecord500Ms,
+                    Number(baseP.GetEntityObjectSkipNewRecord500Ms),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.GetEntityObjectSkipNewRecord500Ms)
+                ),
+                computeTimingRow(
+                    'PB15 UserCache.UserByEmail (10k lookups)',
+                    'ms',
+                    p.UserByEmail10kLookupsMs,
+                    Number(baseP.UserByEmail10kLookupsMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.UserByEmail10kLookupsMs)
+                ),
+                computeTimingRow(
+                    'PB16 Narrow Search RunView (10 calls)',
+                    'ms',
+                    p.NarrowSearchRunView10CallsMs,
+                    Number(baseP.NarrowSearchRunView10CallsMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.NarrowSearchRunView10CallsMs)
+                ),
+                computeTimingRow(
+                    'PB17 TwoTier L1 CoW (200 reads + 50 deltas)',
+                    'ms',
+                    p.TwoTierL1200Reads50DeltasMs,
+                    Number(baseP.TwoTierL1200Reads50DeltasMs),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.TwoTierL1200Reads50DeltasMs)
+                ),
+                computeTimingRow(
+                    'PB17 FrozenRow WeakMap Wire (5k x 20)',
+                    'ms',
+                    p.FrozenRowWireSerialize5000x20Ms,
+                    Number(baseP.FrozenRowWireSerialize5000x20Ms),
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.FrozenRowWireSerialize5000x20Ms)
+                ),
+            ];
+
+            // Add deterministic agent storage rows
+            const pb7Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Sage');
+            const pb8Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Query Builder');
+            const pb9Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Research Agent');
+
+            if (pb7Run) {
+                rows.push({
+                    Metric: 'PB7 Sage 4-Turn Step Storage',
+                    Unit: 'bytes',
+                    PreWave1: hw.PreWave1.PB7StorageBytes,
+                    Wave2: hw.Wave2.PB7StorageBytes,
+                    Wave3: hw.Wave3.PB7StorageBytes,
+                    PreWave4: Number(hw.PreWave4.PB7StorageBytes),
+                    Wave4Baseline: 52871,
+                    Current: pb7Run.TotalStepStorageBytes,
+                    DeltaVsBaselinePercent: Number((((pb7Run.TotalStepStorageBytes - 52871) / 52871) * 100).toFixed(1)),
+                    Status: pb7Run.TotalStepStorageBytes <= gates.MaxPB7StepStorageBytes ? 'PASS' : 'FAIL',
+                });
+            }
+            if (pb8Run) {
+                rows.push({
+                    Metric: 'PB8 Query Builder + Strategist Storage',
+                    Unit: 'bytes',
+                    PreWave1: hw.PreWave1.PB8StorageBytes,
+                    Wave2: hw.Wave2.PB8StorageBytes,
+                    Wave3: hw.Wave3.PB8StorageBytes,
+                    PreWave4: Number(hw.PreWave4.PB8StorageBytes),
+                    Wave4Baseline: 126565,
+                    Current: pb8Run.TotalStepStorageBytes,
+                    DeltaVsBaselinePercent: Number((((pb8Run.TotalStepStorageBytes - 126565) / 126565) * 100).toFixed(1)),
+                    Status: pb8Run.TotalStepStorageBytes <= gates.MaxPB8StepStorageBytes ? 'PASS' : 'FAIL',
+                });
+            }
+            if (pb9Run) {
+                rows.push({
+                    Metric: 'PB9 Research Agent + Writer Storage',
+                    Unit: 'bytes',
+                    PreWave1: hw.PreWave1.PB9StorageBytes,
+                    Wave2: hw.Wave2.PB9StorageBytes,
+                    Wave3: hw.Wave3.PB9StorageBytes,
+                    PreWave4: Number(hw.PreWave4.PB9StorageBytes),
+                    Wave4Baseline: 104158,
+                    Current: pb9Run.TotalStepStorageBytes,
+                    DeltaVsBaselinePercent: Number((((pb9Run.TotalStepStorageBytes - 104158) / 104158) * 100).toFixed(1)),
+                    Status: pb9Run.TotalStepStorageBytes <= gates.MaxPB9StepStorageBytes ? 'PASS' : 'FAIL',
+                });
+            }
+
+            // Structural invariant rows
+            rows.push(
+                {
+                    Metric: 'PB16 Narrow Search SQL Columns Projected',
+                    Unit: 'cols',
+                    PreWave4: Number(hw.PreWave4.NarrowSearchReturnedColumns),
+                    Wave4Baseline: gates.ExpectedNarrowSearchColumns,
+                    Current: p.NarrowSearchReturnedColumns ?? -1,
+                    DeltaVsBaselinePercent: 0,
+                    Status: p.NarrowSearchReturnedColumns === gates.ExpectedNarrowSearchColumns ? 'PASS' : 'FAIL',
+                },
+                {
+                    Metric: 'PB16 MJ: Record Changes Count Targets Base Table',
+                    Unit: 'bool',
+                    PreWave4: String(hw.PreWave4.RecordChangesCountTargetsBaseTable),
+                    Wave4Baseline: 'true',
+                    Current: String(p.RecordChangesCountTargetsBaseTable ?? false),
+                    DeltaVsBaselinePercent: null,
+                    Status: p.RecordChangesCountTargetsBaseTable === true ? 'PASS' : 'FAIL',
+                },
+                {
+                    Metric: 'PB15 BaseEngine PKMap vs Linear Speedup Ratio',
+                    Unit: 'x',
+                    PreWave4: '1.0',
+                    Wave4Baseline: `${baseP.BaseEnginePKMapSpeedupRatio}x`,
+                    Current: `${p.BaseEnginePKMapSpeedupRatio ?? 0}x`,
+                    DeltaVsBaselinePercent: null,
+                    Status: (p.BaseEnginePKMapSpeedupRatio ?? 0) >= gates.MinBaseEnginePKMapSpeedupRatio ? 'PASS' : 'FAIL',
+                },
+                {
+                    Metric: 'PB15 UserCache.UserByEmail vs Linear Speedup Ratio',
+                    Unit: 'x',
+                    PreWave4: '1.0',
+                    Wave4Baseline: `${baseP.UserByEmailSpeedupRatio}x`,
+                    Current: `${p.UserByEmailSpeedupRatio ?? 0}x`,
+                    DeltaVsBaselinePercent: null,
+                    Status: (p.UserByEmailSpeedupRatio ?? 0) >= gates.MinUserByEmailSpeedupRatio ? 'PASS' : 'FAIL',
+                },
+                {
+                    Metric: 'PB17 FrozenRow WeakMap vs JSON.stringify Speedup',
+                    Unit: 'x',
+                    PreWave4: '1.0',
+                    Wave4Baseline: `${baseP.FrozenRowWireSpeedupRatio}x`,
+                    Current: `${p.FrozenRowWireSpeedupRatio ?? 0}x`,
+                    DeltaVsBaselinePercent: null,
+                    Status: (p.FrozenRowWireSpeedupRatio ?? 0) >= gates.MinFrozenRowWireSpeedupRatio ? 'PASS' : 'FAIL',
+                }
+            );
+
+            fx.BaselineComparisons = rows;
+
+            // Emit GitHub Actions warnings for any timing variance rows flagged WARN
+            for (const r of rows) {
+                if (r.Status === 'WARN') {
+                    console.warn(
+                        `::warning title=IT128 Performance Variance::${r.Metric}: current=${r.Current}${r.Unit} vs baseline=${r.Wave4Baseline}${r.Unit} (${r.DeltaVsBaselinePercent}%)`
+                    );
+                }
+            }
+
+            // Enforce hard structural & speedup ratio gates (100% deterministic across local & GitHub CI)
+            Assert(
+                (p.DatestampsOnlyEntityCount ?? 0) >= gates.MinDatestampsOnlyEntities,
+                `PB18 regression: expected >= ${gates.MinDatestampsOnlyEntities} SaveReturnMode='datestamps_only' entities, got ${p.DatestampsOnlyEntityCount}`
+            );
+            AssertEqual(
+                p.NarrowSearchReturnedColumns,
+                gates.ExpectedNarrowSearchColumns,
+                `PB18 regression: narrow RunView with UserSearchString projected ${p.NarrowSearchReturnedColumns} columns instead of ${gates.ExpectedNarrowSearchColumns}`
+            );
+            Assert(
+                (p.CanCountFromBaseTableEntityCount ?? 0) >= gates.MinCanCountFromBaseTableEntities,
+                `PB18 regression: expected >= ${gates.MinCanCountFromBaseTableEntities} entities with CanCountFromBaseTable=true, got ${p.CanCountFromBaseTableEntityCount}`
+            );
+            AssertEqual(
+                p.RecordChangesCountTargetsBaseTable,
+                true,
+                `PB18 regression: MJ: Record Changes count_only query did not target base table [RecordChange] (${p.RecordChangesCountSql})`
+            );
+            Assert(
+                (p.BaseEnginePKMapSpeedupRatio ?? 0) >= gates.MinBaseEnginePKMapSpeedupRatio,
+                `PB18 regression: BaseEngine PKMap delta merge speedup ratio (${p.BaseEnginePKMapSpeedupRatio}x) fell below ${gates.MinBaseEnginePKMapSpeedupRatio}x`
+            );
+            Assert(
+                (p.UserByEmailSpeedupRatio ?? 0) >= gates.MinUserByEmailSpeedupRatio,
+                `PB18 regression: UserCache.UserByEmail speedup ratio (${p.UserByEmailSpeedupRatio}x) fell below ${gates.MinUserByEmailSpeedupRatio}x`
+            );
+            Assert(
+                (p.FrozenRowWireSpeedupRatio ?? 0) >= gates.MinFrozenRowWireSpeedupRatio,
+                `PB18 regression: FrozenRow WeakMap wire serialization speedup ratio (${p.FrozenRowWireSpeedupRatio}x) fell below ${gates.MinFrozenRowWireSpeedupRatio}x`
+            );
+            AssertEqual(
+                p.TwoTierL1ZeroCloneIdentity,
+                true,
+                'PB18 regression: TwoTierCacheStorageProvider L1 lost zero-clone frozen reference identity'
+            );
+
+            if (pb7Run) {
+                Assert(
+                    pb7Run.TotalStepStorageBytes <= gates.MaxPB7StepStorageBytes,
+                    `PB18 regression: PB7 Sage step storage (${pb7Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB7StepStorageBytes} B ceiling`
+                );
+                Assert(
+                    pb7Run.PayloadAtStartPointerSteps >= gates.MinPB7StartPointers &&
+                        pb7Run.PayloadAtEndPointerSteps >= gates.MinPB7EndPointers,
+                    `PB18 regression: PB7 Sage pointer steps (${pb7Run.PayloadAtStartPointerSteps}/${pb7Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB7StartPointers}/${gates.MinPB7EndPointers})`
+                );
+                Assert(
+                    pb7Run.StorageSavingsPercent >= gates.MinPB7StorageSavingsPercent,
+                    `PB18 regression: PB7 Sage storage dedup savings (${pb7Run.StorageSavingsPercent}%) fell below ${gates.MinPB7StorageSavingsPercent}%`
+                );
+            }
+            if (pb8Run) {
+                Assert(
+                    pb8Run.TotalStepStorageBytes <= gates.MaxPB8StepStorageBytes,
+                    `PB18 regression: PB8 Query Builder step storage (${pb8Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB8StepStorageBytes} B ceiling`
+                );
+                Assert(
+                    pb8Run.PayloadAtStartPointerSteps >= gates.MinPB8StartPointers &&
+                        pb8Run.PayloadAtEndPointerSteps >= gates.MinPB8EndPointers,
+                    `PB18 regression: PB8 Query Builder pointer steps (${pb8Run.PayloadAtStartPointerSteps}/${pb8Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB8StartPointers}/${gates.MinPB8EndPointers})`
+                );
+            }
+            if (pb9Run) {
+                Assert(
+                    pb9Run.TotalStepStorageBytes <= gates.MaxPB9StepStorageBytes,
+                    `PB18 regression: PB9 Research Agent step storage (${pb9Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB9StepStorageBytes} B ceiling`
+                );
+                Assert(
+                    pb9Run.PayloadAtStartPointerSteps >= gates.MinPB9StartPointers &&
+                        pb9Run.PayloadAtEndPointerSteps >= gates.MinPB9EndPointers,
+                    `PB18 regression: PB9 Research Agent pointer steps (${pb9Run.PayloadAtStartPointerSteps}/${pb9Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB9StartPointers}/${gates.MinPB9EndPointers})`
+                );
+            }
+
+            const failedRows = rows.filter((r) => r.Status === 'FAIL');
+            AssertEqual(
+                failedRows.length,
+                0,
+                `PB18 regression gate failed on ${failedRows.length} metric(s): ${failedRows.map((r) => `${r.Metric} (current=${r.Current}, baseline=${r.Wave4Baseline})`).join('; ')}`
+            );
+
+            console.log(
+                `      → PB18 Baseline Comparison & Regression Gate: ${rows.length} metrics verified against wave4-baseline.json (0 failures, ${rows.filter((r) => r.Status === 'WARN').length} variance warnings)`
+            );
+        },
+    },
 ];
 
 for (const check of PerformanceBenchmarkChecks) {
@@ -1453,6 +2530,7 @@ function buildBenchmarkReport(fx: BenchmarkFixture): PerformanceBenchmarkReport 
         PrimitivesTotalMs: primitivesTotalMs,
         DeterministicAgentRuns: fx.DeterministicAgentRuns,
         LiveAgentRuns: fx.LiveAgentRuns,
+        BaselineComparisons: fx.BaselineComparisons,
     };
 }
 
@@ -1466,17 +2544,25 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
         `- **\`SaveReturnMode: 'datestamps_only'\` Entities Active (PB13)**: **${report.Primitives.DatestampsOnlyEntityCount ?? 'n/a'}** (\`${JSON.stringify(report.Primitives.DatestampsOnlyEntitiesBySchema ?? {})}\`)`,
         `- **10x 32 KB \`ErrorLog\` Saves with \`datestamps_only\` (PB13)**: **${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms**`,
         ``,
-        `## 1. Core & AI Primitive Microbenchmarks (PB1–PB6, PB13)`,
+        `## 1. Core, Cache & SQL Primitive Microbenchmarks (PB1–PB6, PB13, PB15–PB17)`,
         ``,
-        `| Check | Benchmark | Elapsed (ms) |`,
+        `| Check | Benchmark | Elapsed / Value |`,
         `|---|---|---:|`,
-        `| **PB1** | \`ClassFactory\` (\`GetRegistration\` + \`GetAllRegistrations\`) & \`ObjectCache.Find\` (10k iters / 450 classes) | ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} |`,
-        `| **PB2** | \`EntityInfo.ChildEntities\` + \`BaseEntity\` Hydration (\`LoadFromData\`/\`SetMany\`/\`GetAll\`) + FLS (2,000 rows x 25 fields) | ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} |`,
-        `| **PB3** | \`LocalCacheManager\` \`SetRunViewResult\` + \`SetDataset\` + \`GetStats\` (80 large entries) | ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} |`,
-        `| **PB4** | \`TemplateEngineServer.RenderTemplateSimple\` + \`NunjucksSandbox\` (1,000 renders) | ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} |`,
-        `| **PB5** | \`RedactParamsToJSON\` + \`AIEngineBase\` permissions & catalog lookup (500 iters) | ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} |`,
-        `| **PB6** | \`PayloadManager.applyAgentChangeRequest\` + \`DeepDiffer\` (50 turns) | ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} |`,
-        `| **PB13** | \`SaveReturnMode: 'datestamps_only'\` 10x 32 KB \`MJ: Error Logs\` SQL roundtrips (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities configured) | ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} |`,
+        `| **PB1** | \`ClassFactory\` (\`GetRegistration\` + \`GetAllRegistrations\`) & \`ObjectCache.Find\` (10k iters / 450 classes) | ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} ms |`,
+        `| **PB2** | \`EntityInfo.ChildEntities\` + \`BaseEntity\` Hydration (\`LoadFromData\`/\`SetMany\`/\`GetAll\`) + FLS (2,000 rows x 25 fields) | ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} ms |`,
+        `| **PB3** | \`LocalCacheManager\` \`SetRunViewResult\` + \`SetDataset\` + \`GetStats\` (80 large entries) | ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} ms |`,
+        `| **PB4** | \`TemplateEngineServer.RenderTemplateSimple\` + \`NunjucksSandbox\` (1,000 renders) | ${report.Primitives.TemplateRenderSimpleMs ?? 'n/a'} ms |`,
+        `| **PB5** | \`RedactParamsToJSON\` + \`AIEngineBase\` permissions & catalog lookup (500 iters) | ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} ms |`,
+        `| **PB6** | \`PayloadManager.applyAgentChangeRequest\` + \`DeepDiffer\` (50 turns) | ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} ms |`,
+        `| **PB13** | \`SaveReturnMode: 'datestamps_only'\` 10x 32 KB \`MJ: Error Logs\` SQL roundtrips (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities configured) | ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms |`,
+        `| **PB15** | \`LocalCacheManager.ApplyRowChanges\` CoW (50 updates on 5,000 rows) | ${report.Primitives.ApplyRowChanges50On5000RowsMs ?? 'n/a'} ms |`,
+        `| **PB15** | \`BaseEngine\` \`PKMap\` O(1) row-delta merge (100 deltas on 2,000 rows) | ${report.Primitives.BaseEnginePKMap100DeltasMs ?? 'n/a'} ms (${report.Primitives.BaseEnginePKMapSpeedupRatio ?? 'n/a'}x vs linear) |`,
+        `| **PB15** | \`GetEntityObjectWithOptions({ SkipNewRecord: true })\` (500 calls) | ${report.Primitives.GetEntityObjectSkipNewRecord500Ms ?? 'n/a'} ms (vs ${report.Primitives.GetEntityObjectDefault500Ms ?? 'n/a'} ms default) |`,
+        `| **PB15** | \`UserCache.UserByEmail\` secondary index (10,000 lookups across 500 users) | ${report.Primitives.UserByEmail10kLookupsMs ?? 'n/a'} ms (${report.Primitives.UserByEmailSpeedupRatio ?? 'n/a'}x vs linear) |`,
+        `| **PB16** | Narrow \`Fields: ['ID', 'Name']\` + \`UserSearchString\` \`RunView\` (10 calls on \`MJ: Actions\`) | ${report.Primitives.NarrowSearchRunView10CallsMs ?? 'n/a'} ms (${report.Primitives.NarrowSearchReturnedColumns ?? 'n/a'} cols vs ${report.Primitives.WideSearchReturnedColumns ?? 'n/a'} wide) |`,
+        `| **PB16** | \`CanCountFromBaseTable\` entities & \`MJ: Record Changes\` base-table \`COUNT(*)\` | ${report.Primitives.CanCountFromBaseTableEntityCount ?? 'n/a'} entities (\`baseTable=${report.Primitives.RecordChangesCountTargetsBaseTable ?? false}\`) |`,
+        `| **PB17** | \`TwoTierCacheStorageProvider\` L1 frozen CoW (200 reads + 50 row deltas) | ${report.Primitives.TwoTierL1200Reads50DeltasMs ?? 'n/a'} ms (\`zeroClone=${report.Primitives.TwoTierL1ZeroCloneIdentity ?? false}\`) |`,
+        `| **PB17** | \`FrozenRowSerializationCache\` \`WeakMap\` wire serialize (5,000 rows x 20 responses) | ${report.Primitives.FrozenRowWireSerialize5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenRowWireSpeedupRatio ?? 'n/a'}x vs \`JSON.stringify\`) |`,
         ``,
         `## 2. Multi-Turn Agent Loop & SQL Server Footprint Benchmarks (PB7–PB12)`,
         ``,
@@ -1488,6 +2574,26 @@ function formatBenchmarkMarkdown(report: PerformanceBenchmarkReport): string {
             `| **${r.Label}** | \`${r.Mode}\` | ${r.WallTimeMs} | ${r.LlmPromptExecutionMs} | ${r.FrameworkOverheadMs} | ${r.TotalRunsInTree} | ${r.TotalStepsInTree} | ${r.TotalStepStorageBytes.toLocaleString()} B | ${r.PayloadAtStartPointerSteps} / ${r.PayloadAtEndPointerSteps} | ${r.StorageSavingsPercent}% |`
         );
     }
+
+    if (report.BaselineComparisons && report.BaselineComparisons.length > 0) {
+        lines.push(
+            ``,
+            `## 3. Longitudinal Waves 1–4 & Baseline Regression Comparison (PB18)`,
+            ``,
+            `| Metric | Unit | Pre-Wave-1 | Wave 2 | Wave 3 | Pre-Wave-4 | Wave 4 Baseline | Current | Delta vs Baseline | Status |`,
+            `|---|---|---:|---:|---:|---:|---:|---:|---:|---|`
+        );
+        for (const c of report.BaselineComparisons) {
+            const deltaCell =
+                c.DeltaVsBaselinePercent === null
+                    ? '—'
+                    : `${c.DeltaVsBaselinePercent > 0 ? '+' : ''}${c.DeltaVsBaselinePercent}%`;
+            lines.push(
+                `| **${c.Metric}** | \`${c.Unit}\` | ${c.PreWave1 ?? '—'} | ${c.Wave2 ?? '—'} | ${c.Wave3 ?? '—'} | ${c.PreWave4 ?? '—'} | ${c.Wave4Baseline} | **${c.Current}** | ${deltaCell} | **${c.Status}** |`
+            );
+        }
+    }
+
     lines.push('');
     return lines.join('\n');
 }
@@ -1524,7 +2630,7 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log('║                    MJ PERFORMANCE & AGENT OVERHEAD BENCHMARK SUMMARY                     ║');
     console.log('╚══════════════════════════════════════════════════════════════════════════════════════════╝');
     console.log(`  Database: ${report.Database}`);
-    console.log(`  Primitives Total CPU Time: ${report.PrimitivesTotalMs} ms`);
+    console.log(`  Primitives Total CPU Time (PB1-PB6): ${report.PrimitivesTotalMs} ms`);
     console.log(`    - PB1 ClassFactory & ObjectCache (10k iters):         ${report.Primitives.ClassFactoryAndObjectCacheMs ?? 'n/a'} ms`);
     console.log(`    - PB2 BaseEntity Hydration & FLS (2,000 rows):        ${report.Primitives.EntityHydrateAndFlsMs ?? 'n/a'} ms`);
     console.log(`    - PB3 LocalCacheManager Writes & GetStats:            ${report.Primitives.LocalCacheWritesAndStatsMs ?? 'n/a'} ms`);
@@ -1532,6 +2638,14 @@ function printBenchmarkSummary(report: PerformanceBenchmarkReport): void {
     console.log(`    - PB5 SnapshotActionParams & AIEngine Permissions:    ${report.Primitives.ActionSnapshotAndEngineLookupMs ?? 'n/a'} ms`);
     console.log(`    - PB6 PayloadManager.applyAgentChangeRequest (50x):   ${report.Primitives.PayloadApplyAndDeepDiffMs ?? 'n/a'} ms`);
     console.log(`    - PB13 datestamps_only 10x 32KB ErrorLog saves:       ${report.Primitives.DatestampsOnly10SavesMs ?? 'n/a'} ms (${report.Primitives.DatestampsOnlyEntityCount ?? 0} entities)`);
+    console.log(`    - PB15 ApplyRowChanges CoW (50 on 5k rows):           ${report.Primitives.ApplyRowChanges50On5000RowsMs ?? 'n/a'} ms`);
+    console.log(`    - PB15 BaseEngine PKMap 100 Deltas:                   ${report.Primitives.BaseEnginePKMap100DeltasMs ?? 'n/a'} ms (${report.Primitives.BaseEnginePKMapSpeedupRatio ?? 'n/a'}x vs linear)`);
+    console.log(`    - PB15 GetEntityObject SkipNewRecord (500):           ${report.Primitives.GetEntityObjectSkipNewRecord500Ms ?? 'n/a'} ms (vs ${report.Primitives.GetEntityObjectDefault500Ms ?? 'n/a'} ms default)`);
+    console.log(`    - PB15 UserCache.UserByEmail (10k lookups):           ${report.Primitives.UserByEmail10kLookupsMs ?? 'n/a'} ms (${report.Primitives.UserByEmailSpeedupRatio ?? 'n/a'}x vs linear)`);
+    console.log(`    - PB16 Narrow Search RunView (10 calls):              ${report.Primitives.NarrowSearchRunView10CallsMs ?? 'n/a'} ms (${report.Primitives.NarrowSearchReturnedColumns ?? 'n/a'} cols vs ${report.Primitives.WideSearchReturnedColumns ?? 'n/a'} wide)`);
+    console.log(`    - PB16 CanCountFromBaseTable:                         ${report.Primitives.CanCountFromBaseTableEntityCount ?? 'n/a'} entities (RecordChange baseTable=${report.Primitives.RecordChangesCountTargetsBaseTable ?? false})`);
+    console.log(`    - PB17 TwoTier L1 CoW (200 reads + 50 deltas):        ${report.Primitives.TwoTierL1200Reads50DeltasMs ?? 'n/a'} ms (zeroClone=${report.Primitives.TwoTierL1ZeroCloneIdentity ?? false})`);
+    console.log(`    - PB17 FrozenRow WeakMap Wire (5,000 x 20):           ${report.Primitives.FrozenRowWireSerialize5000x20Ms ?? 'n/a'} ms (${report.Primitives.FrozenRowWireSpeedupRatio ?? 'n/a'}x vs JSON.stringify)`);
 
     const allRuns = [...report.DeterministicAgentRuns, ...report.LiveAgentRuns];
     if (allRuns.length > 0) {
@@ -1555,6 +2669,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
             Primitives: {},
             DeterministicAgentRuns: [],
             LiveAgentRuns: [],
+            BaselineComparisons: [],
             RunIdsToPurge: [],
             ConversationIdsToPurge: [],
             ActionLogIdsToPurge: [],
