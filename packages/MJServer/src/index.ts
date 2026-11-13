@@ -49,6 +49,7 @@ import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from 
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { MJServerStartupState } from './startupState.js';
+import { AssertEntityMetadataLoaded, ENTITY_METADATA_CHECK_PHASE } from './metadataReadiness.js';
 import { CreateStartupGate, ListenOnPort, RejectUpgradeWhileStarting } from './startupGate.js';
 import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import createMSSQLConfig from './orm.js';
@@ -822,8 +823,8 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
 
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const pgEntityCount = md?.Entities ? md.Entities.length : 0;
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const pgEntityCount = AssertEntityMetadataLoaded(Metadata.Provider, `PostgreSQL ${pgHost}:${pgPort}/${pgDatabase}`); // global-provider-ok: bootstrap
     startupLog.LogIf('verbose', `Data Source has been initialized. ${pgEntityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('PostgreSQL', `${pgHost}:${pgPort}/${pgDatabase}`, pgEntityCount);
   } else {
@@ -879,9 +880,9 @@ const setupComplete$ = new ReplaySubject(1);
     validateAuthProvidersRegistered();
     validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
+    startupLog.BeginPhase(ENTITY_METADATA_CHECK_PHASE);
+    const entityCount = AssertEntityMetadataLoaded(Metadata.Provider, `SQL Server ${dbHost}:${dbPort}/${dbDatabase}`); // global-provider-ok: bootstrap
     startupLog.BeginPhase('Initializing data provider');
-    const md = new Metadata(); // global-provider-ok: bootstrap
-    const entityCount = md?.Entities ? md.Entities.length : 0;
     startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
     startupLog.SetDatabaseInfo('SQL Server', `${dbHost}:${dbPort}/${dbDatabase}`, entityCount);
 
