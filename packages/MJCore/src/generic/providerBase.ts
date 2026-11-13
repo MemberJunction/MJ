@@ -212,6 +212,8 @@ export type OrganicKeyMetadataRow = BaseMetadataRow & {
     EntityOrganicKeyRelatedEntities?: unknown[];
 };
 export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
+export type ApplicationMetadataRow = BaseMetadataRow & { ID: string };
+export type ApplicationChildMetadataRow = BaseMetadataRow & { ApplicationID: string };
 
 /**
  * Projects plain-object rows down to a caller-requested field subset, matching
@@ -6998,11 +7000,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     simpleMetadata.EntityUniqueKeys,
                 );
 
-                // Post Process the Applications, because we want to handle the sub-objects properly.
-                simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
-                    a.ApplicationEntities = simpleMetadata.ApplicationEntities.filter((ae: any) => UUIDsEqual(ae.ApplicationID, a.ID))
-                    a.ApplicationSettings = simpleMetadata.ApplicationSettings.filter((as: any) => UUIDsEqual(as.ApplicationID, a.ID))
-                    return new ApplicationInfo(a, this);
+                // Post Process the Applications without mutating raw dataset rows (which may be
+                // frozen in a reference-sharing L1/DatasetCache).
+                const applicationEntitiesByAppId = this.groupByNormalizedUUID(
+                    (simpleMetadata.ApplicationEntities ?? []) as ApplicationChildMetadataRow[],
+                    ae => ae.ApplicationID,
+                );
+                const applicationSettingsByAppId = this.groupByNormalizedUUID(
+                    (simpleMetadata.ApplicationSettings ?? []) as ApplicationChildMetadataRow[],
+                    as => as.ApplicationID,
+                );
+                simpleMetadata.AllApplications = ((simpleMetadata.Applications ?? []) as ApplicationMetadataRow[]).map(a => {
+                    const appIdKey = NormalizeUUID(a.ID);
+                    return new ApplicationInfo(
+                        {
+                            ...a,
+                            ApplicationEntities: applicationEntitiesByAppId.get(appIdKey) || [],
+                            ApplicationSettings: applicationSettingsByAppId.get(appIdKey) || [],
+                        },
+                        this,
+                    );
                 });
 
                 // now we need to construct our return type. The way the return type works, which is an instance of AllMetadata, we have to 
@@ -7117,45 +7134,57 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     ): EntityInfo[] {
         const result: EntityInfo[] = [];
 
-        // Sort entities alphabetically by name to ensure deterministic ordering
-        // This prevents non-deterministic output in CodeGen and other metadata consumers
-        const sortedEntities = entities.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
+        // Sort a shallow copy of entities alphabetically by name to ensure deterministic ordering
+        // without mutating the caller's array (which may come from a frozen L1/DatasetCache).
+        const sortedEntities = [...entities].sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
 
-        if (fieldValues && fieldValues.length > 0) {
-            const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
-            for (const f of fields) {
-                f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
-            }
-        }
-
+        const fieldValuesByFieldId = fieldValues && fieldValues.length > 0
+            ? this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID)
+            : null;
         // Link field-level security records to their fields. Optional and typically absent:
         // the dataset item is only present on databases that have it, and the array is empty
         // in every deployment that has not configured field security — so the whole pass is
-        // skipped rather than assigning an empty array to thousands of field rows.
-        if (fieldPermissions && fieldPermissions.length > 0) {
-            const fieldPermissionsByFieldId = this.groupByNormalizedUUID(fieldPermissions, fp => fp.EntityFieldID);
-            for (const f of fields) {
-                const fieldPerms = fieldPermissionsByFieldId.get(NormalizeUUID(f.ID));
-                if (fieldPerms) {
-                    f.EntityFieldPermissions = fieldPerms;
+        // skipped rather than cloning or assigning an empty array to thousands of field rows.
+        const fieldPermissionsByFieldId = fieldPermissions && fieldPermissions.length > 0
+            ? this.groupByNormalizedUUID(fieldPermissions, fp => fp.EntityFieldID)
+            : null;
+
+        const hydratedFields: EntityFieldMetadataRow[] = (fieldValuesByFieldId || fieldPermissionsByFieldId)
+            ? fields.map(f => {
+                const fieldIdKey = NormalizeUUID(f.ID);
+                const nextField: EntityFieldMetadataRow = { ...f };
+                if (fieldValuesByFieldId) {
+                    nextField.EntityFieldValues = fieldValuesByFieldId.get(fieldIdKey) || [];
                 }
-            }
-        }
+                if (fieldPermissionsByFieldId) {
+                    const fieldPerms = fieldPermissionsByFieldId.get(fieldIdKey);
+                    if (fieldPerms) {
+                        nextField.EntityFieldPermissions = fieldPerms;
+                    }
+                }
+                return nextField;
+            })
+            : fields;
 
-        // Link organic key related entities to their parent organic keys
-        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            const okreByOrganicKeyId = this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID);
-            for (const ok of organicKeys) {
-                ok.EntityOrganicKeyRelatedEntities = okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [];
-            }
-        }
+        // Link organic key related entities to their parent organic keys without mutating input rows
+        const okreByOrganicKeyId = organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0
+            ? this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID)
+            : null;
+        const hydratedOrganicKeys: OrganicKeyMetadataRow[] | undefined = organicKeys
+            ? (okreByOrganicKeyId
+                ? organicKeys.map(ok => ({
+                    ...ok,
+                    EntityOrganicKeyRelatedEntities: okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [],
+                }))
+                : organicKeys)
+            : undefined;
 
-        const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
+        const fieldsByEntityId = this.groupByNormalizedUUID(hydratedFields, f => f.EntityID);
         const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
         const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
         const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
-        const activeOrganicKeysByEntityId = organicKeys
-            ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
+        const activeOrganicKeysByEntityId = hydratedOrganicKeys
+            ? this.groupByNormalizedUUID(hydratedOrganicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
             : new Map<string, OrganicKeyMetadataRow[]>();
         const alternateBaseViewsByEntityId = alternateBaseViews && alternateBaseViews.length > 0
             ? this.groupByNormalizedUUID(alternateBaseViews, abv => abv.EntityID)
@@ -7168,22 +7197,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entityIdKey = NormalizeUUID(e.ID);
 
             const entityFields = fieldsByEntityId.get(entityIdKey) || [];
-            e.EntityFields = entityFields.sort((a, b) => (a.Sequence - b.Sequence) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
-            e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
-            e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
-            e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];
+            const hydratedEntity: EntityMetadataRow = {
+                ...e,
+                EntityFields: [...entityFields].sort((a, b) => (a.Sequence - b.Sequence) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID)),
+                EntityPermissions: permissionsByEntityId.get(entityIdKey) || [],
+                EntityRelationships: relationshipsByEntityId.get(entityIdKey) || [],
+                EntitySettings: settingsByEntityId.get(entityIdKey) || [],
+            };
 
             // Link active organic keys to the entity
-            if (organicKeys) {
-                e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
+            if (hydratedOrganicKeys) {
+                hydratedEntity.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
             if (alternateBaseViews) {
-                e.EntityAlternateBaseViews = alternateBaseViewsByEntityId.get(entityIdKey) || [];
+                hydratedEntity.EntityAlternateBaseViews = alternateBaseViewsByEntityId.get(entityIdKey) || [];
             }
             if (uniqueKeys) {
-                e.EntityUniqueKeys = uniqueKeysByEntityId.get(entityIdKey) || [];
+                hydratedEntity.EntityUniqueKeys = uniqueKeysByEntityId.get(entityIdKey) || [];
             }
-            result.push(new EntityInfo(e, this));
+            result.push(new EntityInfo(hydratedEntity, this));
         }
 
         // Check for schema name collision: if both 'MJ' and 'MJCustom' schemas exist,
