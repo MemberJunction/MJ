@@ -23,7 +23,8 @@
  *   MC1 every non-virtual entity with BaseViewGenerated=1 has its BaseView in sys.objects
  *   MC2 every entity with Allow*API + sp*Generated has its spCreate/spUpdate/spDelete present
  *   MC3 every column-level CHECK constraint that parses as a value list == its EntityFieldValue rows
- *   MC4 every FK column has its IDX_AUTO_MJ_FKEY_{Table}_{Column} index (name truncated to 128)
+ *   MC4 every FK column has its IDX_AUTO_MJ_FKEY_{Table}_{Column} index (name truncated to 128), or
+ *       another unfiltered index that leads with the column (CodeGen then skips its own, #6466)
  *   MC5 field Sequences are gapless from 1, duplicate-free, and match base-view column order
  *   MC6 every physical core-schema field carries a non-empty Description (MS_Description)
  *   MC8 SchemaInfo coverage + casing agreement with the physical catalog
@@ -74,6 +75,12 @@ interface QualifiedIndexRow {
     SchemaName: string;
     TableName: string;
     IndexName: string;
+}
+
+interface LeadingIndexColumnRow {
+    SchemaName: string;
+    TableName: string;
+    ColumnName: string;
 }
 
 interface ViewColumnRow {
@@ -176,6 +183,23 @@ async function fetchIndexNames(pool: sql.ConnectionPool): Promise<Set<string>> {
         INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
         WHERE i.name IS NOT NULL`);
     return new Set(rows.map(r => indexKey(r.SchemaName, r.TableName, r.IndexName)));
+}
+
+/**
+ * `schema.table.column` for every column that leads an enabled, unfiltered index (key ordinal 1).
+ * CodeGen's FK index guard skips its own index when one of these covers the column (#6466).
+ */
+async function fetchLeadingIndexedColumns(pool: sql.ConnectionPool): Promise<Set<string>> {
+    const rows = await catalogQuery<LeadingIndexColumnRow>(pool, `
+        SELECT s.name AS SchemaName, t.name AS TableName, c.name AS ColumnName
+        FROM sys.indexes i
+        INNER JOIN sys.tables t ON i.object_id = t.object_id
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.has_filter = 0 AND i.is_disabled = 0 AND i.is_hypothetical = 0
+          AND ic.key_ordinal = 1 AND ic.is_included_column = 0`);
+    return new Set(rows.map(r => indexKey(r.SchemaName, r.TableName, r.ColumnName)));
 }
 
 /** Physical view columns in ordinal order, keyed by `schema.view`. */
@@ -463,17 +487,20 @@ const MC3: NamedCheck = {
 
 const MC4: NamedCheck = {
     Id: 'metadata-consistency.MC4',
-    Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index',
+    Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index or another index leading with it',
     Fn: async (ctx: IntegrationCheckContext) => {
         const pool = await poolOrSkip(ctx);
         const indexes = await fetchIndexNames(pool);
+        const leadingColumns = await fetchLeadingIndexedColumns(pool);
         const offenders: string[] = [];
         let scanned = 0;
         for (const entity of physicalEntities(ctx.Provider)) {
             for (const field of indexableForeignKeys(entity)) {
                 scanned++;
                 const name = foreignKeyIndexName(entity, field);
-                if (!indexes.has(indexKey(entity.SchemaName, entity.BaseTable, name))) {
+                const covered = indexes.has(indexKey(entity.SchemaName, entity.BaseTable, name))
+                    || leadingColumns.has(indexKey(entity.SchemaName, entity.BaseTable, field.Name));
+                if (!covered) {
                     offenders.push(`${entity.Name}.${field.Name} → ${name}`);
                 }
             }

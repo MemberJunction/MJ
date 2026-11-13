@@ -1,17 +1,53 @@
 import ts from 'typescript';
+import { LogWarning } from './status_logging';
+
+/** The class a validator method is wrapped in to parse it on its own. */
+const VALIDATOR_CLASS_PREFIX = 'class __Validator {\n';
+
+/** Parses a validator method (a class member, signature included) inside a wrapper class. */
+function parseAsClassMember(functionText: string): { SourceFile: ts.SourceFile; Wrapped: string; Parses: boolean } {
+  const wrapped = `${VALIDATOR_CLASS_PREFIX}${functionText}\n}`;
+  const sourceFile = ts.createSourceFile('validator.ts', wrapped, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const parseDiagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: ts.Diagnostic[] }).parseDiagnostics ?? [];
+  return { SourceFile: sourceFile, Wrapped: wrapped, Parses: parseDiagnostics.length === 0 };
+}
+
+/** True when the text parses as a class member (a method with its signature). */
+export function ParsesAsClassMember(functionText: string): boolean {
+  return parseAsClassMember(functionText).Parses;
+}
+
+/** Turns the literal `\n`, `\t` and `\"` sequences of double-escaped text into real characters. */
+function unescapeValidatorText(functionText: string): string {
+  return functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+}
 
 /**
  * Turns a generated validator's text into source that can be written into a class.
  *
  * A model sometimes returns the whole function double-escaped, as one line with literal `\n`,
- * `\t` and `\"` sequences; those are turned into real characters. Text that has real line breaks
- * inside it (a break at either end does not count) is real source and is returned unchanged,
- * because there those sequences are escapes inside string and regular-expression literals, and
- * turning them into characters breaks the code.
+ * `\t` and `\"` sequences; those are turned into real characters.
+ *
+ * Text that has real line breaks inside it (a break at either end does not count) is returned
+ * unchanged when it parses, because there those sequences are escapes inside string and
+ * regular-expression literals, and turning them into characters breaks the code. When it does
+ * not parse but its unescaped form does (real line breaks with every quote stored as `\"`,
+ * #6510), the unescaped form is returned. When neither parses, the input is returned and a
+ * warning names `source`, so the build error that follows can be traced to its row.
+ *
+ * @param functionText - The stored validator source.
+ * @param source - Names the validator in the warning (e.g. the entity and function name).
  */
-export function NormalizeGeneratedValidatorText(functionText: string): string {
-  if (functionText.trim().includes('\n')) return functionText;
-  return functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+export function NormalizeGeneratedValidatorText(functionText: string, source?: string): string {
+  if (!functionText.trim().includes('\n')) return unescapeValidatorText(functionText);
+  if (ParsesAsClassMember(functionText)) return functionText;
+  const unescaped = unescapeValidatorText(functionText);
+  if (unescaped !== functionText && ParsesAsClassMember(unescaped)) return unescaped;
+  LogWarning(
+    `Generated validator${source ? ` ${source}` : ''} does not parse as TypeScript, as stored or unescaped; ` +
+      'it is written unchanged and the entity file will not compile until its GeneratedCode row is fixed.'
+  );
+  return functionText;
 }
 
 /** The equality operators a UUID comparison is rewritten from, mapped to whether the result is negated. */
@@ -41,11 +77,8 @@ export const UUIDS_EQUAL_FUNCTION_NAME = 'UUIDsEqual';
  */
 export function RewriteUUIDComparisons(functionText: string, uuidFieldNames: ReadonlySet<string>): string {
   if (uuidFieldNames.size === 0 || !/[=!]=/.test(functionText)) return functionText;
-  const prefix = 'class __Validator {\n';
-  const wrapped = `${prefix}${functionText}\n}`;
-  const sourceFile = ts.createSourceFile('validator.ts', wrapped, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const parseDiagnostics = (sourceFile as ts.SourceFile & { parseDiagnostics?: ts.Diagnostic[] }).parseDiagnostics ?? [];
-  if (parseDiagnostics.length > 0) return functionText;
+  const { SourceFile: sourceFile, Wrapped: wrapped, Parses: parses } = parseAsClassMember(functionText);
+  if (!parses) return functionText;
 
   const isUUIDField = (node: ts.Expression): boolean =>
     ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword && uuidFieldNames.has(node.name.text);
@@ -73,5 +106,5 @@ export function RewriteUUIDComparisons(functionText: string, uuidFieldNames: Rea
   for (const edit of edits.sort((a, b) => b.Start - a.Start)) {
     result = result.slice(0, edit.Start) + edit.Text + result.slice(edit.End);
   }
-  return result.slice(prefix.length, result.length - 2);
+  return result.slice(VALIDATOR_CLASS_PREFIX.length, result.length - 2);
 }
