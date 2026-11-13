@@ -1,5 +1,5 @@
 /**
- * The MJ_Metadata dataset a client receives carries each row once (IT173, client transport,
+ * The MJ_Metadata dataset a client receives carries each row once (IT174, client transport,
  * non-mutating).
  *
  * The server builds its own metadata from this dataset, and the dataset cache then answers every
