@@ -69,6 +69,9 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
+  concurrencyCheck: z.enum(['off', 'log', 'enforce']).optional().default('off'),
+  deltaUpdates: z.boolean().optional().default(true),
+  typedQueryDrift: z.enum(['warn', 'throw']).optional().default('warn'),
   connectionPool: z.object({
     max: z.number().optional().default(50),
     min: z.number().optional().default(5),
@@ -169,12 +172,41 @@ const componentRegistrySchema = z.object({
   headers: z.record(z.string()).optional(),
 }).passthrough(); // Allow additional fields
 
+/**
+ * Unified notification delivery (#5983). Each names a configured Communication Provider; unset falls back to the
+ * NOTIFICATION_EMAIL_PROVIDER / NOTIFICATION_SMS_PROVIDER environment variables, then SendGrid / Twilio.
+ */
+const notificationsSchema = z.object({
+  emailProvider: z.string().optional(),
+  smsProvider: z.string().optional(),
+}).passthrough();
+
 const scheduledJobsSchema = z.object({
   enabled: z.boolean().optional().default(false),
   systemUserEmail: z.string().optional().default('system@memberjunction.org'),
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+  /**
+   * Longest the scheduler sleeps when nothing is due, and how often it re-reads the user routine
+   * index (#6217). Without Redis, a routine saved on another server reaches this one only through
+   * that re-read, and a scheduled job added or moved earlier without a cache event only at the next
+   * wake, so this bounds how late such a change applies. Minimum 1.
+   */
+  routineIndexRefreshMinutes: z.number().min(1).optional().default(60),
+});
+
+/**
+ * Event-loop stall monitor (MJ #5510). MJAPI serves HTTP, WebSockets, scheduled jobs and agent runs
+ * from one event loop, so a synchronous phase of background work stalls every interactive user.
+ * When a sampling window's worst event-loop delay reaches `warnThresholdMs`, one warning is logged
+ * with the lag, the heap and the agent runs / scheduled jobs in flight; `/healthcheck` reports the
+ * latest window's lag (not the heap: `/healthcheck` is unauthenticated).
+ */
+const eventLoopMonitorSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  warnThresholdMs: z.number().optional().default(1000),
+  sampleIntervalMs: z.number().optional().default(5000),
 });
 
 /**
@@ -992,6 +1024,8 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  eventLoopMonitor: eventLoopMonitorSchema.optional().default({}),
+  notifications: notificationsSchema.optional().default({}),
   agentSessions: AgentSessionsSchema.optional().default({}),
   agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
   conversationDetailReconciler: ConversationDetailReconcilerSchema.optional().default({}),
@@ -1076,6 +1110,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type EventLoopMonitorConfig = z.infer<typeof eventLoopMonitorSchema>;
 export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
@@ -1161,6 +1196,9 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     metadataCacheRefreshInterval: isFinite(Number(process.env.METADATA_CACHE_REFRESH_INTERVAL))
       ? Number(process.env.METADATA_CACHE_REFRESH_INTERVAL)
       : 180000,
+    concurrencyCheck: 'off',
+    deltaUpdates: true,
+    typedQueryDrift: 'warn',
     connectionPool: {
       max: 50,
       min: 5,
@@ -1203,7 +1241,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
-    staleLockCleanupInterval: 300000
+    staleLockCleanupInterval: 300000,
+    routineIndexRefreshMinutes: 60
+  },
+
+  // Event-loop stall monitor defaults (MJ #5510) — on; warns on a >=1s stall, 5s sampling window
+  eventLoopMonitor: {
+    enabled: true,
+    warnThresholdMs: 1000,
+    sampleIntervalMs: 5000
   },
 
   // Background sweeps that query the database on a timer (session janitor, bridge and conversation-

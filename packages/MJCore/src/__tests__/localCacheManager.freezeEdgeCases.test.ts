@@ -272,7 +272,7 @@ describe('LocalCacheManager freeze-on-write edge cases', () => {
         });
     });
 
-    describe('cyclic values (the isFrozen short-circuit must actually terminate a cycle)', () => {
+    describe('cyclic values (the visited set must actually terminate a cycle)', () => {
         test('SetRunViewResult terminates and freezes a self-referencing value', async () => {
             // DB/JSON-shaped rows cannot cycle today, but the deep-freeze documents cycle
             // termination as a property — freeze-first ordering is what makes it true. Pre-fix

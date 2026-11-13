@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
     ApplyEmbeddingInputPrefix,
@@ -228,6 +228,15 @@ describe('LLM control-flow knobs', () => {
         );
         expect(merged?.LLM?.NativeControlFlow).toBe('implicit');
         expect(merged?.LLM?.NativeToolResults).toBe(true);
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+
+    it('takes ChatCompletionsToolsRequireNoReasoning from the vendor row over the model layer (#6210)', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: { ChatCompletionsToolsRequireNoReasoning: true } }
+        );
+        expect(merged?.LLM?.ChatCompletionsToolsRequireNoReasoning).toBe(true);
         expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 
@@ -480,14 +489,43 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(ResolveEffectiveModelConfiguration(Model, Row)?.Realtime?.Pricing).toBeUndefined();
     });
 
-    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price and the turn coverage differ', () => {
-        const { Pricing, TurnDetection: vertexTurns, ...vertexKnobs } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
-        const { TurnDetection: googleTurns, ...googleKnobs } = seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime ?? {};
+    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price, turn coverage, and TrustNativeResumption differ', () => {
+        const {
+            Pricing,
+            TurnDetection: vertexTurns,
+            TrustNativeResumption: vertexTrust,
+            ...vertexKnobs
+        } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
+        const {
+            TurnDetection: googleTurns,
+            TrustNativeResumption: googleTrust,
+            ...googleKnobs
+        } = seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime ?? {};
 
         expect(Pricing).toBeDefined();
         expect(vertexTurns?.Coverage, 'Vertex AI refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup').toBe('audioActivityOnly');
+        expect(vertexTrust).toBe(true);
+        expect(googleTrust).toBeUndefined();
         expect(vertexKnobs).toEqual(googleKnobs);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
+    });
+
+    it('cascades ConnectionMaxSeconds, SessionMaxSeconds, ReconnectBufferSeconds, and TrustNativeResumption from AIModel to AIModelVendor', () => {
+        const { Model, Row: googleRow } = seededLayers('Gemini 3.8 Live', 'Google');
+        const { Row: vertexRow } = seededLayers('Gemini 3.8 Live', 'Vertex AI');
+
+        const googleEffective = ResolveEffectiveModelConfiguration(Model, googleRow)?.Realtime;
+        const vertexEffective = ResolveEffectiveModelConfiguration(Model, vertexRow)?.Realtime;
+
+        expect(googleEffective?.ConnectionMaxSeconds).toBe(600);
+        expect(googleEffective?.SessionMaxSeconds).toBe(1800);
+        expect(googleEffective?.ReconnectBufferSeconds).toBe(10);
+        expect(googleEffective?.TrustNativeResumption).toBeUndefined();
+
+        expect(vertexEffective?.ConnectionMaxSeconds).toBe(600);
+        expect(vertexEffective?.SessionMaxSeconds).toBe(1800);
+        expect(vertexEffective?.ReconnectBufferSeconds).toBe(10);
+        expect(vertexEffective?.TrustNativeResumption).toBe(true);
     });
 });
 
@@ -634,3 +672,16 @@ describe('Lockstep — the JSONType source CodeGen generates from declares what 
     });
 });
 
+
+describe('ResolveEffectiveModelConfiguration — prototype pollution (CodeQL #169, #553)', () => {
+    afterEach(() => {
+        delete (Object.prototype as { polluted?: unknown }).polluted;
+    });
+
+    it('does not write a __proto__ layer key into Object.prototype', () => {
+        const hostile = JSON.parse('{"__proto__":{"polluted":1},"Realtime":{"__proto__":{"polluted":1}}}') as AIModelConfiguration;
+        const effective = ResolveEffectiveModelConfiguration({ Realtime: { FullDuplex: true } }, hostile);
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(effective).toEqual({ Realtime: { FullDuplex: true } });
+    });
+});

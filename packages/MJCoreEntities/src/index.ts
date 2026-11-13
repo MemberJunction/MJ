@@ -1,6 +1,7 @@
 
 export * from './generated/entity_subclasses.js'
 export * from './generated/remote_operations.js'
+export * from './generated/queries/index.js'
 
 export * from "./custom/MJUserViewEntityExtended";
 export * from "./custom/ReadOnlyExternalBaseEntity";
@@ -17,6 +18,10 @@ export * from './custom/MJProjectEntityExtended';
 export * from './custom/ConversationWriteAccess';
 export * from './custom/ConversationForkAccess';
 export * from './custom/AnchoredConversationSecurity';
+export * from './custom/ArtifactPermissionDelegate';
+export * from './custom/DocumentLiveBlockEngine';
+export * from './custom/SlideDeckEngine';
+export * from './custom/SpreadsheetEngine';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';
@@ -55,6 +60,8 @@ export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
 export * from './engines/BrandKitEngine';
 export * from './engines/VideoStudioEngine';
+export * from './engines/CanonGraphEngine';
+export * from './graph';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
@@ -72,6 +79,14 @@ export * from './artifact-extraction/artifact-extractor';
 import { LoadPermissionProviders } from './custom/PermissionProviders';
 import { LoadPermissionEntityExtensions } from './custom/Permissions';
 import { LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
+import { LoadArtifactPermissionDelegates } from './custom/ArtifactPermissionDelegate';
+import { LoadDocumentLiveBlocks } from './custom/DocumentLiveBlockEngine';
+import { LoadSpreadsheetEngine } from './custom/SpreadsheetEngine';
+import { LoadGraphEdgeProviders } from './graph';
 LoadPermissionProviders();
 LoadPermissionEntityExtensions();
 LoadAuthorizationCheckOperation();
+LoadArtifactPermissionDelegates();
+LoadDocumentLiveBlocks();
+LoadSpreadsheetEngine();
+LoadGraphEdgeProviders();

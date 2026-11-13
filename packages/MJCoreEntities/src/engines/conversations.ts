@@ -1,12 +1,16 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, EntityPermissionType, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
+    MJCommentEntity,
+    MJCommentTypeEntity,
     MJConversationEntity,
+    MJConversationTypeEntity,
     MJConversationBranchEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityType,
+    MJFieldSuggestionEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunEntityType,
     MJConversationDetailRatingEntityType,
@@ -40,6 +44,68 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
  * folder inherit access to conversations inside it.
  */
 export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * Canonical built-in `MJ: Conversation Types.Code` constants.
+ * Custom Open Apps may seed additional `ConversationType` rows and look them up via
+ * {@link ConversationEngine.TypeByCode} or {@link ConversationEngine.ResolveConversationTypeID}.
+ */
+export const CONVERSATION_TYPE_CODES = {
+    CHAT: 'CHAT',
+    SKIP: 'SKIP',
+    ROUTINE: 'ROUTINE',
+    MEETING_ROOM: 'MEETING_ROOM',
+    COMMENT: 'COMMENT',
+} as const;
+
+export type BuiltInConversationTypeCode =
+    (typeof CONVERSATION_TYPE_CODES)[keyof typeof CONVERSATION_TYPE_CODES];
+
+/**
+ * Seeded primary-key UUIDs for built-in `MJ: Conversation Types` rows, used as deterministic
+ * fallbacks when {@link ConversationEngine.Config} has not yet run (for example in unit tests).
+ */
+export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversationTypeCode, string>> = {
+    CHAT: '7F81FF57-C5A8-464D-B3B4-35A4FCF10717',
+    SKIP: 'FDAE66B9-CF87-48EA-8A12-8E521740A66A',
+    ROUTINE: '18D12ABA-BE8C-4087-B440-835B6D077DD7',
+    MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
+    COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
+};
+
+const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
+    chat: 'CHAT',
+    skip: 'SKIP',
+    routine: 'ROUTINE',
+    'meeting room': 'MEETING_ROOM',
+    meeting_room: 'MEETING_ROOM',
+    comment: 'COMMENT',
+};
+
+/**
+ * Canonical built-in `MJ: Comment Types.Code` constants.
+ */
+export const COMMENT_TYPE_CODES = {
+    COMMENT: 'COMMENT',
+    FIELD_SUGGESTION: 'FIELD_SUGGESTION',
+} as const;
+
+export type BuiltInCommentTypeCode =
+    (typeof COMMENT_TYPE_CODES)[keyof typeof COMMENT_TYPE_CODES];
+
+/**
+ * Seeded primary-key UUIDs for built-in `MJ: Comment Types` rows.
+ */
+export const BUILT_IN_COMMENT_TYPE_IDS: Readonly<Record<BuiltInCommentTypeCode, string>> = {
+    COMMENT: '4B3A3797-EFA5-419F-80FF-F9515E5F4AA8',
+    FIELD_SUGGESTION: '8918DBA5-EDDD-4AF4-A518-FEB387ED02F9',
+};
+
+const BUILT_IN_COMMENT_TYPE_NAMES: Readonly<Record<string, BuiltInCommentTypeCode>> = {
+    comment: 'COMMENT',
+    'field suggestion': 'FIELD_SUGGESTION',
+    field_suggestion: 'FIELD_SUGGESTION',
+};
 
 /**
  * Three-tier folder visibility model:
@@ -232,6 +298,15 @@ export interface CreateConversationOptions {
      * Structured anchor metadata snapshot (`IConversationAnchorMetadata`).
      */
     anchorMetadata?: ConversationAnchorMetadata | null;
+    /**
+     * Optional `MJ: Conversation Types.Code` (or `Name`) classifying this conversation.
+     * Defaults to `'COMMENT'` when `anchorType` is set, otherwise `'CHAT'`.
+     */
+    typeCode?: string;
+    /**
+     * Optional explicit `MJ: Conversation Types.ID` (takes precedence over {@link typeCode}).
+     */
+    typeId?: string;
 }
 
 /**
@@ -273,8 +348,52 @@ export interface CreateAnchoredConversationParams {
     initialMessage?: string;
     /** Optional AI agent to associate with the conversation (`DefaultAgentID`). */
     defaultAgentId?: string | null;
+    /** Optional `MJ: Comment Types.Code` (or `Name`). Defaults to `'COMMENT'`. */
+    commentTypeCode?: string;
+    /** Optional explicit `MJ: Comment Types.ID`. */
+    commentTypeId?: string;
     /** Optional explicit metadata provider. */
     provider?: IMetadataProvider;
+}
+
+/**
+ * Parameters for creating a new `MJ: Field Suggestions` comment thread on a record field
+ * via {@link ConversationEngine.CreateFieldSuggestion}.
+ */
+export interface CreateFieldSuggestionParams {
+    /** Target entity ID (`MJ: Entities.ID`). */
+    linkedEntityId: string;
+    /** Target record serialized primary key. */
+    linkedRecordId: string;
+    /** Exact `EntityField.Name` on the target entity (`AnchorKey`). */
+    fieldName: string;
+    /** Proposed value serialized as text (or `null` to suggest clearing the field). */
+    suggestedValue: string | null;
+    /** Source category (`'Agent' | 'Integration' | 'LLM' | 'Person'`). Defaults to `'Agent'`. */
+    source?: MJFieldSuggestionEntity['Source'];
+    /** Optional confidence score in `[0, 1]`. */
+    confidence?: number | null;
+    /** Optional `MJ: AI Prompt Runs.ID` provenance link. */
+    aiPromptRunId?: string | null;
+    /** Optional thread title. */
+    name?: string;
+    /** Optional environment ID. */
+    environmentId?: string;
+    /** Optional anchor metadata snapshot (`sectionKey`, `groupKey`, `anchorDisplayName`, etc.). */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /** Optional rationale / explanation posted as the opening `MJ: Conversation Details` message. */
+    initialMessage?: string;
+    /** Optional explicit metadata provider. */
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Batch-loaded `MJ: Comments` and `MJ: Field Suggestions` keyed by normalized `Conversation.ID`.
+ */
+export interface AnchoredCommentsAndSuggestionsBundle {
+    CommentsByConversationId: Map<string, MJCommentEntity>;
+    SuggestionsByConversationId: Map<string, MJFieldSuggestionEntity>;
+    CommentTypeCodeByConversationId: Map<string, string>;
 }
 
 /**
@@ -302,6 +421,14 @@ export interface AnchoredCommentRollup {
     ByGroup: ReadonlyMap<string, number>;
     /** Open thread counts keyed by contribution key (`AnchorType === 'Contribution'`). */
     ByContribution: ReadonlyMap<string, number>;
+    /** Open plain/non-suggestion comment count across the record. */
+    OpenNoteCount?: number;
+    /** Open `FIELD_SUGGESTION` count across the record. */
+    OpenSuggestionCount?: number;
+    /** Open `FIELD_SUGGESTION` counts keyed by normalized (lowercase) field name. */
+    ByFieldSuggestions?: ReadonlyMap<string, number>;
+    /** Open counts per field further broken down by uppercase `CommentType.Code`. */
+    ByFieldByType?: ReadonlyMap<string, ReadonlyMap<string, number>>;
 }
 
 /**
@@ -310,17 +437,26 @@ export interface AnchoredCommentRollup {
  * `entityInfo` and `currentUser` are provided.
  */
 export function ComputeAnchoredCommentCounts(
-    conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+    conversations: ReadonlyArray<
+        Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'> & {
+            ID?: string;
+        }
+    >,
     currentUser?: UserInfo | null,
-    entityInfo?: EntityInfo | null
+    entityInfo?: EntityInfo | null,
+    commentTypeCodeByConversationId?: ReadonlyMap<string, string> | null
 ): AnchoredCommentRollup {
     let totalOpenCount = 0;
     let totalResolvedCount = 0;
     let recordLevelOpenCount = 0;
+    let openNoteCount = 0;
+    let openSuggestionCount = 0;
     const byField = new Map<string, number>();
     const bySection = new Map<string, number>();
     const byGroup = new Map<string, number>();
     const byContribution = new Map<string, number>();
+    const byFieldSuggestions = new Map<string, number>();
+    const byFieldByType = new Map<string, Map<string, number>>();
 
     for (const conv of conversations) {
         if (!conv.AnchorType) {
@@ -345,6 +481,18 @@ export function ComputeAnchoredCommentCounts(
         }
 
         totalOpenCount++;
+        const normId = conv.ID ? NormalizeUUID(conv.ID) : '';
+        const rawTypeCode = normId && commentTypeCodeByConversationId
+            ? commentTypeCodeByConversationId.get(normId)
+            : undefined;
+        const typeCode = (rawTypeCode?.trim().toUpperCase()) || COMMENT_TYPE_CODES.COMMENT;
+        const isSuggestion = typeCode === COMMENT_TYPE_CODES.FIELD_SUGGESTION;
+        if (isSuggestion) {
+            openSuggestionCount++;
+        } else {
+            openNoteCount++;
+        }
+
         const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
         const rawKey = conv.AnchorKey?.trim() ?? '';
 
@@ -354,6 +502,15 @@ export function ComputeAnchoredCommentCounts(
             const fieldKey = (rawKey || meta?.fieldName?.trim() || '').toLowerCase();
             if (fieldKey) {
                 byField.set(fieldKey, (byField.get(fieldKey) ?? 0) + 1);
+                if (isSuggestion) {
+                    byFieldSuggestions.set(fieldKey, (byFieldSuggestions.get(fieldKey) ?? 0) + 1);
+                }
+                let typeMap = byFieldByType.get(fieldKey);
+                if (!typeMap) {
+                    typeMap = new Map<string, number>();
+                    byFieldByType.set(fieldKey, typeMap);
+                }
+                typeMap.set(typeCode, (typeMap.get(typeCode) ?? 0) + 1);
             }
         } else if (conv.AnchorType === 'Section') {
             const sectionKey = rawKey || meta?.sectionKey?.trim() || '';
@@ -393,7 +550,11 @@ export function ComputeAnchoredCommentCounts(
         ByField: byField,
         BySection: bySection,
         ByGroup: byGroup,
-        ByContribution: byContribution
+        ByContribution: byContribution,
+        OpenNoteCount: openNoteCount,
+        OpenSuggestionCount: openSuggestionCount,
+        ByFieldSuggestions: byFieldSuggestions,
+        ByFieldByType: byFieldByType,
     };
 }
 
@@ -1324,30 +1485,153 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * which would cause redundant cache updates or infinite loops.
      */
     private _selfMutating = false;
+    private _conversationTypes: MJConversationTypeEntity[] = [];
+    private _commentTypes: MJCommentTypeEntity[] = [];
+
+    // ========================================================================
+    // CONVERSATION & COMMENT TYPE LOOKUPS
+    // ========================================================================
+
+    /** Cached `MJ: Conversation Types` rows loaded during {@link Config}. */
+    public get ConversationTypes(): readonly MJConversationTypeEntity[] {
+        return this._conversationTypes;
+    }
+
+    /** Cached `MJ: Comment Types` rows loaded during {@link Config}. */
+    public get CommentTypes(): readonly MJCommentTypeEntity[] {
+        return this._commentTypes;
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by its case-insensitive `Code`. */
+    public TypeByCode(code: string | null | undefined): MJConversationTypeEntity | undefined {
+        const normalized = code?.trim().toUpperCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => t.Code?.trim().toUpperCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by its case-insensitive `Name`. */
+    public TypeByName(name: string | null | undefined): MJConversationTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => t.Name?.trim().toLowerCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by `ID`. */
+    public TypeByID(id: string | null | undefined): MJConversationTypeEntity | undefined {
+        if (!id) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => UUIDsEqual(t.ID, id));
+    }
+
+    /**
+     * Resolves a `ConversationType.ID` by `Code` or `Name`, consulting cached `ConversationTypes`
+     * first and falling back to built-in seeded UUIDs when {@link Config} has not yet populated cache.
+     */
+    public ResolveConversationTypeID(codeOrName: string | null | undefined): string | null {
+        const trimmed = codeOrName?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const fromCache = this.TypeByCode(trimmed) ?? this.TypeByName(trimmed);
+        if (fromCache?.ID) {
+            return fromCache.ID;
+        }
+        const upper = trimmed.toUpperCase() as BuiltInConversationTypeCode;
+        if (upper in BUILT_IN_CONVERSATION_TYPE_IDS) {
+            return BUILT_IN_CONVERSATION_TYPE_IDS[upper];
+        }
+        const mappedCode = BUILT_IN_CONVERSATION_TYPE_NAMES[trimmed.toLowerCase()];
+        return mappedCode ? BUILT_IN_CONVERSATION_TYPE_IDS[mappedCode] : null;
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by its case-insensitive `Code`. */
+    public CommentTypeByCode(code: string | null | undefined): MJCommentTypeEntity | undefined {
+        const normalized = code?.trim().toUpperCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => t.Code?.trim().toUpperCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by its case-insensitive `Name`. */
+    public CommentTypeByName(name: string | null | undefined): MJCommentTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => t.Name?.trim().toLowerCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by `ID`. */
+    public CommentTypeByID(id: string | null | undefined): MJCommentTypeEntity | undefined {
+        if (!id) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => UUIDsEqual(t.ID, id));
+    }
+
+    /**
+     * Resolves a `CommentType.ID` by `Code` or `Name`, consulting cached `CommentTypes`
+     * first and falling back to built-in seeded UUIDs when {@link Config} has not yet populated cache.
+     */
+    public ResolveCommentTypeID(codeOrName: string | null | undefined): string | null {
+        const trimmed = codeOrName?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const fromCache = this.CommentTypeByCode(trimmed) ?? this.CommentTypeByName(trimmed);
+        if (fromCache?.ID) {
+            return fromCache.ID;
+        }
+        const upper = trimmed.toUpperCase() as BuiltInCommentTypeCode;
+        if (upper in BUILT_IN_COMMENT_TYPE_IDS) {
+            return BUILT_IN_COMMENT_TYPE_IDS[upper];
+        }
+        const mappedCode = BUILT_IN_COMMENT_TYPE_NAMES[trimmed.toLowerCase()];
+        return mappedCode ? BUILT_IN_COMMENT_TYPE_IDS[mappedCode] : null;
+    }
 
     // ========================================================================
     // ENGINE CONFIG (BaseEngine pattern)
     // ========================================================================
 
     /**
-     * Configures the engine. Unlike other engines that bulk-load entity tables via BaseEngine.Load(),
-     * ConversationEngine manages its own caching because conversations are user-scoped and filtered
-     * by environment, which doesn't fit the standard "load all rows" pattern.
-     *
-     * Call this once at startup to initialize the engine. Conversation data is loaded
-     * separately via LoadConversations().
+     * Configures the engine, bulk-loading small lookup tables (`MJ: Conversation Types`
+     * and `MJ: Comment Types`) while keeping user-scoped conversation data lazy via
+     * {@link LoadConversations}.
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        // Ensure ArtifactMetadataEngine is loaded — conversation details reference artifacts
-        // and we need artifact types available before processing. Passing false means
-        // this is a no-op if it's already loaded.
         await ArtifactMetadataEngine.Instance.Config(forceRefresh, contextUser, provider);
 
-        // We don't use BaseEngine.Load() because conversations are user-scoped.
-        // Mark the engine as "configured" so consumers can check .Loaded.
-        // We call Load with an empty config array just to set the Loaded flag and wire up
-        // the BaseEngine infrastructure (entity event listeners, etc.)
-        const configs: Partial<BaseEnginePropertyConfig>[] = [];
+        const activeProvider = provider ?? this.ProviderToUse;
+        const entities = activeProvider?.Entities;
+        const hasTypeEntities =
+            !Array.isArray(entities) ||
+            entities.length === 0 ||
+            (entities.some((e) => e.Name === 'MJ: Conversation Types') &&
+                entities.some((e) => e.Name === 'MJ: Comment Types'));
+
+        const configs: Partial<BaseEnginePropertyConfig>[] = hasTypeEntities
+            ? [
+                  {
+                      Type: 'entity',
+                      EntityName: 'MJ: Conversation Types',
+                      PropertyName: '_conversationTypes',
+                      CacheLocal: true,
+                  },
+                  {
+                      Type: 'entity',
+                      EntityName: 'MJ: Comment Types',
+                      PropertyName: '_commentTypes',
+                      CacheLocal: true,
+                  },
+              ]
+            : [];
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
@@ -1666,6 +1950,44 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
         return [...byProjectId.values()];
+    }
+
+    /**
+     * True when one of the user's roles grants this kind of write on folders (`MJ: Projects`) with no row-level
+     * filter. A user whose folder writes are all filtered (the UI role: own folders only) writes only folders they
+     * own: they cannot make a folder Public (no owner) or rename, move or delete a Public folder or someone else's.
+     * Answers false when the folder entity's metadata is not loaded.
+     *
+     * @param provider the metadata provider the caller works against; defaults to the engine's.
+     */
+    public CanWriteAnyProject(
+        user: UserInfo | null | undefined,
+        type: Exclude<EntityPermissionType, 'Read'>,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!user) {
+            return false;
+        }
+        const entity = (provider ?? this.ProviderToUse)?.EntityByName('MJ: Projects');
+        return !!entity && entity.UserExemptFromRowLevelSecurity(user, type);
+    }
+
+    /**
+     * True when the user may rename or delete this folder from the sidebar: they own it, or their folder writes
+     * are not row-filtered (see {@link CanWriteAnyProject}).
+     */
+    public CanManageProject(
+        project: MJProjectEntity | null | undefined,
+        user: UserInfo | null | undefined,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!project || !user) {
+            return false;
+        }
+        if (project.OwnerUserID && UUIDsEqual(project.OwnerUserID, user.ID)) {
+            return true;
+        }
+        return this.CanWriteAnyProject(user, EntityPermissionType.Update, provider);
     }
 
     /**
@@ -2075,6 +2397,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   2. Reparents direct child folders to this folder's parent (one level up).
      *   3. Deletes the now-unreferenced folder.
      * Conversations and subfolders are preserved — only the folder itself is removed.
+     * Steps 1 and 2 cover the rows the caller can change; the server's folder delete
+     * (`MJProjectEntityServer.Delete`) moves the rest in the delete's transaction.
      *
      * Note: this does NOT reassign Tasks that reference the project; if a Task still
      * references it, the final delete will fail and this throws with the DB message.
@@ -2100,9 +2424,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const newParentId = project.ParentID ?? null;
 
         // 1. Unassign conversations directly in this folder that the caller can edit.
-        // View-only conversations owned by other users in a shared folder cannot be edited
-        // by this caller; if any still exist in the DB, the delete below will surface
-        // FK_Conversation_Project via ExplainProjectDeleteFailure.
+        // Conversations owned by other users in a shared folder cannot be edited by this
+        // caller; the server's folder delete takes them out of the folder in the delete's
+        // transaction (on a server without that, the delete below surfaces
+        // FK_Conversation_Project via ExplainProjectDeleteFailure).
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
@@ -2122,21 +2447,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
         // with a raw constraint message, about a row the user is not allowed to know exists.
         //
-        // The read carries NO ownership clause, deliberately. Deleting a folder needs
-        // CanDelete on the entity, which the UI role does not hold; the roles that do also
-        // hold unfiltered read, which makes them exempt from the row-level filter — so this
-        // read returns the complete child set for every principal that can actually reach
-        // here. Should a deployment grant delete to a filtered role anyway, the server still
-        // narrows the read, and step 3's guard turns the resulting FK failure into something
-        // legible rather than "Failed to save project".
+        // The read carries no ownership clause; the server narrows it to what the caller
+        // may read. A subfolder another user owns may refuse the move (only its owner moves
+        // it, and a row-filtered caller writes only their own folders): that one is left in
+        // place, and the server's folder delete moves it, as the system user and in the
+        // delete's transaction, once the caller's Delete permission and row filter pass. On a
+        // server without that, the delete below fails on the foreign key and step 3's guard
+        // explains it.
         const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
                 for (const child of childFolders) {
+                    const previousParentId = child.ParentID;
                     child.ParentID = newParentId;
                     const saved = await child.Save();
                     if (!saved) {
+                        const ownedByOther = !!child.OwnerUserID && !!contextUser?.ID && !UUIDsEqual(child.OwnerUserID, contextUser.ID);
+                        if (ownedByOther) {
+                            child.ParentID = previousParentId;   // left for the server's folder delete
+                            continue;
+                        }
                         throw new Error(child.LatestResult?.CompleteMessage || 'Failed to reparent subfolder');
                     }
                 }
@@ -2242,6 +2573,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         conversation.Name = name;
         conversation.EnvironmentID = environmentId;
         conversation.UserID = contextUser.ID;
+        const resolvedTypeId =
+            options?.typeId ??
+            this.ResolveConversationTypeID(
+                options?.typeCode ??
+                    (options?.anchorType ? CONVERSATION_TYPE_CODES.COMMENT : CONVERSATION_TYPE_CODES.CHAT)
+            ) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+        conversation.TypeID = resolvedTypeId;
         if (description) conversation.Description = description;
         if (projectId) conversation.ProjectID = projectId;
 
@@ -2488,6 +2827,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.EnvironmentID = this._lastEnvironmentId;
         }
         conversation.UserID = contextUser.ID;
+        conversation.TypeID =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;
         conversation.ApplicationScope = 'Global';
         conversation.LinkedEntityID = params.linkedEntityId;
         conversation.LinkedRecordID = params.linkedRecordId;
@@ -2498,11 +2840,46 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             conversation.DefaultAgentID = params.defaultAgentId;
         }
 
+        const requestedCommentTypeId =
+            params.commentTypeId ??
+            (params.commentTypeCode ? this.ResolveCommentTypeID(params.commentTypeCode) : null);
+
         this._selfMutating = true;
         try {
             const saved = await conversation.Save();
             if (!saved) {
                 throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to create anchored conversation');
+            }
+            if (
+                requestedCommentTypeId &&
+                !UUIDsEqual(requestedCommentTypeId, BUILT_IN_COMMENT_TYPE_IDS.COMMENT)
+            ) {
+                const isaComment = conversation.ISAChild as MJCommentEntity | null;
+                if (isaComment) {
+                    isaComment.CommentTypeID = requestedCommentTypeId;
+                    const commentSaved = await isaComment.Save();
+                    if (!commentSaved) {
+                        throw new Error(
+                            isaComment.LatestResult?.CompleteMessage ||
+                                isaComment.LatestResult?.Message ||
+                                'Failed to update comment type on anchored conversation'
+                        );
+                    }
+                } else {
+                    const commentObj = await md.GetEntityObject<MJCommentEntity>('MJ: Comments', contextUser);
+                    const loadedComment = await commentObj.Load(conversation.ID);
+                    if (loadedComment) {
+                        commentObj.CommentTypeID = requestedCommentTypeId;
+                        const commentSaved = await commentObj.Save();
+                        if (!commentSaved) {
+                            throw new Error(
+                                commentObj.LatestResult?.CompleteMessage ||
+                                    commentObj.LatestResult?.Message ||
+                                    'Failed to update comment type on anchored conversation'
+                            );
+                        }
+                    }
+                }
             }
         } finally {
             this._selfMutating = false;
@@ -2561,15 +2938,258 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Batch-loads `MJ: Comments` and `MJ: Field Suggestions` for the specified anchored
+     * `conversationIds` in a single batched `RunViews` round trip, avoiding N+1 queries
+     * when rendering forms with multiple comments and field suggestions.
+     */
+    public async LoadAnchoredCommentsAndSuggestions(
+        conversationIds: ReadonlyArray<string>,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        bypassCache: boolean = false
+    ): Promise<AnchoredCommentsAndSuggestionsBundle> {
+        const commentsByConversationId = new Map<string, MJCommentEntity>();
+        const suggestionsByConversationId = new Map<string, MJFieldSuggestionEntity>();
+        const commentTypeCodeByConversationId = new Map<string, string>();
+
+        const cleanIds = conversationIds.map((id) => id?.trim()).filter((id): id is string => !!id);
+        if (cleanIds.length === 0) {
+            return {
+                CommentsByConversationId: commentsByConversationId,
+                SuggestionsByConversationId: suggestionsByConversationId,
+                CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+            };
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const entities = md?.Entities;
+        const hasCommentEntities =
+            !Array.isArray(entities) ||
+            entities.length === 0 ||
+            (entities.some((e) => e.Name === 'MJ: Comments') &&
+                entities.some((e) => e.Name === 'MJ: Field Suggestions'));
+        if (!hasCommentEntities) {
+            return {
+                CommentsByConversationId: commentsByConversationId,
+                SuggestionsByConversationId: suggestionsByConversationId,
+                CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+            };
+        }
+
+        const rv = RunView.FromMetadataProvider(md);
+        const inList = cleanIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        const [commentsResult, suggestionsResult] = await rv.RunViews(
+            [
+                {
+                    EntityName: 'MJ: Comments',
+                    ExtraFilter: `ID IN (${inList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: bypassCache,
+                },
+                {
+                    EntityName: 'MJ: Field Suggestions',
+                    ExtraFilter: `ID IN (${inList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: bypassCache,
+                },
+            ],
+            contextUser
+        );
+
+        if (commentsResult && !commentsResult.Success) {
+            throw new Error(
+                commentsResult.ErrorMessage || 'Failed to load anchored MJ: Comments records'
+            );
+        }
+        if (suggestionsResult && !suggestionsResult.Success) {
+            throw new Error(
+                suggestionsResult.ErrorMessage || 'Failed to load anchored MJ: Field Suggestions records'
+            );
+        }
+
+        if (commentsResult?.Success && Array.isArray(commentsResult.Results)) {
+            for (const rawComment of commentsResult.Results as MJCommentEntity[]) {
+                const normId = NormalizeUUID(rawComment.ID);
+                commentsByConversationId.set(normId, rawComment);
+                const ct = this.CommentTypeByID(rawComment.CommentTypeID);
+                if (ct?.Code) {
+                    commentTypeCodeByConversationId.set(normId, ct.Code.trim().toUpperCase());
+                } else if (UUIDsEqual(rawComment.CommentTypeID, BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION)) {
+                    commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+                } else {
+                    commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.COMMENT);
+                }
+            }
+        }
+
+        if (suggestionsResult?.Success && Array.isArray(suggestionsResult.Results)) {
+            for (const rawSuggestion of suggestionsResult.Results as MJFieldSuggestionEntity[]) {
+                const normId = NormalizeUUID(rawSuggestion.ID);
+                suggestionsByConversationId.set(normId, rawSuggestion);
+                commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+            }
+        }
+
+        return {
+            CommentsByConversationId: commentsByConversationId,
+            SuggestionsByConversationId: suggestionsByConversationId,
+            CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+        };
+    }
+
+    /**
+     * Creates a new `MJ: Field Suggestions` comment thread (saving `Conversation`, `Comment`,
+     * and `FieldSuggestion` in a single IS-A chain transaction) and optionally posts the opening
+     * rationale message into `MJ: Conversation Details`.
+     */
+    public async CreateFieldSuggestion(
+        params: CreateFieldSuggestionParams,
+        contextUser: UserInfo
+    ): Promise<{ Suggestion: MJFieldSuggestionEntity; InitialDetail: MJConversationDetailEntity | null }> {
+        const md = params.provider ?? this.ProviderToUse;
+        const suggestion = await md.GetEntityObject<MJFieldSuggestionEntity>('MJ: Field Suggestions', contextUser);
+        suggestion.NewRecord();
+
+        const cleanFieldName = params.fieldName.trim();
+        const fallbackTitle = `${params.anchorMetadata?.anchorDisplayName || cleanFieldName} Suggestion`;
+        suggestion.Name = (params.name?.trim() || fallbackTitle).slice(0, 255);
+        if (params.environmentId) {
+            suggestion.EnvironmentID = params.environmentId;
+        } else if (this._lastEnvironmentId) {
+            suggestion.EnvironmentID = this._lastEnvironmentId;
+        }
+        suggestion.UserID = contextUser.ID;
+        suggestion.TypeID =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;
+        suggestion.CommentTypeID =
+            this.ResolveCommentTypeID(COMMENT_TYPE_CODES.FIELD_SUGGESTION) ??
+            BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION;
+        suggestion.ApplicationScope = 'Global';
+        suggestion.LinkedEntityID = params.linkedEntityId;
+        suggestion.LinkedRecordID = params.linkedRecordId;
+        suggestion.AnchorType = 'Field';
+        suggestion.AnchorKey = cleanFieldName;
+        suggestion.AnchorMetadata = JSON.stringify({
+            ...(params.anchorMetadata ?? {}),
+            fieldName: cleanFieldName,
+        });
+        suggestion.SuggestedValue = params.suggestedValue;
+        suggestion.Source = params.source ?? 'Agent';
+        suggestion.Confidence = params.confidence ?? null;
+        suggestion.AIPromptRunID = params.aiPromptRunId ?? null;
+        suggestion.Outcome = null;
+
+        this._selfMutating = true;
+        try {
+            const saved = await suggestion.Save();
+            if (!saved) {
+                throw new Error(
+                    suggestion.LatestResult?.CompleteMessage ||
+                        suggestion.LatestResult?.Message ||
+                        'Failed to create field suggestion'
+                );
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        let initialDetail: MJConversationDetailEntity | null = null;
+        const messageText = params.initialMessage?.trim();
+        if (messageText) {
+            initialDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            initialDetail.NewRecord();
+            initialDetail.ConversationID = suggestion.ID;
+            initialDetail.UserID = contextUser.ID;
+            initialDetail.Role = 'User';
+            initialDetail.Message = messageText;
+            const detailSaved = await initialDetail.Save();
+            if (!detailSaved) {
+                throw new Error(
+                    initialDetail.LatestResult?.CompleteMessage ||
+                        initialDetail.LatestResult?.Message ||
+                        'Failed to save initial field suggestion message'
+                );
+            }
+        }
+
+        return { Suggestion: suggestion, InitialDetail: initialDetail };
+    }
+
+    /**
+     * Accepts a pending `MJ: Field Suggestions` row as `contextUser`. Server-side
+     * `FieldSuggestionCommentDriver.OnAccept` writes `SuggestedValue` onto the target record
+     * through a normal `Save()` as `contextUser` (enforcing RLS, FLS, and `Update` permission,
+     * and recording `Record Changes`), then stamps `Outcome = 'Accepted'`, `IsResolved = true`,
+     * `ResolvedByUserID`, and `ResolvedAt`.
+     */
+    public async AcceptFieldSuggestion(
+        suggestionId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        return this.transitionFieldSuggestionOutcome(suggestionId, 'Accepted', contextUser, provider);
+    }
+
+    /**
+     * Rejects a pending `MJ: Field Suggestions` row as `contextUser`. Server-side
+     * `FieldSuggestionCommentDriver.OnReject` verifies `contextUser` holds update rights on the
+     * target record and field, then stamps `Outcome = 'Rejected'`, `IsResolved = true`,
+     * `ResolvedByUserID`, and `ResolvedAt`.
+     */
+    public async RejectFieldSuggestion(
+        suggestionId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        return this.transitionFieldSuggestionOutcome(suggestionId, 'Rejected', contextUser, provider);
+    }
+
+    private async transitionFieldSuggestionOutcome(
+        suggestionId: string,
+        outcome: 'Accepted' | 'Rejected',
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        const md = provider ?? this.ProviderToUse;
+        const suggestion = await md.GetEntityObject<MJFieldSuggestionEntity>('MJ: Field Suggestions', contextUser);
+        const loaded = await suggestion.Load(suggestionId);
+        if (!loaded) {
+            throw new Error(`Field suggestion ${suggestionId} not found`);
+        }
+
+        suggestion.Outcome = outcome;
+        this._selfMutating = true;
+        try {
+            const saved = await suggestion.Save();
+            if (!saved) {
+                throw new Error(
+                    suggestion.LatestResult?.CompleteMessage ||
+                        suggestion.LatestResult?.Message ||
+                        `Failed to mark field suggestion as ${outcome}`
+                );
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+        return suggestion;
+    }
+
+    /**
      * Computes open and resolved anchored comment counts across fields, sections, groups,
      * and contributions for a record, respecting FLS for `currentUser`.
      */
     public ComputeAnchoredCommentCounts(
-        conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+        conversations: ReadonlyArray<
+            Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'> & {
+                ID?: string;
+            }
+        >,
         currentUser?: UserInfo | null,
-        entityInfo?: EntityInfo | null
+        entityInfo?: EntityInfo | null,
+        commentTypeCodeByConversationId?: ReadonlyMap<string, string> | null
     ): AnchoredCommentRollup {
-        return ComputeAnchoredCommentCounts(conversations, currentUser, entityInfo);
+        return ComputeAnchoredCommentCounts(conversations, currentUser, entityInfo, commentTypeCodeByConversationId);
     }
 
     /**

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, inject } from '@angular/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import { FileStorageEngineBase, StorageAccountWithProvider } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, TrimChars } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -140,7 +140,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Currently selected item keys in the grid (Kendo stores keys, not full objects)
+   * Currently selected item keys in the grid (keys, not full objects)
    */
   public SelectedItems: string[] = [];
 
@@ -901,7 +901,7 @@ export class FileGridComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Handles item selection change (not used - Kendo handles selection internally)
+   * Handles item selection change (not used - the grid handles selection internally)
    */
   public OnSelectionChange(selectedKeys: string[]): void {
     this.SelectedItems = selectedKeys;
@@ -2083,7 +2083,7 @@ export class FileGridComponent implements OnInit, OnChanges {
     try {
       // Construct source path and normalize it
       const rawSourcePath = this.constructItemPath(this.ItemToCopyToProvider);
-      const sourcePath = rawSourcePath.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+      const sourcePath = TrimChars(rawSourcePath, '/').replace(/\/+/g, '/');
       console.log('[FileGrid] Cross-account copy sourcePath:', { raw: rawSourcePath, normalized: sourcePath });
 
       // Copy to each selected account

@@ -40,10 +40,10 @@ describe('LiveKitTokenService', () => {
     expect(metadata.mjRole).toBe('agent');
   });
 
-  it('lets an agent bot update its own attributes (to say its avatar was taken down), and no one else', async () => {
+  it('grants no one, agent bots included, the right to update their own name, metadata or attributes', async () => {
     const svc = new LiveKitTokenService(CONFIG);
     const bot = decodePayload((await svc.MintBotToken('room-42', 'agent-x', 'Sage', { 'mj.agentAvatar': 'on' })).Token);
-    expect((bot.video as Record<string, unknown>).canUpdateOwnMetadata).toBe(true);
+    expect((bot.video as Record<string, unknown>).canUpdateOwnMetadata).toBeUndefined();
     expect(bot.attributes).toEqual({ 'mj.agentAvatar': 'on' });
     const person = decodePayload((await svc.MintClientToken('room-42', 'user-1', 'Ada')).Token);
     expect((person.video as Record<string, unknown>).canUpdateOwnMetadata).toBeUndefined();

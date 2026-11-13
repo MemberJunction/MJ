@@ -1,7 +1,143 @@
 import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane, RealtimeTurnDetectionSettings } from "./modelConfiguration";
+import {
+    RealtimeConversationMemory,
+    type RealtimeContextNoteOptions,
+    type RealtimeMemoryEntry,
+    type RealtimeMemorySeed,
+} from "./realtimeConversationMemory";
+import {
+    DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+    DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+    MAX_REALTIME_RAPID_RECONNECTS,
+    REALTIME_RAPID_RECONNECT_WINDOW_MS,
+    RealtimeReconnectController,
+    type RealtimeReconnectContext,
+    type RealtimeReconnectFailureCode,
+    type RealtimeReconnectReason,
+} from "./realtimeSessionResumption";
 import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
 import type { RealtimeVideoFrame } from "./realtimeVideoOutput";
+
+export {
+    DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+    DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+    MAX_REALTIME_RAPID_RECONNECTS,
+    REALTIME_RAPID_RECONNECT_WINDOW_MS,
+    RealtimeReconnectController,
+    type RealtimeReconnectContext,
+    type RealtimeReconnectFailureCode,
+};
+
+/** Extracted timing and resumption settings from a session or model configuration bag. */
+export interface ExtractedRealtimeTimingConfig {
+    readonly ConnectionMaxSeconds?: number;
+    readonly SessionMaxSeconds?: number;
+    readonly ReconnectBufferSeconds?: number;
+    readonly TrustNativeResumption?: boolean;
+    readonly ZeroDataRetention?: boolean;
+}
+
+/** Resolved effective timing and resumption settings for a server or client realtime session. */
+export interface ResolvedRealtimeTiming {
+    /** Effective single-connection duration in seconds (`min(driverDefault, configured, runtimeCap)`). */
+    readonly ConnectionMaxSeconds?: number;
+    /** Credential or session token lifetime in seconds (used to schedule credential/relay refresh). */
+    readonly SessionMaxSeconds?: number;
+    /** Buffer in seconds before `ConnectionMaxSeconds` at which proactive reconnect begins. */
+    readonly ReconnectBufferSeconds: number;
+    /** Whether native resumption handles are trusted on the active session/topology. */
+    readonly TrustNativeResumption: boolean;
+}
+
+/**
+ * Extracts `connectionMaxSeconds`, `sessionMaxSeconds`, `reconnectBufferSeconds`,
+ * `trustNativeResumption`, and `zeroDataRetention` (in either camelCase or PascalCase) from an
+ * open configuration bag. Non-integer fractions are rejected (never floored), matching
+ * {@link ClampSessionSecondsValue}.
+ */
+export function ExtractRealtimeTimingConfig(
+    bag: Record<string, unknown> | null | undefined
+): ExtractedRealtimeTimingConfig {
+    if (!bag || typeof bag !== 'object') {
+        return {};
+    }
+    const rawConn = bag['connectionMaxSeconds'] ?? bag['ConnectionMaxSeconds'];
+    const rawSess = bag['sessionMaxSeconds'] ?? bag['SessionMaxSeconds'];
+    const rawBuf = bag['reconnectBufferSeconds'] ?? bag['ReconnectBufferSeconds'];
+    const rawTrust = bag['trustNativeResumption'] ?? bag['TrustNativeResumption'];
+    const rawZdr = bag['zeroDataRetention'] ?? bag['ZeroDataRetention'];
+
+    const connectionMaxSeconds = ClampSessionSecondsValue(typeof rawConn === 'number' ? rawConn : undefined);
+    const sessionMaxSeconds = ClampSessionSecondsValue(typeof rawSess === 'number' ? rawSess : undefined);
+    const reconnectBufferSeconds = ClampSessionSecondsValue(typeof rawBuf === 'number' ? rawBuf : undefined);
+    const trustNativeResumption = typeof rawTrust === 'boolean' ? rawTrust : undefined;
+    const zeroDataRetention = typeof rawZdr === 'boolean' ? rawZdr : undefined;
+
+    return {
+        ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
+        ...(sessionMaxSeconds !== undefined ? { SessionMaxSeconds: sessionMaxSeconds } : {}),
+        ...(reconnectBufferSeconds !== undefined ? { ReconnectBufferSeconds: reconnectBufferSeconds } : {}),
+        ...(trustNativeResumption !== undefined ? { TrustNativeResumption: trustNativeResumption } : {}),
+        ...(zeroDataRetention !== undefined ? { ZeroDataRetention: zeroDataRetention } : {}),
+    };
+}
+
+/**
+ * Single Core timing resolver shared by `StartSession` (`BaseRealtimeSession`), `CreateClientSession`
+ * (`BaseRealtimeModel`), and `RealtimeClientSessionService`.
+ *
+ * Rules:
+ * - `ConnectionMaxSeconds`: metadata (`configured.ConnectionMaxSeconds`) narrows the driver's provider
+ *   ceiling (`DriverDefaultConnectionSeconds`) and any state-dependent `RuntimeCapSeconds` via
+ *   {@link ClampSessionSecondsValue}, never widening past a hard provider ceiling.
+ * - `SessionMaxSeconds`: credential / session token lifetime in seconds, never conflated with
+ *   `ConnectionMaxSeconds`.
+ * - `TrustNativeResumption`: forced `false` when `ZeroDataRetention` is `true`; otherwise explicit
+ *   `configured.TrustNativeResumption` overrides `DefaultTrustNativeResumption`.
+ */
+export function ResolveRealtimeTiming(options: {
+    Config?: Record<string, unknown> | null;
+    DriverDefaultConnectionSeconds?: number;
+    RuntimeCapSeconds?: number;
+    DriverDefaultBufferSeconds?: number;
+    DefaultTrustNativeResumption?: boolean;
+    ZeroDataRetention?: boolean;
+}): ResolvedRealtimeTiming {
+    const extracted = ExtractRealtimeTimingConfig(options.Config);
+    const connectionMaxSeconds = ClampSessionSecondsValue(
+        options.RuntimeCapSeconds,
+        extracted.ConnectionMaxSeconds,
+        options.DriverDefaultConnectionSeconds
+    );
+    const sessionMaxSeconds = extracted.SessionMaxSeconds;
+    const reconnectBufferSeconds =
+        extracted.ReconnectBufferSeconds ??
+        options.DriverDefaultBufferSeconds ??
+        DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS;
+    const zeroDataRetention = options.ZeroDataRetention === true || extracted.ZeroDataRetention === true;
+    const trustNativeResumption =
+        zeroDataRetention
+            ? false
+            : (extracted.TrustNativeResumption ?? options.DefaultTrustNativeResumption ?? false);
+
+    return {
+        ...(connectionMaxSeconds !== undefined ? { ConnectionMaxSeconds: connectionMaxSeconds } : {}),
+        ...(sessionMaxSeconds !== undefined ? { SessionMaxSeconds: sessionMaxSeconds } : {}),
+        ReconnectBufferSeconds: reconnectBufferSeconds,
+        TrustNativeResumption: trustNativeResumption,
+    };
+}
+
+/** Narrows an optional `JSONValue`, `JSONObject`, or record config bag without unsafe casts at call sites. */
+export function AsConfigRecord(
+    config: JSONValue | Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        return undefined;
+    }
+    return config as Record<string, unknown>;
+}
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -109,7 +245,10 @@ export function RealtimeDiagLog(message: string): void {
     if (v === 'true' || v === '1' || v === 'yes') {
         // Strip all control characters (C0/C1, incl. CR/LF/VT/FF/ESC/NEL) plus Unicode
         // line/paragraph separators, to prevent log injection (CWE-117).
-        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ');
+        // The trailing `.replace(/\n|\r/g, '')` is a runtime no-op (CR/LF are already gone); it is
+        // the exact form CodeQL's js/log-injection sanitizer model recognizes, which the
+        // replace-with-space above is not.
+        const sanitized = message.replace(/[\r\n\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\n|\r/g, '');
         // eslint-disable-next-line no-console
         console.log(sanitized);
     }
@@ -161,16 +300,358 @@ export function RealtimeDriverFactsOf(driver: BaseRealtimeModel): Readonly<Realt
 /**
  * The ONE implementation of the session-cap rule, shared by the drivers ({@link BaseRealtimeModel.ClampSessionSeconds})
  * and the MJAPI relay: returns the smallest candidate that is a positive integer; ignores `undefined`,
- * `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers.
+ * `null`, `0`, negatives, fractions (rejected, never floored: no guessing), `NaN`, `Infinity` and non-numbers.
  * `undefined` when none qualifies.
  */
-export function ClampSessionSecondsValue(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+export function ClampSessionSecondsValue(...candidates: ReadonlyArray<number | null | undefined>): number | undefined {
     let smallest: number | undefined;
     for (const c of candidates) {
         if (typeof c !== 'number' || !Number.isInteger(c) || c <= 0) continue;
         if (smallest === undefined || c < smallest) smallest = c;
     }
     return smallest;
+}
+
+/** A tool result sent while a reconnect was moving the session; see `BaseRealtimeSession.holdToolResultDuringReconnect`. */
+interface HeldRealtimeToolResult {
+    readonly CallID: string;
+    readonly Output: string;
+    readonly TaskRevision?: number;
+}
+
+/**
+ * Shared base class for server-hosted `IRealtimeSession` instances returned by `BaseRealtimeModel.StartSession`.
+ *
+ * Holds per-session state (connection duration timer, `RealtimeConversationMemory`, resumption handle,
+ * and reconnect retry loop) so `BaseRealtimeModel` remains stateless across concurrent sessions and so
+ * callers holding the outer `IRealtimeSession` reference keep the exact same session object across
+ * internal socket swaps.
+ */
+export abstract class BaseRealtimeSession implements IRealtimeSession {
+    protected readonly conversationMemory = new RealtimeConversationMemory({ Log: RealtimeDiagLog });
+    protected configuredCallDurationSeconds: number | undefined;
+    protected configuredSessionMaxSeconds: number | undefined;
+    protected configuredReconnectBufferSeconds: number = DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS;
+    protected configuredTrustNativeResumption: boolean | undefined;
+    protected configuredZeroDataRetention: boolean | undefined;
+    protected turnOpen = false;
+    protected readonly pendingToolCallNames = new Map<string, string>();
+    protected callsFromBeforeReseed = new Set<string>();
+    protected closedByConsumer = false;
+    protected readonly reconnectController: RealtimeReconnectController;
+    /** Tool results held while a reconnect moved the session, oldest first; see {@link holdToolResultDuringReconnect}. */
+    private heldToolResults: HeldRealtimeToolResult[] = [];
+
+    constructor(
+        protected readonly model?: BaseRealtimeModel,
+        config?: Record<string, unknown> | null
+    ) {
+        this.reconnectController = new RealtimeReconnectController({
+            Reconnect: (context) => this.Reconnect(context),
+            OnReconnectFailed: (error, code) => {
+                this.dropHeldToolResults('the reconnect failed');
+                this.onReconnectFailed(error, code);
+            },
+            OnReconnecting: (reason) => this.onReconnecting(reason),
+            OnReconnected: (usedNativeResumption) => {
+                if (!usedNativeResumption && this.pendingToolCallNames.size > 0) {
+                    this.callsFromBeforeReseed = new Set(this.pendingToolCallNames.keys());
+                }
+                this.turnOpen = false;
+                this.ArmConnectionDurationTimer();
+                this.onReconnected(usedNativeResumption);
+                // Last: after callsFromBeforeReseed is rebuilt (a reseeded connection gets a held result as a
+                // late-result note) and after the driver's hook, which may reset the turn state the result sets.
+                this.replayHeldToolResults();
+            },
+            BuildSeed: () => this.buildSeedOrNull(),
+            IsIdle: () => !this.turnOpen && this.pendingToolCallNames.size === 0,
+            TrustsNativeResumption: () => this.TrustsNativeResumption,
+            RequiresPostTurnHandle: () => this.RequiresPostTurnResumptionHandle,
+            Log: RealtimeDiagLog,
+        });
+        this.ApplySessionTimingConfig(config);
+    }
+
+    /** Extracts timing and native-resumption overrides from a session configuration bag. */
+    public ApplySessionTimingConfig(config: Record<string, unknown> | null | undefined): void {
+        const extracted = ExtractRealtimeTimingConfig(config);
+        if (extracted.ConnectionMaxSeconds !== undefined) {
+            this.configuredCallDurationSeconds = extracted.ConnectionMaxSeconds;
+        }
+        if (extracted.SessionMaxSeconds !== undefined) {
+            this.configuredSessionMaxSeconds = extracted.SessionMaxSeconds;
+        }
+        if (extracted.ReconnectBufferSeconds !== undefined) {
+            this.configuredReconnectBufferSeconds = extracted.ReconnectBufferSeconds;
+        }
+        if (extracted.TrustNativeResumption !== undefined) {
+            this.configuredTrustNativeResumption = extracted.TrustNativeResumption;
+        }
+        if (extracted.ZeroDataRetention !== undefined) {
+            this.configuredZeroDataRetention = extracted.ZeroDataRetention;
+        }
+    }
+
+    /**
+     * Dynamic state-dependent duration cap in seconds (for example, returning `120` when
+     * uncompressed video is active on Gemini Live, and `undefined` otherwise). Clamped with
+     * `configuredCallDurationSeconds` via `ClampSessionSecondsValue` so neither a seeded `600s`
+     * catalog value nor a tighter custom metadata value (e.g., `45s`) is shadowed.
+     */
+    protected get RuntimeCallDurationSeconds(): number | undefined {
+        return this.model?.RuntimeCallDurationSeconds;
+    }
+
+    /** Static driver default connection duration in seconds when metadata does not specify one. */
+    protected get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds;
+    }
+
+    /** Driver default for whether native resumption handles are trusted when metadata does not override. */
+    protected get DefaultTrustsNativeResumption(): boolean {
+        return this.model?.TrustsNativeResumption ?? false;
+    }
+
+    /**
+     * Whether this session's provider emits a fresh resumable handle shortly after each `turnComplete`
+     * (e.g. Gemini / Vertex AI Live), so a planned move (`goAway` or soft window) during a turn waits
+     * for that post-turn handle (bounded by the deadline timer) rather than resuming from a pre-turn handle.
+     */
+    protected get RequiresPostTurnResumptionHandle(): boolean {
+        return false;
+    }
+
+    /**
+     * Effective single-connection duration in seconds, resolved via {@link ClampSessionSecondsValue}
+     * so metadata (`configuredCallDurationSeconds`) narrows the driver's provider ceiling
+     * (`DefaultCallDurationSeconds`) and any state-dependent `RuntimeCallDurationSeconds`, never widening it.
+     */
+    public get CallDurationSeconds(): number | undefined {
+        return ClampSessionSecondsValue(
+            this.RuntimeCallDurationSeconds,
+            this.configuredCallDurationSeconds,
+            this.DefaultCallDurationSeconds
+        );
+    }
+
+    /** Configured credential/session lifetime in seconds, when distinct from `CallDurationSeconds`. */
+    public get SessionMaxSeconds(): number | undefined {
+        return this.configuredSessionMaxSeconds;
+    }
+
+    /** Buffer in seconds before `CallDurationSeconds` at which the framework initiates a reconnect. */
+    public get ReconnectBufferSeconds(): number {
+        return this.configuredReconnectBufferSeconds;
+    }
+
+    /** Whether native resumption is trusted on this session (always `false` under ZeroDataRetention). */
+    public get TrustsNativeResumption(): boolean {
+        if (this.configuredZeroDataRetention === true) {
+            return false;
+        }
+        return this.configuredTrustNativeResumption ?? this.DefaultTrustsNativeResumption;
+    }
+
+    /** Accessor for the session's provider-neutral conversation memory ledger. */
+    public get ConversationMemory(): RealtimeConversationMemory {
+        return this.conversationMemory;
+    }
+
+    /** Latest recorded provider resumption handle, or `null` if none. */
+    public get ResumptionHandle(): string | null {
+        return this.reconnectController.Handle;
+    }
+
+    /** True while an in-place reconnect is currently running. */
+    public get IsReconnecting(): boolean {
+        return this.reconnectController.IsReconnecting;
+    }
+
+    /** True once the consumer has closed the session. */
+    public get IsClosedByConsumer(): boolean {
+        return this.closedByConsumer;
+    }
+
+    /** Records a provider resumption handle or conversation ID. */
+    public RecordResumptionHandle(handle: string | null | undefined, resumable = true): void {
+        this.reconnectController.RecordHandle(handle, resumable);
+    }
+
+    /** Clears the recorded resumption handle so subsequent reconnects fall back to history seeding. */
+    public InvalidateResumptionHandle(): void {
+        this.reconnectController.InvalidateHandle();
+    }
+
+    /** Records a finalized turn or tool entry in `conversationMemory`. */
+    public RecordTurnEntry(entry: RealtimeMemoryEntry): void {
+        this.conversationMemory.Record(entry);
+    }
+
+    /** Marks a turn as open so soft-window reconnects wait for the turn boundary. */
+    public NotifyTurnStarted(): void {
+        this.turnOpen = true;
+        this.reconnectController.TurnStarted();
+    }
+
+    /** Marks a turn as ended and triggers a queued soft-window or `ConnectionEnding` reconnect if ready. */
+    public NotifyTurnEnded(keepPostToolTurnWait = false): void {
+        this.turnOpen = false;
+        this.reconnectController.TurnEnded(keepPostToolTurnWait);
+    }
+
+    /**
+     * Notifies the reconnect controller when pending tool calls drain on `SendToolResult`.
+     * When `expectsReply` is `true` (default), a queued soft-window or `ConnectionEnding` move waits
+     * for the model's post-tool turn (or a fresh trusted native handle) rather than reconnecting in
+     * the gap between `SendToolResult` and the first model output frame.
+     */
+    protected NotifyToolCallsDrained(expectsReply = true): void {
+        this.reconnectController.ToolResultSent(expectsReply);
+    }
+
+    /**
+     * Holds a tool result that arrives while a reconnect is moving the session, and returns `true` when it did. Sent
+     * then, the result would reach the connection being replaced after the attempt's seed was built, so the new
+     * connection would have the call and never its result. A driver calls this first in `SendToolResult` and returns
+     * when it is `true`. Once the move lands the result goes through `SendToolResult` again, after
+     * {@link callsFromBeforeReseed} is rebuilt, so a reseeded connection gets it as a late-result note; a failed
+     * reconnect or a close drops it with a warning. Outside a reconnect it returns `false` and changes nothing.
+     */
+    protected holdToolResultDuringReconnect(callID: string, output: string, taskRevision?: number): boolean {
+        if (!this.IsReconnecting || this.closedByConsumer) {
+            return false;
+        }
+        this.heldToolResults.push({ CallID: callID, Output: output, TaskRevision: taskRevision });
+        RealtimeDiagLog(`[${this.constructor.name}] holding the tool result for ${callID} until the reconnect lands`);
+        return true;
+    }
+
+    /** Sends the held tool results, oldest first, now that the session is on its new connection. */
+    private replayHeldToolResults(): void {
+        const held = this.heldToolResults;
+        this.heldToolResults = [];
+        for (const result of held) {
+            // Each send starts synchronously, so the order holds; none can throw into the reconnect cycle that called this.
+            void this.replayHeldToolResult(result);
+        }
+    }
+
+    /** Sends one held result; a failure is reported as a warning, never thrown. */
+    private async replayHeldToolResult(result: HeldRealtimeToolResult): Promise<void> {
+        try {
+            await this.SendToolResult(result.CallID, result.Output, result.TaskRevision);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            console.warn(`[${this.constructor.name}] A tool result held during a reconnect could not be sent on the new connection: ${reason}`);
+        }
+    }
+
+    /** Drops the held tool results: the session will reach no new connection to send them on. */
+    private dropHeldToolResults(reason: string): void {
+        if (this.heldToolResults.length === 0) {
+            return;
+        }
+        console.warn(`[${this.constructor.name}] Dropped ${this.heldToolResults.length} tool result(s) held during a reconnect: ${reason}.`);
+        this.heldToolResults = [];
+    }
+
+    /**
+     * Handles a provider-initiated connection-ending advisory (`goAway` / `session.going_away`).
+     * Reconnects immediately if idle and ready, or waits for the turn/handle boundary up to the scaled deadline.
+     */
+    public NotifyConnectionEnding(timeLeftMs?: number): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.reconnectController.ConnectionEnding(timeLeftMs);
+    }
+
+    /** Arms (or re-arms) the proactive connection-duration timer for the current connection. */
+    public ArmConnectionDurationTimer(): void {
+        if (this.closedByConsumer) {
+            return;
+        }
+        this.reconnectController.ArmDurationTimers(this.CallDurationSeconds, this.ReconnectBufferSeconds);
+    }
+
+    /**
+     * Initiates an in-place reconnect via the unified {@link RealtimeReconnectController}.
+     */
+    public TriggerReconnect(reason: RealtimeReconnectReason): Promise<boolean> {
+        if (this.closedByConsumer) {
+            return Promise.resolve(false);
+        }
+        return this.reconnectController.TriggerReconnect(reason);
+    }
+
+    /**
+     * In-place transport reconnect. By default delegates to `this.model.InvokeReconnectSession(this, context)`
+     * so drivers can implement either `BaseRealtimeModel.ReconnectSession` or override `BaseRealtimeSession.Reconnect`.
+     */
+    protected Reconnect(context: RealtimeReconnectContext): Promise<void> {
+        if (!this.model) {
+            return Promise.reject(new Error('BaseRealtimeSession.Reconnect must be overridden when constructed without a model'));
+        }
+        return this.model.InvokeReconnectSession(this, context);
+    }
+
+    /** Hook invoked when a reconnect cycle starts. */
+    protected onReconnecting(_reason: RealtimeReconnectReason): void {
+        // Optional hook for concrete session subclasses.
+    }
+
+    /** Hook invoked when a reconnect attempt succeeds. */
+    protected onReconnected(_usedNativeResumption: boolean): void {
+        // Optional hook for concrete session subclasses.
+    }
+
+    /**
+     * Hook invoked when all reconnect attempts fail or the rapid-reconnect circuit breaker trips.
+     * Formats the error message via {@link formatReconnectFailureMessage} and emits a fatal
+     * {@link RealtimeSessionError} with `Code: code` via {@link emitSessionError}.
+     */
+    protected onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode = 'reconnect-failed'): void {
+        this.emitSessionError({
+            Message: this.formatReconnectFailureMessage(error, code),
+            Code: code,
+            Fatal: true,
+        });
+    }
+
+    /** Formats the fatal error message surfaced when all reconnect attempts fail. */
+    protected formatReconnectFailureMessage(error: Error, _code: RealtimeReconnectFailureCode): string {
+        return `Realtime session reconnect failed: ${error.message}`;
+    }
+
+    /** Emits a session error to the consumer's registered `OnError` handler(s). */
+    protected abstract emitSessionError(error: RealtimeSessionError): void;
+
+    /**
+     * Cancels all reconnect and duration timers and abandons any in-flight attempt when closed by the consumer. Tool
+     * results held for the attempt are dropped: no new connection will carry them.
+     */
+    protected DisposeReconnectTimers(): void {
+        this.closedByConsumer = true;
+        this.dropHeldToolResults('the session closed');
+        this.reconnectController.Dispose();
+    }
+
+    private buildSeedOrNull(): RealtimeMemorySeed | null {
+        const seed = this.conversationMemory.Seed();
+        return seed.Entries.length > 0 ? seed : null;
+    }
+
+    public abstract SendInput(frame: RealtimeInputFrame): void;
+    public abstract RegisterTools(tools: RealtimeToolDefinition[]): Promise<void>;
+    public abstract OnOutput(handler: (chunk: ArrayBuffer) => void): void;
+    public abstract OnTranscript(handler: (t: RealtimeTranscript) => void): void;
+    public abstract OnToolCall(handler: (call: RealtimeToolCall) => void): void;
+    public abstract SendToolResult(callID: string, output: string, taskRevision?: number): Promise<void>;
+    public abstract OnInterruption(handler: () => void): void;
+    public abstract OnError(handler: (error: RealtimeSessionError) => void): void;
+    public abstract OnUsage(handler: (u: RealtimeUsage) => void): void;
+    public abstract Close(): Promise<void>;
 }
 
 export abstract class BaseRealtimeModel extends BaseModel {
@@ -187,8 +668,118 @@ export abstract class BaseRealtimeModel extends BaseModel {
      * The rule "the caller's bag wins only if smaller" lives there, once: pass the provider
      * cap and the bag cap together.
      */
-    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | undefined>): number | undefined {
+    protected ClampSessionSeconds(...candidates: ReadonlyArray<number | null | undefined>): number | undefined {
         return ClampSessionSecondsValue(...candidates);
+    }
+
+    /**
+     * Static driver default for a single connection's duration in seconds (for example, `600` on
+     * `GeminiRealtime` and `GeminiEnterpriseRealtime`, `3600` on `OpenAIRealtime` and
+     * `OpenAILiveRealtime`, `7200` on `xAIRealtime`). Defaults to `DriverFacts.ProviderMaxSessionSeconds`.
+     */
+    public get DefaultCallDurationSeconds(): number | undefined {
+        return RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds;
+    }
+
+    /**
+     * Dynamic runtime override hook on the model driver (returns `undefined` unless overridden by a subclass).
+     */
+    public get RuntimeCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    /**
+     * Readonly getter returning the model driver's connection duration in seconds.
+     */
+    public get CallDurationSeconds(): number | undefined {
+        return ClampSessionSecondsValue(this.RuntimeCallDurationSeconds, this.DefaultCallDurationSeconds);
+    }
+
+    /**
+     * Buffer in seconds before `CallDurationSeconds` at which the framework initiates a
+     * proactive reconnect. Defaults to `DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS` (10s).
+     */
+    public get ReconnectBufferSeconds(): number {
+        return DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS;
+    }
+
+    /**
+     * Whether this driver supports and trusts the provider's native session resumption on the
+     * active endpoint when a handle is present. Subclasses override as needed (e.g., `true` on
+     * server-side `GeminiRealtime`, `GeminiEnterpriseRealtime`, and `xAIRealtime`; `false` on
+     * `OpenAIRealtime`).
+     */
+    public get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
+    /**
+     * Resolves whether native resumption is trusted for a client-direct session minted by this driver,
+     * given the transport (`'direct'` vs `'relay'`). Subclasses override when client-direct trust
+     * differs from server-bridged trust (e.g., `GeminiRealtime` is `true` on server `v1beta` keys
+     * but `false` on browser-direct `v1alpha` ephemeral tokens).
+     */
+    public ClientSessionTrustsNativeResumption(_transport: RealtimeClientTransport = 'direct'): boolean {
+        return this.TrustsNativeResumption;
+    }
+
+    /**
+     * Resolves the effective single-connection duration in seconds from an open config bag
+     * (`connectionMaxSeconds`), narrowing `this.CallDurationSeconds` via {@link ResolveRealtimeTiming}.
+     */
+    public ResolveConnectionDurationSeconds(config?: Record<string, unknown> | null): number | undefined {
+        return ResolveRealtimeTiming({
+            Config: config,
+            DriverDefaultConnectionSeconds: this.DefaultCallDurationSeconds,
+            RuntimeCapSeconds: this.RuntimeCallDurationSeconds,
+        }).ConnectionMaxSeconds;
+    }
+
+    /**
+     * Resolves the effective reconnect buffer in seconds from an open config bag
+     * (`reconnectBufferSeconds`), falling back to `this.ReconnectBufferSeconds`.
+     */
+    public ResolveReconnectBufferSeconds(config?: Record<string, unknown> | null): number {
+        return ResolveRealtimeTiming({
+            Config: config,
+            DriverDefaultBufferSeconds: this.ReconnectBufferSeconds,
+        }).ReconnectBufferSeconds;
+    }
+
+    /**
+     * Resolves whether native session resumption is trusted for a session from an open config bag
+     * (`trustNativeResumption`), falling back to `defaultTrust` (or `this.TrustsNativeResumption`).
+     */
+    public ResolveTrustsNativeResumption(
+        config?: Record<string, unknown> | null,
+        defaultTrust: boolean = this.TrustsNativeResumption
+    ): boolean {
+        return ResolveRealtimeTiming({
+            Config: config,
+            DefaultTrustNativeResumption: defaultTrust,
+        }).TrustNativeResumption;
+    }
+
+    /**
+     * Reconnect hook for server-hosted `IRealtimeSession` instances created by `StartSession`.
+     * Called by `BaseRealtimeSession`'s duration timer (`CallDurationSeconds - ReconnectBufferSeconds`)
+     * or on unexpected transport close when resumable. Concrete provider drivers override this method.
+     */
+    protected async ReconnectSession(
+        _session: IRealtimeSession,
+        _context: RealtimeReconnectContext
+    ): Promise<void> {
+        throw new Error(`${this.constructor.name} does not implement ReconnectSession.`);
+    }
+
+    /**
+     * Internal bridge allowing `BaseRealtimeSession` to invoke the model driver's protected `ReconnectSession`.
+     */
+    public InvokeReconnectSession(
+        session: IRealtimeSession,
+        context: RealtimeReconnectContext
+    ): Promise<void> {
+        return this.ReconnectSession(session, context);
     }
 
     /**
@@ -253,6 +844,22 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
+     * Mints a fresh client credential (ephemeral token or signed URL) for an already-running
+     * client-direct session during a mid-call credential refresh or reconnect.
+     *
+     * Defaults to delegating to {@link CreateClientSession}. Drivers where `CreateClientSession`
+     * has side effects beyond credential minting (such as `ElevenLabsRealtime`, which provisions
+     * a managed agent when no `agentId` is given) override this to mint a credential for the
+     * existing resource in `existingSessionConfig` without creating duplicate vendor resources.
+     */
+    public async RefreshClientSessionCredential(
+        params: RealtimeSessionParams,
+        _existingSessionConfig?: JSONObject | null
+    ): Promise<ClientRealtimeSessionConfig> {
+        return this.CreateClientSession(params);
+    }
+
+    /**
      * Whether this driver's sessions carry a **video** track in addition to audio.
      *
      * @deprecated Nothing reads it, and no driver overrides it: it is `false` for Gemini Live, which takes camera video
@@ -310,24 +917,31 @@ export abstract class BaseRealtimeModel extends BaseModel {
 }
 
 /**
+ * Timing and session-resumption config keys shared across server/client config bags and
+ * `ClientRealtimeSessionConfig.SessionConfig` that must never be sent to provider wire endpoints.
+ */
+export const REALTIME_TIMING_CONFIG_KEYS: readonly string[] = [
+    'connectionMaxSeconds',
+    'ConnectionMaxSeconds',
+    'sessionMaxSeconds',
+    'SessionMaxSeconds',
+    'maxSessionSeconds',
+    'MaxSessionSeconds',
+    'reconnectBufferSeconds',
+    'ReconnectBufferSeconds',
+    'trustNativeResumption',
+    'TrustNativeResumption',
+    'zeroDataRetention',
+    'ZeroDataRetention',
+] as const;
+
+const REALTIME_TIMING_CONFIG_KEY_SET: ReadonlySet<string> = new Set(REALTIME_TIMING_CONFIG_KEYS);
+
+/**
  * The MJ-side Config-bag keys shared across the realtime driver family that are NEVER provider
  * wire fields: feature knobs the OpenAI-protocol family translates (and gates per profile) plus
- * transport settings for self-hosted/proxied drivers. NON-OpenAI-protocol drivers (Gemini,
- * ElevenLabs, AssemblyAI, Inworld) MUST scrub these before forwarding an open config bag to their
- * SDK/wire — a co-agent config carrying them must be safe on every provider.
- *
- * **Registering a key here is what makes it safe; forgetting to is a wire leak.** A co-agent
- * config is authored WITHOUT knowing which vendor will run, so an agnostic key is filed onto
- * whichever driver resolves — including every driver that does not consume it. Unregistered, it
- * survives each driver's residual-bag spread and reaches the provider as an unknown field; on the
- * OpenAI-protocol endpoints a malformed session object is rejected WHOLESALE, taking the prompt
- * and tools with it. So any key added to the neutral vocabulary belongs in this list at the same
- * time, and the OpenAI family's own scrub in `ExtractRealtimeFeatures` must delete it too — that
- * function enumerates its deletes explicitly and does NOT read this list.
- *
- * A setting only one driver reads belongs here too: a co-agent's `realtime.voice.providers.<key>`
- * bag is matched to drivers by class-name prefix, so a bag keyed `openai` that sets OpenAI Live's
- * `brokerBaseUrl` (its SDP broker origin) also reaches OpenAI Realtime.
+ * transport settings for self-hosted/proxied drivers. Every server and client driver scrubs these
+ * via {@link ScrubRealtimeSharedConfigKeys} before forwarding an open config bag to its SDK/wire.
  */
 export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'effortLevel',
@@ -347,7 +961,52 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'brokerBaseUrl',
     'tooling',
     'toolBehavior',
+    ...REALTIME_TIMING_CONFIG_KEYS,
 ] as const;
+
+const REALTIME_SHARED_CONFIG_KEY_SET: ReadonlySet<string> = new Set(REALTIME_SHARED_CONFIG_KEYS);
+
+/**
+ * Returns a shallow copy of `bag` with all {@link REALTIME_TIMING_CONFIG_KEYS} (plus any caller-supplied
+ * `extraKeys`) removed while preserving already-translated wire fields such as `voice`. Does not mutate `bag`.
+ */
+export function ScrubRealtimeTimingConfigKeys(
+    bag: Record<string, unknown> | JSONObject | null | undefined,
+    extraKeys?: ReadonlyArray<string>
+): JSONObject {
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+        return {};
+    }
+    const extraSet = extraKeys && extraKeys.length > 0 ? new Set(extraKeys) : null;
+    const clean: JSONObject = {};
+    for (const [key, value] of Object.entries(bag)) {
+        if (!REALTIME_TIMING_CONFIG_KEY_SET.has(key) && !extraSet?.has(key) && value !== undefined) {
+            clean[key] = value as JSONValue;
+        }
+    }
+    return clean;
+}
+
+/**
+ * Returns a shallow copy of `bag` with all {@link REALTIME_SHARED_CONFIG_KEYS} (plus any caller-supplied
+ * `extraKeys`) removed so MJ-only framework settings never leak into provider wire payloads. Does not mutate `bag`.
+ */
+export function ScrubRealtimeSharedConfigKeys(
+    bag: Record<string, unknown> | JSONObject | null | undefined,
+    extraKeys?: ReadonlyArray<string>
+): JSONObject {
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+        return {};
+    }
+    const extraSet = extraKeys && extraKeys.length > 0 ? new Set(extraKeys) : null;
+    const clean: JSONObject = {};
+    for (const [key, value] of Object.entries(bag)) {
+        if (!REALTIME_SHARED_CONFIG_KEY_SET.has(key) && !extraSet?.has(key) && value !== undefined) {
+            clean[key] = value as JSONValue;
+        }
+    }
+    return clean;
+}
 
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
 export interface RealtimeVoiceOption {
@@ -390,6 +1049,23 @@ export interface RealtimeInputFrame {
  *   MJAPI holds the provider credential and opens the provider's socket.
  */
 export type RealtimeClientTransport = 'direct' | 'relay';
+
+/**
+ * Discriminated union returned by a client-session credential/relay refresh operation.
+ * - `'token'`: a fresh ephemeral token was minted for a direct connection.
+ * - `'relay'`: an existing MJAPI relay session ticket was extended in place (no ephemeral token is used).
+ */
+export type ClientRealtimeCredentialRefreshResult =
+    | {
+          readonly Kind: 'token';
+          readonly EphemeralToken: string;
+          readonly ExpiresAt: string;
+      }
+    | {
+          readonly Kind: 'relay';
+          readonly ExpiresAt: string;
+          readonly RelayUrl?: string;
+      };
 
 /**
  * Reads a {@link RealtimeClientTransport} from untyped data, such as the mint result's `Transport` field.
@@ -483,6 +1159,24 @@ export interface ClientRealtimeSessionConfig {
      * to the browser today — and never an input: the cap on the wire is the driver's own decision.
      */
     MaxSessionSeconds?: number;
+
+    /**
+     * Single provider connection duration in seconds (from `AIModel.ModelConfiguration.Realtime`
+     * -> `AIModelVendor.ModelConfiguration.Realtime` -> `BaseRealtimeModel.CallDurationSeconds`).
+     */
+    ConnectionMaxSeconds?: number;
+
+    /**
+     * Credential or relay session token lifetime in seconds (`ModelConfiguration.Realtime.SessionMaxSeconds`),
+     * used by the client runtime to schedule proactive credential/relay refresh.
+     */
+    SessionMaxSeconds?: number;
+
+    /** Buffer in seconds before `ConnectionMaxSeconds` at which `BaseRealtimeClient` reconnects. */
+    ReconnectBufferSeconds?: number;
+
+    /** Whether native resumption is trusted on this model/vendor endpoint. */
+    TrustNativeResumption?: boolean;
 }
 
 /**
@@ -686,6 +1380,13 @@ export interface IRealtimeSession {
     SendInput(frame: RealtimeInputFrame): void;
 
     /**
+     * **Optional capability** — clears any active inbound-video connection duration limit
+     * (for example, Gemini Live's 2-minute uncompressed video limit) when the last inbound
+     * video stream ends, re-arming the session's audio connection duration timer.
+     */
+    ClearVideoLimit?(): void;
+
+    /**
      * Registers the set of tools the model may call, translating them into the provider's
      * native function-calling format.
      *
@@ -818,8 +1519,10 @@ export interface IRealtimeSession {
      *
      * @param text The context note to append to the conversation (plain text; the caller owns any
      * prefixing/framing policy such as "[progress]" markers).
+     * @param options Optional retention policy (`StateKey`, `Ephemeral`, `MemoryText`) controlling how
+     * the note is recorded in `RealtimeConversationMemory` across mid-call reconnects.
      */
-    SendContextNote?(text: string): void;
+    SendContextNote?(text: string, options?: RealtimeContextNoteOptions): void;
 
     /**
      * **Optional capability** — asks the model to voice **one brief interim update** following the

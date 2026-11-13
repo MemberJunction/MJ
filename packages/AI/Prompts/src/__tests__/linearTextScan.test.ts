@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ParseManifestEntryMime, TrimSpacesAndTabs } from '../linearTextScan';
+import { ContainsPlaceholderPhrase, ParseManifestEntryMime, TrimSpacesAndTabs } from '../linearTextScan';
 
 /** Deterministic pseudo-random strings over a small alphabet, so equivalence runs are reproducible. */
 function corpus(alphabet: readonly string[], count: number, maxLength: number): string[] {
@@ -90,5 +90,36 @@ describe('ParseManifestEntryMime', () => {
     it('stays linear on the input CodeQL flagged (repeated "\\ [\\" after the entry prefix)', () => {
         const pathological = '**A** — a [' + '\\ [\\'.repeat(60_000);
         expect(elapsedMs(() => ParseManifestEntryMime(pathological))).toBeLessThan(LINEAR_BUDGET_MS);
+    });
+});
+
+describe('ContainsPlaceholderPhrase (#4819)', () => {
+    const OLD = /your .* here|insert .* here/i;
+
+    it.each([
+        ['Your name here', true],
+        ['put YOUR value in here', true],
+        ['insert the date here', true],
+        ['your here', false],
+        ['your  here', true],
+        ['your name\nhere', false],
+        ['your name\r here', false],
+        ['nothing to see', false],
+        ['here your ', false],
+    ])('%j -> %s', (text, expected) => {
+        expect(ContainsPlaceholderPhrase(text)).toBe(expected);
+        expect(OLD.test(text)).toBe(expected);
+    });
+
+    it('matches the old regex over a pseudo-random corpus', () => {
+        const words = ['your', 'insert', 'here', ' ', 'x', '\n', 'YOUR', ' HERE', 'Here', '\r'];
+        for (const text of corpus(words, 3000, 12)) {
+            expect(ContainsPlaceholderPhrase(text)).toBe(OLD.test(text));
+        }
+    });
+
+    it('scans a 200 KB adversarial string in linear time', () => {
+        const text = 'your '.repeat(40_000);
+        expect(elapsedMs(() => ContainsPlaceholderPhrase(text))).toBeLessThan(LINEAR_BUDGET_MS);
     });
 });

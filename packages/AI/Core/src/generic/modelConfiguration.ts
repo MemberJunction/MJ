@@ -37,9 +37,8 @@
  * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
-import { IsPlainObject } from '@memberjunction/global';
+import { IsPlainObject, SafeDeepMerge } from '@memberjunction/global';
 
-import { JSONObject, JSONValue } from './baseRealtime';
 import type { RealtimeTrackDescriptor } from './realtimeTracks';
 import type { EmbeddingInputType } from './embed.types';
 
@@ -273,6 +272,44 @@ export interface RealtimeConfigurationSettings {
      * model-vendor row.
      */
     Pricing?: RealtimePricingSettings | null;
+
+    /**
+     * Maximum duration in seconds of a single underlying provider transport connection
+     * (WebSocket or WebRTC call) before the provider closes or resets the socket
+     * (for example, 600s on Gemini Live WebSockets, 3600s on OpenAI Realtime, 7200s on xAI).
+     *
+     * Set on `MJ: AI Models.ModelConfiguration` and overridable on
+     * `MJ: AI Model Vendors.ModelConfiguration`. When elapsed (minus `ReconnectBufferSeconds`),
+     * the realtime framework triggers a proactive in-place reconnect on `BaseRealtimeModel` /
+     * `BaseRealtimeClient`.
+     */
+    ConnectionMaxSeconds?: number | null;
+
+    /**
+     * Maximum duration in seconds of a single provider credential or session ceiling
+     * when it differs from `ConnectionMaxSeconds` (for example, 1800s ephemeral token ceiling
+     * on Gemini Developer API vs. 600s per WebSocket connection, or 3600s client_secret TTL on xAI
+     * vs. 7200s WebSocket session ceiling). Overridable at the `MJ: AI Model Vendors` level.
+     */
+    SessionMaxSeconds?: number | null;
+
+    /**
+     * Buffer in seconds before `ConnectionMaxSeconds` expiry at which the framework initiates
+     * a proactive reconnect. Defaults to 10 seconds when omitted.
+     */
+    ReconnectBufferSeconds?: number | null;
+
+    /**
+     * Whether the provider's native session resumption handle/ID reliably restores prior
+     * conversation turns on this endpoint.
+     *
+     * - `true`: pass the native resumption handle/ID and do NOT re-inject conversation history
+     *   (e.g., Gemini Enterprise / Vertex AI `v1`, xAI `resumption.enabled` + `conversation_id`).
+     * - `false`: feed `RealtimeConversationMemory` history into the reconnected session even if
+     *   the provider emits a resumption handle (e.g., Gemini Developer API `v1alpha` ephemeral tokens).
+     * - `null` / `undefined`: defer to the driver's runtime default.
+     */
+    TrustNativeResumption?: boolean | null;
 }
 
 /**
@@ -379,6 +416,16 @@ export interface LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -560,14 +607,14 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
- * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
- * layering runs the other way):
+ * type default < model < vendor default < model-vendor, via `SafeDeepMerge` in `@memberjunction/global`
+ * (the same merge the realtime config cascade, `DeepMergeConfigs` in `@memberjunction/ai-agents`, uses):
  *
  * - plain object vs plain object → recursive per-key merge (a vendor row overriding ONE
  *   `Realtime.TurnDetection` knob does not wipe the model's other sections);
  * - anything else (arrays, strings, numbers, booleans, `null`) → the later value REPLACES;
- * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated.
+ * - `null`/`undefined` LAYERS are skipped entirely; inputs are never mutated;
+ * - `__proto__`, `constructor` and `prototype` keys are skipped at every depth.
  *
  * @param layers The catalog layers, base first (type, model, vendor).
  * @returns The merged configuration, or `null` when every layer is absent/empty.
@@ -575,36 +622,8 @@ function parseConfigurationBag<T>(json: string | null | undefined, caller: strin
 export function ResolveEffectiveModelConfiguration(
     ...layers: Array<AIModelConfiguration | null | undefined>
 ): AIModelConfiguration | null {
-    const result: JSONObject = {};
-    for (const layer of layers) {
-        if (!IsPlainObject(layer)) {
-            continue;
-        }
-        mergeInto(result, layer as unknown as JSONObject);
-    }
+    const result = SafeDeepMerge(...layers);
     return Object.keys(result).length > 0 ? (result as AIModelConfiguration) : null;
-}
-
-/** Recursive worker for {@link ResolveEffectiveModelConfiguration} — merges `source` into `target`. */
-function mergeInto(target: JSONObject, source: JSONObject): void {
-    for (const key of Object.keys(source)) {
-        const incoming = source[key];
-        if (incoming === undefined) {
-            continue;
-        }
-        const existing = target[key];
-        if (IsPlainObject(existing) && IsPlainObject(incoming)) {
-            mergeInto(existing, incoming);
-        } else if (IsPlainObject(incoming)) {
-            const copy: JSONObject = {};
-            mergeInto(copy, incoming);
-            target[key] = copy;
-        } else if (Array.isArray(incoming)) {
-            target[key] = incoming.slice() as JSONValue[];
-        } else {
-            target[key] = incoming;
-        }
-    }
 }
 
 /**

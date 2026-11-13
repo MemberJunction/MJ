@@ -194,6 +194,29 @@
   },
   {
     "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Artifacts: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Artifacts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "DelegateEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Artifacts&Name=DelegateRecordID"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Artifacts"
+    }
+  },
+  {
+    "_comments": [
       "Polymorphic foreign key declaration(s) on MJ: Audit Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
     ],
     "fields": {
@@ -1341,6 +1364,60 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Version Labels"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Comments (inherited from MJ: Conversations): LinkedRecordID points to LinkedEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: Comments"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Comments&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:06.179Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Comments"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Field Suggestions (inherited from MJ: Conversations via MJ: Comments): LinkedRecordID points to LinkedEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: Field Suggestions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Field Suggestions&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:06.195Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Field Suggestions"
     }
   }
 ]

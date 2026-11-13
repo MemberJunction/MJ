@@ -120,6 +120,8 @@ Schema Files/
 # generated TypeDoc output — but hand-written decision records are tracked
 /docs/*
 !/docs/decisions/
+!/docs/telemetry-shareable-schema.md
+!/docs/opentelemetry-setup.md
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
@@ -142,7 +144,6 @@ SQL Scripts/internal_only/schema to-do.txt
 SQL Scripts/internal_only/spCreateUpdateAccountCompanyIntegration.sql
 SQL Scripts/internal_only/Trim 990 Raw Data.sql
 packages/GraphQLDataProvider/dist-browser/
-packages/MJExplorer/kendo-ui-license.txt
 build.log.json
 
 packages/Templates-Old/.angular/
@@ -177,7 +178,6 @@ packages/AI/MCPServer/build/Server.js
 sql_logging/
 .sql-log-push/
 .sql-log-watch/
-kendo-license.txt
 metadata/demo-prompt.md
 .mj-ai/
 notes.txt

@@ -304,7 +304,7 @@ describe('ManageMetadataBase — Source stamping', () => {
       ];
       await mm.Sync(connection(() => []), 'F1', ['A', 'B'], rows, 'Config');
       expect(logged).toHaveLength(1);
-      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1'`);
+      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1';`);
    });
 
    it('writes nothing on a second CHECK-pass run over rows the first run stamped (warm-twice drift gate)', async () => {
@@ -316,7 +316,7 @@ describe('ManageMetadataBase — Source stamping', () => {
          { ID: 'V2', EntityFieldID: 'F1', Value: 'Janitor', Sequence: '2', Source: 'Check' },
       ];
       await mm.Sync(connection(() => []), 'F1', ['Idle', 'Janitor'], rows, 'Check');
-      expect(logged.map(c => c[1])).toEqual([`UPDATE [__mj].[EntityFieldValue] SET [Source]='Check' WHERE ID='V1'`]);
+      expect(logged.map(c => c[1])).toEqual([`UPDATE [__mj].[EntityFieldValue] SET [Source]='Check' WHERE ID='V1';`]);
 
       logged = [];
       const afterFirstRun = rows.map(r => ({ ...r, Source: 'Check' }));
@@ -330,10 +330,20 @@ describe('ManageMetadataBase — Source stamping', () => {
       });
       const mm = new TestableRetraction(new SQLServerCodeGenProvider());
       let keyExists = false;
+      // A key recorded before Source existed reads back as 'Manual', so the pass rewrites it.
+      const storedKey = {
+         ID: 'K1', EntityID: 'E1', Name: 'Email Match', MatchFieldNames: 'email', NormalizationStrategy: 'LowerCaseTrim',
+         CustomNormalizationExpression: null, Description: null, Sequence: 0, Status: 'Active', Source: 'Manual',
+      };
       const answer = (sql: string) => {
-         if (sql.includes('vwEntities')) return [{ ID: 'E1', Name: 'Customers' }];
          if (sql.includes('EntityOrganicKeyRelatedEntity')) return [];
-         if (sql.includes('EntityOrganicKey')) return keyExists ? [{ ID: 'K1' }] : [];
+         if (sql.includes('EntityOrganicKey')) return keyExists ? [storedKey] : [];
+         if (sql.includes('[Entity]')) {
+            return [
+               { ID: 'E1', Name: 'Customers', SchemaName: 'ns', BaseTable: 'customer' },
+               { ID: 'E2', Name: 'Contacts', SchemaName: 'ns', BaseTable: 'contact' },
+            ];
+         }
          return [];
       };
       await mm.OrganicKeys(connection(answer));

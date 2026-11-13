@@ -533,3 +533,34 @@ describe('ActionExecutionLog parameters are projected for the user the action ra
         expect(logged.find(p => p.Name === 'Rows')?.Value).toEqual([FullEmployeeRow()]);
     });
 });
+
+describe('engine-made outcomes record a ResultCode on the log row (#4690)', () => {
+    it('input validation failure logs INPUT_VALIDATION_FAILED', async () => {
+        const e = engine();
+        vi.spyOn(e as never, 'ValidateInputs' as never).mockResolvedValue(false as never);
+        await e.RunAction(runParams());
+        expect(logRows[0].ResultCode).toBe('INPUT_VALIDATION_FAILED');
+        expect(bodyRunCount).toBe(0);
+    });
+
+    it('a filter refusal logs PREVENTED_BY_FILTER', async () => {
+        const e = engine();
+        vi.spyOn(e as never, 'RunFilters' as never).mockResolvedValue(false as never);
+        await e.RunAction(runParams());
+        expect(logRows[0].ResultCode).toBe('PREVENTED_BY_FILTER');
+        expect(bodyRunCount).toBe(0);
+    });
+
+    it('a timeout logs TIMEOUT', async () => {
+        class SlowAction extends BaseAction {
+            protected async InternalRunAction(): Promise<{ Success: boolean; ResultCode: string; Message: string }> {
+                await new Promise((r) => setTimeout(r, 300));
+                return { Success: true, ResultCode: 'SUCCESS', Message: 'late' };
+            }
+        }
+        mockClassFactory.CreateInstance.mockImplementation(() => new SlowAction());
+        const e = engine();
+        await e.RunAction(runParams({ Action: { ID: ACTION_ID, Name: 'Slow', DriverClass: 'Slow', Type: 'Custom', MaxExecutionTimeMS: 30 } } as unknown as Partial<RunActionParams>));
+        expect(logRows[logRows.length - 1].ResultCode).toBe('TIMEOUT');
+    });
+});

@@ -9,7 +9,7 @@ import {
   MJArtifactVersionEntity,
   MJExperimentSessionEntity,
 } from '@memberjunction/core-entities';
-import { ExperimentSessions, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type GateOutcome, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSIterationCard, PSLeaderboardEntry } from '../predictive-studio.types';
@@ -17,6 +17,12 @@ import {
   PSKanbanColumns,
   DeriveLeaderboard,
   GroupIterationsToKanban,
+  ParseSessionLeaderboard,
+  SessionSuccessMetric,
+  type PSRankedScore,
+  type PSStoredGate,
+  ReadStoredGate,
+  GateCrowns,
 } from '../predictive-studio.view-models';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
@@ -31,12 +37,13 @@ interface BudgetGaugeVM {
 
 /**
  * Experiments panel: a kanban of iteration cards in Running / Completed / Pruned columns, a leaderboard
- * strip ranked by score, and budget gauges — all live against `MJ: Experiment Sessions` + their
+ * strip in the session's stored ranking, and budget gauges — all live against `MJ: Experiment Sessions` + their
  * `MJ: Experiment Session Iterations`:
  *
  * - The **active session** is the first Running session, else the most-recently-created one.
- * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status,
- *   ranked by score) via the pure {@link groupIterationsToKanban} / {@link deriveLeaderboard} helpers.
+ * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status) and its stored
+ *   leaderboard (each score on its own metric, success-metric entries before fallback ones) via the pure
+ *   {@link GroupIterationsToKanban} / {@link DeriveLeaderboard} helpers.
  * - **Budget gauges** combine the session's budget JSON caps with actual iteration spend (compute
  *   cost, iteration count).
  * - Sessions are switched off: the panel shows earlier sessions and offers no start or control action.
@@ -103,7 +110,10 @@ interface BudgetGaugeVM {
                 <span class="ps-rank" [class.gold]="lp.best">{{ lp.rank }}</span>
                 <span class="algo-ic" [style.background]="lp.algorithmColor"><i [class]="lp.algorithmIcon"></i></span>
                 <div><div class="nm">{{ lp.algorithm }}</div><div class="fs ps-muted ps-small">{{ lp.features }}</div></div>
-                <span class="auc" [class.win]="lp.best">{{ lp.auc | number: '1.3-3' }}</span>
+                <span class="auc" [class.win]="lp.best" data-testid="ps-experiments-lp-score"
+                  [title]="lp.OnSuccessMetric ? '' : 'Scored on ' + lp.ScoreMetric + ': its holdout gave no score on the success metric, so it ranks after every entry that has one.'">
+                  {{ lp.Score | number: '1.3-3' }} <span class="lp-metric">{{ lp.ScoreMetric }}</span>
+                </span>
               </div>
             }
           </div>
@@ -161,28 +171,28 @@ interface BudgetGaugeVM {
         </div>
 
         <ng-template #iterCard let-c="c">
-          <div class="icard" [class.best]="c.status === 'Best'" [class.running]="c.status === 'Running'" [class.pruned]="c.status === 'Pruned'">
+          <div class="icard" [class.best]="c.Status === 'Best'" [class.running]="c.Status === 'Running'" [class.pruned]="c.Status === 'Pruned'">
             <div class="ic-top">
-              <span class="algo-ic" [style.background]="c.algorithmColor"><i [class]="c.algorithmIcon"></i></span>
-              <div><div class="nm">{{ c.algorithm }}</div><div class="it ps-muted ps-small">{{ c.iteration }}</div></div>
+              <span class="algo-ic" [style.background]="c.AlgorithmColor"><i [class]="c.AlgorithmIcon"></i></span>
+              <div><div class="nm">{{ c.Algorithm }}</div><div class="it ps-muted ps-small">{{ c.Iteration }}</div></div>
               <span class="ps-spacer"></span>
-              <span class="ps-badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span>
+              <span class="ps-badge" [class]="statusBadgeClass(c.Status)">{{ statusLabel(c.Status) }}</span>
             </div>
             <div class="feat-chips">
-              @for (f of c.features; track f) { <span class="ps-tag">{{ f }}</span> }
+              @for (f of c.Features; track f) { <span class="ps-tag">{{ f }}</span> }
             </div>
-            @if (c.status === 'Running') {
+            @if (c.Status === 'Running') {
               <div class="ic-prog">
                 <div class="ps-bar run"><span [style.width.%]="c.Progress"></span></div>
                 <div class="meta"><span class="ps-muted ps-small">{{ c.ProgressDetail }}</span></div>
               </div>
             } @else {
               <div class="ic-score">
-                <span class="v" [class.green]="c.status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
-                <span class="lbl ps-muted ps-small">score · {{ c.ScoreDelta }}</span>
+                <span class="v" [class.green]="c.Status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
+                <span class="lbl ps-muted ps-small">{{ c.ScoreMetric || 'not ranked yet' }} · {{ c.ScoreDelta }}</span>
               </div>
             }
-            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.rationale }}</span></div>
+            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.Rationale }}</span></div>
           </div>
         </ng-template>
       }
@@ -347,7 +357,8 @@ export class PSExperimentsComponent implements OnInit {
 
       const art = await p.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser ?? undefined);
       art.Name = `${s.Name} — Results`;
-      art.Description = `Modeling results, leaderboard, and winning model metrics for ${s.Name}.`;
+      // Gate-independent: whether a model shipped is the stored gate's decision, which the version content carries.
+      art.Description = `Modeling results and leaderboard for ${s.Name}.`;
       art.TypeID = 'D41AB707-58F1-4413-8725-9DF31C95F4C5';
       art.Comments = sessionComment;
       const saved = await art.Save();
@@ -363,29 +374,32 @@ export class PSExperimentsComponent implements OnInit {
 
       const planSpec = this.parsePlanSpec(s.PlanSpec);
       const winningRow = this.leaderboard[0];
-      const winningIteration = winningRow
-        ? this.engine.IterationsForSession(s.ID).find((it) => this.engine.AlgorithmForIteration(it.ID) === winningRow.algorithm && it.Score === winningRow.auc)
-        : undefined;
+      const winningIteration = winningRow ? this.engine.IterationsForSession(s.ID).find((it) => UUIDsEqual(it.ID, winningRow.IterationID)) : undefined;
       const winningRun = winningIteration ? this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, winningIteration.ID)) : undefined;
       const winningModelId = winningRun?.ResultingModelID ?? undefined;
+      const gate = ReadStoredGate(winningRun?.ValidationResults ?? null);
+      const outcome = gate?.Outcome ?? null;
 
       const payload = {
         Name: s.Name,
         Goal: s.Goal || planSpec?.Goal || 'Predictive modeling experiment',
         TargetMetric: planSpec?.TargetDefinition?.SuccessMetric || 'Score',
-        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. Winning algorithm: ${winningRow?.algorithm ?? 'None'}.`,
+        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. ${this.gateSummary(gate, winningRow?.algorithm)}`,
+        GateOutcome: outcome,
+        GateReason: gate?.Reason ?? null,
         Leaderboard: this.leaderboard.map((lb) => ({
           rank: lb.rank,
           algorithm: lb.algorithm,
           algorithmName: lb.algorithm,
           featureSet: lb.features,
-          score: lb.auc,
-          isWinner: lb.best,
+          score: lb.Score,
+          metricName: lb.ScoreMetric,
+          isWinner: lb.best === true && GateCrowns(gate),
         })),
-        BestModelID: winningModelId,
-        BestModel: winningModelId && winningRow ? { ID: winningModelId, Name: winningRow.algorithm } : undefined,
+        BestModelID: outcome === 'model' || outcome === 'keep-simple-baseline' ? winningModelId : undefined,
+        BestModel: winningModelId && winningRow ? this.bestModelFor(outcome, winningModelId, winningRow.algorithm) : undefined,
         Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
-          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: Score ${l.auc.toFixed(3)} (${l.features})`).join('\n'),
+          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: ${l.ScoreMetric} ${l.Score.toFixed(3)} (${l.features})`).join('\n'),
       };
 
       ver.Content = JSON.stringify(payload);
@@ -413,6 +427,37 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link ViewResultsArtifact}. */
   public async viewResultsArtifact(): Promise<void> {
     return this.ViewResultsArtifact();
+  }
+
+  /** The artifact summary's outcome sentence: a winner is named only when the stored gate shipped the model. */
+  private gateSummary(gate: PSStoredGate | null, algorithm: string | undefined): string {
+    if (gate === null) return 'Not evaluated under an Evaluation Protocol.';
+    const outcome: GateOutcome = gate.Outcome;
+    switch (outcome) {
+      case 'model': return `Winning algorithm: ${algorithm ?? 'None'}.`;
+      case 'keep-simple-baseline': return `The gate kept a simple baseline: ${gate.Reason.replace(/\.$/, '')}.`;
+      case 'no-signal': return `No model shipped: ${gate.Reason.replace(/\.$/, '')}.`;
+      default: return this.unreachableOutcome(outcome);
+    }
+  }
+
+  /** Compile-time exhaustiveness guard for the gate outcomes: a new outcome fails to compile here. */
+  private unreachableOutcome(outcome: never): never {
+    throw new Error(`Unhandled gate outcome: ${String(outcome)}`);
+  }
+
+  /** The artifact's model record: named by its algorithm only when the gate shipped the model; a kept baseline is not the finalist. */
+  private bestModelFor(outcome: GateOutcome | null, id: string, algorithm: string): { ID: string; Name: string } | undefined {
+    if (outcome === 'model') return { ID: id, Name: algorithm };
+    if (outcome === 'keep-simple-baseline') return { ID: id, Name: 'Kept simple baseline' };
+    return undefined;
+  }
+
+  /** The active session's stored leaderboard, each entry on its metric; an entry with none named is on the plan's success metric. */
+  private storedRanking(): PSRankedScore[] {
+    const session = this.Session;
+    if (!session) return [];
+    return ParseSessionLeaderboard(session.Leaderboard, SessionSuccessMetric(session.PlanSpec));
   }
 
   private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {
@@ -468,8 +513,9 @@ export class PSExperimentsComponent implements OnInit {
       return;
     }
     const rows = this.engine.IterationRowsForSession(this.sessionId);
-    this.Kanban = GroupIterationsToKanban(rows);
-    this.Leaderboard = DeriveLeaderboard(rows);
+    const ranked = this.storedRanking();
+    this.Kanban = GroupIterationsToKanban(rows, ranked);
+    this.Leaderboard = DeriveLeaderboard(rows, ranked);
     this.Budget = this.buildBudget(rows);
   }
 
@@ -568,7 +614,7 @@ export class PSExperimentsComponent implements OnInit {
 
   public StatusLabel(status: PSIterationCard['Status']): string {
     switch (status) {
-      case 'Best': return 'Best';
+      case 'Best': return 'Top scorer';
       case 'AwaitingApproval': return 'Awaiting approval';
       default: return status;
     }

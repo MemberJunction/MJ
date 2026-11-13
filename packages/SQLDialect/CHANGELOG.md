@@ -1,5 +1,20 @@
 # @memberjunction/sql-dialect
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 6c6f0dc: PostgreSQL string columns wider than `VARCHAR` allows are created as `TEXT`. The integration schema builder treats a declared length at or past nvarchar(max) (1073741823) as unbounded instead of padding it, and the PostgreSQL dialect renders any `VARCHAR` width over 10485760 as `TEXT`, as SQL Server falls back to `NVARCHAR(MAX)` above 4000. A netFORUM source that reports nvarchar(max) as 2147483646 previously produced `VARCHAR(2147483946)`, and the migration failed at its first statement.
+- 66fcfde: Preserve native SQL column types (`INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `DECIMAL(p,s)`, `FLOAT`, `BIT`/`BOOLEAN`, `DATE`, `DATETIMEOFFSET`/`TIMESTAMPTZ`, `TIME`, `UNIQUEIDENTIFIER`/`UUID`) and `Precision`/`Scale` across `IntegrationSchemaSync` and `TypeMapper` instead of falling back to `NVARCHAR`/`NVARCHAR(MAX)`, while warning and skipping cross-family `ALTER COLUMN` conversions (such as `NVARCHAR` to `INT` or `DECIMAL`) on existing columns in `SchemaEvolution.DiffSchema` to prevent conversion failures or precision loss on existing data. Add idempotent non-unique auto-indexing for Soft PKs (`IX_*_PK`), Soft FKs (`IX_*_FK_*`), and Organic Keys (`IX_*_OK_*`) across runtime `CREATE TABLE` and `SchemaEvolution` `ALTER TABLE` with SQL Server key-width capping (`<= 450` chars) and `sys.index_columns` key-tuple deduplication.
+- d87bb40: Declare the repo-root data (metadata/, migrations/, metadata-optional/ and other repo-root files) that these packages' tests read as a turbo `test` input, so a change to that data re-runs them instead of replaying a cached pass. Adds a package `turbo.json` to each; no runtime change.
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

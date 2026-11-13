@@ -608,6 +608,182 @@ describe('MarkdownComponent (DOM)', () => {
       expect(c.querySelector('[style]')).toBeNull();
     });
   });
+
+  describe('incremental block-tail streaming rendering', () => {
+    it('monotonic streaming append reuses cached prefix DOM nodes without tearing down completed elements', () => {
+      const f = render({ data: '# Title\n\nParagraph 1' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+      expect(h1Ref).not.toBeNull();
+      expect(h1Ref?.textContent).toContain('Title');
+
+      // Append Paragraph 2: Paragraph 1 graduates into the stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical across chunks
+      const p1Ref = c.querySelectorAll('p')[0];
+      expect(p1Ref).not.toBeNull();
+      expect(p1Ref.textContent).toContain('Paragraph 1');
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2');
+
+      // Append more text to Paragraph 2 (updating active mutable tail)
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 still strictly === identical
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2 is still streaming');
+
+      // Append code block: Paragraph 2 graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Still strictly === identical
+      const p2Ref = c.querySelectorAll('p')[1];
+      expect(c.querySelector('pre code')?.textContent).toContain('const x = 1;');
+
+      // Append trailing conclusion: Code block graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      const preRef = c.querySelector('pre');
+      expect(preRef).not.toBeNull();
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion');
+
+      // Stream more tokens into conclusion: Pre/code block stays strictly === identical
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion is continuing to stream.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      expect(c.querySelector('pre')).toBe(preRef); // Pre/code block strictly === identical
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion is continuing to stream');
+    });
+
+    it('open fenced code blocks across multiple chunks render accurately without premature splitting on blank lines inside the fence', () => {
+      const f = render({ data: '# Section\n\nIntroduction text.' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+
+      // Chunk 1: Open fence with initial line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      const pIntroRef = c.querySelector('p');
+      expect(pIntroRef).not.toBeNull();
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;');
+
+      // Chunk 2: Blank line inside the open code block followed by another line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Intro paragraph stays strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+
+      // Chunk 3: Closing the fence and appending trailing prose
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;\n```\n\nTrailing paragraph.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Still strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+      expect(c.querySelectorAll('p').length).toBe(2);
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Trailing paragraph.');
+    });
+
+    it('reference-style links arriving in a later chunk seamlessly fall back to full render so links resolve correctly', () => {
+      const f = render({ data: 'Read the [documentation][docs] for setup.\n\nMore info here.' });
+      const c = container(f);
+
+      // Initially, [docs] is undefined, so marked leaves it as literal text
+      expect(c.querySelector('a')).toBeNull();
+      expect(c.textContent).toContain('[documentation][docs]');
+
+      // Later chunk introduces the reference link definition
+      f.componentRef.setInput(
+        'data',
+        'Read the [documentation][docs] for setup.\n\nMore info here.\n\n[docs]: https://example.com/docs'
+      );
+      f.detectChanges();
+
+      // Full render fallback resolves the link
+      const link = c.querySelector('a');
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute('href')).toBe('https://example.com/docs');
+      expect(link?.textContent).toBe('documentation');
+    });
+
+    it('non-monotonic text replacement seamlessly falls back to full render', () => {
+      const f = render({ data: '# Original Document\n\nFirst paragraph here.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.textContent).toContain('Original Document');
+
+      // Completely replaced content (not monotonic prefix extension)
+      f.componentRef.setInput('data', '# Replaced Document\n\nCompletely different content.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')?.textContent).toContain('Replaced Document');
+      expect(c.querySelector('p')?.textContent).toContain('Completely different content.');
+      expect(c.textContent).not.toContain('Original Document');
+    });
+
+    it('duplicate headings seamlessly fall back to full render to preserve unique ID slug suffixes', () => {
+      const f = render({ data: '# Overview\n\nInitial overview.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.id).toBe('overview');
+
+      // Appending a second heading with the exact same name
+      f.componentRef.setInput('data', '# Overview\n\nInitial overview.\n\n# Overview\n\nSecond overview.');
+      f.detectChanges();
+
+      const headings = c.querySelectorAll('h1');
+      expect(headings.length).toBe(2);
+      expect(headings[0].id).toBe('overview');
+      expect(headings[1].id).toBe('overview-1');
+    });
+
+    it('produces 100% identical HTML output to full render across multi-element streamed documents', async () => {
+      const chunks = [
+        '# Main Title\n\nFirst paragraph introduces the topic.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```\n\nFinal conclusion paragraph.',
+      ];
+
+      // Stream sequentially through chunks
+      const streamFixture = render({ data: chunks[0] });
+      for (let i = 1; i < chunks.length; i++) {
+        streamFixture.componentRef.setInput('data', chunks[i]);
+        streamFixture.detectChanges();
+      }
+      // Flush microtasks for postRenderProcessing
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // One-shot full render of the final text using a second component instance
+      const fullFixture = TestBed.createComponent(MarkdownComponent);
+      fullFixture.componentRef.setInput('data', chunks[chunks.length - 1]);
+      fullFixture.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(container(streamFixture).innerHTML.trim()).toBe(container(fullFixture).innerHTML.trim());
+    });
+  });
 });
 
 

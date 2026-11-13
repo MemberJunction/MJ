@@ -18,8 +18,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', async () => {
     // The real helper, so the guard reads AdditionalData exactly as the client does.
-    const { IsInheritingFolderAccess, IsInheritingFolderAccessInSQL, CanonicalizeConversationAdditionalData } =
-        await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
+    const actual = await vi.importActual<typeof import('@memberjunction/core-entities')>('@memberjunction/core-entities');
     /** Minimal stand-in for the generated MJConversationEntity. */
     class StubConversationEntity {
         public IsSaved = true;
@@ -36,13 +35,12 @@ vi.mock('@memberjunction/core-entities', async () => {
         }
     }
     return {
+        ...actual,
         MJConversationEntity: StubConversationEntity,
-        IsInheritingFolderAccess,
-        IsInheritingFolderAccessInSQL,
-        CanonicalizeConversationAdditionalData,
     };
 });
 
+import { WellKnownUserSource } from '@memberjunction/core';
 import { MJConversationEntityServer } from '../custom/MJConversationEntityServer.server';
 
 type Field = { Dirty: boolean; OldValue?: unknown; Value?: unknown };
@@ -101,7 +99,7 @@ describe('MJConversationEntityServer — a transaction variable cannot set Exter
     });
 });
 
-describe("MJConversationEntityServer — only the owner moves, re-owns or re-shares a conversation", () => {
+describe("MJConversationEntityServer — only the owner moves or re-shares a conversation; only the server re-owns it", () => {
     const OWNER = 'owner-1';
     /** A saved conversation owned by OWNER, saved by `savedBy`, with these fields changed. */
     function owned(savedBy: unknown, fields: Record<string, Field> = {}, saved = true): MJConversationEntityServer {
@@ -145,12 +143,48 @@ describe("MJConversationEntityServer — only the owner moves, re-owns or re-sha
         expect(owned(colleague, fields).Validate().Success).toBe(true);
     });
 
-    it('allows the owner to move, re-own and re-share', () => {
+    it('allows the owner to move and re-share', () => {
         const fields = {
             ProjectID: { Dirty: true, OldValue: 'p1', Value: 'p2' },
             AdditionalData: { Dirty: true, OldValue: null, Value: inheriting },
         };
         expect(owned({ ID: OWNER }, fields).Validate().Success).toBe(true);
+    });
+
+    it('refuses the owner handing the conversation to another user (#5623)', () => {
+        const result = owned({ ID: OWNER }, { UserID: { Dirty: true, OldValue: OWNER, Value: colleague.ID } }).Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors).toHaveLength(1);
+        expect(JSON.stringify(result.Errors)).toContain("A conversation's owner cannot be changed.");
+    });
+
+    it("refuses the owner whose transaction variable will set UserID at submit", () => {
+        const entity = owned({ ID: OWNER });
+        (entity as unknown as Stub).TransactionGroup = { Variables: [{ EntityObject: entity, Type: 'Use', FieldName: 'UserID' }] };
+        expect(entity.Validate().Success).toBe(false);
+    });
+
+    it('allows the owner changing the folder without changing the owner', () => {
+        expect(owned({ ID: OWNER }, { ProjectID: { Dirty: true, OldValue: 'p1', Value: 'p2' } }).Validate().Success).toBe(true);
+    });
+
+    it('allows the server itself to change the owner', () => {
+        const reown = { UserID: { Dirty: true, OldValue: OWNER, Value: colleague.ID } };
+        expect(owned(null, reown).Validate().Success).toBe(true);
+
+        const systemUser = { ID: 'system-user' };
+        vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockImplementation((u) => u === systemUser);
+        try {
+            expect(owned(systemUser, reown).Validate().Success).toBe(true);
+            expect(owned({ ID: OWNER }, reown).Validate().Success).toBe(false);
+        } finally {
+            vi.restoreAllMocks();
+        }
+    });
+
+    it('allows a new conversation to set any owner', () => {
+        const create = { UserID: { Dirty: true, OldValue: null, Value: colleague.ID } };
+        expect(owned({ ID: OWNER }, create, false).Validate().Success).toBe(true);
     });
 
     it('allows the server itself (no context user) and a new conversation', () => {

@@ -135,12 +135,19 @@ function RetryAfterSeconds(headers: Headers | undefined): number | null {
     return Number.isNaN(at) ? null : Math.max(0, Math.ceil((at - Date.now()) / 1000));
 }
 
+/**
+ * Retry-After at or below this, with no window named in the body, is read as the minute window. Apollo's
+ * minute window can report a little over 60 seconds (#5597); an hourly limit reports far more and must
+ * still stop the run.
+ */
+export const MINUTE_WINDOW_MAX_RETRY_AFTER_SECONDS = 120;
+
 /** Apollo names the window in its 429 body ("per minute", "hourly", "daily"); a short Retry-After also means the minute window. */
 export function WindowOf(retryAfterSeconds: number | null, body: string): ApolloRateLimitWindow {
     const text = body.toLowerCase();
     if (/per[ -]?minute|minute/.test(text)) return 'minute';
     if (/hour/.test(text)) return 'hour';
     if (/day|daily/.test(text)) return 'day';
-    if (retryAfterSeconds !== null && retryAfterSeconds <= 60) return 'minute';
+    if (retryAfterSeconds !== null && retryAfterSeconds <= MINUTE_WINDOW_MAX_RETRY_AFTER_SECONDS) return 'minute';
     return 'unknown';
 }

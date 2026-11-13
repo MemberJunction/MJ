@@ -92,10 +92,11 @@
                         [(ngModel)]="selectedTypeFilter"
                         (change)="onTypeFilterChange(selectedTypeFilter)"
                         aria-label="Filter by notification type">
-                  <option [value]="null">All Types</option>
+                  <option [ngValue]="null">All Types</option>
                   @for (type of notificationTypes; track type.ID) {
-                    <option [value]="type.ID">{{type.Name}}</option>
+                    <option [ngValue]="type.ID">{{type.Name}}</option>
                   }
+                  <option [ngValue]="NoTypeFilter">Other (no type)</option>
                 </select>
               </div>
             }

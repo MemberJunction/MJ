@@ -2956,6 +2956,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Unique Keys Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityUniqueKeys"
+        SectionName="Entity Unique Keys"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityUniqueKeys')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Unique Keys','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Unique Keys','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityUniqueKeys')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityUniqueKeys', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Graph Edge Type Endpoints Section -->
     <mj-collapsible-panel
         SectionKey="mJGraphEdgeTypeEndpoints"
@@ -3025,6 +3050,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGraphEdgesTargetEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Artifacts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifacts"
+        SectionName="Artifacts"
+        Icon="fa fa-file"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifacts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','DelegateEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts','DelegateEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifacts')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

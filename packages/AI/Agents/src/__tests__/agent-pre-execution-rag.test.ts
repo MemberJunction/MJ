@@ -271,6 +271,23 @@ describe('AgentPreExecutionRAG', () => {
             expect(mockSearch.mock.calls[0][0].AISkillID).toBeUndefined();
         });
 
+        it('injects the semantic graph lane\'s results, with their provenance, from the same search', async () => {
+            const breadcrumb = '"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"';
+            mockSearch.mockResolvedValue({
+                ...emptySearch,
+                Results: [{
+                    ID: 'abv-1', EntityName: 'MJ: Entity Alternate Base Views', RecordID: 'abv-1', SourceType: 'SemanticGraph',
+                    ResultType: 'entity-record', Title: 'Invoices.Open', Snippet: `${breadcrumb} — Unpaid invoices`, Score: 0.012,
+                    ScoreBreakdown: { Graph: 0.012 }, Tags: ['MJ Canon'], MatchedAt: new Date(),
+                }],
+                TotalCount: 1,
+                SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Graph: 1 },
+            });
+            const result = await run();
+            expect(result?.formattedSystemMessage).toContain('source: SemanticGraph');
+            expect(result?.formattedSystemMessage).toContain(breadcrumb);
+        });
+
         describe('an audience (audienceReaders)', () => {
             const readerA = { ID: 'reader-a', Name: 'Reader A' } as unknown as UserInfo;
             const readerB = { ID: 'reader-b', Name: 'Reader B' } as unknown as UserInfo;

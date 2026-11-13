@@ -13,6 +13,13 @@ import {
     ValidateRenderGeometry,
 } from '../index.js';
 
+/**
+ * Wall-clock ceiling for the "pathological input in linear time" checks. They guard against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 function createValidBundle(overrides: Partial<RenderProjectBundle> = {}): RenderProjectBundle {
     return {
         Format: '16:9',
@@ -284,7 +291,7 @@ describe('bundle validation and staging', () => {
         expect(ResolveCompositionFps(bundle, 30)).toBe(30);
         expect(ResolveCompositionDuration(bundle, 5)).toBe(5);
         const elapsedMs = performance.now() - start;
-        expect(elapsedMs).toBeLessThan(200);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
         const ltFloodBundle = createValidBundle({
             Files: [{ Path: 'index.html', Content: '<'.repeat(200_000) + '>' }],
@@ -293,7 +300,7 @@ describe('bundle validation and staging', () => {
         ValidateCompositionGeometryMatch(ltFloodBundle, { Width: 1920, Height: 1080, DurationSeconds: 2 });
         expect(ResolveCompositionFps(ltFloodBundle, 30)).toBe(30);
         expect(ResolveCompositionDuration(ltFloodBundle, 5)).toBe(5);
-        expect(performance.now() - ltStart).toBeLessThan(200);
+        expect(performance.now() - ltStart).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
         const quotedLtBundle = createValidBundle({
             Files: [
