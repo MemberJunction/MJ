@@ -989,7 +989,7 @@ export class HarnessAgentBase extends BaseAgent {
         fallbackContextUser?: UserInfo,
     ): Promise<Record<string, string>> {
         const renderedMap: Record<string, string> = {};
-        const templatesById = IndexByUUID(TemplateEngineServer.Instance.Templates ?? []);
+        const templatesById = IndexByUUID(TemplateEngineServer.Instance.Templates ?? [], (t) => t.ID);
         for (const childParam of childPrompts) {
             if (!childParam) {
                 continue;
