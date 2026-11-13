@@ -5,7 +5,8 @@
     "disableClientPackages": [
       "@mj-biz-apps/secure-messaging-core",
       "@mj-biz-apps/secure-messaging-actions",
-      "@mj-biz-apps/secure-messaging-element"
+      "@mj-biz-apps/secure-messaging-element",
+      "@mj-biz-apps/sonar-ng"
     ]
   }
 ]
