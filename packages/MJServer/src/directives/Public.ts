@@ -21,7 +21,7 @@ export const PublicDirective: DirectiveBuilder = {
       } else {
         // `@Public` directive not present, so will require auth
         const { resolve = defaultFieldResolver } = fieldConfig;
-        const directiveResolver: GraphQLFieldResolver<unknown, AppContext> = async (
+        const directiveResolver: GraphQLFieldResolver<unknown, AppContext> = (
           source,
           args,
           context,
@@ -31,7 +31,7 @@ export const PublicDirective: DirectiveBuilder = {
           if (!context?.userPayload?.userRecord?.IsActive) {
             throw new AuthorizationError();
           }
-          return await resolve(source, args, context, info);
+          return resolve(source, args, context, info);
         };
 
         return { ...fieldConfig, resolve: directiveResolver };
