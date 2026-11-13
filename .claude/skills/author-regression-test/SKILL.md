@@ -61,8 +61,14 @@ Helper (run from the repo root): `node .claude/skills/author-regression-test/scr
    4. Failed → read `$RUN_DIR/report.md`, sharpen the goal or criteria, `bash $S/teardown.sh "$C"`,
       and run again. Passed → `bash $S/harvest.sh "$C" pull`. On a problem, show it and stop; do not
       edit files to make the check pass.
-   5. `bash $S/teardown.sh "$C"`. Show `git diff`: only the test's new `ReplayScript` reference and its
-      script file may change. The file name is the lowercase kebab form of the test name
+   5. The harvest says `New scripts: 0` → the test passed but recorded no script. Before teardown,
+      run `docker compose -p mj-regression logs test-runner | grep "Not recording trace"` and show
+      the reason (usually a click on a spot that matches no page element). The developer picks: run
+      once more (an LLM run can take another path), or go on without a script (a later suite
+      harvest can record it).
+   6. `bash $S/teardown.sh "$C"`. Show `git diff`. It may hold only: the test's new `ReplayScript`
+      reference, its script file, and the `sync` blocks that the stack's push wrote into the new test
+      and its suite member. The script file name is the lowercase kebab form of the test name
       (`T156 - Form Studio Duplicate` → `regression/scripts/t156-form-studio-duplicate.json`).
       Commit them on approval.
 7. **Commit only with approval**, with explicit paths: the test file, `.regression-suite.json`, and

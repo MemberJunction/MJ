@@ -159,7 +159,7 @@ jobs:
         id: diff
         if: steps.run.outputs.passed != '0'
         run: |
-          if [ -z "$(git status --porcelain -- metadata-optional/regression-test/tests)" ]; then
+          if [ -z "$(git status --porcelain -- metadata-optional/regression-test/tests metadata-optional/regression-test/test-suites)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "The run recorded no new or changed replay scripts." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -191,7 +191,7 @@ jobs:
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           git checkout -B "$branch"
-          git add metadata-optional/regression-test/tests
+          git add metadata-optional/regression-test/tests metadata-optional/regression-test/test-suites
           git commit -m "test(regression): refresh replay scripts from $BASE run $RUN_NAME"
           # Force is safe here and only here: the branch belongs to this workflow and is rebuilt
           # from the base on every run. Never point it at a branch a person works on.

@@ -7,6 +7,9 @@ import { posix } from 'node:path';
 /** The folder a harvest may change, relative to the repo root. */
 export const HARVEST_DIR = 'metadata-optional/regression-test/tests';
 
+/** The suite folder, where a harvest may change only the `sync` state that a push writes. */
+export const SUITES_DIR = 'metadata-optional/regression-test/test-suites';
+
 const SCRIPTS_DIR = `${HARVEST_DIR}/regression/scripts`;
 const TRACES_DIR = `${HARVEST_DIR}/regression/traces`;
 const FILE_REF_PREFIX = '@file:';
@@ -108,6 +111,14 @@ function comparable(record) {
     return copy;
 }
 
+function withoutSync(value) {
+    if (Array.isArray(value)) return value.map(withoutSync);
+    if (!isPlainObject(value)) return value;
+    const copy = {};
+    for (const [key, child] of Object.entries(value)) if (key !== 'sync') copy[key] = withoutSync(child);
+    return copy;
+}
+
 function diffInto(before, after, prefix, changed) {
     if (isPlainObject(before) && isPlainObject(after)) {
         const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
@@ -199,8 +210,19 @@ function checkTestEntry(entry, ctx) {
     }
 }
 
+function checkSuiteEntry(entry, ctx) {
+    const suite = ctx.suitesByPath.get(entry.path);
+    if (entry.status !== 'modified' || !suite?.head) {
+        ctx.result.problems.push(`${entry.path}: changed outside ${HARVEST_DIR}`);
+    } else if (canonical(withoutSync(suite.head.record)) !== canonical(withoutSync(suite.record))) {
+        ctx.result.problems.push(`${entry.path}: changed outside ${HARVEST_DIR} (more than its sync state)`);
+    }
+}
+
 function checkEntry(entry, ctx) {
-    if (!entry.path.startsWith(`${HARVEST_DIR}/`)) {
+    if (entry.path.startsWith(`${SUITES_DIR}/`)) {
+        checkSuiteEntry(entry, ctx);
+    } else if (!entry.path.startsWith(`${HARVEST_DIR}/`)) {
         ctx.result.problems.push(`${entry.path}: changed outside ${HARVEST_DIR}`);
     } else if (entry.path.startsWith(`${SCRIPTS_DIR}/`)) {
         checkScriptEntry(entry, ctx);
@@ -218,13 +240,16 @@ function checkEntry(entry, ctx) {
  * @param {{ path: string, record: object, text: string, head: { record: object, text: string } | null }[]} input.tests
  *   every test file in the worktree; `head` is the committed version, or null when there is none
  * @param {{ path: string, text: string }[]} input.scripts every replay-script file in the worktree
+ * @param {{ path: string, record: object, head: { record: object } | null }[]} [input.suites]
+ *   the changed suite files and their committed versions
  */
-export function CheckHarvest({ entries, tests, scripts }) {
+export function CheckHarvest({ entries, tests, scripts, suites = [] }) {
     const refs = allReferences(tests);
     const result = { problems: [], newScripts: [], updatedScripts: [], removedScripts: [], pendingScripts: [], scriptedTests: [] };
     const ctx = {
         result,
         testsByPath: new Map(tests.map((t) => [t.path, t])),
+        suitesByPath: new Map(suites.map((s) => [s.path, s])),
         scriptText: new Map(scripts.map((s) => [s.path, s.text])),
         owners: new Map(refs.map((r) => [r.file, r])),
     };

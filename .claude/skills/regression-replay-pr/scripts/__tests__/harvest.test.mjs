@@ -12,6 +12,18 @@ import {
 const TEST_PATH = `${HARVEST_DIR}/regression/.T001-login-smoke.json`;
 const SCRIPT_PATH = `${HARVEST_DIR}/regression/scripts/t001-login-smoke.json`;
 const PENDING_PATH = `${HARVEST_DIR}/regression/scripts/t001-login-smoke.pending.json`;
+const SUITE_PATH = 'metadata-optional/regression-test/test-suites/.regression-suite.json';
+
+function suite(memberSync) {
+    const member = { fields: { TestID: '@lookup:MJ: Tests.Name=T156 - New', Sequence: 156 }, primaryKey: { ID: 'B' } };
+    if (memberSync) member.sync = memberSync;
+    return {
+        fields: { Name: 'MJ Explorer Regression Suite' },
+        primaryKey: { ID: 'A' },
+        sync: { lastModified: '2026-11-12T00:00:00.000Z', checksum: 'a' },
+        relatedEntities: { 'MJ: Test Suite Tests': [member] },
+    };
+}
 
 function record(configuration = {}, sync = { lastModified: '2026-11-12T00:00:00.000Z', checksum: 'a' }) {
     return {
@@ -142,13 +154,34 @@ describe('CheckHarvest', () => {
 
     it('rejects a change outside the test folder', () => {
         const result = CheckHarvest({
-            entries: [{ status: 'modified', path: 'metadata-optional/regression-test/test-suites/.regression-suite.json' }],
+            entries: [{ status: 'modified', path: 'docker/regression/open-apps.json' }],
             tests: [],
             scripts: [],
         });
-        expect(result.problems).toEqual([
-            'metadata-optional/regression-test/test-suites/.regression-suite.json: changed outside metadata-optional/regression-test/tests',
-        ]);
+        expect(result.problems).toEqual(['docker/regression/open-apps.json: changed outside metadata-optional/regression-test/tests']);
+    });
+
+    it('accepts a suite file whose only change is the sync state that a push wrote', () => {
+        const after = suite({ lastModified: '2026-11-13T05:59:12.168Z', checksum: 'b' });
+        const result = CheckHarvest({
+            entries: [{ status: 'modified', path: SUITE_PATH }],
+            tests: [],
+            scripts: [],
+            suites: [testEntry(SUITE_PATH, after, suite())],
+        });
+        expect(result.problems).toEqual([]);
+    });
+
+    it('rejects a suite file with any other change', () => {
+        const after = suite({ lastModified: '2026-11-13T05:59:12.168Z', checksum: 'b' });
+        after.relatedEntities['MJ: Test Suite Tests'][0].fields.Sequence = 157;
+        const result = CheckHarvest({
+            entries: [{ status: 'modified', path: SUITE_PATH }],
+            tests: [],
+            scripts: [],
+            suites: [testEntry(SUITE_PATH, after, suite())],
+        });
+        expect(result.problems).toEqual([`${SUITE_PATH}: changed outside ${HARVEST_DIR} (more than its sync state)`]);
     });
 
     it('rejects a test field change, a format-only change and a missing script file', () => {

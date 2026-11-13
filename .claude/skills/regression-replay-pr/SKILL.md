@@ -61,8 +61,9 @@ The branch is `<prefix>-regression-replay-scripts-<base>-<yyyymmdd>`.
 7. **Teardown.** `bash $S/teardown.sh <WORKTREE>`.
 8. **No changes.** If `git -C <WORKTREE> status --porcelain` prints nothing, say "no new or
    changed scripts", run `bash $S/cleanup.sh <WORKTREE> --delete-branch`, stop.
-9. **Commit.** `git -C <WORKTREE> add metadata-optional/regression-test/tests` (this path only),
-   then commit with the message
+9. **Commit.** `git -C <WORKTREE> add metadata-optional/regression-test/tests metadata-optional/regression-test/test-suites`
+   (these paths only; the check allows only `sync` state to change in the suite folder), then
+   commit with the message
    `test(regression): refresh replay scripts from <base> run <run>` (`<run>` is the last part of
    `RUN_DIR`, for example `run-20261112T183113Z`) and the session's attribution trailer.
 10. **Push.** `git -C <WORKTREE> push -u origin <BRANCH>`. Then `git -C <WORKTREE> branch -vv`
@@ -78,7 +79,7 @@ The branch is `<prefix>-regression-replay-scripts-<base>-<yyyymmdd>`.
 
 - Work only in the worktree that step 2 made. Never run `git checkout --`, `git restore` or
   `git reset --hard`.
-- Stage only `metadata-optional/regression-test/tests`. Never stage `.env.test`.
+- Stage only `metadata-optional/regression-test/tests` and `metadata-optional/regression-test/test-suites`. Never stage `.env.test`.
 - Never push to `next` or `main`. The PR goes from `BRANCH` to the base.
 - Only one `mj-regression` stack can run on a machine (fixed name and ports).
 - A failed test records no script. It does not block the PR; the PR body lists it.
@@ -90,5 +91,5 @@ The branch is `<prefix>-regression-replay-scripts-<base>-<yyyymmdd>`.
 |---|---|
 | Running `mj test regression up` from the main checkout | That builds the main checkout's code. `run-stack.sh` builds the worktree, which is the base branch. |
 | Teardown before `harvest.sh pull` | The pull reads the stack's database. Tear down after the harvest. |
-| The check reports a file outside the test folder (for example the suite file's `sync` block), "only the formatting changed", or a test field change | A push and a pull of unchanged metadata must write the same bytes, so this is a bug in the branch, not noise. Report it; do not revert the change and do not commit. |
+| The check reports a file outside the test folder, a suite file with "more than its sync state", "only the formatting changed", or a test field change | A push and a pull of unchanged metadata must write the same bytes, so this is a bug in the branch, not noise. Report it; do not revert the change and do not commit. |
 | `preflight.sh` reports missing harvest support | The base branch is older than PR MemberJunction/MJ#6613. Pick a newer branch. |
