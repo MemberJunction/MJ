@@ -1,16 +1,6 @@
 [
   {
     "repo": "https://github.com/MemberJunction/more-cheese",
-    "version": "1.3.2",
-    "disableClientPackages": [
-      "@mj-biz-apps/secure-messaging-core",
-      "@mj-biz-apps/secure-messaging-actions",
-      "@mj-biz-apps/secure-messaging-element",
-      "@mj-biz-apps/sonar-ng"
-    ],
-    "mjCompat": [
-      "legacy-conversation-type",
-      "drop-uncoded-view-fields"
-    ]
+    "version": "1.3.2"
   }
 ]

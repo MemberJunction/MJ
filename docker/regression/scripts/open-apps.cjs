@@ -5,14 +5,10 @@
  *                                        as the test-runner image needs), points every workspace
  *                                        @memberjunction package at its workspace copy, runs
  *                                        `mj app install <repo> --version <v> --packages-only` for
- *                                        each app, turns off the client packages that an entry's
- *                                        `disableClientPackages` names, builds the workspace packages
- *                                        that the installed app packages use, then fails if a
- *                                        workspace @memberjunction package now also has a registry
- *                                        copy.
- *   node open-apps.cjs database          db-setup (database up). Runs `--database-only` for each app,
- *                                        with the `mjCompat` changes that an entry names before and
- *                                        after it.
+ *                                        each app, builds the workspace packages that the installed
+ *                                        app packages use, then fails if a workspace @memberjunction
+ *                                        package now also has a registry copy.
+ *   node open-apps.cjs database          db-setup (database up). Runs `--database-only` for each app.
  *   node open-apps.cjs check-duplicates  Only the duplicate check.
  *
  * Every install runs with `--non-interactive`. An empty list does nothing.
@@ -32,13 +28,9 @@ const LIST_PATH = process.env.OPEN_APPS_FILE || path.resolve(__dirname, '..', 'o
 const SECRET_PATH = '/run/secrets/github_token';
 const MJ_CLI = 'packages/MJCLI/bin/run.js';
 const ROOT_MANIFEST = 'package.json';
-const CONFIG_PATH = 'mj.config.cjs';
 const PNPM_STORE = 'node_modules/.pnpm';
-const MJ_CORE_SCHEMA = '__mj';
-/** Database changes an entry can ask for, so an app built for an older MJ installs. */
-const MJ_COMPAT = ['legacy-conversation-type', 'drop-uncoded-view-fields'];
 
-/** Reads and checks the pinned list: an array of { repo, version, disableClientPackages?, mjCompat? }. */
+/** Reads and checks the pinned list: an array of { repo, version }. */
 function readAppList() {
     const apps = JSON.parse(fs.readFileSync(LIST_PATH, 'utf8'));
     if (!Array.isArray(apps)) throw new Error(`${LIST_PATH} must hold a JSON array`);
@@ -48,14 +40,6 @@ function readAppList() {
         }
         if (typeof app.version !== 'string' || app.version.length === 0) {
             throw new Error(`Each entry in ${LIST_PATH} needs a "version": ${JSON.stringify(app)}`);
-        }
-        const off = app.disableClientPackages ?? [];
-        if (!Array.isArray(off) || off.some((name) => typeof name !== 'string')) {
-            throw new Error(`"disableClientPackages" in ${LIST_PATH} must be an array of package names: ${JSON.stringify(app)}`);
-        }
-        const compat = app.mjCompat ?? [];
-        if (!Array.isArray(compat) || compat.some((name) => !MJ_COMPAT.includes(name))) {
-            throw new Error(`"mjCompat" in ${LIST_PATH} must be an array of ${MJ_COMPAT.join(', ')}: ${JSON.stringify(app)}`);
         }
     }
     return apps;
@@ -120,44 +104,6 @@ function linkWorkspacePackages() {
     console.log(`Linked the ${names.length} workspace @memberjunction packages for the app install (pnpm.overrides).`);
 }
 
-/** The `[` … `]` span of the `dynamicPackages.client` array in mj.config.cjs, or null. */
-function clientArraySpan(text) {
-    const section = /dynamicPackages\s*:\s*\{/.exec(text);
-    if (!section) return null;
-    const key = /\bclient\s*:\s*\[/g;
-    key.lastIndex = section.index;
-    const match = key.exec(text);
-    if (!match) return null;
-    const start = match.index + match[0].length - 1;
-    let depth = 0;
-    for (let i = start; i < text.length; i++) {
-        if (text[i] === '[') depth++;
-        else if (text[i] === ']' && --depth === 0) return { start, end: i + 1 };
-    }
-    return null;
-}
-
-/**
- * Sets `Enabled: false` on the named `dynamicPackages.client` entries in mj.config.cjs, so the
- * Explorer manifest emits them as comments. Fails when a name has no client entry.
- */
-function disableClientPackages(names) {
-    if (names.length === 0) return;
-    let text = fs.readFileSync(CONFIG_PATH, 'utf8');
-    const span = clientArraySpan(text);
-    if (!span) throw new Error(`${CONFIG_PATH} has no dynamicPackages.client array`);
-    let client = text.slice(span.start, span.end);
-    for (const name of names) {
-        const escaped = name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-        const entry = new RegExp(`(PackageName:\\s*["']${escaped}["'][^{}]*?Enabled:\\s*)(true|false)`);
-        if (!entry.test(client)) throw new Error(`disableClientPackages: ${name} has no client entry in ${CONFIG_PATH}`);
-        client = client.replace(entry, '$1false');
-    }
-    text = text.slice(0, span.start) + client + text.slice(span.end);
-    fs.writeFileSync(CONFIG_PATH, text);
-    console.log(`Turned off ${names.length} Open App client package(s): ${names.join(', ')}`);
-}
-
 /** The package name of a node_modules/.pnpm folder name (`@scope+name@1.0.0_x` → `@scope/name`). */
 function storeFolderPackage(folder) {
     const scoped = folder.startsWith('@');
@@ -211,47 +157,7 @@ function checkDuplicates() {
     console.log(`No registry copies of the ${workspace.size} workspace @memberjunction packages.`);
 }
 
-/** The `mjCompat` names that any entry lists. */
-function compatNames(apps) {
-    return new Set(apps.flatMap((app) => app.mjCompat ?? []));
-}
-
-/** Runs `work` with a database connection. */
-async function withPool(work) {
-    const { connect } = require('./lib/db.cjs');
-    const pool = await connect();
-    try {
-        return await work(pool);
-    } finally {
-        await pool.close();
-    }
-}
-
-/**
- * `mjCompat` changes before the apps' database step. `legacy-conversation-type` lets the
- * conversation procedures accept the `@Type` name that apps built before MJ 6.3 pass.
- */
-async function applyCompatBefore(apps) {
-    if (!compatNames(apps).has('legacy-conversation-type')) return;
-    const { ApplyLegacyConversationType } = require('./lib/legacy-conversation-type.cjs');
-    const changed = await withPool((pool) => ApplyLegacyConversationType(pool, MJ_CORE_SCHEMA));
-    console.log(`mjCompat legacy-conversation-type: ${changed.length ? `added @Type to ${changed.join(', ')}` : 'not needed'}`);
-}
-
-/**
- * `mjCompat` changes after the apps' database step. `drop-uncoded-view-fields` removes the
- * virtual fields of app entities that no installed app package defines.
- */
-async function applyCompatAfter(apps) {
-    if (!compatNames(apps).has('drop-uncoded-view-fields')) return;
-    const { DropUncodedViewFields } = require('./lib/uncoded-view-fields.cjs');
-    const config = require(path.resolve(CONFIG_PATH));
-    const dropped = await withPool((pool) => DropUncodedViewFields(pool, MJ_CORE_SCHEMA, config, PNPM_STORE));
-    console.log(`mjCompat drop-uncoded-view-fields: removed ${dropped.length} field(s)`);
-    for (const field of dropped) console.log(`  ${field.Entity}.${field.Field}`);
-}
-
-async function main() {
+function main() {
     const step = process.argv[2];
     if (step === 'check-duplicates') return checkDuplicates();
     if (step !== 'packages' && step !== 'database') {
@@ -268,17 +174,16 @@ async function main() {
         run('pnpm', ['exec', 'turbo', 'build', '--concurrency=2', '--filter=@memberjunction/cli'], env);
         linkWorkspacePackages();
         installAll(apps, '--packages-only', env);
-        disableClientPackages(apps.flatMap((app) => app.disableClientPackages ?? []));
         buildWorkspacePackagesUsedByApps(env);
         checkDuplicates();
     } else {
-        await applyCompatBefore(apps);
         installAll(apps, '--database-only', env);
-        await applyCompatAfter(apps);
     }
 }
 
-main().catch((err) => {
+try {
+    main();
+} catch (err) {
     console.error(err.message);
     process.exit(1);
-});
+}
