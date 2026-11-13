@@ -305,3 +305,46 @@ Of the 5 Named, only #3831 became a catch (Gemini). #4253 cannot be matched (fix
 **3. Why 16 PRs had no risk notes: the analyzer's silent fallback.** `ChangeAnalyzer.ask` calls the model with `maxOutputTokens: 2000`, retries once when the reply is not valid JSON, and otherwise returns intent from the commit prefix, the PR title as summary, and no risks. The run records show the signature: every such run has analyzer `OutputTokens` exactly 4000 (two attempts cut at the cap) and `Summary` equal to the PR title. 34 of the 70 tuning runs (49%) ran this way, 16 of the 28 Sonnet bug PRs among them; large diffs fail most (every PR over ~1000 diff lines except #3735 and #4317), and the same PR fails on one attempt and succeeds on another (#4253, #4828). Nothing on stderr, nothing in the report. Fix: plan `plans/catching-jittests-speed.md` Task 1 (8000-token cap, shorter second attempt, `Analysis.Fallback` recorded and reported).
 
 **Where the time goes** (PR #3602, 32 min, from file timestamps): prepare base and head ~10 min (two worktrees, two offline installs of all 313 workspace projects, two builds), analyze and generate ~4 min, execute ~14 min (head build, type-check, 42 vitest runs, 7 per-test coverage runs), judges ~1 min, teardown ~2 min. Coverage feeds only promotions, which gate 1 never reads. Plan `catching-jittests-speed.md` Tasks 3–6: coverage off in backtests, per-stage timings, one turbo cache per run, analyze first and install only the packages under test.
+
+## Hydrogen cost work and a first held-out run (2026-11-13)
+
+Generator `gemini-4-hydrogen`. All decisions of this night, with their options, are in [`OVERNIGHT-DECISIONS.md`](OVERNIGHT-DECISIONS.md) (N1 to N20).
+
+### Settings kept
+
+`GeneratorEffort: medium`, `Limits.RisksPerSession: 5`, `Limits.PackagesPerPR: 2`, `Limits.TestsPerPackage: 3`, `Limits.RisksPerPackage: 2`, `Limits.TurnsPerSession: 60`, staged judges (default), judge prompt cache. `run_test` type-checks a passing test.
+
+### Tuning PRs (settings varied, see N12 to N18)
+
+| Setting | PRs | Mean USD per PR | PRs with a reported catch that is the known bug |
+|---|---|---|---|
+| Round 1: default thinking, one session per risk, no type check | 5 | 2.70 | 2 of 5 (#3831, #5906) |
+| Round 3: medium thinking, shared session, type check | 3 | 0.73 | 1 of 3 (#3831) |
+| Validation: same, PRs with 2 or 3 packages | 4 | 2.85 | 1 of 3 checked (#4450) |
+| Round 7: kept settings | 5 | 2.07 | 1 of 5 (#4450) |
+| Round 8: kept settings with low thinking | 3 | 1.21 | 0 of 3 |
+
+### Held-out slice, first 8 of 15 bug PRs, kept settings
+
+| PR | USD | Tests | Reported | Match check |
+|---|---|---|---|---|
+| #5481 | 0.67 | 10 | 0 | NotMatched |
+| #4126 | 1.05 | 7 | 2 | NotMatched |
+| #4782 | 1.25 | 12 | 0 | Matched by 2 tests that the first judge rated Low (not reported) |
+| #5854 | 0.80 | 7 | 0 | NotMatched |
+| #5703 | 2.37 | 11 | 0 | NotMatched |
+| #3381 | 1.59 | 12 | 2 | NotMatched |
+| #4225 | 0.64 | 6 | 0 | NoCatch |
+| #4120 | 0.86 | 5 | 2 | Matched (reported catch) |
+
+- Total 9.23 USD, mean 1.15 USD per PR.
+- 1 of 8 PRs has a reported catch that is the known bug. A second PR has tests that find the bug, but the first judge filtered them.
+- 3 PRs have reports; on 2 of them the reports are not the known bug. They are not labeled, so they can be other real defects or false reports.
+- The held-out PRs #5267, #3824, #4874, #5047, #5514, #3915 and #5878 are not used.
+- The clean set was not run in this night.
+
+### Infrastructure notes
+
+- `Sandbox.EnsureImage` builds the image at each start and needs the registry for the base image. A registry failure stops the run although the image exists locally (seen three times in the match step).
+- One PR failed at `gh pr view` on a network error and passed on a second attempt (`--retry-failed`).
+

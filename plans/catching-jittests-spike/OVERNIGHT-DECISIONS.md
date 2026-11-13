@@ -259,6 +259,19 @@ Held-out run. The held-out slice has 15 bug PRs.
 - **C. No held-out run tonight.** Pro: nothing used. Con: no figure outside the tuning PRs.
 - **Choice: B.** No setting is changed after this run starts.
 
+## N20. Held-out result and what it means
+
+Result (details in `GATE1.md`): 8 held-out bug PRs, 9.23 USD, mean 1.15 USD per PR. 1 PR has a reported catch that is the known bug (#4120). On #4782 two tests find the bug but the first judge rated them Low. On #4126 and #3381 the reports are not the known bug (not labeled).
+
+Decisions during the run:
+- #4120 failed on a network error at `gh pr view`. Options: leave it out, or run it again. Chosen: run it again (same settings, no change between).
+- The match step stopped on registry failures in the image build. Options: (A) change `EnsureImage` to use the local image when the build fails; (B) run the step again. Chosen: B tonight, because A changes which image runs untrusted code and needs the user's view; A is listed as a follow-up.
+
+Reading of the result (no setting was changed after it):
+- Cost is now near 1 USD per PR on this slice. The catch rate of known bugs is low (1 of 8 reported, 2 of 8 found).
+- The first judge is now the step that loses a found bug (#4782 here; #4450 in round 8). The stored data before this night showed that an Opus Low was never reported, but that says nothing about bugs it filters out.
+- The next work with the most value is on catch rate, not on cost: what the first judge sees for catches that match the bug, and why the risk notes do not name the bug on most PRs.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -276,3 +289,4 @@ Held-out run. The held-out slice has 15 bug PRs.
 | 8 | Smaller plan, low thinking: #3831, #4418, #4450 | 3.63 | 51.59 |
 | J | Judge-only rerun of the stored #4450 run (prompt cache check) | 0.34 | 51.93 |
 | R | Phase 3 rehearsal, PR #3831 (task 3.13) | 0.46 | 52.39 |
+| H | Held-out, first 8 bug PRs, kept settings | 9.23 | 61.62 |
