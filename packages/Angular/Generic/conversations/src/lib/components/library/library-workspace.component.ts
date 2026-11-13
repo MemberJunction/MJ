@@ -530,12 +530,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public SwitchSurfaceMode(mode: LibrarySurfaceMode, persistPreference = true): void {
     this.IsFullCanvasOpen = false;
     this.SurfaceMode = mode;
-    if (mode === 'hub') {
-      this.SelectedCollectionId = null;
-      if (this.NavigatorSection === 'collection') {
-        this.NavigatorSection = 'all';
-      }
-    }
     if (persistPreference) {
       this.preferredSurfaceMode = mode;
       this.saveSettingSafe(SETTING_SURFACE_MODE, mode);
@@ -552,7 +546,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const tab = (valid.includes(tabKey as LibraryHubTab) ? tabKey : 'overview') as LibraryHubTab;
     this.HubTab = tab;
     this.IsFullCanvasOpen = false;
-    this.SelectedCollectionId = null;
     if (tab !== 'drives') {
       this.SelectedDriveId = null;
       this.DriveFolderPrefix = '';
@@ -641,7 +634,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsFullCanvasOpen = false;
     if (this.FullCanvasOriginMode === 'hub') {
       this.ActiveArtifactId = null;
-      this.SelectedCollectionId = null;
     }
     this.SurfaceMode = this.FullCanvasOriginMode;
     this.emitWorkspaceState();
@@ -2410,7 +2402,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       this.SurfaceMode = 'navigator';
       this.NavigatorSection = 'collection';
       this.expandAncestorsOf(params.collectionId);
-    } else {
+    } else if (params.mode !== 'hub' && (!params.section || params.section !== 'collection')) {
       this.SelectedCollectionId = null;
     }
 
