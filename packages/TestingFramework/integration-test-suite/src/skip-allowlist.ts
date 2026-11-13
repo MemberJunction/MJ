@@ -22,6 +22,11 @@
  * or the leg is for another database platform) and `pending-ruling` (waiting on a decision someone
  * else owns; the reason names it). A bare bundle name allows a Test parked by `requiresEnv`.
  *
+ * An entry may set `Transport` (`'server'` or `'client'`) to allow the skip only on that transport;
+ * a skip on the other transport stays a failure. Without `Transport` the entry covers both. A check
+ * has at most one entry: a second entry for the same `CheckId`, even with a different `Transport`,
+ * throws when the list is registered.
+ *
  * Every entry must name a registered check (enforced by check-registry.test.ts). Keep the reason
  * specific: it is printed next to the skip in the run's output.
  */
