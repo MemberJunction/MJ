@@ -476,8 +476,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       if (loaded) {
         job.Set('CronExpression', cronExpression);
         job.Set('Status', 'Active');
-        // Reset NextRunAt so the scheduler picks up the new cron immediately
-        job.Set('NextRunAt', new Date());
+        // NextRunAt follows the new cron on the server (MJScheduledJobEntityServer)
         await job.Save();
         return existingJobID;
       }
@@ -494,8 +493,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     job.Set('Status', 'Active');
     job.Set('ConcurrencyMode', 'Skip');
     job.Set('Configuration', JSON.stringify({ CompanyIntegrationID: integrationID }));
-    // Set NextRunAt to now so the scheduler fires it on next poll without needing a restart
-    job.Set('NextRunAt', new Date());
+    // The scheduler seeds NextRunAt for a new active job at its next cron tick
     await job.Save();
     return job.Get('ID') as string;
   }
