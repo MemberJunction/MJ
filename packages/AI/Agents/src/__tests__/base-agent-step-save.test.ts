@@ -7,7 +7,9 @@
  * stubbed. This locks in the ordering + non-fatal-failure contract that had no coverage before.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { ChatMessage } from '@memberjunction/ai';
 import { BaseAgent } from '../base-agent';
+import { AgentDataPreloader } from '../AgentDataPreloader';
 import { PriorTurnToolResultCache } from '../prior-turn-tool-result-cache';
 import { AgentRunWatchdog } from '../agent-run-watchdog';
 
@@ -730,6 +732,70 @@ describe('BaseAgent terminal saves — release the run from the watchdog', () =>
     const { agent } = trackedAgent(false);
     await finalize(agent, { step: 'Success', message: 'done' });
     expect(isTracked()).toBe(true);
+  });
+});
+
+describe('Wave 5.1 preloadAgentData single-write step & messageFingerprint memoization', () => {
+  it('preloadAgentData records Data Source Preloading via a single INSERT', async () => {
+    const log: string[] = [];
+    const step = new MockStep('preload', log);
+    const { agent, pending } = makeAgent([step]);
+
+    const preloadSpy = vi.spyOn(AgentDataPreloader.Instance, 'PreloadAgentData').mockResolvedValueOnce({
+      data: { ALL_ENTITIES: [{ Name: 'Users' }] },
+      context: {},
+      payload: {},
+      loadedSources: ['ALL_ENTITIES'],
+      failedSources: [],
+    });
+
+    try {
+      const preloadFn = Reflect.get(agent, 'preloadAgentData') as (params: {
+        agent: { ID: string; Name: string };
+        contextUser: { ID: string; Name: string };
+        conversationMessages: ChatMessage[];
+        data: Record<string, string | object>;
+        payload: Record<string, string | object>;
+      }) => Promise<void>;
+
+      await preloadFn.call(agent, {
+        agent: { ID: 'a1', Name: 'TestAgent' },
+        contextUser: { ID: 'u1', Name: 'Tester' },
+        conversationMessages: [],
+        data: {},
+        payload: {},
+      });
+      await pending();
+    } finally {
+      preloadSpy.mockRestore();
+    }
+
+    expect(log).toEqual(['preload:start:1', 'preload:end:1']);
+    expect(step.saveOptions).toHaveLength(1);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+  });
+
+  it('BaseAgent.messageFingerprint memoizes unchanged ChatMessage instances via WeakMap and invalidates on mutation', () => {
+    const msg: ChatMessage = { role: 'user', content: 'hello world' };
+    const stringifySpy = vi.spyOn(JSON, 'stringify');
+
+    try {
+      const fingerprintFn = Reflect.get(BaseAgent, 'messageFingerprint') as (m: ChatMessage) => string;
+      const fp1 = fingerprintFn.call(BaseAgent, msg);
+      const fp2 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp1).toBe(fp2);
+      expect(stringifySpy).toHaveBeenCalledTimes(1);
+
+      msg.content = 'updated';
+      const fp3 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp3).not.toBe(fp1);
+      expect(stringifySpy).toHaveBeenCalledTimes(2);
+    } finally {
+      stringifySpy.mockRestore();
+    }
   });
 });
 

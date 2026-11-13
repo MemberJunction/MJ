@@ -12,9 +12,8 @@
  */
 
 import { AIEngine } from '@memberjunction/aiengine';
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityPermissionType, IMetadataProvider, IRunQueryProvider, IRunViewProvider, IsVerboseLoggingEnabled, LogError, LogStatusEx, Metadata, ProjectEntityValueRowsForUser, RunQuery, RunQueryParams, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
-import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
 
@@ -76,6 +75,20 @@ interface CacheEntry {
  */
 const PRELOAD_CONCURRENCY_LIMIT = 10;
 
+function asRunViewProvider(provider?: IMetadataProvider): IRunViewProvider | null {
+    if (provider && 'RunView' in provider && typeof (provider as IMetadataProvider & IRunViewProvider).RunView === 'function') {
+        return provider as IMetadataProvider & IRunViewProvider;
+    }
+    return null;
+}
+
+function asRunQueryProvider(provider?: IMetadataProvider): IRunQueryProvider | null {
+    if (provider && 'RunQuery' in provider && typeof (provider as IMetadataProvider & IRunQueryProvider).RunQuery === 'function') {
+        return provider as IMetadataProvider & IRunQueryProvider;
+    }
+    return null;
+}
+
 export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     /**
      * Per-agent cache, keyed by agent, data source and user. Each entry carries its own
@@ -134,7 +147,8 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     public async PreloadAgentData(
         agentId: string,
         contextUser: UserInfo,
-        runId?: string
+        runId?: string,
+        provider?: IMetadataProvider
     ): Promise<PreloadedDataResult> {
         try {
             LogStatusEx({
@@ -144,7 +158,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
             });
 
             // Load data source definitions
-            const dataSources = await this.loadDataSourcesForAgent(agentId, contextUser);
+            const dataSources = await this.loadDataSourcesForAgent(agentId, contextUser, provider);
 
             if (dataSources.length === 0) {
                 LogStatusEx({
@@ -165,7 +179,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
 
             // Execute data sources in parallel with a bounded concurrency cap so a
             // long list of sources can't saturate the DB connection pool.
-            const preloadedResults = await this.resolveDataSources(dataSources, contextUser, runId);
+            const preloadedResults = await this.resolveDataSources(dataSources, contextUser, runId, provider);
 
             for (const item of preloadedResults) {
                 if (item.success) {
@@ -268,7 +282,8 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     private async resolveDataSources(
         dataSources: MJAIAgentDataSourceEntity[],
         contextUser: UserInfo,
-        runId?: string
+        runId?: string,
+        provider?: IMetadataProvider
     ): Promise<Array<
         | { success: true; source: MJAIAgentDataSourceEntity; sourceData: unknown; path: string }
         | { success: false; source: MJAIAgentDataSourceEntity; error: unknown }
@@ -288,7 +303,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                     if (idx >= dataSources.length) return;
                     const source = dataSources[idx];
                     try {
-                        const sourceData = await this.executeDataSource(source, contextUser, runId);
+                        const sourceData = await this.executeDataSource(source, contextUser, runId, provider);
                         results[idx] = {
                             success: true as const,
                             source,
@@ -312,10 +327,11 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      */
     private async loadDataSourcesForAgent(
         agentId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
-        await AIEngine.Instance.Config(false, contextUser);
+        await AIEngine.Instance.Config(false, contextUser, provider);
         const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId) && ads.Status === 'Active');
         const sortedData = data.sort((a, b) => {
             if (a.ExecutionOrder === b.ExecutionOrder) {
@@ -336,7 +352,8 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     private async executeDataSource(
         source: MJAIAgentDataSourceEntity,
         contextUser: UserInfo,
-        runId?: string
+        runId?: string,
+        provider?: IMetadataProvider
     ): Promise<unknown> {
         // Check cache first
         const cachedData = this.getCachedData(source, contextUser, runId);
@@ -353,9 +370,9 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         let data: unknown;
 
         if (source.SourceType === 'RunView') {
-            data = await this.executeRunView(source, contextUser);
+            data = await this.executeRunView(source, contextUser, provider);
         } else if (source.SourceType === 'RunQuery') {
-            data = await this.executeRunQuery(source, contextUser);
+            data = await this.executeRunQuery(source, contextUser, provider);
         } else {
             throw new Error(`Unknown source type: ${source.SourceType}`);
         }
@@ -373,7 +390,8 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      */
     private async executeRunView(
         source: MJAIAgentDataSourceEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<unknown> {
         if (!source.EntityName) {
             throw new Error(`RunView data source '${source.Name}' missing EntityName`);
@@ -388,15 +406,24 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         };
 
         // Parse FieldsToRetrieve if provided
+        let fieldsParseFailed = false;
         if (source.FieldsToRetrieve) {
             try {
                 params.Fields = JSON.parse(source.FieldsToRetrieve);
             } catch (error) {
+                fieldsParseFailed = true;
                 LogError(`Failed to parse FieldsToRetrieve JSON for data source '${source.Name}': ${error.message}`);
             }
         }
 
-        const rv = new RunView();
+        if (!fieldsParseFailed) {
+            const cachedEntitiesRows = this.tryExecuteCachedEntitiesView(source, params.Fields, contextUser, provider);
+            if (cachedEntitiesRows !== null) {
+                return cachedEntitiesRows;
+            }
+        }
+
+        const rv = new RunView(asRunViewProvider(provider));
         const result = await rv.RunView(params, contextUser);
 
         if (!result.Success) {
@@ -407,13 +434,97 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     }
 
     /**
+     * Serves unfiltered, field-scoped `MJ: Entities` simple views directly from in-memory
+     * provider entity metadata when the user has read permission and no RLS filter applies,
+     * avoiding a SQL query over entity metadata that is already resident in memory.
+     * Returns `null` to fall back to standard `RunView` execution for any unsupported query shape.
+     */
+    private tryExecuteCachedEntitiesView(
+        source: MJAIAgentDataSourceEntity,
+        requestedFields: string[] | undefined,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Record<string, string | number | boolean | Date | null | undefined>[] | null {
+        if (source.EntityName?.trim().toLowerCase() !== 'mj: entities') {
+            return null;
+        }
+        if ((source.ResultType && source.ResultType !== 'simple') || source.ExtraFilter || source.MaxRows) {
+            return null;
+        }
+        if (!Array.isArray(requestedFields) || requestedFields.length === 0) {
+            return null;
+        }
+        const orderBy = source.OrderBy?.trim() ?? '';
+        if (orderBy.length > 0 && !/^\[?Name\]?(?:\s+(ASC|DESC))?$/i.test(orderBy)) {
+            return null;
+        }
+        if (!contextUser || !Array.isArray(contextUser.UserRoles)) {
+            return null;
+        }
+
+        const resolvedProvider = provider ?? Metadata.Provider;
+        const entities: EntityInfo[] | undefined = resolvedProvider?.Entities;
+        const entitiesMeta = resolvedProvider?.EntityByName('MJ: Entities');
+        if (!resolvedProvider || !entitiesMeta || !entities || entities.length === 0) {
+            return null;
+        }
+
+        if (!entitiesMeta.GetUserPermisions(contextUser).CanRead) {
+            return null;
+        }
+        if (
+            !entitiesMeta.UserExemptFromRowLevelSecurity(contextUser, EntityPermissionType.Read) &&
+            entitiesMeta.GetUserRowLevelSecurityInfo(contextUser, EntityPermissionType.Read).length > 0
+        ) {
+            return null;
+        }
+
+        const sampleEntity = entities[0];
+        for (const field of requestedFields) {
+            if (typeof field !== 'string' || !Reflect.has(sampleEntity, field)) {
+                return null;
+            }
+            const sampleValue = Reflect.get(sampleEntity, field);
+            if (
+                sampleValue !== null &&
+                sampleValue !== undefined &&
+                typeof sampleValue !== 'string' &&
+                typeof sampleValue !== 'number' &&
+                typeof sampleValue !== 'boolean' &&
+                !(sampleValue instanceof Date)
+            ) {
+                return null;
+            }
+        }
+
+        const sortedEntities = orderBy.length > 0
+            ? [...entities].sort((a, b) => {
+                const cmp = (a.Name ?? '').localeCompare(b.Name ?? '');
+                return /desc$/i.test(orderBy) ? -cmp : cmp;
+            })
+            : entities;
+
+        const rows: Record<string, string | number | boolean | Date | null | undefined>[] = sortedEntities.map((entity) => {
+            const row: Record<string, string | number | boolean | Date | null | undefined> = {};
+            for (const field of requestedFields) {
+                const value = Reflect.get(entity, field);
+                row[field] = value as string | number | boolean | Date | null | undefined;
+            }
+            return row;
+        });
+
+        return ProjectEntityValueRowsForUser(resolvedProvider, entitiesMeta, rows, contextUser) ?? rows;
+    }
+
+    /**
      * Executes a RunQuery data source.
      *
      * @private
      */
     private async executeRunQuery(
         source: MJAIAgentDataSourceEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<unknown> {
         if (!source.QueryName) {
             throw new Error(`RunQuery data source '${source.Name}' missing QueryName`);
@@ -434,7 +545,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
             }
         }
 
-        const rq = new RunQuery();
+        const rq = new RunQuery(asRunQueryProvider(provider));
         const result = await rq.RunQuery(params, contextUser);
 
         if (!result.Success) {
