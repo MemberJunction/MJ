@@ -122,6 +122,7 @@ import { DocsSlidesSheetsLibraryChecks, DocsSlidesSheetsLibraryClientChecks } fr
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
+import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -297,6 +298,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
+        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT172)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -424,6 +426,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fp-gate-c2-3': 3,
         'fp-gate-c2-5': 3,
         'fp-live-jobtitle': 1,
+        'gemini-decisions': 8,
         'graph-runtime': 6,
         'integration-schema-pipeline': 4,
         'jsontype-live-sync': 9,

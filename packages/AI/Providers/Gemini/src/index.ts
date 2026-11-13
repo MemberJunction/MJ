@@ -1394,3 +1394,6 @@ export { GeminiLiveRelayPolicy, type GeminiLiveRelayPolicyOptions } from './gemi
 
 // Export multimodal embeddings
 export * from './geminiEmbedding';
+
+// Export the Gemini Decisions API driver (Gemini Decision 1)
+export * from './geminiDecision';

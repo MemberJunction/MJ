@@ -85,6 +85,16 @@ describe('PostgreSQLCodeGenProvider — soft primary key index', () => {
         expect(sql).not.toMatch(/CREATE\s+UNIQUE/i);
     });
 
+    it('skips the index when another non-partial index leads with the key columns, in order (#6466)', () => {
+        const sql = provider.generateSoftPrimaryKeyIndex(
+            createMockEntity({}, [softPKField('user_id', 2), softPKField('course_id', 1)])
+        )[0];
+
+        expect(sql).toContain('ix.indnkeyatts >= 2');
+        expect(sql).toContain("ix.indkey[0] = (SELECT a.attnum FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'course_id')");
+        expect(sql).toContain("ix.indkey[1] = (SELECT a.attnum FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'user_id')");
+    });
+
     it('truncates the index name to 63 characters', () => {
         const long = 'very_long_table_name_segment_padding_to_force_truncation_of_identifier';
         const entity = createMockEntity({ BaseTable: long, BaseTableCodeName: long }, [
