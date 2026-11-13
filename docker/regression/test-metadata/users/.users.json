@@ -63,14 +63,14 @@
         {
           "fields": {
             "Name": "My Members",
-            "Description": "Curated lists of members I follow",
+            "Description": "Curated lists of people I follow",
             "UserID": "@parent:ID"
           }
         },
         {
           "fields": {
-            "Name": "Events",
-            "Description": "Events I'm tracking or attending",
+            "Name": "Meetings",
+            "Description": "Committee meetings I'm tracking or attending",
             "UserID": "@parent:ID"
           }
         }
@@ -79,72 +79,73 @@
         {
           "fields": {
             "Name": "VIP Members",
-            "Description": "Members flagged as VIP for outreach",
+            "Description": "People flagged as VIP for outreach",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",
             "CategoryID": "@lookup:MJ: List Categories.Name=My Members&UserID=@parent:ID"
           }
         },
         {
           "fields": {
             "Name": "Recent Sign-ups",
-            "Description": "Members who joined in the last 30 days",
+            "Description": "People who joined in the last 30 days",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",
             "CategoryID": "@lookup:MJ: List Categories.Name=My Members&UserID=@parent:ID"
           }
         },
         {
           "fields": {
-            "Name": "Spring Events",
-            "Description": "Events scheduled for the Spring season",
+            "Name": "Upcoming Meetings",
+            "Description": "Scheduled committee meetings",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Events",
-            "CategoryID": "@lookup:MJ: List Categories.Name=Events&UserID=@parent:ID"
+            "EntityID": "@lookup:MJ: Entities.Name=Committees: Meetings",
+            "CategoryID": "@lookup:MJ: List Categories.Name=Meetings&UserID=@parent:ID"
           }
         }
       ],
       "MJ: User View Categories": [
         {
           "fields": {
-            "Name": "Members Views",
+            "Name": "People Views",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Members"
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People"
           }
         }
       ],
       "MJ: User Views": [
         {
           "fields": {
-            "Name": "All Active Members",
-            "Description": "Members where IsActive = 1, sorted by JoinDate desc",
+            "Name": "All Active People",
+            "Description": "People where Status = 'Active'",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Members",
-            "CategoryID": "@lookup:MJ: User View Categories.Name=Members Views&UserID=@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",
+            "CategoryID": "@lookup:MJ: User View Categories.Name=People Views&UserID=@parent:ID",
             "IsShared": false,
             "IsDefault": true,
-            "WhereClause": "IsActive = 1"
+            "WhereClause": "Status = 'Active'"
           }
         },
         {
           "fields": {
-            "Name": "All Members",
-            "Description": "Default view of all members",
+            "Name": "All People",
+            "Description": "Default view of all people",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Members",
-            "CategoryID": "@lookup:MJ: User View Categories.Name=Members Views&UserID=@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ_BizApps_Common: People",
+            "CategoryID": "@lookup:MJ: User View Categories.Name=People Views&UserID=@parent:ID",
             "IsShared": false,
             "IsDefault": false
           }
         },
         {
           "fields": {
-            "Name": "Upcoming Events",
-            "Description": "Events with StartDate in the future",
+            "Name": "Upcoming Meetings",
+            "Description": "Committee meetings with Status = 'Scheduled'",
             "UserID": "@parent:ID",
-            "EntityID": "@lookup:MJ: Entities.Name=Events",
+            "EntityID": "@lookup:MJ: Entities.Name=Committees: Meetings",
             "IsShared": false,
-            "IsDefault": false
+            "IsDefault": false,
+            "WhereClause": "Status = 'Scheduled'"
           }
         }
       ],
@@ -161,7 +162,7 @@
           "fields": {
             "UserID": "@parent:ID",
             "Title": "VIP Members list updated",
-            "Message": "5 new members were added to your 'VIP Members' list automatically based on recent activity.",
+            "Message": "5 new people were added to your 'VIP Members' list automatically based on recent activity.",
             "Unread": true
           }
         },
@@ -174,6 +175,9 @@
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Users.Email=computeruse@bluecypress.io?create&Name=computeruse@bluecypress.io&Type=User"
     }
   }
 ]

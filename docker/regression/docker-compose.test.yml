@@ -1,7 +1,7 @@
 # MemberJunction Full-Stack Regression Test Environment
 #
 # Architecture:
-#   sqlserver → db-setup (migrations + AssociationDB + CodeGen + the Open Apps in open-apps.json)
+#   sqlserver → db-setup (migrations + CodeGen + the Open Apps in open-apps.json, which hold the demo data)
 #             → mjapi → mjexplorer → test-runner
 #
 # Usage (from repo root, via the MJ CLI):
@@ -73,8 +73,7 @@ services:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
       # CodeGen's advanced generation parses CHECK constraints into field
-      # validators with these keys. Demo email/URL field types do not come from
-      # here — scripts/set-demo-field-types.cjs sets them.
+      # validators with these keys.
       AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
       # Database step of the Open Apps in open-apps.json (scripts/open-apps.cjs). GITHUB_TOKEN is
@@ -105,8 +104,7 @@ services:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
       # CodeGen's advanced generation parses CHECK constraints into field
-      # validators with these keys. Demo email/URL field types do not come from
-      # here — scripts/set-demo-field-types.cjs sets them.
+      # validators with these keys.
       AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
@@ -128,10 +126,9 @@ services:
       # them up via Dockerfile.explorer's overlay COPY.
       - ./.docker-generated/GeneratedEntities:/app/packages/GeneratedEntities/src/generated
       # CodeGen's GraphQLServer output writes TypeGraphQL resolvers for non-core
-      # entities (e.g. AssociationDemo). MJAPI compiles these into its bundle at
-      # build time, so without them the GraphQL schema is missing types like
-      # CreateAssociationDemoMemberInput and queries against demo entities fail
-      # with 'Unknown type' / 'ID|null' errors.
+      # entities. MJAPI compiles these into its bundle at build time. The Open
+      # Apps are not installed here (their resolvers ship in their packages), so
+      # this holds only what the stack's own schema needs.
       - ./.docker-generated/MJAPI-generated:/app/packages/MJAPI/src/generated
 
   mjapi:

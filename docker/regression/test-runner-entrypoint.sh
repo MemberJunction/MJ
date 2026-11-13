@@ -97,7 +97,8 @@ echo ""
 # ─── 3. SQL safety-net for test user + roles + apps + favorites ──────────────
 # Guarantees the user + both roles exist before the browser authenticates,
 # even if mj-sync fails. Also seeds dynamic example data (lists, favorites)
-# that reference AssociationDemo record IDs.
+# that reference record IDs from the Open Apps' demo data (MoreCheese people and
+# Committees meetings).
 echo "Ensuring test user, roles, apps, and example data via SQL..."
 node "$SCRIPTS/setup-test-user.cjs" 2>&1
 echo ""

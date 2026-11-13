@@ -1,6 +1,6 @@
 # MemberJunction Database Setup — One-Shot Init Container
-# Creates the database, runs Flyway migrations, installs AssociationDB demo data,
-# runs CodeGen, then the database step of the Open Apps in open-apps.json. Exits 0 on success.
+# Creates the database, runs Flyway migrations and CodeGen, then the database step of the
+# Open Apps in open-apps.json, which loads the demo data. Exits 0 on success.
 #
 # This is a one-shot container: it runs to completion and then stops.
 # MJAPI depends on it via service_completed_successfully in docker-compose.
@@ -52,7 +52,6 @@ COPY patches/ ./patches/
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 COPY migrations/ ./migrations/
-COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 
 RUN pnpm install --frozen-lockfile
 
@@ -69,9 +68,6 @@ RUN pnpm run build:api
 
 # Patch autoCreateNewUsers for test environment
 RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false/autoCreateNewUsers: true/' mj.config.cjs
-
-# Generate the combined AssociationDB SQL (skip docs for speed in test env)
-RUN cd Demos/AssociationDB && bash prepare_build.sh --skip-docs
 
 # The entrypoint script runs all setup steps in sequence.
 # It invokes Node helpers from /app/docker/regression/scripts (for DB ops,
