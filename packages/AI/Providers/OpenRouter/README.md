@@ -112,6 +112,16 @@ own rate limits and data policy.
 It is a `Default Decision` power-matched fallback for a host with this key, among the last, because the
 fallbacks follow PowerRank distance from `Default Decision`'s target rank.
 
+**Gemini Decision 1.** OpenRouter also serves Google's `Gemini Decision 1` through the same Decisions API,
+in the System One format, so the model's OpenRouter row uses `OpenRouterDecision` and the same key, with a
+pinned dated slug: `google/gemini-decision-1-20261111` (262,144-token context, up to 1,000 questions, 255
+Choice options and 255 Score levels per call, $0.10 per million input tokens, $0 output). Google's direct
+route, `GeminiDecision` in [`@memberjunction/ai-gemini`](../Gemini/readme.md), has the higher priority.
+As an active `Decision` model (`PowerRank` 61), its OpenRouter row joins `Default Decision`'s
+power-matched fallbacks (behind `Jev` and `LLM Decision`, after the Google route) on any host with an
+OpenRouter decision key or vendor credential; set `Status = 'Inactive'` on that model-vendor row to keep
+`Default Decision` off it.
+
 **The wire format.** Jev and Kev speak the System One decisions format. `OpenRouterDecision` extends
 `BaseSystemOneDecision` (`@memberjunction/ai`), which owns the request and answer mapping; this class
 supplies only the endpoint and the default model. Cloudflare's Clef models speak the same format on

@@ -2,7 +2,13 @@ import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
+import {
+    AIPromptParams,
+    AIPromptRunResult,
+    ChildPromptParam,
+    MJAIPromptRunEntityExtended,
+    ResolvePromptRunUserID,
+} from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
     MJAIAgentHarnessEntity,
@@ -15,6 +21,7 @@ import {
     ExtractHarnessCredentialSecret,
     NormalizeAntigravityEnvironment,
     ResolveDriverVendorFallbackEnvironment,
+    ScrubHarnessSecrets,
 } from './HarnessCredentialResolver.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
@@ -107,11 +114,12 @@ export interface HarnessAgentConfig {
  */
 @RegisterClass(BaseAgent, 'HarnessAgentType')
 export class HarnessAgentBase extends BaseAgent {
-    private adapter: BaseHarnessAdapter | null = null;
-    private sandboxProvider: ISandboxProvider | null = null;
-    private sandboxHandle: SandboxHandle | null = null;
-    private harnessRow: MJAIAgentHarnessEntity | null = null;
-    private turnIndex = 0;
+    protected adapter: BaseHarnessAdapter | null = null;
+    protected sandboxProvider: ISandboxProvider | null = null;
+    protected sandboxHandle: SandboxHandle | null = null;
+    protected harnessRow: MJAIAgentHarnessEntity | null = null;
+    protected sessionEnvironment: Record<string, string> = {};
+    protected turnIndex = 0;
 
     /**
      * Substitutes a harness turn for the prompt call a Loop agent would make.
@@ -170,6 +178,7 @@ export class HarnessAgentBase extends BaseAgent {
         });
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
+        this.sessionEnvironment = environment;
 
         // Permissions are declared in agent metadata and applied BEFORE the session starts, so
         // adapters can fold them into launch flags. Runtime overrides arrive through the same
@@ -370,6 +379,10 @@ export class HarnessAgentBase extends BaseAgent {
             }
         }
 
+        turn.RawText = ScrubHarnessSecrets(turn.RawText, this.sessionEnvironment);
+        if (turn.ErrorMessage) {
+            turn.ErrorMessage = ScrubHarnessSecrets(turn.ErrorMessage, this.sessionEnvironment);
+        }
         turn.SessionId = adapter.SessionId;
         turn.ReportedModel = adapter.ReportedModel;
         return turn;
@@ -901,7 +914,7 @@ export class HarnessAgentBase extends BaseAgent {
      * Later turns send only the conversation: the harness has the contract from turn 1 and, where
      * `SessionResume` is true, still has it in session context.
      */
-    private async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
+    protected async buildTurnInput(promptParams: AIPromptParams, isFirstTurn: boolean): Promise<string> {
         // When the adapter genuinely resumed, the harness already holds the conversation — send only
         // the newest message, exactly as a user typing the next line would. Replaying history on top
         // of a resumed session hands it everything twice. Keyed off DidResumeSession (what happened)
@@ -966,6 +979,87 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
+     * Renders each child prompt's template and collects non-empty outputs keyed by parentPlaceholder.
+     *
+     * Missing templates or render failures log a warning via LogError without throwing, so a failed
+     * child prompt does not abort parent prompt rendering.
+     */
+    protected async renderChildPrompts(
+        childPrompts: ChildPromptParam[],
+        fallbackContextUser?: UserInfo,
+    ): Promise<Record<string, string>> {
+        const renderedMap: Record<string, string> = {};
+        for (const childParam of childPrompts) {
+            if (!childParam) {
+                continue;
+            }
+            const placeholder = childParam.parentPlaceholder;
+            if (!placeholder) {
+                continue;
+            }
+            const childParams = childParam.childPrompt;
+            const childPrompt = childParams?.prompt;
+            if (!childPrompt) {
+                LogError(`Child prompt is missing for placeholder '${placeholder}'`);
+                continue;
+            }
+            if (!childPrompt.TemplateID) {
+                LogError(
+                    `Child prompt '${childPrompt.Name ?? 'unnamed'}' has no TemplateID for placeholder '${placeholder}'`,
+                );
+                continue;
+            }
+            try {
+                const childTemplate = TemplateEngineServer.Instance.Templates?.find((t) =>
+                    UUIDsEqual(t.ID, childPrompt.TemplateID),
+                );
+                const childContent = childTemplate?.GetHighestPriorityContent();
+                if (childTemplate && childContent) {
+                    const nestedChildren =
+                        childParams.childPrompts && childParams.childPrompts.length > 0
+                            ? await this.renderChildPrompts(
+                                  childParams.childPrompts,
+                                  childParams.contextUser ?? fallbackContextUser,
+                              )
+                            : {};
+                    const childData = {
+                        ...(childParams.data ?? {}),
+                        ...(childParams.templateData ?? {}),
+                        ...nestedChildren,
+                    };
+                    const childRendered = await TemplateEngineServer.Instance.RenderTemplate(
+                        childTemplate,
+                        childContent,
+                        childData,
+                        true,
+                        true,
+                        { ContextUser: childParams.contextUser ?? fallbackContextUser },
+                    );
+                    if (childRendered.Success && childRendered.Output?.trim()) {
+                        renderedMap[placeholder] = childRendered.Output;
+                    } else {
+                        LogError(
+                            `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                                `(placeholder '${placeholder}'): ${childRendered.Message ?? 'no output'}`,
+                        );
+                    }
+                } else {
+                    LogError(
+                        `Child prompt template not found for TemplateID '${childPrompt.TemplateID}' ` +
+                            `(prompt '${childPrompt.Name ?? 'unnamed'}', placeholder '${placeholder}').`,
+                    );
+                }
+            } catch (e) {
+                LogError(
+                    `Failed to render child prompt template for '${childPrompt.Name ?? 'unnamed'}' ` +
+                        `(placeholder '${placeholder}'): ${describeError(e)}`,
+                );
+            }
+        }
+        return renderedMap;
+    }
+
+    /**
      * Renders the agent type's system prompt through the same template engine AIPromptRunner uses,
      * so the harness receives exactly what a Loop model would — including the output example.
      *
@@ -973,25 +1067,34 @@ export class HarnessAgentBase extends BaseAgent {
      * carries the envelope shape and lets the run proceed; throwing here would fail a run over a
      * template warning, which is the worse trade.
      */
-    private async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
+    protected async renderSystemPrompt(promptParams: AIPromptParams): Promise<string> {
         const prompt = promptParams.prompt;
         if (!prompt) {
             return '';
         }
         try {
             await TemplateEngineServer.Instance.Config(false, promptParams.contextUser);
+
+            const renderedChildPrompts: Record<string, string> = {
+                ...(promptParams.PreRenderedChildTemplates ?? {}),
+            };
+            if (promptParams.childPrompts && promptParams.childPrompts.length > 0) {
+                const childOutputs = await this.renderChildPrompts(promptParams.childPrompts, promptParams.contextUser);
+                Object.assign(renderedChildPrompts, childOutputs);
+            }
+
             // Look the template up by ID, not name. TemplateEngineBase.FindTemplate takes a NAME —
             // passing prompt.TemplateID matched nothing on every call, so every render fell through
             // to the fallback and the harness never received the agent's own instructions. It failed
             // quietly because a fallback existed, which is exactly what made it survive two rounds of
             // fixing this same symptom.
-            const template = TemplateEngineServer.Instance.Templates.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
+            const template = TemplateEngineServer.Instance.Templates?.find((t) => UUIDsEqual(t.ID, prompt.TemplateID));
             const content = template?.GetHighestPriorityContent();
             if (template && content) {
                 const rendered = await TemplateEngineServer.Instance.RenderTemplate(
                     template,
                     content,
-                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
+                    { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}), ...renderedChildPrompts },
                     true,
                     true,
                     { ContextUser: promptParams.contextUser },
