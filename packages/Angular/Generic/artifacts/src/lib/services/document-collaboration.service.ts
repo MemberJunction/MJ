@@ -453,6 +453,7 @@ export interface CollaboratorPresence {
   Color: string;
   ActiveBlockID?: string;
   CanEdit: boolean;
+  IsAgent?: boolean;
 }
 
 /**
@@ -798,7 +799,14 @@ export class DocumentCollaborationSession {
   constructor(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
     endpointResolver?: (
@@ -837,6 +845,8 @@ export class DocumentCollaborationSession {
       email: user.email,
       color: user.color ?? 'var(--mj-brand-primary)',
       canEdit,
+      isAgent: user.isAgent,
+      role: user.role,
     });
 
     this.bindDocObservers(this.Doc);
@@ -1534,6 +1544,8 @@ export class DocumentCollaborationSession {
             color?: string;
             activeBlockId?: string;
             canEdit?: boolean;
+            isAgent?: boolean;
+            role?: string;
           };
         },
         clientId: number,
@@ -1548,6 +1560,7 @@ export class DocumentCollaborationSession {
             Color: typeof u.color === 'string' ? u.color : 'var(--mj-brand-primary)',
             ActiveBlockID: typeof u.activeBlockId === 'string' ? u.activeBlockId : undefined,
             CanEdit: u.canEdit !== false,
+            IsAgent: u.isAgent === true || u.role === 'agent' || /\bagent\b/i.test(u.name),
           });
         }
       },
@@ -2284,6 +2297,14 @@ export class DocumentCollaborationService implements OnDestroy {
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
     {
+      Command: '/paragraph',
+      Label: 'Paragraph',
+      Description: 'Standard body text paragraph block',
+      Category: 'Structure',
+      Icon: 'fa-paragraph',
+      Snippet: '\n',
+    },
+    {
       Command: '/heading-1',
       Label: 'Heading 1',
       Description: 'Large top-level section heading (#)',
@@ -2306,6 +2327,22 @@ export class DocumentCollaborationService implements OnDestroy {
       Category: 'Structure',
       Icon: 'fa-heading',
       Snippet: '### Topic Heading\n',
+    },
+    {
+      Command: '/bullet-list',
+      Label: 'Bulleted List',
+      Description: 'Unordered bulleted list (- item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ul',
+      Snippet: '- \n',
+    },
+    {
+      Command: '/numbered-list',
+      Label: 'Numbered List',
+      Description: 'Ordered numbered list (1. item)',
+      Category: 'Structure',
+      Icon: 'fa-list-ol',
+      Snippet: '1. \n',
     },
     {
       Command: '/table',
@@ -2410,7 +2447,14 @@ export class DocumentCollaborationService implements OnDestroy {
   public CreateSession(
     artifactId: string,
     initialContent: string,
-    user: { id: string; name: string; email?: string; color?: string },
+    user: {
+      id: string;
+      name: string;
+      email?: string;
+      color?: string;
+      isAgent?: boolean;
+      role?: string;
+    },
     canEdit = true,
     deferInitialSeedForRemoteSync = false,
   ): DocumentCollaborationSession {
@@ -3601,13 +3645,14 @@ export class DocumentCollaborationService implements OnDestroy {
       }
 
       const blockStartIdx = idx;
+      const rawFirstLine = lines[idx].trimStart();
       const firstLine = lines[idx].trim();
 
-      // Heading block
-      const headingMatch = /^(#{1,6})\s+(.+)$/.exec(firstLine);
+      // Heading block (including freshly turned-into empty headings like "# " or "## ")
+      const headingMatch = /^(#{1,6})(?:\s+(.*)|$)$/.exec(rawFirstLine);
       if (headingMatch) {
         const level = headingMatch[1].length;
-        const text = headingMatch[2].trim();
+        const text = (headingMatch[2] ?? '').trim();
         const slug = text
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
@@ -3656,7 +3701,7 @@ export class DocumentCollaborationService implements OnDestroy {
       while (
         idx < lines.length &&
         lines[idx].trim().length > 0 &&
-        !/^#{1,6}\s+/.test(lines[idx].trim()) &&
+        !/^#{1,6}(?:\s+|$)/.test(lines[idx].trimStart()) &&
         !lines[idx].trim().startsWith('```')
       ) {
         chunkLines.push(lines[idx]);
@@ -3671,7 +3716,7 @@ export class DocumentCollaborationService implements OnDestroy {
         blockKind = 'callout';
       } else if (firstLine.startsWith('|')) {
         blockKind = 'table';
-      } else if (/^[-*+]\s+/.test(firstLine) || /^\d+\.\s+/.test(firstLine)) {
+      } else if (/^[-*+](?:\s+|$)/.test(rawFirstLine) || /^\d+\.(?:\s+|$)/.test(rawFirstLine)) {
         blockKind = 'list';
       }
 

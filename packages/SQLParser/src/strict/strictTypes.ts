@@ -33,7 +33,8 @@ export interface StrictStatementReads {
  * - `'NoGrammar'`: the dialect has no grammar the strict parser can read it with;
  * - `'Unparseable'`: the grammar could not read the text;
  * - `'WriteStatement'`: a top-level statement writes, changes the schema or changes permissions;
- * - `'NotPlainSelect'`: the statement is not one plain SELECT (a set operation, SELECT … INTO, …);
+ * - `'NotPlainSelect'`: the statement is not one plain SELECT (SELECT … INTO, any other statement,
+ *   and a set operation, except where a whole read statement may be one of read-only SELECTs);
  * - `'NestedWrite'`: a write or DDL statement sits somewhere inside it (a CTE body, a subquery).
  */
 export type StrictRefusal = 'NoGrammar' | 'Unparseable' | 'WriteStatement' | 'NotPlainSelect' | 'NestedWrite';
