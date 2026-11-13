@@ -17,9 +17,9 @@ type FieldShape = Pick<EntityFieldInfo, 'Name' | 'IsPrimaryKey' | 'IsNameField' 
 type EntityShape = Pick<EntityInfo, 'ID' | 'Name' | 'Icon' | 'Fields' | 'PrimaryKeys' | 'FirstPrimaryKey'>;
 
 const FIELDS = [
-    { Name: 'ID', IsPrimaryKey: true, IsNameField: false, RelatedEntity: null },
-    { Name: 'FullName', IsPrimaryKey: false, IsNameField: true, RelatedEntity: null },
-    { Name: 'Nickname', IsPrimaryKey: false, IsNameField: false, RelatedEntity: null }
+    { Name: 'ID', IsPrimaryKey: true, IsNameField: false, RelatedEntity: '' },
+    { Name: 'FullName', IsPrimaryKey: false, IsNameField: true, RelatedEntity: '' },
+    { Name: 'Nickname', IsPrimaryKey: false, IsNameField: false, RelatedEntity: '' }
 ] as FieldShape[] as EntityFieldInfo[];
 const CONTACTS: EntityShape = { ID: 'e-contacts', Name: 'Contacts', Icon: 'fa-solid fa-user', Fields: FIELDS, PrimaryKeys: FIELDS.filter(f => f.IsPrimaryKey), FirstPrimaryKey: FIELDS[0] };
 const provider = {
