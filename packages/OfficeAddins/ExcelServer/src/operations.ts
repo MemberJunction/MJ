@@ -9,8 +9,8 @@
  *
  * @module @memberjunction/excel-addin-server
  */
-import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { BaseRemotableOperation, EntityInfo, IMetadataProvider, IRunQueryProvider, ProjectEntityValueRowsForUser, RunQuery, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     EXCEL_WORKBOOK_CONTRACT_VERSION,
     ExcelAddinBuildWorkbookInput,
@@ -23,6 +23,9 @@ import {
     ExcelAddinCreateConnectionOutput,
     ExcelAddinEntityViewsInput,
     ExcelAddinEntityViewsOutput,
+    ExcelAddinEvaluateCustomFunctionInput,
+    ExcelAddinEvaluateCustomFunctionOperation,
+    ExcelAddinEvaluateCustomFunctionOutput,
     ExcelAddinGetCatalogOperation,
     ExcelAddinGetEntityViewsOperation,
     ExcelAddinGetStatusOperation,
@@ -31,13 +34,15 @@ import {
     ExcelAddinResolveSourceOutput,
     ExcelAddinStatusInput,
     ExcelAddinStatusOutput,
+    ExcelParameterValue,
     ExcelWorkbookManifest,
     ExcelWorkbookSource,
+    FormatRowsForExcelCustomFunction,
 } from '@memberjunction/excel-addin';
 import { BuildExcelCatalog, LoadExcelEntityViews } from './catalog';
 import { CreateExcelConnectionKey } from './connection';
 import { ExcelAddinRuntime } from './runtime';
-import { ResolveSingleWorkbookSource, ResolveWorkbookSources } from './sources';
+import { ExcelSourceError, ResolveSingleWorkbookSource, ResolveViewByNameOrId, ResolveWorkbookSources } from './sources';
 import { BuildConnectedWorkbook } from './workbook-builder';
 
 const MAX_FILE_NAME_LENGTH = 100;
@@ -141,6 +146,184 @@ export class ExcelAddinResolveSourceServerOperation extends ExcelAddinResolveSou
         const source = await ResolveSingleWorkbookSource(input?.Source, provider, user);
         return { Source: source };
     }
+}
+
+/**
+ * Evaluates an Excel `=MJ.QUERY(...)` or `=MJ.VIEW(...)` custom function under the caller's
+ * permissions, enforcing `IsServerSet` parameter refusal and RLS + FLS projection (`§ 7.1`, `§ 7.2`, `O8`).
+ */
+@RegisterClass(BaseRemotableOperation, 'ExcelAddin.EvaluateCustomFunction')
+export class ExcelAddinEvaluateCustomFunctionServerOperation extends ExcelAddinEvaluateCustomFunctionOperation {
+    protected async Authorize(_input: ExcelAddinEvaluateCustomFunctionInput, _user: UserInfo): Promise<boolean> {
+        return ExcelAddinRuntime.Instance.IsEnabled;
+    }
+
+    protected async InternalExecute(
+        input: ExcelAddinEvaluateCustomFunctionInput,
+        provider: IMetadataProvider,
+        user: UserInfo
+    ): Promise<ExcelAddinEvaluateCustomFunctionOutput> {
+        const settings = ExcelAddinRuntime.Instance.RequireSettings();
+        const maxRows = Math.min(Math.max(1, input?.MaxRows ?? settings.MaxRows), settings.MaxRows);
+
+        if (input?.Kind === 'Query') {
+            const target = (input.Target ?? '').trim();
+            const query = (provider.Queries ?? []).find(
+                q => UUIDsEqual(q.ID, target) || q.Name.toLowerCase() === target.toLowerCase()
+            );
+            if (!query) {
+                throw new Error(`The saved query "${target}" doesn't exist, or you don't have access to it.`);
+            }
+            // Map positional arguments to caller-settable parameters when needed
+            const mergedParams: Record<string, ExcelParameterValue> = { ...(input.Parameters ?? {}) };
+            if (Array.isArray(input.PositionalArguments) && input.PositionalArguments.length > 0) {
+                const callerParams = (query.Parameters ?? []).filter(p => !p.IsServerSet);
+                for (let i = 0; i < input.PositionalArguments.length && i < callerParams.length; i++) {
+                    const pName = callerParams[i].Name;
+                    if (mergedParams[pName] === undefined) {
+                        mergedParams[pName] = input.PositionalArguments[i];
+                    }
+                }
+            }
+            const resolved = await ResolveSingleWorkbookSource(
+                { Kind: 'Query', ID: query.ID, Parameters: mergedParams },
+                provider,
+                user
+            );
+            const rq = new RunQuery(provider as unknown as IRunQueryProvider);
+            const qRes = await rq.RunQuery(
+                {
+                    QueryID: query.ID,
+                    Parameters: resolved.Parameters ?? undefined,
+                    MaxRows: maxRows,
+                },
+                user
+            );
+            if (!qRes.Success) {
+                throw new Error(qRes.ErrorMessage || `The query "${query.Name}" could not be run.`);
+            }
+            const rows = (qRes.Results ?? []) as Record<string, unknown>[];
+            const formatted = FormatRowsForExcelCustomFunction(resolved.Columns, rows, input.IncludeHeaders);
+            return {
+                Columns: resolved.Columns,
+                Matrix: formatted.Matrix,
+                ScalarValue: formatted.ScalarValue,
+                TotalRowCount: qRes.TotalRowCount ?? rows.length,
+            };
+        }
+
+        if (input?.Kind === 'View') {
+            const target = (input.Target ?? '').trim();
+            const entity = (provider.Entities ?? []).find(
+                e => UUIDsEqual(e.ID, target) || e.Name.toLowerCase() === target.toLowerCase()
+            );
+            if (!entity || !entity.GetUserPermisions(user).CanRead) {
+                throw new Error(`You don't have access to the entity "${target}".`);
+            }
+            const resolved = await ResolveViewByNameOrId(entity, input.ViewNameOrId, provider, user);
+            const safeExtraFilter = buildSafeViewExtraFilter(entity, user, input.Filter);
+            const rv = RunView.FromMetadataProvider(provider);
+            const vRes = await rv.RunView(
+                resolved.Kind === 'Entity'
+                    ? {
+                          EntityName: entity.Name,
+                          Fields: resolved.Columns.map(c => c.Name),
+                          ExtraFilter: safeExtraFilter,
+                          MaxRows: maxRows,
+                          ResultType: 'simple',
+                      }
+                    : {
+                          ViewID: resolved.ID,
+                          Fields: resolved.Columns.map(c => c.Name),
+                          ExtraFilter: safeExtraFilter,
+                          MaxRows: maxRows,
+                          ResultType: 'simple',
+                      },
+                user
+            );
+            if (!vRes.Success) {
+                throw new Error(vRes.ErrorMessage || `The view could not be run.`);
+            }
+            const rawRows = (vRes.Results ?? []) as Record<string, unknown>[];
+            const projectedRows = ProjectEntityValueRowsForUser(provider, entity, rawRows, user) ?? [];
+            const formatted = FormatRowsForExcelCustomFunction(
+                resolved.Columns,
+                projectedRows,
+                input.IncludeHeaders ?? true
+            );
+            return {
+                Columns: resolved.Columns,
+                Matrix: formatted.Matrix,
+                ScalarValue: formatted.ScalarValue,
+                TotalRowCount: vRes.TotalRowCount ?? projectedRows.length,
+            };
+        }
+
+        throw new Error('Only Query and View custom functions are supported.');
+    }
+}
+
+function buildSafeViewExtraFilter(entity: EntityInfo, user: UserInfo, rawFilter: string | undefined): string | undefined {
+    const trimmed = (rawFilter ?? '').trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    const quotedLiterals: string[] = [];
+    const masked = trimmed.replace(/'(?:''|[^'])*'|"[^"]*"/g, (lit) => {
+        const idx = quotedLiterals.length;
+        quotedLiterals.push(lit);
+        return `__MJ_LIT_${idx}__`;
+    });
+    if (
+        /;|--|\/\*|\*\/|\b(SELECT|UNION|DROP|DELETE|UPDATE|INSERT|EXEC|EXECUTE|ALTER|CREATE|TRUNCATE|MERGE|GRANT|REVOKE|WAITFOR|OPENROWSET)\b/i.test(
+            masked,
+        ) ||
+        /\bxp_[A-Za-z0-9_]*/i.test(masked)
+    ) {
+        throw new ExcelSourceError('#VALUE! Unsafe SQL filter expression refused in =MJ.VIEW.');
+    }
+
+    const clauses = masked.split(/\s+\bAND\b\s+/i);
+    const denied = entity.GetDeniedReadFields ? entity.GetDeniedReadFields(user) : new Set<string>();
+    const safeClauses: string[] = [];
+
+    for (const maskedClause of clauses) {
+        const clause = maskedClause
+            .replace(/__MJ_LIT_(\d+)__/g, (_m, idxStr: string) => quotedLiterals[Number(idxStr)] ?? '')
+            .trim();
+        const cmpMatch =
+            /^([A-Za-z_][A-Za-z0-9_]*)\s*(=|!=|<>|<=|>=|<|>)\s*(?:'((?:''|[^'])*)'|"([^"]*)"|([+-]?\d+(?:\.\d+)?)|(TRUE|FALSE))$/i.exec(
+                clause,
+            );
+        if (!cmpMatch) {
+            throw new ExcelSourceError(
+                '#VALUE! Only simple Field <op> Value comparison filters (joined by AND) are permitted in =MJ.VIEW.',
+            );
+        }
+
+        const fieldName = cmpMatch[1];
+        const op = cmpMatch[2] === '!=' ? '<>' : cmpMatch[2];
+        const matchedField = entity.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
+        if (!matchedField) {
+            throw new ExcelSourceError(`#VALUE! The entity "${entity.DisplayNameOrName}" has no field "${fieldName}".`);
+        }
+        for (const d of denied) {
+            if (d.toLowerCase() === matchedField.Name.toLowerCase()) {
+                throw new ExcelSourceError(`You do not have permission to filter on field "${matchedField.Name}".`);
+            }
+        }
+
+        if (cmpMatch[5] !== undefined) {
+            safeClauses.push(`${matchedField.Name} ${op} ${Number(cmpMatch[5])}`);
+        } else if (cmpMatch[6] !== undefined) {
+            safeClauses.push(`${matchedField.Name} ${op} ${cmpMatch[6].toUpperCase() === 'TRUE' ? 1 : 0}`);
+        } else {
+            const strVal = cmpMatch[3] !== undefined ? cmpMatch[3].replace(/''/g, "'") : (cmpMatch[4] ?? '');
+            safeClauses.push(`${matchedField.Name} ${op} '${EscapeSQLString(strVal)}'`);
+        }
+    }
+
+    return safeClauses.join(' AND ');
 }
 
 /** A file name safe on every desktop platform, from the first source's name. */

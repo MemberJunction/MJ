@@ -55,6 +55,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 /** The embedding runner double: records each request and answers with one vector per text. */
 vi.mock('@memberjunction/ai-prompts', () => ({
+    EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
     AIEmbeddingRunner: class {
         async RunEmbedding(params: EmbeddingRunParams): Promise<EmbeddingRunResult> {
             embeddingRequests.push(params);

@@ -7,7 +7,7 @@ export type ChatSearchRoute =
   | { Kind: 'conversation'; ConversationId: string }
   | { Kind: 'message'; ConversationId: string; BranchId: string | null; Sequence: number }
   | { Kind: 'artifact'; ArtifactId: string; Title: string }
-  | { Kind: 'nav-item'; NavItemName: 'Collections' | 'Tasks'; Configuration: Record<string, string> };
+  | { Kind: 'nav-item'; NavItemName: 'Collections' | 'Agent Activity'; Configuration: Record<string, string> };
 
 /**
  * Maps a Chat search result to the surface that opens it.
@@ -34,7 +34,7 @@ export function ResolveChatSearchRoute(result: SearchResult): ChatSearchRoute | 
     case 'collection':
       return { Kind: 'nav-item', NavItemName: 'Collections', Configuration: { collectionId: result.id } };
     case 'task':
-      return { Kind: 'nav-item', NavItemName: 'Tasks', Configuration: { taskId: result.id } };
+      return { Kind: 'nav-item', NavItemName: 'Agent Activity', Configuration: { taskId: result.id } };
     default:
       return null;
   }

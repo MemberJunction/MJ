@@ -545,8 +545,11 @@ jobs:
       # in-process). Without one the save is refused and those bundles can only skip. A per-run
       # throwaway is enough — the database was provisioned for this run, so there is no earlier
       # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
-      - name: Generate a throwaway encryption key for this run
-        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
       # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
@@ -811,8 +814,23 @@ jobs:
               );
             }
             lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            const benchMdPath = "packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md";
+            if (fs.existsSync(benchMdPath)) {
+              lines.push("", "---", "", fs.readFileSync(benchMdPath, "utf8"));
+            }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           '
+
+      - name: Upload IT128 performance benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: it128-performance-benchmark-${{ github.run_attempt }}
+          path: |
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.json
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Dump MJAPI log on failure
         if: failure()
@@ -973,6 +991,11 @@ jobs:
           # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
           # land there or the server process never sees them (IT63's agent runs server-side).
           printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
+          COLLAB_SECRET="$(openssl rand -hex 32)"
+          FROZEN_SECRET="$(openssl rand -hex 32)"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$COLLAB_SECRET" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$FROZEN_SECRET" >> "$GITHUB_ENV"
+          printf 'MJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\nMJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$COLLAB_SECRET" "$FROZEN_SECRET" >> packages/MJAPI/.env
 
       - name: Boot MJAPI (wire-callback members)
         if: steps.prereq.outputs.READY == 'true'

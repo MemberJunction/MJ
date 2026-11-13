@@ -544,7 +544,7 @@ describe('base view emission — geo virtual columns', () => {
         });
     }
 
-    it('GM-VIEW-10: geo entity without native lat/lng joins vwRecordGeoCodes and aliases __mj_Latitude/__mj_Longitude', async () => {
+    it('GM-VIEW-10: geo entity without native lat/lng joins RecordGeoCode and aliases __mj_Latitude/__mj_Longitude', async () => {
         // NOTE (cosmetic quirk, pinned as current behavior): when an entity has geo
         // columns but NO FK display fields, the geo select block is the first entry
         // in relatedFieldsSelect and carries no leading newline — so the first geo
@@ -562,7 +562,7 @@ describe('base view emission — geo virtual columns', () => {
 FROM
     [sales].[Site] AS s
 LEFT OUTER JOIN
-    [__mj].[vwRecordGeoCodes] AS __mj_rgc
+    [__mj].[RecordGeoCode] AS __mj_rgc
   ON
     __mj_rgc.[EntityID] = 'SITES-ENTITY-0006'
     AND __mj_rgc.[RecordID] = CAST([s].[ID] AS NVARCHAR(450))
@@ -570,10 +570,11 @@ LEFT OUTER JOIN
 GO`);
     });
 
-    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join vwRecordGeoCodes', async () => {
+    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join RecordGeoCode', async () => {
         // ShouldJoinRecordGeoCodes requires a writable Geo* field, not just the entity flag.
         const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
         const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+        expect(viewSQL).not.toContain('RecordGeoCode');
         expect(viewSQL).not.toContain('vwRecordGeoCodes');
         expect(viewSQL).not.toContain('__mj_Latitude');
     });

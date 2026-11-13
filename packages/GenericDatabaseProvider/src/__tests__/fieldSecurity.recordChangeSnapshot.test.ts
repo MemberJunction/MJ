@@ -66,6 +66,12 @@ class SnapshotTestProvider extends GenericDatabaseProvider {
     public capturedPayload: RecordChangePayload | null = null;
     public executed: ExecutedStatement[] = [];
     public storedRow: Record<string, unknown> | null = null;
+    /** Answers `BuildsFullRecordJSONFromResultRow`: a dialect that renders the snapshot from the returned row. */
+    public snapshotFromRow = false;
+
+    protected override BuildsFullRecordJSONFromResultRow(): boolean {
+        return this.snapshotFromRow;
+    }
 
     public async buildSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
         return this['GenerateSaveSQL'](entity, isNew, user);
@@ -311,6 +317,34 @@ describe('GenerateSaveSQL — Record Change snapshot of a narrowed (restricted) 
 
         const full = parse(provider.capturedPayload?.fullRecordJSON);
         expect(full).toEqual({ ID: PK, Name: 'Ada', Notes: 'n2' });
+    });
+});
+
+describe('GenerateSaveSQL — snapshot built from the returned row', () => {
+    it("a restricted user's update reads nothing when it changes only fields it can read", async () => {
+        const { provider, entity, user } = setup();
+        provider.snapshotFromRow = true;
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' }); // Salary omitted → NotLoaded
+        entity.Set('Notes', 'n2');
+
+        await provider.buildSaveSQL(entity, false, user);
+
+        expect(provider.executed).toHaveLength(0);
+        expect(Object.keys(parse(provider.capturedPayload?.changesJSON))).toEqual(['Notes']);
+    });
+
+    it('a blind write still reads the stored value of that field, so the diff records the real old value', async () => {
+        const { provider, entity, user } = setup();
+        provider.snapshotFromRow = true;
+        entity.Hydrate({ ID: PK, Name: 'Ada', Notes: 'n1' });
+        entity.SetMany({ Salary: 150000 }); // write-only: the saver never saw the stored 123456
+
+        await provider.buildSaveSQL(entity, false, user);
+
+        expect(provider.executed).toHaveLength(1);
+        expect(provider.executed[0].sql).toContain('[Salary]');
+        const changes = parse(provider.capturedPayload?.changesJSON);
+        expect(changes.Salary).toEqual({ field: 'Salary', oldValue: 123456, newValue: 150000 });
     });
 });
 
