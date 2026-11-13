@@ -74,10 +74,10 @@ describe('ResolveChatSearchRoute', () => {
     });
   });
 
-  it('opens a task result on the Tasks nav item', () => {
+  it('opens a task result on the Agent Activity nav item', () => {
     expect(ResolveChatSearchRoute(result({ id: 'T1', type: 'task' }))).toEqual({
       Kind: 'nav-item',
-      NavItemName: 'Tasks',
+      NavItemName: 'Agent Activity',
       Configuration: { taskId: 'T1' },
     });
   });

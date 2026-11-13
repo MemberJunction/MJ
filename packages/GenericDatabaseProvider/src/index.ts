@@ -7,6 +7,8 @@ export {
 } from './GenericDatabaseProvider.js';
 export type { SqlParameterSummary, SqlObservation, ISqlObserver } from './GenericDatabaseProvider.js';
 export { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
+export { RecordChangeSnapshotColumnKindOf } from './recordChangeSnapshot.js';
+export type { RecordChangeSnapshotColumnKind, RecordChangeSnapshotPlatform } from './recordChangeSnapshot.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
@@ -27,6 +29,13 @@ export {
 } from './crudSprocFieldRules.js';
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export {
+    GetServerPrincipal,
+    ResolveServerPrincipalFrom,
+    LowestActiveById,
+    NormalizePrincipalValue,
+} from './serverPrincipal.js';
+export type { ServerPrincipalCandidate, ServerPrincipalReason, ServerPrincipalResolution } from './serverPrincipal.js';
 export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
 export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export {

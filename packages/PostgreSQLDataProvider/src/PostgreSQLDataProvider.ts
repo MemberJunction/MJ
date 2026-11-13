@@ -41,6 +41,7 @@ import {
     FormatSqlParameterTypesForError,
     ExecuteSQLBatchOptions,
     NamedQueryParameter,
+    RecordChangeSnapshotColumnKindOf,
 } from '@memberjunction/generic-database-provider';
 import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import {
@@ -1548,35 +1549,90 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
         }
         const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
-        const baseValues = saveSQL.parameters ?? [];
+        const parameters: unknown[] = [...(saveSQL.parameters ?? [])];
+        const bind = (value: unknown, cast: string): string => {
+            parameters.push(value);
+            return `$${parameters.length}::${cast}`;
+        };
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
-        const s = baseValues.length + 1;
-        const cc = changeContextSQL(payload.changeContext, s + 9);
+        const entityIDSQL = bind(payload.entityID, 'uuid');
+        const userIDSQL = bind(payload.userID, 'uuid');
+        const typeSQL = bind(payload.type, 'varchar');
+        const sourceSQL = bind(payload.source, 'varchar');
+        const changesJSONSQL = bind(payload.changesJSON, 'text');
+        const changesDescriptionSQL = bind(payload.changesDescription, 'text');
+        // The snapshot is the row the function returned, when save_result holds the whole row;
+        // otherwise the payload's in-memory snapshot.
+        const fullRecordJSONSQL = this.BuildsFullRecordJSONFromResultRow(entity, resolvedReturn)
+            ? this.renderResultRowSnapshotSQL(entity.EntityInfo, 'save_result')
+            : bind(payload.fullRecordJSON, 'text');
+        const restoredFromIDSQL = bind(payload.restoredFromID, 'uuid');
+        const restoreReasonSQL = bind(payload.restoreReason, 'text');
+        const cc = changeContextSQL(payload.changeContext, parameters.length + 1);
+        parameters.push(...cc.parameters);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
         ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text${cc.value}
+    SELECT ${entityIDSQL}, ${recordIDExpr}, ${userIDSQL}, ${typeSQL}, ${sourceSQL}, ${changesJSONSQL}, ${changesDescriptionSQL}, ${fullRecordJSONSQL}, 'Complete', ${restoredFromIDSQL}, ${restoreReasonSQL}${cc.value}
     FROM save_result
     RETURNING "ID"
 )
 SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
-        const parameters = [
-            ...baseValues,
-            payload.entityID,
-            payload.userID,
-            payload.type,
-            payload.source,
-            payload.changesJSON,
-            payload.changesDescription,
-            payload.fullRecordJSON,
-            payload.restoredFromID,
-            payload.restoreReason,
-            ...cc.parameters,
-        ];
         return { sql: fullSQL, parameters };
+    }
+
+    /**
+     * True when a save's Record Change snapshot can be built from the row its function returned:
+     * `save_result` holds the whole row, because neither the compiled function nor this call
+     * returns datestamps only.
+     *
+     * Built from the returned row, the snapshot holds what the database stored: values another writer
+     * committed to columns this save did not change, server-set timestamps and defaults, current
+     * joined display values, and encrypted columns as their ciphertext.
+     */
+    protected override BuildsFullRecordJSONFromResultRow(_entity: BaseEntity, returnContext: SaveReturnContext): boolean {
+        return !returnContext.spReturnsDatestampsOnly && !returnContext.needsDatestampProjection;
+    }
+
+    /**
+     * A scalar subquery rendering the current `rowAlias` row as the snapshot's JSON text, one key per
+     * entity field, each column rendered as {@link renderResultRowSnapshotColumn} describes.
+     */
+    private renderResultRowSnapshotSQL(entityInfo: EntityInfo, rowAlias: string): string {
+        const columns = entityInfo.Fields.map(
+            (f) => `${this.renderResultRowSnapshotColumn(f, `${rowAlias}.${this.QuoteIdentifier(f.Name)}`)} AS ${this.QuoteIdentifier(f.Name)}`,
+        );
+        return `(SELECT row_to_json(snapshot_row)::text FROM (SELECT ${columns.join(', ')}) snapshot_row)`;
+    }
+
+    /**
+     * One returned column as the snapshot writes it, matching how a loaded entity serializes the same
+     * value: date-times as UTC ISO-8601 with milliseconds and `Z` (MJ's date-time columns are
+     * `timestamptz`), `bigint` as a string, `bytea` as base64 rather than `row_to_json`'s `\x` hex,
+     * and `json`/`jsonb` and unrecognized types as text rather than nested JSON.
+     */
+    private renderResultRowSnapshotColumn(field: EntityFieldInfo, col: string): string {
+        switch (RecordChangeSnapshotColumnKindOf(field.Type, 'postgresql')) {
+            case 'utc-datetime':
+            case 'offset-datetime':
+                return `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+            case 'date':
+                return `to_char(${col}, 'YYYY-MM-DD') || 'T00:00:00.000Z'`;
+            case 'time':
+                return `'1970-01-01T' || to_char(${col}, 'HH24:MI:SS.MS') || 'Z'`;
+            case 'binary':
+                return `translate(encode(${col}, 'base64'), E'\\n', '')`;
+            case 'bigint':
+            case 'json':
+            case 'clr':
+            case 'text':
+                return `(${col})::text`;
+            default:
+                return col;
+        }
     }
 
     /**

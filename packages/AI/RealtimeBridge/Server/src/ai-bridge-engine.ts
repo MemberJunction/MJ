@@ -504,6 +504,13 @@ export interface StartBridgeSessionParams {
     RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
 
     /**
+     * Told every time the bridge reports it can no longer show the avatar (including again after its room client
+     * rejoins), so the host can mark the agent audio-only in the room on the server's authority. The bot's own token
+     * cannot change its attributes. Errors are logged, never thrown into the bridge.
+     */
+    OnAvatarUnavailable?: (reason: BridgeAvatarFailure) => void | Promise<void>;
+
+    /**
      * Called once at the end of {@link AIBridgeEngine.StopBridgeSession} for this session, after the bridge row is
      * terminal — the place for the host to close the rest of the session's bookkeeping (the agent session row, a
      * capacity lease). Must not throw; a throw is logged and swallowed.
@@ -738,6 +745,9 @@ export interface ActiveBridgeSession {
 
     /** The audio-only replacement factory (see {@link StartBridgeSessionParams.RecoverRealtimeSessionWithoutAvatar}). */
     RecoverRealtimeSessionWithoutAvatar?: BridgeRealtimeSessionRecovery;
+
+    /** The host's avatar take-down listener (see {@link StartBridgeSessionParams.OnAvatarUnavailable}). */
+    OnAvatarUnavailable?: (reason: BridgeAvatarFailure) => void | Promise<void>;
 
     /** Whether the model session was already replaced because its avatar could not be shown (once per session). */
     AvatarReplaced?: boolean;
@@ -1176,6 +1186,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 OnBargeIn: params.OnBargeIn,
                 RecoverRealtimeSession: params.RecoverRealtimeSession,
                 RecoverRealtimeSessionWithoutAvatar: params.RecoverRealtimeSessionWithoutAvatar,
+                OnAvatarUnavailable: params.OnAvatarUnavailable,
                 OnSessionEnded: params.OnSessionEnded,
                 TranscriptTail: [],
                 ModelRecoveryAttempts: 0,
@@ -1336,7 +1347,10 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
         });
         Bridge.OnVideoSourceEnded((source: BridgeVideoSourceEnd) => this.tellModelVideoSourceEnded(active, source));
-        Bridge.OnAvatarUnavailable((reason: BridgeAvatarFailure) => void this.replaceModelSessionWithoutAvatar(active, reason));
+        Bridge.OnAvatarUnavailable((reason: BridgeAvatarFailure) => {
+            void this.notifyHostAvatarUnavailable(active, reason);
+            void this.replaceModelSessionWithoutAvatar(active, reason);
+        });
     }
 
     /**
@@ -1698,6 +1712,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         active.ModelRecovering = false;
         LogStatus(`[AIBridgeEngine] model session re-opened for bridge ${active.SessionBridgeID} (${note}).`);
         await this.closeQuietly(lost); // releases the dead socket and finalizes its observability run
+    }
+
+    /** Tells the host the avatar is down (see {@link StartBridgeSessionParams.OnAvatarUnavailable}); logs, never throws. */
+    private async notifyHostAvatarUnavailable(active: ActiveBridgeSession, reason: BridgeAvatarFailure): Promise<void> {
+        try {
+            await active.OnAvatarUnavailable?.(reason);
+        } catch (err) {
+            LogError(`[AIBridgeEngine] the host's avatar take-down handler failed for bridge ${active.SessionBridgeID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**

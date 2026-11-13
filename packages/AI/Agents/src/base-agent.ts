@@ -30,6 +30,8 @@ import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPre
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentType } from './agent-types/loop-agent-type';
+import { CreateAgentInstance } from './agent-instance';
+import { FailingStepError, IsPromptTurnStep, MAX_REPEATED_FAILING_STEP, RepeatedFailingStepTracker } from './repeated-failing-step';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
@@ -2931,7 +2933,12 @@ export class BaseAgent {
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts);
+                this._artifactToolManager.Initialize(inputArtifacts, {
+                    contextUser: params.contextUser,
+                    provider: this.ProviderToUse,
+                    getAgentRun: () => this._agentRun,
+                    agentName: params.agent?.Name ?? undefined,
+                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
@@ -2994,7 +3001,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -3815,6 +3822,10 @@ export class BaseAgent {
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
+            // The run's validated scope and active skills, built here on the server (never read from the session's
+            // Config), so the session's direct tool calls and delegated runs carry them (#5624).
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -4805,6 +4816,35 @@ export class BaseAgent {
     }
 
     /**
+     * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
+     * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
+     * the prompt between two failures returns a non-Failed decision and resets it. When the same
+     * decision has failed {@link MAX_REPEATED_FAILING_STEP} times in a row, `nextStep` is turned
+     * into a terminating Failed step naming the step type and the last error.
+     */
+    private checkRepeatedFailingStep<P>(
+        params: ExecuteAgentParams,
+        tracker: RepeatedFailingStepTracker,
+        executedDecision: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>
+    ): void {
+        const count = tracker.Observe(executedDecision, nextStep);
+        if (count < MAX_REPEATED_FAILING_STEP) {
+            return;
+        }
+        const lastError = FailingStepError(nextStep);
+        const message = `Agent repeated the same failing ${executedDecision.step} step ${count} times. Last error: ${lastError}`;
+        this.logError(`⛔ Agent '${params.agent.Name}': ${message}`, {
+            agent: params.agent,
+            category: 'ExecutionSafetyNet',
+            metadata: { repeatedFailures: count, stepType: executedDecision.step, lastError }
+        });
+        nextStep.step = 'Failed';
+        nextStep.terminate = true;
+        nextStep.errorMessage = message;
+    }
+
+    /**
      * Executes the agent's internal logic.
      * 
      * This method contains the core execution logic that drives agent behavior. By default,
@@ -4831,6 +4871,9 @@ export class BaseAgent {
         let stepCount = 0;
         let consecutiveFailedSteps = 0;
         let consecutiveUnproductiveRetries = 0;
+        // Model-driven types only: a Flow graph may re-run a failing node on purpose (see
+        // BaseAgentType.UsesActionCircuitBreaker), and has no model that could repeat itself.
+        const repeatedFailures = this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? null : new RepeatedFailingStepTracker();
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -4849,6 +4892,7 @@ export class BaseAgent {
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
+            const executedDecision = currentNextStep;
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
@@ -4888,6 +4932,10 @@ export class BaseAgent {
                 }
             } else if (nextStep.step !== 'Failed') {
                 consecutiveFailedSteps = 0;
+            }
+
+            if (repeatedFailures && executedDecision && !IsPromptTurnStep(executedDecision) && !nextStep.terminate) {
+                this.checkRepeatedFailingStep(params, repeatedFailures, executedDecision, nextStep);
             }
 
             // Track consecutive *unproductive* retries to prevent infinite loops that the
@@ -5910,7 +5958,7 @@ export class BaseAgent {
             }
             // Counted only on the native path: null means "envelope", which is different from a
             // native turn where the model chose not to call anything (0).
-            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit' || mode === 'NativeRecovered') {
                 const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
                 const callCount = message?.toolCalls?.length ?? 0;
                 stepEntity.NativeToolCallCount = callCount;
@@ -8145,6 +8193,27 @@ export class BaseAgent {
                     stepActionNamesLower.has(a.Name.trim().toLowerCase()) ||
                     stepActionNamesSanitized.has(SanitizeToolName(a.Name)))
         );
+    }
+
+    /**
+     * Returns the active agents named by an agent's own active Flow steps: a `Sub-Agent` step's
+     * `SubAgentID`, or the `SubAgentID` of a `ForEach`/`While` step whose `LoopBodyType` is
+     * `'Sub-Agent'`. Flow agents bind sub-agents on `AIAgentStep` rather than through `ParentID`
+     * or `AIAgentRelationship`, so {@link resolveSubAgentByName} needs these in scope, as
+     * {@link getFlowStepActions} does for actions.
+     */
+    private getFlowStepSubAgents(agentId: string): MJAIAgentEntityExtended[] {
+        if (!agentId) return [];
+        const steps = AIEngine.Instance.GetAgentSteps?.(agentId, 'Active') ?? [];
+        const ids = new UUIDSet(
+            steps
+                .filter(s => s.StepType === 'Sub-Agent'
+                    || ((s.StepType === 'ForEach' || s.StepType === 'While') && s.LoopBodyType === 'Sub-Agent'))
+                .map(s => s.SubAgentID)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (ids.Size === 0) return [];
+        return AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && ids.Has(a.ID));
     }
 
     /**
@@ -16095,7 +16164,12 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            await this.recordExecutionRouting(params);
+            // A run refused before its first step (a dispatch refusal, a flow that does not compile)
+            // never ran on either engine, so it gets no routing record: a completed Decision step
+            // there would read as a successful dispatch (#4622).
+            if (initialStep?.step !== 'Failed') {
+                await this.recordExecutionRouting(params);
+            }
 
             if (initialStep) {
                 // Agent type provided an initial step
@@ -17654,7 +17728,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Finds a sub-agent by name, checking child agents (ParentID) first, then
-     * related agents (AgentRelationships). Returns `undefined` when the name
+     * related agents (AgentRelationships), then agents named on this agent's own
+     * Flow steps, then runtime-granted sub-agents. Returns `undefined` when the name
      * doesn't resolve to an active agent reachable from `params.agent`.
      *
      * Used by both the single and parallel sub-agent dispatch paths so name
@@ -17707,7 +17782,19 @@ The context is now within limits. Please retry your request with the recovered c
                 return { subAgentEntity: matchedPair.agent, relationship: matchedPair.rel };
             }
         }
-        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // 3) Sub-agents named on this agent's own Flow steps (#1415). A Flow agent binds a sub-agent on
+        // its step (`AIAgentStep.SubAgentID`, or a ForEach/While body with LoopBodyType 'Sub-Agent'),
+        // not through ParentID or a relationship row, so without this tier an in-run Flow could not
+        // reach the agent its own step names. The same reasoning as getFlowStepActions. A Loop agent
+        // has no steps, so this adds nothing for it.
+        const flowStepPool = this.getFlowStepSubAgents(params.agent.ID);
+        const flowStepAgent =
+            flowStepPool.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, flowStepPool, true).match;
+        if (flowStepAgent) {
+            return { subAgentEntity: flowStepAgent };
+        }
+        // 4) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
         // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
         // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
         // or not active") — and because the catalog keeps offering it, the model re-picks the same
@@ -17722,7 +17809,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
         }
-        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // 5) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
         // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
         // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
         // so allow resolving any active agent in AIEngine.Instance.Agents.
@@ -21708,8 +21795,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
@@ -21728,6 +21815,12 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        // The watchdog aborts a run it force-failed with the row's own message (#4883). The row
+        // already says Failed and clients were told so; finalizing Cancelled would contradict it.
+        const abortReason = this._runAbortController?.signal.reason;
+        if (AgentRunWatchdog.IsForceFailedAbortReason(typeof abortReason === 'string' ? abortReason : null)) {
+            return this.createFailureResult(abortReason, contextUser);
+        }
         const [{ failures }] = await Promise.all([
             this._stepSaveQueue.Flush(),
             this.flushPromptRunnerSaves(),
@@ -21761,8 +21854,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
@@ -21776,7 +21869,9 @@ The context is now within limits. Please retry your request with the recovered c
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
      * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
      * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
-     * anything else (an upstream caller's token, a shutdown) is `System`.
+     * anything else (an upstream caller's token, a shutdown) is `System`. A watchdog force-fail
+     * ({@link AgentRunWatchdog.ForceFailedAbortReason}) never gets here: {@link createCancelledResult}
+     * finalizes it `Failed`, with no cancellation reason.
      */
     public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === AgentRunWatchdog.UserCancelAbortReason) {
@@ -21836,6 +21931,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -21929,7 +22037,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -22842,9 +22950,16 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
 
-        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
-        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
-        if (!memoryAgent) {
+        // Resolved like every other agent (CreateAgentInstance); a Memory Manager row matched by name
+        // with no DriverClass still runs its own class rather than the plain BaseAgent.
+        let memoryAgent: BaseAgent;
+        try {
+            memoryAgent = await CreateAgentInstance({
+                Name: memoryManagerEntity.Name,
+                DriverClass: memoryManagerEntity.DriverClass?.trim() || 'MemoryManagerAgent',
+            });
+        } catch (error) {
+            LogError(`Post-run MemoryManager not started: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
 
@@ -23127,17 +23242,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);

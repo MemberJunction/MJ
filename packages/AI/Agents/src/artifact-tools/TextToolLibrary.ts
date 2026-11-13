@@ -1,14 +1,10 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
-
-interface LineMatch {
-    lineNumber: number;
-    text: string;
-}
+import { ExecuteStructuredLineGrep, LineMatch } from './grepHelper';
 
 /**
  * Tool library for searching and slicing plain-text artifact content.
- * Provides regex grep and line-range extraction.
+ * Provides literal/regex grep and line-range extraction.
  */
 @RegisterClass(BaseArtifactToolLibrary, 'TextToolLibrary')
 export class TextToolLibrary extends BaseArtifactToolLibrary {
@@ -16,15 +12,38 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
         return [
             {
                 name: 'grep',
-                description: 'Search for regex matches in the text. Returns matching lines with line numbers.',
+                description:
+                    'Search lines in the text by case-insensitive literal substring (default false for use_regex) or by regular expression when use_regex is true. Returns a stable result object with matching lines and line numbers.',
                 inputSchema: {
                     type: 'object',
                     properties: {
-                        pattern: { type: 'string', description: 'Regex pattern to search for.' },
-                        flags: { type: 'string', description: 'Optional regex flags (e.g., "i" for case-insensitive).' },
+                        pattern: {
+                            type: 'string',
+                            description: 'Literal text substring (default) or regex pattern (when use_regex/useRegex is true) to search for.'
+                        },
+                        flags: { type: 'string', description: 'Optional regex flags when use_regex is true (e.g., "i" for case-insensitive).' },
+                        case_sensitive: {
+                            type: 'boolean',
+                            description:
+                                'Case-sensitive matching. Defaults to false (case-insensitive) for literal search; when use_regex is true, defaults to regex flags (case-sensitive unless flags includes "i", and explicit case_sensitive overrides flags).'
+                        },
+                        caseSensitive: {
+                            type: 'boolean',
+                            description: 'Alias for case_sensitive (default false).'
+                        },
+                        use_regex: {
+                            type: 'boolean',
+                            description:
+                                'Optional (default false): set true to evaluate pattern as a regular expression instead of a literal substring.'
+                        },
+                        useRegex: {
+                            type: 'boolean',
+                            description:
+                                'Alias for use_regex (default false): set true to evaluate pattern as a regular expression instead of a literal substring.'
+                        }
                     },
-                    required: ['pattern'],
-                },
+                    required: ['pattern']
+                }
             },
             {
                 name: 'get_lines',
@@ -33,11 +52,11 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
                     type: 'object',
                     properties: {
                         start: { type: 'number', description: 'Start line number (0-based).' },
-                        count: { type: 'number', description: 'Number of lines to return.' },
+                        count: { type: 'number', description: 'Number of lines to return.' }
                     },
-                    required: ['start', 'count'],
-                },
-            },
+                    required: ['start', 'count']
+                }
+            }
         ];
     }
 
@@ -58,32 +77,19 @@ export class TextToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleGrep(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        const patternStr = String(input.pattern);
-        const flags = input.flags != null ? String(input.flags) : undefined;
-        const regex = new RegExp(patternStr, flags);
-
-        const lines = content.split('\n');
-        const matches: LineMatch[] = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            if (regex.test(lines[i])) {
-                matches.push({ lineNumber: i, text: lines[i] });
-            }
-        }
-
-        return { success: true, data: matches };
+    private handleGrep(content: string, input: Parameters<BaseArtifactToolLibrary['InvokeTool']>[1]): Promise<ArtifactToolResult> {
+        return ExecuteStructuredLineGrep(content, input);
     }
 
     private handleGetLines(content: string, input: Record<string, unknown>): ArtifactToolResult {
-        const start = Number(input.start);
-        const count = Number(input.count);
+        const start = Number(input.start ?? 0);
+        const count = Number(input.count ?? 20);
         const lines = content.split('\n');
 
         const sliced = lines.slice(start, start + count);
         const result: LineMatch[] = sliced.map((text, idx) => ({
             lineNumber: start + idx,
-            text,
+            text
         }));
 
         return { success: true, data: result };

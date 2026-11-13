@@ -39,6 +39,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // @RequiresSubclass(); this mock replaces the module wholesale, so an unlisted symbol
     // anywhere in the dependency chain stops the suite collecting.
     RequiresSubclass: () => (target: unknown) => target,
+    IsBrowser: () => false,
 }));
 
 vi.mock('@memberjunction/core', async () => ({

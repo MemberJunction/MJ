@@ -173,6 +173,24 @@ export function ResolveToolChoiceForRequest(
     return catalogConfiguration?.LLM?.SupportsForcedToolChoice === false ? 'auto' : choice;
 }
 
+/**
+ * The decision to record on a result whose tool calls the driver read back out of a provider
+ * rejection ({@link ChatResult.ToolCallsRecovered}, Groq's `tool_use_failed` — #5847).
+ *
+ * Only a hybrid `'Native'` turn becomes `'NativeRecovered'`. A `'NativeImplicit'` turn keeps its mode,
+ * because the agent loop reads that mode to know control tools are dispatchable and that plain text
+ * ends the turn; one column cannot carry both facts. Every other result keeps the gate's decision.
+ *
+ * @param decision The gate's decision for the request
+ * @param result The result the model call returned
+ * @returns The decision to record on the result
+ */
+export function RecoveredToolCallingDecision(decision: NativeToolCallingDecision, result: ChatResult): NativeToolCallingDecision {
+    return result.ToolCallsRecovered === true && decision.mode === 'Native'
+        ? { ...decision, mode: 'NativeRecovered' }
+        : decision;
+}
+
 // =============================================================================
 // Mode recording — carrying the decision from the model call to the prompt run
 // =============================================================================
@@ -187,7 +205,14 @@ export function ResolveToolChoiceForRequest(
  * every copy of this package ({@link SharedWeakMap}): the Loop agent type that reads `toolResults`
  * back may come from a different copy than the runner that recorded it.
  */
-const toolCallingDecisionByObject = SharedWeakMap<ChatParams | ChatResult, NativeToolCallingDecision>('ai-prompts:toolCallingDecision');
+const toolCallingDecisionByObject = SharedWeakMap<ToolCallingTagTarget, NativeToolCallingDecision>('ai-prompts:toolCallingDecision');
+
+/**
+ * What a tool-calling decision can be recorded on: the request, its result, or the error a model call
+ * threw. A thrown error carries the decision so a failover error result built from it can still record
+ * which path the failed call took.
+ */
+export type ToolCallingTagTarget = ChatParams | ChatResult | Error;
 
 /**
  * Tags a request (at gate time) or a result (after a fallback) with the tool-calling mode.
@@ -207,13 +232,13 @@ export function RecordToolCallingMode(target: ChatParams | ChatResult, mode: Too
     });
 }
 
-/** Tags a request (at gate time) or a result with the gate's whole decision; the loop reads `toolResults` back. */
-export function RecordToolCallingDecision(target: ChatParams | ChatResult, decision: NativeToolCallingDecision): void {
+/** Tags a request (at gate time), a result or a thrown error with the gate's whole decision; the loop reads `toolResults` back. */
+export function RecordToolCallingDecision(target: ToolCallingTagTarget, decision: NativeToolCallingDecision): void {
     toolCallingDecisionByObject.set(target, decision);
 }
 
-/** Reads back the whole decision for a request or result, or undefined when nothing tagged it. */
-export function GetToolCallingDecision(target: ChatParams | ChatResult | null | undefined): NativeToolCallingDecision | undefined {
+/** Reads back the whole decision for a request, result or thrown error, or undefined when nothing tagged it. */
+export function GetToolCallingDecision(target: ToolCallingTagTarget | null | undefined): NativeToolCallingDecision | undefined {
     return target ? toolCallingDecisionByObject.get(target) : undefined;
 }
 

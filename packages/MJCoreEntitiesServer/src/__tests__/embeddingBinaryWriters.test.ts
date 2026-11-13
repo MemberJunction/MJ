@@ -17,7 +17,7 @@ const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEm
     vi.hoisted(() => ({
         logError: vi.fn(),
         /** Drives the stub's IsSaved / GetFieldByName(...).Dirty answers. */
-        stubState: { isSaved: false, dirty: new Set<string>() },
+        stubState: { isSaved: false, dirty: new Set<string>(), contextUser: undefined as object | undefined },
         superSave: vi.fn(),
         generateEmbeddingByFieldName: vi.fn(),
         generateEmbeddingsByFieldName: vi.fn(),
@@ -33,6 +33,8 @@ const { logError, stubState, superSave, generateEmbeddingByFieldName, generateEm
         tagEngineStub: {
             AddOrUpdateSingleTagEmbeddingFromPersisted: vi.fn(),
             RemoveTagFromVectorService: vi.fn(),
+            ResolveTagEmbeddingModelID: vi.fn(),
+            EmbedTagText: vi.fn(),
         },
     }));
 
@@ -53,6 +55,7 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     class StubEntity {
         public ID = 'rec-1';
         public get IsSaved(): boolean { return stubState.isSaved; }
+        public get ContextCurrentUser(): object | undefined { return stubState.contextUser; }
         public GetFieldByName(name: string): { Dirty: boolean } {
             return { Dirty: stubState.dirty.has(name) };
         }
@@ -132,6 +135,9 @@ beforeEach(() => {
     vi.clearAllMocks();
     stubState.isSaved = false;
     stubState.dirty = new Set<string>();
+    stubState.contextUser = undefined;
+    tagEngineStub.ResolveTagEmbeddingModelID.mockResolvedValue(null);
+    tagEngineStub.EmbedTagText.mockResolvedValue(null);
     superSave.mockResolvedValue(true);
     generateEmbeddingByFieldName.mockResolvedValue(true);
     generateEmbeddingsByFieldName.mockResolvedValue(true);
@@ -438,6 +444,62 @@ describe('MJTagEntityServer embedding columns', () => {
 
         expect(tag.EmbeddingVector).toBe(JSON.stringify(VECTOR));
         expect(tag.EmbeddingModelID).toBe('old-model');
+    });
+
+    describe('when TagEngine resolves a tag embedding model (#4922)', () => {
+        const TAG_MODEL = 'hosted-tag-model';
+        beforeEach(() => {
+            stubState.contextUser = { ID: 'user-1' };
+            tagEngineStub.ResolveTagEmbeddingModelID.mockResolvedValue(TAG_MODEL);
+        });
+
+        it('embeds a new tag through TagEngine and stores that model, not the local helper', async () => {
+            tagEngineStub.EmbedTagText.mockResolvedValue({ Vector: VECTOR, ModelID: TAG_MODEL });
+            const tag = newTag('Finance', 'Money matters');
+
+            expect(await tag.Save()).toBe(true);
+
+            expect(tagEngineStub.EmbedTagText).toHaveBeenCalledWith('Finance: Money matters', stubState.contextUser);
+            expect(embedTextLocalHelper).not.toHaveBeenCalled();
+            expect(tag.EmbeddingModelID).toBe(TAG_MODEL);
+            expectBothColumns(tag.EmbeddingVector, tag.EmbeddingVectorBinary, VECTOR);
+        });
+
+        it('does not re-embed an unchanged tag already stored under that model', async () => {
+            stubState.isSaved = true;
+            const tag = newTag('Finance', null);
+            tag.EmbeddingVector = JSON.stringify(VECTOR);
+            tag.EmbeddingModelID = TAG_MODEL;
+
+            expect(await tag.Save()).toBe(true);
+
+            expect(tagEngineStub.EmbedTagText).not.toHaveBeenCalled();
+            expect(isLocalEmbeddingStaleHelper).not.toHaveBeenCalled();
+            expect(tag.EmbeddingVector).toBe(JSON.stringify(VECTOR));
+        });
+
+        it('re-embeds an unchanged tag stored under another model with the TagEngine model', async () => {
+            stubState.isSaved = true;
+            tagEngineStub.EmbedTagText.mockResolvedValue({ Vector: VECTOR, ModelID: TAG_MODEL });
+            const tag = newTag('Finance', null);
+            tag.EmbeddingVector = JSON.stringify([9, 9, 9]);
+            tag.EmbeddingModelID = 'local-model';
+
+            expect(await tag.Save()).toBe(true);
+
+            expect(tagEngineStub.EmbedTagText).toHaveBeenCalledWith('Finance', stubState.contextUser);
+            expect(tag.EmbeddingModelID).toBe(TAG_MODEL);
+        });
+
+        it('never falls back to the local helper when the TagEngine embedding fails', async () => {
+            tagEngineStub.EmbedTagText.mockResolvedValue(null);
+            const tag = newTag('Finance', null);
+
+            expect(await tag.Save()).toBe(true);
+
+            expect(embedTextLocalHelper).not.toHaveBeenCalled();
+            expect(tag.EmbeddingVector).toBeNull();
+        });
     });
 
     it('re-embeds an unchanged tag whose stored vector came from another model', async () => {

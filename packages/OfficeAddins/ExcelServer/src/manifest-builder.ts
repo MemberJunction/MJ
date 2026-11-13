@@ -44,6 +44,8 @@ export function BuildExcelAddinManifest(options: ExcelAddinManifestOptions): str
     const name = options.ServerName.slice(0, MAX_SHORT_STRING);
     const description = `Load ${name} views and queries into Excel, and refresh them as you.`.slice(0, 250);
     const taskpaneUrl = `${base}${EXCEL_ADDIN_PATHS.Taskpane}`;
+    const functionsScriptUrl = `${base}${EXCEL_ADDIN_PATHS.FunctionsScript}`;
+    const functionsMetadataUrl = `${base}${EXCEL_ADDIN_PATHS.FunctionsJson}`;
     const icon = (size: number): string => `${base}${EXCEL_ADDIN_PATHS.Assets}/icon-${size}.png`;
     return [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -73,71 +75,128 @@ export function BuildExcelAddinManifest(options: ExcelAddinManifestOptions): str
         `    <SourceLocation DefaultValue="${EscapeXml(taskpaneUrl)}"/>`,
         '  </DefaultSettings>',
         '  <Permissions>ReadWriteDocument</Permissions>',
-        buildVersionOverrides(name, taskpaneUrl, icon),
+        buildVersionOverrides(name, taskpaneUrl, functionsScriptUrl, functionsMetadataUrl, icon),
         '</OfficeApp>',
         '',
     ].join('\n');
 }
 
-function buildVersionOverrides(name: string, taskpaneUrl: string, icon: (size: number) => string): string {
+function buildDesktopFormFactor(indent: string, icons: string): string {
+    return [
+        `${indent}<DesktopFormFactor>`,
+        `${indent}  <GetStarted>`,
+        `${indent}    <Title resid="GetStarted.Title"/>`,
+        `${indent}    <Description resid="GetStarted.Description"/>`,
+        `${indent}    <LearnMoreUrl resid="Taskpane.Url"/>`,
+        `${indent}  </GetStarted>`,
+        `${indent}  <FunctionFile resid="Taskpane.Url"/>`,
+        `${indent}  <ExtensionPoint xsi:type="PrimaryCommandSurface">`,
+        `${indent}    <OfficeTab id="TabData">`,
+        `${indent}      <Group id="MJ.ExcelAddin.Group">`,
+        `${indent}        <Label resid="Group.Label"/>`,
+        `${indent}        ${icons}`,
+        `${indent}        <Control xsi:type="Button" id="MJ.ExcelAddin.TaskpaneButton">`,
+        `${indent}          <Label resid="Button.Label"/>`,
+        `${indent}          <Supertip><Title resid="Button.Label"/><Description resid="Button.Tooltip"/></Supertip>`,
+        `${indent}          ${icons}`,
+        `${indent}          <Action xsi:type="ShowTaskpane"><TaskpaneId>${AUTO_SHOW_TASKPANE_ID}</TaskpaneId><SourceLocation resid="Taskpane.Url"/></Action>`,
+        `${indent}        </Control>`,
+        `${indent}      </Group>`,
+        `${indent}    </OfficeTab>`,
+        `${indent}  </ExtensionPoint>`,
+        `${indent}</DesktopFormFactor>`,
+    ].join('\n');
+}
+
+function buildVersionOverrides(
+    name: string,
+    taskpaneUrl: string,
+    functionsScriptUrl: string,
+    functionsMetadataUrl: string,
+    icon: (size: number) => string,
+): string {
     const icons = '<Icon><bt:Image size="16" resid="Icon.16x16"/><bt:Image size="32" resid="Icon.32x32"/><bt:Image size="80" resid="Icon.80x80"/></Icon>';
     return [
         '  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">',
         '    <Hosts>',
         '      <Host xsi:type="Workbook">',
-        '        <DesktopFormFactor>',
-        '          <GetStarted>',
-        '            <Title resid="GetStarted.Title"/>',
-        '            <Description resid="GetStarted.Description"/>',
-        '            <LearnMoreUrl resid="Taskpane.Url"/>',
-        '          </GetStarted>',
-        // Required by the schema; the pane page is a valid function file and no ExecuteFunction action uses it.
-        '          <FunctionFile resid="Taskpane.Url"/>',
-        '          <ExtensionPoint xsi:type="PrimaryCommandSurface">',
-        '            <OfficeTab id="TabData">',
-        '              <Group id="MJ.ExcelAddin.Group">',
-        '                <Label resid="Group.Label"/>',
-        `                ${icons}`,
-        '                <Control xsi:type="Button" id="MJ.ExcelAddin.TaskpaneButton">',
-        '                  <Label resid="Button.Label"/>',
-        '                  <Supertip><Title resid="Button.Label"/><Description resid="Button.Tooltip"/></Supertip>',
-        `                  ${icons}`,
-        `                  <Action xsi:type="ShowTaskpane"><TaskpaneId>${AUTO_SHOW_TASKPANE_ID}</TaskpaneId><SourceLocation resid="Taskpane.Url"/></Action>`,
-        '                </Control>',
-        '              </Group>',
-        '            </OfficeTab>',
-        '          </ExtensionPoint>',
-        '        </DesktopFormFactor>',
+        buildDesktopFormFactor('        ', icons),
         '      </Host>',
         '    </Hosts>',
-        buildResources(name, taskpaneUrl, icon),
+        buildResources('    ', name, taskpaneUrl, icon),
+        '    <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">',
+        '      <Requirements>',
+        '        <bt:Sets DefaultMinVersion="1.1">',
+        '          <bt:Set Name="CustomFunctionsRuntime" MinVersion="1.1"/>',
+        '          <bt:Set Name="SharedRuntime" MinVersion="1.1"/>',
+        '        </bt:Sets>',
+        '      </Requirements>',
+        '      <Hosts>',
+        '        <Host xsi:type="Workbook">',
+        '          <Runtimes>',
+        '            <Runtime resid="Taskpane.Url" lifetime="long"/>',
+        '          </Runtimes>',
+        '          <AllFormFactors>',
+        '            <ExtensionPoint xsi:type="CustomFunctions">',
+        '              <Script>',
+        '                <SourceLocation resid="Functions.Script.Url"/>',
+        '              </Script>',
+        '              <Page>',
+        '                <SourceLocation resid="Taskpane.Url"/>',
+        '              </Page>',
+        '              <Metadata>',
+        '                <SourceLocation resid="Functions.Metadata.Url"/>',
+        '              </Metadata>',
+        '              <Namespace resid="Functions.Namespace"/>',
+        '            </ExtensionPoint>',
+        '          </AllFormFactors>',
+        buildDesktopFormFactor('          ', icons),
+        '        </Host>',
+        '      </Hosts>',
+        buildResources('      ', name, taskpaneUrl, icon, { functionsScriptUrl, functionsMetadataUrl }),
+        '    </VersionOverrides>',
         '  </VersionOverrides>',
     ].join('\n');
 }
 
-function buildResources(name: string, taskpaneUrl: string, icon: (size: number) => string): string {
-    const image = (size: number): string => `        <bt:Image id="Icon.${size}x${size}" DefaultValue="${EscapeXml(icon(size))}"/>`;
-    const short = (id: string, text: string): string => `        <bt:String id="${id}" DefaultValue="${EscapeXml(text.slice(0, MAX_SHORT_STRING))}"/>`;
-    const long = (id: string, text: string): string => `        <bt:String id="${id}" DefaultValue="${EscapeXml(text)}"/>`;
+function buildResources(
+    indent: string,
+    name: string,
+    taskpaneUrl: string,
+    icon: (size: number) => string,
+    customFunctions?: { functionsScriptUrl: string; functionsMetadataUrl: string },
+): string {
+    const image = (size: number): string => `${indent}    <bt:Image id="Icon.${size}x${size}" DefaultValue="${EscapeXml(icon(size))}"/>`;
+    const short = (id: string, text: string): string => `${indent}    <bt:String id="${id}" DefaultValue="${EscapeXml(text.slice(0, MAX_SHORT_STRING))}"/>`;
+    const long = (id: string, text: string): string => `${indent}    <bt:String id="${id}" DefaultValue="${EscapeXml(text)}"/>`;
+    const extraUrls = customFunctions
+        ? [
+              `${indent}    <bt:Url id="Functions.Script.Url" DefaultValue="${EscapeXml(customFunctions.functionsScriptUrl)}"/>`,
+              `${indent}    <bt:Url id="Functions.Metadata.Url" DefaultValue="${EscapeXml(customFunctions.functionsMetadataUrl)}"/>`,
+          ]
+        : [];
+    const extraShorts = customFunctions ? [short('Functions.Namespace', 'MJ')] : [];
     return [
-        '    <Resources>',
-        '      <bt:Images>',
+        `${indent}<Resources>`,
+        `${indent}  <bt:Images>`,
         image(16),
         image(32),
         image(80),
-        '      </bt:Images>',
-        '      <bt:Urls>',
-        `        <bt:Url id="Taskpane.Url" DefaultValue="${EscapeXml(taskpaneUrl)}"/>`,
-        '      </bt:Urls>',
-        '      <bt:ShortStrings>',
+        `${indent}  </bt:Images>`,
+        `${indent}  <bt:Urls>`,
+        `${indent}    <bt:Url id="Taskpane.Url" DefaultValue="${EscapeXml(taskpaneUrl)}"/>`,
+        ...extraUrls,
+        `${indent}  </bt:Urls>`,
+        `${indent}  <bt:ShortStrings>`,
+        ...extraShorts,
         short('GetStarted.Title', `Get ${name} data in Excel`),
         short('Group.Label', name),
         short('Button.Label', name),
-        '      </bt:ShortStrings>',
-        '      <bt:LongStrings>',
+        `${indent}  </bt:ShortStrings>`,
+        `${indent}  <bt:LongStrings>`,
         long('GetStarted.Description', `Open a view or query in ${name} and choose Open in Excel. Sign in here to fill it, and refresh any time.`),
         long('Button.Tooltip', `Open the ${name} pane to sign in and refresh this workbook's data.`),
-        '      </bt:LongStrings>',
-        '    </Resources>',
+        `${indent}  </bt:LongStrings>`,
+        `${indent}</Resources>`,
     ].join('\n');
 }

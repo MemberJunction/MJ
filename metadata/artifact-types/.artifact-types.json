@@ -276,16 +276,12 @@
       "ParentID": null,
       "ContentType": "text/markdown",
       "DriverClass": "MarkdownArtifactViewerPlugin",
-      "ToolLibraryClass": "TextToolLibrary",
+      "ToolLibraryClass": "DocumentToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-brands fa-markdown"
     },
     "primaryKey": {
       "ID": "5E5883C2-0185-4E1E-8A1C-F514DBF52DB7"
-    },
-    "sync": {
-      "lastModified": "2026-04-22T21:08:13.615Z",
-      "checksum": "0e36ff1c9eab065ac76d09b68b9c48026c021e26506baace990c82286f879924"
     }
   },
   {
@@ -315,17 +311,13 @@
       "ParentID": null,
       "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "ContentCategory": "File",
-      "DriverClass": "XlsxArtifactViewerPlugin",
-      "ToolLibraryClass": "ExcelToolLibrary",
+      "DriverClass": "SpreadsheetArtifactViewerPlugin",
+      "ToolLibraryClass": "SpreadsheetToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-excel"
     },
     "primaryKey": {
       "ID": "E197541F-484B-4462-8160-70993E18CEF6"
-    },
-    "sync": {
-      "lastModified": "2026-04-22T21:08:13.647Z",
-      "checksum": "9fd246c12453c6a4dde992ece729a1df8567376ae1d64fa0cd1be379893ac103"
     }
   },
   {
@@ -375,15 +367,28 @@
       "ParentID": null,
       "ContentType": "application/json",
       "DriverClass": "WhiteboardArtifactViewerPlugin",
+      "ToolLibraryClass": "WhiteboardToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-solid fa-chalkboard"
     },
     "primaryKey": {
       "ID": "D37C0785-C5FD-42B4-9442-D48B076E2BA4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Presentation",
+      "Description": "Collaborative slide deck presentations with structured layouts, themes, speaker notes, and live MJ blocks.",
+      "ParentID": null,
+      "ContentType": "application/vnd.mj.presentation+json",
+      "ContentCategory": "Text",
+      "DriverClass": "SlideDeckArtifactViewerPlugin",
+      "ToolLibraryClass": "SlideDeckToolLibrary",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-person-chalkboard"
     },
-    "sync": {
-      "lastModified": "2026-06-16T01:17:11.152Z",
-      "checksum": "6d58bfe5c82547da9713a939ac8612ad37ee0e8729fac20bdda891e0ad2eecc5"
+    "primaryKey": {
+      "ID": "5AEC55B8-6302-4DC6-ABBC-E9DC9254A3EF"
     }
   }
 ]

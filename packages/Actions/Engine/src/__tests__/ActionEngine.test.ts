@@ -91,6 +91,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
     // Real UUIDSet — actions-base's audience helpers (ActionAudienceReaders) dedupe readers with it.
     UUIDSet: (await importOriginal<typeof import('@memberjunction/global')>()).UUIDSet,
+    IsBrowser: (await importOriginal<typeof import('@memberjunction/global')>()).IsBrowser,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,

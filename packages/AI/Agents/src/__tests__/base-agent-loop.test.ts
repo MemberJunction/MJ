@@ -1350,19 +1350,104 @@ describe('BaseAgent.Execute — a While whose condition cannot be evaluated', ()
         expect(whileStep?.ErrorMessage).toContain('could not be evaluated');
     });
 
-    it('a model that keeps emitting the bad While is stopped by the per-run iteration limit', async () => {
-        // The consecutive-failed-steps breaker cannot catch this: each prompt's While decision
-        // resets it, so the run alternates Prompt → Failed While until an iteration limit trips.
-        harness.agent = makeAgentRow({ MaxIterationsPerRun: 4 });
+    it('a model that keeps emitting the same bad While ends the run Failed after 3 failures (#4832)', async () => {
+        // The consecutive-failed-steps counter cannot catch this: each prompt's While decision resets
+        // it. The repeated-failing-step guard keys on the decision itself, so no iteration limit is set.
         const { agent, runner } = makeAgent([() => llmEnvelope(badWhile())]);
 
         const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
 
         expect(result.success).toBe(false);
-        expect(runner.Calls).toHaveLength(4);
+        expect(runner.Calls).toHaveLength(3);
         expect(harness.run.Status).toBe('Failed');
-        expect(harness.run.ErrorMessage).toContain('Maximum iteration limit of 4 exceeded');
+        expect(harness.run.ErrorMessage).toContain('Agent repeated the same failing While step 3 times');
+        expect(harness.run.ErrorMessage).toContain('could not be evaluated');
         expect(harness.steps.filter((s) => s.StepType === 'While').map((s) => s.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+    });
+
+    it('a model that changes its While after each failure is not stopped by the guard', async () => {
+        // Same failure, different decision each turn: the count starts over every time.
+        const variant = (n: number): LoopAgentResponse => ({
+            ...badWhile(),
+            nextStep: { type: 'While', while: { condition: `payload.count${n} =`, itemVariable: 'attempt', action: { name: ACTION_NAME, params: {} } } },
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(variant(1)),
+            () => llmEnvelope(variant(2)),
+            () => llmEnvelope(variant(3)),
+            () => llmEnvelope(variant(4)),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(5);
+        expect(harness.run.Status).toBe('Completed');
+    });
+
+    it('a While failing between two other failures of the same While starts the count over', async () => {
+        const other: LoopAgentResponse = {
+            ...badWhile(),
+            nextStep: { type: 'While', while: { condition: 'payload.other =', itemVariable: 'attempt', action: { name: ACTION_NAME, params: {} } } },
+        };
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(badWhile()),
+            () => llmEnvelope(badWhile()),
+            () => llmEnvelope(other),
+            () => llmEnvelope(badWhile()),
+            () => llmEnvelope(badWhile()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(6);
+    });
+});
+
+describe('BaseAgent.Execute — an action call the circuit breaker keeps blocking (#4832)', () => {
+    const failingAction = () => ({
+        Success: false,
+        Message: 'Upstream rejected the request',
+        Params: [],
+        Result: { ResultCode: 'FAILED' },
+        LogEntry: { ID: ACTION_LOG_ID },
+    });
+
+    it('a re-issued blocked action ends the run Failed after it is blocked 3 times', async () => {
+        // Two identical failures trip the identical-arguments rule; every later identical call is
+        // blocked without dispatching and comes back as a non-Failed step, so only the
+        // repeated-failing-step guard can end the cycle.
+        harness.runAction = failingAction;
+        const { agent, runner } = makeAgent([() => llmEnvelope(actionsEnvelope())]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.runActionCalls).toHaveLength(2); // the blocked calls never reach the engine
+        expect(runner.Calls).toHaveLength(5);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain('Agent repeated the same failing Actions step 3 times');
+        expect(harness.run.ErrorMessage).toContain('failed 2 times with identical arguments');
+    });
+
+    it('a dispatched action that keeps failing is left to the circuit breaker, not counted by the guard', async () => {
+        // Failures that reached the engine do not count: the breaker gives the model its own budget
+        // first. The run continues once the model changes course.
+        harness.runAction = failingAction;
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(harness.runActionCalls).toHaveLength(2);
+        expect(runner.Calls).toHaveLength(3);
     });
 });
 

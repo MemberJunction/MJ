@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 import { getEventListeners } from 'node:events';
 import { CreateCancellableOllamaClient } from '../models/cancellable-client';
 
@@ -137,6 +138,7 @@ vi.mock('@memberjunction/ai', () => {
       if (match) return { mediaType: match[1], data: match[2] };
       return null;
     }),
+    NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
   };
 });
 
