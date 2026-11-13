@@ -2634,7 +2634,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get CanEdit(): boolean {
-    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
   public get CanComment(): boolean {
@@ -2999,12 +2999,12 @@ export class SpreadsheetArtifactViewerComponent
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.ConnectionStatus = status;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.CollaboratorsChanged$.subscribe((collabs: CollaboratorPresence[]) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.Collaborators = collabs;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
@@ -3113,6 +3113,9 @@ export class SpreadsheetArtifactViewerComponent
         } else {
           this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
         }
+      }
+      if (!this.isComponentDestroyed) {
+        this.cdr.detectChanges();
       }
       await this.loadPersistedSheetRangeComments();
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {

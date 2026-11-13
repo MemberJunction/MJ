@@ -4218,7 +4218,7 @@ export class MarkdownArtifactViewerComponent
   }
 
   public get CanUserEdit(): boolean {
-    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
   /**
@@ -4322,7 +4322,7 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     this.SetViewMode('edit');
-    this.focusEditableSegment(seg.SegmentID, 'end');
+    this.FocusEditableSegment(seg.SegmentID, 'end');
   }
 
   private promoteToDefaultEditModeIfEligible(): void {
@@ -4444,7 +4444,7 @@ export class MarkdownArtifactViewerComponent
         (lastSeg.BlockKind === 'paragraph' || !lastSeg.BlockKind) &&
         lastSeg.RawMarkdown.trim().length === 0
       ) {
-        this.focusEditableSegment(lastSeg.SegmentID, 'start');
+        this.FocusEditableSegment(lastSeg.SegmentID, 'start');
         return;
       }
     }
@@ -4659,7 +4659,7 @@ export class MarkdownArtifactViewerComponent
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
         if (rawText.trim().length === 0) {
-          this.focusEditableSegment(seg.SegmentID, 'start');
+          this.FocusEditableSegment(seg.SegmentID, 'start');
           return;
         }
         if (caret.start === 0 && before.trim().length === 0 && after.trim().length > 0) {
@@ -4778,7 +4778,7 @@ export class MarkdownArtifactViewerComponent
         if (prevIdx >= 0) {
           event.preventDefault();
           this.flushElementBeforeNavigation(seg, el);
-          this.focusEditableSegment(this.DocumentSegments[prevIdx].SegmentID, 'end');
+          this.FocusEditableSegment(this.DocumentSegments[prevIdx].SegmentID, 'end');
         }
         return;
       }
@@ -4787,7 +4787,7 @@ export class MarkdownArtifactViewerComponent
         if (nextIdx >= 0) {
           event.preventDefault();
           this.flushElementBeforeNavigation(seg, el);
-          this.focusEditableSegment(this.DocumentSegments[nextIdx].SegmentID, 'start');
+          this.FocusEditableSegment(this.DocumentSegments[nextIdx].SegmentID, 'start');
         }
       }
     }
@@ -5173,14 +5173,14 @@ export class MarkdownArtifactViewerComponent
       if ((event.key === 'ArrowUp' || event.key === 'ArrowLeft') && caret.start === 0) {
         if (itemIndex > 0) {
           event.preventDefault();
-          this.focusEditableSegment(seg.SegmentID, 'end', itemIndex - 1);
+          this.FocusEditableSegment(seg.SegmentID, 'end', itemIndex - 1);
           return;
         }
       }
       if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawText.length) {
         if (itemIndex + 1 < items.length) {
           event.preventDefault();
-          this.focusEditableSegment(seg.SegmentID, 'start', itemIndex + 1);
+          this.FocusEditableSegment(seg.SegmentID, 'start', itemIndex + 1);
           return;
         }
       }
@@ -5406,7 +5406,7 @@ export class MarkdownArtifactViewerComponent
       const targetSeg = this.DocumentSegments[clampedIdx];
       if (targetSeg) {
         this.SelectedAnchorKey = targetSeg.SegmentID;
-        this.focusEditableSegment(
+        this.FocusEditableSegment(
           targetSeg.SegmentID,
           focusSpec.position ?? 'start',
           focusSpec.listItemIndex,
@@ -5460,7 +5460,7 @@ export class MarkdownArtifactViewerComponent
    * Focuses the editable DOM surface for `segmentId` (or a specific list item inside it)
    * and places the DOM selection caret at `'start'`, `'end'`, or a specific character offset.
    */
-  public focusEditableSegment(
+  public FocusEditableSegment(
     segmentId: string,
     position: 'start' | 'end' | number = 'start',
     listItemIndex?: number,
@@ -5750,7 +5750,7 @@ export class MarkdownArtifactViewerComponent
     this.OnMarkdownChanged(`${cleanedBase}${sep}${snippet}`);
     if (this.DocumentSegments.length > 0) {
       const lastSeg = this.DocumentSegments[this.DocumentSegments.length - 1];
-      this.focusEditableSegment(lastSeg.SegmentID, 'end');
+      this.FocusEditableSegment(lastSeg.SegmentID, 'end');
     }
   }
 
@@ -8631,11 +8631,15 @@ export class MarkdownArtifactViewerComponent
         } else {
           this.promoteToDefaultEditModeIfEligible();
         }
-        this.cdr.markForCheck();
+        if (!this.isComponentDestroyed) {
+          this.cdr.detectChanges();
+        }
       }),
       this.session.CollaboratorsChanged$.subscribe((peers) => {
         this.Collaborators = peers;
-        this.cdr.markForCheck();
+        if (!this.isComponentDestroyed) {
+          this.cdr.detectChanges();
+        }
       }),
       this.session.VersionSaved$.subscribe((savedEvt) => {
         const exists = this.SavedVersionSnapshots.some((s) => s.VersionNumber === savedEvt.versionNumber);
@@ -8762,7 +8766,9 @@ export class MarkdownArtifactViewerComponent
           this.promoteToDefaultEditModeIfEligible();
         }
       }
-      this.cdr.markForCheck();
+      if (!this.isComponentDestroyed) {
+        this.cdr.detectChanges();
+      }
     } catch (err) {
       LogError(err);
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
@@ -8778,7 +8784,9 @@ export class MarkdownArtifactViewerComponent
       if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
         this.ViewMode = 'preview';
       }
-      this.cdr.markForCheck();
+      if (!this.isComponentDestroyed) {
+        this.cdr.detectChanges();
+      }
     }
 
     await this.hydrateAnchoredThreadsFromServer(artifactId, user, provider, gen);
@@ -8843,7 +8851,9 @@ export class MarkdownArtifactViewerComponent
               this.promoteToDefaultEditModeIfEligible();
             }
           }
-          this.cdr.markForCheck();
+          if (!this.isComponentDestroyed) {
+            this.cdr.detectChanges();
+          }
         } catch (err) {
           LogError(err);
         }
