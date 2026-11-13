@@ -2662,10 +2662,12 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
         Name: 'PB19: Wave 5.2 — BuildRecordChangePayload skipFullRecordJSON & CanCountFromBaseTable safe subquery/temporal SQL benchmark',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
             const fx = requireFixture();
-            const md = new Metadata();
-            const rcEntity = md.EntityByName('MJ: Record Changes');
+            const rcEntity = ctx.Provider.EntityByName('MJ: Record Changes');
             Assert(!!rcEntity, 'PB19: expected MJ: Record Changes in entity metadata');
-            const dbProv = Metadata.Provider as unknown as GenericDatabaseProvider;
+            if (!rcEntity) {
+                throw new Error('PB19: expected MJ: Record Changes in entity metadata');
+            }
+            const dbProv = ctx.Provider as unknown as GenericDatabaseProvider;
 
             // ── Part A: BuildRecordChangePayload (skipFullRecordJSON=true vs false) ─
             interface RecordChangePayloadInvoker {
@@ -2817,7 +2819,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
 
             const tExists0 = performance.now();
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(ctx.Provider);
                 const res = await rv.RunView(
                     {
                         EntityName: 'MJ: Record Changes',
