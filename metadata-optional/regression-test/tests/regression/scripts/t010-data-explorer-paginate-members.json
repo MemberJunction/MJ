@@ -1,0 +1,65 @@
+{
+  "TestId": "DE34FE96-7F54-4CE4-B0C3-C677EA5A6F26",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "df4c198e",
+  "RecordedAt": "2026-11-13T08:38:06.325Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the 'People' entity grid and paginate to page 2. As instructed, I can navigate directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People or open Data E",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The 'People' entity grid is open showing 3,058 records (Page 1 of 31). I need to advance to page 2 using the pagination control at the bottom right. Element [79] corresponds to the 'Next page' button.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Next page",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/mj-pagination[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 1207,
+            "YMin": 685,
+            "XMax": 1235,
+            "YMax": 713
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

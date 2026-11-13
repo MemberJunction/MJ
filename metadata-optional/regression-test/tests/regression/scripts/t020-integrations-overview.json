@@ -1,0 +1,52 @@
+{
+  "TestId": "7E856969-FF8F-4A46-B32C-031EADD6ED30",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "38a11f53",
+  "RecordedAt": "2026-11-13T08:41:30.250Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the Integrations app. Looking at the Interactive Elements list, index [48] is 'Integrations' card under 'My applications', or I can click the app switcher dropdown [1]. Let's click the ",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[35]",
+          "BoundingBox": {
+            "XMin": 646,
+            "YMin": 1363,
+            "XMax": 916,
+            "YMax": 1449
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/integrations/Overview",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

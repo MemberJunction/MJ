@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t007-data-explorer-search-members.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,search",
@@ -51,7 +52,7 @@
     "ID": "FB8724E6-22E4-4E8A-8695-82A49A27306D"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.773Z",
-    "checksum": "e26bda7946bf821bb0107dbf138540aebe2bfae02e857bf1c17da994f5106366"
+    "lastModified": "2026-11-13T09:22:10.939Z",
+    "checksum": "acca664d1d9c27526358d07214c02b089adf0601312e5610c4dc6ec055fc8ff7"
   }
 }

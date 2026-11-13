@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t122-integrations-schedule-type-config-editor.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,integrations",
@@ -51,7 +52,7 @@
     "ID": "B1241A3E-43AB-40C3-848F-4885E4BBDB81"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.760Z",
-    "checksum": "0e54ada63363318b9f90f0f024ded8783f728fb38ebed0e4c9c019d32b3bcd1c"
+    "lastModified": "2026-11-13T09:22:10.932Z",
+    "checksum": "419620bcfdf0420c053a34834c7d677aadb5096d2ffc9317dcd1c63369e11cd5"
   }
 }

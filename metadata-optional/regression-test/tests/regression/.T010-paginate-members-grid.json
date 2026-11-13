@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t010-data-explorer-paginate-members.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,data-explorer",
@@ -51,7 +52,7 @@
     "ID": "DE34FE96-7F54-4CE4-B0C3-C677EA5A6F26"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.790Z",
-    "checksum": "1ae019ff9e2710c07b7541699e2b28e14bd49bb197aec4dbf0418407bcc11a83"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "2bd38e3fa936f9b7a4afd00f217a074833c30fc6128bd59d9b33795042deb411"
   }
 }

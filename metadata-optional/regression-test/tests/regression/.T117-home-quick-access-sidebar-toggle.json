@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t117-home-quick-access-sidebar-toggle.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,home",
@@ -51,7 +52,7 @@
     "ID": "ED3E804B-2189-4D65-8DBA-FB60D2C2B4BD"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.802Z",
-    "checksum": "44dc6cfaf173b5763aa9e5c4dc4a70af4fba86acb17d36c115be210133dcf8f6"
+    "lastModified": "2026-11-13T09:22:10.952Z",
+    "checksum": "d9050ac17ea8f37461f155ed7de10bb26ce6ba077606ca575e15d280c5eed0b3"
   }
 }

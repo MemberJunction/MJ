@@ -1,0 +1,201 @@
+{
+  "TestId": "0E8B376E-9E55-43B8-B7D8-951E15A3E258",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "c208968d",
+  "RecordedAt": "2026-11-13T09:01:26.373Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The user wants to open the Permissions app (already in Permissions app, or click Audit Log tab directly). The instructions say: 'Open the Permissions app via the application switcher dropdown next to ",
+      "UrlBefore": "http://localhost:4200/app/permissions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Audit Log",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 605,
+            "YMin": 13,
+            "XMax": 726,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    },
+    {
+      "Instruction": "We are on the Audit Log tab and see the 'No query yet' empty-state, matching section (1) audit-timeline-query. We will signal this checkpoint and click 'Query' (Index 14).",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Query",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-audit-log-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 499,
+            "XMax": 132,
+            "YMax": 543
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    },
+    {
+      "Instruction": "We need to set a filter (e.g. change Domain combobox or type date without filling malformed value), then click Query, emit checkpoint audit-reset-filters, then click Reset to return to defaults and 'N",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Domain:",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-audit-log-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/select[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 197,
+            "XMax": 1256,
+            "YMax": 235
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    },
+    {
+      "Instruction": "The Domain combobox is open. I will select 'AI Skill Permissions' (or press Down arrow and Enter), then click Query to apply the filter. Then emit audit-reset-filters, click Reset, and confirm return ",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "keypress",
+        "Key": "ArrowDown"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    },
+    {
+      "Instruction": "The Domain combobox is open. I will select 'AI Skill Permissions' (or press Down arrow and Enter), then click Query to apply the filter. Then emit audit-reset-filters, click Reset, and confirm return ",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The Domain combobox is open. I will select 'AI Skill Permissions' (or press Down arrow and Enter), then click Query to apply the filter. Then emit audit-reset-filters, click Reset, and confirm return ",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Query",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-audit-log-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 498,
+            "XMax": 132,
+            "YMax": 542
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The Domain filter is now set to 'AI Skill Permissions'. I will click 'Query' so that the results (or no-results state) appear under this non-default filter. Then I will signal the 'audit-reset-filters",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Query",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-audit-log-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 24,
+            "YMin": 497,
+            "XMax": 132,
+            "YMax": 541
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    },
+    {
+      "Instruction": "Now that we have executed Query with a non-default filter ('AI Skill Permissions') and confirmed a no-results state ('No audit entries found'), we hit the checkpoint 'audit-reset-filters'. Next, we cl",
+      "UrlBefore": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-permissions-audit-log-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 144,
+            "YMin": 499,
+            "XMax": 248,
+            "YMax": 543
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/permissions/Audit%20Log",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

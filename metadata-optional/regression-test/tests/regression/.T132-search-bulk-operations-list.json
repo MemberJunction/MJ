@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t132-search-bulk-operations-list.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,bulk",
@@ -51,7 +52,7 @@
     "ID": "8D4D994A-7A0C-49ED-8FA1-52D857A1ACB7"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.764Z",
-    "checksum": "1e1d05ee5e73df670b7a2663849756df3f878147b0a49615c0b068e1a59dbd76"
+    "lastModified": "2026-11-13T09:22:10.932Z",
+    "checksum": "880728efacf114f0251fa9bdbefb7091c165f921fc96a513614ca914d0b09723"
   }
 }

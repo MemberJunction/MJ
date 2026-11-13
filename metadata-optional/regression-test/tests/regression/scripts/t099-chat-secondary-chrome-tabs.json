@@ -1,0 +1,108 @@
+{
+  "TestId": "E6098D0D-8C3D-4544-82D4-94700B449641",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "5e801f0f",
+  "RecordedAt": "2026-11-13T09:03:23.739Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the Chat app card to open the Chat application workspace.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Chat",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 82,
+            "YMin": 486,
+            "XMax": 352,
+            "YMax": 572
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "Clicking the 'Collections' tab in the top navigation bar to go to the Collections full view.",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Collections",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 392,
+            "YMin": 13,
+            "XMax": 525,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Collections"
+      }
+    },
+    {
+      "Instruction": "The Collections view has rendered with the 'Collections' breadcrumb, view controls, and valid empty state ('No collections yet'). I will register the checkpoint 'collections-tab' and click on the 'Tas",
+      "UrlBefore": "http://localhost:4200/app/chat/Collections",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Tasks",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 529,
+            "YMin": 13,
+            "XMax": 625,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Collections"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Tasks"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/chat/Tasks",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

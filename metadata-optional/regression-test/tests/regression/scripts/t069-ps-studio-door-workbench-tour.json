@@ -1,0 +1,347 @@
+{
+  "TestId": "6FC23A4B-28D8-421C-BE16-B080A00B329A",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "241b8ae1",
+  "RecordedAt": "2026-11-13T08:55:27.929Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown next to the logo to open the list of available applications.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open. I need to open 'Predictive Studio'. I will type 'Predictive Studio' into the search box inside the launcher.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Predictive Studio",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher search filtered to 'Predictive Studio'. I will click element [4] (or press Enter) to open Predictive Studio.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Predictive Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[1]/div[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 155,
+            "XMax": 492,
+            "YMax": 233
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      }
+    },
+    {
+      "Instruction": "Now inside Predictive Studio app. I need to click the 'Studio' top tab/nav item (Index 4).",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Predictions",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 456,
+            "YMin": 13,
+            "XMax": 559,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Predictions"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio"
+      }
+    },
+    {
+      "Instruction": "We are now on the Studio section. Checkpoint (1) is studio-section-nav (click through several internal sections and confirm main content swaps). Wait, let's look at the checkpoint order: (1) studio-se",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Training Pipelines",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/button[4]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 392,
+            "XMax": 169,
+            "YMax": 424
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=pipelines"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Training Pipelines' in the previous step. We have now arrived at checkpoint (3) training-pipelines. Let's signal `training-pipelines`. Next checkpoint is (4) `pipeline-validate` (click 'Va",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=pipelines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Validate",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/as-split[1]/as-split-area[1]/section[1]/ps-pipelines[1]/div[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/div[1]/div[2]/button[4]",
+          "BoundingBox": {
+            "XMin": 1045,
+            "YMin": 242,
+            "XMax": 1142,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=pipelines"
+      }
+    },
+    {
+      "Instruction": "The Validate button was clicked and a notification toast 'Pipeline needs a bound Evaluation Protocol.' is clearly visible in the upper right. Checkpoint 'pipeline-validate' is reached. Now navigating ",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=pipelines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Algorithm Catalog",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 442,
+            "XMax": 169,
+            "YMax": 474
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=pipelines"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=catalog"
+      }
+    },
+    {
+      "Instruction": "We have navigated to Algorithm Catalog. We need to reach checkpoint (5) `algorithm-catalog-guide`: click a 'Guide me' scenario chip and confirm a recommendation banner appears and cards re-rank/highli",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=catalog",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Binary classification (yes/no)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/as-split[1]/as-split-area[1]/section[1]/ps-catalog[1]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 215,
+            "YMin": 251,
+            "XMax": 435,
+            "YMax": 281
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=catalog"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Binary classification (yes/no)' chip. A recommendation banner appeared ('For Binary classification (yes/no), your top pick(s): XGBoost...'). This confirms algorithm-catalog-guide checkpoin",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=catalog",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Clear",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/as-split[1]/as-split-area[1]/section[1]/ps-catalog[1]/div[1]/div[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 215,
+            "YMin": 331,
+            "XMax": 274,
+            "YMax": 347
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=catalog"
+      }
+    },
+    {
+      "Instruction": "First, setting checkpointReached to 'algorithm-catalog-guide' to confirm step (5). Next, clicking 'Details' on the LightGBM algorithm card (Index 25) to expand hyperparameters inline for checkpoint (6",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=catalog",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[2]/div[1]/as-split[1]/as-split-area[1]/section[1]/ps-catalog[1]/div[1]/div[2]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 235,
+            "YMin": 634,
+            "XMax": 325,
+            "YMax": 668
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=catalog"
+      }
+    },
+    {
+      "Instruction": "The 'Details' button was clicked and the inline details panel expanded for LightGBM. This satisfies checkpoint (6) algorithm-catalog-detail. Now set checkpointReached to 'algorithm-catalog-detail' and",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=catalog",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Experiments",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/button[6]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 507,
+            "XMax": 169,
+            "YMax": 539
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=catalog"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=experiments"
+      }
+    },
+    {
+      "Instruction": "We are on the 'Experiments' section, which displays the empty state 'No experiment sessions yet'. This satisfies checkpoint (7) experiments-kanban. Now setting checkpointReached to 'experiments-kanban",
+      "UrlBefore": "http://localhost:4200/app/predictive-studio/Studio?section=experiments",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Compare Runs",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-ps-studio-resource[1]/mj-page-body-interior[1]/div[1]/as-split[1]/as-split-area[1]/aside[1]/button[7]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 525,
+            "XMax": 169,
+            "YMax": 557
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=experiments"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=compare"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/predictive-studio/Studio?section=compare",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "TestId": "D7F6860E-32C6-4428-9B79-8441F50E8514",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "df64e3c9",
+  "RecordedAt": "2026-11-13T09:00:33.823Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the Chat application. In the current screenshot, the application switcher (or the Chat card on the landing page) is available. Element [12] is the 'Chat' card under My Applications, and",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Chat",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 82,
+            "YMin": 486,
+            "XMax": 352,
+            "YMax": 572
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "The Chat application workspace is loaded. I can see the 'Search conversations...' input field [9] in the left sidebar, along with existing conversations ('Event sponsorship ideas', 'Quarterly report d",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "type",
+        "Text": "Event",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search conversations...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 70,
+            "XMax": 251,
+            "YMax": 103
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    },
+    {
+      "Instruction": "I typed 'Event' into the search conversations box. The sidebar updated to display only 'Event sponsorship ideas' matching the text. Now I will click the 'Clear search' button (index 10) to clear the s",
+      "UrlBefore": "http://localhost:4200/app/chat/Conversations",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Clear search",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-chat-conversations-resource[1]/div[1]/div[1]/mj-conversation-list[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 225,
+            "YMin": 75,
+            "XMax": 247,
+            "YMax": 97
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/chat/Conversations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/chat/Conversations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

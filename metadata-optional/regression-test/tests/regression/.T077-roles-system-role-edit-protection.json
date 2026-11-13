@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t077-roles-system-role-edit-protection.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,admin",
@@ -51,7 +52,7 @@
     "ID": "6051D3BD-95CA-4A29-AD2B-576A0ABCDD73"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.764Z",
-    "checksum": "41f454bd387ee1dea2e45ea5025c5ce21605b5fd899c6dab6d579dc1f9b24151"
+    "lastModified": "2026-11-13T09:22:10.934Z",
+    "checksum": "99c292ba6e1264e2e09435bc7d9f429c7605d389145a61e7248594276caba28f"
   }
 }

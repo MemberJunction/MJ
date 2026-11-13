@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t073-testing-analytics-and-explorer-tour.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,testing",
@@ -51,7 +52,7 @@
     "ID": "88C270AF-9C9F-436A-8A37-A4F0A8463D80"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.783Z",
-    "checksum": "34f6b00eab519e6bb6da273609a5d17717c4d84b4dbad8cd747b14dfdb72529c"
+    "lastModified": "2026-11-13T09:22:10.947Z",
+    "checksum": "234dc116592f559e5c2ee0f46cff0bbd3d2f2c09ecaec285a6176470c6f1cadd"
   }
 }

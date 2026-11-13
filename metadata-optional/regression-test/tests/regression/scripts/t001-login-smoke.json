@@ -1,0 +1,128 @@
+{
+  "TestId": "C9FE51A9-8750-47FD-A6B6-347ED5E53A65",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "988e50e4",
+  "RecordedAt": "2026-11-13T08:36:46.048Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking the 'Log in' button to proceed to the login flow/dashboard.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Log in",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/div[2]/div[1]/mj-login-picker[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 760,
+            "YMin": 342,
+            "XMax": 1160,
+            "YMax": 396
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "/u/login"
+      }
+    },
+    {
+      "Instruction": "I need to enter the provided login credentials into the Auth0 form: Username `%authUsername%` and Password `%authPassword%`, then click Continue.",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authUsername%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Email address *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 314,
+            "XMax": 800,
+            "YMax": 366
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "/u/login"
+      }
+    },
+    {
+      "Instruction": "I need to enter the provided login credentials into the Auth0 form: Username `%authUsername%` and Password `%authPassword%`, then click Continue.",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "type",
+        "Text": "%authPassword%",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Password *",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[2]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 481,
+            "YMin": 379,
+            "XMax": 755,
+            "YMax": 431
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I need to enter the provided login credentials into the Auth0 form: Username `%authUsername%` and Password `%authPassword%`, then click Continue.",
+      "UrlBefore": "/u/login",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Continue",
+          "Selector": "xpath=/html/body[1]/div[1]/main[1]/section[1]/div[1]/div[2]/div[1]/form[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 480,
+            "YMin": 493,
+            "XMax": 800,
+            "YMax": 545
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/home/Home",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

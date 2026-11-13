@@ -1,0 +1,93 @@
+{
+  "TestId": "EBA37AB4-1A44-4195-85FC-E9F776841BDE",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "06ffc83e",
+  "RecordedAt": "2026-11-13T08:42:14.590Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I will navigate directly to the People entity grid URL (http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People) as specified in the fallback instructions to reliably open the ",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The People entity grid is currently open. Next step is to click the 'New' record button (+ New button at index 23/25 or above grid rows) to open a blank People form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create new record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[1]/mj-view-selector[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 476,
+            "YMin": 264,
+            "XMax": 508,
+            "YMax": 296
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/new"
+      }
+    },
+    {
+      "Instruction": "The blank 'New People Record' form is loaded with required fields (First Name, Last Name underlined in red). I will click the blue 'Save Changes' button (Index 14) without entering any values, to test",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/new",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Save Changes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommonperson-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1008,
+            "YMin": 150,
+            "XMax": 1152,
+            "YMax": 183
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/new"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Common:%20People/new",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

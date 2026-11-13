@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t044-entity-form-email-and-url-field-link-rendering.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,form",
@@ -51,7 +52,7 @@
     "ID": "E9FD01B7-CF62-4E87-B545-F5EAF492CB80"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.800Z",
-    "checksum": "bd74384d2b547919c854c9335f0baedfd0c561a11c107cad3864fd420e4bc850"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "0719c5bb3fdc07067e1aae2cad1d3ff0ff31803f6d4b31cae717c5651dc3a72e"
   }
 }

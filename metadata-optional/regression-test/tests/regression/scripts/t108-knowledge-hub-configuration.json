@@ -1,0 +1,333 @@
+{
+  "TestId": "FFF8945C-7170-4034-B305-1AA34B954A3B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b48b1138",
+  "RecordedAt": "2026-11-13T09:07:52.141Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Clicking application switcher dropdown next to the logo to switch to Knowledge Hub.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "I need to switch to the Knowledge Hub app. I can type 'Knowledge Hub' into the 'Find an app...' search box in the app launcher modal.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Knowledge Hub",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    },
+    {
+      "Instruction": "We are now in Knowledge Hub app! Next step is to click 'Configuration' (or 'More 5' -> Configuration or find Configuration tab). Let's see 'More 5' (index 6). Let's click 'More 5' to reveal 'Configura",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 642,
+            "YMin": 13,
+            "XMax": 757,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      }
+    },
+    {
+      "Instruction": "The 'More' menu is open and 'Configuration' (Index 11) is visible. I will click on 'Configuration'.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Classify",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Configuration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[5]",
+          "BoundingBox": {
+            "XMin": 625,
+            "YMin": 207,
+            "XMax": 823,
+            "YMax": 244
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Classify"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "We are now on the Knowledge Hub Configuration page. Checkpoint 1 (kh-config-nav) requires us to: (1) confirm the default section renders in the inner settings rail (Pipeline, Vector Database, etc.) — ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Vector Database\nManage vector database connections and indexes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav[1]/aside[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 226,
+            "XMax": 231,
+            "YMax": 293
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "Vector Database section loaded showing 'Setup Progress 3 of 3 complete' (confirming 3-step setup progress). Now clicking another section ('Pipeline') to confirm inner content swaps while outer header ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pipeline\nConfigure the knowledge ingestion pipeline stages",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav[1]/aside[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 157,
+            "XMax": 231,
+            "YMax": 224
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "We clicked Pipeline and verified the content swapped back to Pipeline while outer header stayed. This completes all parts of (1) kh-config-nav! I will set checkpointReached to 'kh-config-nav' and now ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Thresholds\nSet scoring thresholds for search and deduplication",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav[1]/aside[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 433,
+            "XMax": 231,
+            "YMax": 501
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "We have reached the 'Thresholds' section. I will report checkpoint 'kh-thresholds-edit'. Now I need to edit one of the range sliders (e.g. index 20), confirm its percentage updates and the Unsaved cha",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "type",
+        "Text": "0.85",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav-content[1]/mj-page-body-interior[1]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 754,
+            "YMin": 278,
+            "XMax": 954,
+            "YMax": 294
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "The slider was changed to 0.85 (percentage label updated to 85%), and 'Unsaved changes' indicator + Save/Reset bar appeared. Now I will click 'Reset' (Index 27) to clear the unsaved-changes state, com",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav-content[1]/mj-page-body-interior[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 1169,
+            "YMin": 575,
+            "XMax": 1231,
+            "YMax": 608
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "The Reset button was clicked and the unsaved-changes bar cleared, resetting the slider back to 95%. Now I need to navigate to 'Search Scopes' (Checkpoint 3: kh-search-scopes). I will click on 'Search ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Search Scopes\nDefine reusable search scopes — which providers, entities, external indexes, and storage accounts particip",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav[1]/aside[1]/button[6]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 503,
+            "XMax": 231,
+            "YMax": 613
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "We have reached Search Scopes section (checkpoint kh-search-scopes). The scope 'Global' is selected, displaying the tab strip (Definition, Providers, External Indexes, Entities, Storage, Permissions) ",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Providers",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav-content[1]/mj-page-body-interior[1]/div[1]/div[1]/section[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 651,
+            "YMin": 275,
+            "XMax": 735,
+            "YMax": 303
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    },
+    {
+      "Instruction": "We clicked on the 'Providers' tab, and the detail content updated to show the Providers table and '+ Add provider' button. Now clicking the 'Entities' tab to exercise another tab.",
+      "UrlBefore": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Entities",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-knowledge-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/mj-left-nav-content[1]/mj-page-body-interior[1]/div[1]/div[1]/section[1]/div[1]/button[4]",
+          "BoundingBox": {
+            "XMin": 871,
+            "YMin": 275,
+            "XMax": 941,
+            "YMax": 303
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/knowledge-hub/Configuration",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t097-conversation-folder-grouping.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,chat",
@@ -51,7 +52,7 @@
     "ID": "610BF5AD-B684-4E85-A210-8D584735002A"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.780Z",
-    "checksum": "18db38e738c5c661d82879aa652636e4ab22706932dc1940bce15fffaca2e06a"
+    "lastModified": "2026-11-13T09:22:10.941Z",
+    "checksum": "dd2335b51c7e25f63753811435a1f6ed3731b36581db64d3fb050d07f6a860cc"
   }
 }

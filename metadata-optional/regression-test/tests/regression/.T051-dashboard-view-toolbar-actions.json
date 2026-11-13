@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t051-dashboard-view-toolbar-actions.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,dashboard",
@@ -51,7 +52,7 @@
     "ID": "0A683189-636C-41AE-A335-9C2077F1499B"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.782Z",
-    "checksum": "cffd1809f9aab301067ff62a9be33633184d38e2cad007d6c69ec28fae2ea257"
+    "lastModified": "2026-11-13T09:22:10.947Z",
+    "checksum": "c9106079e962b4c712b6c8683c04535fb36593a23ca5f677ed1926bd5183f1a2"
   }
 }

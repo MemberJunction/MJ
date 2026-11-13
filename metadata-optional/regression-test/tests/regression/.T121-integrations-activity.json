@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t121-integrations-activity.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,integrations",
@@ -51,7 +52,7 @@
     "ID": "A5624820-7FEB-485D-8D4B-B17639C81E2D"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.786Z",
-    "checksum": "6846a4810c688de52e7ed0bb650572ee92ea704dda7eaa48c40f0f25bfebe061"
+    "lastModified": "2026-11-13T09:22:10.948Z",
+    "checksum": "a22702896ed86ad0e8a8487b72b297f2e4e109c184163a441cd2a47547ebc340"
   }
 }

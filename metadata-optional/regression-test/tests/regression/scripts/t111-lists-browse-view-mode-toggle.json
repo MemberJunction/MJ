@@ -1,0 +1,155 @@
+{
+  "TestId": "F011EE33-C0AD-4DAB-B979-2B858BAB655C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "68f8e3ed",
+  "RecordedAt": "2026-11-13T09:08:16.652Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Open the application switcher dropdown next to the logo.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I see 'Lists' in the visible grid of ALL APPS (index 17 or 66). I'll click on the 'Lists' app link to navigate to the Lists application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Lists",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[10]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 574,
+            "XMax": 492,
+            "YMax": 652
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "I have opened the Lists application and navigated to the default 'Lists' (Browse) section. Currently, Card view is active (as seen by the layout of cards). I will click on 'Table view' (element [14]) ",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Table view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1164,
+            "YMin": 169,
+            "XMax": 1192,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "I have opened the Lists application and navigated to the default 'Lists' (Browse) section. Currently, Card view is active (as seen by the layout of cards). I will click on 'Table view' (element [14]) ",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Category view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 1224,
+            "YMin": 169,
+            "XMax": 1252,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "In step 3 I clicked 'Table view' and then 'Category view'. The previous screenshot showed the default Card view (grid of cards), and the current screenshot shows Category view (folder-grouped hierarch",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Table view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1164,
+            "YMin": 169,
+            "XMax": 1192,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/lists/Lists",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

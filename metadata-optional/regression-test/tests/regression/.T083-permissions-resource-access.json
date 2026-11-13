@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t083-permissions-resource-access.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,permissions",
@@ -51,7 +52,7 @@
     "ID": "1A3D1E53-364E-4ADD-943D-C8D95963B487"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.792Z",
-    "checksum": "4b215f49fc06b87f4c23420622bd8795f5517c840c283b3f1ad1a693960edd28"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "27b641d3e4ff9c268e348a35ad7c8aa90540dc04d08e17c50ee408876681ef89"
   }
 }

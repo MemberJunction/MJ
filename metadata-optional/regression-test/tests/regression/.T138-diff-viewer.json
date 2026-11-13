@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t138-diff-viewer.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,version-history",
@@ -51,7 +52,7 @@
     "ID": "DFA8851A-B8E5-4B14-8BCF-C4E28B9114F6"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.789Z",
-    "checksum": "dbacf2c5c93b290aaecd28933769fa698fee9ac12714b17755e7b0da37b8423e"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "90dab58ce114b3b741fee3796dd1aac31de4e5a0d3b9d38872824221488885cc"
   }
 }

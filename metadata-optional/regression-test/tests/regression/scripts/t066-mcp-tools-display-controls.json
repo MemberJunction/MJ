@@ -1,0 +1,335 @@
+{
+  "TestId": "EE41BA0C-B6C5-4EA7-8B0C-DF09B7FCDF06",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "4cec7ad3",
+  "RecordedAt": "2026-11-13T08:54:31.092Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the AI app via the application switcher dropdown next to the logo. Clicking index 1 ('Switch application — current: Home').",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I need to click on 'AI' app (index 6 or 37). Index 6 is under RECENT, index 37 is under ALL APPS. Let's click index 6.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "AI",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[3]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 788,
+            "YMin": 186,
+            "XMax": 1063,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "We are now on the AI app Overview page. We need to go to the MCP section -> Tools tab. Let's see if MCP section is under 'More' navigation items in the top bar.",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "More navigation items",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 601,
+            "YMin": 13,
+            "XMax": 716,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "The 'More' menu is open in the top bar. I will click on 'MCP' (element index 9) to navigate to the MCP section.",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "MCP",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/div[1]/div[3]",
+          "BoundingBox": {
+            "XMin": 602,
+            "YMin": 133,
+            "XMax": 800,
+            "YMax": 170
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "Now on the MCP Dashboard. Need to go to the Tools tab (Index 14).",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "tab",
+          "Name": "Tools\n0",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-tab-nav[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 633,
+            "YMin": 170,
+            "XMax": 745,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "We are now on the Tools tab of the MCP section. We need to complete three checkpoints:",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "List View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 987,
+            "YMin": 92,
+            "XMax": 1015,
+            "YMax": 120
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "I am on the Tools tab of the MCP section. I need to fulfill checkpoint 1 (mcp-view-toggle) by interacting with the view toggle (Card View / List View). I clicked List View in the previous step, now I ",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Card View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 957,
+            "YMin": 92,
+            "XMax": 985,
+            "YMax": 120
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "I need to complete checkpoint 1 (mcp-view-toggle). I am on the Tools tab. I will click 'List View' (index 12) or 'Card View' (index 11) to trigger the view toggle behavior and mark checkpoint mcp-view",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "List View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/mj-view-toggle[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 987,
+            "YMin": 92,
+            "XMax": 1015,
+            "YMax": 120
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "We need to work through the remaining checkpoints. Checkpoint 1 'mcp-view-toggle' was verified in step 7/8. Now we are arriving at checkpoint 2 'mcp-scale-mode'. I will set checkpointReached to 'mcp-s",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Enable scale mode for large tool sets",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1031,
+            "YMin": 89,
+            "XMax": 1142,
+            "YMax": 123
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Scale mode' and it turned to 'Scale: ON', showing 'Showing 0 of 0 tools'. Now we need to toggle it back OFF, then move to checkpoint (3) 'mcp-favorites-filter'.",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Scale mode on: virtual scroll, paginated",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1035,
+            "YMin": 89,
+            "XMax": 1142,
+            "YMax": 123
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "We are now at checkpoint 3 (mcp-favorites-filter). Scale mode has been toggled back to OFF. We will click the 'Filters' button (index 20) to open the filter popover.",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-mcp-resource[1]/mj-mcp-dashboard[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-filter-popover[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 169,
+            "XMax": 1256,
+            "YMax": 203
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    },
+    {
+      "Instruction": "We are at checkpoint 3 (mcp-favorites-filter). The filter popover is open. I will click the 'Favorites only' filter button (index 25) to satisfy the favorite filtering exercise, confirming response in",
+      "UrlBefore": "http://localhost:4200/app/ai/MCP",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Favorites only",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[4]/label[1]/div[1]/mj-filter-chip[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 1000,
+            "YMin": 486,
+            "XMax": 1123,
+            "YMax": 514
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/MCP"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/ai/MCP",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

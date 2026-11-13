@@ -1,0 +1,93 @@
+{
+  "TestId": "93048B31-221E-416A-85A4-AABE8430D2A0",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "e98c66b4",
+  "RecordedAt": "2026-11-13T08:41:53.223Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the 'Meetings' entity (Committees app) via the Data Explorer or direct URL, or search in Data Explorer sidebar. First, let's navigate to Data Explorer, or click on Data Explorer in 'My ",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Data Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 364,
+            "YMin": 579,
+            "XMax": 634,
+            "YMax": 665
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    },
+    {
+      "Instruction": "The 'Meetings' grid is open (showing 'Meetings 294 records'). Now I need to type 'zzqxnomatch' into the 'Filter records... (press / to focus)' input box (element [18]).",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data",
+      "Action": {
+        "Method": "type",
+        "Text": "zzqxnomatch",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 586,
+            "YMin": 121,
+            "XMax": 1186,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "I typed 'zzqxnomatch' into the filter box, but the grid hasn't updated yet (it still shows 294 rows). Let me press Enter to trigger/apply the filter.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

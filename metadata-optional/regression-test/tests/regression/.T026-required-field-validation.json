@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t026-required-field-validation-error.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,validation",
@@ -51,7 +52,7 @@
     "ID": "EBA37AB4-1A44-4195-85FC-E9F776841BDE"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.798Z",
-    "checksum": "d8e40baf840fe19d0c77f57657c93dd9ecea98b7a7c6c36dfb0007dab5c5d7a6"
+    "lastModified": "2026-11-13T09:22:10.952Z",
+    "checksum": "061a4f181b0cffc5b6ae1be5be8e07b00ff3b4b7d05e55cf7fca27564b59201f"
   }
 }

@@ -1,0 +1,132 @@
+{
+  "TestId": "1AEF9642-3364-428D-B805-0480F27CF90B",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b8a0fd22",
+  "RecordedAt": "2026-11-13T09:14:48.182Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to go to Component Studio app. I will click on the application switcher dropdown next to the Home logo.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I need to switch to Component Studio. I can type 'Component Studio' into the search box or click on it directly if visible, or scroll down. 'Component Studio' ",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Component Studio",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[31]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 1178,
+            "XMax": 492,
+            "YMax": 1256
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "I am on the Component Studio app in the Components section. I need to click 'New Component', verify the 'Create New Component' dialog opens showing Name field (required), Type selection card grid, Tit",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "New Component",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/div[2]/div[1]/mj-component-browser[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 14,
+            "YMin": 114,
+            "XMax": 195,
+            "YMax": 158
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    },
+    {
+      "Instruction": "The 'Create New Component' dialog is visible. It shows: Name field (marked with red *), Type card grid (Dashboard, Report, Chart, Form, Component), Title field, and Description field below. Currently,",
+      "UrlBefore": "http://localhost:4200/app/component-studio/Components",
+      "Action": {
+        "Method": "type",
+        "Text": "Test Component",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name *",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-component-studio-resource[1]/div[1]/mj-component-studio-dashboard[1]/div[1]/mj-new-component-dialog[1]/mj-dialog[1]/div[1]/div[1]/div[2]/form[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Create New Component",
+          "BoundingBox": {
+            "XMin": 408,
+            "YMin": 158,
+            "XMax": 872,
+            "YMax": 197
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/component-studio/Components"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/component-studio/Components",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

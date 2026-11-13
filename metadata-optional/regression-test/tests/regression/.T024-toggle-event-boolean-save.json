@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t024-toggle-event-boolean-and-save.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,edit",
@@ -51,7 +52,7 @@
     "ID": "A89F9281-F137-4151-8B5D-4CB9F6732AC2"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.762Z",
-    "checksum": "eb3a71008d5d28879d19252054af36f630d0f53695506cabc62d9b421f1cbb58"
+    "lastModified": "2026-11-13T09:22:10.933Z",
+    "checksum": "4017c46c823312b2dc58bd24c29ca830ec26e4ce7729ba4f19b350930d4f22b4"
   }
 }
