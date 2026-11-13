@@ -1404,6 +1404,19 @@ export class SQLServerDataProvider
    * @param value The value to set
    * @returns SQL value string
    */
+  /**
+   * Renders a value for a numeric field as a SQL number literal, keeping the caller's digits so a
+   * high-precision decimal isn't rounded through a JS number. Throws for anything else: this text
+   * goes into the save statement as written, and a value that isn't a number must not reach it.
+   */
+  protected static RenderNumberLiteral(value: unknown, fieldName: string): string {
+    const raw = String(value).trim();
+    if (!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw)) {
+      throw new Error(`Invalid non-numeric value provided for numeric field ${fieldName}`);
+    }
+    return raw;
+  }
+
   private generateSetStatementValue(f: EntityFieldInfo, value: any): string {
     let val: any = value;
     
@@ -1442,7 +1455,7 @@ export class SQLServerDataProvider
         return `'${val}'`;
         
       case EntityFieldTSType.Number:
-        return val.toString();
+        return SQLServerDataProvider.RenderNumberLiteral(val, f.Name);
         
       default:
         // For other types, convert to string and quote if needed
@@ -1553,6 +1566,7 @@ export class SQLServerDataProvider
     if (!payload) return null;
 
     const quotes = wrapRecordIdInQuotes ? "'" : '';
+    const safeRecordID = wrapRecordIdInQuotes ? String(recordID).replace(/'/g, "''") : recordID;
     const restoreClause = payload.source === 'Restore'
       ? `,
                                                                                         @Source='Restore',
@@ -1561,7 +1575,7 @@ export class SQLServerDataProvider
       : '';
 
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
-                                                                                        @RecordID=${quotes}${recordID}${quotes},
+                                                                                        @RecordID=${quotes}${safeRecordID}${quotes},
                                                                                         @UserID='${payload.userID}',
                                                                                         @Type='${payload.type}',
                                                                                         @ChangesJSON='${payload.changesJSON}',
@@ -1611,8 +1625,8 @@ export class SQLServerDataProvider
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
       const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
-      const quotes = f.NeedsQuotes ? "'" : '';
-      return `@${f.CodeName}=${quotes}${kv.Value}${quotes}`;
+      // After a load this is the caller's key, not the row's, so it goes through the same renderer as a save.
+      return `@${f.CodeName}=${this.generateSetStatementValue(f, kv.Value)}`;
     }).join(', ');
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
