@@ -142,7 +142,8 @@ export class VitestCatchTarget extends BaseCatchTarget {
     }
 
     /**
-     * `turbo run build --filter=<pkg>...` for the packages under test, minus `Sandbox.BuildExclude`, inside the sandbox with the
+     * `turbo run build --filter=...<pkg>` (each package under test and its dependencies; turbo reads `<pkg>...` as the dependents) minus
+     * `Sandbox.BuildExclude`, inside the sandbox with the
      * local cache only. Concurrency is one task per sandbox cpu: turbo's default of ten parallel compilers exceeds the memory cap.
      * The local cache is `<WorkRoot>/turbo-cache`, shared by every build of the run, so a later build reuses the outputs of
      * packages whose inputs did not change.
@@ -150,7 +151,7 @@ export class VitestCatchTarget extends BaseCatchTarget {
     public async BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void> {
         if (packages.length === 0) return;
         const sandbox = this.o.Settings.Sandbox;
-        const filters = [...packages.map((p) => `--filter=${p}...`), ...sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
+        const filters = [...packages.map((p) => `--filter=...${p}`), ...sandbox.BuildExclude.map((p) => `--filter=!${p}`)].join(' ');
         const cmd = `npx turbo run build ${filters} --concurrency=${Math.max(1, Math.floor(sandbox.Cpus))} --cache=local:rw,remote:r --log-order=stream --summarize`;
         const cache = join(this.o.WorkRoot, TURBO_CACHE_SUBDIR); mkdirSync(cache, { recursive: true });
         const r = await this.inSandbox(revision, 'rw', ['sh', '-c', cmd], 45 * 60_000, { TURBO_CACHE_DIR: CONTAINER_TURBO_CACHE, TURBO_TELEMETRY_DISABLED: '1' }, [], [],
