@@ -91,6 +91,12 @@ export interface ResolveFormChromeResult {
     Spec: FormChromeSpec;
     RelatedRoles: RelatedFormRoleResolution;
     PolicyUsed: boolean;
+    /**
+     * Section keys an inclusion of `None` removed from the form: a relationship ruled `None`
+     * (L1 config or an L3 `MJ: Form Chrome Rules` row) and a contribution ruled `None`. These
+     * sections are not shown anywhere, so their content must not mount or load data.
+     */
+    SuppressedSectionKeys: string[];
 }
 
 /**
@@ -150,8 +156,8 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
     );
     const hidden = new Set(input.HiddenSectionKeys ?? []);
     for (const key of displayInFormFalseSectionKeys(input.Entity)) hidden.add(key);
-    for (const key of noneInclusionSectionKeys(input.Entity, assignments)) hidden.add(key);
-    for (const key of contributionGroups.hiddenKeys) hidden.add(key);
+    const suppressed = [...new Set([...noneInclusionSectionKeys(input.Entity, assignments), ...contributionGroups.hiddenKeys])];
+    for (const key of suppressed) hidden.add(key);
     const visiblePanels = input.Panels.filter((p) => !hidden.has(p.SectionKey));
     const defaultSpec = BuildDefaultChromeSpec(
         visiblePanels,
@@ -188,12 +194,12 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
         ApplyEmptySectionBehavior(spec, input.EmptySectionBehavior, visiblePanels);
         ApplyFormChromeRuleTitles(spec, input.Entity, input.ChromeRules ?? []);
-        return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
+        return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true, SuppressedSectionKeys: suppressed };
     }
 
     ApplyEmptySectionBehavior(defaultSpec, input.EmptySectionBehavior, visiblePanels);
     ApplyFormChromeRuleTitles(defaultSpec, input.Entity, input.ChromeRules ?? []);
-    return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
+    return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false, SuppressedSectionKeys: suppressed };
 }
 
 /**
@@ -223,6 +229,57 @@ export function ApplyEmptySectionBehavior(
     spec.Groups = spec.Groups.filter((g) => g.IsMore || g.SectionKeys.length > 0);
     spec.MoreSectionKeys = spec.MoreSectionKeys.filter((key) => !hide.has(key));
     return RebuildChromeSpecMembership(spec, [...more], panels);
+}
+
+/** Key of the rail group that gathers related sections with no rows (populated-first ordering). */
+export const NO_RECORDS_GROUP_KEY = '__mj_form_no_records';
+
+/**
+ * The first-class related-entity groups that have no rows, for populated-first ordering.
+ *
+ * A group counts only when every one of its sections is a related-entity section and every one
+ * has a known count of 0; a section with no known count is treated as populated, so a count that
+ * never arrives (counting turned off) cannot gather a section with rows. Lead groups, Details,
+ * More and the groups in `keep` (the one the user is on) are never gathered.
+ */
+export function EmptyRelatedGroupKeys(
+    spec: FormChromeSpec,
+    rowCountOf: (sectionKey: string) => number | undefined,
+    keep: ReadonlySet<string> = new Set(),
+): string[] {
+    return spec.Groups
+        .filter((g) => !g.IsMore && !g.IsLead && g.Key !== DETAILS_SECTION_KEY && g.Key !== NO_RECORDS_GROUP_KEY && !keep.has(g.Key))
+        .filter((g) => g.SectionKeys.length > 0 && g.SectionKeys.every((key) => spec.RelatedRoles.has(key)))
+        .filter((g) => g.SectionKeys.every((key) => rowCountOf(key) === 0))
+        .map((g) => g.Key);
+}
+
+/**
+ * Populated-first related sections: the groups named in `emptyGroupKeys` leave their places and
+ * are gathered into one "No records" group after every other first-class group (before More).
+ * Every other group keeps its relative order, so the populated related groups now come before
+ * the empty ones. The gathered group still shows each section, so a first record can be added
+ * from its grid. A spec with none of those groups is returned unchanged.
+ */
+export function GatherEmptyRelatedGroups(
+    spec: FormChromeSpec,
+    emptyGroupKeys: ReadonlySet<string>,
+    title = 'No records',
+): FormChromeSpec {
+    const gathered = spec.Groups.filter((g) => !g.IsMore && emptyGroupKeys.has(g.Key));
+    if (gathered.length === 0) return spec;
+    const kept = spec.Groups.filter((g) => g.IsMore || !emptyGroupKeys.has(g.Key));
+    const noRecords: FormChromeGroup = {
+        Key: NO_RECORDS_GROUP_KEY,
+        Title: title,
+        Icon: 'fa-regular fa-folder-open',
+        SectionKeys: gathered.flatMap((g) => g.SectionKeys),
+        IsMore: false,
+    };
+    const firstMore = kept.findIndex((g) => g.IsMore);
+    const at = firstMore < 0 ? kept.length : firstMore;
+    spec.Groups = [...kept.slice(0, at), noRecords, ...kept.slice(at)];
+    return spec;
 }
 
 /**

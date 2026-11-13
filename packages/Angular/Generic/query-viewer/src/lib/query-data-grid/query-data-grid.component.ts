@@ -59,6 +59,7 @@ import {
     DEFAULT_QUERY_VISUAL_CONFIG,
     QueryRowClickEvent,
     QueryEntityLinkClickEvent,
+    EntityLinkRecordKey,
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryExportOptions,
@@ -719,6 +720,16 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             return container;
         }
 
+        // The link shows the cell's value; it opens the record by the column's key field when it
+        // names one (a name column), else by the value itself. With no key it is plain text.
+        const recordId = EntityLinkRecordKey(col, params.data, params.value);
+        if (recordId === null) {
+            const plain = document.createElement('span');
+            plain.textContent = String(params.value);
+            container.appendChild(plain);
+            return container;
+        }
+
         const link = document.createElement('a');
         link.href = 'javascript:void(0)';
         link.className = 'entity-link';
@@ -730,7 +741,7 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             e.stopPropagation();
             this.EntityLinkClick.emit({
                 entityName: col.targetEntityName!,
-                recordId: String(params.value),
+                recordId,
                 column: col,
                 rowData: params.data
             });

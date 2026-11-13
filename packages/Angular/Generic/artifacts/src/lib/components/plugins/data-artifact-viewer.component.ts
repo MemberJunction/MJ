@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
-import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
+import { QueryGridColumnConfig, QueryEntityLinkClickEvent, ResolveTargetEntity, InferNameFieldLinks } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer, NavigationRequest } from '../base-artifact-viewer.component';
 import { QueryVersionDiffComponent } from '../version-diff/query-version-diff.component';
@@ -407,9 +407,11 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (!hasMetadata) return null;
 
     const md = this.ProviderToUse;
-    return columns.map((col, index) => {
-      const target = resolveTargetEntity(col.sourceEntity, col.sourceFieldName, md);
-      const isEntityLink = !!(target.targetEntityName && (target.isPrimaryKey || target.isForeignKey));
+    const configs = columns.map((col, index) => {
+      const target = ResolveTargetEntity(col.sourceEntity, col.sourceFieldName, md);
+      // An explicit key field makes the column a link to its source entity, opened by that field.
+      const explicitTarget = col.linkKeyField ? md.EntityByName(col.sourceEntity ?? '') : undefined;
+      const isEntityLink = !!explicitTarget || !!(target.targetEntityName && (target.isPrimaryKey || target.isForeignKey));
       const baseType = (col.sqlBaseType || 'nvarchar').toLowerCase();
 
       let align: 'left' | 'center' | 'right' = 'left';
@@ -437,14 +439,17 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         sourceEntityName: col.sourceEntity,
         sourceFieldName: col.sourceFieldName,
         isEntityLink,
-        targetEntityName: target.targetEntityName,
-        targetEntityId: target.targetEntityId,
-        targetEntityIcon: target.targetEntityIcon,
-        isPrimaryKey: target.isPrimaryKey,
-        isForeignKey: target.isForeignKey,
+        targetEntityName: explicitTarget ? explicitTarget.Name : target.targetEntityName,
+        targetEntityId: explicitTarget ? explicitTarget.ID : target.targetEntityId,
+        targetEntityIcon: explicitTarget ? explicitTarget.Icon || undefined : target.targetEntityIcon,
+        linkKeyField: explicitTarget ? col.linkKeyField : undefined,
+        isPrimaryKey: explicitTarget ? false : target.isPrimaryKey,
+        isForeignKey: explicitTarget ? false : target.isForeignKey,
         pinned: null,
       } as QueryGridColumnConfig;
     });
+    // A column holding its entity's name links by that entity's key column when the table has one.
+    return InferNameFieldLinks(configs, md);
   }
 
   /**

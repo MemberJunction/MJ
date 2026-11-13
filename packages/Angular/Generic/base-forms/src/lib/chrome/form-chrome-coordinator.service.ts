@@ -4,6 +4,16 @@ import { DEFAULT_FORM_CHROME_SPEC, MORE_SECTION_KEY, type FormChromeSpec } from 
 import { StabilizeFirstClassGroupOrder } from './resolve-form-chrome';
 
 /**
+ * Which sections an inclusion of `None` removed, as the container pushes it to the form.
+ * `RulesResolved` is false until the entity's chrome rules have loaded and been applied;
+ * until then a lazily loaded section must not load (it may be about to be suppressed).
+ */
+export interface FormChromeSuppression {
+    RulesResolved: boolean;
+    SuppressedSectionKeys: ReadonlySet<string>;
+}
+
+/**
  * Per-container chrome state. Provided by `<mj-record-form-container>` so
  * projected panels and fill-in stock grids share one spec.
  */
@@ -26,8 +36,47 @@ export class FormChromeCoordinator {
         this.SectionsChanged.next();
     }
 
-    public Apply(spec: FormChromeSpec): void {
-        this.Spec = StabilizeFirstClassGroupOrder(this.Spec, spec);
+    /**
+     * True once the L3 `MJ: Form Chrome Rules` for the current entity have loaded and a resolve
+     * has applied them. Until then a section that an admin ruled `None` is not yet known, so
+     * {@link IsSuppressed} answers `undefined`.
+     */
+    public RulesResolved = false;
+    private suppressedSectionKeys: ReadonlySet<string> = new Set<string>();
+
+    /**
+     * Whether an inclusion of `None` removed this section from the form. `undefined` while the
+     * rules are pending ({@link RulesResolved} false); `true` / `false` once they are applied.
+     */
+    public IsSuppressed(sectionKey: string): boolean | undefined {
+        if (!this.RulesResolved) return undefined;
+        return this.suppressedSectionKeys.has(sectionKey);
+    }
+
+    /** The current suppression state, as pushed to the form (see `BaseFormComponent.SetChromeSuppression`). */
+    public get Suppression(): FormChromeSuppression {
+        return { RulesResolved: this.RulesResolved, SuppressedSectionKeys: this.suppressedSectionKeys };
+    }
+
+    /** Records the rules as applied, with the section keys they suppress. */
+    public SetSuppressed(sectionKeys: readonly string[]): void {
+        this.RulesResolved = true;
+        this.suppressedSectionKeys = new Set(sectionKeys);
+    }
+
+    /** Back to pending: the entity changed, so its rules have to load again. */
+    public ResetSuppression(): void {
+        this.RulesResolved = false;
+        this.suppressedSectionKeys = new Set<string>();
+    }
+
+    /**
+     * Apply a resolved spec. The first-class order is kept from the previous spec so the rail
+     * does not reshuffle on every re-resolve; pass `Reordered: true` for the one deliberate
+     * reorder (populated-first related sections), which must not be undone that way.
+     */
+    public Apply(spec: FormChromeSpec, options?: { Reordered?: boolean }): void {
+        this.Spec = options?.Reordered ? spec : StabilizeFirstClassGroupOrder(this.Spec, spec);
         if (spec.Layout === 'left-nav') {
             // A More child is a valid active key too: it is never a group of its own.
             const active = this.ActiveGroupKey;
@@ -60,6 +109,7 @@ export class FormChromeCoordinator {
      */
     public IsAccordionSectionVisible(sectionKey: string): boolean {
         if (this.Spec.Layout !== 'accordion') return true;
+        if (this.IsSuppressed(sectionKey) === true) return false;
         if (this.Spec.MoreSectionKeys.includes(sectionKey)) return this.MoreExpanded;
         return true;
     }

@@ -52,6 +52,9 @@ class RefusingEntity extends BaseEntity {
       result.Success = false;
       result.Message = this.refusalMessage;
       result.Errors = this.refuseWith;
+      // The GraphQL provider builds Message from the server's errors and says so, so the form's
+      // CompleteMessage read does not repeat them.
+      result.MessageIncludesErrors = this.refuseWith.length > 0 && !!this.refusalMessage;
       this.RegisterResultHistoryEntry(result);
       return false;
     }

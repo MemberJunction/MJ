@@ -183,6 +183,39 @@ describe('MjFormToolbarComponent (DOM)', () => {
     });
   });
 
+  describe('edit-banner record name (#5689)', () => {
+    const DEALS = { ...ENTITY_INFO, Name: 'Sales: Deals', DisplayNameOrName: 'Deals' } as unknown as EntityInfo;
+    const bannerName = (f: Fx) => (query(f, '.mj-forms-edit-banner-record-name')?.textContent ?? '').trim();
+
+    it('shows "New <singular>" for a new record with no name yet', () => {
+      const record = { ...RECORD, EntityInfo: DEALS, IsSaved: false, PrimaryKey: { ToConcatenatedString: () => 'ID|00000000-0000-0000-0000-000000000001', KeyValuePairs: [] } };
+      const f = render({ EditMode: true, Record: record, EntityInfo: DEALS });
+      expect(bannerName(f)).toBe(': New Deal');
+    });
+
+    it('shows the bare key value, without the field-name prefix, for a saved record with no name', () => {
+      const record = {
+        ...RECORD,
+        EntityInfo: DEALS,
+        PrimaryKey: { ToConcatenatedString: () => 'ID|00000000-0000-0000-0000-0000000000AB', KeyValuePairs: [{ FieldName: 'ID', Value: '00000000-0000-0000-0000-0000000000AB' }] },
+      };
+      const f = render({ EditMode: true, Record: record, EntityInfo: DEALS });
+      expect(bannerName(f)).toBe(': 00000000-0000-0000-0000-0000000000AB');
+    });
+  });
+
+  describe('IS-A breadcrumb (#5693)', () => {
+    it('shows the display names of the parent and current entities, not their raw names', () => {
+      const parent = { ID: 'P1', Name: 'Sample_Common: Organizations', DisplayNameOrName: 'Organizations' };
+      const child = { ...ENTITY_INFO, Name: 'Sample_Sales: Sales Accounts', DisplayNameOrName: 'Sales Accounts', ParentChain: [parent] } as unknown as EntityInfo;
+      const f = render({ Record: { ...RECORD, EntityInfo: child }, EntityInfo: child });
+      const parentBadge = query(f, '.mj-entity-badge--parent') as HTMLElement;
+      expect(parentBadge.textContent?.trim()).toBe('Organizations');
+      expect(parentBadge.getAttribute('title')).toBe('Navigate to parent: Organizations');
+      expect(query(f, '.mj-entity-badge--current')?.textContent?.trim()).toBe('Sales Accounts');
+    });
+  });
+
   describe('edit-banner mode', () => {
     it('renders Save + Discard and hides the view-mode actions', () => {
       const f = render({ EditMode: true });

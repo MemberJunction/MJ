@@ -19,6 +19,7 @@ import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.
 import { TemplateParamsGridComponent } from "./Templates/template-params-grid.component";
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { MJAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
+import { AIPromptSamplingFieldsComponent } from "./AIPrompts/ai-prompt-sampling-fields.component";
 import { MJAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
@@ -138,6 +139,7 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         TemplateParamsGridComponent,
         TemplateEditorComponent,
         MJAIPromptFormComponentExtended,
+        AIPromptSamplingFieldsComponent,
         MJAIAgentFormComponentExtended,
         NewAgentDialogComponent,
         AddActionDialogComponent,

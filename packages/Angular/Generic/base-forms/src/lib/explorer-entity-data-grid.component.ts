@@ -10,11 +10,17 @@ import {
     AfterDataLoadEventArgs,
     GridToolbarConfig,
     GridSelectionMode,
+    GridColumnConfig,
     buildCompositeKey
 } from '@memberjunction/ng-entity-viewer';
+import { ViewGridState } from '@memberjunction/core-entities';
+import { type CompositeFilterDescriptor } from '@memberjunction/core';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
 import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid-height';
+
+/** The inner grid's user filter: a filter-builder descriptor, or none. */
+type GridUserFilter = CompositeFilterDescriptor | null;
 
 /**
  * Wrapper for EntityDataGridComponent that emits navigation events on row double-click.
@@ -31,10 +37,14 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
         <mj-entity-data-grid
             #innerGrid
             [Params]="Params"
+            [Columns]="Columns"
+            [GridState]="GridState"
             [NewRecordValues]="NewRecordValues"
             [AllowLoad]="EffectiveAllowLoad"
             [ShowToolbar]="EffectiveShowToolbar"
             [ShowSearch]="ShowSearch"
+            [ShowFilterButton]="ShowFilterButton"
+            [UserFilter]="UserFilter"
             [ShowNewButton]="ShowNewButton"
             [ShowRefreshButton]="ShowRefreshButton"
             [ShowExportButton]="ShowExportButton"
@@ -52,6 +62,7 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
             (AfterRowDoubleClick)="onRowDoubleClick($event)"
             (AfterRowClick)="onRowClick($event)"
             (AfterDataLoad)="onDataLoad($event)"
+            (UserFilterChange)="OnUserFilterChange($event)"
             (MergeRecordsRequested)="MergeRecordsRequested.emit($event)"
             (NewRecordTabRequested)="onNewRecordTabRequested($event)">
         </mj-entity-data-grid>
@@ -123,6 +134,30 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     }
     /** Search box on the left of the toolbar. Default true. */
     @Input() ShowSearch: boolean = true;
+    /**
+     * Shows the inner grid's Filter button. Off by default; the user's filter narrows the rows
+     * within this grid's `Params.ExtraFilter` (for a related grid, the join to the parent record).
+     */
+    @Input() ShowFilterButton: boolean = false;
+
+    private _userFilter: GridUserFilter = null;
+    /** The user's filter, forwarded to the inner grid. Bind with {@link UserFilterChange} to keep it. */
+    @Input()
+    set UserFilter(value: GridUserFilter) {
+        this._userFilter = value ?? null;
+    }
+    get UserFilter(): GridUserFilter {
+        return this._userFilter;
+    }
+
+    /** Re-emits the inner grid's user filter changes. */
+    @Output() UserFilterChange = new EventEmitter<GridUserFilter>();
+
+    OnUserFilterChange(filter: GridUserFilter): void {
+        this._userFilter = filter;
+        this.UserFilterChange.emit(filter);
+    }
+
     /** Forwarded to the inner grid. Defaults match `<mj-entity-data-grid>`. */
     @Input() ShowNewButton: boolean = true;
     @Input() ShowRefreshButton: boolean = true;
@@ -147,6 +182,29 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() MaxHeight: number | null = RELATED_GRID_DEFAULT_MAX_PX;
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
+
+    private _columns: GridColumnConfig[] = [];
+    /**
+     * Columns to show, in order, with any host formatting. Empty means the inner grid picks
+     * them from the entity's metadata. Forwarded to the inner grid's `Columns`.
+     */
+    @Input()
+    set Columns(value: GridColumnConfig[] | null) {
+        this._columns = value ?? [];
+    }
+    get Columns(): GridColumnConfig[] {
+        return this._columns;
+    }
+
+    private _gridState: ViewGridState | null = null;
+    /** Saved column layout and sort for the inner grid. Forwarded to the inner grid's `GridState`. */
+    @Input()
+    set GridState(value: ViewGridState | null) {
+        this._gridState = value ?? null;
+    }
+    get GridState(): ViewGridState | null {
+        return this._gridState;
+    }
 
     /**
      * Related-entity grids (accordion and left-nav) and explicit fit-content grids

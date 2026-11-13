@@ -694,6 +694,20 @@
               </div>
             </div>
           </mj-accordion-panel>
+          <!-- Sampling Expansion Panel -->
+          <mj-accordion-panel
+            [Expanded]="false"
+            style="margin-bottom: 12px;">
+            <ng-template mjAccordionTitle>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-dice" style="color: var(--mj-text-muted);"></i>
+                Sampling
+              </span>
+            </ng-template>
+            <div style="padding: 16px 0;">
+              <mj-ai-prompt-sampling-fields [Record]="record" [EditMode]="EditMode"></mj-ai-prompt-sampling-fields>
+            </div>
+          </mj-accordion-panel>
           <!-- Template Parameters Expansion Panel -->
           @if (template && templateParams.length > 0) {
             <mj-accordion-panel SectionKey="parameters" SectionTitle="Template Parameters" SectionIcon="fa-solid fa-sliders"

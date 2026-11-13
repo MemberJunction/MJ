@@ -1,0 +1,33 @@
+.sampling-note {
+  margin: 0 0 12px 0;
+  font-size: 0.85em;
+  color: var(--mj-text-muted);
+}
+
+.sampling-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+}
+
+/* Same row layout as a read-mode mj-form-field (its width and gap variables are scoped to that
+   component, hence the fallbacks), so the two line up in the grid */
+.sampling-default {
+  display: grid;
+  grid-template-columns: var(--mj-forms-field-label-width, 200px) 1fr;
+  gap: var(--mj-forms-field-gap, 12px);
+  align-items: baseline;
+  padding: 8px 0;
+}
+
+.sampling-default-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.sampling-default-value {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--mj-text-muted);
+}

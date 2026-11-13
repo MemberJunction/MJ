@@ -8,7 +8,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { CompositeKey, Metadata, RunView, LogError } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView, RunViewParams, RunViewResult, LogError } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine, MJSearchScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, UUIDMap, IndexByUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -269,6 +269,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     ];
 
     ngAfterViewInit(): void {
+        // A credential added elsewhere (Credentials dashboard, another tab) shows up in the
+        // pickers when the user comes back to this cached tab.
+        this.WatchEntities('MJ: Credentials');
         this.loadConfiguration();
         this.emitAgentContext();
         this.registerAgentTools();
@@ -1166,11 +1169,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [modelsResult, credentialsResult] = await rv.RunViews([
                 { EntityName: 'MJ: AI Models', ResultType: 'simple' },
-                { EntityName: 'MJ: Credentials', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name'], ResultType: 'simple' }
+                KnowledgeConfigResourceComponent.credentialsView
             ]);
             this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
-            this.AvailableCredentials = (credentialsResult.Success ? credentialsResult.Results : [])
-                .map((c: Record<string, unknown>) => ({ ID: String(c['ID']), Name: String(c['Name']) }));
+            this.AvailableCredentials = KnowledgeConfigResourceComponent.toCredentialOptions(credentialsResult);
         } catch (error) {
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
@@ -1180,6 +1182,43 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
         // Load FTS entities in background (doesn't block main config)
         this.loadFTSEntities();
+    }
+
+    /** The active credentials the provider pickers offer. */
+    private static readonly credentialsView: RunViewParams = {
+        EntityName: 'MJ: Credentials', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name'], ResultType: 'simple'
+    };
+
+    private static toCredentialOptions(result: RunViewResult<Record<string, unknown>>): { ID: string; Name: string }[] {
+        return (result.Success ? result.Results : []).map(c => ({ ID: String(c['ID']), Name: String(c['Name']) }));
+    }
+
+    /**
+     * A credential was saved or deleted while this tab was cached: reload the credential list the
+     * provider pickers read, and the names shown against each provider.
+     */
+    protected override async OnStaleOnReattach(): Promise<void> {
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<Record<string, unknown>>(KnowledgeConfigResourceComponent.credentialsView);
+            if (!result.Success) {
+                return;
+            }
+            this.AvailableCredentials = KnowledgeConfigResourceComponent.toCredentialOptions(result);
+            // A renamed credential shows its new name; a provider whose credential is no longer
+            // offered keeps the name it was loaded with.
+            const credentialNames = new UUIDMap(this.AvailableCredentials.map(c => [c.ID, c.Name] as const));
+            for (const provider of this.VectorDBProviders) {
+                const name = provider.CredentialID ? credentialNames.Get(provider.CredentialID) : undefined;
+                if (name !== undefined) {
+                    provider.CredentialName = name;
+                }
+            }
+        } catch (error) {
+            console.error('[KnowledgeConfig] Error reloading credentials:', error);
+        } finally {
+            this.RefreshView();
+        }
     }
 
     private async loadFTSEntities(): Promise<void> {

@@ -1,5 +1,5 @@
 import { Injectable, Type } from '@angular/core';
-import { IMetadataProvider, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { FormScopeAllowedOnEntity, InteractiveFormsEngine, IsSelectableFormOverride } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
@@ -124,11 +124,48 @@ export class FormResolverService {
             return { kind: 'interactive', override: active, variants, standard };
         }
 
-        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entity.Name);
+        const reg = this.classRegistrationForEntity(entity);
         return reg
-            ? { kind: 'class', subClass: reg.SubClass as Type<BaseFormComponent>, variants, standard }
+            ? { kind: 'class', subClass: reg, variants, standard }
             : { kind: 'none', variants, standard };
     }
+
+    /**
+     * The highest-priority class form registered for the entity. When the entity has none and is
+     * an IS-A child, the nearest parent with a registered form is used instead: the child record
+     * carries every parent field and shares the parent's primary key, so the parent form binds
+     * to it. The child's own fields are not shown on that form. Only class registrations are
+     * inherited; a parent's `EntityFormOverride` rows are scoped to the parent and are not.
+     */
+    private classRegistrationForEntity(entity: EntityInfo): Type<BaseFormComponent> | null {
+        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entity.Name);
+        if (reg) return reg.SubClass as Type<BaseFormComponent>;
+        const parent = this.nearestParentWithForm(entity);
+        if (!parent) return null;
+        const parentReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, parent.Name);
+        return parentReg ? parentReg.SubClass as Type<BaseFormComponent> : null;
+    }
+
+    /**
+     * The nearest IS-A ancestor (parent first, then grandparent, ...) that has a class form
+     * registered, or null. Logs once per child entity when a parent form is used, so an app
+     * author can see why the child's own fields are missing from the form.
+     */
+    private nearestParentWithForm(entity: EntityInfo): EntityInfo | null {
+        for (const parent of entity.ParentChain ?? []) {
+            if (MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormComponent, parent.Name).length === 0) continue;
+            const childKey = entity.Name.trim().toLowerCase();
+            if (!FormResolverService.loggedParentFallbacks.has(childKey)) {
+                FormResolverService.loggedParentFallbacks.add(childKey);
+                LogStatus(`No form is registered for "${entity.Name}"; using the form of its IS-A parent "${parent.Name}". Fields of "${entity.Name}" itself are not shown until it has its own form.`);
+            }
+            return parent;
+        }
+        return null;
+    }
+
+    /** Child entities whose parent-form fallback has been logged, so it is logged once. */
+    private static readonly loggedParentFallbacks = new Set<string>();
 
     /**
      * The CodeGen-generated ("standard") form class for an entity, or null
@@ -146,7 +183,12 @@ export class FormResolverService {
      * one registration, that registration is the standard form.
      */
     ResolveStandardForm(entity: EntityInfo): Type<BaseFormComponent> | null {
-        const regs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormComponent, entity.Name);
+        let regs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormComponent, entity.Name);
+        if (regs.length === 0) {
+            // An IS-A child with no form of its own uses its nearest parent's (see classRegistrationForEntity).
+            const parent = this.nearestParentWithForm(entity);
+            if (parent) regs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseFormComponent, parent.Name);
+        }
         if (regs.length === 0) return null;
         let lowest = regs[0];
         for (const r of regs) {

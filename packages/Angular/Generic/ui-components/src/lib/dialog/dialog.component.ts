@@ -8,6 +8,13 @@ import {
   OnDestroy,
   inject
 } from '@angular/core';
+import {
+  CaptureFocusedElement,
+  FirstEnabledElement,
+  GetTabStops,
+  RestoreFocusTo,
+  WrapTabAtEnds,
+} from '../shared/modal-focus';
 
 export type MjDialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'auto';
 
@@ -109,9 +116,6 @@ export class MJDialogComponent implements OnDestroy {
   private static readonly openDialogs: MJDialogComponent[] = [];
   private static nextId = 0;
 
-  private static readonly TAB_STOP_SELECTOR =
-    'a[href], button, input, select, textarea, [contenteditable]:not([contenteditable="false"]), [tabindex]';
-
   private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this._visible) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
@@ -131,11 +135,11 @@ export class MJDialogComponent implements OnDestroy {
     // A dropdown or calendar focuses its field and leaves the key alone. The key
     // started in the overlay, so the container never saw it. Wrap at the ends.
     if (focusInside && startedOutside) {
-      this.wrapTabAtEnds(event, container);
+      WrapTabAtEnds(event, container);
       return;
     }
     if (focusInside) return;
-    const stops = this.tabStops(container);
+    const stops = GetTabStops(container);
     event.preventDefault();
     const target = stops.length === 0 ? container : (event.shiftKey ? stops[stops.length - 1] : stops[0]);
     target.focus();
@@ -263,35 +267,7 @@ export class MJDialogComponent implements OnDestroy {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     const container = event.currentTarget;
     if (!(container instanceof HTMLElement)) return;
-    this.wrapTabAtEnds(event, container);
-  }
-
-  /**
-   * Tab on the last stop wraps to the first. Shift+Tab on the first stop or the
-   * container wraps to the last. A Tab in the middle is left for the browser.
-   */
-  private wrapTabAtEnds(event: KeyboardEvent, container: HTMLElement): void {
-    const stops = this.tabStops(container);
-    if (stops.length === 0) {
-      event.preventDefault();
-      container.focus();
-      return;
-    }
-
-    const active = document.activeElement;
-    const index = active instanceof HTMLElement ? stops.indexOf(active) : -1;
-    const onContainer = active === container;
-    if (event.shiftKey) {
-      if (index === 0 || onContainer) {
-        event.preventDefault();
-        stops[stops.length - 1].focus();
-      }
-      return;
-    }
-    if (index === stops.length - 1) {
-      event.preventDefault();
-      stops[0].focus();
-    }
+    WrapTabAtEnds(event, container);
   }
 
   ngOnDestroy(): void {
@@ -308,8 +284,7 @@ export class MJDialogComponent implements OnDestroy {
     this.rememberOpen();
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', this.onDocumentKeyDown);
-    const active = document.activeElement;
-    this.previouslyFocused = active instanceof HTMLElement ? active : null;
+    this.previouslyFocused = CaptureFocusedElement();
     if (this.AutoFocus) {
       this.scheduleInitialFocus();
     }
@@ -371,37 +346,22 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   private initialFocusTarget(container: HTMLElement): HTMLElement {
-    const marked = this.firstEnabled(container.querySelectorAll<HTMLElement>('[data-autofocus]'));
+    const marked = FirstEnabledElement(container.querySelectorAll<HTMLElement>('[data-autofocus]'));
     if (marked) return marked;
 
-    const field = this.firstEnabled(container.querySelectorAll<HTMLElement>(
+    const field = FirstEnabledElement(container.querySelectorAll<HTMLElement>(
       '.mj-dialog-body input, .mj-dialog-body select, .mj-dialog-body textarea',
     ));
     if (field) return field;
 
-    const button = this.firstEnabled(
+    // The ✕ is skipped only for the button fallback.
+    const button = FirstEnabledElement(
       container.querySelectorAll<HTMLElement>('.mj-dialog-body button, .mj-dialog-actions button'),
-      true,
+      (el) => el.classList.contains('mj-dialog-close'),
     );
     if (button) return button;
 
     return container;
-  }
-
-  /**
-   * First element that can take focus. The ✕ is skipped only for the button fallback. A hidden or
-   * inert element is skipped too: `.focus()` on one is a silent no-op, which would leave focus
-   * outside the dialog.
-   */
-  private firstEnabled(nodes: NodeListOf<HTMLElement>, skipClose = false): HTMLElement | null {
-    for (const el of Array.from(nodes)) {
-      if (skipClose && el.classList.contains('mj-dialog-close')) continue;
-      if (this.isDisabled(el)) continue;
-      if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
-      if (!this.isVisibleStop(el)) continue;
-      return el;
-    }
-    return null;
   }
 
   private restoreFocus(): void {
@@ -409,73 +369,12 @@ export class MJDialogComponent implements OnDestroy {
     this.previouslyFocused = null;
     if (!this.RestoreFocus) return;
     // The trigger is outside the dialog. An element inside this host is about to be removed.
-    if (target && target !== document.body && document.contains(target) && !this.host.nativeElement.contains(target)) {
-      target.focus();
-      return;
-    }
-    this.focusDocumentBody();
-  }
-
-  /** `document.body.focus()` is a no-op unless body is a focusable area; blur lands on body. */
-  private focusDocumentBody(): void {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement && active !== document.body) {
-      active.blur();
-    }
-    if (document.activeElement !== document.body) {
-      document.body.focus();
-    }
+    RestoreFocusTo(target, this.host.nativeElement);
   }
 
   private containerElement(): HTMLElement | null {
     const found = this.host.nativeElement.querySelector('.mj-dialog-container');
     return found instanceof HTMLElement ? found : null;
-  }
-
-  private tabStops(container: HTMLElement): HTMLElement[] {
-    return Array.from(container.querySelectorAll<HTMLElement>(MJDialogComponent.TAB_STOP_SELECTOR)).filter((el) =>
-      this.isTabStop(el),
-    );
-  }
-
-  /** Real controls only. `tabindex="-1"` (including the container) is the fallback, not a stop. */
-  private isTabStop(el: HTMLElement): boolean {
-    if (el.getAttribute('tabindex') === '-1') return false;
-    if (this.isDisabled(el)) return false;
-    if (el instanceof HTMLInputElement && el.type === 'hidden') return false;
-    if (!this.isVisibleStop(el)) return false;
-    return true;
-  }
-
-  /**
-   * display:none, [hidden] and [inert] (a collapsed accordion body) take the whole subtree out of
-   * focus. visibility is inherited, and a child can set visible again, so that check is only on the
-   * element itself.
-   */
-  private isVisibleStop(el: HTMLElement): boolean {
-    if (getComputedStyle(el).visibility === 'hidden') return false;
-    let current: HTMLElement | null = el;
-    while (current) {
-      if (current.hasAttribute('hidden') || current.hasAttribute('inert')) return false;
-      if (getComputedStyle(current).display === 'none') return false;
-      current = current.parentElement;
-    }
-    return true;
-  }
-
-  private isDisabled(el: HTMLElement): boolean {
-    if (
-      el instanceof HTMLButtonElement ||
-      el instanceof HTMLInputElement ||
-      el instanceof HTMLSelectElement ||
-      el instanceof HTMLTextAreaElement ||
-      el instanceof HTMLFieldSetElement ||
-      el instanceof HTMLOptGroupElement ||
-      el instanceof HTMLOptionElement
-    ) {
-      return el.disabled;
-    }
-    return el.hasAttribute('disabled');
   }
 }
 

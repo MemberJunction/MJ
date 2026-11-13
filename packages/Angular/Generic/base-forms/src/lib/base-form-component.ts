@@ -21,6 +21,7 @@ import { BaseRecordComponent } from './base-record-component';
 import type { BaseFormPanel } from './panel-slot/base-form-panel';
 import { MergePanelValidation } from './panel-slot/merge-panel-validation';
 import type { FormCompositionSnapshot } from './chrome/form-composition-snapshot';
+import type { FormChromeSuppression } from './chrome/form-chrome-coordinator.service';
 import { BaseFormSectionInfo } from './base-form-section-info';
 import { MjCollapsiblePanelComponent } from './panel/collapsible-panel.component';
 import { FormNavigationEvent } from './types/navigation-events';
@@ -42,7 +43,7 @@ import { CollectFormContributionRegistrations } from './panel-slot/collect-form-
 import type { FormContributionRegistration } from './panel-slot/form-contribution';
 import { FORM_PLACEMENT_PREVIEW } from './panel-slot/placement-preview';
 import { FormContextsEqual } from './base-form-component-internals';
-import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
+import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys, RegistrationsForRecordState } from './panel-slot/form-contribution';
 import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
 /** Options for {@link BaseFormComponent.RefreshRecord}. */
@@ -311,6 +312,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * never asked for.
    */
   public get OwnsEntireFormBody(): boolean { return false; }
+
+  /**
+   * Opt in to populated-first related sections on a left-nav form. Once every related
+   * section's row count is known, related sections with no rows leave their places on the
+   * rail and are gathered into one "No records" item at the end of the first-class items, so
+   * the sections with data come first. Each gathered section still shows its grid, so a first
+   * record can be added. The rail is reordered once per record and does not move again as
+   * counts change. Off by default: some forms rely on a deliberate section order. Override in
+   * a form subclass to turn it on.
+   */
+  public get PopulatedRelatedSectionsFirst(): boolean { return false; }
 
   /**
    * Last composition snapshot the container published — what is actually on this form:
@@ -698,7 +710,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         return true;
       }
 
-      const serverMsg = this.record.LatestResult?.Message || '';
+      const serverMsg = this.latestResultMessage();
       const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
       // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
       // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
@@ -1284,8 +1296,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public get formContext(): FormContext {
     // One collector read per access; both contribution-derived values come from it.
     const entity = this.record?.EntityInfo;
+    // Only the contributions that apply to the record's state (`visibleWhen`) claim fields or hide sections.
     const regs = entity
-      ? CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview })
+      ? RegistrationsForRecordState(CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview }), this.record?.IsSaved)
       : null;
     const next: FormContext = {
       sectionFilter: this.searchFilter,
@@ -1469,10 +1482,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         : new BaseFormSectionInfo(s.sectionKey, s.sectionName, s.isExpanded, s.rowCount, s.metadata)
     );
     this.sectionMap.clear();
+    this.seededExpandedSectionKeys.clear();
     this.sections.forEach(section => {
       this.sectionMap.set(section.sectionKey, section);
+      if (section.isExpanded) this.seededExpandedSectionKeys.add(section.sectionKey);
     });
   }
+
+  /**
+   * Sections `initSections()` seeded expanded (field sections). Kept apart from
+   * `BaseFormSectionInfo.isExpanded`, which follows the user's toggles, because chrome-rule
+   * gating needs the form's own default: a section seeded collapsed loads lazily.
+   */
+  private seededExpandedSectionKeys = new Set<string>();
 
   protected getSection(sectionKey: string): BaseFormSectionInfo | undefined {
     return this.sectionMap.get(sectionKey);
@@ -1480,6 +1502,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
     const section = this.sectionMap.get(sectionKey);
+    // A section an admin ruled `None` (Form Chrome Rules) is shown nowhere, so it reports
+    // collapsed whatever the user's saved state says: every lazy loader (a related grid's
+    // [AllowLoad], a contribution panel) asks here, and none of them should load its data.
+    if (this.isSuppressedOrPending(sectionKey, defaultExpanded ?? this.seededExpandedSectionKeys.has(sectionKey))) {
+      return false;
+    }
     // When the caller doesn't pass an explicit default, fall back to the value seeded by
     // initSections() — related-entity and System Metadata panels are seeded collapsed there.
     // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
@@ -1498,6 +1526,36 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
+  }
+
+  /**
+   * Chrome-rule suppression pushed by `<mj-record-form-container>`, which owns the chrome
+   * coordinator. `null` for a form outside a container: nothing is gated.
+   */
+  private chromeSuppression: FormChromeSuppression | null = null;
+
+  /**
+   * Called by the form container as the entity's chrome rules load. Until `RulesResolved`,
+   * sections that start collapsed (related grids, contribution panels — the ones that load
+   * lazily) report collapsed, so nothing loads for a section a rule may be about to hide.
+   * After it, a section in `SuppressedSectionKeys` always reports collapsed.
+   */
+  public SetChromeSuppression(state: FormChromeSuppression | null): void {
+    this.chromeSuppression = state;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * True when {@link IsSectionExpanded} must answer false because of chrome rules: the section
+   * is suppressed, or the rules are still loading and the section starts collapsed. Field
+   * sections start expanded and are not rule targets, so they are not held back; related grids
+   * and contribution panels start collapsed and are.
+   */
+  private isSuppressedOrPending(sectionKey: string, seededExpanded: boolean): boolean {
+    const state = this.chromeSuppression;
+    if (!state) return false;
+    if (!state.RulesResolved) return !seededExpanded;
+    return state.SuppressedSectionKeys.has(sectionKey);
   }
 
   public SetSectionExpanded(sectionKey: string, isExpanded: boolean): void {
@@ -1774,6 +1832,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
+   * The reason the last save or delete failed, as the record's `LatestResult` states it.
+   * `CompleteMessage` joins the message with every error the server returned, so a server-side
+   * refusal (a validation rule, a permission, a referencing row) reaches the user instead of a
+   * generic "Error ..." text. Empty when the record has no result or the result has no message.
+   */
+  private latestResultMessage(): string {
+    const latest = this.record?.LatestResult;
+    if (!latest) return '';
+    return latest.CompleteMessage || latest.Message || '';
+  }
+
+  /**
    * Handles delete requests from the form container.
    * Emits RecordDeleted on success, RecordDeleteFailed on failure.
    * Generated form templates bind this as: (DeleteRequested)="OnDeleteRequested()"
@@ -1789,7 +1859,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           RecordId: this.record.PrimaryKey.ToString()
         });
       } else {
-        const errorMsg = 'Error deleting record';
+        const serverMsg = this.latestResultMessage();
+        const errorMsg = serverMsg ? `Delete failed: ${serverMsg}` : 'Error deleting record';
         this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
         this.RecordDeleteFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
       }

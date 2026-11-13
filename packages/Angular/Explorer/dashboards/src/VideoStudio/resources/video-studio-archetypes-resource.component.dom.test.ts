@@ -16,12 +16,14 @@ ExpectConsoleLines({
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
+  ResourceReattached$: typeof EMPTY;
   SetAgentContext: ReturnType<typeof vi.fn>;
   SetAgentClientTools: ReturnType<typeof vi.fn>;
   OpenEntityRecord: ReturnType<typeof vi.fn>;
 } {
   return {
     QueryParamChanged$: EMPTY,
+    ResourceReattached$: EMPTY,
     SetAgentContext: vi.fn(),
     SetAgentClientTools: vi.fn(),
     OpenEntityRecord: vi.fn(),

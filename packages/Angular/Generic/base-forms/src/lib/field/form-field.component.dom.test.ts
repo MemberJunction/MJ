@@ -96,6 +96,8 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
       { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
       { ID: 'F13', Name: 'OrderNumber', DisplayName: 'Order Number', Type: 'nvarchar', Length: 20, AllowsNull: false, AllowUpdateAPI: true },
+      // A nullable UUID column with no related entity: edited as plain text.
+      { ID: 'F14', Name: 'ExternalRef', Type: 'uniqueidentifier', AllowsNull: true, AllowUpdateAPI: true },
     ],
   });
 }
@@ -315,6 +317,24 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(record.Get('Name')).toBe('Gizmo');
       // Real dirty tracking on a saved record surfaces the dirty modifier class
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--dirty')).toBe(true);
+    });
+
+    it('clearing a textbox on a uniqueidentifier field stores null, not an empty string (#4570)', () => {
+      const record = makeWidget({ ExternalRef: '99999999-8888-7777-6666-555555555555' });
+      const f = render({ Record: record, FieldName: 'ExternalRef', Type: 'textbox', EditMode: true });
+
+      typeInto(f, 'input.mj-forms-field-input', '');
+
+      expect(record.Get('ExternalRef')).toBeNull();
+    });
+
+    it('clearing a textbox on an nvarchar field keeps the empty string', () => {
+      const record = makeWidget({ Description: 'old text' });
+      const f = render({ Record: record, FieldName: 'Description', Type: 'textbox', EditMode: true });
+
+      typeInto(f, 'input.mj-forms-field-input', '');
+
+      expect(record.Get('Description')).toBe('');
     });
 
     it('renders a textarea for Type textarea and typing updates the record', () => {

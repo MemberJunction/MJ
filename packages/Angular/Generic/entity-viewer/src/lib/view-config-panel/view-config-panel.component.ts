@@ -21,7 +21,6 @@ import {
 } from '@memberjunction/core-entities';
 import {
   FilterFieldInfo,
-  FilterFieldType,
   CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
 import {
@@ -31,6 +30,7 @@ import {
   type FilterDescriptor
 } from '@memberjunction/core';
 import { ViewConfigSummary } from '../types';
+import { BuildFilterFields, CollectFilterFieldNames } from '../utils/filter-fields.util';
 
 /**
  * Column configuration for the view (internal use)
@@ -781,68 +781,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
-   * Collect field names referenced anywhere in a CompositeFilterDescriptor
-   */
-  private collectFilterFieldNames(filter: CompositeFilterDescriptor | null | undefined, acc: Set<string> = new Set()): Set<string> {
-    if (!filter?.filters) return acc;
-    for (const item of filter.filters) {
-      if (IsCompositeFilter(item)) {
-        this.collectFilterFieldNames(item, acc);
-      } else if (IsSimpleFilter(item) && item.field) {
-        acc.add(item.field.toLowerCase());
-      }
-    }
-    return acc;
-  }
-
-  /**
    * Build filter fields from entity fields (hiding system __mj_ fields and raw sqlType badges
    * in Standard Mode unless already referenced by an active rule or Advanced Mode is enabled)
    */
   private buildFilterFields(): FilterFieldInfo[] {
     if (!this.Entity) return [];
-
-    const activeFilterFields = this.collectFilterFieldNames(this.FilterState);
-
-    return this.Entity.Fields
-      .filter(f => !f.IsBinaryFieldType)
-      .filter(f => this.IsAdvancedMode || !f.Name.startsWith('__mj_') || activeFilterFields.has(f.Name.toLowerCase()))
-      .map(field => ({
-        name: field.Name,
-        displayName: field.DisplayNameOrName,
-        type: this.mapFieldType(field),
-        description: field.Description || undefined,
-        sqlType: this.IsAdvancedMode ? (field.Type || undefined) : undefined,
-        lookupEntityName: field.RelatedEntity || undefined,
-        valueList: field.ValueListType === 'List' && field.EntityFieldValues?.length > 0
-          ? field.EntityFieldValues.map(v => ({ value: v.Value, label: v.Value }))
-          : undefined
-      }));
-  }
-
-  /**
-   * Map entity field type to filter field type
-   */
-  private mapFieldType(field: EntityFieldInfo): FilterFieldType {
-    // Check for lookup first - RelatedEntity is a string (entity name) if it's a lookup field
-    if (field.RelatedEntity) {
-      return 'lookup';
-    }
-
-    // Map based on SQL type
-    const sqlType = field.Type.toLowerCase();
-    if (sqlType.includes('bit') || sqlType === 'boolean') {
-      return 'boolean';
-    }
-    if (sqlType.includes('date') || sqlType.includes('time')) {
-      return 'date';
-    }
-    if (sqlType.includes('int') || sqlType.includes('decimal') ||
-        sqlType.includes('numeric') || sqlType.includes('float') ||
-        sqlType.includes('real') || sqlType.includes('money')) {
-      return 'number';
-    }
-    return 'string';
+    return BuildFilterFields(this.Entity, CollectFilterFieldNames(this.FilterState), this.IsAdvancedMode);
   }
 
   /**

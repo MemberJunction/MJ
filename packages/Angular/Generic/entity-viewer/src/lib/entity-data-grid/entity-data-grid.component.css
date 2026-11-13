@@ -996,6 +996,21 @@
   justify-content: flex-end;
 }
 
+/* Host-declared alignment (GridColumnConfig.align / headerAlign) */
+::ng-deep .cell-align-center {
+  text-align: center;
+  justify-content: center;
+}
+
+::ng-deep .cell-align-left {
+  text-align: left;
+  justify-content: flex-start;
+}
+
+::ng-deep .header-align-center .ag-header-cell-label {
+  justify-content: center;
+}
+
 /* Empty cell placeholder */
 ::ng-deep .cell-empty {
   color: var(--mj-text-disabled);
@@ -1518,4 +1533,19 @@
   object-fit: cover;
   object-position: center;
   display: block;
+}
+
+/* ========================================
+   User filter (opt-in Filter button)
+   ======================================== */
+
+.toolbar-user-filter {
+  flex-shrink: 0;
+}
+
+/* Projected into mj-filter-popover's overlay, so it is styled from here without ::ng-deep */
+.mj-grid-user-filter-builder {
+  width: min(640px, 90vw);
+  max-height: 60vh;
+  overflow: auto;
 }

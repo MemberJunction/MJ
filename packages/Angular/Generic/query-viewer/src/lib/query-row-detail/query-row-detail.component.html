@@ -190,13 +190,25 @@
                 }
                 <!-- Regular value -->
                 @if (field.value != null && !isJson(field.formattedValue) && !field.isLongText && field.sqlType.toLowerCase() !== 'bit') {
-                  <div class="field-value"
-                    >
-                    <span class="value-text"
-                      [class.monospace]="field.sqlType.toLowerCase().includes('uniqueidentifier') || field.name.toLowerCase().includes('id')">
-                      {{ field.formattedValue }}
-                    </span>
-                  </div>
+                  @if (field.linkKeyField && field.recordKey !== null) {
+                    <!-- A name that opens its record by the row's key field -->
+                    <div class="field-value clickable"
+                      (click)="OnEntityLinkClick(field)">
+                      @if (field.targetEntityIcon) {
+                        <i [class]="field.targetEntityIcon" class="entity-icon"></i>
+                      }
+                      <span class="value-text">{{ field.formattedValue }}</span>
+                      <i class="fa-solid fa-arrow-up-right-from-square link-icon"></i>
+                    </div>
+                  } @else {
+                    <div class="field-value"
+                      >
+                      <span class="value-text"
+                        [class.monospace]="field.sqlType.toLowerCase().includes('uniqueidentifier') || field.name.toLowerCase().includes('id')">
+                        {{ field.formattedValue }}
+                      </span>
+                    </div>
+                  }
                 }
               </div>
             }

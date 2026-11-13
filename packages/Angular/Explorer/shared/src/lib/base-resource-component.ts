@@ -1,7 +1,8 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
 import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
-import { BaseEntity, LogError } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, LogError } from "@memberjunction/core";
+import { MJEventType, MJGlobal } from "@memberjunction/global";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
 import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
@@ -136,6 +137,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         // emission claim the 'deeplink' source before any later popstate event.
         this.setupQueryParamSubscription();
         this.setupInitialParamDelivery();
+        this.setupReattachSubscription();
 
         // Start the NotifyLoadComplete watchdog (no-op once it fires or load completes).
         this._loadCompleteWatchdog = setTimeout(() => {
@@ -166,6 +168,97 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         }
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    // ========================================================================
+    // Cache reattach
+    // ========================================================================
+
+    /** Lower-cased names of the entities {@link WatchEntities} registered. */
+    private readonly watchedEntityNames = new Set<string>();
+    /** The entity-event subscription {@link WatchEntities} opens on its first call. */
+    private watchedEntitySub: Subscription | null = null;
+    /** Set when a watched entity was saved or deleted since the last reattach. */
+    private watchedEntitiesChanged = false;
+
+    /**
+     * Called each time the shell's component cache reattaches this component to a tab: the user
+     * came back to a cached tab or nav item. A cached component keeps its instance and runs no init
+     * on reattach, so data it loaded can be stale.
+     *
+     * The default calls {@link OnStaleOnReattach} once when an entity registered with
+     * {@link WatchEntities} was saved or deleted since the last reattach, and does nothing
+     * otherwise. Override it to reload on every return.
+     */
+    protected OnReattached(): void | Promise<void> {
+        if (!this.watchedEntitiesChanged) {
+            return;
+        }
+        this.watchedEntitiesChanged = false;
+        return this.OnStaleOnReattach();
+    }
+
+    /**
+     * Called on reattach when an entity registered with {@link WatchEntities} changed since the
+     * last reattach. Reload what reads those entities here, then call {@link RefreshView}.
+     * Default no-op.
+     */
+    protected OnStaleOnReattach(): void | Promise<void> {
+        // nothing to reload by default
+    }
+
+    /**
+     * Marks this component stale when a record of any of these entities is saved or deleted in this
+     * browser, so the next reattach calls {@link OnStaleOnReattach}. Call it once from init with the
+     * entities the component reads (for example `'MJ: Credentials'`); later calls add names.
+     *
+     * @param entityNames Entity names, with their `MJ: ` prefix where they have one.
+     */
+    protected WatchEntities(...entityNames: string[]): void {
+        for (const name of entityNames) {
+            const key = name?.trim().toLowerCase();
+            if (key) {
+                this.watchedEntityNames.add(key);
+            }
+        }
+        if (this.watchedEntitySub) {
+            return;
+        }
+        this.watchedEntitySub = MJGlobal.Instance.GetEventListener(false)
+            .pipe(
+                filter(event => event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode),
+                filter(event => this.isWatchedEntityChange(event.args as BaseEntityEvent)),
+                takeUntil(this.destroy$)
+            )
+            .subscribe(() => { this.watchedEntitiesChanged = true; });
+    }
+
+    /** True when the event is a completed save or delete of a watched entity. */
+    private isWatchedEntityChange(entityEvent: BaseEntityEvent | null | undefined): boolean {
+        if (!entityEvent || (entityEvent.type !== 'save' && entityEvent.type !== 'delete')) {
+            return false;
+        }
+        const name = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+        return !!name && this.watchedEntityNames.has(name);
+    }
+
+    /** Internal: call {@link OnReattached} each time the cache reattaches this instance. */
+    private setupReattachSubscription(): void {
+        this.navigationService.ResourceReattached$
+            .pipe(
+                filter(resource => resource === this),
+                takeUntil(this.destroy$)
+            )
+            .subscribe(() => this.runReattachHook());
+    }
+
+    /** Runs {@link OnReattached}, logging a failure rather than breaking the reattach stream. */
+    private async runReattachHook(): Promise<void> {
+        try {
+            await this.OnReattached();
+        } catch (error) {
+            LogError(`${this.constructor.name}.OnReattached failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**

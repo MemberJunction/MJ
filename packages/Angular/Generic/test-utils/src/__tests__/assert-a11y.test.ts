@@ -47,6 +47,24 @@ describe('ExpectNoAxeViolations', () => {
     await expect(ExpectNoAxeViolations(fixture, { disableRules: ['image-alt'] })).rejects.toThrowError(/label/);
   });
 
+  it('scans the CDK overlay container only when asked, so an open panel is not missed', async () => {
+    const fixture = fixtureFor(`<button type="button">Open</button>`);
+    const overlay = document.createElement('div');
+    overlay.className = 'cdk-overlay-container';
+    overlay.innerHTML = `<input id="overlay-input" type="text" />`;
+    document.body.appendChild(overlay);
+    await expect(ExpectNoAxeViolations(fixture)).resolves.toBeUndefined();
+    await expect(ExpectNoAxeViolations(fixture, { IncludeOverlayContainer: true })).rejects.toThrowError(/#overlay-input/);
+  });
+
+  it('scans extra roots alongside the fixture', async () => {
+    const fixture = fixtureFor(`<button type="button">Open</button>`);
+    const outside = document.createElement('div');
+    outside.innerHTML = `<img id="outside-img" src="x.png" />`;
+    document.body.appendChild(outside);
+    await expect(ExpectNoAxeViolations(fixture, { ExtraScanRoots: [outside] })).rejects.toThrowError(/#outside-img/);
+  });
+
   it('publishes the jsdom-unsupported preset (layout + page-level rules)', () => {
     expect(JSDOM_UNSUPPORTED_AXE_RULES).toContain('color-contrast');
     expect(JSDOM_UNSUPPORTED_AXE_RULES).toContain('region');

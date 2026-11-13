@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 /**
@@ -109,5 +109,66 @@ describe('FormResolverService — an identity entity', () => {
         hoisted.stored = 'global';
         expect(await resolvedID(USERS)).toBeNull();
         expect(hoisted.deleted).toEqual(['mj.formVariant.mj: users']);
+    });
+});
+
+/**
+ * An IS-A child entity with no form of its own opens with its nearest parent's class form: the
+ * child record carries every parent field and shares the key. A parent's EntityFormOverride rows
+ * are scoped to the parent and do not apply to the child.
+ */
+describe('FormResolverService — an IS-A child with no form of its own', () => {
+    class OrganizationsForm {}
+    class SpecialOrganizationsForm {}
+    class AccountsForm {}
+
+    const ORGS = { ID: 'ent-org', Name: 'Test: Organizations', ParentChain: [] } as unknown as EntityInfo;
+    const ACCOUNTS = { ID: 'ent-acct', Name: 'Test: Accounts', ParentChain: [ORGS] } as unknown as EntityInfo;
+    const MEMBER_ACCOUNTS = { ID: 'ent-macct', Name: 'Test: Member Accounts', ParentChain: [ACCOUNTS, ORGS] } as unknown as EntityInfo;
+    const VENDORS = { ID: 'ent-vend', Name: 'Test: Vendors', ParentChain: [] } as unknown as EntityInfo;
+    const VENDOR_KINDS = { ID: 'ent-vk', Name: 'Test: Vendor Kinds', ParentChain: [VENDORS] } as unknown as EntityInfo;
+
+    beforeAll(async () => {
+        const { MJGlobal } = await import('@memberjunction/global');
+        const { BaseFormComponent } = await import('../../base-form-component');
+        MJGlobal.Instance.ClassFactory.Register(BaseFormComponent, OrganizationsForm, 'Test: Organizations');
+        MJGlobal.Instance.ClassFactory.Register(BaseFormComponent, SpecialOrganizationsForm, 'Test: Organizations', 10);
+        MJGlobal.Instance.ClassFactory.Register(BaseFormComponent, AccountsForm, 'Test: Accounts');
+    });
+
+    async function resolve(entity: EntityInfo) {
+        return new FormResolverService().ResolveFormForEntity(entity, USER, PROVIDER);
+    }
+
+    it('uses the parent class form, and the parent standard form, when the child has none', async () => {
+        const orgChild = { ID: 'ent-c', Name: 'Test: Org Children', ParentChain: [ORGS] } as unknown as EntityInfo;
+        const resolution = await resolve(orgChild);
+        expect(resolution.kind).toBe('class');
+        expect(resolution.kind === 'class' ? resolution.subClass : null).toBe(SpecialOrganizationsForm);
+        expect(resolution.standard).toBe(OrganizationsForm);
+    });
+
+    it('keeps the child form when the child has its own registration', async () => {
+        const resolution = await resolve(ACCOUNTS);
+        expect(resolution.kind === 'class' ? resolution.subClass : null).toBe(AccountsForm);
+        expect(resolution.standard).toBe(AccountsForm);
+    });
+
+    it('uses the nearest ancestor with a form', async () => {
+        const resolution = await resolve(MEMBER_ACCOUNTS);
+        expect(resolution.kind === 'class' ? resolution.subClass : null).toBe(AccountsForm);
+    });
+
+    it('resolves to none when no ancestor has a form', async () => {
+        const resolution = await resolve(VENDOR_KINDS);
+        expect(resolution.kind).toBe('none');
+        expect(resolution.standard).toBeNull();
+    });
+
+    it('does not apply a parent override to the child', async () => {
+        hoisted.overrides = [form({ ID: 'org-override', EntityID: 'ent-org' })];
+        const childOfOrgs = { ID: 'ent-c2', Name: 'Test: Org Children 2', ParentChain: [ORGS] } as unknown as EntityInfo;
+        const resolution = await resolve(childOfOrgs);
+        expect(resolution.kind).toBe('class');
     });
 });

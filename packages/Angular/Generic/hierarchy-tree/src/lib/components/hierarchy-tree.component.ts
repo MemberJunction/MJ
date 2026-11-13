@@ -200,6 +200,8 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     /** Flattened list of all loaded hierarchy nodes for search and lookup. */
     public AllNodes: HierarchyNodeData[] = [];
     private nodeMap = new Map<string, HierarchyNodeData>();
+    /** Set once a parent walk has been cut at a cycle, so a build warns only once. */
+    private ancestorCycleWarned = false;
 
     /** The root nodes of the active view. */
     public RootNodes: HierarchyNodeData[] = [];
@@ -436,6 +438,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     public BuildTreeFromData(items: Record<string, unknown>[]): void {
         this.nodeMap.clear();
         this.AllNodes = [];
+        this.ancestorCycleWarned = false;
 
         const parentFieldName = this.resolveParentFieldName();
         const nameFieldName = this.resolveNameFieldName();
@@ -521,18 +524,17 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
                 activeNode.IsHighlighted = true;
                 this.SelectedNode = activeNode;
                 // Expand all ancestors so the active node is visible in full context
-                let curr = activeNode.ParentID ? this.nodeMap.get(NormalizeUUID(activeNode.ParentID)) : undefined;
-                while (curr) {
-                    curr.IsExpanded = true;
-                    curr.Children = [...(curr._allChildren || [])];
-                    curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
-                }
+                this.expandAncestors(activeNode);
 
-                // If AutoRootFocus is enabled and multiple roots exist, focus on the active root tree
+                // If AutoRootFocus is enabled and multiple roots exist, focus on the active root tree.
+                // The walk stops at the first root: a node promoted to root to break a cycle still
+                // carries its ParentID, which would otherwise lead into the other half of the cycle.
                 if (this.Config.AutoRootFocus !== false && roots.length > 1 && !this.FocusRecordID && !this.Config.FocusRecordID) {
+                    const rootSet = new Set(roots);
                     let rootAncestor = activeNode;
-                    while (rootAncestor.ParentID && this.nodeMap.has(NormalizeUUID(rootAncestor.ParentID))) {
-                        rootAncestor = this.nodeMap.get(NormalizeUUID(rootAncestor.ParentID))!;
+                    for (const ancestor of this.ancestorChain(activeNode)) {
+                        if (rootSet.has(rootAncestor)) break;
+                        rootAncestor = ancestor;
                     }
                     rootAncestor.IsFocusRoot = true;
                     this.FocusedNode = rootAncestor;
@@ -587,12 +589,36 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     private wouldCreateCycle(node: HierarchyNodeData, proposedParent: HierarchyNodeData): boolean {
-        let curr: HierarchyNodeData | undefined = proposedParent;
-        while (curr) {
-            if (UUIDsEqual(curr.ID, node.ID)) return true;
-            curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
+        if (UUIDsEqual(proposedParent.ID, node.ID)) return true;
+        for (const ancestor of this.ancestorChain(proposedParent)) {
+            if (UUIDsEqual(ancestor.ID, node.ID)) return true;
         }
         return false;
+    }
+
+    /**
+     * Yields `start`'s ancestors by following `ParentID` through `nodeMap`, nearest first. The data
+     * can hold parent cycles (A -> B -> A), so the walk stops when an ID repeats instead of looping
+     * forever; it warns once per build when it does.
+     */
+    private *ancestorChain(start: HierarchyNodeData): Generator<HierarchyNodeData> {
+        const visited = new Set<string>([NormalizeUUID(start.ID)]);
+        let parentId = start.ParentID;
+        while (parentId) {
+            const key = NormalizeUUID(parentId);
+            const parent = this.nodeMap.get(key);
+            if (!parent) return;
+            if (visited.has(key)) {
+                if (!this.ancestorCycleWarned) {
+                    this.ancestorCycleWarned = true;
+                    console.warn(`[HierarchyTree] Circular parent chain detected at ${parent.ID}. Stopping the ancestor walk.`);
+                }
+                return;
+            }
+            visited.add(key);
+            yield parent;
+            parentId = parent.ParentID;
+        }
     }
 
     private computeSubtreeMetrics(node: HierarchyNodeData, depth: number): number {
@@ -1004,11 +1030,9 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
     }
 
     private expandAncestors(node: HierarchyNodeData): void {
-        let curr = node.ParentID ? this.nodeMap.get(NormalizeUUID(node.ParentID)) : undefined;
-        while (curr) {
-            curr.IsExpanded = true;
-            curr.Children = [...(curr._allChildren || [])];
-            curr = curr.ParentID ? this.nodeMap.get(NormalizeUUID(curr.ParentID)) : undefined;
+        for (const ancestor of this.ancestorChain(node)) {
+            ancestor.IsExpanded = true;
+            ancestor.Children = [...(ancestor._allChildren || [])];
         }
     }
 
