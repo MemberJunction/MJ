@@ -2876,6 +2876,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // omitting clean fields, read-only fields, virtual fields, and NotLoaded fields.
             // When options?.IgnoreDirtyState is true, include all loaded writable fields alongside
             // primary keys.
+            let wireOldValues: { Key: string; Value: string | null }[] | undefined;
             if (isUpdate && options?.SkipOldValuesCheck === false) {
                 const oldValueFields = options?.IgnoreDirtyState
                     ? entity.Fields.filter(f => f.IsPrimaryKey || (!f.NotLoaded && !f.ReadOnly && !isDeniedRead(f.Name)))
@@ -2896,6 +2897,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return { Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val };
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
+                wireOldValues = ov;
             }
 
             if (entity.TransactionGroup) {
@@ -2909,12 +2911,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     mutationName: string;
                     mutationInputTypes: { varName: string; inputType: string }[];
                     ignoreDirtyState?: boolean;
+                    oldValues?: { Key: string; Value: string | null }[];
                 } = {
                     mutationName,
                     mutationInputTypes: mutationInputTypes
                 };
                 if (options?.IgnoreDirtyState) {
                     extraData.ignoreDirtyState = true;
+                }
+                // The group sends these with the item so the server checks this update for
+                // concurrent changes exactly as it checks a single-record update.
+                if (wireOldValues && wireOldValues.length > 0) {
+                    extraData.oldValues = wireOldValues;
                 }
 
                 entity.RaiseReadyForTransaction(); // let the entity know we're ready to be part of the transaction

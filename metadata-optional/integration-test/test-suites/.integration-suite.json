@@ -1517,6 +1517,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT173 - Transaction Group Concurrency over GraphQL",
+            "Sequence": 84,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
             "Sequence": 49,
             "Status": "Active"

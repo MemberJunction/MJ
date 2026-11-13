@@ -384,15 +384,24 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             }
           </div>
 
-          @if (Collaborators.length > 0) {
+          @let activeCollabs = GetRemoteCollaborators();
+          @if (activeCollabs.length > 0) {
             <div class="mj-sheets-presence-strip" data-testid="sheets-presence-strip">
-              @for (collab of Collaborators; track collab.ClientID) {
+              @for (collab of activeCollabs; track collab.ClientID) {
                 <span
                   class="mj-sheets-presence-avatar"
                   [style.background]="collab.Color"
                   [title]="collab.Name + (collab.ActiveBlockID ? ' (' + collab.ActiveBlockID + ')' : '')"
+                  (click)="JumpToCollaboratorSelection(collab)"
+                  [attr.data-testid]="'sheet-presence-avatar-' + collab.ClientID"
                 >
+                  @if (collab.IsAgent) {
+                    <i class="fa-solid fa-robot"></i>
+                  }
                   {{ GetInitials(collab.Name) }}
+                  @if (collab.ActiveBlockID) {
+                    <span class="mj-sheets-presence-range-tag">{{ collab.ActiveBlockID }}</span>
+                  }
                 </span>
               }
             </div>
@@ -450,6 +459,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             type="text"
             class="mj-sheets-range-input"
             [(ngModel)]="SelectedRange"
+            (ngModelChange)="OnSelectedRangeInputChange($event)"
             placeholder="Range (e.g. B2:B6)"
             aria-label="Selected Cell Range"
             data-testid="sheet-selected-range-input"
@@ -496,7 +506,13 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             } @else {
             <!-- Interactive A1 Grid -->
             <div class="mj-sheets-grid-scroll" data-testid="sheets-grid-container">
-              <table class="mj-sheets-grid-table" role="grid" [attr.aria-label]="ActiveSheet.Name">
+              <table
+                class="mj-sheets-grid-table"
+                role="grid"
+                [attr.aria-label]="ActiveSheet.Name"
+                (mouseup)="OnCellMouseUp()"
+                (mouseleave)="OnCellMouseUp()"
+              >
                 <thead>
                   <tr>
                     <th class="mj-sheets-corner-header">#</th>
@@ -504,10 +520,11 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                       <th
                         class="mj-sheets-col-header"
                         [class.selected]="col.Letter === ActiveColumnLetter"
+                        [class.in-range]="IsColumnInSelectedRange(col.Index)"
                         [style.min-width.px]="(col.Width ?? 14) * 8"
                         [attr.data-col-id]="col.ColumnID"
                         [attr.data-testid]="'sheet-col-header-' + col.Letter"
-                        (click)="SelectColumnHeader(col.Letter)"
+                        (click)="SelectColumnHeader(col.Letter, $event)"
                       >
                         <div class="mj-sheets-col-header-inner">
                           <span class="mj-sheets-col-letter">{{ col.Letter }}</span>
@@ -535,7 +552,9 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                       <td
                         class="mj-sheets-row-header"
                         [class.selected]="row.Index === ActiveRowIndex"
+                        [class.in-range]="IsRowInSelectedRange(row.Index)"
                         [attr.data-testid]="'sheet-row-header-' + row.Index"
+                        (click)="SelectRowHeader(row.Index, $event)"
                       >
                         {{ row.Index }}
                       </td>
@@ -543,10 +562,16 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                         @let addr = col.Letter + row.Index;
                         @let cell = ActiveSheet.Cells[addr];
                         @let condTone = GetConditionalTone(cell);
+                        @let peerColor = GetCellCollaboratorBorderColor(row.Index, col.Index);
+                        @let peerBadge = GetCellPrimaryCollaboratorBadge(row.Index, col.Index);
+                        @let cellComments = GetCellCommentThreads(row.Index, col.Index);
                         <td
                           class="mj-sheets-cell"
                           [class.active]="addr === ActiveCellAddress"
                           [class.in-range]="IsAddressInSelectedRange(row.Index, col.Index)"
+                          [class.has-peer-selection]="!!peerColor"
+                          [style.--mj-sheets-peer-color]="peerColor"
+                          [class.has-comment]="cellComments.length > 0"
                           [class.has-formula]="!!cell?.Formula"
                           [class.is-bold]="!!cell?.Style?.Bold"
                           [class.is-italic]="!!cell?.Style?.Italic"
@@ -561,14 +586,32 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                           [attr.data-col-id]="col.ColumnID"
                           [attr.data-address]="addr"
                           [attr.data-testid]="'sheet-cell-' + addr"
-                          (click)="SelectCell(row.Index, col.Index, $event)"
+                          (mousedown)="OnCellMouseDown(row.Index, col.Index, $event)"
+                          (mouseenter)="OnCellMouseEnter(row.Index, col.Index)"
+                          (mouseup)="OnCellMouseUp()"
+                          (click)="OnCellClick(row.Index, col.Index, $event)"
                           (dblclick)="BeginInlineCellEdit(row.Index, col.Index)"
                         >
+                          @if (peerBadge) {
+                            <span
+                              class="mj-sheets-peer-cell-badge"
+                              [style.background]="peerBadge.Color"
+                              [attr.data-testid]="'sheet-peer-badge-' + addr"
+                            >
+                              @if (peerBadge.IsAgent) {
+                                <i class="fa-solid fa-robot"></i>
+                              }
+                              {{ peerBadge.Name }}
+                            </span>
+                          }
                           @if (InlineEditingAddress === addr && CanEdit) {
                             <input
                               type="text"
                               class="mj-sheets-inline-cell-input"
                               [(ngModel)]="InlineEditValue"
+                              (mousedown)="$event.stopPropagation()"
+                              (click)="$event.stopPropagation()"
+                              (dblclick)="$event.stopPropagation()"
                               (blur)="CommitInlineCellEdit()"
                               (keydown.enter)="CommitInlineCellEdit()"
                               (keydown.escape)="CancelInlineCellEdit()"
@@ -599,6 +642,38 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                                 </span>
                               }
                             </div>
+                            @if (cellComments.length > 0) {
+                              <span
+                                class="mj-sheets-comment-corner"
+                                [attr.data-testid]="'sheet-comment-corner-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              ></span>
+                              <div
+                                class="mj-sheets-comment-hover-bubble"
+                                [attr.data-testid]="'sheet-comment-bubble-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              >
+                                @for (thread of cellComments; track thread.ConversationID) {
+                                  <div class="mj-sheets-comment-bubble-thread">
+                                    <div class="mj-sheets-comment-bubble-header">
+                                      <span class="mj-sheets-comment-bubble-author">
+                                        <i class="fa-solid fa-comment-dots"></i>
+                                        {{ thread.Messages[0]?.UserName || 'Comment' }}
+                                      </span>
+                                      <span class="mj-sheets-comment-bubble-anchor">{{ thread.AnchorLabel }}</span>
+                                    </div>
+                                    <div class="mj-sheets-comment-bubble-body">
+                                      {{ thread.Messages[thread.Messages.length - 1]?.Message }}
+                                    </div>
+                                    @if (thread.Messages.length > 1) {
+                                      <div class="mj-sheets-comment-bubble-meta">
+                                        {{ thread.Messages.length }} messages · {{ thread.Status }}
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
                           }
                         </td>
                       }
@@ -1413,15 +1488,32 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
       }
 
       .mj-sheets-presence-avatar {
-        width: 24px;
         height: 24px;
-        border-radius: 50%;
+        min-width: 24px;
+        border-radius: 12px;
+        padding: 0 6px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 4px;
         font-size: 10px;
         font-weight: 700;
         color: var(--mj-text-inverse);
+        cursor: pointer;
+        transition: transform 0.15s ease;
+      }
+
+      .mj-sheets-presence-avatar:hover {
+        transform: scale(1.05);
+      }
+
+      .mj-sheets-presence-range-tag {
+        font-size: 9px;
+        font-weight: 500;
+        opacity: 0.9;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 4px;
+        border-radius: 4px;
       }
 
       .mj-sheets-status-banner {
@@ -1580,9 +1672,15 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
       }
 
       .mj-sheets-col-header.selected,
-      .mj-sheets-row-header.selected {
+      .mj-sheets-col-header.in-range,
+      .mj-sheets-row-header.selected,
+      .mj-sheets-row-header.in-range {
         background: var(--mj-brand-primary-subtle);
         color: var(--mj-brand-primary);
+      }
+
+      .mj-sheets-col-header {
+        user-select: none;
       }
 
       .mj-sheets-col-header-inner {
@@ -1605,6 +1703,12 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         position: sticky;
         left: 0;
         z-index: 1;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .mj-sheets-grid-table {
+        user-select: none;
       }
 
       .mj-sheets-frozen-row td {
@@ -1624,6 +1728,28 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 
       .mj-sheets-cell.in-range {
         background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-sheets-cell.has-peer-selection {
+        box-shadow: inset 0 0 0 2px var(--mj-sheets-peer-color, var(--mj-brand-primary));
+        z-index: 2;
+      }
+
+      .mj-sheets-peer-cell-badge {
+        position: absolute;
+        top: -16px;
+        left: -1px;
+        z-index: 4;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px 3px 3px 0;
+        color: var(--mj-text-inverse);
+        white-space: nowrap;
+        pointer-events: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
       }
 
       .mj-sheets-cell.active {
@@ -1699,6 +1825,95 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         height: 0;
         border-left: 6px solid transparent;
         border-top: 6px solid var(--mj-brand-primary);
+      }
+
+      .mj-sheets-comment-corner {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-top: 8px solid var(--mj-status-warning, #f59e0b);
+        z-index: 3;
+        cursor: pointer;
+      }
+
+      .mj-sheets-comment-hover-bubble {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        max-width: 300px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-status-warning, #f59e0b);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+        padding: 8px 10px;
+        z-index: 30;
+        white-space: normal;
+        cursor: pointer;
+      }
+
+      .mj-sheets-cell:hover .mj-sheets-comment-hover-bubble {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-sheets-comment-bubble-thread {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .mj-sheets-comment-bubble-thread + .mj-sheets-comment-bubble-thread {
+        border-top: 1px solid var(--mj-border-subtle);
+        padding-top: 6px;
+      }
+
+      .mj-sheets-comment-bubble-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11px;
+      }
+
+      .mj-sheets-comment-bubble-author {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mj-sheets-comment-bubble-author i {
+        color: var(--mj-status-warning, #f59e0b);
+      }
+
+      .mj-sheets-comment-bubble-anchor {
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-comment-bubble-body {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--mj-text-primary);
+        word-break: break-word;
+      }
+
+      .mj-sheets-comment-bubble-meta {
+        font-size: 10px;
+        color: var(--mj-text-muted);
       }
 
       .mj-sheets-validation-badge {
@@ -2253,6 +2468,15 @@ export class SpreadsheetArtifactViewerComponent
   public ActiveRowIndex = 1;
   public ActiveColumnIndex = 1;
   public SelectedRange = 'A1';
+  public SelectedRanges: string[] = ['A1'];
+  public IsDraggingSelection = false;
+  public DragAnchorAddress: string | null = null;
+  private isCtrlMultiSelectDrag = false;
+  private lastMouseDownTimestamp = 0;
+  private lastMouseDownCell = '';
+
+  public SyntheticAgentPresence: CollaboratorPresence | null = null;
+  private syntheticAgentTimer: ReturnType<typeof setTimeout> | null = null;
   public FormulaBarInput = '';
   public InlineEditingAddress: string | null = null;
   public InlineEditValue = '';
@@ -2324,6 +2548,18 @@ export class SpreadsheetArtifactViewerComponent
       SpreadsheetEngine.Instance.GetWorksheet(this.Workbook, this.Workbook.ActiveSheetID) ??
       this.Workbook.Worksheets[0]
     );
+  }
+
+  public get ActiveSheetID(): string {
+    return this.Workbook?.ActiveSheetID ?? '';
+  }
+
+  public set ActiveSheetID(sheetId: string) {
+    if (this.Workbook && sheetId && this.Workbook.Worksheets.some((w) => w.SheetID === sheetId)) {
+      this.Workbook.ActiveSheetID = sheetId;
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    }
   }
 
   public get VisibleColumns(): SpreadsheetColumnSpec[] {
@@ -2452,7 +2688,24 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     if (changes['readonly']) {
+      if (
+        !this.readonly &&
+        this.ConnectionStatus === 'readonly' &&
+        !this.AccessRevoked &&
+        !this.PermissionVerifyError &&
+        !this.LiveSyncUnavailable
+      ) {
+        if (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true) {
+          this.ConnectionStatus =
+            this.CollaborationSession?.Status && this.CollaborationSession.Status !== 'readonly'
+              ? this.CollaborationSession.Status
+              : 'local';
+        }
+      }
       this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
+      if (this.CollaborationSession) {
+        this.ConnectionStatus = this.CollaborationSession.Status;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -2464,6 +2717,11 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   private teardownSession(): void {
+    if (this.syntheticAgentTimer) {
+      clearTimeout(this.syntheticAgentTimer);
+      this.syntheticAgentTimer = null;
+    }
+    this.SyntheticAgentPresence = null;
     for (const s of this.subs) {
       s.unsubscribe();
     }
@@ -2663,6 +2921,10 @@ export class SpreadsheetArtifactViewerComponent
       session.ContentChanged$.subscribe((nextContent: string) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         if (!nextContent || !nextContent.trim().startsWith('{')) return;
+        const prevCells: Record<string, SpreadsheetCellSpec> = {
+          ...(this.ActiveSheet?.Cells ?? {}),
+        };
+        const prevSheetId = this.ActiveSheet?.SheetID;
         this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
         SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
@@ -2671,6 +2933,48 @@ export class SpreadsheetArtifactViewerComponent
         if (this.workbookHasLiveDataOrMjFunctions(this.Workbook)) {
           void this.RefreshAllLiveData(false);
         }
+
+        // Compare changed cells on active sheet to surface synthetic agent selection
+        if (this.ActiveSheet && (!prevSheetId || prevSheetId === this.ActiveSheet.SheetID)) {
+          const changedAddresses: string[] = [];
+          const currCells = this.ActiveSheet.Cells ?? {};
+          const allAddresses = new Set([...Object.keys(prevCells), ...Object.keys(currCells)]);
+          for (const addr of allAddresses) {
+            const prev = prevCells[addr];
+            const curr = currCells[addr];
+            const valChanged =
+              prev?.RawValue !== curr?.RawValue ||
+              prev?.ComputedValue !== curr?.ComputedValue ||
+              prev?.DisplayValue !== curr?.DisplayValue;
+            const formulaChanged = (prev?.Formula ?? '') !== (curr?.Formula ?? '');
+            if (valChanged || formulaChanged) {
+              changedAddresses.push(addr);
+            }
+          }
+          if (changedAddresses.length > 0) {
+            let minR = Infinity;
+            let maxR = -Infinity;
+            let minC = Infinity;
+            let maxC = -Infinity;
+            for (const addr of changedAddresses) {
+              const pos = ParseCellAddress(addr);
+              if (pos) {
+                minR = Math.min(minR, pos.row);
+                maxR = Math.max(maxR, pos.row);
+                minC = Math.min(minC, pos.col);
+                maxC = Math.max(maxC, pos.col);
+              }
+            }
+            if (minR !== Infinity && minC !== Infinity) {
+              const boundingRange =
+                minR === maxR && minC === maxC
+                  ? FormatCellAddress(minR, minC)
+                  : `${FormatCellAddress(minR, minC)}:${FormatCellAddress(maxR, maxC)}`;
+              this.RecordSyntheticAgentSelection(this.ActiveSheet.SheetID, boundingRange, 'AI Agent');
+            }
+          }
+        }
+
         this.cdr.markForCheck();
       }),
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
@@ -2811,36 +3115,171 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   public SelectCell(rowIndex: number, colIndex: number, event?: MouseEvent): void {
-    const prevAddr = this.ActiveCellAddress;
-    this.ActiveRowIndex = rowIndex;
-    this.ActiveColumnIndex = colIndex;
     const nextAddr = FormatCellAddress(rowIndex, colIndex);
 
-    if (event?.shiftKey) {
-      this.SelectedRange = `${prevAddr}:${nextAddr}`;
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(nextAddr);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(nextAddr);
+      }
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
+    } else if (event?.shiftKey) {
+      const anchorAddr = this.DragAnchorAddress || this.ActiveCellAddress;
+      const rangeSeg = anchorAddr === nextAddr ? nextAddr : `${anchorAddr}:${nextAddr}`;
+      if (this.SelectedRanges.length > 0) {
+        this.SelectedRanges[this.SelectedRanges.length - 1] = rangeSeg;
+      } else {
+        this.SelectedRanges = [rangeSeg];
+      }
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
     } else {
+      this.DragAnchorAddress = nextAddr;
+      this.SelectedRanges = [nextAddr];
       this.SelectedRange = nextAddr;
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
     }
 
     this.syncFormulaBarFromActiveCell();
-    this.CollaborationSession?.SetActiveBlock(`${this.ActiveSheet.SheetID}:${this.SelectedRange}`);
+    this.broadcastSelectionPresence();
     this.cdr.markForCheck();
   }
 
-  public SelectColumnHeader(colLetter: string): void {
-    const rowCount = this.ActiveSheet.Rows.length;
-    this.SelectedRange = `${colLetter}1:${colLetter}${rowCount}`;
+  public OnCellMouseDown(rowIndex: number, colIndex: number, event?: MouseEvent): void {
+    if (event && event.button !== 0) return;
+    if (this.InlineEditingAddress) return;
+    this.lastMouseDownTimestamp = Date.now();
+    this.lastMouseDownCell = FormatCellAddress(rowIndex, colIndex);
+    this.IsDraggingSelection = true;
+    this.isCtrlMultiSelectDrag = Boolean(event?.metaKey || event?.ctrlKey);
+    this.DragAnchorAddress = FormatCellAddress(rowIndex, colIndex);
+    this.SelectCell(rowIndex, colIndex, event);
+  }
+
+  public OnCellMouseEnter(rowIndex: number, colIndex: number): void {
+    if (!this.IsDraggingSelection || !this.DragAnchorAddress) return;
+    const hoverAddr = FormatCellAddress(rowIndex, colIndex);
+    const rangeSegment =
+      this.DragAnchorAddress === hoverAddr
+        ? hoverAddr
+        : `${this.DragAnchorAddress}:${hoverAddr}`;
+    if (this.isCtrlMultiSelectDrag && this.SelectedRanges.length > 0) {
+      this.SelectedRanges[this.SelectedRanges.length - 1] = rangeSegment;
+    } else {
+      this.SelectedRanges = [rangeSegment];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  public OnCellMouseUp(): void {
+    if (this.IsDraggingSelection) {
+      this.IsDraggingSelection = false;
+      this.isCtrlMultiSelectDrag = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnCellClick(rowIndex: number, colIndex: number, event?: MouseEvent): void {
+    if (this.InlineEditingAddress) return;
+    const now = Date.now();
+    const addr = FormatCellAddress(rowIndex, colIndex);
+    if (this.lastMouseDownCell === addr && now - this.lastMouseDownTimestamp < 500) {
+      return;
+    }
+    this.SelectCell(rowIndex, colIndex, event);
+  }
+
+  public SelectColumnHeader(colLetter: string, event?: MouseEvent): void {
+    const rowCount = this.ActiveSheet?.Rows?.length ?? 100;
+    const colRange = `${colLetter}1:${colLetter}${rowCount}`;
     const pos = ParseCellAddress(`${colLetter}1`);
     if (pos) {
       this.ActiveRowIndex = 1;
       this.ActiveColumnIndex = pos.col;
+      this.DragAnchorAddress = `${colLetter}1`;
       this.syncFormulaBarFromActiveCell();
     }
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(colRange);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(colRange);
+      }
+    } else {
+      this.SelectedRanges = [colRange];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
     this.cdr.markForCheck();
+  }
+
+  public SelectRowHeader(rowIndex: number, event?: MouseEvent): void {
+    const lastColLetter =
+      this.VisibleColumns.length > 0
+        ? this.VisibleColumns[this.VisibleColumns.length - 1].Letter
+        : 'Z';
+    const rowRange = `A${rowIndex}:${lastColLetter}${rowIndex}`;
+    this.ActiveRowIndex = rowIndex;
+    this.ActiveColumnIndex = 1;
+    this.DragAnchorAddress = `A${rowIndex}`;
+    this.syncFormulaBarFromActiveCell();
+
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(rowRange);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(rowRange);
+      }
+    } else {
+      this.SelectedRanges = [rowRange];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  public OnSelectedRangeInputChange(nextRange: string): void {
+    this.SelectedRange = nextRange;
+    const parts = nextRange
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    this.SelectedRanges = parts.length > 0 ? parts : [nextRange.trim()];
+    if (this.SelectedRanges.length > 0) {
+      const first = this.SelectedRanges[0].split(':')[0];
+      const parsed = ParseCellAddress(first);
+      if (parsed) {
+        this.ActiveRowIndex = parsed.row;
+        this.ActiveColumnIndex = parsed.col;
+        this.syncFormulaBarFromActiveCell();
+      }
+    }
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  private broadcastSelectionPresence(): void {
+    if (this.ActiveSheet) {
+      this.CollaborationSession?.SetActiveBlock(
+        `${this.ActiveSheet.SheetID}:${this.SelectedRange}`,
+      );
+    }
   }
 
   public BeginInlineCellEdit(rowIndex: number, colIndex: number): void {
     if (!this.CanEdit) return;
+    this.IsDraggingSelection = false;
+    this.isCtrlMultiSelectDrag = false;
     this.ActiveRowIndex = rowIndex;
     this.ActiveColumnIndex = colIndex;
     const addr = FormatCellAddress(rowIndex, colIndex);
@@ -2852,6 +3291,19 @@ export class SpreadsheetArtifactViewerComponent
         ? String(existing.RawValue)
         : '';
     this.cdr.markForCheck();
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        if (this.InlineEditingAddress !== addr || this.isComponentDestroyed) return;
+        const inputEl = document.querySelector<HTMLInputElement>(
+          '[data-testid="sheet-inline-cell-input"]',
+        );
+        if (inputEl) {
+          inputEl.focus();
+          const len = inputEl.value.length;
+          inputEl.setSelectionRange(len, len);
+        }
+      }, 0);
+    }
   }
 
   public CommitInlineCellEdit(): void {
@@ -3855,20 +4307,47 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public FocusRangeFromAnchorKey(anchorKey: string): void {
-    const sep = anchorKey.indexOf(':');
-    if (sep < 0) return;
-    const sheetId = anchorKey.slice(0, sep);
-    const range = anchorKey.slice(sep + 1);
-    if (this.Workbook.Worksheets.some((w) => w.SheetID === sheetId)) {
-      this.Workbook.ActiveSheetID = sheetId;
+    const parsed = this.ParseCollaboratorSheetRanges(anchorKey);
+    if (parsed.SheetID && this.Workbook.Worksheets.some((w) => w.SheetID === parsed.SheetID)) {
+      this.Workbook.ActiveSheetID = parsed.SheetID;
     }
-    this.SelectedRange = range;
-    const firstAddr = range.split(':')[0];
-    const pos = ParseCellAddress(firstAddr);
-    if (pos) {
-      this.ActiveRowIndex = pos.row;
-      this.ActiveColumnIndex = pos.col;
-      this.syncFormulaBarFromActiveCell();
+    if (parsed.Ranges.length > 0) {
+      this.SelectedRanges = [...parsed.Ranges];
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      const firstAddr = parsed.Ranges[0].split(':')[0];
+      const pos = ParseCellAddress(firstAddr);
+      if (pos) {
+        this.ActiveRowIndex = pos.row;
+        this.ActiveColumnIndex = pos.col;
+        this.syncFormulaBarFromActiveCell();
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public GetCellCommentThreads(rowIndex: number, colIndex: number): DocumentAnchoredThread[] {
+    if (!this.AnchoredThreads || this.AnchoredThreads.length === 0) {
+      return [];
+    }
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const matches: DocumentAnchoredThread[] = [];
+    for (const thread of this.AnchoredThreads) {
+      const parsed = this.ParseCollaboratorSheetRanges(thread.AnchorKey);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        continue;
+      }
+      if (parsed.Ranges.some((segment) => this.isCellInsideRangeString(rowIndex, colIndex, segment))) {
+        matches.push(thread);
+      }
+    }
+    return matches;
+  }
+
+  public OpenCommentThreadFromCell(thread: DocumentAnchoredThread | undefined, event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.ShowCommentsDrawer = true;
+    if (thread?.AnchorKey) {
+      this.FocusRangeFromAnchorKey(thread.AnchorKey);
     }
     this.cdr.markForCheck();
   }
@@ -4123,15 +4602,199 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public IsAddressInSelectedRange(rowIndex: number, colIndex: number): boolean {
-    const parts = this.SelectedRange.split(':');
-    const p1 = ParseCellAddress(parts[0]);
-    const p2 = parts.length > 1 ? ParseCellAddress(parts[1]) : p1;
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => this.isCellInsideRangeString(rowIndex, colIndex, segment));
+  }
+
+  public IsRowInSelectedRange(rowIndex: number): boolean {
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => {
+      const parts = segment.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (!p1 || !p2) return false;
+      const rMin = Math.min(p1.row, p2.row);
+      const rMax = Math.max(p1.row, p2.row);
+      return rowIndex >= rMin && rowIndex <= rMax;
+    });
+  }
+
+  public IsColumnInSelectedRange(colIndex: number): boolean {
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => {
+      const parts = segment.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (!p1 || !p2) return false;
+      const cMin = Math.min(p1.col, p2.col);
+      const cMax = Math.max(p1.col, p2.col);
+      return colIndex >= cMin && colIndex <= cMax;
+    });
+  }
+
+  private isCellInsideRangeString(rowIndex: number, colIndex: number, rangeStr: string): boolean {
+    const parts = rangeStr.split(':');
+    const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+    const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
     if (!p1 || !p2) return false;
     const rMin = Math.min(p1.row, p2.row);
     const rMax = Math.max(p1.row, p2.row);
     const cMin = Math.min(p1.col, p2.col);
     const cMax = Math.max(p1.col, p2.col);
     return rowIndex >= rMin && rowIndex <= rMax && colIndex >= cMin && colIndex <= cMax;
+  }
+
+  public RecordSyntheticAgentSelection(
+    sheetId: string,
+    boundingRange: string,
+    agentName = 'AI Agent',
+  ): void {
+    if (this.syntheticAgentTimer) {
+      clearTimeout(this.syntheticAgentTimer);
+      this.syntheticAgentTimer = null;
+    }
+    this.SyntheticAgentPresence = {
+      ClientID: -999,
+      UserID: 'ai-agent',
+      Name: agentName,
+      Color: '#8b5cf6',
+      ActiveBlockID: `${sheetId}:${boundingRange}`,
+      CanEdit: true,
+      IsAgent: true,
+    };
+    this.cdr.markForCheck();
+    this.syntheticAgentTimer = setTimeout(() => {
+      this.SyntheticAgentPresence = null;
+      this.syntheticAgentTimer = null;
+      this.cdr.markForCheck();
+    }, 6000);
+  }
+
+  public GetRemoteCollaborators(): CollaboratorPresence[] {
+    const localClientId = this.CollaborationSession?.Doc?.clientID;
+    const remote = this.Collaborators.filter(
+      (c) => localClientId === undefined || c.ClientID !== localClientId,
+    );
+    if (this.SyntheticAgentPresence) {
+      const alreadyPresent = remote.some(
+        (c) =>
+          c.ClientID === this.SyntheticAgentPresence?.ClientID ||
+          c.UserID === this.SyntheticAgentPresence?.UserID,
+      );
+      if (!alreadyPresent) {
+        return [...remote, this.SyntheticAgentPresence];
+      }
+    }
+    return remote;
+  }
+
+  public ParseCollaboratorSheetRanges(activeBlockId: string | undefined): {
+    SheetID: string | null;
+    Ranges: string[];
+  } {
+    if (!activeBlockId || !activeBlockId.trim()) {
+      return { SheetID: null, Ranges: [] };
+    }
+    const trimmed = activeBlockId.trim();
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx > 0) {
+      const prefix = trimmed.slice(0, colonIdx).trim();
+      const remainder = trimmed.slice(colonIdx + 1).trim();
+      const matchesSheet = this.Workbook?.Worksheets?.some((w) => w.SheetID === prefix);
+      const isSheetPrefix =
+        matchesSheet || prefix.startsWith('sheet-') || ParseCellAddress(prefix) === null;
+      if (isSheetPrefix) {
+        const ranges = remainder
+          .split(',')
+          .map((r) => r.trim())
+          .filter((r) => r.length > 0);
+        return { SheetID: prefix, Ranges: ranges };
+      }
+    }
+    const ranges = trimmed
+      .split(',')
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+    return { SheetID: null, Ranges: ranges };
+  }
+
+  public GetCellCollaborators(rowIndex: number, colIndex: number): CollaboratorPresence[] {
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const remote = this.GetRemoteCollaborators();
+    return remote.filter((collab) => {
+      const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        return false;
+      }
+      return parsed.Ranges.some((rng) => this.isCellInsideRangeString(rowIndex, colIndex, rng));
+    });
+  }
+
+  public GetCellCollaboratorBorderColor(rowIndex: number, colIndex: number): string | null {
+    const collabs = this.GetCellCollaborators(rowIndex, colIndex);
+    return collabs[0]?.Color ?? null;
+  }
+
+  public GetCellPrimaryCollaboratorBadge(
+    rowIndex: number,
+    colIndex: number,
+  ): CollaboratorPresence | null {
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const remote = this.GetRemoteCollaborators();
+    for (const collab of remote) {
+      const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        continue;
+      }
+      for (const rng of parsed.Ranges) {
+        const parts = rng.split(':');
+        const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+        const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+        if (!p1 || !p2) continue;
+        const rMin = Math.min(p1.row, p2.row);
+        const cMin = Math.min(p1.col, p2.col);
+        if (rowIndex === rMin && colIndex === cMin) {
+          return collab;
+        }
+      }
+    }
+    return null;
+  }
+
+  public JumpToCollaboratorSelection(collab: CollaboratorPresence): void {
+    const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+    if (
+      parsed.SheetID &&
+      this.Workbook?.Worksheets?.some((w) => w.SheetID === parsed.SheetID)
+    ) {
+      this.Workbook.ActiveSheetID = parsed.SheetID;
+    }
+    if (parsed.Ranges.length > 0) {
+      this.SelectedRanges = parsed.Ranges;
+      this.SelectedRange = parsed.Ranges.join(', ');
+      const firstRange = parsed.Ranges[0];
+      const parts = firstRange.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (p1 && p2) {
+        this.ActiveRowIndex = Math.min(p1.row, p2.row);
+        this.ActiveColumnIndex = Math.min(p1.col, p2.col);
+      } else if (p1) {
+        this.ActiveRowIndex = p1.row;
+        this.ActiveColumnIndex = p1.col;
+      }
+      this.syncFormulaBarFromActiveCell();
+    }
+    this.cdr.markForCheck();
   }
 
   public GetInitials(name: string): string {

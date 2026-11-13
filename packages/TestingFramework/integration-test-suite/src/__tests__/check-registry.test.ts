@@ -102,6 +102,7 @@ import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.check
 import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
 import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
 import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { TransactionGroupConcurrencyClientChecks } from '../checks/transaction-group-concurrency-client.checks';
 import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
 import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
 import { SqlPipeExtractionFixtureChecks } from '../checks/sqlpipe-extraction-fixtures.checks';
@@ -294,6 +295,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
+        ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
     ];
 
@@ -431,7 +433,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
-        'metadata-consistency': 7,
+        'metadata-consistency': 8,
         'metadata-sync': 9,
         'metadata-sync-push': 12,
         'metadata-sync-queries': 10,
@@ -567,6 +569,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'task-graph-security': 10,
         'templates': 8,
         'trailing-runtime-state': 6,
+        'transaction-group-concurrency-client': 4,
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 5,
@@ -1077,6 +1080,10 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'task-graph-security.TGS7',
         'task-graph-security.TGS8',
         'task-graph-security.TGS9',
+        'transaction-group-concurrency-client.TGC1',
+        'transaction-group-concurrency-client.TGC2',
+        'transaction-group-concurrency-client.TGC3',
+        'transaction-group-concurrency-client.TGC4',
         'transaction-groups-batched.TGB1',
         'transaction-groups-batched.TGB2',
         'transaction-groups-batched.TGB3',
