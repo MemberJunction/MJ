@@ -11,6 +11,7 @@ import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { ArtifactMetadataEngine, ArtifactPermissionEngine, SpreadsheetEngine, XlsxOpenXmlAdapter } from '@memberjunction/core-entities';
 import { RegisterClass, MJEventType, MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 // Side-effect imports — force the @RegisterClass decorators on the production
 // libraries to run so the P2B.8 parent-chain tests can resolve them via ClassFactory
@@ -2494,23 +2495,32 @@ describe('ArtifactToolManager', () => {
         });
 
         describe('R13-3: Rollback on Commit Failure in all 4 Sub-Cases', () => {
-            it('R13-3a: Rollback marks versionEntity via ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback so Delete succeeds even when permissions revoked', async () => {
+            it('R13-3a / R15-2: rollback deletes the version as the system user, so it succeeds when the agent user lost Delete', async () => {
                 const artifactUuid = '11112222-3333-4444-5555-666677778888';
                 const user = new UserInfo();
                 user.ID = 'user-r13-3a';
+                const systemUser = new UserInfo();
+                systemUser.ID = 'system-user-r13-3a';
+                const systemUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
-                let wasTrustedOnDelete = false;
-                const deleteSpy = vi.fn().mockImplementation(async function(this: object) {
-                    wasTrustedOnDelete = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(this);
-                    return true;
-                });
-
+                // The caller's entity refuses Delete (rights revoked); only the system-user copy may delete.
+                const callerDelete = vi.fn().mockResolvedValue(false);
                 const mockVersionEntity = {
                     ID: 'ver-r13-3a',
                     ArtifactID: artifactUuid,
                     VersionNumber: 2,
                     Content: '# Draft',
                     NewRecord: vi.fn(),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: callerDelete,
+                };
+                const systemLoad = vi.fn().mockResolvedValue(true);
+                const deleteSpy = vi.fn().mockResolvedValue(true);
+                const systemVersionEntity = {
+                    ID: 'ver-r13-3a',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Load: systemLoad,
                     Save: vi.fn().mockResolvedValue(true),
                     Delete: deleteSpy,
                 };
@@ -2528,9 +2538,9 @@ describe('ArtifactToolManager', () => {
                         }
                         return { Success: true, Results: [] };
                     },
-                    GetEntityObject: async (entityName: string) => {
-                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
-                        return null;
+                    GetEntityObject: async (entityName: string, entityUser?: UserInfo) => {
+                        if (entityName !== 'MJ: Artifact Versions') return null;
+                        return entityUser?.ID === systemUser.ID ? systemVersionEntity : mockVersionEntity;
                     },
                 };
 
@@ -2567,8 +2577,10 @@ describe('ArtifactToolManager', () => {
                 });
 
                 expect(editRes.result.success).toBe(false);
+                expect(systemLoad).toHaveBeenCalledWith('ver-r13-3a');
                 expect(deleteSpy).toHaveBeenCalledTimes(1);
-                expect(wasTrustedOnDelete).toBe(true);
+                expect(callerDelete).not.toHaveBeenCalled();
+                systemUserSpy.mockRestore();
             });
 
             it('R13-3b: When commit throws or returns applied: false, hookResult.rollback is invoked alongside DB rollback', async () => {
@@ -2938,13 +2950,13 @@ describe('ArtifactToolManager', () => {
                 expect(rollbackSpy).not.toHaveBeenCalled();
             });
 
-            it('X4b: rollback Delete() failure clears trusted rollback mark in finally so subsequent Save() without edit rights is rejected', async () => {
+            it('X4b / R15-2: when the system-user delete fails, the previous content is saved back on that same system-user copy', async () => {
                 const artifactUuid = '66667777-8888-9999-0000-111122223333';
                 const user = new UserInfo();
                 user.ID = 'user-x4b';
-
-                let deleteCalled = false;
-                let wasMarkedOnDelete = false;
+                const systemUser = new UserInfo();
+                systemUser.ID = 'system-user-x4b';
+                const systemUserSpy = vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(systemUser);
 
                 const mockVersionEntity = {
                     ID: 'ver-x4b',
@@ -2953,11 +2965,19 @@ describe('ArtifactToolManager', () => {
                     Content: '# Draft',
                     NewRecord: vi.fn(),
                     Save: vi.fn().mockResolvedValue(true),
-                    Delete: vi.fn().mockImplementation(async () => {
-                        deleteCalled = true;
-                        wasMarkedOnDelete = ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(mockVersionEntity);
-                        return false;
-                    }),
+                    Delete: vi.fn().mockResolvedValue(false),
+                };
+                const systemVersionEntity = {
+                    ID: 'ver-x4b',
+                    ArtifactID: artifactUuid,
+                    VersionNumber: 2,
+                    Content: '# Doc\n\nAgent edit\n',
+                    ContentHash: 'agent-hash',
+                    ContentSizeBytes: 0,
+                    LatestResult: { CompleteMessage: 'FK violation' },
+                    Load: vi.fn().mockResolvedValue(true),
+                    Save: vi.fn().mockResolvedValue(true),
+                    Delete: vi.fn().mockResolvedValue(false),
                 };
 
                 const mockProvider = {
@@ -2970,9 +2990,9 @@ describe('ArtifactToolManager', () => {
                         }
                         return { Success: true, Results: [] };
                     },
-                    GetEntityObject: async (entityName: string) => {
-                        if (entityName === 'MJ: Artifact Versions') return mockVersionEntity;
-                        return null;
+                    GetEntityObject: async (entityName: string, entityUser?: UserInfo) => {
+                        if (entityName !== 'MJ: Artifact Versions') return null;
+                        return entityUser?.ID === systemUser.ID ? systemVersionEntity : mockVersionEntity;
                     },
                 };
 
@@ -3010,9 +3030,12 @@ describe('ArtifactToolManager', () => {
                 });
 
                 expect(editRes.result.success).toBe(false);
-                expect(deleteCalled).toBe(true);
-                expect(wasMarkedOnDelete).toBe(true);
-                expect(ArtifactPermissionEngine.Instance.IsTrustedServerVersionRollback(mockVersionEntity)).toBe(false);
+                expect(systemVersionEntity.Delete).toHaveBeenCalledTimes(1);
+                // The fallback runs on the system-user copy, so a caller without Edit cannot block it.
+                expect(systemVersionEntity.Save).toHaveBeenCalledTimes(1);
+                expect(systemVersionEntity.Content).toBe('# Doc\n\nInitial.\n');
+                expect(mockVersionEntity.Delete).not.toHaveBeenCalled();
+                systemUserSpy.mockRestore();
             });
 
             it('X5 & X6: when human restores v3 during agent v2 commit failure, v2 is NOT deleted, entry stays at v1, and subsequent edit without reload fails with concurrent modification error', async () => {

@@ -23,6 +23,13 @@ export class AdminMonitoringComponent extends BaseAdminContainerComponent {
     // monitoring belongs in the Communications app, not in the Admin app.
     public readonly Sections: AdminSection[] = [
         {
+            id: 'observatory',
+            label: 'Health & Telemetry Observatory',
+            icon: 'fa-solid fa-heart-pulse',
+            description: 'Live health probes, local ring buffer, OpenTelemetry spine & share layer',
+            source: { kind: 'resource', driverClass: 'HealthObservatoryResource' }
+        },
+        {
             id: 'diagnostics',
             label: 'Diagnostics',
             icon: 'fa-solid fa-stethoscope',

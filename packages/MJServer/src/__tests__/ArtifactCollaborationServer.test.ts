@@ -7510,6 +7510,199 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
         expect(room!.BaseVersionNumber).toBe(1);
     });
 
+    describe('R15: rollback undoes only the agent change', () => {
+        type DeferredLiveHook = (evt: {
+            artifactId: string;
+            alphaId: string;
+            previousContent?: string;
+            updatedContent: string;
+            tool: string;
+            deferCommit?: boolean;
+            contextUser?: UserInfo;
+        }) => Promise<ArtifactLiveMutationHookResult | void>;
+
+        /** The registered hook, wrapped so a deferred call always yields a result (the room is live). */
+        const getLiveHook = (): ((evt: Parameters<DeferredLiveHook>[0]) => Promise<ArtifactLiveMutationHookResult>) => {
+            const store = GetGlobalObjectStore();
+            const hook = store ? (store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] as DeferredLiveHook | undefined) : undefined;
+            expect(typeof hook).toBe('function');
+            return async (evt) => {
+                const res = await hook!(evt);
+                if (!res) {
+                    throw new Error('expected the live-mutation hook to return a result for a live room');
+                }
+                return res;
+            };
+        };
+
+        const raiseVersionSaved = (artifactId: string, versionId: string, content: string): void => {
+            versions.push({
+                ID: versionId,
+                ArtifactID: artifactId,
+                VersionNumber: 2,
+                Content: content,
+                ContentHash: `hash-${versionId}`,
+                UserID: editorUser.ID
+            });
+            MJGlobal.Instance.RaiseEvent({
+                component: null,
+                event: MJEventType.ComponentEvent,
+                eventCode: ARTIFACT_VERSION_SAVED_EVENT_CODE,
+                args: { ArtifactID: artifactId, VersionID: versionId, VersionNumber: 2, Content: content, UserID: editorUser.ID }
+            });
+        };
+
+        it('R15-1: keeps an unsaved human edit that was typed BEFORE the agent call', async () => {
+            const server = ArtifactCollaborationServer.Instance;
+            const artifactId = 'a1500000-0000-4000-8000-000000000001';
+            const v1 = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\nBudget.\n';
+            versions = [{ ID: 'ver-r15-1-v1', ArtifactID: artifactId, VersionNumber: 1, Content: v1, ContentHash: 'h1', UserID: editorUser.ID }];
+            workingStates.clear();
+
+            const room = await server.GetOrCreateRoom(artifactId, editorUser);
+            const yText = room!.Doc.getText('content');
+            // Bob types and does NOT save: the room now differs from the saved v1.
+            const unsaved = '# Plan\nIntro.\n## Goals\nShip.\n## Risks\n$25k (human)\n';
+            room!.Doc.transact(() => {
+                yText.delete(0, yText.length);
+                yText.insert(0, unsaved);
+            }, 'human-edit');
+
+            const agentContent = '# Plan\nIntro (agent).\n## Goals\nShip.\n## Risks\nBudget.\n';
+            const hookRes = await getLiveHook()({
+                artifactId,
+                alphaId: 'alpha-r15-1',
+                previousContent: v1,
+                updatedContent: agentContent,
+                tool: 'test-tool',
+                deferCommit: true,
+                contextUser: editorUser
+            });
+            // The manager persists the merged preview as v2; the saved event reconciles it into the room.
+            raiseVersionSaved(artifactId, 'ver-r15-1-v2', hookRes!.mergedContent!);
+            expect(yText.toString()).toContain('Intro (agent).');
+            expect(yText.toString()).toContain('$25k (human)');
+
+            versions.pop();
+            await hookRes!.rollback!('ver-r15-1-v2');
+
+            const finalContent = yText.toString();
+            expect(finalContent).toContain('Intro.');
+            expect(finalContent).not.toContain('Intro (agent).');
+            expect(finalContent).toContain('$25k (human)');
+            expect(room!.BaseVersionID).toBe('ver-r15-1-v1');
+            expect(room!.BaseVersionText).toBe(v1);
+            expect(room!.DirtyVersion).toBe(true);
+        });
+
+        const makeDeck = (titles: [string, string, string]): string =>
+            JSON.stringify({
+                SchemaVersion: '1.0',
+                DeckID: 'deck-r15',
+                Title: 'R15 Deck',
+                AspectRatio: '16:9',
+                Theme: {
+                    ThemeID: 'mj-default',
+                    Name: 'MemberJunction Default',
+                    PrimaryColor: '#2563EB',
+                    AccentColor: '#0EA5E9',
+                    BackgroundColor: '#FFFFFF',
+                    SurfaceColor: '#F8FAFC',
+                    TextPrimaryColor: '#0F172A',
+                    TextSecondaryColor: '#475569',
+                    BorderColor: '#E2E8F0',
+                    HeadingFontFamily: 'Inter, system-ui, sans-serif',
+                    BodyFontFamily: 'Inter, system-ui, sans-serif',
+                    MonospaceFontFamily: 'JetBrains Mono, monospace'
+                },
+                Slides: titles.map((title, idx) => ({
+                    SlideID: `s${idx + 1}`,
+                    Layout: 'Title',
+                    Title: title,
+                    Regions: []
+                }))
+            });
+
+        const slideTitle = (doc: Y.Doc, slideId: string): string | undefined => {
+            const raw = doc.getMap<string>('slidesById').get(slideId);
+            return raw ? (JSON.parse(raw) as { Title: string }).Title : undefined;
+        };
+
+        it('R15-3: deck rollback reverts the agent slide and keeps a slide a human edited during the save', async () => {
+            const server = ArtifactCollaborationServer.Instance;
+            const artifactId = 'a1500000-0000-4000-8000-000000000003';
+            const v1 = makeDeck(['One', 'Two', 'Three']);
+            versions = [{ ID: 'ver-r15-3-v1', ArtifactID: artifactId, VersionNumber: 1, Content: v1, ContentHash: 'h1', UserID: editorUser.ID }];
+            workingStates.clear();
+
+            const room = await server.GetOrCreateRoom(artifactId, editorUser);
+            expect(slideTitle(room!.Doc, 's2')).toBe('Two');
+
+            const hookRes = await getLiveHook()({
+                artifactId,
+                alphaId: 'alpha-r15-3',
+                previousContent: v1,
+                updatedContent: makeDeck(['One (agent)', 'Two', 'Three']),
+                tool: 'test-tool',
+                deferCommit: true,
+                contextUser: editorUser
+            });
+
+            // While the agent's Save() is in flight, a human edits slide 2.
+            const slidesById = room!.Doc.getMap<string>('slidesById');
+            const s2 = JSON.parse(slidesById.get('s2')!) as { Title: string };
+            s2.Title = 'Two (human)';
+            room!.Doc.transact(() => slidesById.set('s2', JSON.stringify(s2)), 'human-edit');
+
+            raiseVersionSaved(artifactId, 'ver-r15-3-v2', hookRes!.mergedContent!);
+            expect(slideTitle(room!.Doc, 's1')).toBe('One (agent)');
+            expect(slideTitle(room!.Doc, 's2')).toBe('Two (human)');
+
+            versions.pop();
+            await hookRes!.rollback!('ver-r15-3-v2');
+
+            expect(slideTitle(room!.Doc, 's1')).toBe('One');
+            expect(slideTitle(room!.Doc, 's2')).toBe('Two (human)');
+            expect(slideTitle(room!.Doc, 's3')).toBe('Three');
+            // Y.Text is re-derived from the structures, so the two agree.
+            const serialized = await server.GetRoomContent(artifactId, editorUser);
+            expect(serialized).toContain('Two (human)');
+            expect(serialized).not.toContain('One (agent)');
+        });
+
+        it('R15-3b: a slide the agent changed and a human then edited keeps the human edit', async () => {
+            const server = ArtifactCollaborationServer.Instance;
+            const artifactId = 'a1500000-0000-4000-8000-000000000004';
+            const v1 = makeDeck(['One', 'Two', 'Three']);
+            versions = [{ ID: 'ver-r15-3b-v1', ArtifactID: artifactId, VersionNumber: 1, Content: v1, ContentHash: 'h1', UserID: editorUser.ID }];
+            workingStates.clear();
+
+            const room = await server.GetOrCreateRoom(artifactId, editorUser);
+            const hookRes = await getLiveHook()({
+                artifactId,
+                alphaId: 'alpha-r15-3b',
+                previousContent: v1,
+                updatedContent: makeDeck(['One (agent)', 'Two', 'Three']),
+                tool: 'test-tool',
+                deferCommit: true,
+                contextUser: editorUser
+            });
+            raiseVersionSaved(artifactId, 'ver-r15-3b-v2', hookRes!.mergedContent!);
+            expect(slideTitle(room!.Doc, 's1')).toBe('One (agent)');
+
+            // A human builds on the agent's slide before the commit fails.
+            const slidesById = room!.Doc.getMap<string>('slidesById');
+            const s1 = JSON.parse(slidesById.get('s1')!) as { Title: string };
+            s1.Title = 'One (agent, then human)';
+            room!.Doc.transact(() => slidesById.set('s1', JSON.stringify(s1)), 'human-edit');
+
+            versions.pop();
+            await hookRes!.rollback!('ver-r15-3b-v2');
+
+            expect(slideTitle(room!.Doc, 's1')).toBe('One (agent, then human)');
+        });
+    });
+
     it('X1b: same as X1 with MJ_ARTIFACT_VERSION_SAVED disabled -> rollback() is a no-op so human edit is preserved', async () => {
         const server = ArtifactCollaborationServer.Instance;
         const testArtifactId = 'a1400000-0000-4000-8000-000000000002';
