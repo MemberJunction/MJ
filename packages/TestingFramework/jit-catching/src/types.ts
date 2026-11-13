@@ -89,9 +89,10 @@ export interface GenerationLimits {
     TestsPerPackage: number; RisksPerPackage: number; TestsPerRisk: number; PackagesPerPR: number; ParallelSessions: number;
     TurnsPerSession: number; TokensPerSession: number; UsdPerSession: number;
 }
+/** `Risks` holds the risks one IntentAware session covers, in rank order; it is empty for DodgyDiff. */
 export interface GenerationRequest {
     Run: Run; Analysis: ChangeAnalysis; Package: string; PackageDir: string; BaseRootDir: string; Method: GenerationMethod;
-    Risk: Risk | null; Model: string; Limits: GenerationLimits;
+    Risks: Risk[]; Model: string; Limits: GenerationLimits;
 }
 /** `EndReason` is how the session ended (the SDK result subtype, `aborted_token_budget`, or `error` when it threw); `Turns` is its turn count. */
 export interface GenerationResult { Tests: CandidateTest[]; Tokens: TokenUsage; TranscriptPath: string | null; EndReason: string; Turns: number; }

@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { query, tool, createSdkMcpServer, type CanUseTool, type McpSdkServerConfigWithInstance, type Options, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import { BaseTestGenerator } from '../contracts/BaseTestGenerator';
-import type { CandidateTest, GenerationRequest, GenerationResult, MutantEdit, TokenUsage } from '../types';
+import type { CandidateTest, GenerationRequest, GenerationResult, MutantEdit, Risk, TokenUsage } from '../types';
 import type { Sandbox } from '../sandbox/Sandbox';
 import type { PackageMap } from '../analyzer/PackageMap';
 import type { Settings } from '../settings';
@@ -35,30 +35,42 @@ export interface ClaudeAgentGeneratorOptions {
 /** What the generator knows about one allocated file: the source written through write_test and what run_test proved on it. */
 interface FileRecord { Source: string; Base: boolean; Mutant: LastMutantRecord | null; }
 
-/** State of one generation session. */
+/** State of one generation session. `RiskOf` maps each allocated file ID to the risk it tests (IntentAware only). */
 interface Session {
-    Request: GenerationRequest; PackageDir: string; JitDir: string; IDs: string[];
+    Request: GenerationRequest; PackageDir: string; JitDir: string; IDs: string[]; RiskOf: Map<string, Risk>;
     Tool: RunTestRunner; Files: Map<string, FileRecord>; Transcript: string[];
 }
 
 const WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW;
 
-/** One agent session per (package, method[, risk]) that only writes tests and proves them with run_test (§8.2, §8.3). */
+/** The risk as a test's `RiskText`: what could break and the symbol. */
+export function RiskText(risk: Risk): string { return `${risk.WhatCouldBreak} (${risk.Symbol})`; }
+
+/** The session's risk IDs joined with `+`, or null for a session without risks. */
+export function SessionRiskID(r: Pick<GenerationRequest, 'Risks'>): string | null { return r.Risks.length ? r.Risks.map((x) => x.ID).join('+') : null; }
+
+/**
+ * One agent session per (package, method[, risk group]) that only writes tests and proves them with run_test (§8.2, §8.3).
+ * An IntentAware session gets `TestsPerRisk` files per risk, and its turn, token and USD limits are multiplied by its number of risks.
+ */
 export class ClaudeAgentGenerator extends BaseTestGenerator {
     constructor(private readonly o: ClaudeAgentGeneratorOptions) { super(); }
 
     public async Generate(r: GenerationRequest): Promise<GenerationResult> {
         const pkg = this.o.PackageMap.Get(r.Package); if (!pkg) throw new Error(`unknown package ${r.Package}`);
         const jitDir = `${pkg.Dir}/src/__tests__/jit`; mkdirSync(join(r.BaseRootDir, jitDir), { recursive: true });
-        const ids = Array.from({ length: r.Method === 'DodgyDiff' ? r.Limits.TestsPerPackage : r.Limits.TestsPerRisk }, () => NewID());
+        const perRisk = r.Risks.map(() => Array.from({ length: r.Limits.TestsPerRisk }, () => NewID()));
+        const ids = r.Method === 'DodgyDiff' ? Array.from({ length: r.Limits.TestsPerPackage }, () => NewID()) : perRisk.flat();
+        const riskOf = new Map(perRisk.flatMap((group, i) => group.map((id): [string, Risk] => [id, r.Risks[i]])));
         const factory = this.o.RunTestFactory ?? ((x: RunTestToolOptions) => new RunTestTool(x));
-        const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, Files: new Map(), Transcript: [],
+        const s: Session = { Request: r, PackageDir: pkg.Dir, JitDir: jitDir, IDs: ids, RiskOf: riskOf, Files: new Map(), Transcript: [],
             Tool: factory({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings }) };
         let usage: TokenUsage = { Model: r.Model, InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 }; let subtype = 'none'; let turns = 0;
         const transcriptPath = this.transcriptPath(s);
         try {
-            const ctx = buildContext(s);
-            const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession, TokenBudget: r.Limits.TokensPerSession, BudgetUsd: r.Limits.UsdPerSession,
+            const ctx = buildContext(s, perRisk);
+            const scale = Math.max(1, r.Risks.length);
+            const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession * scale, TokenBudget: r.Limits.TokensPerSession * scale, BudgetUsd: r.Limits.UsdPerSession * scale,
                 Price: this.o.Settings.Prices[r.Model] ?? null, Effort: this.o.Settings.GeneratorEffort, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
             for await (const m of (this.o.Runner ?? RunnerForModel(r.Model))(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
                 if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; turns = m.Turns; }
@@ -72,14 +84,14 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
 
     private transcriptPath(s: Session): string {
         const r = s.Request;
-        return join(this.o.TranscriptDir, `${safeName(r.Run.ID)}-${safeName(s.PackageDir)}-${r.Method}${r.Risk ? `-${safeName(r.Risk.ID)}` : ''}.log`);
+        return join(this.o.TranscriptDir, `${safeName(r.Run.ID)}-${safeName(s.PackageDir)}-${r.Method}${r.Risks.length ? `-${safeName(SessionRiskID(r) ?? '')}` : ''}.log`);
     }
 }
 
-function buildContext(s: Session): PromptContext {
+function buildContext(s: Session, testIDsPerRisk: string[][]): PromptContext {
     const r = s.Request; const changed = r.Analysis.ChangedFiles.filter((f) => f.Package === r.Package);
     return {
-        PackageRelDir: s.PackageDir, JitDir: s.JitDir, TestIDs: s.IDs, ChangedFilesInPackage: changed.map((f) => f.Path),
+        PackageRelDir: s.PackageDir, JitDir: s.JitDir, TestIDs: s.IDs, TestIDsPerRisk: testIDsPerRisk, ChangedFilesInPackage: changed.map((f) => f.Path),
         ExistingTestPaths: existingTests(join(r.BaseRootDir, s.PackageDir, 'src')).map((p) => `${s.PackageDir}/src/${p}`),
         Diff: changed.flatMap((f) => f.Hunks).map((h) => `--- ${h.Path} @@ -${h.OldStart},${h.OldLines} +${h.NewStart},${h.NewLines} @@\n${h.Lines.join('\n')}`).join('\n'),
     };
@@ -155,8 +167,8 @@ function collectCandidates(s: Session, usage: TokenUsage, transcriptPath: string
         const rec = s.Files.get(id);
         const present = lstatSync(join(r.BaseRootDir, jitFile(s, id)), { throwIfNoEntry: false }) !== undefined;
         if (!rec && !present) continue;
-        const reason = failureReason(s, id, rec);
-        tests.push({ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null, RiskText: r.Risk ? `${r.Risk.WhatCouldBreak} (${r.Risk.Symbol})` : null,
+        const reason = failureReason(s, id, rec); const risk = s.RiskOf.get(id);
+        tests.push({ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: risk?.ID ?? null, RiskText: risk ? RiskText(risk) : null,
             Mutant: rec?.Mutant ? { Edits: rec.Mutant.Edits, Patch: rec.Mutant.Patch } : null, MutantFailure: rec?.Mutant?.Failure ?? null, FilePath: jitFile(s, id), Source: rec?.Source ?? '',
             GenerationOutcome: reason ? 'Failed' : 'Produced', FailureReason: reason, Tokens: usage, TranscriptURL: transcriptPath });
     }

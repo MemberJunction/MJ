@@ -2,14 +2,14 @@ import { join } from 'node:path';
 import { GitHub, type PullRequestInfo } from '../git/GitHub';
 import { GitRepo } from '../git/GitRepo';
 import { ChangeAnalyzer, type PullRequestText } from '../analyzer/ChangeAnalyzer';
-import { ClaudeAgentGenerator } from '../generator/ClaudeAgentGenerator';
+import { ClaudeAgentGenerator, RiskText, SessionRiskID } from '../generator/ClaudeAgentGenerator';
 import { NoUsage, SessionError } from '../generator/UsageCounter';
 import { CreateLLM } from '../judges/ProviderFactory';
 import type { PackageMap } from '../analyzer/PackageMap';
 import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
 import type { RedactionCheck } from '../sandbox/Redaction';
 import type { Settings } from '../settings';
-import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, Run, SessionRecord, TokenUsage, Trigger } from '../types';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, Risk, Run, SessionRecord, TokenUsage, Trigger } from '../types';
 import { NewID, NewRunID } from '../ids';
 import { RedactTail } from '../sandbox/Redaction';
 import { RunDir } from './RunDir';
@@ -52,7 +52,7 @@ export class GenerateError extends Error {
 
 /**
  * Job 1: checks the environment, resolves the revisions, analyses the change, prepares base for the packages under test and builds it, runs one generation session per
- * (package, method[, risk]) and writes `generation.json` with one record per session, the analyzer's and the sessions' tokens per role and model, and the time of each stage,
+ * (package, method[, risk group]) and writes `generation.json` with one record per session, the analyzer's and the sessions' tokens per role and model, and the time of each stage,
  * which it also prints on one stdout line. The base worktree stays for the execute and assess jobs.
  * A failure from the analyzer on is thrown as a `GenerateError`; an earlier failure is thrown as it is.
  */
@@ -98,7 +98,7 @@ async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, baseS
     const results = generated.Result;
     const timings: GenerationTimings = { AnalyzeMs: analyzed.Ms, PrepareBaseMs: prepared.Ms, BuildBaseMs: built.Ms, GenerateMs: generated.Ms };
     const tests = results.flatMap((r) => r.Tests);
-    const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null, EndReason: results[i].EndReason,
+    const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: SessionRiskID(r), EndReason: results[i].EndReason,
         Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,
         Produced: results[i].Tests.filter((x) => x.GenerationOutcome === 'Produced').length, Failed: results[i].Tests.filter((x) => x.GenerationOutcome === 'Failed').length }));
     run.TokensByModel = SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...results.map((r) => ({ ...r.Tokens, Role: 'Generator' as const }))]); run.EndedAt = new Date().toISOString();
@@ -129,33 +129,40 @@ async function pullRequestText(d: GenerateDeps, pr: PullRequestInfo | null, head
     return { Title: await d.Repo.Subject(headSHA), Body: '' };
 }
 
-/** Per package to test: one DodgyDiff request, then one IntentAware request per risk in that package, up to `RisksPerPackage`. */
+/**
+ * Per package to test: one DodgyDiff request, then the package's risks (up to `RisksPerPackage`, in rank order) in
+ * IntentAware requests of at most `RisksPerSession` risks each.
+ */
 function buildRequests(run: Run, analysis: ChangeAnalysis, baseRoot: string, settings: Settings, map: Pick<PackageMap, 'Get' | 'PackageForPath'>): GenerationRequest[] {
     const requests: GenerationRequest[] = [];
     for (const pkg of analysis.PackagesToTest) {
         const info = map.Get(pkg); if (!info) throw new Error(`unknown package ${pkg}`);
         const common = { Run: run, Analysis: analysis, Package: pkg, PackageDir: join(baseRoot, info.Dir), BaseRootDir: baseRoot, Model: settings.GeneratorModel, Limits: settings.Limits };
-        requests.push({ ...common, Method: 'DodgyDiff', Risk: null });
+        requests.push({ ...common, Method: 'DodgyDiff', Risks: [] });
         const risks = analysis.Risks.filter((r) => map.PackageForPath(r.File)?.Name === pkg).slice(0, settings.Limits.RisksPerPackage);
-        for (const risk of risks) requests.push({ ...common, Method: 'IntentAware', Risk: risk });
+        const size = settings.Limits.RisksPerSession;
+        for (let i = 0; i < risks.length; i += size) requests.push({ ...common, Method: 'IntentAware', Risks: risks.slice(i, i + size) });
     }
     return requests;
 }
 
 /**
- * Runs one generation session. A session that throws becomes one failed test for its request, with the redacted
- * first line of the error as reason, the tokens a `SessionError` carries (zero otherwise) with role `Generator` and end reason `error`, so the other sessions still finish.
+ * Runs one generation session. A session that throws becomes one failed test per risk of its request (one test for
+ * DodgyDiff), each with its own risk, the redacted first line of the error as reason, the tokens a `SessionError` carries (zero otherwise) with role `Generator` and end reason `error`, so the other sessions still finish.
  */
 async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<GenerationResult> {
     try { return await t.Generator.Generate(r); }
     catch (e) {
         const message = (e instanceof Error ? e.message : String(e)).split('\n')[0].trim();
-        const dir = t.PackageMap.Get(r.Package)?.Dir; const id = NewID();
+        const dir = t.PackageMap.Get(r.Package)?.Dir;
         if (!dir) throw e;
         const tokens: TokenUsage = { ...(e instanceof SessionError ? e.Usage : NoUsage(r.Model)), Role: 'Generator' };
-        return { Tokens: tokens, TranscriptPath: null, EndReason: 'error', Turns: 0, Tests: [{ ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: r.Risk?.ID ?? null,
-            RiskText: r.Risk ? `${r.Risk.WhatCouldBreak} (${r.Risk.Symbol})` : null, Mutant: null, MutantFailure: null, FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`,
-            Source: '', GenerationOutcome: 'Failed', FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null }] };
+        const risks: (Risk | null)[] = r.Risks.length ? r.Risks : [null];
+        return { Tokens: tokens, TranscriptPath: null, EndReason: 'error', Turns: 0, Tests: risks.map((risk) => {
+            const id = NewID();
+            return { ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: risk?.ID ?? null, RiskText: risk ? RiskText(risk) : null, Mutant: null, MutantFailure: null,
+                FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`, Source: '', GenerationOutcome: 'Failed' as const, FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null };
+        }) };
     }
 }
 
