@@ -624,7 +624,9 @@ const NON_SECRET_ENV_KEYS: ReadonlySet<string> = new Set([
     'DB_PORT',
     'DB_DATABASE',
     'DB_USER',
+    'DB_USERNAME',
     'CODEGEN_DB_USER',
+    'CODEGEN_DB_USERNAME',
 ]);
 
 /**
