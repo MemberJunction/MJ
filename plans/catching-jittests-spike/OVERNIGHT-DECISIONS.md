@@ -196,6 +196,30 @@ Options for the next cut:
 - **D. One Opus judge call for all weak catches of a run.** Pro: the diff is sent once (judge cost was 0.3 to 1.0 USD per PR in this round). Con: code change in the judge panel and a new prompt to validate. Kept as the next step if B is not enough.
 - **Choice: B.** Round 7 runs B on #4450, #4418, #4290, #3644 and #5729 with a 9 USD cap, then the match check. #4253 is left out because its match check cannot run.
 
+## N17. Round 7 result (smaller plan) and round 8
+
+Round 7 ran option B of N16 (2 packages, 3 diff-only tests, 2 risks per package, medium thinking, shared session).
+
+| PR | Validation USD | Round 7 USD | Reported | Match check |
+|---|---|---|---|---|
+| #4418 | 2.34 | 2.29 | 3 | NOT matched |
+| #4450 | 2.08 | 1.98 | 3 | Matched (one diff-only test and one risk 1 test) |
+| #4290 | 4.19 | 2.07 | 1 | NOT matched |
+| #3644 | not run | 1.91 | 0 | NOT matched |
+| #5729 | not run | 2.09 | 0 | NOT matched |
+
+Mean 2.07 USD per PR, total 10.34 USD. The plan removed the third package of #4290, but fewer tests per session did not make a session cheaper: a session costs 0.2 to 0.6 USD for 2 or 5 tests alike. The same PR matched as before.
+
+Generator cost of the 20 sessions, by token kind: new input 2.70 USD (37%), output 3.09 USD (42%), cached input 1.51 USD (21%). The 63 stored tests hold about 104 000 tokens of code; the sessions wrote 411 000 output tokens. So most of the output is thinking, not test code.
+
+Options:
+
+- **A. Low thinking, now with the type check.** Round 2 used low thinking and cost 0.31 to 0.47 USD per PR, but it ran before `run_test` had the type check, so all its #3831 tests were invalid. Low thinking was never tested with the type check. Pro: settings only; targets the largest cost part. Con: weaker tests are possible; the type check can add repair turns.
+- **B. One session per package for both methods.** Pro: the package files are read once. Con: a longer session re-reads a larger history each turn; code change; gain not clear from the data.
+- **C. One Opus judge call per run.** Judge cost in round 7 was 0.3 to 0.7 USD per PR. Pro: about 0.2 to 0.4 USD saved per PR. Con: code change and a new prompt to validate.
+- **D. One package per PR.** Pro: half the sessions. Con: a bug in the second package is lost.
+- **Choice: A first (round 8: #4450, #3831, #4418, 5 USD cap), because it needs no code and tests the largest part.** C is next if the catch on #4450 and #3831 stays.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -209,3 +233,4 @@ Options for the next cut:
 | 5 | Hydrogen, default thinking, shared session: #5906, #5513, #3831 | 3.90 | 26.26 |
 | M | Match checks, rounds 1 and 3 to 5 (no model spend) | 0.00 | 26.26 |
 | 6 | Validation, candidate A: #4253, #4418, #4450, #4290 (stopped at the cap) | 11.36 | 37.62 |
+| 7 | Smaller plan (N16 B): #4418, #4450, #4290, #3644, #5729 | 10.34 | 47.96 |
