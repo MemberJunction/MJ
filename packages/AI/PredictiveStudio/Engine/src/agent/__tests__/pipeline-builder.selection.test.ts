@@ -8,7 +8,9 @@ import {
   type CandidateInnerScore, type StoredGateRecord, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, RESERVED_CANDIDATE_NAMES, RESERVED_CANDIDATE_PREFIX, type AlgorithmRow } from '../pipeline-builder';
-import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
+import type { Actor, TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { LifecycleGate } from '../../registry/lifecycle-gate';
+import type { EvaluateOutcome, EvaluateSubject, GateContext, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { TrainingDelegation } from '../../operations/delegation';
 import { PipelineMigration } from '../../migration/legacy-pipeline-migration';
 import type { TrainModelInput, TrainModelResult } from '../../training/types';
@@ -95,6 +97,8 @@ describe('PredictiveStudioPipelineBuilder.MatchAlgorithm', () => {
 // ---- Build: the one training of a plan ------------------------------------------------------------------------------
 
 const RUN_ID = 'B1B2C3D4-0000-4000-8000-0000000000AA';
+/** The StatusReason the gate writes for a kept simple baseline (the stored decision's reason). */
+const KEPT_REASON = 'The simple baseline glm beats the flat guess; the trained model does not beat it, so the simple baseline is kept.';
 const plan = (labels: readonly string[]): ModelingPlanSpec => ({
   Goal: 'Predict renewal',
   TargetDefinition: { EntityName: 'Members', TargetVariable: 'Renewed', ProblemType: 'classification', SuccessMetric: 'AUC' },
@@ -148,14 +152,14 @@ function measuredModel(): MJMLModelEntity {
 
 /**
  * A model the builder may publish: it records how many times it was saved and reloaded; a reload reads back the status
- * `Stored` holds (what the promotion gate saved).
+ * `Stored` holds (what the lifecycle gate saved).
  */
 function publishableModel(lineage: string | null = null): { readonly Entity: MJMLModelEntity; readonly Saves: number; readonly Loads: number; Stored: MJMLModelEntity['Status'] } {
   const state = { Saves: 0, Loads: 0, Stored: 'Draft' as MJMLModelEntity['Status'] };
   const entity = {
-    ID: 'M-1', Version: 1, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.95 }), FeatureImportance: null, Lineage: lineage, LatestResult: null,
+    ID: 'M-1', Version: 1, Status: 'Draft', StatusReason: null as string | null, HoldoutMetrics: JSON.stringify({ auc: 0.95 }), FeatureImportance: null, Lineage: lineage, LatestResult: null,
     Save: async () => { state.Saves += 1; return true; },
-    Load: async () => { state.Loads += 1; entity.Status = state.Stored; return true; },
+    Load: async () => { state.Loads += 1; entity.Status = state.Stored; entity.StatusReason = state.Stored === 'KeepBaseline' ? KEPT_REASON : null; return true; },
   };
   return {
     Entity: entity as unknown as MJMLModelEntity,
@@ -166,22 +170,44 @@ function publishableModel(lineage: string | null = null): { readonly Entity: MJM
   };
 }
 
-/** A promotion gate that records each request; it refuses `refuseAt` with `refusal`, else it promotes and stores the status. */
-class RecordingGate implements IModelPromotionGate {
-  public readonly Requests: PromoteModelRequest[] = [];
-  constructor(private readonly onPromote: (status: PromoteModelRequest['targetStatus']) => void, private readonly refuseAt?: PromoteModelRequest['targetStatus'], private readonly refusal?: PromoteModelOutcome) {}
-  public async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
-    this.Requests.push(request);
-    if (request.targetStatus === this.refuseAt && this.refusal !== undefined) return this.refusal;
-    this.onPromote(request.targetStatus);
-    return { kind: 'promoted', newStatus: request.targetStatus };
+/** One gate call the build made: the method, its subject, the initiator and the context user and provider. */
+interface GateCall { readonly Method: 'Evaluate' | 'Publish'; readonly Subject: EvaluateSubject | { readonly modelId: string }; readonly Actor: Actor; readonly Ctx: GateContext }
+
+/**
+ * A lifecycle gate fake that records every call. Evaluate stores `Validated` (through `onEvaluate`) unless it is built
+ * with a refusal; Publish is recorded so a test can pin that the build never calls it.
+ */
+class RecordingGate extends LifecycleGate {
+  public readonly Requests: GateCall[] = [];
+  constructor(
+    private readonly onEvaluate: (status: 'Validated' | 'KeepBaseline') => void, private readonly refusal?: TransitionRefusal, private readonly to: 'Validated' | 'KeepBaseline' = 'Validated',
+  ) { super(); }
+  public override async Evaluate(subject: EvaluateSubject, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
+    this.Requests.push({ Method: 'Evaluate', Subject: subject, Actor: actor, Ctx: ctx });
+    if (this.refusal !== undefined) return { Kind: 'refused', Refusal: this.refusal };
+    this.onEvaluate(this.to);
+    return { Kind: 'evaluated', ModelID: 'M-1', From: 'Draft', To: this.to };
+  }
+  public override async Publish(request: PublishRequest, ctx: GateContext): Promise<PublishOutcome> {
+    this.Requests.push({ Method: 'Publish', Subject: { modelId: request.modelId }, Actor: request.initiator, Ctx: ctx });
+    throw new Error('the build must not publish (M4b routes it through the automated publisher)');
   }
 }
 
-/** The builder publishing through the given gate. */
+/** A gate fake for a run with no model row: Evaluate records the run's one run-level refusal (the stored trainer reason). */
+class RunRecordingGate extends RecordingGate {
+  constructor(private readonly reason: string) { super(() => undefined); }
+  public override async Evaluate(subject: EvaluateSubject, actor: Actor, ctx: GateContext): Promise<EvaluateOutcome> {
+    this.Requests.push({ Method: 'Evaluate', Subject: subject, Actor: actor, Ctx: ctx });
+    if (!('trainingRunId' in subject)) throw new Error('a no-model run is evaluated by its training run');
+    return { Kind: 'run-recorded', TrainingRunID: subject.trainingRunId, Refusal: { kind: 'gate-no-signal', reason: this.reason }, RefusalRecordID: 'REC-1' };
+  }
+}
+
+/** The builder evaluating through the given gate. */
 class GatedBuilder extends PredictiveStudioPipelineBuilder {
-  constructor(private readonly gate: IModelPromotionGate) { super(); }
-  protected override CreatePromotionGate(): IModelPromotionGate { return this.gate; }
+  constructor(private readonly gate: LifecycleGate) { super(); }
+  protected override CreateLifecycleGate(): LifecycleGate { return this.gate; }
 }
 
 /**
@@ -258,7 +284,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(ConsoleCapture.Lines(errors)).toHaveLength(1);
   });
 
-  it("publishes a model whose run's stored gate decision ships it through the promotion gate, and renders the verdict from that run", async () => {
+  it("evaluates (never publishes) a model whose run's stored gate decision ships it: Evaluate({ trainingRunId }), the model stays Validated, and the verdict renders from that run", async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
@@ -269,29 +295,45 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const provider = world.Provider();
     const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider, user });
     const gate = storedGate(run);
-    // Draft → Validated → Published through the gate with no sign-off; the builder never saves the model itself.
-    expect(promotions.Requests.map((r) => [r.modelId, r.targetStatus, r.signOff, r.contextUser, r.provider])).toEqual([['M-1', 'Validated', false, user, provider], ['M-1', 'Published', false, user, provider]]);
-    expect([result.published, result.heldReason, model.Saves, model.Loads, model.Entity.Status]).toEqual([true, null, 0, 1, 'Published']);
+    // Draft → Validated through the gate, by the run, as the user; nothing publishes until M4b; the builder never saves the model itself.
+    expect(promotions.Requests.map((r) => [r.Method, r.Subject, r.Actor, r.Ctx.ContextUser, r.Ctx.Provider])).toEqual([['Evaluate', { trainingRunId: RUN_ID }, { kind: 'human', userId: user.ID }, user, provider]]);
+    expect([result.published, result.readyToPublish, result.heldReason, model.Saves, model.Loads, model.Entity.Status]).toEqual([
+      false, true, 'Evaluated to Validated through the lifecycle gate — it clears the bar to publish, and is published only when you ask.', 0, 1, 'Validated',
+    ]);
     expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null }));
     expect(result.Gate).toEqual({ Outcome: 'model', Reason: gate.reason.text });
     expect(result.trust?.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'B', Value: gate.intervals.modelVsDummy.value, Lower: gate.intervals.modelVsDummy.lower, Upper: gate.intervals.modelVsDummy.upper, Metric: gate.primaryMetric });
   });
 
-  it('holds a model the promotion gate refuses, with the refusal as the reason, at the status the gate left it', async () => {
+  it('a model the gate keeps at KeepBaseline is reported as the kept simple baseline with the stored reason, not as clearing the bar', async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
     const model = publishableModel();
-    const refusal: PromoteModelOutcome = { kind: 'not-servable', message: "ML Model 'M-1' cannot be published or score records: forecast models are not served by /predict yet." };
-    const promotions = new RecordingGate((status) => { model.Stored = status; }, 'Published', refusal);
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, undefined, 'KeepBaseline');
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
     const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
-    expect(promotions.Requests.map((r) => r.targetStatus)).toEqual(['Validated', 'Published']);
-    expect([result.published, model.Saves, model.Entity.Status]).toEqual([false, 0, 'Validated']);
-    expect(result.heldReason).toBe("Not published — the promotion gate refused to move it to Published: ML Model 'M-1' cannot be published or score records: forecast models are not served by /predict yet.");
+    expect([result.published, result.readyToPublish, model.Entity.Status, result.heldReason]).toEqual([
+      false, true, 'KeepBaseline', `Evaluated to KeepBaseline through the lifecycle gate — the gate kept the simple baseline. ${KEPT_REASON} It is published only when you ask.`,
+    ]);
+    expect(result.heldReason).not.toContain('clears the bar');
   });
 
-  it('holds a calibration-held model with the reason, without asking the promotion gate', async () => {
+  it('holds a model the lifecycle gate refuses to evaluate, with the refusal as the reason, at the status the gate left it', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const refusal: TransitionRefusal = { kind: 'not-servable', reason: 'ML Model M-1 has no stored gate decision to evaluate' };
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, refusal);
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    expect(promotions.Requests.map((r) => r.Method)).toEqual(['Evaluate']);
+    expect([result.published, result.readyToPublish, model.Saves, model.Entity.Status]).toEqual([false, false, 0, 'Draft']);
+    expect(result.heldReason).toBe('Not evaluated — the lifecycle gate refused: The model cannot be served: ML Model M-1 has no stored gate decision to evaluate');
+  });
+
+  it('a calibration-held model is evaluated and held', async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
@@ -299,11 +341,42 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const promotions = new RecordingGate((status) => { model.Stored = status; });
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
     const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
-    expect([result.published, promotions.Requests.length, model.Saves, model.Entity.Status]).toEqual([false, 0, 0, 'Draft']);
+    expect(promotions.Requests.map((r) => [r.Method, r.Subject])).toEqual([['Evaluate', { trainingRunId: RUN_ID }]]);
+    expect([result.published, result.readyToPublish, model.Saves, model.Entity.Status]).toEqual([false, false, 0, 'Validated']);
     expect(result.heldReason).toBe('Held — its calibration slope 0.50 is outside 0.8–1.2, so its family is hidden (calibration hold); a hidden family is never published.');
   });
 
-  it('keeps a model that clears the bar in Draft when publishing is off, ready to publish, without asking the promotion gate', async () => {
+  it("a leakage-flagged model is evaluated through the gate and held from publishing with the gate's StatusReason", async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, undefined, 'KeepBaseline');
+    const run = completedRun([inner('A', 0.42), inner('B', 0.40)], 'B');
+    const flagged = { ...run, Notes: 'Training completed. LEAKAGE WARNING: Age alone predicts the target.' } as unknown as MJMLTrainingRunEntity;
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: flagged });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    expect(promotions.Requests.map((r) => [r.Method, r.Subject])).toEqual([['Evaluate', { trainingRunId: RUN_ID }]]);
+    expect([result.published, result.readyToPublish, result.leakageFlagged, model.Entity.Status, model.Entity.StatusReason]).toEqual([false, false, true, 'KeepBaseline', KEPT_REASON]);
+    expect(result.heldReason).toBe('Held for analyst review — training flagged a possible data-leakage issue.');
+  });
+
+  it("a leakage-held model whose evaluation the gate refuses carries both the hold and the gate's refusal", async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const refusal: TransitionRefusal = { kind: 'not-servable', reason: 'ML Model M-1 has no stored gate decision to evaluate' };
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, refusal);
+    const run = completedRun([inner('A', 0.42), inner('B', 0.40)], 'B');
+    const flagged = { ...run, Notes: 'Training completed. LEAKAGE WARNING: Age alone predicts the target.' } as unknown as MJMLTrainingRunEntity;
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: flagged });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    expect([result.published, result.readyToPublish, model.Entity.Status]).toEqual([false, false, 'Draft']);
+    expect(result.heldReason).toBe('Held for analyst review — training flagged a possible data-leakage issue. — lifecycle gate: Not evaluated — the lifecycle gate refused: The model cannot be served: ML Model M-1 has no stored gate decision to evaluate');
+  });
+
+  it('keeps a model that clears the bar in Draft when publishing is off, ready to publish, without asking the lifecycle gate', async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
@@ -327,15 +400,15 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(result.heldReason).toBe('Held — its calibration slope 0.50 is outside 0.8–1.2, so its family is hidden (calibration hold); a hidden family is never published.');
   });
 
-  it('reports a published model as not waiting to be published', async () => {
+  it('reports an evaluated model as ready to publish, not published: neither the build nor anything after it publishes (until M4b)', async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
     const model = publishableModel();
     const promotions = new RecordingGate((status) => { model.Stored = status; });
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
-    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: true });
-    expect([result.published, result.readyToPublish]).toEqual([true, false]);
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: true, initiator: { kind: 'agent', agentRunId: RUN_ID } });
+    expect([result.published, result.readyToPublish, model.Entity.Status, promotions.Requests.map((r) => [r.Method, r.Actor])]).toEqual([false, true, 'Validated', [['Evaluate', { kind: 'agent', agentRunId: RUN_ID }]]]);
   });
 
   it("holds a model whose run's stored gate decision is no-signal, with the stored reason", async () => {
@@ -346,8 +419,13 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const noSignal = { ...storedEnvelope(run), gate: { ...storedGate(run), decision: { outcome: 'no-signal' as const, branch: 'c:no-signal' as const, shipped: null, shippedRole: null, note: null }, reason: { code: 'nothing-beats-dummy' as const, text: 'Neither the model nor any simple baseline beats the flat guess.' } } };
     const model = publishableModel();
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(noSignal) } as unknown as MJMLTrainingRunEntity });
-    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
-    expect([result.published, result.heldReason, model.Saves]).toEqual([false, 'Neither the model nor any simple baseline beats the flat guess.', 0]);
+    const refusal: TransitionRefusal = { kind: 'gate-no-signal', reason: 'Neither the model nor any simple baseline beats the flat guess.' };
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, refusal);
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A']), provider: world.Provider(), user });
+    expect(promotions.Requests.map((r) => r.Method)).toEqual(['Evaluate']);
+    expect([result.published, result.heldReason, model.Saves, model.Entity.Status]).toEqual([
+      false, 'Neither the model nor any simple baseline beats the flat guess. — lifecycle gate: Not evaluated — the lifecycle gate refused: The stored gate decision ships nothing: Neither the model nor any simple baseline beats the flat guess.', 0, 'Draft',
+    ]);
   });
 
   it('refuses a plan with a bad experiment before any row is written, whichever branch it would take', async () => {
@@ -391,18 +469,34 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(result.Gate?.Outcome).toBe('keep-simple-baseline');
   });
 
-  it('holds a build whose training run shipped no model, with the stored reason, and publishes nothing', async () => {
+  it("a no-model run gets one run-level refusal record with the trainer's reason", async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
     const run = completedRun([inner('A', 0.42)], 'A', 'keep-simple-baseline');
     const noModel = { ...storedEnvelope(run), gate: { ...storedGate(run), decision: { outcome: 'no-signal' as const, branch: 'c:no-signal' as const, shipped: null, shippedRole: null, note: null }, reason: { code: 'nothing-beats-dummy' as const, text: 'Neither the model nor any simple baseline beats the flat guess.' } } };
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: null, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(noModel) } as unknown as MJMLTrainingRunEntity });
-    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A']), provider: world.Provider(), user });
+    const gate = new RunRecordingGate('Neither the model nor any simple baseline beats the flat guess.');
+    const provider = world.Provider();
+    const result = await new GatedBuilder(gate).Build({ spec: plan(['A']), provider, user });
+    expect(gate.Requests.map((r) => [r.Method, r.Subject, r.Actor, r.Ctx.ContextUser, r.Ctx.Provider])).toEqual([['Evaluate', { trainingRunId: RUN_ID }, { kind: 'human', userId: user.ID }, user, provider]]);
     expect([result.success, result.published, result.modelId, result.model, result.trust]).toEqual([true, false, undefined, undefined, undefined]);
     expect(result.heldReason).toBe('Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.');
     expect(result.leaderboard?.map((r) => r.ModelID)).toEqual([undefined]);
     expect(result.Gate).toEqual({ Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' });
+  });
+
+  it('auto-publish off leaves the model Draft and writes no run-level record', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const run = completedRun([inner('A', 0.42)], 'A', 'keep-simple-baseline');
+    const noModel = { ...storedEnvelope(run), gate: { ...storedGate(run), decision: { outcome: 'no-signal' as const, branch: 'c:no-signal' as const, shipped: null, shippedRole: null, note: null }, reason: { code: 'nothing-beats-dummy' as const, text: 'Neither the model nor any simple baseline beats the flat guess.' } } };
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: null, run: { ID: RUN_ID, Notes: 'Training completed.', ValidationResults: JSON.stringify(noModel) } as unknown as MJMLTrainingRunEntity });
+    const gate = new RunRecordingGate('Neither the model nor any simple baseline beats the flat guess.');
+    const result = await new GatedBuilder(gate).Build({ spec: plan(['A']), provider: world.Provider(), user, autoPublish: false });
+    expect([result.success, result.published, gate.Requests.length]).toEqual([true, false, 0]);
+    expect(result.heldReason).toBe('Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.');
   });
 
   it('binds a default protocol to a unit pipeline before the search trains, with a budget for every candidate', async () => {

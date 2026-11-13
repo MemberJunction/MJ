@@ -20,7 +20,9 @@ import { AutoTrainShippedNoModelError, PipelineAutoTrainer } from '../auto-train
 import { TrainingDelegation } from '../../operations/delegation';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import type { AutoTrainRequest, IMLModelLoader, IModelAutoTrainer, ISidecarPredictor, MLInferenceDeps } from '../types';
-import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
+import type { Actor, LeakageFlag, TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { LifecycleGate } from '../../registry/lifecycle-gate';
+import type { EvaluateOutcome, EvaluateSubject, GateApplyResult, GateContext, PublishOutcome, PublishRequest } from '../../registry/gate-context';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
 import type { IFeatureDataAccess, FetchRowsParams, FetchRowsResult } from '../../feature-assembly';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
@@ -293,25 +295,38 @@ describe('MLModelInferenceProcessor.Preflight — opt-in auto-train', () => {
 // PipelineAutoTrainer — reuse vs train+publish, with the DB-touching steps stubbed.
 // ---------------------------------------------------------------------------
 
-class RecordingGate implements IModelPromotionGate {
-  public Calls: Array<{ modelId: string; targetStatus: string }> = [];
-  constructor(private readonly refuse?: PromoteModelOutcome) {}
-  async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
-    this.Calls.push({ modelId: request.modelId, targetStatus: request.targetStatus });
-    if (this.refuse && request.targetStatus !== 'Archived') return this.refuse;
-    return { kind: 'promoted', newStatus: request.targetStatus };
+const NEW_RUN = '8A1C44F3-938C-4E65-B6DE-D621BC4C30AA';
+
+/** One lifecycle-gate call auto-train made. */
+interface AutoTrainGateCall { readonly Method: 'Evaluate' | 'Publish' | 'Archive'; readonly Subject: EvaluateSubject | { readonly modelId: string }; readonly Actor: Actor; readonly Reason?: string }
+
+/** A lifecycle gate fake recording each call; Evaluate refuses with `refusal` or evaluates to `to`, Archive always applies. */
+class RecordingGate extends LifecycleGate {
+  public readonly Calls: AutoTrainGateCall[] = [];
+  constructor(private readonly refusal?: TransitionRefusal, private readonly to: 'Validated' | 'KeepBaseline' = 'Validated') { super(); }
+  public override async Evaluate(subject: EvaluateSubject, actor: Actor, _ctx: GateContext): Promise<EvaluateOutcome> {
+    this.Calls.push({ Method: 'Evaluate', Subject: subject, Actor: actor });
+    return this.refusal === undefined ? { Kind: 'evaluated', ModelID: 'new-model', From: 'Draft', To: this.to } : { Kind: 'refused', Refusal: this.refusal };
+  }
+  public override async Publish(request: PublishRequest, _ctx: GateContext): Promise<PublishOutcome> {
+    this.Calls.push({ Method: 'Publish', Subject: { modelId: request.modelId }, Actor: request.initiator });
+    throw new Error('auto-train must not publish (M4b routes it through the automated publisher)');
+  }
+  public override async Archive(modelId: string, reason: string, actor: Actor, _ctx: GateContext): Promise<GateApplyResult> {
+    this.Calls.push({ Method: 'Archive', Subject: { modelId }, Actor: actor, Reason: reason });
+    return { Ok: true, ModelID: modelId, From: 'Published', To: 'Archived', Archived: null };
   }
 }
 
 class TestableAutoTrainer extends PipelineAutoTrainer {
   public Repointed: string[] = [];
   public TrainCount = 0;
-  constructor(gate: IModelPromotionGate, private readonly reusable: string | null) {
+  constructor(gate: LifecycleGate, private readonly reusable: string | null, private readonly flags: readonly LeakageFlag['kind'][] = []) {
     super({
       gate,
       train: async () => {
         this.TrainCount++;
-        return { ID: 'new-model', Status: 'Draft' } as unknown as MJMLModelEntity;
+        return { ID: 'new-model', Status: 'Draft', TrainingRunID: NEW_RUN } as unknown as MJMLModelEntity;
       },
     });
   }
@@ -321,7 +336,12 @@ class TestableAutoTrainer extends PipelineAutoTrainer {
   protected override async repoint(_r: AutoTrainRequest, modelId: string): Promise<void> {
     this.Repointed.push(modelId);
   }
+  protected override async ReadLeakageFlags(): Promise<readonly LeakageFlag['kind'][]> {
+    return this.flags;
+  }
 }
+
+const AUTO_TRAIN_ACTOR: Actor = { kind: 'system', component: 'auto-train' };
 
 const USER = undefined as unknown as UserInfo;
 const PROVIDER = undefined as unknown as IMetadataProvider;
@@ -329,7 +349,7 @@ const PIPE = '8A1C44F3-938C-4E65-B6DE-D621BC4C3001';
 const OLD = 'E93F0238-6902-4521-87D9-FE9A1201B001';
 
 describe('PipelineAutoTrainer', () => {
-  it('trains, publishes (Validated → Published), repoints, and archives the superseded model', async () => {
+  it('trains, evaluates the run (never publishes: the model stays Validated until M4b), repoints, and archives the superseded model', async () => {
     const status = ConsoleCapture.Status();
     const gate = new RecordingGate();
     const trainer = new TestableAutoTrainer(gate, null);
@@ -337,12 +357,11 @@ describe('PipelineAutoTrainer', () => {
     expect(id).toBe('new-model');
     expect(trainer.TrainCount).toBe(1);
     expect(gate.Calls).toEqual([
-      { modelId: 'new-model', targetStatus: 'Validated' },
-      { modelId: 'new-model', targetStatus: 'Published' },
-      { modelId: OLD, targetStatus: 'Archived' },
+      { Method: 'Evaluate', Subject: { trainingRunId: NEW_RUN }, Actor: AUTO_TRAIN_ACTOR },
+      { Method: 'Archive', Subject: { modelId: OLD }, Actor: AUTO_TRAIN_ACTOR, Reason: "Superseded by auto-train's model new-model." },
     ]);
     expect(trainer.Repointed).toEqual(['new-model']);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + published model 'new-model'.")]);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 trained + evaluated (Validated) model 'new-model'.")]);
   });
 
   it('reuses an already-published, loadable model instead of retraining', async () => {
@@ -356,13 +375,21 @@ describe('PipelineAutoTrainer', () => {
     expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Predictive Studio auto-train: pipeline '8A1C44F3-938C-4E65-B6DE-D621BC4C3001' \u2192 reused model 'existing-model'.")]);
   });
 
-  it('refuses to publish a leakage-flagged model and says it needs human sign-off', async () => {
-    const gate = new RecordingGate({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.95 });
-    const trainer = new TestableAutoTrainer(gate, null);
+  it('does not serve a model whose training run flagged leakage: it says a person must sign off, and repoints nothing', async () => {
+    const gate = new RecordingGate();
+    const trainer = new TestableAutoTrainer(gate, null, ['single-feature-auc']);
     await expect(
-      trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: null, recordProcessId: null }, USER, PROVIDER),
-    ).rejects.toThrow(/human sign-off/);
-    expect(trainer.Repointed).toHaveLength(0);
+      trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER),
+    ).rejects.toThrow(/single-feature-auc.*sign-off/);
+    expect([trainer.Repointed, gate.Calls.map((c) => c.Method)]).toEqual([[], ['Evaluate']]);
+  });
+
+  it('a model the gate refuses to evaluate, or evaluates to KeepBaseline, is not served: the error names why, and nothing is repointed or archived', async () => {
+    for (const gate of [new RecordingGate({ kind: 'calibration-held', slope: 0.5 }), new RecordingGate(undefined, 'KeepBaseline')]) {
+      const trainer = new TestableAutoTrainer(gate, null);
+      await expect(trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER)).rejects.toThrow(/new-model/);
+      expect([trainer.Repointed, gate.Calls.map((c) => c.Method)]).toEqual([[], ['Evaluate']]);
+    }
   });
 
   it('does not archive the reused model when the process already pointed at it (IDs compared as UUIDs, any letter case)', async () => {

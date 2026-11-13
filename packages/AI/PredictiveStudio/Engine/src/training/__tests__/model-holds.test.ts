@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
-import type { UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocol,
+  TrainingRunResultsParser,
+  type Actor,
   type CalibrationReport,
   type EvaluationProtocolSpec,
+  type LeakageFlag,
   type SourceColumnImportance,
   type TrainerCompleted,
   type TrainerRequest,
@@ -14,19 +15,27 @@ import {
 
 import { TrainerResultFixtures } from './fixtures/trainer-result';
 import { ProtocolRowFixture } from './fixtures/protocol-row';
-import { FakeEvaluationProtocolStore, FakeMLModel, FakeTrainer, TrainingHarness, fakeProvider } from '../../__tests__/fakes/training-fakes';
+import { FakeEvaluationProtocolStore, FakeMLModel, FakeTrainer, TrainingHarness } from '../../__tests__/fakes/training-fakes';
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { TrainerModelLineageReader } from '../trainer-model-lineage';
 import type { TrainModelResult } from '../types';
-import { ProductionModelPromotionGate } from '../../actions/promote-model.gate';
-import type { PromoteModelRequest } from '../../actions/promote-model.action';
 import { PipelineAutoTrainer } from '../../scoring/auto-train';
 import type { AutoTrainRequest } from '../../scoring/types';
+import { GateTestStore, GateWorld, type WorldModel } from '../../__tests__/fakes/gate-test-store';
+import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
+import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
+import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
+import { LifecycleGate } from '../../registry/lifecycle-gate';
+import { GateContexts } from '../../registry/gate-seams';
+import type { GateContext } from '../../registry/gate-context';
 
 /**
- * What a trainer run records on its model decides what promotion may do with it: the run's leakage audit (G-6) and the
- * finalist's calibration hold (G-9) travel on the model's Lineage, and the real promotion gate and auto-train path read
- * them there. No live DB, no live sidecar: the training fakes and a gate whose model load is the trained fake.
+ * What a trainer run records decides what the lifecycle gate may do with its model: the run's leakage flags (stored on
+ * the run's `ValidationResults.trainer`) and the finalist's calibration hold (on the model's Lineage, G-9). The model's
+ * Lineage leakage audit (G-6) is still recorded, and the gate judges leakage only by the trainer's stored flags (PR 4
+ * §5.1: the single-feature-dominance re-run is kept only for Unevaluated pre-change models). No live DB, no live
+ * sidecar: the training fakes, then the real `LifecycleGate` over the `GateTestStore` world with the trained Lineage
+ * and flags copied onto its rows.
  */
 
 beforeEach(() => {
@@ -76,29 +85,43 @@ async function train(answer: (r: TrainerRequest) => TrainerCompleted): Promise<O
   return { ...result, model };
 }
 
-/** The real promotion gate over one trained model fake, with the pipeline's dominance threshold. */
-class TrainedModelGate extends ProductionModelPromotionGate {
-  constructor(private readonly model: FakeMLModel, private readonly threshold = 0.6) {
-    super();
-  }
-  protected override async loadModel(modelId: string): Promise<MJMLModelEntity | null> {
-    // Single deliberate test-double cast: the fake exposes the typed members the gate reads and Save().
-    return UUIDsEqual(modelId, this.model.ID) ? (this.model as unknown as MJMLModelEntity) : null;
-  }
-  protected override async resolveThreshold(): Promise<number> {
-    return this.threshold;
-  }
+const storage = new MemoryStorageAccount('model-holds', []);
+RegisterMemoryStorage('PS Model Holds Test Storage', storage);
+const providerRow = ProviderRow(GateWorld.StorageProviderID, 'Model Holds Storage', 'PS Model Holds Test Storage', true);
+const human: Actor = { kind: 'human', userId: GateWorld.User.ID };
+
+/** The real lifecycle gate over a `GateTestStore` world, its scoring-Action seam recorded. */
+interface GateWorldRig { readonly Store: GateTestStore; readonly World: GateWorld; readonly Gate: LifecycleGate; readonly Ctx: GateContext }
+function gateWorld(): GateWorldRig {
+  storage.Reset();
+  ServeStorageProviders([providerRow]);
+  const store = new GateTestStore();
+  const world = new GateWorld(store, storage);
+  return { Store: store, World: world, Gate: new LifecycleGate(new StorageProviderArtifactLoader(), undefined, new RecordingScoringActions()), Ctx: GateContexts.ForRequest({ ContextUser: GateWorld.User, Provider: store.Provider() }) };
 }
 
-function request(model: FakeMLModel, over: Partial<PromoteModelRequest> = {}): PromoteModelRequest {
-  return { modelId: model.ID, targetStatus: 'Validated', signOff: false, provider: fakeProvider, ...over };
+/** A world model of `status` carrying the trained model's Lineage (its calibration hold) and its run's stored leakage flags. */
+function asWorldModel(rig: GateWorldRig, status: 'Draft' | 'Validated', trained: { readonly Lineage: string | null }, flags: readonly LeakageFlag[]): WorldModel {
+  const model = rig.World.Model(status, 'model');
+  const row = rig.Store.Row('MJ: ML Models', model.ID);
+  if (row) row['Lineage'] = trained.Lineage;
+  if (flags.length > 0) rig.Store.FlagLeakage(model.ID, flags);
+  return model;
 }
 
-/** The production auto-trainer with its train step returning the trained model and no reuse or repoint. */
-class TrainedModelAutoTrainer extends PipelineAutoTrainer {
+/** The trainer leakage flags a run stores on `ValidationResults.trainer`. */
+function storedFlags(run: { readonly ValidationResults: string | null }): readonly LeakageFlag[] {
+  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+  if (!parsed.Ok || parsed.Value.status !== 'completed') throw new Error('the run stores no completed envelope');
+  return parsed.Value.trainer?.leakageFlags || [];
+}
+
+/** The production auto-trainer over the gate world: its train step returns `model` (its ID and run), no reuse or repoint. */
+class WorldAutoTrainer extends PipelineAutoTrainer {
   public readonly Repointed: string[] = [];
-  constructor(model: FakeMLModel) {
-    super({ gate: new TrainedModelGate(model), train: async () => model as unknown as MJMLModelEntity });
+  constructor(rig: GateWorldRig, model: WorldModel) {
+    // Single deliberate test-double cast: auto-train reads only the trained row's ID and TrainingRunID.
+    super({ gate: rig.Gate, train: async () => ({ ID: model.ID, TrainingRunID: model.RunID }) as unknown as MJMLModelEntity });
   }
   protected override async findReusableModel(): Promise<string | null> {
     return null;
@@ -109,8 +132,7 @@ class TrainedModelAutoTrainer extends PipelineAutoTrainer {
 }
 
 const AUTO_TRAIN: AutoTrainRequest = { pipelineId: PIPELINE_ID, currentModelId: null, recordProcessId: null };
-/** No acting user: the gate then skips its scoring-action sync, which reads Action metadata. */
-const NO_USER = undefined as unknown as UserInfo;
+const LEAKY_FLAG: LeakageFlag = { kind: 'single-feature-auc', sourceColumn: 'EventsAttended', heldOutAuc: 0.97 };
 
 describe('G-6: a kept simple baseline carries the run\'s leakage audit to promotion', () => {
   it("records the finalist importance's top feature and share on the kept baseline's Lineage, whose own importance is {}", async () => {
@@ -130,30 +152,23 @@ describe('G-6: a kept simple baseline carries the run\'s leakage audit to promot
     expect(JSON.parse(unmeasured.model.Lineage || '{}')).toMatchObject({ trainingLeakageAudit: null });
   });
 
-  it('refuses to promote the kept baseline without a sign-off, and promotes it with a sign-off and a reason', async () => {
-    const { model } = await train(keptBaseline({ importance: LEAKING }));
-    const status = ConsoleCapture.Status();
-    const refused = await new TrainedModelGate(model).promote(request(model));
-    expect(refused).toMatchObject({ kind: 'refused-leakage', topFeature: 'EventsAttended' });
-    expect([model.Status, model.SaveCallCount]).toEqual(['Draft', 1]);
-    const signedOff = await new TrainedModelGate(model).promote(request(model, { signOff: true, reason: 'EventsAttended is recorded before the decision date.' }));
-    expect(signedOff).toMatchObject({ kind: 'promoted', newStatus: 'Validated' });
-    expect(signedOff.kind === 'promoted' ? signedOff.signOffNote : '').toContain('on feature "EventsAttended"');
-    // the sign-off override is logged for audit
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Leakage sign-off override for ML Model 'model-1'")]);
+  it("stores the trainer's leakage flags on the run, and the lifecycle gate withholds the publish of the model they flag", async () => {
+    const { model, run } = await train(finalistShips({ importance: LEAKING, leakageFlags: [LEAKY_FLAG] }));
+    expect(storedFlags(run)).toEqual([LEAKY_FLAG]);
+    const rig = gateWorld();
+    const candidate = asWorldModel(rig, 'Validated', model, storedFlags(run));
+    const request = { modelId: candidate.ID, purpose: 'publish' as const, initiator: human, signOffId: null, reason: null };
+    expect(await rig.Gate.Publish(request, rig.Ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'unacknowledged-leakage-flags', flags: ['single-feature-auc'] }, Transient: false });
+    expect(rig.Store.Status(candidate.ID)).toBe('Validated');
   });
 
-  it("judges the audit against the pipeline's current threshold, as it judges the importance", async () => {
-    const { model } = await train(keptBaseline({ importance: [importanceOf('EventsAttended', 0.7), importanceOf('Region', 0.3)] }));
-    expect(await new TrainedModelGate(model, 0.6).promote(request(model))).toMatchObject({ kind: 'refused-leakage', topFeature: 'EventsAttended', topShare: 0.7 });
-    expect(await new TrainedModelGate(model, 0.8).promote(request(model))).toMatchObject({ kind: 'promoted', newStatus: 'Validated' });
-  });
-
-  it('auto-train does not publish the kept baseline: it stays Draft and nothing is repointed', async () => {
-    const { model } = await train(keptBaseline({ importance: LEAKING }));
-    const trainer = new TrainedModelAutoTrainer(model);
-    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, NO_USER, fakeProvider)).rejects.toThrow(/possible target leakage on "EventsAttended" needs human sign-off/);
-    expect([model.Status, trainer.Repointed]).toEqual(['Draft', []]);
+  it('auto-train evaluates a flagged model but does not serve it: the error names the flag, and nothing is repointed', async () => {
+    const { model, run } = await train(finalistShips({ leakageFlags: [LEAKY_FLAG] }));
+    const rig = gateWorld();
+    const trained = asWorldModel(rig, 'Draft', model, storedFlags(run));
+    const trainer = new WorldAutoTrainer(rig, trained);
+    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(/single-feature-auc.*sign-off/);
+    expect([rig.Store.Status(trained.ID), trainer.Repointed, rig.Store.PublishRecords(trained.ID)]).toEqual(['Validated', [], []]);
   });
 });
 
@@ -179,21 +194,25 @@ describe('G-9: a shipped finalist whose calibration hides its family is held', (
     }
   });
 
-  it('refuses to move a held model to Validated or Published, even with a sign-off and a reason; Archived is allowed', async () => {
+  it('the lifecycle gate refuses calibration-held for the trained Lineage at Evaluate and at Publish (an interactive user included); Archive is allowed', async () => {
     const { model } = await train(finalistShips({ calibration: calibration(0.5) }));
-    const gate = new TrainedModelGate(model);
-    expect(await gate.promote(request(model))).toEqual({ kind: 'refused-calibration', slope: 0.5 });
-    expect(await gate.promote(request(model, { signOff: true, reason: 'looks fine to me' }))).toEqual({ kind: 'refused-calibration', slope: 0.5 });
-    model.Status = 'Validated';
-    expect(await gate.promote(request(model, { targetStatus: 'Published', signOff: true, reason: 'ship it' }))).toEqual({ kind: 'refused-calibration', slope: 0.5 });
-    expect(await gate.promote(request(model, { targetStatus: 'Archived' }))).toMatchObject({ kind: 'promoted', newStatus: 'Archived' });
+    const rig = gateWorld();
+    const draft = asWorldModel(rig, 'Draft', model, []);
+    expect(await rig.Gate.Evaluate({ modelId: draft.ID }, human, rig.Ctx)).toEqual({ Kind: 'refused', Refusal: { kind: 'calibration-held', slope: 0.5 } });
+    const validated = asWorldModel(rig, 'Validated', model, []);
+    const request = { modelId: validated.ID, purpose: 'publish' as const, initiator: human, signOffId: null, reason: null };
+    expect(await rig.Gate.Publish(request, rig.Ctx)).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'calibration-held', slope: 0.5 } });
+    expect(await rig.Gate.Archive(validated.ID, 'held for calibration', human, rig.Ctx)).toMatchObject({ Ok: true, To: 'Archived' });
+    expect([rig.Store.Status(draft.ID), rig.Store.Status(validated.ID)]).toEqual(['Draft', 'Archived']);
   });
 
-  it('auto-train does not publish a held model', async () => {
+  it('auto-train does not serve a held model: the gate refuses its evaluation and it stays Draft', async () => {
     const { model } = await train(finalistShips({ calibration: calibration(0.5) }));
-    const trainer = new TrainedModelAutoTrainer(model);
-    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, NO_USER, fakeProvider)).rejects.toThrow(/calibration/);
-    expect([model.Status, trainer.Repointed]).toEqual(['Draft', []]);
+    const rig = gateWorld();
+    const held = asWorldModel(rig, 'Draft', model, []);
+    const trainer = new WorldAutoTrainer(rig, held);
+    await expect(trainer.EnsureTrainedModel(AUTO_TRAIN, GateWorld.User, rig.Store.Provider())).rejects.toThrow(/calibration/);
+    expect([rig.Store.Status(held.ID), trainer.Repointed]).toEqual(['Draft', []]);
   });
 });
 

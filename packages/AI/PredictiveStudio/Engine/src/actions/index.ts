@@ -28,7 +28,6 @@ export * from './score-record-set.runner';
 export * from './run-experiment.action';
 export * from './run-experiment.deps';
 export * from './promote-model.action';
-export * from './promote-model.gate';
 export * from './model-scoring-action-generator';
 export * from './schedule-model-scoring.action';
 export * from './evaluate-drift.action';

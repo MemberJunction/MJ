@@ -9,7 +9,7 @@ import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import type { MJMLModelEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, JsonParse, TrainingRunResultsParser, type FeatureImportance, type PredictionUnitSpec, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotManifest, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
-import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
+import { C1CorpusFixture, C1_CORPUS_DIR, RunFixtures, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The Training Snapshot columns the snapshot assertions read. */
@@ -155,8 +155,7 @@ export class PredictionUnitGates {
     const newest = [...truth.Values()].filter((t) => t.Censored);
     if (!run.ResultingModelID) return { Passed: false, Measured: {}, Detail: `run ${run.ID} produced no model` };
     const dominant = await PredictionUnitGates.dominantFeature(h, run.ResultingModelID);
-    const promoted = await h.Promote(run.ResultingModelID, 'Validated', 'G1.3: dry-run preview of the newest cycle');
-    if (!promoted.Promoted) return { Passed: false, Measured: { modelStatus: promoted.Status, dominantFeature: dominant.Feature, dominantShare: dominant.Share }, Detail: `model ${run.ResultingModelID} could not be validated for the dry run` };
+    await RunFixtures.PublishModel(h, run.ResultingModelID, `G1.3 dry-run preview of the newest cycle (dominant feature ${dominant.Feature}, share ${dominant.Share})`);
     const scores = await h.Score(run.ResultingModelID, { scope: { filter: { entityName: w5.Entity.Name, extraFilter: '[Year] = 2026' } }, dryRun: true });
     if (!scores.Ok || scores.Predictions.length === 0) throw new Error(`dry-run scoring of W5 2026 failed: ${scores.ErrorMessage || 'no predictions'}`);
     const meanPrediction = scores.Predictions.reduce((s, p) => s + p.Score, 0) / scores.Predictions.length;

@@ -3,7 +3,7 @@
  *
  * Reads back the keys a trainer run writes to `MJ: ML Models.Lineage` ({@link TrainerModelLineage}) that decide what
  * may happen to the model after training: its leakage audit, its calibration hold and the driver of its shipped
- * artifact. The promotion gate, scoring readiness and the pipeline builder read them here, so a key is parsed one way.
+ * artifact. The lifecycle gate, scoring readiness and the pipeline builder read them here, so a key is parsed one way.
  * A Lineage that is missing, unreadable or written before a key existed reads as the key's absence (null): such a
  * model behaves as it did before the key was written.
  */

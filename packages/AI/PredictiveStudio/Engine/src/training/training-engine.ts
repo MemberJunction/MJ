@@ -31,7 +31,7 @@
  * run) and the model stays `Draft`; every trainer model's Lineage records that leakage audit, so a kept baseline (whose
  * own importance is `{}`) is judged by it at promotion. A shipped finalist of a probability task whose holdout
  * calibration hides its family ({@link TrainerContract.CalibrationHidesFamily}) is held: a CALIBRATION HOLD note on
- * the run and a `calibrationHold` on its Lineage, which the promotion gate never lets through. The run stores the
+ * the run and a `calibrationHold` on its Lineage, which the lifecycle gate never lets through. The run stores the
  * trainer's result with its artifacts
  * as file references, never their bytes, the unit resolution counts, the holdout carve's summary, the gate record and
  * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
@@ -95,7 +95,7 @@ import {
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
-import { detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
+import { DetectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
@@ -118,6 +118,9 @@ import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result
 import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
 import { ProtocolSearchGuard } from '../protocol/search-guard';
 import { ComputePricing } from './compute-cost';
+import { ModelVersionSaveError, ModelVersions } from '../registry/model-versions';
+import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
+import { TrainerIncumbents, type TrainerIncumbent } from './trainer-incumbent';
 import type {
   ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage, TrainingLeakageAudit, CalibrationHold,
 } from './types';
@@ -529,9 +532,10 @@ export class TrainingEngine {
   private async trainThroughTrainer(x: TrainerRunInputs): Promise<MJMLModelEntity | null> {
     const { Run: run, Resolved: resolved, Snapshot: snapshot, Training: training, Deps: deps } = x;
     const candidates = x.Input.candidates || [TrainerRequestBuilder.CandidateFromPipeline(resolved.algorithmDriverKey, resolved.pipeline.AlgorithmID, resolved.algorithmDriverKey, resolved.pipeline.Hyperparameters)];
-    // Each call pre-authorises fresh snapshot downloads: the first attempt sends one, every retry another.
+    const incumbent = await TrainingEngine.incumbentFor(x);
+    // Each call pre-authorises fresh snapshot (and incumbent) downloads: the first attempt sends one, every retry another.
     const issue = (): Promise<TrainerRequest> => TrainerRequestBuilder.BuildTrainerRequest({
-      TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Protocol: training.Protocol.Protocol, Task: x.Unit.label.outcome,
+      TrainingRunID: run.ID, Snapshot: snapshot.Entity, Files: x.Files, Incumbent: incumbent, Protocol: training.Protocol.Protocol, Task: x.Unit.label.outcome,
       Candidates: candidates, TimeoutSeconds: TrainingEngine.TimeoutSecondsFor(training.Protocol.Protocol, x.Input),
     });
     const request = await issue();
@@ -551,6 +555,18 @@ export class TrainingEngine {
       await TrainingEngine.discardStoredOutput(run, model, stored, deps);
       throw err;
     }
+  }
+
+  /**
+   * The incumbent the run is compared with (D4-93): the pipeline's verified Published model when the bound protocol's
+   * rule is `current-published` ({@link TrainerIncumbents.Resolve}, the reads the lifecycle gate uses), resolved once
+   * per run on the run's provider; each request attempt issues a fresh download of its artifact. Null otherwise.
+   */
+  private static async incumbentFor(x: TrainerRunInputs): Promise<TrainerIncumbent | null> {
+    const deps = x.Deps;
+    const ctx = { ContextUser: deps.contextUser, Provider: deps.provider };
+    const resolution = await TrainerIncumbents.Resolve(x.Resolved.pipeline.ID, x.Training.Protocol.Protocol, ctx, deps.artifactLoader || new StorageProviderArtifactLoader());
+    return TrainerIncumbents.IncumbentOf(resolution, x.Run.ID);
   }
 
   /**
@@ -714,7 +730,7 @@ export class TrainingEngine {
     const why = hold.slope === null
       ? `the calibration slope of the model's probabilities could not be measured on the held-back rows, so they cannot be shown to fall in the ${range} range`
       : `the model's probabilities are miscalibrated on the held-back rows (calibration slope ${hold.slope.toFixed(2)}, outside the ${range} range)`;
-    return `CALIBRATION HOLD: ${why}. Its family is hidden: the model is kept in Draft and the promotion gate will not move it to Validated or Published, with or without a sign-off.`;
+    return `CALIBRATION HOLD: ${why}. Its family is hidden: the model is kept in Draft and the lifecycle gate will not move it to Validated or Published, with or without a sign-off.`;
   }
 
   /**
@@ -842,10 +858,8 @@ export class TrainingEngine {
     const registered = TrainingEngine.registerDelivery(x, result, shipped, stored);
     const content = snapshot.Content;
     const split = LockedHoldoutSplitter.FromManifest(content, content.Header.labelColumn, resolved.problemType);
-    const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
     const model = await deps.entityFactory.getEntityObject<MJMLModelEntity>('MJ: ML Models', deps.contextUser);
     model.PipelineID = resolved.pipeline.ID;
-    model.Version = version;
     model.AlgorithmID = await this.shippedAlgorithmId(x, outcome, shipped);
     TrainingEngine.applyRegistryEntry(model, x, result, stored, registered);
     model.FittedPreprocessing = '{}';
@@ -861,8 +875,27 @@ export class TrainingEngine {
     model.TrainingDurationSec = Math.round(result.computeSeconds);
     model.TrainingRowCount = split.TrainingRowCount;
     model.Status = 'Draft';
-    await this.saveOrThrow(model, 'create ML Model');
+    await TrainingEngine.saveModelRowUnderLock(model, deps);
     return model;
+  }
+
+  /**
+   * Saves the new model row with its version allocated under the pipeline lock, in one provider transaction of its own
+   * ({@link ModelVersions.SaveNewRow}): two runs of one pipeline cannot take the same version
+   * (`UX_MLModel_PipelineVersion`). A row that cannot be saved fails the run as before.
+   *
+   * @throws EntityTransactionsUnsupportedError when the provider cannot open a transaction (training runs on the server)
+   * @throws PipelineLockTimeoutError when the pipeline stays locked for the whole lock wait
+   * @throws Error `TrainingEngine: failed to create ML Model: …` when the save fails
+   */
+  private static async saveModelRowUnderLock(model: MJMLModelEntity, deps: TrainingDeps): Promise<void> {
+    const ctx = { ContextUser: deps.contextUser, Provider: deps.provider };
+    try {
+      await ModelVersions.SaveNewRow(model, ctx);
+    } catch (error) {
+      if (error instanceof ModelVersionSaveError) throw new Error(`TrainingEngine: failed to create ML Model: ${error.SaveMessage}`);
+      throw error;
+    }
   }
 
   /**
@@ -913,7 +946,7 @@ export class TrainingEngine {
    * out-of-sample scoring (the holdout rows are scored once by the shipped artifact, which never trained on them) and the
    * kind of the importance the row stores: the finalist's held-out importance, or none for a kept baseline member (its
    * row stores `{}`). It names what shipped and that artifact's driver, the run's leakage audit (the finalist
-   * importance's top feature and share, whatever shipped: the promotion gate judges a kept baseline by it) and the
+   * importance's top feature and share, whatever shipped: the lifecycle gate judges a kept baseline by it) and the
    * calibration hold of a shipped finalist whose family is hidden.
    */
   private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit, shipped: ShippedArtifact): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
@@ -1232,7 +1265,7 @@ export class TrainingEngine {
   /** Compose the plain-language run note, surfacing leakage suspicion loudly (§6.4). */
   private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord, modelCreated: boolean): string {
     const consequence = modelCreated
-      ? 'The model is kept in Draft and will NOT be auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.'
+      ? 'The model is kept in Draft and is withheld by the lifecycle gate until a person records a sign-off for its leakage flags in Predictive Studio.'
       : 'No model was created from this run, so there is nothing to promote.';
     const base = dominance.Dominant
       ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
@@ -1252,7 +1285,7 @@ export class TrainingEngine {
 
   /** Run the single-feature-dominance check against the leakage threshold (§6.4). */
   private checkLeakage(importance: FeatureImportance, guard: LeakageGuard): DominanceResult {
-    return detectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
+    return DetectSingleFeatureDominance(importance, guard.SingleFeatureDominanceThreshold);
   }
 
   // region: model lineage ----------------------------------------------------------

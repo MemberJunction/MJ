@@ -22,7 +22,7 @@ export const PsGateW1S75Checks: NamedCheck[] = [
       // `??` on purpose for the row counts here and in `Measured`: 0 is a legitimate count, and `|| null` would report it as null.
       const trainRead = m ? (m.TrainingRowCount ?? 0) + (m.HoldoutRowCount ?? 0) : null;
       const trainOk = m ? trainRead === w1.RowCount : t.RefusalCode === 'READ_CAP_EXCEEDED';
-      const scoring = await RunFixtures.W1S42ValidatedModel(h); // full-row, Validated: scoring is tested even if training refused
+      const scoring = await RunFixtures.W1S42PublishedModel(h); // full-row, published through the gate: scoring is tested even if training refused
       const s = await h.Score(scoring.ModelID, { scope: { filter: { entityName: w1.Entity.Name } } });
       const scoreOk = s.Ok ? s.Scored === w1.RowCount : s.RefusalCode === 'READ_CAP_EXCEEDED';
       PsGate.Assert({

@@ -1,8 +1,8 @@
 /**
  * The compile-time half of the review's contract checks: `fixtures/registry-contract-refusals.ts` compiled with the
  * TypeScript compiler API under this package's `tsconfig.json` has no diagnostics (every `@ts-expect-error` is used),
- * and with every `@ts-expect-error` line removed has exactly the review's 15 errors (`agentPublish` replaced by
- * `agentSignOff`, D4-16).
+ * and with every `@ts-expect-error` line removed has exactly the review's errors, 12 since D4-103 removed
+ * `IncumbentCheck` (`agentPublish` replaced by `agentSignOff`, D4-16).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -32,12 +32,12 @@ interface FixtureDiagnostic {
 }
 
 /**
- * The code each refusal must fail with, in fixture order: f1–f5 and the two literals miss `#issued` (TS2741), the
+ * The code each refusal must fail with, in fixture order: f1, f4 and the two literals miss `#issued` (TS2741), the
  * direct `new` hits the private constructor (TS2673), an unknown member is an excess property (TS2353), a wrong literal
  * or a raw number is not assignable (TS2322).
  */
 const EXPECTED_CODES: readonly (readonly [string, number])[] = [
-  ['f1', 2741], ['f2', 2741], ['f3', 2741], ['f4', 2741], ['f5', 2741], ['direct', 2673],
+  ['f1', 2741], ['f4', 2741], ['direct', 2673],
   ['finalistAsSimple', 2741], ['mismatchedRegistry', 2741], ['separateGate', 2353], ['badMargin', 2322],
   ['replacesField', 2353], ['agentSignOff', 2322], ['badTask', 2322], ['storedBooleans', 2353], ['callerMargin', 2353],
 ];
@@ -86,7 +86,7 @@ describe('registry contract compile-time refusals', () => {
     expect(compileText(source)).toBe('');
   }, 120_000);
 
-  it('fails with exactly the 15 refusals, one per removed @ts-expect-error line, each with its code', () => {
+  it('fails with exactly the 12 refusals, one per removed @ts-expect-error line, each with its code', () => {
     const original = source.split('\n');
     const stripped = original.filter((line) => !isDirective(line));
     // Each directive guards the next line; after stripping, that statement sits `directives so far` lines higher.
@@ -98,9 +98,9 @@ describe('registry contract compile-time refusals', () => {
       const pair = EXPECTED_CODES[expected.length];
       expected.push({ Line: strippedLine, Name: pair?.[0] || '?', Code: pair?.[1] || 0 });
     });
-    expect(expected).toHaveLength(15);
+    expect(expected).toHaveLength(12);
     expect(expected.map((e) => declaredName(stripped[e.Line - 1] || ''))).toEqual(EXPECTED_CODES.map(([name]) => name));
     expect(compileDiagnostics(stripped.join('\n'))).toEqual(expected);
-    expect(compileText(stripped.join('\n')).match(/error TS\d+/g) || []).toHaveLength(15);
+    expect(compileText(stripped.join('\n')).match(/error TS\d+/g) || []).toHaveLength(12);
   }, 120_000);
 });

@@ -5,7 +5,7 @@
  *
  * The seven Manual-mode Remote Operations and the five Predictive Studio Actions are
  * two thin invocation surfaces over the SAME engine service classes
- * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `ProductionModelPromotionGate`; experiment
+ * (`TrainingEngine`, `ProductionScoreRecordSetRunner`, `LifecycleGate`; experiment
  * sessions are switched off and refuse with `ExperimentSessionsUnavailableError`). Per CLAUDE.md
  * "push improvements to the generic level" and DRY, the production wiring each path
  * needs lives here exactly ONCE, so the Remote Ops and Actions share one delegation
@@ -18,7 +18,9 @@
  * surfaces reuse them.
  */
 
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJMLModelEntity, PredictiveStudioModelTransition } from '@memberjunction/core-entities';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
@@ -47,16 +49,15 @@ import type {
   ScoreRecordSetResult,
 } from '../actions/score-record-set.action';
 
-import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
-import type {
-  IModelPromotionGate,
-  PromoteModelRequest,
-  PromoteModelOutcome,
-} from '../actions/promote-model.action';
+import { LifecycleGate, LifecycleModelNotFoundError } from '../registry/lifecycle-gate';
+import type { GateApplyResult, GateContext, PublishRequest } from '../registry/gate-context';
 
 import type {
+  Actor,
   ModelingPlanSpec,
   Budget,
+  ListsEveryMember,
+  TransitionRefusal,
 } from '@memberjunction/predictive-studio-core';
 
 // ----- Training ---------------------------------------------------------------
@@ -225,21 +226,112 @@ export async function RunExperimentSessionViaOrchestrator(
   throw new ExperimentSessionsUnavailableError();
 }
 
-// ----- Promotion --------------------------------------------------------------
+// ----- Lifecycle transitions ---------------------------------------------------
+
+/** Every transition `PredictiveStudio.PromoteModel` and the Promote ML Model action accept. */
+const MODEL_TRANSITIONS = ['evaluate', 'publish', 'archive', 'rollback'] as const satisfies readonly PredictiveStudioModelTransition[];
+/** Compile-time completeness: a transition added to the operation's input type without listing it here breaks the build. */
+const modelTransitionsComplete: ListsEveryMember<PredictiveStudioModelTransition, (typeof MODEL_TRANSITIONS)[number]> = true;
+void modelTransitionsComplete;
+
+/** One lifecycle transition a caller asks for: the model, the transition, its reason and sign-off, and who asks. */
+export interface ModelTransitionRequest {
+  readonly ModelID: string;
+  readonly Transition: PredictiveStudioModelTransition;
+  /** Required for `archive` and `rollback`; recorded with a `publish`. */
+  readonly Reason: string | null;
+  /** The approving sign-off record a `publish` consumes, when one is required. */
+  readonly SignOffID: string | null;
+  /** Who started it: an interactive user is recorded as the approver; any other caller gets the automatic rules. */
+  readonly Initiator: Actor;
+}
+
+/** What the gate did: applied, with the model's new status; or refused, with the model's status ('' when no model has the ID). */
+export type ModelTransitionResult =
+  | { readonly Applied: true; readonly Status: MJMLModelEntity['Status'] }
+  | { readonly Applied: false; readonly Status: MJMLModelEntity['Status'] | ''; readonly Refusal: TransitionRefusal };
 
 /**
- * Transition a model's lifecycle status, delegating to the SAME production gate the
- * Promote action uses ({@link ProductionModelPromotionGate}). The `gate` is
- * injectable for tests.
- *
- * @param request the model id + target status + sign-off + user/provider
- * @param gate optional gate override (defaults to {@link ProductionModelPromotionGate})
+ * The lifecycle-transition delegation the Promote operation and the Promote action share: one mapping of
+ * `evaluate | publish | archive | rollback` onto {@link LifecycleGate} (`Evaluate`, `Publish` with purpose `publish` or
+ * `rollback`, `Archive`), so both surfaces apply a transition the same way. The gate is injectable for tests.
  */
-export function PromoteModelViaGate(
-  request: PromoteModelRequest,
-  gate: IModelPromotionGate = new ProductionModelPromotionGate(),
-): Promise<PromoteModelOutcome> {
-  return gate.promote(request);
+export class ModelTransitionDelegation {
+  /** The transition `raw` names, or null when it names none (case-sensitive: the wire contract is lower case). */
+  public static ParseTransition(raw: string | null | undefined): PredictiveStudioModelTransition | null {
+    return MODEL_TRANSITIONS.find((t) => t === raw) || null;
+  }
+
+  /** The transitions, for messages that list them. */
+  public static readonly Transitions: readonly PredictiveStudioModelTransition[] = MODEL_TRANSITIONS;
+
+  /**
+   * Apply `request` through the gate on `ctx` (the caller's provider and user, M3's seams).
+   *
+   * @param gate the lifecycle gate (defaults to the production {@link LifecycleGate})
+   */
+  public static async Apply(request: ModelTransitionRequest, ctx: GateContext, gate: LifecycleGate = new LifecycleGate()): Promise<ModelTransitionResult> {
+    switch (request.Transition) {
+      case 'evaluate':
+        return ModelTransitionDelegation.evaluate(request, ctx, gate);
+      case 'publish':
+      case 'rollback':
+        return ModelTransitionDelegation.publish(request, request.Transition, ctx, gate);
+      case 'archive':
+        return ModelTransitionDelegation.archive(request, ctx, gate);
+      default: {
+        const unknown: never = request.Transition;
+        throw new Error(`Unknown lifecycle transition '${String(unknown)}'`);
+      }
+    }
+  }
+
+  private static async evaluate(request: ModelTransitionRequest, ctx: GateContext, gate: LifecycleGate): Promise<ModelTransitionResult> {
+    const outcome = await gate.Evaluate({ modelId: request.ModelID }, request.Initiator, ctx);
+    if (outcome.Kind === 'evaluated') return { Applied: true, Status: outcome.To };
+    return ModelTransitionDelegation.refused(request.ModelID, outcome.Refusal, ctx);
+  }
+
+  private static async publish(request: ModelTransitionRequest, purpose: PublishRequest['purpose'], ctx: GateContext, gate: LifecycleGate): Promise<ModelTransitionResult> {
+    const publish: PublishRequest = { modelId: request.ModelID, purpose, initiator: request.Initiator, signOffId: request.SignOffID, reason: request.Reason };
+    try {
+      const outcome = await gate.Publish(publish, ctx);
+      if (outcome.Kind === 'withheld') return { Applied: false, Status: outcome.Status, Refusal: outcome.Refusal };
+      return { Applied: true, Status: 'Published' };
+    } catch (error) {
+      if (error instanceof LifecycleModelNotFoundError) return { Applied: false, Status: '', Refusal: error.Refusal };
+      throw error;
+    }
+  }
+
+  private static async archive(request: ModelTransitionRequest, ctx: GateContext, gate: LifecycleGate): Promise<ModelTransitionResult> {
+    const result = await gate.Archive(request.ModelID, request.Reason || '', request.Initiator, ctx);
+    if (result.Ok === true) return { Applied: true, Status: result.To };
+    return ModelTransitionDelegation.refused(request.ModelID, ModelTransitionDelegation.refusalOf(result), ctx);
+  }
+
+  /** An archive's refusal as a `TransitionRefusal` (an unverified artifact load is `artifact-unverifiable`). */
+  private static refusalOf(result: Extract<GateApplyResult, { readonly Ok: false }>): TransitionRefusal {
+    const refusal = result.Refusal;
+    return 'kind' in refusal ? refusal : { kind: 'artifact-unverifiable', detail: `the artifact load was ${refusal.Load.Status}` };
+  }
+
+  /** A refusal with the model's current status, read once ('' when no model has the ID). */
+  private static async refused(modelId: string, refusal: TransitionRefusal, ctx: GateContext): Promise<ModelTransitionResult> {
+    return { Applied: false, Status: await ModelTransitionDelegation.currentStatus(modelId, ctx), Refusal: refusal };
+  }
+
+  /** The model's persisted status, or '' when the ID is not a UUID or names no model. */
+  private static async currentStatus(modelId: string, ctx: GateContext): Promise<MJMLModelEntity['Status'] | ''> {
+    if (!IsValidUUID(modelId)) return '';
+    const r = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLModelEntity, 'ID' | 'Status'>>(
+      { EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`, Fields: ['ID', 'Status'], MaxRows: 1, ResultType: 'simple', BypassCache: true },
+      ctx.ContextUser,
+    );
+    if (!r.Success) throw new Error(`Reading the status of ML Model ${modelId} failed: ${r.ErrorMessage || 'unknown error'}`);
+    const row = r.Results[0];
+    return row !== undefined && UUIDsEqual(row.ID, modelId) ? row.Status : '';
+  }
 }
 
 /** Re-export the orchestrator budget type for the operations that map it. */

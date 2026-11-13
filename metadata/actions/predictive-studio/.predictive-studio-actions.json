@@ -743,13 +743,13 @@
   },
   {
     "_comments": [
-      "Promote ML Model — thin Action boundary over the model lifecycle transition.",
-      "Enforces the leakage sign-off gate: a leakage-flagged model is refused without SignOff=true.",
+      "Promote ML Model — thin Action boundary over the Predictive Studio lifecycle gate (LifecycleGate).",
+      "Takes one Transition (evaluate, publish, archive, rollback); a leakage-flagged model is withheld until a person records a sign-off.",
       "Lifecycle-only — never edits metrics, only Status."
     ],
     "fields": {
       "Name": "Promote ML Model",
-      "Description": "Transitions an ML Model through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless SignOff=true. Lifecycle-only: never edits the model's metrics or artifact, only its Status.",
+      "Description": "Applies one lifecycle Transition to an ML Model through the Predictive Studio lifecycle gate: evaluate (Draft to Validated or KeepBaseline from the training run's stored gate decision), publish (Validated or KeepBaseline to Published, re-verified from the stored rows), archive (to Archived, Reason required) or rollback (Archived to Published for a model published before, Reason required). A model whose training run flagged possible target leakage is withheld until a person records a sign-off in the model detail. Lifecycle-only: never edits the model's metrics or artifact, only its Status.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioPromoteModelAction",
       "Status": "Active",
@@ -786,7 +786,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
-            "Description": "The lifecycle status to move the model to: Validated, Published, or Archived."
+            "Description": "Retired. The action takes a Transition."
           },
           "primaryKey": {
             "ID": "D70D7ADE-5394-40B5-97B1-DADCFE9A173F"
@@ -794,6 +794,10 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:34.274Z",
             "checksum": "89ec7284b8b922dbd92f8bd6806fdc5740c1483d10f9fd15c1b90e0ea6d3383e"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-12T21:41:31.903Z"
           }
         },
         {
@@ -804,7 +808,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models."
+            "Description": "Retired. A leakage flag is acknowledged only by a sign-off record a person makes in the model detail."
           },
           "primaryKey": {
             "ID": "556E4BEE-7D99-429A-84F0-B29C61C96C94"
@@ -812,6 +816,38 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:34.316Z",
             "checksum": "5a65b90600c42455e387eeb127ee001aca7823c18c817ae163f63d0a49008bad"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-12T21:41:31.990Z"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Transition",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The lifecycle transition to apply: evaluate, publish, archive or rollback."
+          },
+          "primaryKey": {
+            "ID": "815C2C8F-6962-4D22-A4FB-400C433275C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Reason",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Why the transition is made: required for archive and rollback, recorded with a publish."
+          },
+          "primaryKey": {
+            "ID": "4D95A059-DB54-4C0E-92AE-ABE332F8FEDC"
           }
         },
         {
@@ -839,7 +875,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
-            "Description": "Model transitioned to the target status."
+            "Description": "The lifecycle gate applied the transition; the Status output is the model's new status."
           },
           "primaryKey": {
             "ID": "8B1C4AEC-D5AF-4202-90B7-6B03F666DAAC"
@@ -854,7 +890,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
-            "Description": "ModelID is missing, or TargetStatus is missing/not one of Validated/Published/Archived."
+            "Description": "ModelID is missing, or Transition is missing or not one of evaluate, publish, archive, rollback."
           },
           "primaryKey": {
             "ID": "408C3D81-C59E-4CA0-9B26-2F92A3F9494B"
@@ -869,7 +905,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "LEAKAGE_SIGNOFF_REQUIRED",
             "IsSuccess": false,
-            "Description": "The model was flagged for possible target leakage and cannot be promoted without SignOff=true."
+            "Description": "Retired. A flagged model is refused with LEAKAGE_FLAGGED."
           },
           "primaryKey": {
             "ID": "4F4E1851-A9A2-4D76-8668-71E3A5FA3A58"
@@ -877,6 +913,10 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:34.409Z",
             "checksum": "e90b767991f271c85addda28eac847e3c19696f32a8141701fee289c25a9c329"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-12T21:41:32.039Z"
           }
         },
         {
@@ -899,7 +939,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SAVE_FAILED",
             "IsSuccess": false,
-            "Description": "The status transition failed to save."
+            "Description": "Retired. The action no longer saves the model; the lifecycle gate does."
           },
           "primaryKey": {
             "ID": "52D24616-B50F-4660-8775-198FEC5D295A"
@@ -907,6 +947,10 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:34.450Z",
             "checksum": "96cf14fb68c01f230d363e01e2f3e30aa1ca0cc048d074dffb83b3054ed17040"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-12T21:41:32.073Z"
           }
         },
         {
@@ -914,7 +958,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "PROMOTION_FAILED",
             "IsSuccess": false,
-            "Description": "An unexpected error occurred while promoting the model."
+            "Description": "The lifecycle gate threw (a lost connection, a lock or save failure); the message carries the error."
           },
           "primaryKey": {
             "ID": "896E1F71-8A61-480B-807E-0CCE7CF04D49"
@@ -929,7 +973,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SIGNOFF_REASON_REQUIRED",
             "IsSuccess": false,
-            "Description": "A leakage sign-off was given without a reason; overriding a leakage-flagged model requires a non-empty Reason."
+            "Description": "Retired. A missing reason is refused with REASON_REQUIRED."
           },
           "primaryKey": {
             "ID": "2210EFA6-996E-4B50-BBDD-2EDD89BB2B7B"
@@ -937,6 +981,10 @@
           "sync": {
             "lastModified": "2026-11-10T23:41:38.430Z",
             "checksum": "6b5846a835824a14caa77a744ac6c55d200eaafdc35e07cc219a883b216d2fca"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-11-12T21:41:32.113Z"
           }
         },
         {
@@ -944,7 +992,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "CALIBRATION_HOLD",
             "IsSuccess": false,
-            "Description": "The model is held: its holdout calibration slope is outside 0.8-1.2 or could not be measured, so it is not offered and cannot be validated or published (no sign-off overrides this)."
+            "Description": "The lifecycle gate refused calibration-held: the model's holdout calibration slope is outside 0.8-1.2 or could not be measured, so it cannot be validated or published (no sign-off overrides this)."
           },
           "primaryKey": {
             "ID": "2BA2642A-EEE4-4C7E-9403-7CB2EBC70E36"
@@ -959,7 +1007,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "MODEL_NOT_SERVABLE",
             "IsSuccess": false,
-            "Description": "The model cannot be published: its artifact is a series forecaster, which /predict does not serve yet."
+            "Description": "The lifecycle gate refused not-servable: the model has no artifact file, its artifact is a series forecaster /predict does not serve yet, or its stored rows cannot be evaluated."
           },
           "primaryKey": {
             "ID": "655E1445-800B-4AC4-8EFF-8FE9DF2D5EF6"
@@ -967,6 +1015,50 @@
           "sync": {
             "lastModified": "2026-11-10T23:41:38.454Z",
             "checksum": "e285616213bc76e5600a5c78cad7a1119608f55433f61a9c0b4f7a4f32df6e00"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LEAKAGE_FLAGGED",
+            "IsSuccess": false,
+            "Description": "The lifecycle gate refused unacknowledged-leakage-flags: the training run's leakage audit flagged the model, and it is published only after a person records a sign-off naming each flag."
+          },
+          "primaryKey": {
+            "ID": "F3FDADEB-0146-4302-8BEF-9E1BB188F06B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ILLEGAL_TRANSITION",
+            "IsSuccess": false,
+            "Description": "The lifecycle table has no move from the model's status to the one the transition asks for (for example, publishing a Draft model)."
+          },
+          "primaryKey": {
+            "ID": "3866FE63-795E-47B5-AB4A-A87F7B9278B9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REASON_REQUIRED",
+            "IsSuccess": false,
+            "Description": "An archive or a rollback was asked for without a Reason."
+          },
+          "primaryKey": {
+            "ID": "EC833DA5-5318-460F-ACCD-37CB62EEF9C8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TRANSITION_REFUSED",
+            "IsSuccess": false,
+            "Description": "The lifecycle gate refused the transition for another reason (it does not beat the published model, the artifact cannot be verified, another publish holds the lock, and so on); the message names the refusal kind."
+          },
+          "primaryKey": {
+            "ID": "CAF1E823-CC2E-41D8-9B74-E17A511020BB"
           }
         }
       ]

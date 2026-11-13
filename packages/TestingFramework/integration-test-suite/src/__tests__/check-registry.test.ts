@@ -447,6 +447,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s2-6': 1,
         'ps-gate-c1-s3-1': 1,
         'ps-gate-c1-s4-2': 1,
+        'ps-gate-c1-s4-2-2': 1,
         'ps-gate-c1-s6-1': 1,
         'ps-gate-c1-s6-4': 1,
         'ps-gate-c2-s1-2': 1,
@@ -475,6 +476,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-t3-s-t-1': 1,
         'ps-gate-t4-s-t-3': 1,
         'ps-gate-t4-s6-5': 1,
+        'ps-gate-w1-c1-2': 1,
         'ps-gate-w1-s1-4': 1,
         'ps-gate-w1-s3-2': 1,
         'ps-gate-w1-s5-1': 1,
@@ -495,8 +497,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-w2-s5-2': 1,
         'ps-gate-w2-s5-3': 1,
         'ps-gate-w2-s6-5': 1,
+        'ps-gate-w2-s6-5-2': 1,
         'ps-gate-w3-c1-1': 1,
         'ps-gate-w3-s2-4': 1,
+        'ps-gate-w3-s7-2': 1,
         'ps-gate-w4-s2-1': 1,
         'ps-gate-w4-s2-1-2': 1,
         'ps-gate-w5-s2-2': 1,
@@ -600,7 +604,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(240);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(244);
     });
 });
 
@@ -857,6 +861,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s2-3.G1.6',
         'ps-gate-c1-s2-6.G2.25',
         'ps-gate-c1-s3-1.G1.12',
+        'ps-gate-c1-s4-2-2.G3.5',
         'ps-gate-c1-s4-2.G2.7',
         'ps-gate-c1-s6-1.G2.6',
         'ps-gate-c1-s6-4.G2.36',
@@ -886,6 +891,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-t3-s-t-1.G1.5',
         'ps-gate-t4-s-t-3.G2.11',
         'ps-gate-t4-s6-5.G0.11',
+        'ps-gate-w1-c1-2.G3.11',
         'ps-gate-w1-s1-4.G1.7',
         'ps-gate-w1-s3-2.G1.11',
         'ps-gate-w1-s5-1.G2.29',
@@ -905,9 +911,11 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-w2-c1-1.G0.2',
         'ps-gate-w2-s5-2.G2.4',
         'ps-gate-w2-s5-3.G0.9',
+        'ps-gate-w2-s6-5-2.G3.4',
         'ps-gate-w2-s6-5.G2.3',
         'ps-gate-w3-c1-1.G0.3',
         'ps-gate-w3-s2-4.G2.10',
+        'ps-gate-w3-s7-2.G3.3',
         'ps-gate-w4-s2-1-2.G1.4',
         'ps-gate-w4-s2-1.G0.8',
         'ps-gate-w5-s2-2.G1.3',

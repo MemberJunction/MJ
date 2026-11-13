@@ -1,9 +1,11 @@
 /**
- * The 46 run-time checks of the review's `probes/architecture/check_gate_parity.sh` (`ps-review` `d47dfb8`, its
+ * The run-time checks of the review's `probes/architecture/check_gate_parity.sh` (`ps-review` `d47dfb8`, its
  * `t('…')` lines), one `it` each, under the product names (D-037): `deliver` → `Delivery.Create`,
- * `compareToIncumbent` → `IncumbentCheck.Compare`, `registerDelivery` → `RegisteredDelivery.Register`, `isIssued` →
+ * `registerDelivery` → `RegisteredDelivery.Register`, `isIssued` →
  * `IsIssued`, `reverifyPublish` → `PublishRules.ReverifyPublish`, `decideStatusWrite` →
  * `StatusWriteRules.DecideStatusWrite`. The status-write authorisations name persisted statuses (§6.2a, D4-02).
+ * `compareToIncumbent`'s seven checks went with `IncumbentCheck` (D4-103: nothing on the publish path called it; the live
+ * comparison is `PublishRules.ReverifyPublish`'s incumbent step, pinned below).
  *
  * The spread forgeries are typed with `as unknown as <Class>` on purpose: the cast compiles (the types are a
  * convenience layer) and only the run-time `IsIssued` checks catch it, which is what these checks prove.
@@ -11,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { EvaluationProtocol } from '../evaluation-protocol';
 import { GateRules } from '../gate';
-import { Delivery, IncumbentCheck, PublishRules, RegisteredDelivery, StatusWriteRules, type StoredPublishInputs } from '../registry-contracts';
+import { Delivery, PublishRules, RegisteredDelivery, StatusWriteRules, type StoredPublishInputs } from '../registry-contracts';
 import { RegistryInputs as R } from './fixtures/registry-inputs';
 
 const task = R.Task;
@@ -75,39 +77,6 @@ describe('issued values', () => {
   });
   it('RegisteredDelivery.Register refuses a spread Delivery', () => {
     expect(RegisteredDelivery.Register(spreadD, null).Ok).toBe(false);
-  });
-  it('IncumbentCheck.Compare refuses a spread Delivery', () => {
-    expect(IncumbentCheck.Compare(spreadD, INC, m, R.ClaimedWin(1, 1, 1))).toBeNull();
-  });
-});
-
-describe('IncumbentCheck', () => {
-  it('IncumbentCheck.Compare: winning interval -> beats-incumbent, candidate from delivery', () => {
-    const win = IncumbentCheck.Compare(dk, INC, m, R.ClaimedWin(0.02, 0.01, 0.03));
-    expect(win instanceof IncumbentCheck && IncumbentCheck.IsIssued(win) && win.View.Kind === 'beats-incumbent' &&
-      win.View.Comparison.beats === true && win.View.Delivery.View.artifact?.candidate === 'glm').toBe(true);
-  });
-  it('spread IncumbentCheck (f2/f5) is not issued', () => {
-    const win = IncumbentCheck.Compare(dk, INC, m, R.ClaimedWin(0.02, 0.01, 0.03));
-    if (!(win instanceof IncumbentCheck)) throw new Error('expected an issued check');
-    // f2/f5: another incumbent id spread into a genuine check; the cast is the forgery.
-    const forged = { ...win, View: { ...win.View, IncumbentModelID: 'other' } } as unknown as IncumbentCheck;
-    expect(IncumbentCheck.IsIssued(forged)).toBe(false);
-  });
-  it('IncumbentCheck.Compare: losing interval -> does-not-beat-incumbent', () => {
-    const lose = IncumbentCheck.Compare(dk, INC, m, R.ClaimedWin(0.004, -0.01, 0.02));
-    expect(lose !== null && !(lose instanceof IncumbentCheck) && lose.Kind === 'does-not-beat-incumbent' && lose.Comparison.beats === false).toBe(true);
-  });
-  it('IncumbentCheck.Compare: lower bound equal to margin does not beat', () => {
-    const r = IncumbentCheck.Compare(dk, INC, m, R.ClaimedWin(0.01, 0.005, 0.02));
-    expect(r !== null && !(r instanceof IncumbentCheck) && r.Kind === 'does-not-beat-incumbent').toBe(true);
-  });
-  it('IncumbentCheck.Compare: no-incumbent only when id is null', () => {
-    const r = IncumbentCheck.Compare(dk, null, m, R.ClaimedWin(0, -1, 1));
-    expect(r instanceof IncumbentCheck && r.View.Kind === 'no-incumbent').toBe(true);
-  });
-  it('IncumbentCheck.Compare: no-signal delivery cannot be compared', () => {
-    expect(IncumbentCheck.Compare(dn, INC, m, R.ClaimedWin(1, 1, 1))).toBeNull();
   });
 });
 
@@ -190,30 +159,30 @@ describe('PublishRules.ReverifyPublish', () => {
 
 describe('StatusWriteRules.DecideStatusWrite', () => {
   it('DecideStatusWrite: create as Draft allowed', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Draft', { Kind: 'create' }, null, false).Allow).toBe(true);
+    expect(StatusWriteRules.DecideStatusWrite('Draft', { Kind: 'create' }, null, false, false).Allow).toBe(true);
   });
   it('DecideStatusWrite: create as Published refused', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'create' }, null, false).Reason).toBe('create-not-draft');
+    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'create' }, null, false, false).Reason).toBe('create-not-draft');
   });
   it('DecideStatusWrite: saved record whose stored row is unreadable is refused (N7)', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Draft', { Kind: 'unreadable' }, null, false).Reason).toBe('stored-row-unreadable');
+    expect(StatusWriteRules.DecideStatusWrite('Draft', { Kind: 'unreadable' }, null, false, false).Reason).toBe('stored-row-unreadable');
   });
   it('DecideStatusWrite: unchanged status allowed', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Validated', { Kind: 'row', Status: 'Validated' }, null, false).Allow).toBe(true);
+    expect(StatusWriteRules.DecideStatusWrite('Validated', { Kind: 'row', Status: 'Validated', ServingWhileUnevaluated: false }, null, false, false).Allow).toBe(true);
   });
   it('DecideStatusWrite: change outside gate refused', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated' }, null, false).Reason).toBe('status-changed-outside-gate');
+    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated', ServingWhileUnevaluated: false }, null, false, false).Reason).toBe('status-changed-outside-gate');
   });
   it('DecideStatusWrite: gate-authorised transition allowed', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated' }, { From: 'Validated', To: 'Published' }, false).Allow).toBe(true);
+    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated', ServingWhileUnevaluated: false }, { From: 'Validated', To: 'Published' }, false, false).Allow).toBe(true);
   });
   it('DecideStatusWrite: authorisation for another transition refused', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Draft' }, { From: 'Validated', To: 'Published' }, false).Reason).toBe('gate-transition-mismatch');
+    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Draft', ServingWhileUnevaluated: false }, { From: 'Validated', To: 'Published' }, false, false).Reason).toBe('gate-transition-mismatch');
   });
   it('DecideStatusWrite: non-gate update inside a TransactionGroup refused (N6)', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Validated', { Kind: 'row', Status: 'Validated' }, null, true).Reason).toBe('deferred-in-transaction-group');
+    expect(StatusWriteRules.DecideStatusWrite('Validated', { Kind: 'row', Status: 'Validated', ServingWhileUnevaluated: false }, null, true, false).Reason).toBe('deferred-in-transaction-group');
   });
   it('DecideStatusWrite: gate-authorised transition inside a group allowed', () => {
-    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated' }, { From: 'Validated', To: 'Published' }, true).Allow).toBe(true);
+    expect(StatusWriteRules.DecideStatusWrite('Published', { Kind: 'row', Status: 'Validated', ServingWhileUnevaluated: false }, { From: 'Validated', To: 'Published' }, true, false).Allow).toBe(true);
   });
 });

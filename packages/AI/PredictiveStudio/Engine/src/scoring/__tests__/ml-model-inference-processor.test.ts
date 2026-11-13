@@ -573,7 +573,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     return {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      recordLoader: { loadPipeline: async () => pipeline, resolveAlgorithmIDForDriver: async () => null },
       artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user,
       provider,
@@ -839,7 +839,7 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     const deps: TrainingDeps = {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      recordLoader: { loadPipeline: async () => pipeline, resolveAlgorithmIDForDriver: async () => null },
       artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user, provider, predictionUnits: units, assemblyMetadata: metadata, dataAccess,
       now: () => new Date(`${TRAIN_DAY}T09:00:00Z`),

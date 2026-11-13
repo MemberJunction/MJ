@@ -1,26 +1,21 @@
 /**
  * @module operations/promote-model.operation
  *
- * **Promote ML Model** Remote Operation — the server body for the Manual-mode
- * `PredictiveStudio.PromoteModel` operation. A `Sync` lifecycle-only transition
- * (`Draft → Validated → Published → Archived`) that **enforces the leakage sign-off
- * gate**: a leakage-flagged model cannot be promoted without an explicit sign-off
- * (and a justification reason).
+ * **Promote ML Model** Remote Operation — the server body for the Manual-mode `PredictiveStudio.PromoteModel`
+ * operation. A `Sync` lifecycle-only call that applies ONE `transition` (`evaluate`, `publish`, `archive`, `rollback`)
+ * through the {@link LifecycleGate}, the only writer of `MJ: ML Models.Status` (PR 4 §5.3).
  *
- * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter — it
- * carries no promotion logic. The leakage detection + state-machine transition live
- * in {@link ProductionModelPromotionGate}, shared with the Promote action via
- * {@link PromoteModelViaGate}. The gate touches ONLY the `Status` (the model is
- * immutable, §6.4).
+ * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter — it carries no lifecycle logic. The
+ * transition → gate mapping is {@link ModelTransitionDelegation}, shared with the Promote action. The caller is the
+ * initiator (`{ kind: 'human', userId }`), so an interactive user is recorded as the approver of a publish.
  *
- * Non-promoted outcomes (leakage refusal, missing reason, calibration hold, a model
- * `/predict` does not serve, invalid transition, not found, save failure) are surfaced as a thrown error so the framework wraps them as
- * a clean `EXECUTION_ERROR` result; the message preserves the plain-language detail
- * the Action also surfaces.
+ * An input without a valid `transition` is refused before any read (a thrown error the framework wraps as
+ * `EXECUTION_ERROR`). A gate refusal is not an error: it is returned as `{ applied: false, status, refusal }`, the
+ * refusal being the gate's `TransitionRefusal`, so a caller can say in words why nothing changed.
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RemoteOpServerContext, UserInfo } from '@memberjunction/core';
 import { BaseRemotableOperation } from '@memberjunction/core';
 import {
   PredictiveStudioPromoteModelOperation,
@@ -28,18 +23,14 @@ import {
   type PredictiveStudioPromoteModelOutput,
 } from '@memberjunction/core-entities';
 
-import type {
-  IModelPromotionGate,
-  PromoteModelOutcome,
-} from '../actions/promote-model.action';
-import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
-import { PromoteModelViaGate } from './delegation';
+import { LifecycleGate } from '../registry/lifecycle-gate';
+import { GateContexts } from '../registry/gate-seams';
+import { ModelTransitionDelegation, type ModelTransitionResult } from './delegation';
 
 /**
- * Server implementation of `PredictiveStudio.PromoteModel`. Extends the
- * CodeGen-emitted {@link PredictiveStudioPromoteModelOperation} base
- * (`ExecutionMode='Sync'`, `RequiredScope='predictive:execute'`) and supplies only
- * the body; registered last so it wins server-side dispatch.
+ * Server implementation of `PredictiveStudio.PromoteModel`. Extends the CodeGen-emitted
+ * {@link PredictiveStudioPromoteModelOperation} base (`ExecutionMode='Sync'`, `RequiredScope='predictive:execute'`)
+ * and supplies only the body; registered last so it wins server-side dispatch.
  */
 @RegisterClass(BaseRemotableOperation, 'PredictiveStudio.PromoteModel')
 export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudioPromoteModelOperation {
@@ -48,101 +39,32 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
     input: PredictiveStudioPromoteModelInput,
     provider: IMetadataProvider,
     user: UserInfo,
+    _context: RemoteOpServerContext,
   ): Promise<PredictiveStudioPromoteModelOutput> {
     if (!input?.modelId) {
       throw new Error('modelId is required');
     }
-    if (!input.targetStatus) {
-      throw new Error('targetStatus is required (one of: Validated, Published, Archived)');
+    const transition = ModelTransitionDelegation.ParseTransition(input.transition);
+    if (transition === null) {
+      throw new Error(`transition is required (one of: ${ModelTransitionDelegation.Transitions.join(', ')})`);
     }
-
-    const outcome = await PromoteModelViaGate(
-      {
-        modelId: input.modelId,
-        targetStatus: input.targetStatus,
-        signOff: input.signOff ?? false,
-        reason: input.reason,
-        contextUser: user,
-        provider,
-      },
-      this.gate(),
+    const result = await ModelTransitionDelegation.Apply(
+      { ModelID: input.modelId, Transition: transition, Reason: input.reason || null, SignOffID: input.signOffId || null, Initiator: { kind: 'human', userId: user.ID } },
+      GateContexts.ForRequest({ ContextUser: user, Provider: provider }),
+      this.CreateLifecycleGate(),
     );
-
-    return this.toOutput(input, outcome);
+    return PredictiveStudioPromoteModelServerOperation.ToOutput(result);
   }
 
-  /**
-   * Map the gate outcome onto the operation's typed output. The single happy path
-   * (`promoted`) returns `{ promoted: true, status: newStatus }`; every refusal /
-   * failure throws with the plain-language detail so the framework surfaces it as a
-   * clean error (rather than silently returning `promoted: false`).
-   */
-  protected toOutput(
-    input: PredictiveStudioPromoteModelInput,
-    outcome: PromoteModelOutcome,
-  ): PredictiveStudioPromoteModelOutput {
-    switch (outcome.kind) {
-      case 'promoted':
-        return { promoted: true, status: outcome.newStatus };
-      case 'refused-leakage':
-        throw new Error(this.leakageRefusalMessage(input.modelId, outcome));
-      case 'signoff-reason-required':
-        throw new Error(this.signOffReasonRequiredMessage(input.modelId, outcome));
-      case 'refused-calibration':
-        throw new Error(ProductionModelPromotionGate.CalibrationRefusalMessage(input.modelId, outcome.slope));
-      case 'not-servable':
-        throw new Error(outcome.message);
-      case 'invalid-transition':
-        throw new Error(
-          `Model ${input.modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
-            'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
-        );
-      case 'needs-training':
-        throw new Error(outcome.message);
-      case 'not-found':
-        throw new Error(`ML Model '${input.modelId}' was not found.`);
-      case 'save-failed':
-        throw new Error(`Failed to transition model '${input.modelId}': ${outcome.message}`);
-    }
+  /** The operation's output for a gate result: `applied` and the status, with the gate's refusal when it refused. */
+  public static ToOutput(result: ModelTransitionResult): PredictiveStudioPromoteModelOutput {
+    if (result.Applied === true) return { applied: true, status: result.Status };
+    return { applied: false, status: result.Status, refusal: result.Refusal };
   }
 
-  /** Plain-language refusal message for a leakage-flagged model (mirrors the Action). */
-  protected leakageRefusalMessage(
-    modelId: string,
-    outcome: Extract<PromoteModelOutcome, { kind: 'refused-leakage' }>,
-  ): string {
-    const detail =
-      outcome.topFeature != null
-        ? ` One feature ("${outcome.topFeature}") accounts for ${((outcome.topShare ?? 0) * 100).toFixed(0)}% of the model's predictions, which often signals the model is accidentally peeking at the answer.`
-        : '';
-    return (
-      `Model ${modelId} was flagged for possible target leakage and cannot be promoted without sign-off.${detail} ` +
-      'A human must review the model and re-run this operation with signOff=true (and a reason) to confirm the result is legitimate.'
-    );
-  }
-
-  /** Message when a sign-off override was requested without a justification reason. */
-  protected signOffReasonRequiredMessage(
-    modelId: string,
-    outcome: Extract<PromoteModelOutcome, { kind: 'signoff-reason-required' }>,
-  ): string {
-    const detail =
-      outcome.topFeature != null
-        ? ` (one feature, "${outcome.topFeature}", dominates this model's predictions)`
-        : '';
-    return (
-      `Model ${modelId} is leakage-flagged${detail} and signOff=true was supplied without a reason. ` +
-      'Overriding a leakage flag requires a non-empty reason so the sign-off is auditable.'
-    );
-  }
-
-  /**
-   * The promotion gate to delegate to. Overridable so unit tests inject a mock with
-   * no live DB. The production default ({@link ProductionModelPromotionGate}) is the
-   * SAME gate the Promote action uses.
-   */
-  protected gate(): IModelPromotionGate {
-    return new ProductionModelPromotionGate();
+  /** The lifecycle gate the transition runs through (production: {@link LifecycleGate}). Overridable so tests inject one. */
+  protected CreateLifecycleGate(): LifecycleGate {
+    return new LifecycleGate();
   }
 }
 

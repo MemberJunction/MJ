@@ -41,8 +41,8 @@ export class MetadataEntityFactory implements IEntityFactory {
 
 /**
  * `RunView`-backed {@link IRecordLoader}; every read runs on the caller's provider. Loads the pipeline as a full
- * `entity_object` (it is read, not mutated) and computes the next version from a
- * narrow `simple` projection over `MJ: ML Models`.
+ * `entity_object` (it is read, not mutated). A new model row's version is allocated under the pipeline lock by
+ * `ModelVersions` (registry), not read here.
  */
 export class RunViewRecordLoader implements IRecordLoader {
   /** @inheritdoc */
@@ -66,31 +66,6 @@ export class RunViewRecordLoader implements IRecordLoader {
       return null;
     }
     return result.Results[0];
-  }
-
-  /** @inheritdoc */
-  public async nextModelVersion(
-    pipelineId: string,
-    contextUser: UserInfo,
-    provider: IMetadataProvider,
-  ): Promise<number> {
-    const rv = RunView.FromMetadataProvider(provider);
-    const result = await rv.RunView<{ Version: number }>(
-      {
-        EntityName: 'MJ: ML Models',
-        ExtraFilter: `PipelineID='${pipelineId}'`,
-        Fields: ['Version'],
-        OrderBy: 'Version DESC',
-        MaxRows: 1,
-        SkipTotalRowCount: true,
-        ResultType: 'simple',
-      },
-      contextUser,
-    );
-    if (!result.Success || result.Results.length === 0) {
-      return 1;
-    }
-    return (result.Results[0].Version ?? 0) + 1;
   }
 
   /** @inheritdoc */

@@ -1,8 +1,9 @@
 import { RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
-  MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity,
-  MJRecordProcessEntity, MJMLTrainingSnapshotEntity,
+  MJActionParamEntity, MJMLEvaluationProtocolEntity, MJFileEntity, MJFileStorageProviderEntity, MJMLModelEntity, MJMLModelPublishRecordEntity, MJMLTrainingPipelineEntity,
+  MJMLTrainingRunEntity, MJMLPredictionUnitEntity, MJRecordProcessEntity, MJMLTrainingSnapshotEntity, MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
+import { MonitoringJobs } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, UUIDMap } from '@memberjunction/global';
 import { ResolveStorageDriver } from '@memberjunction/storage';
 import { JsonParse, TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser } from '@memberjunction/predictive-studio-core';
@@ -165,6 +166,15 @@ export type CleanupTrainingRunRow = CleanupRow & Pick<BaseEntity, 'Save'> & Pick
 /** A Training Snapshot row: a cleanup row with its three stored files. */
 export type CleanupSnapshotRow = CleanupRow & Pick<MJMLTrainingSnapshotEntity, 'MatrixFileID' | 'RowManifestFileID' | 'ProvenanceFileID'>;
 
+/** A scheduled job row: a cleanup row with the configuration that names the model a monitoring job watches. */
+export type CleanupScheduledJobRow = CleanupRow & Pick<MJScheduledJobEntity, 'Configuration'>;
+
+/** An `MJ: ML Model Publish Records` row: a cleanup row with the sign-off record it consumed (a record naming a sign-off references it). */
+export type CleanupPublishRecordRow = CleanupRow & Pick<MJMLModelPublishRecordEntity, 'SignOffID'>;
+
+/** An `MJ: Action Params` row: a cleanup row with the Action it belongs to. */
+export type CleanupActionParamRow = CleanupRow & Pick<MJActionParamEntity, 'ActionID'>;
+
 /** An `MJ: Files` row: a cleanup row with the provider and key of the object it records. */
 export type CleanupFileRow = CleanupRow & Pick<MJFileEntity, 'ProviderID' | 'ProviderKey'>;
 
@@ -179,6 +189,12 @@ export interface CleanupStore {
   TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]>;
   Files(filter: string): Promise<CleanupFileRow[]>;
   Rows(entityName: string, filter: string): Promise<CleanupRow[]>;
+  /** The lifecycle gate's model-monitoring jobs (`MonitoringJobs.JOB_TYPE_NAME`), every status, with their configuration. */
+  MonitoringJobs(): Promise<CleanupScheduledJobRow[]>;
+  /** The `MJ: Action Params` rows matching the filter, with their Action. */
+  ActionParams(filter: string): Promise<CleanupActionParamRow[]>;
+  /** The `MJ: ML Model Publish Records` rows matching the filter, with the sign-off each consumed. */
+  PublishRecords(filter: string): Promise<CleanupPublishRecordRow[]>;
   /** Delete the object a file row records, through its provider's driver; null when deleted, else why not. */
   DeleteStoredObject(file: CleanupFileRow): Promise<string | null>;
 }
@@ -192,8 +208,24 @@ interface ScoringRows {
   readonly Watermarks: CleanupRow[];
 }
 
+/**
+ * What the lifecycle gate wrote for the recorded models and runs: their publish records (a published model's record, a
+ * sign-off, a refusal record, a run-level refusal), split into the records that name a sign-off and the rest (a record
+ * references the sign-off it consumed, `FK_MLModelPublishRecord_SignOff`); the models' monitoring jobs with their job
+ * runs; and the per-model scoring Actions generated on publish with their params. All reference the models or runs, so
+ * they are deleted first.
+ */
+interface GateRows {
+  readonly SignOffConsumers: CleanupRow[];
+  readonly OtherPublishRecords: CleanupRow[];
+  readonly MonitoringJobRuns: CleanupRow[];
+  readonly MonitoringJobs: CleanupRow[];
+  readonly ScoringActionParams: CleanupRow[];
+  readonly ScoringActions: CleanupRow[];
+}
+
 /** Every row `HarnessCleanup.DeleteRecorded` deletes before the recorded protocol and unit versions. */
-interface RecordedRows extends ScoringRows {
+interface RecordedRows extends ScoringRows, GateRows {
   readonly Models: CleanupModelRow[];
   readonly Runs: CleanupTrainingRunRow[];
   readonly Snapshots: CleanupSnapshotRow[];
@@ -204,6 +236,16 @@ interface RecordedRows extends ScoringRows {
 
 /** Deletes the pipelines and models a run recorded, and everything hanging off them, through the entity layer. */
 export class HarnessCleanup {
+  /**
+   * The most deletes one stage runs at once. Each delete is a GraphQL request, and the client's HTTP agent (undici,
+   * Node's `fetch`) opens a socket for every request in flight with no per-origin cap. A stage of hundreds of Process
+   * Run Details deleted all at once put ~1,600 requests in flight and opened over 1,100 sockets: MJAPI's accept queue
+   * stayed at its 128 limit (macOS `kern.ipc.somaxconn`) for ~10 s while it served them, so the connects of hundreds of
+   * them timed out client-side (`ETIMEDOUT` on both `::1` and `127.0.0.1`), the request was never sent (MJAPI logged
+   * nothing), and each of those rows' `Delete()` failed with "GraphQL Error (Code: unknown)".
+   */
+  public static readonly MAX_CONCURRENT_DELETES = 8;
+
   /** The entity-layer store on `provider` as `user`. */
   public static EntityStore(provider: IMetadataProvider, user: UserInfo): CleanupStore {
     return {
@@ -215,6 +257,14 @@ export class HarnessCleanup {
       TrainingSnapshots: (filter) => HarnessCleanup.load<MJMLTrainingSnapshotEntity>(provider, user, 'MJ: ML Training Snapshots', filter),
       Files: (filter) => HarnessCleanup.load<MJFileEntity>(provider, user, 'MJ: Files', filter),
       Rows: (entityName, filter) => HarnessCleanup.load<BaseEntity & { ID: string }>(provider, user, entityName, filter),
+      MonitoringJobs: async () => {
+        const types = await HarnessCleanup.load<BaseEntity & { ID: string }>(provider, user, 'MJ: Scheduled Job Types', `Name = '${EscapeSQLString(MonitoringJobs.JOB_TYPE_NAME)}'`);
+        const typeIds = new RecordIDSet(types.map((t) => t.ID));
+        const filter = HarnessCleanup.anyIn([['JobTypeID', typeIds]]);
+        return filter ? HarnessCleanup.load<MJScheduledJobEntity>(provider, user, 'MJ: Scheduled Jobs', filter) : [];
+      },
+      ActionParams: (filter) => HarnessCleanup.load<MJActionParamEntity>(provider, user, 'MJ: Action Params', filter),
+      PublishRecords: (filter) => HarnessCleanup.load<MJMLModelPublishRecordEntity>(provider, user, 'MJ: ML Model Publish Records', filter),
       DeleteStoredObject: (file) => HarnessCleanup.deleteStoredObject(provider, user, file),
     };
   }
@@ -222,15 +272,17 @@ export class HarnessCleanup {
   /**
    * Delete the recorded models (and every model trained from a recorded pipeline) and the recorded pipelines (and the
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
-   * runs, run details and watermarks; then the run/model cycle (a run names the model it produced in `ResultingModelID`,
+   * runs, run details and watermarks; what the lifecycle gate wrote for the models and runs (publish records — those
+   * naming a sign-off before the rest, run-level refusals included —, the monitoring jobs' runs, the jobs, the generated
+   * scoring Actions and their params); then the run/model cycle (a run names the model it produced in `ResultingModelID`,
    * and the model names the run in `TrainingRunID`): each run's `ResultingModelID` that names a model being deleted is
    * cleared and saved, then the models, then the training runs; then the Training Snapshots the runs trained on and the
    * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
    * artifact files and every artifact file a run's stored trainer result names (stored object, then row), pipelines,
    * the recorded Evaluation Protocol versions (pipelines, runs and snapshots reference them), and last the recorded
    * Prediction Unit versions (pipelines and snapshots reference them).
-   * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed and per stored
-   * object that could not be deleted.
+   * Every row is attempted, at most {@link MAX_CONCURRENT_DELETES} at a time; deleted IDs leave `records`. Returns one
+   * line per row whose `Delete()` failed and per stored object that could not be deleted.
    */
   public static async DeleteRecorded(store: CleanupStore, records: RunRecords): Promise<string[]> {
     const r = await HarnessCleanup.readRecorded(store, records);
@@ -241,6 +293,12 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: Process Runs', r.ProcessRuns)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Process Watermarks', r.Watermarks)),
       ...(await HarnessCleanup.deleteAll('MJ: Record Processes', r.Processes)),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Model Publish Records', r.SignOffConsumers)),
+      ...(await HarnessCleanup.deleteAll('MJ: ML Model Publish Records', r.OtherPublishRecords)),
+      ...(await HarnessCleanup.deleteAll('MJ: Scheduled Job Runs', r.MonitoringJobRuns)),
+      ...(await HarnessCleanup.deleteAll('MJ: Scheduled Jobs', r.MonitoringJobs)),
+      ...(await HarnessCleanup.deleteAll('MJ: Action Params', r.ScoringActionParams)),
+      ...(await HarnessCleanup.deleteAll('MJ: Actions', r.ScoringActions)),
       ...(await HarnessCleanup.detachRunsFromModels(r.Runs, new RecordIDSet(r.Models.map((m) => m.ID)))),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', r.Models, (id) => records.ModelIDs.Delete(id))),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', r.Runs)),
@@ -259,11 +317,11 @@ export class HarnessCleanup {
    */
   private static async detachRunsFromModels(runs: readonly CleanupTrainingRunRow[], modelIds: RecordIDSet): Promise<string[]> {
     const attached = runs.filter((r) => r.ResultingModelID !== null && modelIds.Has(r.ResultingModelID));
-    const failures = await Promise.all(attached.map(async (run) => {
+    const failures = await HarnessCleanup.mapBounded(attached, async (run) => {
       run.ResultingModelID = null;
       if (await run.Save()) return null;
       return `MJ: ML Training Runs ${run.ID}: could not clear ResultingModelID before its model is deleted: ${run.LatestResult?.CompleteMessage || 'Save() returned false'}`;
-    }));
+    });
     return failures.filter((f): f is string => f !== null);
   }
 
@@ -285,7 +343,42 @@ export class HarnessCleanup {
     const fileFilter = HarnessCleanup.anyIn([['ID', new RecordIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
     const files = fileFilter ? await store.Files(fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
-    return { ...scoring, Models: models, Runs: runs, Snapshots: snapshots, TrainerFiles: trainerFiles, Files: files, Pipelines: pipelines };
+    const gate = await HarnessCleanup.readGateRows(store, modelIds, new RecordIDSet(runs.map((r) => r.ID)));
+    return { ...scoring, ...gate, Models: models, Runs: runs, Snapshots: snapshots, TrainerFiles: trainerFiles, Files: files, Pipelines: pipelines };
+  }
+
+  /**
+   * What the lifecycle gate wrote for the models and runs: publish records naming either (as the model, the model it
+   * replaced, or the run — a run-level refusal names only the run), split by whether they name a sign-off; the
+   * monitoring jobs whose configuration names a model, every status, with their job runs; and the generated scoring
+   * Actions (child Actions whose `ModelID` param defaults to a model) with all their params.
+   */
+  private static async readGateRows(store: CleanupStore, modelIds: RecordIDSet, runIds: RecordIDSet): Promise<GateRows> {
+    const recordFilter = HarnessCleanup.anyIn([['ModelID', modelIds], ['ReplacesModelID', modelIds], ['TrainingRunID', runIds]]);
+    const jobs = modelIds.Size > 0 ? (await store.MonitoringJobs()).filter((j) => HarnessCleanup.namesModel(j.Configuration, modelIds)) : [];
+    const jobRunFilter = HarnessCleanup.anyIn([['ScheduledJobID', new RecordIDSet(jobs.map((j) => j.ID))]]);
+    const jobRuns = jobRunFilter ? await store.Rows('MJ: Scheduled Job Runs', jobRunFilter) : [];
+    const defaultFilter = HarnessCleanup.anyIn([['DefaultValue', modelIds]]);
+    const modelParams = defaultFilter ? await store.ActionParams(`Name = 'ModelID' AND Type = 'Input' AND (${defaultFilter})`) : [];
+    const actionIds = new RecordIDSet(modelParams.map((p) => p.ActionID));
+    const paramFilter = HarnessCleanup.anyIn([['ActionID', actionIds]]);
+    const actionFilter = HarnessCleanup.anyIn([['ID', actionIds]]);
+    const records = recordFilter ? await store.PublishRecords(recordFilter) : [];
+    return {
+      SignOffConsumers: records.filter((r) => r.SignOffID !== null),
+      OtherPublishRecords: records.filter((r) => r.SignOffID === null),
+      MonitoringJobRuns: jobRuns,
+      MonitoringJobs: jobs,
+      ScoringActionParams: paramFilter ? await store.ActionParams(paramFilter) : [],
+      ScoringActions: actionFilter ? await store.Rows('MJ: Actions', `ParentID IS NOT NULL AND (${actionFilter})`) : [],
+    };
+  }
+
+  /** True when a monitoring job's configuration names one of `modelIds` as its `modelId`. */
+  private static namesModel(configuration: string | null, modelIds: RecordIDSet): boolean {
+    const json = JsonParse.ParseJsonText(configuration, 'Configuration');
+    const modelId = json.Ok && JsonParse.IsJsonObject(json.Value) ? JsonParse.JsonString(json.Value, 'modelId') : null;
+    return modelId !== null && modelIds.Has(modelId);
   }
 
   /** The models' scoring rows: their bindings and Record Processes, with the processes' runs, run details and watermarks. */
@@ -445,16 +538,36 @@ export class HarnessCleanup {
     return res.Results;
   }
 
-  /** Delete each row (one stage of the FK order, so the rows are independent and run in parallel); the failures. */
+  /**
+   * Delete each row (one stage of the FK order, so the rows are independent), at most {@link MAX_CONCURRENT_DELETES} at
+   * a time; the failures.
+   */
   private static async deleteAll(entityName: string, rows: CleanupRow[], onDeleted: (id: string) => void = () => undefined): Promise<string[]> {
-    const failures = await Promise.all(rows.map(async (row) => {
+    const failures = await HarnessCleanup.mapBounded(rows, async (row) => {
       const id = row.ID; // read before Delete(): a deleted entity object no longer carries its field values
       if (await row.Delete()) {
         onDeleted(id);
         return null;
       }
       return `${entityName} ${id}: ${row.LatestResult?.CompleteMessage || 'Delete() returned false'}`;
-    }));
+    });
     return failures.filter((f): f is string => f !== null);
+  }
+
+  /**
+   * `fn` over every item with at most {@link MAX_CONCURRENT_DELETES} calls in flight; the results in item order. Each
+   * worker takes the next item when its call settles, so one slow request never holds back the rest of the stage.
+   */
+  private static async mapBounded<T, R>(items: readonly T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = new Array<R>(items.length);
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(HarnessCleanup.MAX_CONCURRENT_DELETES, items.length) }, () => worker()));
+    return results;
   }
 }

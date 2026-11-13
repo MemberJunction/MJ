@@ -37,6 +37,9 @@ const existingFields: FieldRow[] = [];
 
 import { NamesExtractionLeavesAlone, SyncFields, SyncParameters } from '../custom/query-extraction/sync';
 import type { ExtractedField, ExtractedParameter } from '../custom/query-extraction/types';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^Query parameter extraction: '(Context\.UserID|Context)' reads the server-set Context object; it is not a parameter, and no parameter row is kept for it\.$/]);
 
 function row(name: string, isServerSet: boolean): ParamRow {
     return {

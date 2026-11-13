@@ -38,12 +38,12 @@ export const PsGateW1S71Checks: NamedCheck[] = [
     Fn: async (ctx) => {
       const h = await PsGate.Harness(ctx);
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-      const lost = await PsGateRegistry.ValidatedWorldModel(h, 'G3.1 lost', w1);
+      const lost = await PsGateRegistry.PublishedWorldModel(h, 'G3.1 lost', w1);
       const warmed = await h.Score(lost, PsGateRegistry.ScoreAll(w1));          // fills any in-process cache (MJAPI's loader, the sidecar's warm cache)
       await ArtifactObjects.RemoveStoredObject(h, lost);
       const refused = await h.Score(lost, PsGateRegistry.ScoreAll(w1));          // a cache that outlives storage serves here
       const afterLoss = await h.ReadModel(lost);
-      const kept = await PsGateRegistry.ValidatedWorldModel(h, 'G3.1 kept', w1);
+      const kept = await PsGateRegistry.PublishedWorldModel(h, 'G3.1 kept', w1);
       const before = await h.Score(kept, PsGateRegistry.ScoreAll(w1));
       const keptBefore = await h.ReadModel(kept);
       await HarnessSidecar.Restart();                               // the sidecar process and its warm cache are gone

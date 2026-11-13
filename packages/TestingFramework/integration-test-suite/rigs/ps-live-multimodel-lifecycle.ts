@@ -8,11 +8,11 @@
  *
  *   PredictiveStudio.TrainModel    → MJAPI → TrainingEngine → Python sidecar (/train)
  *   PredictiveStudio.ScoreRecordSet→ MJAPI → MLModelInferenceProcessor → sidecar (/predict)
- *   PredictiveStudio.PromoteModel  → MJAPI → ProductionModelPromotionGate
+ *   PredictiveStudio.PromoteModel  → MJAPI → LifecycleGate (transition 'evaluate')
  *
  * — for SEVERAL model configs in turn, each fully isolated by its own try/finally cleanup
  * so one model's failure never blocks the next. At the end it prints a summary table
- * (model · trained? · holdout metric · scored · promoted? · wall-clock).
+ * (model · trained? · holdout metric · scored · evaluated? · wall-clock).
  *
  * Nothing about the ML is mocked. The ops are invoked exactly as any caller would:
  *   `await new SomeOperation().Execute(input, { provider, user })` — the call marshals over
@@ -63,6 +63,7 @@
  */
 import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { GateAnswer } from './lib/ps-promote';
 import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
 import { BindUnitAndProtocol, DeleteCreatedAlgorithm, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -117,7 +118,7 @@ interface ModelResult {
   trained: boolean;
   holdoutMetric: string;
   scored: number;
-  promoted: boolean;
+  evaluated: boolean;
   /** Wall-clock for this model's lifecycle in seconds. */
   seconds: number;
   /** Captured failure message, when the run errored. */
@@ -269,7 +270,7 @@ async function createPipeline(
 async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, algorithmId: string, cfg: ModelConfig): Promise<ModelResult> {
   const t0 = Date.now();
   const result: ModelResult = {
-    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scored: 0, promoted: false, seconds: 0, cleanupFailures: 0,
+    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scored: 0, evaluated: false, seconds: 0, cleanupFailures: 0,
   };
 
   banner(`MODEL: ${cfg.name}  (${cfg.targetEntity}.${cfg.targetVariable}, ${cfg.problemType})`);
@@ -352,17 +353,21 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
       console.log(`      • record ${p.recordId?.slice(0, 8)}… → class='${p.class}' score=${p.score?.toFixed(4)}`);
     }
 
-    // ── Promote (Draft → Validated) ──────────────────────────────────────────
+    // ── Evaluate (Draft → Validated or KeepBaseline, the stored decision) through the lifecycle gate ──
     const promoteResult = await new PredictiveStudioPromoteModelOperation().Execute(
-      { modelId: shippedModelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-multimodel-lifecycle smoke test' },
+      { modelId: shippedModelId, transition: 'evaluate', reason: 'ps-live-multimodel-lifecycle smoke test' },
       { provider: route, user },
     );
-    console.log(`  PROMOTE Success=${promoteResult.Success}${promoteResult.ErrorMessage ? ` Error=${promoteResult.ErrorMessage}` : ''}`);
+    console.log(`  EVALUATE Success=${promoteResult.Success}${promoteResult.ErrorMessage ? ` Error=${promoteResult.ErrorMessage}` : ''}`);
     if (!promoteResult.Success || !promoteResult.Output) {
-      throw new Error(`Promotion failed: ${promoteResult.ErrorMessage}`);
+      throw new Error(`Evaluation failed: ${promoteResult.ErrorMessage}`);
     }
-    result.promoted = promoteResult.Output.promoted;
-    console.log(`    promoted=${promoteResult.Output.promoted} status=${promoteResult.Output.status}`);
+    const reached = promoteResult.Output.status;
+    if (!promoteResult.Output.applied || (reached !== 'Validated' && reached !== 'KeepBaseline')) {
+      throw new Error(`Evaluation left ML Model ${shippedModelId} ${reached} (the lifecycle gate's answer: ${GateAnswer(promoteResult.Output.refusal)})`);
+    }
+    result.evaluated = promoteResult.Output.applied;
+    console.log(`    applied=${promoteResult.Output.applied} status=${promoteResult.Output.status}${promoteResult.Output.refusal ? ` refusal=${promoteResult.Output.refusal.kind}` : ''}`);
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err);
     console.log(`  ERROR in ${cfg.name}: ${result.error}`);
@@ -381,15 +386,15 @@ function printSummary(results: ModelResult[], totalSeconds: number): void {
   const pad = (v: string, n: number): string => (v.length > n ? `${v.slice(0, n - 1)}…` : v.padEnd(n));
   const trim = (v: string, n: number): string => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
   console.log(
-    `  ${pad('Model', 22)} ${pad('Trained', 8)} ${pad('Holdout', 30)} ${pad('Scored', 7)} ${pad('Promoted', 9)} ${pad('Wall(s)', 8)}`,
+    `  ${pad('Model', 22)} ${pad('Trained', 8)} ${pad('Holdout', 30)} ${pad('Scored', 7)} ${pad('Evaluated', 9)} ${pad('Wall(s)', 8)}`,
   );
   console.log(`  ${'-'.repeat(22)} ${'-'.repeat(8)} ${'-'.repeat(30)} ${'-'.repeat(7)} ${'-'.repeat(9)} ${'-'.repeat(8)}`);
   for (const r of results) {
     const trained = r.skipped ? 'skipped' : r.trained ? 'yes' : 'no';
     const holdout = r.skipped ? '—' : r.error && !r.trained ? `ERR: ${trim(r.error, 24)}` : trim(r.holdoutMetric, 30);
-    const promoted = r.skipped ? '—' : r.promoted ? 'yes' : 'no';
+    const evaluated = r.skipped ? '—' : r.evaluated ? 'yes' : 'no';
     console.log(
-      `  ${pad(r.name, 22)} ${pad(trained, 8)} ${pad(holdout, 30)} ${pad(String(r.scored), 7)} ${pad(promoted, 9)} ${pad(r.seconds.toFixed(1), 8)}`,
+      `  ${pad(r.name, 22)} ${pad(trained, 8)} ${pad(holdout, 30)} ${pad(String(r.scored), 7)} ${pad(evaluated, 9)} ${pad(r.seconds.toFixed(1), 8)}`,
     );
   }
   console.log(`\n  Total wall-clock: ${totalSeconds.toFixed(1)}s`);

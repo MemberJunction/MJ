@@ -10,7 +10,7 @@ import {
   BuildProductionMLInferenceDeps, MLModelInferenceProcessor, ProviderAssemblyMetadata, RunViewDataAccess, RunViewRecordHistoryReader, TrainingDelegation, TrainingEngine,
   type AsOfAssembledMatrix, type AssembledRow, type SourceRow, type UnitTrainingAssembly,
 } from '@memberjunction/predictive-studio';
-import { UnitFixtures, W4StatusHistory, type GateMeasurement, type StatusSpan, type StatusTimeline, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
+import { RunFixtures, UnitFixtures, W4StatusHistory, type GateMeasurement, type StatusSpan, type StatusTimeline, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The catalog algorithms a refused as-of column must be refused for, one training run each. */
@@ -188,15 +188,14 @@ export class AsOfAssemblyGates {
     }).length;
   }
 
-  /** G1.12 C1 → S3.1. The model is promoted to Validated before the scoring path loads it: the scoring processor refuses Draft models. */
+  /** G1.12 C1 → S3.1. The model is published through the gate before the scoring path loads it: the scoring processor refuses Draft and KeepBaseline models. */
   public static async MeasureC1TrainScoreParity(h: TruthHarness): Promise<GateMeasurement> {
     // Trained on C1's reference split: the gate scores the run's model, and the default year-cutoff holdout ships none.
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionC1AssemblyPipeline(h, EvaluationProtocolGates.C1ReferenceProtocol);
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);
     if (!run.ResultingModelID) return { Passed: false, Measured: {}, Detail: `training run ${run.ID} produced no model: ${run.Notes || ''}` };
-    const promoted = await h.Promote(run.ResultingModelID, 'Validated', 'G1.12: scoring-path assembly');
-    if (!promoted.Promoted) return { Passed: false, Measured: { modelStatus: promoted.Status }, Detail: `model ${run.ResultingModelID} could not be validated for scoring` };
+    await RunFixtures.PublishModel(h, run.ResultingModelID, 'G1.12 scoring-path assembly');
     const training = await AsOfAssemblyGates.assembleForTraining(h, pipeline.ID);
     if (training.Assembled.Status !== 'assembled') return { Passed: false, Measured: {}, Detail: `training assembly refused: ${JSON.stringify(training.Assembled.Refusal)}` };
     const sample = AsOfAssemblyGates.paritySample(training.Assembled.Rows);

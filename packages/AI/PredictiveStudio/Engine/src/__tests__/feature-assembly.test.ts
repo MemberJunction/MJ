@@ -8,7 +8,7 @@ import {
   type FetchRowsResult,
   type SourceRow,
   type DatedSourceSpec,
-  detectSingleFeatureDominance,
+  DetectSingleFeatureDominance,
   LeakageGuardEnforcer,
   ResolveAsOfDate,
   DaysSinceLastActivityAsOf,
@@ -294,25 +294,25 @@ describe('LeakageGuard', () => {
 
   it('LeakageGuardEnforcer partitions columns', () => {
     const enforcer = new LeakageGuardEnforcer({ DenyFields: ['x'], SingleFeatureDominanceThreshold: 0.6 });
-    expect(enforcer.partitionColumns(['x', 'y'])).toEqual({ allowed: ['y'], denied: ['x'] });
-    expect(enforcer.isSourceAllowed('AnySource')).toBe(true);
+    expect(enforcer.PartitionColumns(['x', 'y'])).toEqual({ allowed: ['y'], denied: ['x'] });
+    expect(enforcer.IsSourceAllowed('AnySource')).toBe(true);
   });
 
-  it('detectSingleFeatureDominance flags importance over threshold', () => {
-    const dominant = detectSingleFeatureDominance({ a: 0.8, b: 0.1, c: 0.1 }, 0.6);
+  it('DetectSingleFeatureDominance flags importance over threshold', () => {
+    const dominant = DetectSingleFeatureDominance({ a: 0.8, b: 0.1, c: 0.1 }, 0.6);
     expect(dominant.Dominant).toBe(true);
     expect(dominant.TopFeature).toBe('a');
     expect(dominant.TopShare).toBeCloseTo(0.8, 5);
   });
 
-  it('detectSingleFeatureDominance does not flag a balanced model', () => {
-    const balanced = detectSingleFeatureDominance({ a: 0.34, b: 0.33, c: 0.33 }, 0.6);
+  it('DetectSingleFeatureDominance does not flag a balanced model', () => {
+    const balanced = DetectSingleFeatureDominance({ a: 0.34, b: 0.33, c: 0.33 }, 0.6);
     expect(balanced.Dominant).toBe(false);
   });
 
-  it('detectSingleFeatureDominance handles signed importances via magnitude and empty maps', () => {
-    expect(detectSingleFeatureDominance({ a: -0.9, b: 0.1 }, 0.6).Dominant).toBe(true);
-    expect(detectSingleFeatureDominance({}, 0.6).Dominant).toBe(false);
+  it('DetectSingleFeatureDominance handles signed importances via magnitude and empty maps', () => {
+    expect(DetectSingleFeatureDominance({ a: -0.9, b: 0.1 }, 0.6).Dominant).toBe(true);
+    expect(DetectSingleFeatureDominance({}, 0.6).Dominant).toBe(false);
   });
 });
 

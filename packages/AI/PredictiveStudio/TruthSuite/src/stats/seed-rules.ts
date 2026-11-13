@@ -1,7 +1,7 @@
 import { ConfidenceInterval } from './confidence-interval';
 
 /** The P11 statistical rules a gate can count seeds against. */
-export type StatRule = 'noise-publish-60'; // G0.2's publication count at n = 60
+export type StatRule = 'noise-publish-60' | 'noise-publish-400'; // G0.2's publication count at n = 60; G3.4's at n = 400
 
 /** The P11 statistical gate rules over n seeds (§3.3), and their acceptance ranges. */
 export class SeedRule {
@@ -13,7 +13,9 @@ export class SeedRule {
   /** Whether `count` of `n` seeds passes `rule`. */
   public static Passes(rule: StatRule, count: number, n: number): boolean {
     switch (rule) {
-      case 'noise-publish-60': return SeedRule.NoisePublishPasses(count, n);
+      case 'noise-publish-60':
+      case 'noise-publish-400':
+        return SeedRule.NoisePublishPasses(count, n);
     }
   }
 

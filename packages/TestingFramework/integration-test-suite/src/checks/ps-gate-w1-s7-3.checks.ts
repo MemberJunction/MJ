@@ -1,6 +1,6 @@
 /**
  * Gate G0.7 "W1 → S7.3": scoring with write-back on a Draft and on an Archived W1-signal s42 model is refused with
- * MODEL_NOT_SCORABLE and writes 0 rows, 2 of 2; a dry run on a Validated model succeeds, scores rows and writes 0 rows.
+ * MODEL_NOT_SCORABLE and writes 0 rows, 2 of 2; a dry run on a published model succeeds, scores rows and writes 0 rows.
  * A dry run that crashes, returns a GraphQL error or times out scores nothing, so it fails the gate (spec §2).
  */
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
@@ -21,12 +21,14 @@ class ScoringRefusalSteps {
     return { Attempt: a, Written: await h.CountNonNull(w1, 'TruthScore') };
   }
 
-  /** A W1 s42 model promoted to Validated and then Archived. */
+  /** A W1 s42 model evaluated (its stored decision: Validated or KeepBaseline) and then archived, through the lifecycle gate. */
   public static async ArchivedModel(h: TruthHarness, w1: LoadedDataset): Promise<string> {
     const archivedId = await RunFixtures.TrainedModel(h, 'G0.7 archived', w1);
-    await h.Promote(archivedId, 'Validated', 'truth suite fixture: promote');
-    const archived = await h.Promote(archivedId, 'Archived', 'truth suite fixture: archive');
-    if (archived.Status !== 'Archived') throw new Error(`could not archive the G0.7 fixture model (status ${archived.Status})`);
+    await RunFixtures.EvaluateModel(h, archivedId, 'G0.7 archived');
+    const archived = await h.Promote(archivedId, 'archive', 'truth suite fixture: archive');
+    if (!archived.Applied || archived.Status !== 'Archived') {
+      throw new Error(`could not archive the G0.7 fixture model (status ${archived.Status}, the lifecycle gate's answer: ${RunFixtures.GateAnswer(archived.Refusal)})`);
+    }
     return archivedId;
   }
 }
@@ -39,7 +41,7 @@ export const PsGateW1S73Checks: NamedCheck[] = [
       const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
       const draft = await RunFixtures.W1S42Model(h); // a trained Draft: the inference processor's status switch scores only Validated and Published
       const archivedId = await ScoringRefusalSteps.ArchivedModel(h, w1);
-      const validatedId = (await RunFixtures.W1S42ValidatedModel(h)).ModelID;
+      const validatedId = (await RunFixtures.W1S42PublishedModel(h)).ModelID; // scorable: published through the gate
       const d = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, draft.ModelID, false);
       const ar = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, archivedId, false);
       const dry = await ScoringRefusalSteps.ScoreWithWriteBack(h, w1, validatedId, true);

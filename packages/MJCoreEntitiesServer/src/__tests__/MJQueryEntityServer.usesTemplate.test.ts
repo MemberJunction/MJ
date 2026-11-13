@@ -85,6 +85,9 @@ vi.mock('../custom/approvalStamp', () => ({
 }));
 
 import { QueryEngine } from '@memberjunction/core-entities';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^\[MJQueryEntityServer\] Query "Templated Query": The extracted child rows could not be written: the query is not saved through a database provider$/]);
 import { MJQueryEntityServer } from '../custom/MJQueryEntityServer.server';
 import { RunExtractionPipeline } from '../custom/query-extraction/pipeline';
 
@@ -139,6 +142,8 @@ const IF_BLOCK_ONLY_SQL = "SELECT m.ID FROM ext.Members m WHERE 1 = 1 {% if true
 
 beforeEach(() => {
     writes.length = 0;
+    // The query engine is not loaded through a database here; saving reads its (stubbed) queries without loading it.
+    vi.spyOn(QueryEngine.Instance, 'Loaded', 'get').mockReturnValue(true);
 });
 
 afterEach(() => {

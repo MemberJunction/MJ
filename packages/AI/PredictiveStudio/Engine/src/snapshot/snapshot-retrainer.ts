@@ -116,7 +116,8 @@ export class SnapshotRetrainer {
     const [protocol, unit] = await Promise.all([this.LoadProtocolSpec(logged.Request.evaluationProtocolId, deps), this.LoadUnitSpec(snapshot.PredictionUnitID, deps)]);
     // Each call pre-authorises fresh snapshot downloads: the first attempt sends one, every retry another.
     const issue = (): Promise<TrainerRequest> => TrainerRequestBuilder.BuildTrainerRequest({
-      TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Protocol: protocol, Task: unit.label.outcome,
+      // A retraining replays the logged run to compare holdout metrics, not to publish, so it sends no incumbent.
+      TrainingRunID: run.ID, Snapshot: snapshot, Files: files, Incumbent: null, Protocol: protocol, Task: unit.label.outcome,
       Candidates: logged.Request.candidates, Seed: logged.Request.seed, Threads: logged.Request.threads,
       TimeoutSeconds: logged.Request.timeoutSeconds, MaxRetries: logged.Request.maxRetries,
     });

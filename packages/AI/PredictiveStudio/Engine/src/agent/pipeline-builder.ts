@@ -8,9 +8,10 @@
  * if the trust verdict clears the bar** — the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's
  * stored gate decision the business UI uses, so a model the gate did not ship, a model trained without an Evaluation
  * Protocol (not evaluated), a leakage-flagged model or a calibration-held model is never silently published into the
- * catalog. Publishing goes through the promotion gate (`ProductionModelPromotionGate`: Draft → Validated → Published,
- * with no sign-off), so its readiness checks and the per-model scoring Action apply; a refusal holds the model with
- * the gate's reason.
+ * catalog. A build that may publish evaluates its model through the lifecycle gate (`LifecycleGate.Evaluate({
+ * trainingRunId })`: Draft → Validated or KeepBaseline from the run's stored gate decision) and stops there: nothing
+ * publishes it until M4b routes automatic publishing through the gate's automated publisher, so the model is ready for a
+ * person to publish (Promote ML Model, `publish`). A refusal holds the model with the gate's reason.
  *
  * Every approved experiment is a candidate of ONE search on ONE pipeline. The saved pipeline is bound to version 1 of
  * a Prediction Unit mapped from the plan's target (the pipeline migration's mapping; a target the mapping would archive
@@ -26,6 +27,7 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
+  CALIBRATION_SLOPE_RANGE,
   EvaluationProtocolRules,
   InnerScoreSelection,
   UtcDay,
@@ -36,14 +38,17 @@ import {
   type FeatureStepWarning,
   type GateOutcome,
   type HyperparameterValue,
+  type Actor,
   type ModelingPlanSpec,
   type TrustVerdict,
 } from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { TrainingDelegation, WasTrainingLeakageFlagged } from '../operations/delegation';
-import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
-import type { IModelPromotionGate } from '../actions/promote-model.action';
+import { LifecycleGate } from '../registry/lifecycle-gate';
+import { GateContexts } from '../registry/gate-seams';
+import { GateRefusals } from '../registry/gate-refusals';
+import type { EvaluateOutcome } from '../registry/gate-context';
 import { TrainerModelLineageReader } from '../training/trainer-model-lineage';
 import { TrainingEngine } from '../training/training-engine';
 import type { ProposedExperiment } from '../experiment/types';
@@ -95,10 +100,13 @@ export interface BuildPredictionInput {
   /** The acting user (isolation/audit). */
   user: UserInfo;
   /**
-   * Publish the trained model when the trust verdict clears the bar. Default true. The Model Development Agent's build
-   * turns it off, so the model it trains stays in Draft until the user asks for it to be published.
+   * Evaluate the trained model through the lifecycle gate when the trust verdict clears the bar. Default true. The
+   * Model Development Agent's build turns it off, so the model it trains stays in Draft until the user asks for it to be
+   * published. Nothing is published by the build (M4b routes automatic publishing through the gate's automated publisher).
    */
   autoPublish?: boolean;
+  /** Who started the build, recorded by the lifecycle gate: the agent run when the agent builds; default the user. */
+  initiator?: Actor;
   /** Sidecar version marker recorded in lineage. */
   sidecarVersion?: string;
 }
@@ -159,14 +167,14 @@ export interface BuildPredictionResult {
   published: boolean;
   /**
    * True when the model was not published only because auto-publish was off: it shipped under its protocol, training
-   * flagged no leakage and it holds no calibration hold, so the promotion gate may be asked to publish it.
+   * flagged no leakage and it holds no calibration hold, so the lifecycle gate may be asked to evaluate and publish it.
    */
   readyToPublish: boolean;
   /** Whether training flagged a leakage warning (held for analyst review). */
   leakageFlagged: boolean;
   /**
    * When not published, the plain reason (leakage, a calibration hold, the trust verdict, auto-publish off, or the
-   * promotion gate's refusal); else null.
+   * lifecycle gate's refusal); else null.
    */
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
@@ -194,9 +202,12 @@ interface BuildTraining {
 /** What the publish step of a build decides on. */
 interface PublishInputs {
   readonly Model: MJMLModelEntity;
+  /** The build's training run: what the lifecycle gate evaluates. */
+  readonly TrainingRunID: string;
   readonly Trust: TrustVerdict;
   readonly LeakageFlagged: boolean;
   readonly AutoPublish: boolean;
+  readonly Initiator: Actor;
   readonly Provider: IMetadataProvider;
   readonly User: UserInfo;
 }
@@ -241,15 +252,19 @@ export class PredictiveStudioPipelineBuilder {
    */
   protected async runBuild(input: BuildPredictionInput, warnings: FeatureStepWarning[]): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
+    const initiator: Actor = input.initiator || { kind: 'human', userId: user.ID };
     const config = ModelingPlanToPipelineConfig(spec);
     warnings.push(...PredictiveStudioPipelineBuilder.DistinctWarnings(config.warnings));
     const { Pipeline: pipeline, Candidates: candidates } = await this.createBoundPipeline(spec, config, provider, user);
     const training = await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user);
     const model = training.Train.model;
-    if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, warnings);
+    if (model === null) {
+      const runOutcome = autoPublish ? await this.evaluateRunWithoutModel(training.Train.run.ID, initiator, provider, user) : null;
+      return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, warnings, runOutcome);
+    }
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
     const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
-    const { published, heldReason, readyToPublish } = await this.maybePublish({ Model: model, Trust: trust, LeakageFlagged: leakageFlagged, AutoPublish: autoPublish, Provider: provider, User: user });
+    const { published, heldReason, readyToPublish } = await this.maybePublish({ Model: model, TrainingRunID: training.Train.run.ID, Trust: trust, LeakageFlagged: leakageFlagged, AutoPublish: autoPublish, Initiator: initiator, Provider: provider, User: user });
     return {
       success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, readyToPublish, leakageFlagged, heldReason,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
@@ -290,11 +305,18 @@ export class PredictiveStudioPipelineBuilder {
   /**
    * The result of a build whose training run shipped no model (the gate decided `no-signal`, or kept the unit's existing
    * rule): built, not published, held with the run's stored reason, and no trust verdict (there is no model to judge).
+   * `runOutcome` is the lifecycle gate's answer when the build evaluated the run (auto-publish on): its run-level record
+   * holds the same stored reason; a refusal of the evaluation is the held reason instead.
    */
-  private static heldWithoutModel(pipeline: MJMLTrainingPipelineEntity, training: BuildTraining, warnings: FeatureStepWarning[]): BuildPredictionResult {
+  private static heldWithoutModel(
+    pipeline: MJMLTrainingPipelineEntity, training: BuildTraining, warnings: FeatureStepWarning[], runOutcome: EvaluateOutcome | null,
+  ): BuildPredictionResult {
+    const heldReason = runOutcome?.Kind === 'refused'
+      ? `Not evaluated — the lifecycle gate refused: ${GateRefusals.Describe(runOutcome.Refusal)}`
+      : `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`;
     return {
       success: true, pipelineId: pipeline.ID, pipeline, published: false, readyToPublish: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
-      heldReason: `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`,
+      heldReason,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
@@ -589,69 +611,95 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * Publish the trained model into the business catalog ONLY if auto-publish is on, training wasn't leakage-flagged,
-   * the model holds no calibration hold and the trust verdict clears the bar, and then only through the promotion
-   * gate ({@link publishThroughGate}). Otherwise the model stays where it is and the plain held-reason is returned.
+   * Take the trained model as far as the build may (D4-102). With auto-publish on, every model is evaluated through the
+   * lifecycle gate first ({@link evaluateThroughGate}), so it carries the gate's status and `StatusReason` whatever
+   * holds it; then a leakage flag, a calibration hold or a trust verdict that does not clear the bar is the held reason
+   * (why it is not published), else the gate's answer. Nothing is published here (M4b). With auto-publish off the model
+   * stays in Draft: the plain held reason, or that it waits for a person.
    */
   private async maybePublish(p: PublishInputs): Promise<PublishResult> {
     const held = PredictiveStudioPipelineBuilder.heldBeforePromotion(p);
-    if (held !== null) return { published: false, heldReason: held, readyToPublish: false };
-    if (!p.AutoPublish) return { published: false, heldReason: PredictiveStudioPipelineBuilder.KeptInDraftReason, readyToPublish: true };
-    return this.publishThroughGate(p.Model, p.Provider, p.User);
+    if (!p.AutoPublish) {
+      return held !== null
+        ? { published: false, heldReason: held, readyToPublish: false }
+        : { published: false, heldReason: PredictiveStudioPipelineBuilder.KeptInDraftReason, readyToPublish: true };
+    }
+    const evaluated = await this.evaluateThroughGate(p);
+    if (held === null) return evaluated;
+    // A held model whose evaluation the gate also refused keeps both answers (the gate's is lost otherwise).
+    const heldReason = evaluated.readyToPublish ? held : `${held} — lifecycle gate: ${evaluated.heldReason}`;
+    return { published: false, heldReason, readyToPublish: false };
+  }
+
+  /**
+   * Evaluate a training run that shipped no model through the lifecycle gate (`Evaluate({ trainingRunId })`): the gate
+   * writes the run's one run-level refusal record with the stored reason. A thrown gate error is not caught here: it
+   * fails the build.
+   */
+  private async evaluateRunWithoutModel(trainingRunId: string, initiator: Actor, provider: IMetadataProvider, user: UserInfo): Promise<EvaluateOutcome> {
+    const ctx = GateContexts.ForRequest({ ContextUser: user, Provider: provider });
+    return this.CreateLifecycleGate().Evaluate({ trainingRunId }, initiator, ctx);
   }
 
   /** The held reason of a model that clears the bar to publish and stays in Draft only because auto-publish was off. */
   public static readonly KeptInDraftReason = 'Kept in Draft — it clears the bar to publish, and is published only when you ask.';
 
   /**
-   * Why a trained model cannot be published; null when the promotion gate may be asked to publish it. Auto-publish is
+   * The held reason of a model the build evaluated, naming the status the lifecycle gate moved it to (nothing publishes
+   * it): `Validated` clears the bar to publish; `KeepBaseline` means the gate kept the simple baseline, with the stored
+   * decision's reason (the `StatusReason` the gate wrote).
+   */
+  public static EvaluatedReason(to: Extract<MJMLModelEntity['Status'], 'Validated' | 'KeepBaseline'>, storedReason: string | null): string {
+    if (to === 'Validated') return 'Evaluated to Validated through the lifecycle gate — it clears the bar to publish, and is published only when you ask.';
+    const why = storedReason && storedReason.trim().length > 0 ? ` ${storedReason.trim()}` : '';
+    return `Evaluated to KeepBaseline through the lifecycle gate — the gate kept the simple baseline.${why} It is published only when you ask.`;
+  }
+
+  /**
+   * Why a trained model cannot be published; null when the lifecycle gate may be asked to evaluate it. Auto-publish is
    * not one of these reasons: a model that is off only for that is ready to publish ({@link maybePublish}).
    */
   private static heldBeforePromotion(p: PublishInputs): string | null {
     if (p.LeakageFlagged) return 'Held for analyst review — training flagged a possible data-leakage issue.';
     const hold = TrainerModelLineageReader.CalibrationHoldOf(p.Model.Lineage);
-    if (hold !== null) {
-      return `Held — ${ProductionModelPromotionGate.DescribeRefusal({ kind: 'refused-calibration', slope: hold.slope })}; a hidden family is never published.`;
-    }
+    if (hold !== null) return `Held — ${PredictiveStudioPipelineBuilder.calibrationHoldText(hold.slope)}; a hidden family is never published.`;
     return p.Trust.CanAct ? null : p.Trust.Reason;
   }
 
-  /**
-   * Move the model Draft → Validated → Published through the promotion gate with no sign-off, so the gate's leakage,
-   * calibration and readiness checks apply and it generates the per-model scoring Action. A refusal holds the model at
-   * the status the gate left it, with the gate's reason. The gate saves its own copy of the row, so the returned model
-   * is reloaded once anything moved and reads the status the gate stored.
-   */
-  private async publishThroughGate(model: MJMLModelEntity, provider: IMetadataProvider, user: UserInfo): Promise<PublishResult> {
-    const gate = this.CreatePromotionGate();
-    let result: PublishResult = { published: true, heldReason: null, readyToPublish: false };
-    let moved = false;
-    for (const targetStatus of ['Validated', 'Published'] as const) {
-      const outcome = await gate.promote({ modelId: model.ID, targetStatus, signOff: false, contextUser: user, provider });
-      if (outcome.kind !== 'promoted') {
-        const reason = ProductionModelPromotionGate.DescribeRefusal(outcome);
-        result = { published: false, heldReason: `Not published — the promotion gate refused to move it to ${targetStatus}: ${reason}${reason.endsWith('.') ? '' : '.'}`, readyToPublish: false };
-        break;
-      }
-      moved = true;
-    }
-    if (moved) await PredictiveStudioPipelineBuilder.reloadModel(model);
-    return result;
+  /** The calibration hold in words: the slope outside the accepted range, or that it could not be measured. */
+  private static calibrationHoldText(slope: number | null): string {
+    const range = `${CALIBRATION_SLOPE_RANGE[0]}–${CALIBRATION_SLOPE_RANGE[1]}`;
+    return slope === null
+      ? 'its calibration slope could not be measured, so its family is hidden (calibration hold)'
+      : `its calibration slope ${slope.toFixed(2)} is outside ${range}, so its family is hidden (calibration hold)`;
   }
 
-  /** Read the model row back after the gate changed it; a failed read is logged (the promotion itself succeeded). */
+  /**
+   * Evaluate the build's training run through the lifecycle gate (`Evaluate({ trainingRunId })`): Draft → Validated or
+   * KeepBaseline as the run's stored gate decision says, the build's initiator recorded. The model is not published:
+   * it is ready for a person to publish until M4b's automated publisher. A refusal holds the model at Draft with the
+   * gate's reason. The gate saves its own copy of the row, so the returned model is reloaded once it moved.
+   */
+  private async evaluateThroughGate(p: PublishInputs): Promise<PublishResult> {
+    const ctx = GateContexts.ForRequest({ ContextUser: p.User, Provider: p.Provider });
+    const outcome = await this.CreateLifecycleGate().Evaluate({ trainingRunId: p.TrainingRunID }, p.Initiator, ctx);
+    if (outcome.Kind !== 'evaluated') {
+      return { published: false, heldReason: `Not evaluated — the lifecycle gate refused: ${GateRefusals.Describe(outcome.Refusal)}`, readyToPublish: false };
+    }
+    await PredictiveStudioPipelineBuilder.reloadModel(p.Model);
+    return { published: false, heldReason: PredictiveStudioPipelineBuilder.EvaluatedReason(outcome.To, p.Model.StatusReason), readyToPublish: true };
+  }
+
+  /** Read the model row back after the gate changed it; a failed read is logged (the evaluation itself succeeded). */
   private static async reloadModel(model: MJMLModelEntity): Promise<void> {
     if (!(await model.Load(model.ID))) {
-      LogError(`PredictiveStudioPipelineBuilder: model ${model.ID} was promoted but could not be read back: ${model.LatestResult?.CompleteMessage || 'unknown error'}`);
+      LogError(`PredictiveStudioPipelineBuilder: model ${model.ID} was evaluated but could not be read back: ${model.LatestResult?.CompleteMessage || 'unknown error'}`);
     }
   }
 
-  /**
-   * The promotion gate the build publishes through: the production {@link ProductionModelPromotionGate}, the same gate
-   * the Promote action, operation and auto-train use. Overridable so tests inject a gate with no live DB.
-   */
-  protected CreatePromotionGate(): IModelPromotionGate {
-    return new ProductionModelPromotionGate();
+  /** The lifecycle gate the build evaluates through (production: {@link LifecycleGate}). Overridable so tests inject one. */
+  protected CreateLifecycleGate(): LifecycleGate {
+    return new LifecycleGate();
   }
 }
 

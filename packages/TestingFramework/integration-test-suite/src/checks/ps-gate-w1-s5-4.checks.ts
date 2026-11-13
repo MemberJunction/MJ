@@ -10,7 +10,7 @@
 import { IndexByUUID } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
-import { HarnessDatasets, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
+import { HarnessDatasets, RunFixtures, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 import { PsGateSpecs } from './ps-gates/ps-gate-specs';
 
@@ -19,14 +19,19 @@ const DETERMINISM_ALGORITHMS = ['logistic_regression', 'xgboost', 'lightgbm', 'r
 
 /** The training and scoring of one G0.10 repetition. */
 class DeterminismSteps {
-  /** Train the pipeline, promote the model to Validated (Draft models are refused for scoring) and score `records`. */
+  /**
+   * Train the pipeline, publish the model through the gate (evaluate, then publish: a KeepBaseline decision does not
+   * score), score `records`, then archive it so the next training of the same pipeline has no incumbent to be compared
+   * with (both trainings must reach Published for the scores to be compared).
+   */
   public static async TrainAndScore(h: TruthHarness, p: MJMLTrainingPipelineEntity, records: string[], label: string): Promise<number[]> {
     const t = await h.Train(p); // every unit row: a unit pipeline refuses a row cap
     if (!t.ModelID) throw new Error(`${label} failed: ${t.ErrorMessage}`);
-    // The promote is the product's promote operation.
-    const promoted = await h.Promote(t.ModelID, 'Validated', 'truth suite fixture: promote (G0.10)');
-    if (!promoted.Promoted) throw new Error(`${label}: could not promote model ${t.ModelID} to Validated (${promoted.Status})`);
+    // The transitions are the product's PromoteModel operation.
+    await RunFixtures.PublishModel(h, t.ModelID, `G0.10 ${label}`);
     const s = await h.Score(t.ModelID, { scope: { records } });
+    const archived = await h.Promote(t.ModelID, 'archive', `truth suite fixture (G0.10 ${label}): archived so the next training has no incumbent`);
+    if (!archived.Applied || archived.Status !== 'Archived') throw new Error(`${label}: could not archive model ${t.ModelID} (status ${archived.Status}, the lifecycle gate's answer: ${RunFixtures.GateAnswer(archived.Refusal)})`);
     if (!s.Ok || s.Predictions.length !== records.length) {
       throw new Error(`${label}: scored ${s.Predictions.length} of ${records.length}`);
     }

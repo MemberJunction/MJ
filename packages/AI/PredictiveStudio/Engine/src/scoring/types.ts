@@ -281,16 +281,17 @@ export interface AutoTrainRequest {
 }
 
 /**
- * Seam that turns "this model needs training" into a published, scoreable model.
- * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, publish via
- * the promotion gate, repoint the Record Process + bindings). Injected so the
+ * Seam that turns "this model needs training" into a scoreable model.
+ * Production: `PipelineAutoTrainer` (train via the real `TrainingEngine`, evaluate via
+ * the lifecycle gate, repoint the Record Process + bindings). Injected so the
  * processor stays free of training dependencies and is unit-testable.
  */
 export interface IModelAutoTrainer {
   /**
-   * Ensure a published, artifact-backed model exists for the pipeline and that the
-   * Record Process + its bindings point at it. Returns that model's id.
-   * @throws when training or publishing fails (e.g. leakage-flagged model needing sign-off)
+   * Ensure a scoreable, artifact-backed model exists for the pipeline (a reusable Published one, or a newly trained
+   * one the lifecycle gate evaluated to Validated) and that the Record Process + its bindings point at it. Returns that
+   * model's id.
+   * @throws when training or evaluation fails, or the model is not served (e.g. its run flagged leakage needing a sign-off)
    */
   EnsureTrainedModel(request: AutoTrainRequest, contextUser: UserInfo, provider: IMetadataProvider): Promise<string>;
 }

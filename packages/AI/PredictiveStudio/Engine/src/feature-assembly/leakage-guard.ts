@@ -50,11 +50,6 @@ export class LeakageGuardEnforcer {
     return !this.denyFields.has(normalizeName(fieldName));
   }
 
-  /** @deprecated Use {@link IsFieldAllowed}. */
-  public isFieldAllowed(fieldName: string): boolean {
-    return this.IsFieldAllowed(fieldName);
-  }
-
   /**
    * Whether a source binding is allowed to be drawn from (i.e. NOT deny-listed).
    *
@@ -62,11 +57,6 @@ export class LeakageGuardEnforcer {
    */
   public IsSourceAllowed(sourceRef: string): boolean {
     return !this.denySources.has(normalizeName(sourceRef));
-  }
-
-  /** @deprecated Use {@link IsSourceAllowed}. */
-  public isSourceAllowed(sourceRef: string): boolean {
-    return this.IsSourceAllowed(sourceRef);
   }
 
   /**
@@ -84,11 +74,6 @@ export class LeakageGuardEnforcer {
       (this.IsFieldAllowed(c) ? allowed : denied).push(c);
     }
     return { allowed, denied };
-  }
-
-  /** @deprecated Use {@link PartitionColumns}. */
-  public partitionColumns(columns: string[]): { allowed: string[]; denied: string[] } {
-    return this.PartitionColumns(columns);
   }
 }
 
@@ -158,9 +143,4 @@ export function DetectSingleFeatureDominance(featureImportance: FeatureImportanc
     TopShare: topShare,
     Threshold: effectiveThreshold,
   };
-}
-
-/** @deprecated Use {@link DetectSingleFeatureDominance}. */
-export function detectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
-  return DetectSingleFeatureDominance(featureImportance, threshold);
 }

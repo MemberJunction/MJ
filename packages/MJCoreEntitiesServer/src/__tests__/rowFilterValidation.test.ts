@@ -15,6 +15,9 @@ import {
     type RowFilterProbeProvider,
     type RowFilterReferrer
 } from '../custom/rowFilterValidation';
+import { ExpectedConsole } from './helpers/expected-console';
+
+ExpectedConsole.Install([/^RLS filter has unresolved token after markup: \{\{ActingOrganizationID\}\}/]);
 
 function makeEntity(id: string, name: string, fields: { Name: string; IsVirtual?: boolean }[]): EntityInfo {
     return new EntityInfo({

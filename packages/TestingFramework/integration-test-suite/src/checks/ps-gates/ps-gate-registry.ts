@@ -5,7 +5,6 @@
  * models).
  */
 import { createHash } from 'node:crypto';
-import type { PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
 import { RunFixtures, UnitFixtures, type LoadedDataset, type ProtocolChoice, type ScoreAttempt, type ScoreRequest, type TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 
 /** A SHA-256 over a scoring attempt's predictions. */
@@ -38,16 +37,19 @@ export class PsGateRegistry {
     return { scope: { filter: { entityName: dataset.Entity.Name } } };
   }
 
-  /** A W1-world logistic-regression model (`RunFixtures.TrainedModel`) promoted to Validated; returns its ID. */
-  public static async ValidatedWorldModel(h: TruthHarness, tag: string, dataset: LoadedDataset): Promise<string> {
+  /**
+   * A W1-world logistic-regression model (`RunFixtures.TrainedModel`) evaluated and published through the gate, so it
+   * scores (W1's stored decision keeps the simple baseline, which does not score until published); returns its ID.
+   */
+  public static async PublishedWorldModel(h: TruthHarness, tag: string, dataset: LoadedDataset): Promise<string> {
     const id = await RunFixtures.TrainedModel(h, tag, dataset);
-    await PsGateRegistry.promote(h, id, ['Validated'], tag);
+    await RunFixtures.PublishModel(h, id, tag);
     return id;
   }
 
   /**
    * An R1 regression model on a scenario unit (every scenario feature column, ridge regression) held out by a seeded
-   * row hash of `holdoutFraction`, promoted to Validated and then Published; returns its ID. Two calls with different
+   * row hash of `holdoutFraction`, evaluated to Validated and then published through the lifecycle gate; returns its ID. Two calls with different
    * fractions train on different rows, so their artifacts differ.
    */
   public static async PublishedR1Model(h: TruthHarness, tag: string, holdoutFraction: number): Promise<string> {
@@ -55,15 +57,7 @@ export class PsGateRegistry {
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionScenarioUnitPipeline(h, 'R1', { kind: 'continuous' }, { DateColumn: null, GroupKey: null, Protocol: protocol });
     const t = await h.Train(pipeline);
     if (!t.ModelID) throw new Error(`${tag}: training failed (${t.RefusalCode || 'no refusal code'}): ${t.ErrorMessage || 'no model id'}`);
-    await PsGateRegistry.promote(h, t.ModelID, ['Validated', 'Published'], tag);
+    await RunFixtures.PublishModel(h, t.ModelID, tag);
     return t.ModelID;
-  }
-
-  /** Promote through each status in order; throws naming the status a promotion did not reach. */
-  private static async promote(h: TruthHarness, modelId: string, targets: readonly PredictiveStudioModelTargetStatus[], tag: string): Promise<void> {
-    for (const target of targets) {
-      const p = await h.Promote(modelId, target, `truth suite fixture (${tag}): promote`);
-      if (!p.Promoted) throw new Error(`${tag}: could not promote ML Model ${modelId} to ${target} (status ${p.Status})`);
-    }
   }
 }

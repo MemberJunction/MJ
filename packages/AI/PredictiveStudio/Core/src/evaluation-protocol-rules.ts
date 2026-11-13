@@ -6,8 +6,8 @@
  *
  * Guard-field author rule: under the default `non-agent` setting every author except an agent tool call (a user, a
  * non-agent API caller, a scheduled job, the system) may change the holdout, promotion, leakage audit, exclusions,
- * budgets and the setting itself, and every version passes the same validation; a lineage set to `human-only` accepts
- * those changes only in a user-authored version.
+ * budgets, the minimum minority-class rows and the setting itself, and every version passes the same validation; a
+ * lineage set to `human-only` accepts those changes only in a user-authored version.
  *
  * Pure and browser-safe: the protocol server entity, the pipeline server entity, the training engine, the agent's
  * builder and the Explorer editor call the same functions, so they compute the same refusals.
@@ -22,9 +22,9 @@ import type { Actor, PredictionUnitSpec } from './prediction-unit';
 import type { TaskKind, TaskType } from './task-type';
 
 /** The protocol fields `GuardFieldsEditableBy` governs between versions. */
-export type GuardField = 'holdout' | 'promotion' | 'leakageAudit' | 'exclusions' | 'budgets' | 'guardFieldsEditableBy';
+export type GuardField = 'holdout' | 'promotion' | 'leakageAudit' | 'exclusions' | 'budgets' | 'minMinorityClassRows' | 'guardFieldsEditableBy';
 /** Every guard field; `ChangedGuardFields` reports changed fields in this order. */
-export const GUARD_FIELDS: readonly GuardField[] = ['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'guardFieldsEditableBy'];
+export const GUARD_FIELDS: readonly GuardField[] = ['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'guardFieldsEditableBy'];
 
 /** One reason a protocol version may not be saved, or may not be used with a Prediction Unit version. */
 export type ProtocolRefusal =

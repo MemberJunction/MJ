@@ -10,11 +10,11 @@
  * circuit breaker.
  *
  * The single source of truth for the check and its wording, shared by the scoring
- * processor's run-level preflight and the promotion gate.
+ * processor's run-level preflight and the lifecycle gate.
  *
  * A trained model is also refused when the sidecar's `/predict` does not serve its artifact: a forecast whose shipped
  * artifact is a series forecaster (a series model or a series baseline) is refused there (`SeriesForecasterNotServedError`),
- * so the promotion gate never publishes one and scoring refuses it up front ({@link ModelReadiness}).
+ * so the lifecycle gate never publishes one and scoring refuses it up front ({@link ModelReadiness}).
  */
 
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
@@ -136,8 +136,8 @@ export class ModelNotScorableError extends Error {
   public static Message(modelId: string, status: MJMLModelEntity['Status']): string {
     const next =
       status === 'Draft'
-        ? 'Move it to Validated through the promotion gate first.'
-        : 'Score with a Published version of the pipeline, or un-archive this model through the promotion gate.';
+        ? 'Evaluate it through the lifecycle gate, then publish it.'
+        : 'Score with a Published version of the pipeline, or publish (or roll back to) this model through the lifecycle gate.';
     return `ML Model '${modelId}' is ${status} and cannot score records: only Validated or Published models score. ${next}`;
   }
 }

@@ -3,7 +3,7 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import type { UUIDMap } from '@memberjunction/global';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJProcessRunEntity,
   MJProcessRunDetailEntity, PredictiveStudioScoreRecordSetInput,
-  PredictiveStudioTrainAsOf, PredictiveStudioModelTargetStatus } from '@memberjunction/core-entities';
+  PredictiveStudioTrainAsOf, PredictiveStudioModelTransition, PredictiveStudioTransitionRefusal } from '@memberjunction/core-entities';
 import type { ModelingPlanSpec, TrustVerdict, ValidationStrategy, AsOfStrategy, ProblemType,
   PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
 import type { ProvenanceCheck } from '../fixtures/provenance-resolver';
@@ -88,8 +88,8 @@ export interface GateMeasurement {
 /** One row of a world's truth.csv (`MembershipYearID,Cycle,TrueP,Drawn,Censored`). */
 export interface WorldTruthRow { readonly Cycle: number; readonly TrueP: number; readonly Censored: boolean }
 
-/** What `Promote` reports: whether the operation applied the transition and the model's status after it. */
-export interface PromoteAttempt { Promoted: boolean; Status: MJMLModelEntity['Status'] }
+/** What `Promote` reports: whether the lifecycle gate applied the transition, the model's status after it, and the gate's refusal (null when applied). */
+export interface PromoteAttempt { Applied: boolean; Status: MJMLModelEntity['Status']; Refusal: PredictiveStudioTransitionRefusal | null }
 
 export interface TruthHarness {
   readonly Provider: GraphQLDataProvider;
@@ -105,7 +105,8 @@ export interface TruthHarness {
   /** Trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults, Lineage }): the model's training run's stored gate decision, with the model's lineage. */
   ReadModel(modelId: string): Promise<CandidateModel>;
   ModelsForPipelineNamePrefix(prefix: string): Promise<CandidateModel[]>;
-  Promote(modelId: string, target: PredictiveStudioModelTargetStatus, reason: string): Promise<PromoteAttempt>;
+  /** Applies one lifecycle transition through `PredictiveStudio.PromoteModel`; a refusal is returned, an operation error thrown. */
+  Promote(modelId: string, transition: PredictiveStudioModelTransition, reason: string): Promise<PromoteAttempt>;
   Score(modelId: string, req: ScoreRequest): Promise<ScoreAttempt>;
   ScoreViaRecordProcess(modelId: string, dataset: LoadedDataset, extraFilter: string): Promise<RecordProcessScoring>;
   CountNonNull(dataset: LoadedDataset, column: 'TruthScore'): Promise<number>;

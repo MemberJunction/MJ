@@ -330,27 +330,73 @@ export interface PredictiveStudioCreateScoringProcessOutput {
     scoringBindingId?: string;
 }
 
-/** The lifecycle status to transition an ML Model to. */
-export type PredictiveStudioModelTargetStatus = 'Validated' | 'Published' | 'Archived';
+/**
+ * A lifecycle transition the gate applies to an ML Model: `evaluate` (Draft → Validated or KeepBaseline from the
+ * training run's stored gate decision), `publish` (Validated or KeepBaseline → Published), `archive` (→ Archived, with a
+ * reason) or `rollback` (Archived → Published for a model published before, with a reason).
+ */
+export type PredictiveStudioModelTransition = 'evaluate' | 'publish' | 'archive' | 'rollback';
 
 /** Input for `PredictiveStudio.PromoteModel`. */
 export interface PredictiveStudioPromoteModelInput {
     /** Id of the `MJ: ML Models` row to transition. */
     modelId: string;
-    /** The lifecycle status to move the model to. */
-    targetStatus: PredictiveStudioModelTargetStatus;
-    /** Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models. */
-    signOff?: boolean;
-    /** Optional human-readable reason recorded with the promotion. */
+    /** The lifecycle transition to apply. */
+    transition: PredictiveStudioModelTransition;
+    /** The approving sign-off record (`MJ: ML Model Publish Records`, Kind `sign-off`) a publish consumes, when one is required. */
+    signOffId?: string;
+    /** Why: required for `archive` and `rollback`, recorded with a `publish`. */
     reason?: string;
 }
 
-/** Output of `PredictiveStudio.PromoteModel` — whether the transition was applied + the new status. */
+/**
+ * Why the lifecycle gate did not apply a transition: the `TransitionRefusal` JSON the gate records on
+ * `MJ: ML Model Publish Records.Refusal` (`kind` and the kind's own fields).
+ *
+ * **Lockstep contract**: this type equals `TransitionRefusal` in `@memberjunction/predictive-studio-core`
+ * (`registry-contracts.ts`), member for member; the referenced unions are written inline because a Remote Operation
+ * type file cannot import another. Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ */
+export type PredictiveStudioTransitionRefusal =
+    | { readonly kind: 'illegal-transition'; readonly from: 'draft' | 'validated' | 'published' | 'archived' | 'unevaluated' | 'keep-baseline'; readonly to: 'draft' | 'validated' | 'published' | 'archived' | 'unevaluated' | 'keep-baseline' }
+    | { readonly kind: 'no-sign-off' }
+    | { readonly kind: 'gate-no-signal'; readonly reason: string }
+    | { readonly kind: 'unacknowledged-leakage-flags'; readonly flags: readonly ('single-feature-auc' | 'time-shifted-label' | 'drop-column' | 'high-cardinality-id')[] }
+    | { readonly kind: 'semantics-check-failed'; readonly mismatches: readonly string[] }
+    | { readonly kind: 'actor-not-permitted'; readonly actor: 'human' | 'agent' | 'scheduled-job' | 'system' }
+    | { readonly kind: 'does-not-beat-incumbent'; readonly incumbentModelId: string; readonly comparison: { readonly value: number; readonly ci: readonly [number, number]; readonly beats: boolean } }
+    | {
+        readonly kind: 'status-written-outside-gate';
+        readonly guard: {
+            readonly Allow: false;
+            readonly Reason:
+                | 'create-not-draft'
+                | 'stored-row-unreadable'
+                | 'deferred-in-transaction-group'
+                | 'status-changed-outside-gate'
+                | 'gate-transition-mismatch'
+                | 'serving-flag-set-outside-migration';
+        };
+    }
+    | { readonly kind: 'artifact-unverifiable'; readonly detail: string }
+    | { readonly kind: 'publish-in-progress' }
+    | { readonly kind: 'keep-baseline-not-auto-published' }
+    | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
+    | { readonly kind: 'kept-existing-rule'; readonly rule: string }
+    | { readonly kind: 'calibration-held'; readonly slope: number | null }
+    | { readonly kind: 'not-servable'; readonly reason: string }
+    | { readonly kind: 'model-not-found'; readonly modelId: string }
+    | { readonly kind: 'reason-required' }
+    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+
+/** Output of `PredictiveStudio.PromoteModel`: whether the gate applied the transition, the model's status, and why not. */
 export interface PredictiveStudioPromoteModelOutput {
-    /** True when the model was transitioned to the target status. */
-    promoted: boolean;
-    /** The model's new lifecycle status on success (the target status); the unchanged current status when not promoted. */
+    /** True when the lifecycle gate applied the transition (an idempotent retry of an applied publish included). */
+    applied: boolean;
+    /** The model's lifecycle status after the call; empty when no model has the id. */
     status: string;
+    /** Why the gate refused; absent when `applied` is true. */
+    refusal?: PredictiveStudioTransitionRefusal;
 }
 
 /**
@@ -2028,7 +2074,7 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
 // ============================================================
 /**
  * Promote ML Model
- * Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.
+ * Apply one lifecycle transition to an MJ: ML Models row through the Predictive Studio lifecycle gate: evaluate (Draft to Validated or KeepBaseline from the training run's stored gate decision), publish (Validated or KeepBaseline to Published, re-verified from the stored rows, with the publish record written), archive (to Archived, reason required) or rollback (Archived to Published for a model published before, reason required). A leakage-flagged model is published only with an approving sign-off record (signOffId). The caller is the initiator; an interactive user is recorded as the approver. Returns whether the transition was applied, the model's status, and the gate's refusal when it was not. Delegates to LifecycleGate in @memberjunction/predictive-studio-engine.
  * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
  * under 'PredictiveStudio.PromoteModel'. This generated base provides the typed contract only (client-safe).
  */
@@ -2037,7 +2083,7 @@ export class PredictiveStudioPromoteModelOperation extends BaseRemotableOperatio
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_4e292361ad1e1c4d";
+    public readonly ContractFingerprint = "ro_fp_707dcd50e5ccc5f2";
 }
 
 // ============================================================

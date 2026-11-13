@@ -14,7 +14,7 @@
  * - D4-17: `RollbackTrigger` (in `evaluation-protocol.ts`, beside `RetrainTrigger`: it is a `PromotionRule` member).
  * - D4-45: the in-process `ArtifactLoad` gains `unverified` (a model row with no registered `ArtifactSha256`).
  *
- * Issued values (Ruling Q21): `Delivery`, `IncumbentCheck` and `RegisteredDelivery` are classes with an ES `#issued`
+ * Issued values (Ruling Q21): `Delivery` and `RegisteredDelivery` are classes with an ES `#issued`
  * field and a private constructor, created only by their static factories, and frozen (instance and view). Object
  * spread does not copy `#` fields, so a spread forgery neither type-checks as the class nor passes `IsIssued`. A cast
  * still compiles: the guarantee is `PublishRules.ReverifyPublish`, which the gate and the PreSave hook run on stored
@@ -68,6 +68,35 @@ export type LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
  * written out; Task M1.7's test asserts it equals the generated `MJMLModelEntity['Status']` once CodeGen has run.
  */
 export type PersistedModelStatus = 'Draft' | 'Validated' | 'Published' | 'Archived' | 'KeepBaseline' | 'Unevaluated';
+
+/**
+ * A lifecycle state as a refusal names it (D4-90): the contract's four states plus the two persisted statuses the
+ * contract has no state for, `unevaluated` (a demoted pre-change model, §5.6) and `keep-baseline` (the `validated`
+ * state of a keep-simple-baseline delivery). `illegal-transition` names these, so a refusal of a publish of an
+ * `Unevaluated` or `KeepBaseline` model says what the model is rather than collapsing it onto a contract state.
+ */
+export type PersistedLifecycleState = LifecycleState | 'unevaluated' | 'keep-baseline';
+
+/** The lifecycle states of persisted statuses. */
+export class LifecycleStates {
+  /**
+   * The state of each persisted status. A mapped type over {@link PersistedModelStatus}, so a status added to the union
+   * without a state here is a compile error (the exhaustiveness check D4-90 asks for).
+   */
+  private static readonly byStatus: { readonly [S in PersistedModelStatus]: PersistedLifecycleState } = {
+    Draft: 'draft',
+    Validated: 'validated',
+    Published: 'published',
+    Archived: 'archived',
+    KeepBaseline: 'keep-baseline',
+    Unevaluated: 'unevaluated',
+  };
+
+  /** The lifecycle state a persisted status is in (`KeepBaseline` → `keep-baseline`, `Unevaluated` → `unevaluated`). Pure. */
+  public static FromPersisted(status: PersistedModelStatus): PersistedLifecycleState {
+    return LifecycleStates.byStatus[status];
+  }
+}
 
 /**
  * Which class a score is for and which direction is adverse (S9.5). Only the task type is stored; the scored class and
@@ -156,13 +185,21 @@ class IssuedValue {
 
 // ======================================================================================================= Delivery ==
 
+/**
+ * What a delivery reads of an artifact: everything the sidecar returns except the bytes (D4-92, a deviation from the
+ * frozen contract, which types delivery over `ReturnedArtifact`). Nothing a delivery decides depends on the bytes, and
+ * publish re-verification re-derives the delivery from the run's stored artifact references, which hold no bytes
+ * (`StoredArtifactRef`). Both `ReturnedArtifact` (the trainer's live result) and `StoredArtifactRef` satisfy it.
+ */
+export type DeliverableArtifact = Omit<ReturnedArtifact, 'bytesBase64'>;
+
 /** The discriminated view of a Delivery: the gate outcome fixes the role of the artifact. */
 export type DeliveryView =
-  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process; it holds the sidecar wire artifact with bytesBase64, never stored; RegisteredDeliveryView is the stored form)
-  | { readonly gate: Extract<GateDecision, { readonly outcome: 'model' }>; readonly artifact: ReturnedArtifact & { readonly role: 'model' } }
-  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process; it holds the sidecar wire artifact with bytesBase64, never stored; RegisteredDeliveryView is the stored form)
-  | { readonly gate: Extract<GateDecision, { readonly outcome: 'keep-simple-baseline' }>; readonly artifact: ReturnedArtifact & { readonly role: 'simpleBaseline' } }
-  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process; it holds the sidecar wire artifact with bytesBase64, never stored; RegisteredDeliveryView is the stored form)
+  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process, never stored; RegisteredDeliveryView is the stored form)
+  | { readonly gate: Extract<GateDecision, { readonly outcome: 'model' }>; readonly artifact: DeliverableArtifact & { readonly role: 'model' } }
+  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process, never stored; RegisteredDeliveryView is the stored form)
+  | { readonly gate: Extract<GateDecision, { readonly outcome: 'keep-simple-baseline' }>; readonly artifact: DeliverableArtifact & { readonly role: 'simpleBaseline' } }
+  // case-violation-ok-legacy-back-compat: the contract's DeliveryView keys (in-process, never stored; RegisteredDeliveryView is the stored form)
   | { readonly gate: Extract<GateDecision, { readonly outcome: 'no-signal' }>; readonly artifact: null };
 
 /** Why `Delivery.Create` refused: the shipped artifact is missing or duplicated, or its class order is not the task's. */
@@ -193,7 +230,7 @@ export class Delivery {
    */
   public static Create(
     gate: GateDecision,
-    artifacts: readonly ReturnedArtifact[],
+    artifacts: readonly DeliverableArtifact[],
     task: TaskType,
   ): { readonly Ok: true; readonly Delivery: Delivery } | { readonly Ok: false; readonly Error: DeliveryError } {
     if (gate.outcome === 'no-signal') return { Ok: true, Delivery: new Delivery({ gate, artifact: null }) };
@@ -216,72 +253,10 @@ export class Delivery {
   }
 
   /** A classification artifact lists the task's classes in the task's order; any other artifact lists none. */
-  private static sameClassOrder(task: TaskType, artifact: ReturnedArtifact): boolean {
+  private static sameClassOrder(task: TaskType, artifact: DeliverableArtifact): boolean {
     if (task.kind !== 'binary' && task.kind !== 'multiclass') return artifact.classOrder === null;
     const a = artifact.classOrder;
     return a !== null && a.length === task.classOrder.length && a.every((c, k) => c === task.classOrder[k]);
-  }
-}
-
-// ================================================================================================ IncumbentCheck ==
-
-/** The shipped candidate does not beat the published incumbent by the margin. */
-export interface IncumbentLoss {
-  readonly Kind: 'does-not-beat-incumbent';
-  readonly IncumbentModelID: string;
-  readonly Margin: NonNegative;
-  /** The comparison with `beats` recomputed from its lower bound. */
-  readonly Comparison: PairedComparison;
-}
-
-/** The view of an issued incumbent check: no incumbent, or the candidate beats it. */
-export type IncumbentCheckView =
-  | { readonly Kind: 'no-incumbent'; readonly Delivery: Delivery; readonly IncumbentModelID: null }
-  | {
-      readonly Kind: 'beats-incumbent';
-      readonly Delivery: Delivery;
-      readonly IncumbentModelID: string;
-      readonly Margin: NonNegative;
-      readonly Comparison: PairedComparison;
-    };
-
-/**
- * Spec §5: the shipped candidate beats the published incumbent by the margin (paired lower bound strictly above it, same
- * holdout rows). Created only by {@link IncumbentCheck.Compare}.
- */
-export class IncumbentCheck {
-  readonly #issued = true;
-  /** The frozen view. */
-  public readonly View: IncumbentCheckView;
-
-  private constructor(view: IncumbentCheckView) {
-    this.View = IssuedValue.DeepFreeze(view);
-    Object.freeze(this);
-  }
-
-  /** True only for a value `IncumbentCheck.Compare` issued; a spread or a cast is not. */
-  public static IsIssued(x: IncumbentCheck): boolean {
-    return typeof x === 'object' && x !== null && #issued in x;
-  }
-
-  /**
-   * Compares the delivery's shipped candidate with the incumbent. Computes `beats` itself from the comparison's lower
-   * bound (`ci[0] > margin`; the caller's `beats` is ignored) and takes the candidate from the delivery. Returns
-   * `no-incumbent` only for a null id, an {@link IncumbentLoss} when the candidate does not beat, and null when nothing
-   * can be compared: an unissued delivery, a no-signal delivery, or an incumbent with no stored comparison.
-   */
-  public static Compare(
-    delivery: Delivery,
-    incumbentModelId: string | null,
-    margin: NonNegative,
-    comparison: PairedComparison | null,
-  ): IncumbentCheck | IncumbentLoss | null {
-    if (!Delivery.IsIssued(delivery) || delivery.View.artifact === null) return null;
-    if (incumbentModelId === null) return new IncumbentCheck({ Kind: 'no-incumbent', Delivery: delivery, IncumbentModelID: null });
-    if (comparison === null) return null;
-    const recomputed: PairedComparison = { value: comparison.value, ci: [comparison.ci[0], comparison.ci[1]], beats: comparison.ci[0] > margin };
-    if (!recomputed.beats) return { Kind: 'does-not-beat-incumbent', IncumbentModelID: incumbentModelId, Margin: margin, Comparison: recomputed };
-    return new IncumbentCheck({ Kind: 'beats-incumbent', Delivery: delivery, IncumbentModelID: incumbentModelId, Margin: margin, Comparison: recomputed });
   }
 }
 
@@ -360,7 +335,8 @@ export interface StoredPublishInputs {
   readonly PinnedProtocol: { readonly ProtocolID: string; readonly ProtocolVersion: number };
   /** The protocol version row loaded by the pinned ID; its promotion rule (margin, `autoPublishKeepBaseline`) applies. */
   readonly ProtocolRow: { readonly ID: string; readonly Version: number; readonly Promotion: PromotionRule };
-  readonly RegisteredArtifacts: readonly ReturnedArtifact[];
+  /** The run's registered artifacts: the stored references of `ValidationResults.trainer.artifacts` (no bytes, D4-92). */
+  readonly RegisteredArtifacts: readonly DeliverableArtifact[];
   readonly RegisteredDelivery: { readonly Shipped: string | null; readonly ArtifactSha256: string | null };
   readonly IncumbentDiff: StoredGateRecord['incumbentDiff'];
   readonly CurrentPublishedModelID: string | null;
@@ -443,7 +419,7 @@ export class PublishRules {
   private static checkDelivery(
     x: StoredPublishInputs,
     gate: Exclude<GateDecision, { readonly outcome: 'no-signal' }>,
-  ): { readonly Ok: true; readonly Artifact: ReturnedArtifact } | PublishRefusal {
+  ): { readonly Ok: true; readonly Artifact: DeliverableArtifact } | PublishRefusal {
     const d = Delivery.Create(gate, x.RegisteredArtifacts, x.Task);
     if (!d.Ok) return { Ok: false, Reason: 'delivery-refused', Detail: d.Error.Kind };
     const art = d.Delivery.View.artifact;
@@ -504,8 +480,6 @@ export type LifecycleTransition =
       readonly Actor: Actor;
       readonly SignOff?: SignOff & { readonly Decision: 'approve' };
       readonly SemanticsCheck: SemanticsCheck & { readonly Result: { readonly Status: 'passed' } };
-      /** The single source of the gate, what ships and the model replaced; re-derived by the gate, never trusted. */
-      readonly IncumbentCheck: IncumbentCheck;
     }
   | { readonly From: 'published'; readonly To: 'archived'; readonly ModelID: string; readonly Actor: Actor; readonly Reason: string }
   | {
@@ -530,17 +504,31 @@ export type StatusGuardDecision =
         | 'stored-row-unreadable'
         | 'deferred-in-transaction-group'
         | 'status-changed-outside-gate'
-        | 'gate-transition-mismatch';
+        | 'gate-transition-mismatch'
+        /** A save that sets `ServingWhileUnevaluated` (0 → 1, or a create with it set): only M7's SQL sets it (D4-61). */
+        | 'serving-flag-set-outside-migration';
     };
 
 /**
- * What the hook read for the persisted Status: `create` when the entity is not saved yet; `unreadable` when it is saved
- * but the hook's own read returned no row or failed (the guard fails closed, N7).
+ * What the hook read for the persisted row: `create` when the entity is not saved yet; `row` with the persisted Status
+ * and `ServingWhileUnevaluated` (one read); `unreadable` when it is saved but the hook's own read returned no row or
+ * failed (the guard fails closed, N7).
  */
 export type PersistedStatus =
   | { readonly Kind: 'create' }
-  | { readonly Kind: 'row'; readonly Status: PersistedModelStatus }
+  | { readonly Kind: 'row'; readonly Status: PersistedModelStatus; readonly ServingWhileUnevaluated: boolean }
   | { readonly Kind: 'unreadable' };
+
+/**
+ * What the Status guard's rule reads of the gate's authorisation of one save: the transition, by persisted status, and
+ * whether it clears `ServingWhileUnevaluated` (absent: the flag is unchanged). An authorisation can never set the flag:
+ * only M7's data section does, by SQL (D4-61).
+ */
+export interface StatusWriteAuthorisationRule {
+  readonly From: PersistedModelStatus;
+  readonly To: PersistedModelStatus;
+  readonly ServingWhileUnevaluated?: false;
+}
 
 /** The PreSave Status guard's rules over persisted statuses (§6.2a) and the §5.1 lifecycle table. */
 export class StatusWriteRules {
@@ -572,17 +560,29 @@ export class StatusWriteRules {
   }
 
   /**
-   * The PreSave Status guard decision. A create must be `Draft`; an unreadable stored row is refused (fail closed); a
-   * non-gate save inside a TransactionGroup is refused (the deferred write widens the window between the hook's read and
-   * the write, N6); an unchanged Status is allowed; a change needs the gate's authorisation of exactly this
-   * `From → To`, which must also be a row of the lifecycle table.
+   * The PreSave Status guard decision. First, the `ServingWhileUnevaluated` flag (D4-61): setting it (a create with it
+   * set, or 0 → 1) is refused whatever the authorisation, because only M7's data section sets it, by SQL; clearing it
+   * (1 → 0) takes a legacy model out of service, so it is allowed only inside a gate-authorised lifecycle transition
+   * whose authorisation carries the change (`ServingWhileUnevaluated: false`: M7's `AdoptPublished` demotion, the
+   * publish that archives the serving row); any other change of it is `serving-flag-set-outside-migration`. Then a
+   * create must be `Draft`; an unreadable stored row is refused (fail closed, the flag included); a non-gate save inside
+   * a TransactionGroup is refused (the deferred write widens the window between the hook's read and the write, N6); an
+   * unchanged Status is allowed; a change needs the gate's authorisation of exactly this `From → To`, which must also be
+   * a row of the lifecycle table.
+   *
+   * @param authorised the gate's authorisation of this save; `ServingWhileUnevaluated: false` when it clears the flag
+   * @param incomingServingWhileUnevaluated the `ServingWhileUnevaluated` value being saved
    */
   public static DecideStatusWrite(
     incoming: PersistedModelStatus,
     persisted: PersistedStatus,
-    authorised: { readonly From: PersistedModelStatus; readonly To: PersistedModelStatus } | null,
+    authorised: StatusWriteAuthorisationRule | null,
     inTransactionGroup: boolean,
+    incomingServingWhileUnevaluated: boolean,
   ): StatusGuardDecision {
+    if (StatusWriteRules.servingFlagChangeRefused(incoming, persisted, authorised, incomingServingWhileUnevaluated)) {
+      return { Allow: false, Reason: 'serving-flag-set-outside-migration' };
+    }
     if (persisted.Kind === 'create') {
       return incoming === 'Draft' ? { Allow: true, Reason: 'create-as-draft' } : { Allow: false, Reason: 'create-not-draft' };
     }
@@ -595,12 +595,27 @@ export class StatusWriteRules {
       ? { Allow: true, Reason: 'gate-authorised' }
       : { Allow: false, Reason: 'gate-transition-mismatch' };
   }
+
+  /**
+   * True when the save changes `ServingWhileUnevaluated` in a way no authorisation can allow: setting it, or clearing it
+   * outside a lifecycle transition that is exactly the authorised one and carries the change.
+   */
+  private static servingFlagChangeRefused(
+    incoming: PersistedModelStatus, persisted: PersistedStatus, authorised: StatusWriteAuthorisationRule | null, incomingServing: boolean,
+  ): boolean {
+    if (persisted.Kind === 'create') return incomingServing;
+    if (persisted.Kind !== 'row' || persisted.ServingWhileUnevaluated === incomingServing) return false;
+    if (incomingServing) return true;
+    const carried = authorised !== null && authorised.ServingWhileUnevaluated === false
+      && authorised.From === persisted.Status && authorised.To === incoming && StatusWriteRules.IsAuthorisedTransition(authorised.From, authorised.To);
+    return !carried;
+  }
 }
 
 /** Why a lifecycle transition was refused; stored as `MJ: ML Model Publish Records.Refusal` JSON. */
 export type TransitionRefusal =
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'illegal-transition'; readonly from: LifecycleState; readonly to: LifecycleState }
+  | { readonly kind: 'illegal-transition'; readonly from: PersistedLifecycleState; readonly to: PersistedLifecycleState }
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
   | { readonly kind: 'no-sign-off' }
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
@@ -629,7 +644,22 @@ export type TransitionRefusal =
   | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
   /** A run whose decision kept the incumbent heuristic: no model row (PR 3 Q3-5; D4-56). */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'kept-existing-rule'; readonly rule: string };
+  | { readonly kind: 'kept-existing-rule'; readonly rule: string }
+  /** The shipped finalist's calibration hides its family (the trainer's CALIBRATION HOLD); the slope, or null when unmeasured (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'calibration-held'; readonly slope: number | null }
+  /** The model cannot be served (no artifact file, or a delivery that ships nothing); the reason in words (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'not-servable'; readonly reason: string }
+  /** No model row has this ID, or the ID is not a UUID (refused before any read). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'model-not-found'; readonly modelId: string }
+  /** An archive or a rollback without a reason. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'reason-required' }
+  /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
 
 /**
  * One row of `MJ: ML Model Publish Records` (D-029, D4-08): an optional human sign-off, an applied publish (automatic or

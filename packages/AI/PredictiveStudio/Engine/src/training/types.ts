@@ -13,6 +13,7 @@
  * `MJ: Files` over an MJ storage provider; the tests inject in-memory fakes implementing the same contracts.
  */
 
+import type { IArtifactLoader } from '../scoring/types';
 import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type {
   ProblemType,
@@ -71,17 +72,6 @@ export interface IRecordLoader {
    * @param provider the provider the read runs on (no global fallback)
    */
   loadPipeline(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJMLTrainingPipelineEntity | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-
-  /**
-   * Compute the next monotonic model version under a pipeline — `max(Version)+1`,
-   * or `1` when the pipeline has no prior models. Implemented as a narrow,
-   * read-only count/scan over `MJ: ML Models`.
-   *
-   * @param pipelineId pipeline primary-key value
-   * @param contextUser request user
-   * @param provider the provider the read runs on (no global fallback)
-   */
-  nextModelVersion(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<number>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Resolve the sidecar **driver key** for an algorithm from its
@@ -252,6 +242,11 @@ export interface TrainingDeps {
   trainer?: ITrainerEvaluator;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** Reads the Evaluation Protocol a pipeline is bound to; defaults to a `RunViewEvaluationProtocolStore` on `provider`. */
   protocols?: IEvaluationProtocolStore;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  /**
+   * How the incumbent's stored artifact is read and verified before a run is compared with it (D4-93); default the
+   * storage-provider loader. Tests pass an in-memory one.
+   */
+  artifactLoader?: IArtifactLoader;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**
@@ -314,14 +309,14 @@ export interface TrainerModelLineage {
   shippedDriver: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
   /**
    * The run's leakage audit: the top feature of the finalist's held-out importance and its share, whatever shipped.
-   * A kept simple baseline stores no importance of its own (`FeatureImportance` is `{}`), so the promotion gate reads
+   * A kept simple baseline stores no importance of its own (`FeatureImportance` is `{}`), so the lifecycle gate reads
    * this audit to judge it against the pipeline's current dominance threshold. Null when the trainer measured no
    * importance (a forecast reports none).
    */
   trainingLeakageAudit: TrainingLeakageAudit | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
   /**
    * Set when the shipped finalist's family is hidden for its holdout calibration (a probability task whose slope is
-   * outside 0.8–1.2, or could not be measured): the model stays `Draft` and the promotion gate never moves it to
+   * outside 0.8–1.2, or could not be measured): the model stays `Draft` and the lifecycle gate never moves it to
    * Validated or Published, with or without a sign-off. Null when nothing is held (a kept baseline member is not
    * judged by the finalist's calibration report).
    */

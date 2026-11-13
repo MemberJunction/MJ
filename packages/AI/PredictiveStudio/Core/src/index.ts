@@ -54,3 +54,4 @@ export * from './registry-schemas';
 export * from './governance-contracts';
 export * from './scoring-contracts';
 export * from './monitoring-contracts';
+export * from './monitoring-job-specs';

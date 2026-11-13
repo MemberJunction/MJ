@@ -10,7 +10,7 @@
  * **Lockstep contract**: every type here is mirrored, field for field, by the type of the same name in
  * `@memberjunction/predictive-studio-core` (`packages/AI/PredictiveStudio/Core/src/`): `Actor` in `prediction-unit.ts`;
  * `GateDecision` and `PairedComparison` in `gate.ts`; `EvidenceSnapshot` in `governance-contracts.ts`;
- * `TransitionRefusal`, `LifecycleState` and `StatusGuardDecision` in `registry-contracts.ts`; `Interval`,
+ * `TransitionRefusal`, `LifecycleState`, `PersistedLifecycleState` and `StatusGuardDecision` in `registry-contracts.ts`; `Interval`,
  * `MetricWithInterval`, `ProperScore`, `SecondaryMetric` and `MetricKey` in `evaluation-protocol.ts`; `LeakageFlag` in
  * `trainer-contract.ts`. Runtime code reads the columns through those Core types, so a member added there must be added
  * here. Edit both in the same commit; Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
@@ -102,7 +102,7 @@ export type LeakageFlag =
 /** Why a lifecycle transition was refused; stored as `MJ: ML Model Publish Records.Refusal` JSON. */
 export type TransitionRefusal =
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'illegal-transition'; readonly from: LifecycleState; readonly to: LifecycleState }
+  | { readonly kind: 'illegal-transition'; readonly from: PersistedLifecycleState; readonly to: PersistedLifecycleState }
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
   | { readonly kind: 'no-sign-off' }
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
@@ -131,10 +131,28 @@ export type TransitionRefusal =
   | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
   /** A run whose decision kept the incumbent heuristic: no model row (PR 3 Q3-5; D4-56). */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'kept-existing-rule'; readonly rule: string };
+  | { readonly kind: 'kept-existing-rule'; readonly rule: string }
+  /** The shipped finalist's calibration hides its family (the trainer's CALIBRATION HOLD); the slope, or null when unmeasured (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'calibration-held'; readonly slope: number | null }
+  /** The model cannot be served (no artifact file, or a delivery that ships nothing); the reason in words (D4-57). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'not-servable'; readonly reason: string }
+  /** No model row has this ID, or the ID is not a UUID (refused before any read). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'model-not-found'; readonly modelId: string }
+  /** An archive or a rollback without a reason. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'reason-required' }
+  /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
 
 /** A lifecycle state of the contract. */
 export type LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
+
+/** A lifecycle state as a refusal names it: the contract's four plus `unevaluated` and `keep-baseline` (D4-90). */
+export type PersistedLifecycleState = LifecycleState | 'unevaluated' | 'keep-baseline';
 
 /** The Status guard's decision for one save of `MJ: ML Models`. */
 export type StatusGuardDecision =
@@ -146,5 +164,6 @@ export type StatusGuardDecision =
         | 'stored-row-unreadable'
         | 'deferred-in-transaction-group'
         | 'status-changed-outside-gate'
-        | 'gate-transition-mismatch';
+        | 'gate-transition-mismatch'
+        | 'serving-flag-set-outside-migration';
     };
