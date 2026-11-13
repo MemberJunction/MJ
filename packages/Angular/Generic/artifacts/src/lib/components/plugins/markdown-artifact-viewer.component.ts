@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Type, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -46,6 +46,61 @@ import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
 export type DocsEditingStyle = 'simple' | 'blocks';
+
+/** User setting key storing the toolbar actions a user pinned across documents. */
+export const DOCS_TOOLBAR_PINS_SETTING_KEY = 'MJ.Docs.Toolbar.PinnedActions';
+
+/** User setting key storing toolbar visibility & layout preferences across documents. */
+export const DOCS_TOOLBAR_VISIBILITY_SETTING_KEY = 'MJ.Docs.Toolbar.Visibility';
+
+export type DocsToolbarItemKey =
+  | 'outline'
+  | 'format'
+  | 'insert-block'
+  | 'add-section'
+  | 'suggest-mode'
+  | 'blocks-mode'
+  | 'comments'
+  | 'share'
+  | 'source-mode'
+  | 'diff-mode'
+  | 'export-docx'
+  | 'export-md'
+  | 'copy-md';
+
+export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
+  'outline',
+  'format',
+  'insert-block',
+  'comments',
+];
+
+export interface DocsToolbarVisibilitySetting {
+  Version: 1;
+  ShowOutlineRail?: boolean;
+  EditingStyle?: DocsEditingStyle;
+  FormattingRibbonPinned?: boolean;
+}
+
+export interface ResolvedDocsToolbarItem {
+  Key: DocsToolbarItemKey;
+  Label: string;
+  MenuLabel: string;
+  Description: string;
+  Icon: string;
+  Placement: 'left' | 'right';
+  Category: 'writing' | 'view' | 'collab' | 'io';
+  Order: number;
+  Visible: boolean;
+  Active: boolean;
+  Badge?: string | number;
+  Accent?: boolean;
+  HasChevron?: boolean;
+  ChevronUp?: boolean;
+  StatusTag?: string;
+  TestId: string;
+  MenuTestId: string;
+}
 
 export interface DocsEntityPickerOption {
   ID: string;
@@ -127,22 +182,9 @@ interface DocsInlineToken {
   selector: 'mj-markdown-artifact-viewer',
   template: `
     <div class="mj-docs-workspace" [ngClass]="cssClass" data-testid="mj-docs-workspace">
-      <!-- Tier 1: Calm Primary Collaboration & Mode Toolbar -->
+      <!-- Tier 1: Calm Progressive Disclosure Collaboration & Mode Toolbar -->
       <div class="mj-docs-toolbar" data-testid="mj-docs-toolbar">
         <div class="mj-docs-toolbar__left">
-          <button
-            type="button"
-            class="mj-docs-btn"
-            [class.mj-docs-btn--active]="ShowOutlineRail"
-            [attr.aria-pressed]="ShowOutlineRail"
-            title="Show or Hide Document Outline (Saved across all your documents)"
-            data-testid="toggle-outline-btn"
-            (click)="ToggleOutlineRail()"
-          >
-            <i class="fas fa-list-ul"></i>
-            <span>Outline</span>
-          </button>
-
           <div class="mj-docs-mode-group" role="tablist" aria-label="Document Mode">
             <button
               type="button"
@@ -165,89 +207,89 @@ interface DocsInlineToken {
               >
                 <i class="fas fa-pen-to-square"></i> Write
               </button>
-              <button
-                type="button"
-                class="mj-docs-mode-btn"
-                [class.mj-docs-mode-btn--active]="ViewMode === 'suggest'"
-                title="Suggest Tracked Edits (Committed on Save)"
-                data-testid="mode-suggest-btn"
-                (click)="SetViewMode('suggest')"
-              >
-                <i class="fas fa-code-pull-request"></i> Suggest
-                @if (PendingSuggestionsCount > 0) {
-                  <span class="mj-docs-badge mj-docs-badge--brand">{{ PendingSuggestionsCount }}</span>
-                }
-              </button>
             }
           </div>
 
-          @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
-            <div class="mj-docs-mode-group" role="group" aria-label="Editing Style">
-              <button
-                type="button"
-                class="mj-docs-mode-btn"
-                [class.mj-docs-mode-btn--active]="EditingStyle === 'simple'"
-                title="Simple Note Mode — Clean, continuous Mac Notes / TextEdit flow"
-                data-testid="editing-style-simple-btn"
-                (click)="SetEditingStyle('simple')"
-              >
-                <i class="fas fa-feather"></i> Simple
-              </button>
-              <button
-                type="button"
-                class="mj-docs-mode-btn"
-                [class.mj-docs-mode-btn--active]="EditingStyle === 'blocks'"
-                title="Advanced Block Studio — Show block handles, reorder arrows, and level badges"
-                data-testid="editing-style-blocks-btn"
-                (click)="SetEditingStyle('blocks')"
-              >
-                <i class="fas fa-cubes"></i> Blocks
-              </button>
-            </div>
+          <!-- Active Non-Default Mode / Editing Style Chips (revealed only when active & not pinned) -->
+          @if (CanUserEdit && (ViewMode === 'suggest' || PendingSuggestionsCount > 0) && !IsToolbarItemShownOnBar('suggest-mode')) {
+            <button
+              type="button"
+              class="mj-docs-active-mode-chip"
+              [class.mj-docs-active-mode-chip--active]="ViewMode === 'suggest'"
+              [title]="ViewMode === 'suggest' ? 'Suggest Mode active — click to return to Write mode' : 'View pending suggestions'"
+              data-testid="active-mode-chip-suggest"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="SetViewMode(ViewMode === 'suggest' ? 'edit' : 'suggest')"
+            >
+              <i class="fas fa-code-pull-request"></i>
+              <span>Suggest</span>
+              @if (PendingSuggestionsCount > 0) {
+                <span class="mj-docs-badge mj-docs-badge--brand">{{ PendingSuggestionsCount }}</span>
+              }
+              @if (ViewMode === 'suggest') {
+                <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+              }
+            </button>
+          }
 
+          @if (CanUserEdit && EditingStyle === 'blocks' && (ViewMode === 'edit' || ViewMode === 'suggest') && !IsToolbarItemShownOnBar('blocks-mode')) {
+            <button
+              type="button"
+              class="mj-docs-active-mode-chip mj-docs-active-mode-chip--active"
+              title="Block Studio active — click to return to Simple Note Mode"
+              data-testid="active-style-chip-blocks"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="SetEditingStyle('simple')"
+            >
+              <i class="fas fa-cubes"></i>
+              <span>Blocks</span>
+              <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+            </button>
+          }
+
+          @if ((ViewMode === 'source' && !IsToolbarItemShownOnBar('source-mode')) || (ViewMode === 'diff' && !IsToolbarItemShownOnBar('diff-mode'))) {
+            <button
+              type="button"
+              class="mj-docs-active-mode-chip mj-docs-active-mode-chip--active"
+              [title]="'Viewing ' + (ViewMode === 'source' ? 'Markdown Source' : 'Version History & Diff') + ' — click to close'"
+              data-testid="active-mode-chip-view"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="SetViewMode(CanUserEdit ? 'edit' : 'preview')"
+            >
+              <i class="fas" [ngClass]="ViewMode === 'source' ? 'fa-code' : 'fa-code-compare'"></i>
+              <span>{{ ViewMode === 'source' ? 'Source' : 'Diff' }}</span>
+              <i class="fas fa-xmark mj-docs-active-mode-chip__close"></i>
+            </button>
+          }
+
+          <!-- User-Pinned Left Toolbar Actions (via UserInfoEngine) -->
+          @for (item of PinnedLeftToolbarItems; track item.Key) {
             <button
               type="button"
               class="mj-docs-btn"
-              [class.mj-docs-btn--active]="ShowFormattingRibbon"
-              [attr.aria-expanded]="ShowFormattingRibbon"
-              title="Toggle Formatting Ribbon"
-              data-testid="toggle-format-ribbon-btn"
+              [class.mj-docs-btn--active]="item.Active"
+              [class.mj-docs-btn--accent]="item.Accent"
+              [attr.aria-pressed]="item.Active"
+              [attr.aria-expanded]="item.HasChevron ? item.ChevronUp : null"
+              [title]="item.Description"
+              [attr.data-testid]="item.TestId"
               (mousedown)="OnToolbarActionMousedown($event)"
-              (click)="ToggleFormattingRibbon()"
+              (click)="ExecuteToolbarItem(item, false, $event)"
             >
-              <i class="fas fa-font"></i>
-              <span>Format</span>
-              <i class="fas" [ngClass]="ShowFormattingRibbon ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-            </button>
-
-            <button
-              type="button"
-              class="mj-docs-btn"
-              title="Add Section Heading Below Current Line"
-              data-testid="quick-add-section-btn"
-              (mousedown)="OnToolbarActionMousedown($event)"
-              (click)="InsertSectionHeadingBelow()"
-            >
-              <i class="fas fa-heading"></i>
-              <span>+ Section</span>
-            </button>
-
-            <button
-              type="button"
-              class="mj-docs-btn mj-docs-btn--accent"
-              title="Insert Live View, Query, or Whiteboard Below Current Line (/)"
-              data-testid="open-slash-menu-btn"
-              (mousedown)="OnToolbarActionMousedown($event)"
-              (click)="ToggleSlashMenu()"
-            >
-              <i class="fas fa-plus"></i>
-              <span>Insert View / Block</span>
+              <i class="fas" [ngClass]="item.Icon"></i>
+              <span>{{ item.Label }}</span>
+              @if (item.Badge != null) {
+                <span class="mj-docs-badge mj-docs-badge--brand">{{ item.Badge }}</span>
+              }
+              @if (item.HasChevron) {
+                <i class="fas" [ngClass]="item.ChevronUp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+              }
             </button>
           }
         </div>
 
         <div class="mj-docs-toolbar__right">
-          <!-- Collaboration Presence Pill -->
+          <!-- Compact Collaboration Presence Pill -->
           <div
             class="mj-docs-presence-pill"
             [class.mj-docs-presence-pill--connected]="CollaborationStatus === 'connected'"
@@ -256,10 +298,11 @@ interface DocsInlineToken {
             "
             [class.mj-docs-presence-pill--error]="CollaborationStatus === 'error'"
             [attr.data-status]="CollaborationStatus"
+            [title]="GetCollaborationStatusLabel()"
             data-testid="collaboration-presence-pill"
           >
             <span class="mj-docs-presence-dot"></span>
-            <span>{{ GetCollaborationStatusLabel() }}</span>
+            <span>{{ GetCompactCollaborationStatusLabel() }}</span>
             @if (CollaborationStatus === 'error') {
               <button
                 type="button"
@@ -291,25 +334,35 @@ interface DocsInlineToken {
             (change)="OnImportFileSelected($event)"
           />
 
-          @if (CanUserShareArtifact) {
+          <!-- User-Pinned Right Toolbar Actions (via UserInfoEngine; defaults to Comments) -->
+          @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
               type="button"
               class="mj-docs-btn"
-              title="Share & Document Permissions"
-              data-testid="open-permissions-modal-btn"
-              (click)="OpenPermissionsModal()"
+              [class.mj-docs-btn--active]="item.Active"
+              [class.mj-docs-btn--accent]="item.Accent"
+              [attr.aria-pressed]="item.Active"
+              [title]="item.Description"
+              [attr.data-testid]="item.TestId"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="ExecuteToolbarItem(item, false, $event)"
             >
-              <i class="fas fa-user-shield"></i>
-              <span>Share</span>
+              <i class="fas" [ngClass]="item.Icon"></i>
+              <span>{{ item.Label }}</span>
+              @if (item.Badge != null) {
+                <span class="mj-docs-badge" [class.mj-docs-badge--brand]="item.Active">{{ item.Badge }}</span>
+              }
             </button>
           }
 
           @if (CanUserEdit) {
             <button
               type="button"
-              class="mj-docs-btn mj-docs-btn--primary"
+              class="mj-docs-btn"
+              [class.mj-docs-btn--primary]="HasUnsavedChanges"
+              [class.mj-docs-btn--saved-quiet]="!HasUnsavedChanges"
               [disabled]="IsSavingVersion || !HasUnsavedChanges"
-              [title]="HasUnsavedChanges ? 'Save Document Version' : 'No unsaved changes to save'"
+              [title]="HasUnsavedChanges ? 'Save Document Version' : 'All changes saved'"
               data-testid="save-doc-version-btn"
               (click)="OnSaveDocumentVersion()"
             >
@@ -318,97 +371,98 @@ interface DocsInlineToken {
             </button>
           }
 
-          <button
-            type="button"
-            class="mj-docs-btn mj-docs-btn--icon"
-            [class.mj-docs-btn--active]="ShowCommentsDrawer"
-            title="Toggle Comments & Suggestions"
-            data-testid="toggle-comments-btn"
-            (click)="ToggleCommentsDrawer()"
-          >
-            <i class="fas fa-comments"></i>
-            <span>Comments</span>
-            @if (OpenThreadsCount > 0) {
-              <span class="mj-docs-badge">{{ OpenThreadsCount }}</span>
-            }
-          </button>
-
-          <!-- Progressive Disclosure Overflow Menu (...) for Source, Version Diff, Import & Export -->
-          <div class="mj-docs-more-menu-wrap">
+          <!-- Progressive Disclosure Tools & View Menu (...) with per-action Thumbtack Pinning -->
+          <div class="mj-docs-more-menu-wrap" #moreMenuWrap>
             <button
               type="button"
               class="mj-docs-btn mj-docs-btn--icon"
               [class.mj-docs-btn--active]="ShowMoreToolsMenu || ViewMode === 'source' || ViewMode === 'diff'"
               [attr.aria-expanded]="ShowMoreToolsMenu"
-              title="More Tools: Markdown Source, Version History, Import & Export"
+              title="Customize toolbar pins, modes, share &amp; export"
               data-testid="toggle-more-tools-btn"
-              (click)="ShowMoreToolsMenu = !ShowMoreToolsMenu"
+              (click)="ToggleMoreToolsMenu($event)"
             >
               <i class="fas fa-ellipsis"></i>
             </button>
 
             <div class="mj-docs-more-menu" [hidden]="!ShowMoreToolsMenu" data-testid="docs-more-tools-menu">
-              <div class="mj-docs-more-menu__section">Document Views</div>
-              <button
-                type="button"
-                class="mj-docs-more-menu__item"
-                [class.mj-docs-more-menu__item--active]="ViewMode === 'source'"
-                data-testid="mode-source-btn"
-                (click)="SetViewMode('source'); ShowMoreToolsMenu = false"
-              >
-                <i class="fas fa-code"></i>
-                <span>Markdown Source</span>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-more-menu__item"
-                [class.mj-docs-more-menu__item--active]="ViewMode === 'diff'"
-                data-testid="mode-diff-btn"
-                (click)="SetViewMode('diff'); ShowMoreToolsMenu = false"
-              >
-                <i class="fas fa-code-compare"></i>
-                <span>Version History &amp; Diff</span>
-              </button>
+              <div class="mj-docs-more-menu__header">
+                <span class="mj-docs-more-menu__title">Tools &amp; View</span>
+                <span class="mj-docs-badge" data-testid="toolbar-pin-count-badge">
+                  {{ PinnedToolbarItemsCount }}/{{ MaxPinnedToolbarActions }} pinned
+                </span>
+                @if (HasCustomToolbarSettings) {
+                  <button
+                    type="button"
+                    class="mj-docs-menu-reset-btn"
+                    title="Reset toolbar pins &amp; view preferences to defaults"
+                    data-testid="reset-toolbar-pins-btn"
+                    (mousedown)="OnToolbarActionMousedown($event)"
+                    (click)="ResetToolbarCustomizations($event)"
+                  >
+                    Reset
+                  </button>
+                }
+              </div>
 
-              <div class="mj-docs-more-menu__divider"></div>
-              <div class="mj-docs-more-menu__section">Import &amp; Export</div>
-              <button
-                type="button"
-                class="mj-docs-more-menu__item"
-                data-testid="export-docx-btn"
-                (click)="OnExportDocx(); ShowMoreToolsMenu = false"
-              >
-                <i class="fas fa-file-word"></i>
-                <span>Export Word (.docx)</span>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-more-menu__item"
-                data-testid="export-md-btn"
-                (click)="OnExportMarkdown(); ShowMoreToolsMenu = false"
-              >
-                <i class="fas fa-file-lines"></i>
-                <span>Export Markdown (.md)</span>
-              </button>
-              <button
-                type="button"
-                class="mj-docs-more-menu__item"
-                data-testid="copy-markdown-btn"
-                (click)="OnCopy(); ShowMoreToolsMenu = false"
-              >
-                <i class="fas fa-copy"></i>
-                <span>Copy Markdown</span>
-              </button>
-              @if (CanUserEdit) {
-                <button
-                  type="button"
-                  class="mj-docs-more-menu__item"
-                  data-testid="import-doc-btn"
-                  (click)="TriggerFileImport(); ShowMoreToolsMenu = false"
-                >
-                  <i class="fas fa-file-import"></i>
-                  <span>Import .docx or .md…</span>
-                </button>
+              @for (cat of ToolbarMenuCategories; track cat.Key; let lastCat = $last) {
+                @let catItems = GetMenuItemsForCategory(cat.Key);
+                @if (catItems.length > 0 || (cat.Key === 'io' && CanUserEdit)) {
+                  <div class="mj-docs-more-menu__section">{{ cat.Title }}</div>
+                  @for (item of catItems; track item.Key) {
+                    <div class="mj-docs-menu-row">
+                      <button
+                        type="button"
+                        class="mj-docs-more-menu__item"
+                        [class.mj-docs-more-menu__item--active]="item.Active"
+                        [title]="item.Description"
+                        [attr.data-testid]="IsToolbarItemShownOnBar(item.Key) ? item.MenuTestId : item.TestId"
+                        (mousedown)="OnToolbarActionMousedown($event)"
+                        (click)="ExecuteToolbarItem(item, true, $event)"
+                      >
+                        <i class="fas" [ngClass]="item.Icon"></i>
+                        <span class="mj-docs-more-menu__item-label">{{ item.MenuLabel }}</span>
+                        @if (item.StatusTag) {
+                          <span class="mj-docs-badge">{{ item.StatusTag }}</span>
+                        } @else if (item.Badge != null) {
+                          <span class="mj-docs-badge mj-docs-badge--brand">{{ item.Badge }}</span>
+                        }
+                      </button>
+                      <button
+                        type="button"
+                        class="mj-docs-menu-pin"
+                        [class.pinned]="IsToolbarItemPinned(item.Key)"
+                        [class.over-cap]="IsToolbarItemPinnedOverCap(item.Key)"
+                        [attr.aria-disabled]="!IsToolbarItemPinned(item.Key) && !CanPinMoreToolbarItems ? 'true' : null"
+                        [attr.aria-pressed]="IsToolbarItemPinned(item.Key)"
+                        [attr.aria-label]="'Pin ' + item.MenuLabel"
+                        [attr.data-testid]="'menu-pin-' + item.Key"
+                        [title]="GetToolbarPinTooltip(item.Key)"
+                        (mousedown)="OnToolbarActionMousedown($event)"
+                        (click)="ToggleToolbarItemPin(item.Key, $event)"
+                      >
+                        <i class="fas fa-thumbtack"></i>
+                      </button>
+                    </div>
+                  }
+                  @if (cat.Key === 'io' && CanUserEdit) {
+                    <div class="mj-docs-menu-row">
+                      <button
+                        type="button"
+                        class="mj-docs-more-menu__item"
+                        data-testid="import-doc-btn"
+                        (mousedown)="OnToolbarActionMousedown($event)"
+                        (click)="TriggerFileImport(); CloseMoreToolsMenu()"
+                      >
+                        <i class="fas fa-file-import"></i>
+                        <span class="mj-docs-more-menu__item-label">Import .docx or .md…</span>
+                      </button>
+                    </div>
+                  }
+                  @if (!lastCat) {
+                    <div class="mj-docs-more-menu__divider"></div>
+                  }
+                }
               }
             </div>
           </div>
@@ -423,33 +477,34 @@ interface DocsInlineToken {
           aria-label="Formatting Tools"
           data-testid="docs-format-ribbon"
         >
-          <button type="button" class="mj-docs-btn" title="Bold" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('**', '**')">
+          <button type="button" class="mj-docs-btn" title="Bold" data-testid="fmt-bold-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('**', '**')">
             <i class="fas fa-bold"></i>
           </button>
-          <button type="button" class="mj-docs-btn" title="Italic" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('*', '*')">
+          <button type="button" class="mj-docs-btn" title="Italic" data-testid="fmt-italic-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('*', '*')">
             <i class="fas fa-italic"></i>
           </button>
           <span class="mj-docs-ribbon-sep"></span>
-          <button type="button" class="mj-docs-btn" title="Heading 1" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('# ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 1" data-testid="fmt-h1-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('# ', '')">
             <strong>H1</strong>
           </button>
-          <button type="button" class="mj-docs-btn" title="Heading 2" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('## ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 2" data-testid="fmt-h2-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('## ', '')">
             <strong>H2</strong>
           </button>
-          <button type="button" class="mj-docs-btn" title="Heading 3" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('### ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 3" data-testid="fmt-h3-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('### ', '')">
             <strong>H3</strong>
           </button>
           <span class="mj-docs-ribbon-sep"></span>
-          <button type="button" class="mj-docs-btn" title="Bullet List" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- ', '')">
+          <button type="button" class="mj-docs-btn" title="Bullet List" data-testid="fmt-list-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- ', '')">
             <i class="fas fa-list-ul"></i> List
           </button>
-          <button type="button" class="mj-docs-btn" title="Task List" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- [ ] ', '')">
+          <button type="button" class="mj-docs-btn" title="Task List" data-testid="fmt-checklist-btn" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- [ ] ', '')">
             <i class="fas fa-list-check"></i> Checklist
           </button>
           <button
             type="button"
             class="mj-docs-btn"
             title="Insert Table"
+            data-testid="fmt-table-btn"
             (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n', '')"
           >
@@ -459,6 +514,7 @@ interface DocsInlineToken {
             type="button"
             class="mj-docs-btn"
             title="Callout Block"
+            data-testid="fmt-callout-btn"
             (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('> [!NOTE]\n> ', '')"
           >
@@ -468,6 +524,19 @@ interface DocsInlineToken {
             Tip: Type <kbd>/</kbd> anywhere to insert a live <strong>View</strong>, <strong>Query</strong>, or
             <strong>Whiteboard</strong>
           </span>
+          <button
+            type="button"
+            class="mj-docs-btn mj-docs-pin-ribbon-btn"
+            [class.mj-docs-btn--active]="FormattingRibbonPinned"
+            [attr.aria-pressed]="FormattingRibbonPinned"
+            title="Keep formatting ribbon open across all documents"
+            data-testid="pin-format-ribbon-btn"
+            (mousedown)="OnToolbarActionMousedown($event)"
+            (click)="ToggleFormattingRibbonPinned()"
+          >
+            <i class="fas fa-thumbtack"></i>
+            <span>{{ FormattingRibbonPinned ? 'Pinned' : 'Pin Ribbon' }}</span>
+          </button>
         </div>
       }
 
@@ -2358,6 +2427,57 @@ interface DocsInlineToken {
         color: var(--mj-brand-primary);
       }
 
+      .mj-docs-btn--saved-quiet {
+        background: transparent;
+        border-color: transparent;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-docs-btn--saved-quiet:hover:not(:disabled) {
+        background: var(--mj-bg-surface-hover);
+        border-color: var(--mj-border-default);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-active-mode-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 26px;
+        padding: 0 8px 0 10px;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-border-default));
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.12s ease, border-color 0.12s ease;
+      }
+
+      .mj-docs-active-mode-chip:hover {
+        background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
+        border-color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-active-mode-chip--active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-active-mode-chip__close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        opacity: 0.7;
+      }
+
+      .mj-docs-active-mode-chip:hover .mj-docs-active-mode-chip__close {
+        opacity: 1;
+      }
+
       .mj-docs-mode-btn:disabled,
       .mj-docs-btn:disabled {
         opacity: 0.5;
@@ -3959,6 +4079,37 @@ interface DocsInlineToken {
         border-bottom: 1px solid var(--mj-border-default);
       }
 
+      .mj-docs-format-ribbon[hidden] {
+        display: none !important;
+      }
+
+      .mj-docs-pin-ribbon-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      }
+
+      .mj-docs-pin-ribbon-btn:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-pin-ribbon-btn--active {
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+      }
+
       .mj-docs-ribbon-hint {
         margin-left: auto;
         font-size: 11px;
@@ -3983,7 +4134,9 @@ interface DocsInlineToken {
         top: calc(100% + 6px);
         right: 0;
         z-index: 85;
-        width: 240px;
+        width: 276px;
+        max-height: 70vh;
+        overflow-y: auto;
         padding: 6px;
         background: var(--mj-bg-surface);
         border: 1px solid var(--mj-border-strong);
@@ -3994,8 +4147,55 @@ interface DocsInlineToken {
         gap: 2px;
       }
 
+      .mj-docs-more-menu[hidden] {
+        display: none !important;
+      }
+
+      .mj-docs-more-menu__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 4px 8px 6px 8px;
+        border-bottom: 1px solid var(--mj-border-default);
+        margin-bottom: 4px;
+      }
+
+      .mj-docs-more-menu__title {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-menu-reset-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--mj-text-muted);
+        background: transparent;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+      }
+
+      .mj-docs-menu-reset-btn:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+        border-color: var(--mj-border-strong);
+      }
+
+      .mj-docs-more-menu__section,
       .mj-docs-more-menu__section-title {
-        padding: 4px 8px 2px 8px;
+        padding: 6px 8px 2px 8px;
         font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
@@ -4003,11 +4203,24 @@ interface DocsInlineToken {
         color: var(--mj-text-muted);
       }
 
+      .mj-docs-menu-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 6px;
+      }
+
+      .mj-docs-menu-row:hover {
+        background: var(--mj-bg-surface-hover);
+      }
+
       .mj-docs-more-menu__item {
+        flex: 1;
+        min-width: 0;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 7px 10px;
+        padding: 6px 8px;
         font-size: 12px;
         color: var(--mj-text-primary);
         background: transparent;
@@ -4017,10 +4230,64 @@ interface DocsInlineToken {
         text-align: left;
       }
 
-      .mj-docs-more-menu__item:hover,
+      .mj-docs-more-menu__item:hover:not(:disabled),
       .mj-docs-more-menu__item--active {
         background: var(--mj-bg-surface-hover);
         color: var(--mj-brand-primary);
+      }
+
+      .mj-docs-more-menu__item:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .mj-docs-more-menu__item-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mj-docs-menu-pin {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--mj-text-muted);
+        font-size: 11px;
+        cursor: pointer;
+        opacity: 0.55;
+        transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+      }
+
+      .mj-docs-menu-row:hover .mj-docs-menu-pin,
+      .mj-docs-menu-pin.pinned {
+        opacity: 1;
+      }
+
+      .mj-docs-menu-pin:hover:not([aria-disabled='true']) {
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-primary);
+      }
+
+      .mj-docs-menu-pin.pinned {
+        color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+      }
+
+      .mj-docs-menu-pin.over-cap {
+        opacity: 0.45;
+      }
+
+      .mj-docs-menu-pin[aria-disabled='true'] {
+        opacity: 0.3;
+        cursor: not-allowed;
       }
 
       .mj-docs-more-menu__divider {
@@ -4188,12 +4455,14 @@ export class MarkdownArtifactViewerComponent
 {
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
+  @ViewChild('moreMenuWrap') public MoreMenuWrap?: ElementRef<HTMLElement>;
 
   /**
    * Emitted when a user clicks a primary key, record name, or foreign key link inside an embedded Live View or Query block.
    * Picked up by `ArtifactTypePluginViewerComponent` and bubbled up to MJ Explorer to open the target entity record.
    */
   @Output() public OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+  @Output() public ToolbarPinChanged = new EventEmitter<{ Key: DocsToolbarItemKey; Pinned: boolean }>();
   /** @deprecated Use {@link OpenEntityRecord}. */
   @Output() public openEntityRecord = this.OpenEntityRecord;
 
@@ -4218,6 +4487,7 @@ export class MarkdownArtifactViewerComponent
   private readonly notificationService = inject(MJNotificationService, { optional: true });
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
+  private readonly renderer = inject(Renderer2, { optional: true });
 
   public MarkdownContent = '';
   private initialLoadedMarkdown = '';
@@ -4252,6 +4522,27 @@ export class MarkdownArtifactViewerComponent
   public ShowCommentsDrawer = false;
   public ShowFormattingRibbon = false;
   public ShowMoreToolsMenu = false;
+  public FormattingRibbonPinned = false;
+  public readonly MaxPinnedToolbarActions = 6;
+  public readonly ToolbarMenuCategories: ReadonlyArray<{
+    Key: ResolvedDocsToolbarItem['Category'];
+    Title: string;
+  }> = [
+    { Key: 'writing', Title: 'Writing & Formatting' },
+    { Key: 'view', Title: 'Mode & Layout' },
+    { Key: 'collab', Title: 'Collaboration & Access' },
+    { Key: 'io', Title: 'Import & Export' },
+  ];
+
+  private _toolbarPinsRaw: string | null = null;
+  private _toolbarPinsParsed: DocsToolbarItemKey[] | null = null;
+  private _localToolbarPins: DocsToolbarItemKey[] | null = null;
+  private _serverToolbarPinsRaw: string | null = null;
+  private _toolbarVisibilityRaw: string | null = null;
+  private _toolbarVisibilityParsed: DocsToolbarVisibilitySetting | null = null;
+  private _localToolbarVisibility: DocsToolbarVisibilitySetting | null = null;
+  private _serverToolbarVisibilityRaw: string | null = null;
+  private _unlistenMoreMenuDocs: Array<() => void> = [];
   public ShowPermissionsModal = false;
   public ShowSlashMenu = false;
   public SlashSearchQuery = '';
@@ -4462,6 +4753,7 @@ export class MarkdownArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    this.stopMoreMenuDocumentListeners();
     this.destroyCollaborationSession();
   }
 
@@ -4517,7 +4809,8 @@ export class MarkdownArtifactViewerComponent
 
   public SetEditingStyle(style: DocsEditingStyle): void {
     this.EditingStyle = style;
-    void UserInfoEngine.Instance.SetSettingDebounced(
+    this.writeToolbarVisibility({ EditingStyle: style });
+    this.resolveUserInfoEngine()?.SetSettingDebounced(
       MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY,
       style,
     );
@@ -4710,7 +5003,8 @@ export class MarkdownArtifactViewerComponent
 
   public ToggleOutlineRail(): void {
     this.ShowOutlineRail = !this.ShowOutlineRail;
-    void UserInfoEngine.Instance.SetSettingDebounced(
+    this.writeToolbarVisibility({ ShowOutlineRail: this.ShowOutlineRail });
+    this.resolveUserInfoEngine()?.SetSettingDebounced(
       MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
       String(this.ShowOutlineRail),
     );
@@ -4722,14 +5016,592 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
-  public ToggleMoreToolsMenu(): void {
+  public ToggleFormattingRibbonPinned(): void {
+    this.FormattingRibbonPinned = !this.FormattingRibbonPinned;
+    if (this.FormattingRibbonPinned) {
+      this.ShowFormattingRibbon = true;
+    }
+    this.writeToolbarVisibility({ FormattingRibbonPinned: this.FormattingRibbonPinned });
+    this.cdr.markForCheck();
+  }
+
+  public ToggleMoreToolsMenu(event?: Event): void {
+    event?.stopPropagation();
     this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
+    this.syncMoreMenuDocumentListeners();
     this.cdr.markForCheck();
   }
 
   public CloseMoreToolsMenu(): void {
+    if (!this.ShowMoreToolsMenu) {
+      this.stopMoreMenuDocumentListeners();
+      return;
+    }
     this.ShowMoreToolsMenu = false;
+    this.stopMoreMenuDocumentListeners();
     this.cdr.markForCheck();
+  }
+
+  // =========================================================================
+  // TOOLBAR PROGRESSIVE DISCLOSURE & USER SETTINGS PERSISTENCE
+  // =========================================================================
+
+  /**
+   * Returns `UserInfoEngine.Instance` when available, or `null` if unavailable.
+   */
+  private resolveUserInfoEngine(): UserInfoEngine | null {
+    try {
+      return UserInfoEngine.Instance ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private isValidToolbarItemKey(value: string): value is DocsToolbarItemKey {
+    return this.ResolvedToolbarItems.some((item) => item.Key === value);
+  }
+
+  private normalizeToolbarPins(keys: ReadonlyArray<string>): DocsToolbarItemKey[] {
+    const seen = new Set<DocsToolbarItemKey>();
+    const normalized: DocsToolbarItemKey[] = [];
+    for (const candidate of keys) {
+      if (this.isValidToolbarItemKey(candidate) && !seen.has(candidate)) {
+        seen.add(candidate);
+        normalized.push(candidate);
+      }
+    }
+    return normalized;
+  }
+
+  private readToolbarPins(): DocsToolbarItemKey[] {
+    const engine = this.resolveUserInfoEngine();
+    const raw = engine?.GetSetting(DOCS_TOOLBAR_PINS_SETTING_KEY) ?? null;
+
+    // Keep immediate in-memory edits active while SetSettingDebounced waits to flush to DB
+    if (this._localToolbarPins !== null && raw === this._serverToolbarPinsRaw) {
+      return [...this._localToolbarPins];
+    }
+
+    if (raw == null || raw.trim() === '') {
+      if (this._localToolbarPins !== null) {
+        return [...this._localToolbarPins];
+      }
+      return [...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS];
+    }
+
+    if (raw === this._toolbarPinsRaw && this._toolbarPinsParsed !== null) {
+      return [...this._toolbarPinsParsed];
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const stringItems = parsed.filter((entry): entry is string => typeof entry === 'string');
+        const normalized = this.normalizeToolbarPins(stringItems);
+        this._serverToolbarPinsRaw = raw;
+        this._localToolbarPins = null;
+        this._toolbarPinsRaw = raw;
+        this._toolbarPinsParsed = normalized;
+        return [...normalized];
+      }
+    } catch {
+      // Fall back to default pins when stored JSON is malformed
+    }
+
+    return [...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS];
+  }
+
+  private writeToolbarPins(pins: DocsToolbarItemKey[]): void {
+    const normalized = this.normalizeToolbarPins(pins);
+    const json = JSON.stringify(normalized);
+    const engine = this.resolveUserInfoEngine();
+    this._serverToolbarPinsRaw = engine?.GetSetting(DOCS_TOOLBAR_PINS_SETTING_KEY) ?? null;
+    this._localToolbarPins = [...normalized];
+    this._toolbarPinsRaw = json;
+    this._toolbarPinsParsed = [...normalized];
+    engine?.SetSettingDebounced(DOCS_TOOLBAR_PINS_SETTING_KEY, json);
+  }
+
+  private readToolbarVisibility(): DocsToolbarVisibilitySetting {
+    const engine = this.resolveUserInfoEngine();
+    const raw = engine?.GetSetting(DOCS_TOOLBAR_VISIBILITY_SETTING_KEY) ?? null;
+
+    if (this._localToolbarVisibility !== null && raw === this._serverToolbarVisibilityRaw) {
+      return { ...this._localToolbarVisibility };
+    }
+
+    if (raw && raw.trim() !== '') {
+      if (raw === this._toolbarVisibilityRaw && this._toolbarVisibilityParsed !== null) {
+        return { ...this._toolbarVisibilityParsed };
+      }
+      try {
+        const parsed = JSON.parse(raw) as Partial<DocsToolbarVisibilitySetting> | null;
+        if (parsed && typeof parsed === 'object') {
+          const normalized: DocsToolbarVisibilitySetting = {
+            Version: 1,
+            ShowOutlineRail: typeof parsed.ShowOutlineRail === 'boolean' ? parsed.ShowOutlineRail : true,
+            EditingStyle: parsed.EditingStyle === 'blocks' ? 'blocks' : 'simple',
+            FormattingRibbonPinned: parsed.FormattingRibbonPinned === true,
+          };
+          this._serverToolbarVisibilityRaw = raw;
+          this._localToolbarVisibility = null;
+          this._toolbarVisibilityRaw = raw;
+          this._toolbarVisibilityParsed = normalized;
+          return { ...normalized };
+        }
+      } catch {
+        // Fall back to legacy/default visibility below
+      }
+    }
+
+    if (this._localToolbarVisibility !== null) {
+      return { ...this._localToolbarVisibility };
+    }
+
+    const legacyOutline = engine?.GetSetting(
+      MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
+    );
+    const legacyStyle = engine?.GetSetting(
+      MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY,
+    );
+    return {
+      Version: 1,
+      ShowOutlineRail: legacyOutline === 'false' ? false : true,
+      EditingStyle: legacyStyle === 'blocks' ? 'blocks' : 'simple',
+      FormattingRibbonPinned: false,
+    };
+  }
+
+  private writeToolbarVisibility(patch: Partial<DocsToolbarVisibilitySetting>): void {
+    const current = this.readToolbarVisibility();
+    const next: DocsToolbarVisibilitySetting = {
+      Version: 1,
+      ShowOutlineRail: patch.ShowOutlineRail ?? current.ShowOutlineRail ?? true,
+      EditingStyle: patch.EditingStyle ?? current.EditingStyle ?? 'simple',
+      FormattingRibbonPinned: patch.FormattingRibbonPinned ?? current.FormattingRibbonPinned ?? false,
+    };
+    const json = JSON.stringify(next);
+    const engine = this.resolveUserInfoEngine();
+    this._serverToolbarVisibilityRaw = engine?.GetSetting(DOCS_TOOLBAR_VISIBILITY_SETTING_KEY) ?? null;
+    this._localToolbarVisibility = { ...next };
+    this._toolbarVisibilityRaw = json;
+    this._toolbarVisibilityParsed = { ...next };
+    engine?.SetSettingDebounced(DOCS_TOOLBAR_VISIBILITY_SETTING_KEY, json);
+  }
+
+  private loadToolbarPreferencesFromUserSettings(): void {
+    this._localToolbarPins = null;
+    this._toolbarPinsRaw = null;
+    this._toolbarPinsParsed = null;
+    this._serverToolbarPinsRaw = null;
+    this._localToolbarVisibility = null;
+    this._toolbarVisibilityRaw = null;
+    this._toolbarVisibilityParsed = null;
+    this._serverToolbarVisibilityRaw = null;
+
+    const vis = this.readToolbarVisibility();
+    if (typeof vis.ShowOutlineRail === 'boolean') {
+      this.ShowOutlineRail = vis.ShowOutlineRail;
+    }
+    if (vis.EditingStyle === 'simple' || vis.EditingStyle === 'blocks') {
+      this.EditingStyle = vis.EditingStyle;
+    }
+    this.FormattingRibbonPinned = vis.FormattingRibbonPinned === true;
+    if (this.FormattingRibbonPinned) {
+      this.ShowFormattingRibbon = true;
+    }
+  }
+
+  public get PinnedToolbarKeys(): DocsToolbarItemKey[] {
+    return this.readToolbarPins();
+  }
+
+  public get ResolvedToolbarItems(): ResolvedDocsToolbarItem[] {
+    const canEdit = this.CanUserEdit;
+    const isWriteOrSuggest = this.ViewMode === 'edit' || this.ViewMode === 'suggest';
+    const isFormattingAvailable = canEdit && (isWriteOrSuggest || this.ViewMode === 'source');
+    const openThreads = this.OpenThreadsCount;
+    const pendingSuggestions = this.PendingSuggestionsCount;
+
+    const items: ResolvedDocsToolbarItem[] = [
+      {
+        Key: 'format',
+        Label: 'Format',
+        MenuLabel: 'Format Ribbon',
+        Description: 'Toggle rich formatting ribbon',
+        Icon: 'fa-font',
+        Placement: 'left',
+        Category: 'writing',
+        Order: 10,
+        Visible: isFormattingAvailable,
+        Active: this.ShowFormattingRibbon,
+        HasChevron: true,
+        ChevronUp: this.ShowFormattingRibbon,
+        TestId: 'toggle-format-ribbon-btn',
+        MenuTestId: 'menu-toggle-format-ribbon-btn',
+      },
+      {
+        Key: 'insert-block',
+        Label: '+ Insert',
+        MenuLabel: 'Insert View / Block',
+        Description: 'Insert Live Entity View, Query, Whiteboard, or Block (/)',
+        Icon: 'fa-plus',
+        Placement: 'left',
+        Category: 'writing',
+        Order: 20,
+        Visible: canEdit && isWriteOrSuggest,
+        Active: this.ShowSlashMenu,
+        Accent: true,
+        TestId: 'open-slash-menu-btn',
+        MenuTestId: 'menu-open-slash-menu-btn',
+      },
+      {
+        Key: 'add-section',
+        Label: '+ Section',
+        MenuLabel: 'Add Section Heading',
+        Description: 'Insert a new section heading below the current section',
+        Icon: 'fa-heading',
+        Placement: 'left',
+        Category: 'writing',
+        Order: 30,
+        Visible: canEdit && isWriteOrSuggest,
+        Active: false,
+        TestId: 'quick-add-section-btn',
+        MenuTestId: 'menu-quick-add-section-btn',
+      },
+      {
+        Key: 'suggest-mode',
+        Label: 'Suggest',
+        MenuLabel: 'Suggesting Mode',
+        Description: 'Propose tracked changes for review',
+        Icon: 'fa-code-pull-request',
+        Placement: 'left',
+        Category: 'writing',
+        Order: 40,
+        Visible: canEdit,
+        Active: this.ViewMode === 'suggest',
+        Badge: pendingSuggestions > 0 ? pendingSuggestions : undefined,
+        StatusTag: this.ViewMode === 'suggest' ? 'On' : undefined,
+        TestId: 'mode-suggest-btn',
+        MenuTestId: 'menu-mode-suggest-btn',
+      },
+      {
+        Key: 'outline',
+        Label: 'Outline',
+        MenuLabel: 'Document Outline Rail',
+        Description: 'Toggle Document Outline Rail',
+        Icon: 'fa-list-ul',
+        Placement: 'left',
+        Category: 'view',
+        Order: 50,
+        Visible: true,
+        Active: this.ShowOutlineRail,
+        StatusTag: this.ShowOutlineRail ? 'Shown' : 'Hidden',
+        TestId: 'toggle-outline-btn',
+        MenuTestId: 'menu-toggle-outline-btn',
+      },
+      {
+        Key: 'blocks-mode',
+        Label: 'Blocks',
+        MenuLabel: 'Block Studio Mode',
+        Description: 'Toggle structural Block Studio rails and section cards',
+        Icon: 'fa-cubes',
+        Placement: 'left',
+        Category: 'view',
+        Order: 60,
+        Visible: canEdit && isWriteOrSuggest,
+        Active: this.EditingStyle === 'blocks',
+        StatusTag: this.EditingStyle === 'blocks' ? 'Blocks' : 'Simple',
+        TestId: 'style-blocks-btn',
+        MenuTestId: 'menu-style-blocks-btn',
+      },
+      {
+        Key: 'source-mode',
+        Label: 'Source',
+        MenuLabel: 'Markdown Source',
+        Description: 'Inspect or edit raw Markdown source',
+        Icon: 'fa-code',
+        Placement: 'left',
+        Category: 'view',
+        Order: 70,
+        Visible: true,
+        Active: this.ViewMode === 'source',
+        TestId: 'mode-source-btn',
+        MenuTestId: 'menu-mode-source-btn',
+      },
+      {
+        Key: 'diff-mode',
+        Label: 'History & Diff',
+        MenuLabel: 'Version History & Diff',
+        Description: 'Compare against earlier versions',
+        Icon: 'fa-code-compare',
+        Placement: 'left',
+        Category: 'view',
+        Order: 80,
+        Visible: true,
+        Active: this.ViewMode === 'diff',
+        TestId: 'mode-diff-btn',
+        MenuTestId: 'menu-mode-diff-btn',
+      },
+      {
+        Key: 'comments',
+        Label: 'Comments',
+        MenuLabel: 'Comments Drawer',
+        Description: 'Toggle Anchored Comments & Agent Mentions Drawer',
+        Icon: 'fa-comments',
+        Placement: 'right',
+        Category: 'collab',
+        Order: 90,
+        Visible: true,
+        Active: this.ShowCommentsDrawer,
+        Badge: openThreads > 0 ? openThreads : undefined,
+        TestId: 'toggle-comments-btn',
+        MenuTestId: 'menu-toggle-comments-btn',
+      },
+      {
+        Key: 'share',
+        Label: 'Share',
+        MenuLabel: 'Share & Permissions',
+        Description: 'Manage document sharing and permissions',
+        Icon: 'fa-user-shield',
+        Placement: 'right',
+        Category: 'collab',
+        Order: 100,
+        Visible: this.CanUserShareArtifact,
+        Active: this.ShowPermissionsModal,
+        TestId: 'open-permissions-modal-btn',
+        MenuTestId: 'menu-open-permissions-modal-btn',
+      },
+      {
+        Key: 'export-docx',
+        Label: 'Export .docx',
+        MenuLabel: 'Export Word (.docx)',
+        Description: 'Download document as Word (.docx)',
+        Icon: 'fa-file-word',
+        Placement: 'right',
+        Category: 'io',
+        Order: 110,
+        Visible: true,
+        Active: false,
+        TestId: 'export-docx-btn',
+        MenuTestId: 'menu-export-docx-btn',
+      },
+      {
+        Key: 'export-md',
+        Label: 'Export .md',
+        MenuLabel: 'Export Markdown (.md)',
+        Description: 'Download document as Markdown (.md)',
+        Icon: 'fa-file-code',
+        Placement: 'right',
+        Category: 'io',
+        Order: 120,
+        Visible: true,
+        Active: false,
+        TestId: 'export-md-btn',
+        MenuTestId: 'menu-export-md-btn',
+      },
+      {
+        Key: 'copy-md',
+        Label: 'Copy',
+        MenuLabel: 'Copy Markdown',
+        Description: 'Copy Markdown to clipboard',
+        Icon: 'fa-copy',
+        Placement: 'right',
+        Category: 'io',
+        Order: 130,
+        Visible: true,
+        Active: false,
+        TestId: 'copy-markdown-btn',
+        MenuTestId: 'menu-copy-markdown-btn',
+      },
+    ];
+
+    return items.sort((a, b) => a.Order - b.Order);
+  }
+
+  public get PinnedLeftToolbarItems(): ResolvedDocsToolbarItem[] {
+    const pinnedSet = new Set(this.PinnedToolbarKeys);
+    return this.ResolvedToolbarItems
+      .filter((item) => item.Visible && item.Placement === 'left' && pinnedSet.has(item.Key))
+      .sort((a, b) => a.Order - b.Order);
+  }
+
+  public get PinnedRightToolbarItems(): ResolvedDocsToolbarItem[] {
+    const pinnedSet = new Set(this.PinnedToolbarKeys);
+    return this.ResolvedToolbarItems
+      .filter((item) => item.Visible && item.Placement === 'right' && pinnedSet.has(item.Key))
+      .sort((a, b) => a.Order - b.Order);
+  }
+
+  public get PinnedToolbarItemsCount(): number {
+    return this.PinnedToolbarKeys.length;
+  }
+
+  public get CanPinMoreToolbarItems(): boolean {
+    return this.PinnedToolbarKeys.length < this.MaxPinnedToolbarActions;
+  }
+
+  public get HasCustomToolbarSettings(): boolean {
+    const pins = this.PinnedToolbarKeys;
+    const pinsDiffer =
+      pins.length !== DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS.length ||
+      DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS.some((key, index) => pins[index] !== key);
+    return (
+      pinsDiffer ||
+      this.FormattingRibbonPinned ||
+      this.EditingStyle !== 'simple' ||
+      !this.ShowOutlineRail
+    );
+  }
+
+  public IsToolbarItemShownOnBar(key: DocsToolbarItemKey): boolean {
+    if (!this.IsToolbarItemPinned(key)) {
+      return false;
+    }
+    const item = this.ResolvedToolbarItems.find((entry) => entry.Key === key);
+    return Boolean(item?.Visible);
+  }
+
+  public IsToolbarItemPinned(key: DocsToolbarItemKey): boolean {
+    return this.PinnedToolbarKeys.includes(key);
+  }
+
+  public IsToolbarItemPinnedOverCap(key: DocsToolbarItemKey): boolean {
+    return !this.IsToolbarItemPinned(key) && !this.CanPinMoreToolbarItems;
+  }
+
+  public GetToolbarPinTooltip(key: DocsToolbarItemKey): string {
+    if (this.IsToolbarItemPinned(key)) {
+      return 'Unpin from toolbar';
+    }
+    if (!this.CanPinMoreToolbarItems) {
+      return `Pin limit reached (${this.MaxPinnedToolbarActions}). Unpin an item first.`;
+    }
+    return 'Pin to toolbar';
+  }
+
+  public GetMenuItemsForCategory(category: ResolvedDocsToolbarItem['Category']): ResolvedDocsToolbarItem[] {
+    return this.ResolvedToolbarItems
+      .filter((item) => item.Visible && item.Category === category)
+      .sort((a, b) => a.Order - b.Order);
+  }
+
+  public ExecuteToolbarItem(item: ResolvedDocsToolbarItem, fromMenu = false, event?: Event): void {
+    event?.stopPropagation();
+    if (!item.Visible) {
+      return;
+    }
+    switch (item.Key) {
+      case 'outline':
+        this.ToggleOutlineRail();
+        break;
+      case 'format':
+        this.ToggleFormattingRibbon();
+        break;
+      case 'insert-block':
+        this.ToggleSlashMenu();
+        break;
+      case 'add-section':
+        this.InsertSectionHeadingBelow(2);
+        break;
+      case 'suggest-mode':
+        this.SetViewMode(this.ViewMode === 'suggest' ? 'edit' : 'suggest');
+        break;
+      case 'blocks-mode':
+        this.SetEditingStyle(this.EditingStyle === 'blocks' ? 'simple' : 'blocks');
+        break;
+      case 'source-mode':
+        this.SetViewMode(this.ViewMode === 'source' ? (this.CanUserEdit ? 'edit' : 'preview') : 'source');
+        break;
+      case 'diff-mode':
+        this.SetViewMode(this.ViewMode === 'diff' ? (this.CanUserEdit ? 'edit' : 'preview') : 'diff');
+        break;
+      case 'comments':
+        this.ToggleCommentsDrawer();
+        break;
+      case 'share':
+        this.OpenPermissionsModal();
+        break;
+      case 'export-docx':
+        void this.OnExportDocx();
+        break;
+      case 'export-md':
+        this.OnExportMarkdown();
+        break;
+      case 'copy-md':
+        this.OnCopy();
+        break;
+    }
+    if (fromMenu) {
+      this.CloseMoreToolsMenu();
+    }
+  }
+
+  public ToggleToolbarItemPin(key: DocsToolbarItemKey, event?: Event): void {
+    event?.stopPropagation();
+    const current = this.PinnedToolbarKeys;
+    const isPinned = current.includes(key);
+    if (isPinned) {
+      const next = current.filter((k) => k !== key);
+      this.writeToolbarPins(next);
+      this.ToolbarPinChanged.emit({ Key: key, Pinned: false });
+      this.cdr.markForCheck();
+      return;
+    }
+    if (!this.CanPinMoreToolbarItems) {
+      return;
+    }
+    const next = [...current, key];
+    this.writeToolbarPins(next);
+    this.ToolbarPinChanged.emit({ Key: key, Pinned: true });
+    this.cdr.markForCheck();
+  }
+
+  public ResetToolbarCustomizations(event?: Event): void {
+    event?.stopPropagation();
+    const defaults = [...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS];
+    this.writeToolbarPins(defaults);
+    this.ShowOutlineRail = true;
+    this.EditingStyle = 'simple';
+    this.FormattingRibbonPinned = false;
+    this.writeToolbarVisibility({
+      Version: 1,
+      ShowOutlineRail: true,
+      EditingStyle: 'simple',
+      FormattingRibbonPinned: false,
+    });
+    const engine = this.resolveUserInfoEngine();
+    engine?.SetSettingDebounced(MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY, 'true');
+    engine?.SetSettingDebounced(MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY, 'simple');
+    this.cdr.markForCheck();
+  }
+
+  private syncMoreMenuDocumentListeners(): void {
+    this.stopMoreMenuDocumentListeners();
+    if (!this.ShowMoreToolsMenu || !this.renderer) {
+      return;
+    }
+    const unlistenClick = this.renderer.listen('document', 'click', (evt: Event) => {
+      const wrapEl = this.MoreMenuWrap?.nativeElement;
+      const target = evt.target as Node | null;
+      if (wrapEl && target && wrapEl.contains(target)) {
+        return;
+      }
+      this.CloseMoreToolsMenu();
+    });
+    const unlistenKeydown = this.renderer.listen('document', 'keydown', (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        this.CloseMoreToolsMenu();
+      }
+    });
+    this._unlistenMoreMenuDocs.push(unlistenClick, unlistenKeydown);
+  }
+
+  private stopMoreMenuDocumentListeners(): void {
+    for (const unlisten of this._unlistenMoreMenuDocs) {
+      unlisten();
+    }
+    this._unlistenMoreMenuDocs = [];
   }
 
   public ToggleCommentsDrawer(): void {
@@ -8230,18 +9102,7 @@ export class MarkdownArtifactViewerComponent
   private loadCollapsedStateFromUserSettings(): void {
     this.userCollapsedBlockOverrides.clear();
     this.collapsedHeadingIds.clear();
-    const outlinePref = UserInfoEngine.Instance.GetSetting(
-      MarkdownArtifactViewerComponent.OUTLINE_PREF_SETTING_KEY,
-    );
-    if (outlinePref === 'true' || outlinePref === 'false') {
-      this.ShowOutlineRail = outlinePref === 'true';
-    }
-    const stylePref = UserInfoEngine.Instance.GetSetting(
-      MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY,
-    );
-    if (stylePref === 'simple' || stylePref === 'blocks') {
-      this.EditingStyle = stylePref;
-    }
+    this.loadToolbarPreferencesFromUserSettings();
 
     const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());
     if (!raw) {
@@ -10218,6 +11079,25 @@ export class MarkdownArtifactViewerComponent
   /** @deprecated Use {@link OnCopy}. */
   public onCopy(): void {
     return this.OnCopy();
+  }
+
+  public GetCompactCollaborationStatusLabel(): string {
+    switch (this.CollaborationStatus) {
+      case 'connected':
+        return 'Live';
+      case 'connecting':
+        return 'Syncing…';
+      case 'readonly':
+        return 'Read-Only';
+      case 'revoked':
+        return 'Revoked';
+      case 'error':
+        return 'Sync Issue';
+      case 'disconnected':
+        return 'Offline';
+      default:
+        return this.CanUserEdit ? 'Ready' : 'Read-Only';
+    }
   }
 
   public GetCollaborationStatusLabel(): string {

@@ -14,6 +14,7 @@ import {
   type ConversationScope,
   SlideDeckEngine,
   SpreadsheetEngine,
+  UserInfoEngine,
   type DocumentBlockSpec,
   type FrozenBlockSnapshot,
 } from '@memberjunction/core-entities';
@@ -28,7 +29,12 @@ import {
 import { DocumentImportExportService } from '../services/document-import-export.service';
 import { SlideDeckExportService } from '../services/slide-deck-export.service';
 import { ArtifactViewerPanelComponent } from '../components/artifact-viewer-panel.component';
-import { MarkdownArtifactViewerComponent } from '../components/plugins/markdown-artifact-viewer.component';
+import {
+  DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS,
+  DOCS_TOOLBAR_PINS_SETTING_KEY,
+  DOCS_TOOLBAR_VISIBILITY_SETTING_KEY,
+  MarkdownArtifactViewerComponent,
+} from '../components/plugins/markdown-artifact-viewer.component';
 import { SlideDeckArtifactViewerComponent } from '../components/plugins/slide-deck-artifact-viewer.component';
 import { SpreadsheetArtifactViewerComponent } from '../components/plugins/spreadsheet-artifact-viewer.component';
 import type { MammothModuleShim } from '../components/previews/office-preview.logic';
@@ -2470,6 +2476,87 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     } finally {
       globalWithNode.Node = originalNode;
       viewerInternal.hostElement = originalHostElement;
+    }
+  });
+
+  it('supports progressive disclosure toolbar pins, 6-pin cap, formatting ribbon pin, and UserInfoEngine persistence', async () => {
+    const store = new Map<string, string>();
+    const getSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
+      store.set(key, value);
+      return Promise.resolve();
+    });
+
+    const viewer = createEditableDocsViewer('# Progressive Toolbar\n\nBody paragraph.');
+    try {
+      expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual(['format', 'insert-block', 'outline']);
+      expect(viewer.PinnedRightToolbarItems.map((i) => i.Key)).toEqual(['comments']);
+      expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(false);
+      expect(viewer.HasCustomToolbarSettings).toBe(false);
+
+      // Pin + Section and confirm persistence to UserInfoEngine
+      viewer.ToggleToolbarItemPin('add-section');
+      expect(viewer.PinnedToolbarKeys).toContain('add-section');
+      expect(viewer.PinnedLeftToolbarItems.map((i) => i.Key)).toEqual([
+        'format',
+        'insert-block',
+        'add-section',
+        'outline',
+      ]);
+      expect(viewer.IsToolbarItemShownOnBar('add-section')).toBe(true);
+      expect(viewer.HasCustomToolbarSettings).toBe(true);
+      expect(setSpy).toHaveBeenCalledWith(
+        DOCS_TOOLBAR_PINS_SETTING_KEY,
+        expect.stringContaining('"add-section"'),
+      );
+
+      // Hit the 6-pin cap: pin 'suggest-mode' (6th pin), then try a 7th ('blocks-mode')
+      viewer.ToggleToolbarItemPin('suggest-mode');
+      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.CanPinMoreToolbarItems).toBe(false);
+      expect(viewer.IsToolbarItemPinnedOverCap('blocks-mode')).toBe(true);
+      viewer.ToggleToolbarItemPin('blocks-mode');
+      expect(viewer.PinnedToolbarItemsCount).toBe(6);
+      expect(viewer.IsToolbarItemPinned('blocks-mode')).toBe(false);
+
+      // Visibility preferences: pin formatting ribbon, toggle Block Studio, toggle Outline Rail
+      viewer.ToggleFormattingRibbonPinned();
+      expect(viewer.FormattingRibbonPinned).toBe(true);
+      expect(viewer.ShowFormattingRibbon).toBe(true);
+      viewer.SetEditingStyle('blocks');
+      expect(viewer.EditingStyle).toBe('blocks');
+      viewer.ToggleOutlineRail();
+      expect(viewer.ShowOutlineRail).toBe(false);
+
+      expect(setSpy).toHaveBeenCalledWith(
+        DOCS_TOOLBAR_VISIBILITY_SETTING_KEY,
+        expect.stringContaining('"FormattingRibbonPinned":true'),
+      );
+
+      // Reload preferences on a fresh viewer instance from the persisted UserInfoEngine store via ngOnInit
+      const restoredViewer = createEditableDocsViewer('# Restored Doc\n\nHello.');
+      restoredViewer.markdownContent = '# Restored Doc\n\nHello.';
+      restoredViewer.ngOnInit();
+      expect(restoredViewer.PinnedToolbarKeys).toContain('add-section');
+      expect(restoredViewer.PinnedToolbarItemsCount).toBe(6);
+      expect(restoredViewer.FormattingRibbonPinned).toBe(true);
+      expect(restoredViewer.ShowFormattingRibbon).toBe(true);
+      expect(restoredViewer.EditingStyle).toBe('blocks');
+      expect(restoredViewer.ShowOutlineRail).toBe(false);
+      restoredViewer.ngOnDestroy();
+
+      // Reset restores calm defaults
+      viewer.ResetToolbarCustomizations();
+      expect(viewer.PinnedToolbarKeys).toEqual([...DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS]);
+      expect(viewer.FormattingRibbonPinned).toBe(false);
+      expect(viewer.EditingStyle).toBe('simple');
+      expect(viewer.ShowOutlineRail).toBe(true);
+      expect(viewer.HasCustomToolbarSettings).toBe(false);
+      expect(getSpy).toHaveBeenCalled();
+    } finally {
+      viewer.ngOnDestroy();
+      vi.restoreAllMocks();
     }
   });
 });

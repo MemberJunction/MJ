@@ -1,10 +1,10 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
-import type { MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
@@ -882,5 +882,69 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(comp.ExtractMarkdownFromEditableElement(syntheticEditable)).toBe(
       'Hello **bold** and *italic* and `snippet`',
     );
+  });
+
+  it('uses progressive disclosure toolbar defaults, supports pinning actions and Blocks chip, and resets cleanly via DOM clicks', async () => {
+    const store = new Map<string, string>();
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => store.get(key));
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation((key: string, value: string) => {
+      store.set(key, value);
+      return Promise.resolve();
+    });
+
+    try {
+      const mock = createDocsMockProvider();
+      const f = await renderDocsViewer('# Calm Toolbar\n\nSimple starter doc.', false, mock.provider);
+      const root = f.nativeElement as HTMLElement;
+      const comp = f.componentInstance;
+
+      const leftBar = root.querySelector('.mj-docs-toolbar__left')!;
+      const rightBar = root.querySelector('.mj-docs-toolbar__right')!;
+      const moreMenu = root.querySelector<HTMLElement>('[data-testid="docs-more-tools-menu"]')!;
+
+      // Calm default toolbar buttons
+      expect(leftBar.querySelector('[data-testid="mode-preview-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="mode-edit-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-outline-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="toggle-format-ribbon-btn"]')).not.toBeNull();
+      expect(leftBar.querySelector('[data-testid="open-slash-menu-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="toggle-comments-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="save-doc-version-btn"]')).not.toBeNull();
+      expect(rightBar.querySelector('[data-testid="toggle-more-tools-btn"]')).not.toBeNull();
+
+      // Unpinned quick-add-section-btn is inside hidden More menu, not on leftBar
+      expect(moreMenu.hasAttribute('hidden')).toBe(true);
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).toBeNull();
+      expect(moreMenu.querySelector('[data-testid="quick-add-section-btn"]')).not.toBeNull();
+
+      // Open More menu and click pin for add-section -> moves quick-add-section-btn onto leftBar
+      root.querySelector<HTMLButtonElement>('[data-testid="toggle-more-tools-btn"]')!.click();
+      f.detectChanges();
+      expect(moreMenu.hasAttribute('hidden')).toBe(false);
+
+      root.querySelector<HTMLButtonElement>('[data-testid="menu-pin-add-section"]')!.click();
+      f.detectChanges();
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).not.toBeNull();
+      expect(moreMenu.querySelector('[data-testid="menu-quick-add-section-btn"]')).not.toBeNull();
+
+      // Switching to Block Studio while blocks-mode is unpinned reveals active-style-chip-blocks; clicking it returns to simple
+      comp.SetEditingStyle('blocks');
+      f.detectChanges();
+      const blocksChip = leftBar.querySelector<HTMLButtonElement>('[data-testid="active-style-chip-blocks"]');
+      expect(blocksChip).not.toBeNull();
+      blocksChip!.click();
+      f.detectChanges();
+      expect(comp.EditingStyle).toBe('simple');
+      expect(leftBar.querySelector('[data-testid="active-style-chip-blocks"]')).toBeNull();
+
+      // Clicking Reset resets pins back to calm defaults
+      const resetBtn = moreMenu.querySelector<HTMLButtonElement>('[data-testid="reset-toolbar-pins-btn"]')!;
+      expect(resetBtn).not.toBeNull();
+      resetBtn.click();
+      f.detectChanges();
+      expect(leftBar.querySelector('[data-testid="quick-add-section-btn"]')).toBeNull();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
