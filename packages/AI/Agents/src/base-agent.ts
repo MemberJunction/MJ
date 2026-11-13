@@ -2605,7 +2605,8 @@ export class BaseAgent {
             const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
                 params.agent.ID,
                 params.contextUser,
-                this._agentRun?.ID
+                this._agentRun?.ID,
+                params.provider || this._activeProvider
             );
 
             const totalSources =

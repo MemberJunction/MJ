@@ -31,7 +31,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import { AgentDataPreloader } from '../AgentDataPreloader';
-import { EntityPermissionType, Metadata, type UserInfo } from '@memberjunction/core';
+import { EntityPermissionType, IMetadataProvider, Metadata, type UserInfo } from '@memberjunction/core';
 
 const AGENT_ID = 'agent-cache-isolation';
 const USER_A = { ID: 'USER-A', Name: 'Alice' } as UserInfo;
@@ -156,6 +156,51 @@ describe('AgentDataPreloader PerAgent cache', () => {
             expect(fakeEntitiesMeta.UserExemptFromRowLevelSecurity).toHaveBeenCalledWith(userWithRoles, EntityPermissionType.Read);
         } finally {
             providerSpy.mockRestore();
+        }
+    });
+
+    it('uses an explicit provider argument for MJ: Entities instead of global Metadata.Provider', async () => {
+        dataSources.length = 0;
+        dataSources.push({
+            AgentID: AGENT_ID,
+            Name: 'ALL_ENTITIES',
+            Status: 'Active',
+            ExecutionOrder: 1,
+            SourceType: 'RunView',
+            EntityName: 'MJ: Entities',
+            OrderBy: 'Name ASC',
+            FieldsToRetrieve: JSON.stringify(['Name', 'Description', 'SchemaName', 'BaseTable', 'BaseView']),
+            ResultType: 'simple',
+            DestinationType: 'Data',
+            DestinationPath: null,
+            CachePolicy: 'None',
+            CacheTimeoutSeconds: 0,
+        });
+
+        const explicitEntitiesMeta = {
+            GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+            UserExemptFromRowLevelSecurity: vi.fn().mockReturnValue(true),
+            GetUserRowLevelSecurityInfo: vi.fn().mockReturnValue([]),
+            Fields: [],
+        };
+        const explicitProvider = {
+            Entities: [
+                { Name: 'ScopedEntity', Description: 'Per-provider', SchemaName: 'custom', BaseTable: 'Scoped', BaseView: 'vwScoped' },
+            ],
+            EntityByName: (name: string) => (name === 'MJ: Entities' ? explicitEntitiesMeta : undefined),
+        } as unknown as IMetadataProvider;
+        const globalSpy = vi.spyOn(Metadata, 'Provider', 'get');
+
+        try {
+            const userWithRoles = { ID: 'user-meta', Name: 'Meta', UserRoles: [] } as UserInfo;
+            const res = await AgentDataPreloader.Instance.PreloadAgentData(AGENT_ID, userWithRoles, undefined, explicitProvider);
+            expect(runViewCalls).toHaveLength(0);
+            expect(globalSpy).not.toHaveBeenCalled();
+            expect(res.data.ALL_ENTITIES).toEqual([
+                { Name: 'ScopedEntity', Description: 'Per-provider', SchemaName: 'custom', BaseTable: 'Scoped', BaseView: 'vwScoped' },
+            ]);
+        } finally {
+            globalSpy.mockRestore();
         }
     });
 });
