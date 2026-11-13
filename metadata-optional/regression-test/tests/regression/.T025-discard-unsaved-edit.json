@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T025 - Discard Unsaved Edit",
-    "Description": "Edits a field on an Event record then discards/cancels the change without saving, verifying unsaved changes can be abandoned cleanly.",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search record types...' box and click the exact 'Events' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Click a row, then click 'Open Full Record'. Change the 'Location' text field to 'Temporary Edit 204'. An unsaved-changes banner appears at the TOP with a 'Save Changes' button and usually a 'Revert'/'Cancel'/'Discard' option. Do NOT save — instead discard the change (click Revert/Cancel/Discard, or navigate away and decline saving). Verify you end up with the change abandoned and no error (the field shows its original value, or you are back on a clean view). Pages can take 10-30s to load — wait, don't navigate away unexpectedly.\",\n  \"startUrl\": \"http://localhost:4200/app/data-explorer/Data?entity=Events\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"A field was edited then the change was discarded/reverted without saving\",\n    \"The app handled the discard cleanly (original value retained or clean navigation), no error\",\n    \"No crash pages or stuck states\"\n  ]\n}",
+    "Description": "Edits a field on a Meeting record then discards/cancels the change without saving, verifying unsaved changes can be abandoned cleanly.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'Meetings' entity grid (the Committees app's meetings) — type 'Meetings' in the LEFT sidebar 'Search record types...' box and click the exact 'Meetings' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings). Click the 'Standards Committee — Q4 2015 meeting' row (or any meeting row), then click 'Open Full Record'. Change the 'Location Text' field to 'Temporary Edit 204'. An unsaved-changes banner appears at the TOP with a 'Save Changes' button and usually a 'Revert'/'Cancel'/'Discard' option. Do NOT save — instead discard the change (click Revert/Cancel/Discard, or navigate away and decline saving). Verify you end up with the change abandoned and no error (the field shows its original value, or you are back on a clean view). Pages can take 10-30s to load — wait, don't navigate away unexpectedly.\",\n  \"startUrl\": \"http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The 'Location Text' field was edited then the change was discarded/reverted without saving\",\n    \"The app handled the discard cleanly (original value such as 'Madison, WI — Annex Room 2' retained, or clean navigation), no error\",\n    \"No crash pages or stuck states\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 40,
@@ -51,7 +51,7 @@
     "ID": "A7B930DE-6862-4160-AC7A-F8D0D70EC8C1"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.801Z",
-    "checksum": "ec8f04b1737aad5ed322d9e68f2e9464ebd1758a6f34d6cf6067e738360b32ee"
+    "lastModified": "2026-11-13T08:35:59.911Z",
+    "checksum": "5baf96661b41bdf0c0103e8cfa0dd2df458eda10c79bd0b88a1b663ea08888c2"
   }
 }

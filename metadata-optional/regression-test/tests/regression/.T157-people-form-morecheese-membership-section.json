@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T157 - People Form MoreCheese Membership Section",
+    "Description": "Open the 'People' entity grid — type 'People' in the LEFT sidebar 'Search record types...' box and click the EXACT 'People' match (not 'Person Job Functions'/'Member Profiles'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People. Type 'Rodriguez' in the grid's filter box ('Filter records...'), click the row for Elena Rodriguez, then click 'Open Full Record'. On her People form, find the 'Membership' section that the MoreCheese app adds (scroll down, or use the form's section list); expand it if it is collapsed. It shows her member profile. Pages can take 10-30s to load — wait, don't navigate away.",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'People' entity grid — type 'People' in the LEFT sidebar 'Search record types...' box and click the EXACT 'People' match (not 'Person Job Functions'/'Member Profiles'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People. Type 'Rodriguez' in the grid's filter box ('Filter records...'), click the row for Elena Rodriguez, then click 'Open Full Record'. On her People form, find the 'Membership' section that the MoreCheese app adds (scroll down, or use the form's section list); expand it if it is collapsed. It shows her member profile. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200(?!/login|/callback)\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"Elena Rodriguez's People form is open\",\n    \"A Membership section shows her MoreCheese member profile, for example Member Number ICF-000101, Segment Producer and City Petaluma\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 480000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      },
+      "ReplayScript": "@file:regression/scripts/t157-people-form-morecheese-membership-section.json"
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,open-apps,related",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "SkipEmbeddings": false,
+    "RubricID": null
+  },
+  "primaryKey": {
+    "ID": "1C476FA9-84B9-4D5F-82A4-62C8A5B25D7F"
+  },
+  "sync": {
+    "lastModified": "2026-11-13T15:37:29.217Z",
+    "checksum": "f71fa35d622815e17b7fc77ea1ce692a1c64ca950aa00d6662172097e3c98d68"
+  }
+}

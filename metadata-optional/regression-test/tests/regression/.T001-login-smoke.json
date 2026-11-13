@@ -42,7 +42,8 @@
         "goal-completion": 0.5,
         "url-match": 0.3,
         "step-count": 0.2
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t001-login-smoke.json"
     },
     "Status": "Active",
     "Tags": "P0,regression,smoke",
@@ -59,7 +60,7 @@
     "ID": "C9FE51A9-8750-47FD-A6B6-347ED5E53A65"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.756Z",
-    "checksum": "5fc032eebca9a037f52e77c599031e92765dccbcfad09a9453eb3f368feafb17"
+    "lastModified": "2026-11-13T09:22:10.931Z",
+    "checksum": "21370b8cd28874ffe82fc7a81358c37468dbcb9e3da241a605116b2a57fa5307"
   }
 }

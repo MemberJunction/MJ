@@ -3,7 +3,7 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T003 - Navigation and Tab Management",
     "Description": "Verifies workspace tab navigation between Home and an open record.",
-    "InputDefinition": "{\n  \"goal\": \"Open a record: open the 'Events' (or 'Members') entity via the LEFT sidebar 'Search record types...' box, click a row, then click 'Open Full Record'. The record opens as a TAB in the top workspace bar alongside the 'Home' tab. Click the 'Home' tab to switch back to Home, then click the record's tab to switch back to the record. Verify switching between the Home tab and the record tab works and each shows its own content. (You do NOT need multiple record tabs \u2014 this verifies tab navigation between Home and an open record.) Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "InputDefinition": "{\n  \"goal\": \"Open a record: open the 'People' (or 'Meetings') entity via the LEFT sidebar 'Search record types...' box, click a row, then click 'Open Full Record'. The record opens as a TAB in the top workspace bar alongside the 'Home' tab. Click the 'Home' tab to switch back to Home, then click the record's tab to switch back to the record. Verify switching between the Home tab and the record tab works and each shows its own content. (You do NOT need multiple record tabs \u2014 this verifies tab navigation between Home and an open record.) Pages can take 10-30s to load \u2014 wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
     "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"A record opened as a workspace tab alongside the Home tab\",\n    \"Switching between the Home tab and the record tab works, each showing its own content\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
@@ -51,7 +51,7 @@
     "ID": "543CC2DF-E1D3-4BEC-B89F-01A760DEACF9"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.739Z",
-    "checksum": "d6f074c91ee6ced6c0bdc3e86feb63896a9475da7fc69191fdecd6e8f8dc7150"
+    "lastModified": "2026-11-13T08:35:59.315Z",
+    "checksum": "f81e3c3ebd7cfe9612fb30b55b1470a4d76061cd1cf92300f54f975b28f5e4fd"
   }
 }

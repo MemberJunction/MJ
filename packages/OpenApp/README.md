@@ -227,6 +227,7 @@ Rules:
 - Underscores in the description replace spaces
 - Files are applied in version order
 - Once applied, a migration is **never re-run** (tracked in `flyway_schema_history`)
+- Each SQL request may run for 30 minutes, as with `mj migrate`. Set `MJ_MIGRATION_REQUEST_TIMEOUT` (milliseconds) or `dbRequestTimeout` in `mj.config.cjs` for a longer data migration
 
 #### Migration Content
 
@@ -694,6 +695,30 @@ When the dependency includes a `repository`, the CLI will automatically install 
 
 If any step fails, the orchestrator attempts compensating actions (e.g., dropping a newly created schema) and records the failure in the install history.
 
+### Two-Step Install (Docker)
+
+A Docker image is built where no database exists, and the database is only reachable when the container starts. Split the install into its two halves for that case:
+
+| Flag | Engine call | Steps | Changes |
+|------|-------------|-------|---------|
+| `--packages-only` | `InstallAppPackages(options, context)` (or `InstallApp` with `PackagesOnly: true`) | 1-5, 10-13 | `package.json` files, the lockfile, `mj.config.cjs`, `angular.json`. Opens **no** database connection. |
+| `--database-only` | `InstallApp` with `DatabaseOnly: true` | 1-9, 14-15 (incl. the template-user step) | The app schema, its migrations and the `MJ: Open Apps` records. Changes **no** file and runs no package install. |
+
+Both run for the app and every dependency app. The two flags cannot be used together; with neither, the install runs every step as before.
+
+- **`--packages-only`** — run in the Dockerfile. There is no "already installed" check (that needs the database), so every app is treated as a fresh install of its packages. A failed package install fails the command (the full install only warns and leaves the app `Disabled`). No hooks and no template-user step run. `InstallAppPackages` takes a `PackageStepContext`, which is `OrchestratorContext` without `ContextUser`, `DatabaseProvider` and `DatabaseConfig`.
+- **`--database-only`** — run at container start, with the same source and `--version`. It skips the npm registry check, because it installs no packages. It does the same "already installed" check as a full install, so it fails for an app that is already `Active` or `Disabled`.
+
+```dockerfile
+# Build time: no database
+RUN mj app install https://github.com/acme/mj-crm --version 1.2.0 --packages-only
+```
+
+```bash
+# Container start: database available
+mj app install https://github.com/acme/mj-crm --version 1.2.0 --database-only --non-interactive
+```
+
 ### Upgrade Flow (`mj app upgrade`)
 
 Similar to install, but:
@@ -720,6 +745,10 @@ Similar to install, but:
 # Install an app from GitHub
 mj app install https://github.com/acme/mj-crm
 mj app install https://github.com/acme/mj-crm --version 1.2.0
+
+# Two-step install: packages in a Docker build, database at container start
+mj app install https://github.com/acme/mj-crm --version 1.2.0 --packages-only
+mj app install https://github.com/acme/mj-crm --version 1.2.0 --database-only
 
 # Upgrade an installed app
 mj app upgrade acme-crm

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t055-ai-analytics-controls.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,ai",
@@ -51,7 +52,7 @@
     "ID": "902B51C8-8CB3-4EEE-ABCD-D156C89BBED1"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.793Z",
-    "checksum": "f16ce807b2b7a2b4c265d92049156e407cd8c3c0d8a15cdc0a5f8c0c860cdb4f"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "afa1b147259c50a1359681873940cbd5d9f7c63a531d35461b65aad0dd4afb97"
   }
 }

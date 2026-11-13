@@ -1,0 +1,330 @@
+{
+  "TestId": "F023B65A-C0A5-40B0-8C26-0B48D519C6D5",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "4c0e4dba",
+  "RecordedAt": "2026-11-13T09:16:47.994Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown next to the logo ('Home v') to open the app list.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is open and 'Archiving' is visible as element index 14 or button index 63. I will click on the Archiving app card to navigate to Archiving.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Archiving",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[7]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 486,
+            "XMax": 492,
+            "YMax": 564
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "Checkpoint 1 (config-master-detail) was reached when loading this screen (selected configuration card populates the right panel). Now proceeding to checkpoint 2 (add-config-draft) by clicking '+ Add C",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add Configuration",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 294,
+            "YMin": 155,
+            "XMax": 431,
+            "YMax": 179
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "We scrolled down to the Entities section in the right panel. Now we need to reach checkpoint 'entities-subgrid': click 'Add Entity' button (index 37), confirm a new editable row appears, then click it",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Add Entity",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[4]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1164,
+            "YMin": 483,
+            "XMax": 1260,
+            "YMax": 509
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "I have arrived at checkpoint 'entities-subgrid': after clicking '+ Add Entity', a new editable row appeared with inputs for Entity name, Mode dropdown, Retention, Batch, Date Field, Active checkbox, a",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Remove entity",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[4]/div[2]/table[1]/tbody[1]/tr[1]/td[7]/button[1]",
+          "BoundingBox": {
+            "XMin": 1225,
+            "YMin": 562,
+            "XMax": 1249,
+            "YMax": 585
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "The added entity row has been deleted, completing checkpoint 3 (entities-subgrid). Now we need to reach checkpoint 4 (edit-cancel-revert): select an existing configuration card, modify its Name field ",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Action Execution Logs - 12 Month\nDISABLED\n No storage\n /archives\n HardDelete",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[1]/div[2]/div[2]",
+          "BoundingBox": {
+            "XMin": 12,
+            "YMin": 11,
+            "XMax": 435,
+            "YMax": 96
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "Now executing checkpoint (4) edit-cancel-revert: I will edit the 'Name' text field (Index 24) by typing extra characters (e.g. ' EDITED'), then click 'Cancel' (Index 43) to confirm the original name (",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "type",
+        "Text": " EDITED",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 468,
+            "YMin": 176,
+            "XMax": 1260,
+            "YMax": 207
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "Now executing checkpoint (4) edit-cancel-revert: I will edit the 'Name' text field (Index 24) by typing extra characters (e.g. ' EDITED'), then click 'Cancel' (Index 43) to confirm the original name (",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[5]/button[2]",
+          "BoundingBox": {
+            "XMin": 559,
+            "YMin": 913,
+            "XMax": 635,
+            "YMax": 946
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The Name field is currently visible with value 'Action Execution Logs - 12 Month' (index 24). I will append extra characters to the Name field, then scroll down to click Cancel and confirm it reverts.",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "type",
+        "Text": " EDITED",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 468,
+            "YMin": 176,
+            "XMax": 1260,
+            "YMax": 207
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "The current page shows the edited state of 'Action Execution Logs - 12 Month' with the Cancel button visible. Clicking Cancel (Index 46) will discard the unsaved edits and revert the Name field back t",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[5]/button[2]",
+          "BoundingBox": {
+            "XMin": 559,
+            "YMin": 553,
+            "XMax": 635,
+            "YMax": 586
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "Now scrolled up to reveal the Name field (Index 24). I will append ' EDITED' to the Name field, then scroll down to click Cancel and verify that the Name field reverts back to its original saved value",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "type",
+        "Text": " EDITED",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Name",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 468,
+            "YMin": 176,
+            "XMax": 1260,
+            "YMax": 207
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    },
+    {
+      "Instruction": "In step 15, we typed ' EDITED' into the Name field and scrolled down. Looking at the current screenshot, the 'Cancel' button is visible (Index 46). Now I will click 'Cancel' to revert the Name field b",
+      "UrlBefore": "http://localhost:4200/app/archiving/Configuration",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-archive-config-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-archive-config-admin[1]/div[1]/div[1]/div[2]/div[1]/div[5]/button[2]",
+          "BoundingBox": {
+            "XMin": 559,
+            "YMin": 625,
+            "XMax": 635,
+            "YMax": 658
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/archiving/Configuration"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/archiving/Configuration",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

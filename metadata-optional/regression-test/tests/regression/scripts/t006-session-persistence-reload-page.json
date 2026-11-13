@@ -1,0 +1,67 @@
+{
+  "TestId": "4F7533E2-29B3-48FD-BF83-934D309AE4C9",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "cfd47861",
+  "RecordedAt": "2026-11-13T08:37:35.709Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate to Data Explorer, open an entity (like People), reload the page, and verify the user remains logged in. Let's click on Data Explorer [15] first.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Data Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 364,
+            "YMin": 579,
+            "XMax": 634,
+            "YMax": 665
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    },
+    {
+      "Instruction": "The application is currently on Data Explorer -> Data -> People entity (it says 'People 3,058 records' and the grid is loading/rendered). Now I need to refresh/reload the browser page to verify user r",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data",
+      "Action": {
+        "Method": "refresh"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

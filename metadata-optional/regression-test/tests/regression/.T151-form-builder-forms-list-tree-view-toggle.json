@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t151-form-builder-forms-list-tree-view-toggle.json"
     },
     "Status": "Active",
     "Tags": "P3,regression,component-studio",
@@ -51,7 +52,7 @@
     "ID": "86CCCFB7-3081-4890-AE3D-C6118CB9F57C"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.789Z",
-    "checksum": "62151a531ea367b0c0235be13a11457e4781166f8bf2759b42219382d5835d0d"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "fb2a22002ca7cd9eb8845a91021385b6632c2fe26c0355cbd41b66ebca726bb7"
   }
 }

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t107-knowledge-hub-vectors.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,knowledge-hub",
@@ -51,7 +52,7 @@
     "ID": "86A2215D-D672-4994-AD8E-F64E372F970C"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.801Z",
-    "checksum": "8099d9809aeead8a7db0e536e924b43b70a05331e88d53df7357b077394302d3"
+    "lastModified": "2026-11-13T09:22:10.951Z",
+    "checksum": "ef60686f2d5fe1753b1ff3e1f2856b0fa5756859bcb7ef62094172516820760d"
   }
 }

@@ -1,0 +1,336 @@
+{
+  "TestId": "9FC067DF-6E41-4A67-8345-2D89181188EC",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "fd1e96c7",
+  "RecordedAt": "2026-11-13T15:36:07.147Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the application switcher dropdown to switch to the Routines application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher overlay is open. I need to find 'Routines'. I will type 'Routines' into the 'Find an app...' search box.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "type",
+        "Text": "Routines",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Find an app",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[1]/div[1]/input[1]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 256,
+            "YMin": 113,
+            "XMax": 1000,
+            "YMax": 135
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher shows 'Routines' filtered in the results. I will click on the 'Routines' app card (index 5) to switch to the Routines application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Routines",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[1]/div[2]",
+          "Scope": "dialog:Application launcher",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 155,
+            "XMax": 778,
+            "YMax": 233
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "Now executing sub-action (2): routines-search-filter. I will type a search query into the 'Search routines...' box (index 10), then click the 'Filters' button (index 11) to set a status filter.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "type",
+        "Text": "test",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search routines...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 194,
+            "XMax": 1132,
+            "YMax": 217
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "Now executing sub-action (2): routines-search-filter. I will type a search query into the 'Search routines...' box (index 10), then click the 'Filters' button (index 11) to set a status filter.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-filter-popover[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1157,
+            "YMin": 188,
+            "XMax": 1256,
+            "YMax": 222
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will click the Status dropdown inside the Filters popover (index 13) to select a non-default status option, e.g. Active.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Status",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[1]/label[1]/mj-dropdown[1]/div[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 953,
+            "YMin": 289,
+            "XMax": 1239,
+            "YMax": 327
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "I need to pick a Status other than 'All statuses' (e.g. Active), confirm the interface responds, then click 'Reset filters' (or clear search/filters) to return to the initial state. I will click 'Acti",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "option",
+          "Name": "Active",
+          "Selector": "xpath=/html/body[1]/div[1]/div[2]/div[2]/div[1]/div[2]",
+          "Scope": "listbox:Status",
+          "BoundingBox": {
+            "XMin": 954,
+            "YMin": 368,
+            "XMax": 1238,
+            "YMax": 404
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "I need to pick a Status other than 'All statuses' (e.g. Active), confirm the interface responds, then click 'Reset filters' (or clear search/filters) to return to the initial state. I will click 'Acti",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset filters",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 1128,
+            "YMin": 352,
+            "XMax": 1239,
+            "YMax": 381
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will click the status combobox/dropdown to reveal the options (Active, Paused, Disabled), click 'Active', and then click 'Reset filters' to complete the checkpoint routines-search-filter.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Status",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[1]/label[1]/mj-dropdown[1]/div[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 953,
+            "YMin": 289,
+            "XMax": 1239,
+            "YMax": 327
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "The status dropdown is currently open showing options: 'All statuses', 'Active', 'Paused', 'Disabled'. I will click 'Active' (index 16) to apply the status filter, confirming the UI responds.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "option",
+          "Name": "Active",
+          "Selector": "xpath=/html/body[1]/div[1]/div[2]/div[2]/div[1]/div[2]",
+          "Scope": "listbox:Status",
+          "BoundingBox": {
+            "XMin": 954,
+            "YMin": 368,
+            "XMax": 1238,
+            "YMax": 404
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "The status filter 'Active' has been selected, and the UI displays the empty state ('No Routines Yet' / 0 of 0 routines). Now I need to clear the filters (click 'Reset filters' or 'Clear all') and clea",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Reset filters",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[2]/button[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 1128,
+            "YMin": 358,
+            "XMax": 1239,
+            "YMax": 387
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    },
+    {
+      "Instruction": "I need to clear the search text in 'Search routines...' input box to return the list to its completely unfiltered state, fulfilling the sub-action requirement.",
+      "UrlBefore": "http://localhost:4200/app/routines/My%20Routines",
+      "Action": {
+        "Method": "type",
+        "Text": "",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search routines...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-user-routines-resource[1]/mj-page-layout[1]/mj-page-header[1]/header[1]/div[2]/div[1]/mj-page-search[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 909,
+            "YMin": 194,
+            "XMax": 1132,
+            "YMax": 217
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/routines/My%20Routines"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/routines/My%20Routines",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

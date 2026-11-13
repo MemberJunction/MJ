@@ -2339,6 +2339,66 @@
           "lastModified": "2026-09-09T20:02:53.266Z",
           "checksum": "d24aed7008b7b27158d730cb2400b5d420277f60b015da5a4af53c3c0615380d"
         }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T156 - MoreCheese Competition Entry Form",
+          "Sequence": 156,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "24B6CCB8-98A4-484D-B2CC-383864FB61C4"
+        },
+        "sync": {
+          "lastModified": "2026-11-13T09:24:07.845Z",
+          "checksum": "795734fbc48dfb5d416fb75176ee4955776cef4393258019ff6714ae27250c3b"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T157 - People Form MoreCheese Membership Section",
+          "Sequence": 157,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "407C8E27-5627-49BC-9767-1402A6A03E19"
+        },
+        "sync": {
+          "lastModified": "2026-11-13T09:24:07.932Z",
+          "checksum": "96c98e9d024a7eb2fbb7d1a578e2776fb29b1e2df6cb4fc53f2c5f213198c982"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T158 - Committees Meeting Record",
+          "Sequence": 158,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1C5A2331-E780-4D5F-84CB-CE85E58CEB1E"
+        },
+        "sync": {
+          "lastModified": "2026-11-13T09:24:07.997Z",
+          "checksum": "af3bc2c139a73aefa40d02242311312f343c4abf1f74234b26895841b26e1d0a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T159 - Issues App Open Issue",
+          "Sequence": 159,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D2E1699F-747B-4819-BCB4-5FD89C3940BD"
+        },
+        "sync": {
+          "lastModified": "2026-11-13T09:24:08.062Z",
+          "checksum": "6f9764127baaed4c9cfa28ec5426616fd5f09b12d3dddd50838db2340c9fc33a"
+        }
       }
     ]
   },
@@ -2346,7 +2406,7 @@
     "ID": "71428DF0-78F4-4775-95E5-A52D2B4602D1"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:35:46.971Z",
-    "checksum": "d0f2aa943f2e0fb39e602cfdaea058791ad83d67546b846ba524a51c73b9e6d0"
+    "lastModified": "2026-11-13T08:36:02.164Z",
+    "checksum": "a8718851e3dcb24f360247282a80587e4a2f58eae44b8a20dc8d278a49575d93"
   }
 }

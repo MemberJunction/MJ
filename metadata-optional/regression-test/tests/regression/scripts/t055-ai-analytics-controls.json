@@ -1,0 +1,335 @@
+{
+  "TestId": "902B51C8-8CB3-4EEE-ABCD-D156C89BBED1",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "a863aade",
+  "RecordedAt": "2026-11-13T08:49:56.778Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the AI application using the application switcher dropdown next to the logo. Element [1] is 'Switch application — current: Home'. I will click it.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher overlay is open. I need to switch to the 'AI' application. In the interactive elements, index 37 is link 'AI'. Alternatively, typing 'AI' into the 'Find an app...' textbox (in",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "AI",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[30]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 788,
+            "YMin": 1090,
+            "XMax": 1063,
+            "YMax": 1168
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      }
+    },
+    {
+      "Instruction": "I am in the AI application. Now I need to open the Analytics section by clicking 'Open Analytics' or the Analytics card.",
+      "UrlBefore": "http://localhost:4200/app/ai/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Analytics",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-overview-hub[1]/div[1]/div[3]/div[1]",
+          "BoundingBox": {
+            "XMin": 64,
+            "YMin": 247,
+            "XMax": 435,
+            "YMax": 467
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "We are now on the AI Analytics page with Executive Summary active. We need to work through the checkpoints in order:",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cost & Budget",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[5]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 299,
+            "XMax": 231,
+            "YMax": 335
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Cost & Budget' from 'Executive Summary', so section switching has been demonstrated (content swapped from Executive Summary KPIs to Cost & Budget metrics). I will set checkpoint 'section-s",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "30d",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-page-header-interior[1]/div[1]/div[2]/div[1]/mj-filter-chip[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1008,
+            "YMin": 241,
+            "XMax": 1057,
+            "YMax": 270
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "The 30d time range chip is active now. I will signal checkpoint 'time-range-chips'. Next, I need to test checkpoint (3) compare-toggle, which was present on Executive Summary. I'll switch back to Exec",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Executive Summary",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 149,
+            "XMax": 231,
+            "YMax": 184
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "I am on the Executive Summary view which has a 'Compare' button (index 23). I will click the 'Compare' button to turn comparison mode on, then click it again to turn it off, verifying its toggle state",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Compare",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-page-header-interior[1]/div[1]/div[1]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1141,
+            "YMin": 176,
+            "XMax": 1247,
+            "YMax": 210
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "I am on the Executive Summary view which has a 'Compare' button (index 23). I will click the 'Compare' button to turn comparison mode on, then click it again to turn it off, verifying its toggle state",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Compare",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-page-header-interior[1]/div[1]/div[1]/div[3]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1141,
+            "YMin": 176,
+            "XMax": 1247,
+            "YMax": 210
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "The Compare button was toggled (comparison state is active with '% vs prev month' tags visible). This fulfills checkpoint (3) compare-toggle. Next, we go to Model Performance (index 14) for checkpoint",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Model Performance",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav[1]/aside[1]/button[4]",
+          "BoundingBox": {
+            "XMin": 8,
+            "YMin": 261,
+            "XMax": 231,
+            "YMax": 297
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "We are now on the Model Performance section. To complete checkpoint (4) model-performance-controls, we need to interact with the Filters / Sort By or Vendor control. Let's click the 'Filters' button (",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Filters",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-ai-analytics-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-page-header-interior[1]/div[1]/div[1]/div[3]/div[1]/mj-filter-popover[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1148,
+            "YMin": 176,
+            "XMax": 1247,
+            "YMax": 210
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "The Filters menu is open, displaying 'Sort By' (currently 'By Performance') and 'Vendor' (currently 'All Vendors'). I will click the 'Sort By' combobox to change the sorting, which satisfies the model",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "combobox",
+          "Name": "Sort By",
+          "Selector": "xpath=/html/body[1]/div[1]/div[1]/div[2]/div[1]/div[2]/mj-filter-panel[1]/div[1]/div[1]/mj-filter-field[1]/label[1]/mj-dropdown[1]/div[1]",
+          "Scope": "dialog:Filters",
+          "BoundingBox": {
+            "XMin": 944,
+            "YMin": 277,
+            "XMax": 1230,
+            "YMax": 315
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    },
+    {
+      "Instruction": "Clicking 'By Cost' from the Sort By dropdown to update the Model Performance leaderboard, completing the fourth and final checkpoint.",
+      "UrlBefore": "http://localhost:4200/app/ai/Analytics",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "option",
+          "Name": "By Cost",
+          "Selector": "xpath=/html/body[1]/div[1]/div[2]/div[2]/div[1]/div[2]",
+          "Scope": "listbox:Sort By",
+          "BoundingBox": {
+            "XMin": 945,
+            "YMin": 356,
+            "XMax": 1229,
+            "YMax": 392
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/ai/Analytics"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/ai/Analytics",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t072-testing-review-tab.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,testing",
@@ -51,7 +52,7 @@
     "ID": "927BDE37-0813-4EE9-A7C4-B24117F0A6CD"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.787Z",
-    "checksum": "4d2b4ec82b7b3f01fc694d96380f1be0a5fd3639384b360ec45371263d6df2d5"
+    "lastModified": "2026-11-13T15:37:29.248Z",
+    "checksum": "8a53cd5187c16c9dd3e1d2ad99890d0e15051feac5964c09f318d9368e2b1c00"
   }
 }

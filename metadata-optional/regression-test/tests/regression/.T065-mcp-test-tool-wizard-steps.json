@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t065-mcp-test-tool-wizard-steps.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,mcp",
@@ -51,7 +52,7 @@
     "ID": "FDCD25FF-DFE2-4FEE-99A7-2210B9F9285E"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.750Z",
-    "checksum": "f34be6c1ddcf8bc1577b6d09abddd10f59a434a3b5093725fd89842897d419fe"
+    "lastModified": "2026-11-13T09:22:10.907Z",
+    "checksum": "9f6fa9c04e183969ceaf514356a49fe114752414dc6a51b963bf04dc712c0bf8"
   }
 }

@@ -1,0 +1,78 @@
+{
+  "TestId": "FB8724E6-22E4-4E8A-8695-82A49A27306D",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b6658a13",
+  "RecordedAt": "2026-11-13T08:37:39.456Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the People entity grid. The instructions mention navigating directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People if needed, or using the sidebar s",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "The People grid is loaded. Now I need to type a value into the grid's filter box (placeholder 'Filter records...') like 'Rodriguez' and verify the grid responds.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "type",
+        "Text": "Rodriguez",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Filter records... (press / to focus)",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[2]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 466,
+            "YMin": 121,
+            "XMax": 1066,
+            "YMax": 159
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    },
+    {
+      "Instruction": "I need to press Enter or wait for the client-side filter to apply to the grid records.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Enter"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common: People",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

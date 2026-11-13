@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t133-bulk-ops-editor-authoring.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,bulk-ops",
@@ -51,7 +52,7 @@
     "ID": "1CD1A261-55D1-432B-8A29-CEBAD2E08E41"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.792Z",
-    "checksum": "55635a78542ed1462097f94b3dc629f6728771612bd243daed156788d3d98605"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "11165b9ad9316b607fa39f17985a470b3b9ae5c2045571bf0703cca198591419"
   }
 }

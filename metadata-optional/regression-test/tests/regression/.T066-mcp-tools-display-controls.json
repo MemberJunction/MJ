@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t066-mcp-tools-display-controls.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,mcp",
@@ -51,7 +52,7 @@
     "ID": "EE41BA0C-B6C5-4EA7-8B0C-DF09B7FCDF06"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.796Z",
-    "checksum": "d73bbb532a17a258f284ce21bdc7006bd990737f964e2876401d4004a2c949a0"
+    "lastModified": "2026-11-13T09:22:10.951Z",
+    "checksum": "34b663eec5df84fe9539d9f2993890f5fac4ccad4e6a9d4a33f96ef6d3c4d13c"
   }
 }

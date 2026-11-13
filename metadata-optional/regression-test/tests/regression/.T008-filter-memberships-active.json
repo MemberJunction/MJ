@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T008 - Data Explorer Filter Memberships by Status",
-    "Description": "Verifies that a column/value filter on the Memberships grid can restrict results to Status = Active.",
-    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Memberships' entity. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then apply a filter on the Status column (or via the grid's search/filter controls) so that only records with Status = 'Active' are shown. Success is reached when the grid is visibly filtered to active memberships.\",\n  \"startUrl\": \"http://localhost:4200/app/data-explorer\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The Memberships entity grid is open in the Data Explorer Data section\",\n    \"A filter restricting Status to 'Active' has been applied to the grid\",\n    \"The visible rows show Status = 'Active' (no other status values appear in the filtered results)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Description": "Verifies that a column/value filter on the Committees Memberships grid can restrict results to Status = Active.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Memberships' entity of the Committees app (entity name 'Committees: Memberships'; if it is hard to find, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Memberships). Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then apply a filter on the Status column (or via the grid's search/filter controls) so that only records with Status = 'Active' are shown. Success is reached when the grid is visibly filtered to active memberships.\",\n  \"startUrl\": \"http://localhost:4200/app/data-explorer\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 40,\n  \"judgeValidationCriteria\": [\n    \"The Committees Memberships entity grid is open in the Data Explorer Data section\",\n    \"A filter restricting Status to 'Active' has been applied to the grid\",\n    \"The visible rows show Status = 'Active' (no 'Ended' or other status values appear in the filtered results)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 40,
@@ -51,7 +51,7 @@
     "ID": "28ADC23A-8A75-4E40-8F09-4E041B1CE362"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.762Z",
-    "checksum": "fc39dd8d6722b53b385162a344714e08bafcdadbfa8f39a240fd81e1e347993d"
+    "lastModified": "2026-11-13T08:35:59.397Z",
+    "checksum": "834f68a52f7f85bf99fbf4dda185ecf94f39d322869db14b1509e6f9c09f4226"
   }
 }

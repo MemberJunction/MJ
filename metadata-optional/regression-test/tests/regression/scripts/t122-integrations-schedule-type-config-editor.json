@@ -1,0 +1,183 @@
+{
+  "TestId": "B1241A3E-43AB-40C3-848F-4885E4BBDB81",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "bc7ff9f1",
+  "RecordedAt": "2026-11-13T09:06:42.649Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click on the application switcher dropdown next to the Home logo to find and select Integrations.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher dialog is now open. 'Integrations' is visible under RECENT (element index 4). Clicking it will navigate to the Integrations application.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Integrations",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      }
+    },
+    {
+      "Instruction": "I am in the Integrations app. Next step is to navigate to the 'Schedules' section by clicking the 'Schedules' link in the top bar.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Overview",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Schedules",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[4]",
+          "BoundingBox": {
+            "XMin": 656,
+            "YMin": 13,
+            "XMax": 780,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Overview"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "I am on the Schedules section of the Integrations app. There is a schedule card ('File Feed') with an 'Auto-sync' toggle currently off. I need to click the Auto-sync toggle (index 12) to reveal the sc",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "switch",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[1]/label[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 400,
+            "YMin": 214,
+            "XMax": 440,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "The Auto-sync toggle is turned on, revealing the schedule type pills (Manual, Interval, Cron). Next, I need to click the 'Interval' type pill to confirm interval options.",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Interval",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 399,
+            "YMin": 251,
+            "XMax": 467,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    },
+    {
+      "Instruction": "The Interval pill was clicked and the interval preset buttons (5m, 15m, 30m, 1h, 6h, 12h, 24h) and Custom min input are visible. Now I need to click the 'Cron' type pill (index 15) to confirm cron pre",
+      "UrlBefore": "http://localhost:4200/app/integrations/Schedules",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cron",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/app-integration-schedules[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[1]/div[1]/div[2]/div[2]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 471,
+            "YMin": 251,
+            "XMax": 525,
+            "YMax": 275
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/integrations/Schedules"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/integrations/Schedules",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

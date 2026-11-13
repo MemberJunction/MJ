@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t142-archive-run-detail-drawer.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,archiving",
@@ -51,7 +52,7 @@
     "ID": "E3E8AFB3-FBD7-4AA2-9748-BB2EF872C9C0"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.790Z",
-    "checksum": "5c8f9569083a32cf9bbc597473476ce5b9a7e44a8c65dd85044400dd93e8e590"
+    "lastModified": "2026-11-13T09:22:10.949Z",
+    "checksum": "ce4442f0bab2befc5b6fca2fe8158f44270b726ca92e76eb1b4f09d95e593fb9"
   }
 }

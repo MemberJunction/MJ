@@ -1,0 +1,281 @@
+{
+  "TestId": "927BDE37-0813-4EE9-A7C4-B24117F0A6CD",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "e178dcbd",
+  "RecordedAt": "2026-11-13T15:30:43.052Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The 'Testing' app is already active. I will click the 'Review' tab (element index 7).",
+      "UrlBefore": "http://localhost:4200/app/testing",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Review",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-nav[1]/nav[1]/div[5]",
+          "BoundingBox": {
+            "XMin": 706,
+            "YMin": 13,
+            "XMax": 807,
+            "YMax": 46
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "I have reached the Review tab in the Testing app. I see the KPI summary row and the Review Queue containing accordion items. I will expand the first item to submit a review.",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "T072 - Testing Review Tab\njust now\n0.0000\nRUNNING",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 45,
+            "YMin": 387,
+            "XMax": 1079,
+            "YMax": 447
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "I have expanded the item 'T072 - Testing Review Tab'. Now I need to select a Rating (e.g. 10), click a correctness button ('Correct'), optionally type a note, and click 'Submit' to complete checkpoint",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "10",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/div[1]/button[10]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 471,
+            "YMin": 502,
+            "XMax": 507,
+            "YMax": 538
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "I have expanded the item 'T072 - Testing Review Tab'. Now I need to select a Rating (e.g. 10), click a correctness button ('Correct'), optionally type a note, and click 'Submit' to complete checkpoint",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Correct",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[2]/div[1]/button[1]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 93,
+            "YMin": 582,
+            "XMax": 293,
+            "YMax": 626
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I have expanded the item 'T072 - Testing Review Tab'. Now I need to select a Rating (e.g. 10), click a correctness button ('Correct'), optionally type a note, and click 'Submit' to complete checkpoint",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Submit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[4]/button[1]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 93,
+            "YMin": 768,
+            "XMax": 206,
+            "YMax": 808
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "In the previous step, Rating 10 and Correct were selected. Now I need to click Submit to complete the review submission, confirming the checkpoint review-queue-submission. Then I'll toggle to History ",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Submit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[4]/button[1]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 93,
+            "YMin": 426,
+            "XMax": 206,
+            "YMax": 466
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "Click the Submit button (index 30) to submit the review item. Setting checkpoint 'review-queue-submission'. Then I will toggle to History and back to Review Queue.",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Submit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[4]/button[1]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 93,
+            "YMin": 426,
+            "XMax": 206,
+            "YMax": 466
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "Clicking Submit (Index 30) to submit the review. Setting checkpoint 'review-queue-submission'.",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Submit",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[3]/div[1]/mj-accordion-panel[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[4]/button[1]",
+          "Scope": "region:T072 - Testing Review Tab just now 0.0000Running",
+          "BoundingBox": {
+            "XMin": 93,
+            "YMin": 426,
+            "XMax": 206,
+            "YMax": 466
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "The Submit button was clicked, but the form for T072 is still showing (or it moved to T098/the item leaves). Wait, looking closely at the top item: T072 is gone! The new top item in the accordion list",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "History",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 202,
+            "YMin": -14,
+            "XMax": 316,
+            "YMax": 25
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    },
+    {
+      "Instruction": "I clicked 'History' and confirmed the history view rendered ('No reviewed items' empty state / history controls). Now I need to click 'Review Queue' (Index 13) to switch back, completing sub-action 2 ",
+      "UrlBefore": "http://localhost:4200/app/testing/Review",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Review Queue",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-testing-review-resource[1]/app-testing-review[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 44,
+            "YMin": 327,
+            "XMax": 202,
+            "YMax": 366
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/testing/Review"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/testing/Review",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

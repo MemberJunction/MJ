@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t144-component-browser-list-controls.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,component-studio",
@@ -51,7 +52,7 @@
     "ID": "183EA69E-6D61-45AC-9460-5089DEFDE214"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.763Z",
-    "checksum": "5df22cc9286086c72c532a00ecc257d0f72e029fc5b63870fdb1a3b61cacf2ef"
+    "lastModified": "2026-11-13T09:22:10.932Z",
+    "checksum": "f947a763b448cc2c7cf50a34c4b947b50110216534d0b0cf3523069406ed66d6"
   }
 }

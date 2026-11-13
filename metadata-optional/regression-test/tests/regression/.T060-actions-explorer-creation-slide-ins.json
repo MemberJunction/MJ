@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t060-actions-explorer-creation-slide-ins.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,actions",
@@ -51,7 +52,7 @@
     "ID": "49903BFF-7CE5-465C-BF66-2B092F92616F"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.752Z",
-    "checksum": "7d32fb218bbf40fb1eefa2454b8f60ed09d4c53d78bb263fe0d28dc262b0fbb9"
+    "lastModified": "2026-11-13T09:22:10.907Z",
+    "checksum": "dae70de2d5842d1cffc9144f807daaf2c0e9a1001481bcb79fafd3352edd247b"
   }
 }

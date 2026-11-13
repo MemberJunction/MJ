@@ -1,0 +1,294 @@
+{
+  "TestId": "94B49AA3-DB65-4724-B48C-E26A6B5E5E3C",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "f37414a3",
+  "RecordedAt": "2026-11-13T08:46:39.616Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open an entity with code/SQL/JSON/markdown fields like 'Templates', 'MJ: Queries', or 'Email Templates'. I'll navigate to Data Explorer first.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Data Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 364,
+            "YMin": 579,
+            "XMax": 634,
+            "YMax": 665
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    },
+    {
+      "Instruction": "I am in Data Explorer. I need to search for an entity like 'Templates', 'MJ: Queries', or 'Email Templates' in the left sidebar search box. The sidebar search input '[16]' is currently visible. I will",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data",
+      "Action": {
+        "Method": "type",
+        "Text": "Templates",
+        "PressEnter": true,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search record types...",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[1]/mj-explorer-navigation-panel[1]/div[1]/div[1]/mj-accordion-panel[3]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/input[1]",
+          "Scope": "region:Record Types669",
+          "BoundingBox": {
+            "XMin": 31,
+            "YMin": 557,
+            "XMax": 248,
+            "YMax": 594
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings&record=ID|{uuid}"
+      }
+    },
+    {
+      "Instruction": "The sidebar search for 'Templates' filtered the tree to show 'Admin (Deprecated) -> Templates'. I will click on 'Templates' in the sidebar tree.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings&record=ID|{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "div",
+          "Name": "Admin (Deprecated)\nTemplates\nTasks\nTask Templates",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[1]/mj-explorer-navigation-panel[1]/div[1]/div[1]/mj-accordion-panel[3]/div[1]/div[2]/div[1]/div[1]/div[1]/mj-tree[1]/div[1]",
+          "Scope": "region:Record Types669",
+          "BoundingBox": {
+            "XMin": 31,
+            "YMin": 606,
+            "XMax": 248,
+            "YMax": 687
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings&record=ID|{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: Templates"
+      }
+    },
+    {
+      "Instruction": "The 'Templates' entity grid is now loaded. I will click the first row ('ActionSmith Agent Prompt') to open its preview panel, where 'Open Full Record' will become available.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ: Templates",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "ActionSmith Agent Prompt\nTemplate for AI Prompt: ActionSmith Agent Prompt\nB61B01C3-2DD1-4FFA-AE77-6DE9765BCA68\n—\nECAFCCE",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 406,
+            "XMax": 1392,
+            "YMax": 446
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: Templates"
+      }
+    },
+    {
+      "Instruction": "I have selected the row 'ActionSmith Agent Prompt' in the Templates grid and the preview pane is showing. I will click 'Open Full Record' [110] to open the full form tab.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ: Templates",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 963,
+            "YMin": 664,
+            "XMax": 1322,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ: Templates"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The record form is currently showing in read/custom mode (or standard form). Let's look at the instruction: 'Locate the long code/markdown field: in read mode it should render in a formatted way (synt",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/mj-templates-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The user prompt says standard view or edit mode. Let's look at 'Open standard form' [14] or scroll down. But wait! The scroll action was targetting the full page context without specifying a element o",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open standard form",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1113,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "Now we are in standard form view. Let's click the Edit icon (pencil) at the top left of the form [15 in previous step, or the pencil icon button here] to edit in standard form mode, or scroll down to ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjtemplate-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "The standard form container itself doesn't scroll further down because all fields on this form tab are visible or the entire browser page window needs scrolling / focusing inside the form panel. Let's",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Back to custom view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1107,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}?form=standard"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The user feedback requested clicking the Edit icon (pencil) to enter edit mode, then scrolling down to show the multi-line code editor for Template Content. First, let's click the Edit icon button (pe",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/mj-templates-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ:%20Templates/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

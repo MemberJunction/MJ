@@ -1,0 +1,52 @@
+{
+  "TestId": "105FD41D-201B-4E3C-BAA2-B7C4BD703690",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "e309db77",
+  "RecordedAt": "2026-11-13T09:05:18.717Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "The 'My applications' section is now clearly visible on the screen. I will click the 'Data Explorer' application card (element index 13) to verify that clicking an application card navigates into that",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Data Explorer",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[1]/div[1]/section[1]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 364,
+            "YMin": 314,
+            "XMax": 634,
+            "YMax": 400
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/Data",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

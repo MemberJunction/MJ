@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t080-admin-system-diagnostics.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,admin",
@@ -51,7 +52,7 @@
     "ID": "DFB9EB3A-A19F-4AED-8CD7-8F61ABDA4D8E"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.777Z",
-    "checksum": "07c06d83a81665a90262fbff3caf23843cff3e708786af035f19d648a194d6bc"
+    "lastModified": "2026-11-13T09:22:10.941Z",
+    "checksum": "9bfcfc430eae6b4de4b0b1049792e439a7e8a61525fa40dc44fdb82aaf209750"
   }
 }

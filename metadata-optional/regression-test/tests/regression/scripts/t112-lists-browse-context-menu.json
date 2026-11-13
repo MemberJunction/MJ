@@ -1,0 +1,232 @@
+{
+  "TestId": "65AA8C1A-6D3C-4E21-A2B2-2549024D8FBC",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "51476f30",
+  "RecordedAt": "2026-11-13T09:01:47.396Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (or click the Lists app icon) to switch to the Lists application.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application launcher overlay is open. I will click on 'Lists' in the launcher overlay (interactive element index [4] or [17]).",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Lists",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[1]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 217,
+            "YMin": 186,
+            "XMax": 492,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "We are on the Lists app in the default 'Lists' section. We have lists owned by 'You' (e.g. Recent Sign-ups). We need to click the '...' ellipsis button on one of these lists to open its context menu, ",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/div[1]/div[2]/button[1]",
+          "Scope": "list:Lists",
+          "BoundingBox": {
+            "XMin": 297,
+            "YMin": 325,
+            "XMax": 316,
+            "YMax": 348
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The context menu for 'Recent Sign-ups' is open. I will click 'Share' (element index 31) to open the share dialog.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Share",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 307,
+            "YMin": 377,
+            "XMax": 465,
+            "YMax": 413
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The Share dialog is currently loading/open ('Share \"Recent Sign-ups\"' with controls like Send email notification, Manage Invitations, Cancel, Done). We set checkpointReached to list-share-dialog. Now ",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-list-share-dialog[1]/mj-dialog[1]/div[1]/div[1]/mj-dialog-actions[1]/div[1]/button[3]",
+          "Scope": "dialog:Share \"Recent Sign-ups\"",
+          "BoundingBox": {
+            "XMin": 701,
+            "YMin": 511,
+            "XMax": 790,
+            "YMax": 555
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The share dialog was closed (or finished). Now I need to test list-delete-guard: click the '...' ellipsis button on a list I own, choose 'Delete', verify the confirmation guard dialog appears, and cli",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[1]/div[2]/div[1]/div[1]/div[2]/button[1]",
+          "Scope": "list:Lists",
+          "BoundingBox": {
+            "XMin": 297,
+            "YMin": 325,
+            "XMax": 316,
+            "YMax": 348
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The context menu for 'Recent Sign-ups' is open. I will click 'Delete' (element index 33) to trigger the 'Delete List' confirmation guard dialog.",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Delete",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/mj-page-body[1]/div[3]/button[4]",
+          "BoundingBox": {
+            "XMin": 307,
+            "YMin": 458,
+            "XMax": 465,
+            "YMax": 494
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    },
+    {
+      "Instruction": "The 'Delete List' dialog has appeared warning that it will also remove all items in the list. This confirms the list-delete-guard checkpoint is reached. Now I will click 'Cancel' to complete the guard",
+      "UrlBefore": "http://localhost:4200/app/lists/Lists",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Cancel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-lists-browse-resource[1]/mj-page-layout[1]/div[2]/div[3]/button[2]",
+          "BoundingBox": {
+            "XMin": 552,
+            "YMin": 426,
+            "XMax": 638,
+            "YMax": 464
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/lists/Lists"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/lists/Lists",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

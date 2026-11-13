@@ -1,0 +1,74 @@
+{
+  "TestId": "8D4D994A-7A0C-49ED-8FA1-52D857A1ACB7",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "f86da7fe",
+  "RecordedAt": "2026-11-13T09:14:36.008Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "We are already on the Bulk Operations page with Operations selected. I will type a query ('Content') into the 'Search bulk operations…' box (element 10) to test that the list filters/responds.",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "type",
+        "Text": "Content",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search bulk operations…",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 260,
+            "YMin": 163,
+            "XMax": 620,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    },
+    {
+      "Instruction": "I typed 'Content' into the search box. The list responded by filtering out 'Activity Tagging and Sentiment' and showing only operations matching 'Content'. Now I need to clear the box and confirm the ",
+      "UrlBefore": "http://localhost:4200/app/bulk-operations",
+      "Action": {
+        "Method": "type",
+        "Text": "",
+        "PressEnter": false,
+        "Target": {
+          "Role": "textbox",
+          "Name": "Search bulk operations…",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-bulk-operations-container[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-bulk-operations-operations[1]/div[1]/mj-record-process-studio[1]/div[1]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 260,
+            "YMin": 163,
+            "XMax": 620,
+            "YMax": 202
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/bulk-operations"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/bulk-operations",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

@@ -47,6 +47,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.api
+      secrets: [github_token]
     depends_on:
       db-setup:
         condition: service_completed_successfully
@@ -65,6 +66,7 @@ services:
       AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
       GRAPHQL_PORT: "4000"
       NODE_ENV: test
+      MORECHEESE_SHARED_KEY: "${MORECHEESE_SHARED_KEY:-}"
       REDIS_URL: "redis://redis:6379"
     ports:
       - "14001:4000"

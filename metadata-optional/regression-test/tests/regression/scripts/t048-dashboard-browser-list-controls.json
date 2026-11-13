@@ -1,0 +1,181 @@
+{
+  "TestId": "1DEBEB47-322D-4AC6-AD32-3BEB49916953",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "b728df11",
+  "RecordedAt": "2026-11-13T08:50:29.380Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the application switcher dropdown next to the logo (or click Dashboards application) to go to Dashboards. Element [1] is 'Switch application — current: Home' (or I can click element [16",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open. I need to click on 'Dashboards' to switch to the Dashboards application library page.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Dashboards",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[2]/div[2]",
+          "Scope": "group:Recent applications",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 186,
+            "XMax": 778,
+            "YMax": 264
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "We have arrived at Dashboards -> Library page. We are starting section (1) 'view-mode-toggle'. First, I set checkpointReached to 'view-mode-toggle'. Then I need to click List View button [19], then Ca",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "List View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1022,
+            "YMin": 195,
+            "XMax": 1054,
+            "YMax": 227
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "The page is now showing List View after clicking element [19] (List View button). Now I need to click Card View button [18] to switch back to Card View, completing section (1) 'view-mode-toggle'. Then",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Card View",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 990,
+            "YMin": 195,
+            "XMax": 1022,
+            "YMax": 227
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "We clicked Card View to return to card layout. Both List View and Card View rendering have been confirmed. Now we proceed to section (2) 'multi-select', so set checkpointReached to 'multi-select' and ",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Select multiple dashboards",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1068,
+            "YMin": 195,
+            "XMax": 1145,
+            "YMax": 226
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    },
+    {
+      "Instruction": "Now in multi-select mode (selection toolbar showing '0 selected', checkboxes visible on cards). Clicking a checkbox on a card will select an item and update the count to '1 selected'.",
+      "UrlBefore": "http://localhost:4200/app/dashboards/Library",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Name": "Select CU Test Rename",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-dashboard-browser-resource[1]/mj-page-layout[1]/mj-page-body[1]/mj-left-nav-content[1]/mj-dashboard-browser[1]/div[1]/div[3]/mj-dashboard-card[1]/article[1]/label[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 284,
+            "YMin": 351,
+            "XMax": 297,
+            "YMax": 364
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/dashboards/Library"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/dashboards/Library",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

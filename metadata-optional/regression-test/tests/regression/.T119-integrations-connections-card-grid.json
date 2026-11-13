@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t119-integrations-connections-card-grid.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,integrations",
@@ -51,7 +52,7 @@
     "ID": "8B8C22CC-57E9-4D58-A779-DB1FDE797B8B"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.795Z",
-    "checksum": "d43ad4b739486516a2e225544aa0d7605a6a976c1a4398a57a6b92c22cc15f1a"
+    "lastModified": "2026-11-13T09:22:10.951Z",
+    "checksum": "c4e5b9ca625df528fe7ba57241f1c058911af1a8415e2438070e89009108cfe4"
   }
 }

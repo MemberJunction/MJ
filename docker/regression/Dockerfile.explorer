@@ -39,6 +39,16 @@ COPY docker/regression/scripts/ ./docker/regression/scripts/
 
 RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm install --frozen-lockfile
 
+# Package step for the Open Apps pinned in open-apps.json (see scripts/open-apps.cjs). It needs
+# mj.config.cjs, because it writes dynamicPackages, entityPackageName and excludeSchemas into it.
+# GITHUB_TOKEN is a BuildKit secret (compose build.secrets), so it is in no image layer; without
+# it, public repos still install.
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/open-apps.json ./docker/regression/open-apps.json
+COPY docker/regression/scripts/open-apps.cjs ./docker/regression/scripts/open-apps.cjs
+RUN --mount=type=secret,id=github_token NODE_OPTIONS=--max-old-space-size=8192 node docker/regression/scripts/open-apps.cjs packages
+# The Explorer prebuild turns dynamicPackages.client into imports, so the build runs after this.
+
 # Generate environment.ts — GRAPHQL_URI must be an absolute URL because
 # graphql-request v7+ validates with new URL() which rejects relative paths.
 # nginx proxies /api/ to mjapi:4000.

@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t079-admin-database-designer.json"
     },
     "Status": "Active",
     "Tags": "P1,regression,admin",
@@ -51,7 +52,7 @@
     "ID": "8A1677B6-CCBC-422D-B8F4-934A33460040"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.779Z",
-    "checksum": "837f3c02389b467753afae4d5570b843091225cbeeaaa4859fae030e8ba1b50f"
+    "lastModified": "2026-11-13T09:22:10.942Z",
+    "checksum": "701414f991cd62948efbbc55ce3fe555f5d9a07d579ffc22665650d0151d406a"
   }
 }

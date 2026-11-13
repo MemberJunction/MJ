@@ -386,7 +386,7 @@ In the third full run, 7 tests failed (T025, T027, T028, T029, T030, T041, T042)
 `Committees: Meetings` record: every Meetings read failed with `Cannot query field
 "MeetingDurationMinutes" on type "mjBizAppsCommitteesMeeting_"`. Committees 1.5.0's `vwMeetings`
 has ten computed columns that none of its published packages define. Since MJ `d90a3ea456`
-(2026-08-25, 6.2), the Open App install refreshes the app schema's metadata after its migrations,
+(2026-08-25, first released in 6.1.0), the Open App install refreshes the app schema's metadata after its migrations,
 which adds those columns as virtual fields; the browser asks for every field, and MJAPI's GraphQL
 type (from the app's package) rejects them. A scan of all 669 virtual fields of app entities
 against every installed app package found no other entity with this gap.
@@ -397,7 +397,7 @@ against every installed app package found no other entity with this gap.
 | b. Retarget the 7 tests to People or Products | No change to the database. | Rewrites 7 tests and loses Meetings' text, dropdown and date fields that T027 needs. The Meetings form stays broken for every other test that opens it. |
 | c. Keep the 7 failures as known | Shows the break. | The suite's form-feature coverage is gone until Committees republishes. |
 
-**Finding for MJ 6.2+:** with MoreCheese 1.3.2 installed, the Committees Meetings grid and form
+**Finding for MJ 6.1.0+:** with MoreCheese 1.3.2 installed, the Committees Meetings grid and form
 fail for every user. Committees should release code generated from its current view; MJ could
 also warn at install time when a refreshed view is wider than the app's code (commit `1ce1b80e26`
 already warns about this in CodeGen).
@@ -509,3 +509,32 @@ pulled yet. My reruns lost the scripts of 13 passed tests this way (for example 
 
 **Finding:** the skills run one run per stack start, so they do not hit this, but anyone who
 reruns tests on a running stack does. The docs should say "harvest before you rerun".
+
+## After review (2026-11-13)
+
+### D45. Remove every app workaround from the stack
+
+MoreCheese is built for the current MJ LTS version (6.2 today) and moves to each new LTS. The
+user's direction: the stack installs it as it is, so the install also checks that the branch
+still runs an app built for LTS; app bugs and MJ breaks are separate issues.
+
+Removed: both `mjCompat` changes (D35 `legacy-conversation-type`; D37, D39 and D42
+`drop-uncoded-view-fields`) and `disableClientPackages` (D31 and D33: the secure-messaging and
+Sonar client packages). Kept: the `pnpm.overrides` link to the workspace packages (D30), the
+duplicate check and the build of the workspace packages that apps use (D32), because they are
+how the stack builds an app into the repo, not changes to the app. Kept: the T106 goal hint
+(D43), because it does not change the result when the page cannot scroll.
+
+Which break belongs to which version (6.2.2 column from a stack run on `v6.2.2` with no workarounds, 2026-11-13):
+
+| Break | On `next` (6.3) | On LTS 6.2.2 |
+|---|---|---|
+| MoreCheese data migration calls `spCreateConversation` with `@Type` | Fails (6.3 removed `@Type`) | Works: all 11 apps install as Active |
+| Sonar 0.7.0 imports `IsCompositeFilter` from `ng-filter-builder` | Explorer build fails | Not in the 6.2.2 build errors (6.1 and 6.2 export it) |
+| Committees 1.5.0 `vwMeetings` columns that its code does not define | Meetings reads fail | Same: the fields exist after the install (the metadata refresh is in MJ since 6.1.0) |
+| Secure-messaging 2.1.0 packaging | Explorer build fails | Explorer build fails: `-core` and `-actions` are `shared` Node libraries with no `platform: "node"`, so MJ puts them in the browser bundle; `-element` names `main: dist/mj-secure-messaging.js`, a file its package does not ship |
+
+So the stack stops on both versions until secure-messaging releases a fixed package, and on
+`next` also until MJ keeps the old names or the apps release builds for 6.3. The 6.2.2 run used a
+local branch, `CB-regression-morecheese-lts-6-2` (the stack folders of this branch on `v6.2.2`,
+with the install split applied and the conversation seed using `Type`).

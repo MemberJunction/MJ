@@ -1,0 +1,227 @@
+{
+  "TestId": "ED3E804B-2189-4D65-8DBA-FB60D2C2B4BD",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "6c73bf44",
+  "RecordedAt": "2026-11-13T09:09:21.789Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "Click the circular Quick Access toggle (bolt icon, top right, item [60]) to open the Quick Access sidebar.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Quick Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1200,
+            "YMin": 80,
+            "XMax": 1256,
+            "YMax": 136
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The Quick Access sidebar is now open on the right-hand side. I need to click the sidebar's close button (or 'Close panel' element) to collapse it.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Close panel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1364,
+            "YMin": 80,
+            "XMax": 1396,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The Quick Access sidebar is currently expanded on the right, showing Notifications, Favorites, etc. To complete the goal, I need to click the Quick Access button (the bolt icon, or close button) to co",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Quick Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1199,
+            "YMin": 79,
+            "XMax": 1257,
+            "YMax": 137
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "Clicking element [36] (the close panel 'x' button at top right of the Quick Access sidebar) to close the Quick Access sidebar.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Close panel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1228,
+            "YMin": 80,
+            "XMax": 1260,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "In the previous step, I clicked element [44] ('Close panel'), but looking at the screenshot, the Quick Access toggle icon (bolt FAB) with red badge '2' reappeared right over the sidebar header or the ",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Quick Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1199,
+            "YMin": 79,
+            "XMax": 1257,
+            "YMax": 137
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The close button 'Close panel' [40] or the close icon at top right of the sidebar (X) needs to be clicked to collapse the Quick Access sidebar.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Close panel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1311,
+            "YMin": 80,
+            "XMax": 1343,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "Element [60] is the Quick Access FAB button (blue circular button with bolt icon). Clicking it toggles the sidebar open/closed. Let's click it to collapse the Quick Access sidebar.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Quick Access",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1199,
+            "YMin": 79,
+            "XMax": 1257,
+            "YMax": 137
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "Looking at the current interactive elements list, element [40] is 'Close panel'. In previous steps, clicking [60] toggled it, but element [40] 'Close panel' is the explicit close button for the Quick ",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Close panel",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-home-dashboard[1]/div[1]/div[2]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1364,
+            "YMin": 80,
+            "XMax": 1396,
+            "YMax": 112
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/home/Home",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

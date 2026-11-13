@@ -1,0 +1,635 @@
+{
+  "TestId": "A89F9281-F137-4151-8B5D-4CB9F6732AC2",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "2d018f70",
+  "RecordedAt": "2026-11-13T08:44:13.299Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate to the 'Products' entity grid. The instructions mention navigating directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders:%20Products as a reliable way.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      }
+    },
+    {
+      "Instruction": "I am on the Products grid. I need to click the 'Federation apron' row (index 46) to open its preview/full record.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Federation apron\nPROD-MERCH-APRON\nActive\nPublications & Goods\nInternational Cheese Federation",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[6]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 606,
+            "XMax": 1278,
+            "YMax": 646
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      }
+    },
+    {
+      "Instruction": "The preview panel for 'Federation apron' is now open on the right. I will click 'Open Full Record' (index 88) to navigate to the full record form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 919,
+            "YMin": 664,
+            "XMax": 1278,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Orders: Products"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "We are now on the custom record view of 'Federation apron'. The banner states 'Custom view. Some fields may only be editable in the standard form.' and there is an 'Open standard form' button, or we c",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open standard form",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1113,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "I clicked 'Open standard form' and now we are on standard form view. Next, I need to click the 'Details' tab [25] or the Edit icon (pencil) [15] to open the editable fields where 'Is Taxable' checkbox",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[3]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 403,
+            "XMax": 275,
+            "YMax": 441
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "I clicked on 'Details' in standard form mode, but to edit fields like 'Is Taxable', I need to click the Edit icon (pencil) at top left [15]. Let's click element [15].",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "Let's check the other tabs on the left sidebar of the form like 'Pricing', 'Accounting', etc., or check if 'Is Taxable' is under 'Pricing' or 'Accounting'. Let's click on 'Pricing' [21].",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pricing\n1",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[2]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 349,
+            "XMax": 275,
+            "YMax": 387
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "Wait, let's look at the standard form tabs on the left. We have Overview, Pricing, Details, Promotions, Accounting, etc. Let's switch back to 'Details' tab or scroll further down on Details. Wait! Let",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[3]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 391,
+            "XMax": 275,
+            "YMax": 429
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "The standard form layout doesn't seem to scroll its outer panel when sending window-level scrolls. Let's switch back to the custom view ('Back to custom view' button, index 14) or look at the other ta",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Back to custom view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1107,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "We are back on the custom view. Notice the Edit button (pencil icon, element [15] in previous Interactive Elements, or visually top-left button with pencil icon). Let's click the Edit icon to put the ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/bizapps-product-save-guard-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "Now we are in edit mode on the custom view ('Editing: Federation apron' banner visible). In standard form, we saw 'Is Taxable' checkbox. Wait! Let's click 'Open standard form' (index 14) while in edit",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open standard form",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1113,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Open standard form', but we are not in edit mode now. Let's click the Edit icon (pencil, element 15 / top left icon) to edit the record on this standard form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "Now we are in edit mode on the standard form ('Editing: Federation apron' top banner visible!). Look at the interactive elements list: element [35] is a checkbox ('on') and element [47] is a checkbox ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/div[1]/mj-collapsible-panel[6]/div[1]/div[2]/div[1]/mj-form-field[3]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 533,
+            "YMin": 901,
+            "XMax": 551,
+            "YMax": 919
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We modified 'Requires Sale Approval' instead of 'Is Taxable'. Let's discard or un-check 'Requires Sale Approval' (or reset it via the undo button near it), or let's look at the other tabs on the left ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/div[1]/mj-collapsible-panel[6]/div[1]/div[2]/div[1]/mj-form-field[3]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 533,
+            "YMin": 443,
+            "XMax": 551,
+            "YMax": 461
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We modified 'Requires Sale Approval' instead of 'Is Taxable'. Let's discard or un-check 'Requires Sale Approval' (or reset it via the undo button near it), or let's look at the other tabs on the left ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Pricing\n1",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[2]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 349,
+            "XMax": 275,
+            "YMax": 387
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We need to find the 'Is Taxable' checkbox. In the standard form navigation on the left, let's check the 'Accounting' tab (index 24) or 'Overview' tab (index 20) or other tabs to find where 'Is Taxable",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Accounting",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[5]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 475,
+            "XMax": 275,
+            "YMax": 513
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We clicked 'Accounting', but let's check 'Details' tab again. Wait, on 'Details' tab in standard form, let's scroll down the form fields area to find 'Is Taxable'. Let's click 'Details' tab (index 22)",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Details",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[3]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 391,
+            "XMax": 275,
+            "YMax": 429
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We are currently on the 'Standard form — all form fields, same permissions' for Federation apron, but standard form splits fields across sections or needs scrolling. Let's click 'Back to custom view' ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Back to custom view",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1107,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "In custom view, the header shows TAX: Taxable. To edit fields, we can click the pencil 'Edit' icon at the top-left (element index 15) to make the fields on this custom view editable.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/bizapps-product-save-guard-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "Let's open the standard form where 'Is Taxable' checkbox is present, or check the Accounting tab. Wait, the prompt feedback explicitly states: \"Click 'Open standard form' (or navigate through standard",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open standard form",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 1113,
+            "YMin": 140,
+            "XMax": 1264,
+            "YMax": 174
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We are on the standard form view (indicated by 'Standard form — all form fields, same permissions' and the 'Back to custom view' button). To edit fields, we need to click the pencil 'Edit this Record'",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Edit this Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[1]",
+          "BoundingBox": {
+            "XMin": 16,
+            "YMin": 203,
+            "XMax": 65,
+            "YMax": 236
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "We clicked Edit in standard form mode and now the top banner shows 'Editing: Federation apron'. Let's click on the Accounting tab (index 24) or Pricing tab (index 21) or scroll down standard form to f",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Accounting",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/nav[1]/div[3]/div[5]",
+          "Scope": "navigation:Form sections",
+          "BoundingBox": {
+            "XMin": 85,
+            "YMin": 475,
+            "XMax": 275,
+            "YMax": 513
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "The 'Is Taxable' checkbox is now visible under the Accounting tab / Accounting setup card (element index 38, currently checked). I will click the checkbox to toggle its value, then click 'Save Changes",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "checkbox",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/div[1]/div[1]/div[1]/div[1]/mj-form-panel-slot[3]/mjo-product-accounting-panel[1]/mj-collapsible-panel[1]/div[1]/div[2]/div[1]/bizapps-product-accounting-widget[1]/div[1]/section[1]/div[1]/mj-form-field[2]/div[1]/div[2]/div[1]/input[1]",
+          "BoundingBox": {
+            "XMin": 968,
+            "YMin": 456,
+            "XMax": 986,
+            "YMax": 474
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard"
+      }
+    },
+    {
+      "Instruction": "The 'Is Taxable' checkbox is now visible under the Accounting tab / Accounting setup card (element index 38, currently checked). I will click the checkbox to toggle its value, then click 'Save Changes",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Save Changes",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappsordersproduct-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 1008,
+            "YMin": 197,
+            "XMax": 1152,
+            "YMax": 230
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/MJ_BizApps_Orders:%20Products/ID%7C{uuid}?form=standard",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

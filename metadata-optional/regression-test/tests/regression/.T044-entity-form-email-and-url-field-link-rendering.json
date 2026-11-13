@@ -3,8 +3,8 @@
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T044 - Entity Form Email and URL Field Link Rendering",
     "Description": "Covers the LinkType='Email'/'URL' read-mode rendering branches (OnEmailLinkClick/OnUrlLinkClick with mailto/external-link icons) — distinct from LinkType='Record' FK links (T214) and from FK display-name rendering (T92).",
-    "InputDefinition": "{\n  \"goal\": \"Open the 'Members' entity via the LEFT sidebar 'Search record types...' box (type 'Members', click the exact match). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Open a member row, then 'Open Full Record' to view it in read mode. Find the member's Email field: every member has an email address, so it always has a value. It should render as a styled clickable link with an envelope icon after the address (tooltip 'Send email'), not as plain text. If the record also has a populated URL field (e.g. LinkedIn URL), it should render as a link with an external-link arrow icon (tooltip 'Open link'). Success is the Email field rendering as a styled link with the envelope icon.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
-    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The member's populated Email field renders as a clickable link with an envelope icon after the address\",\n    \"The email address is styled as a hyperlink, visibly different from the plain-text values of non-link fields such as First Name\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "InputDefinition": "{\n  \"goal\": \"Open the 'People' entity grid — type 'People' in the LEFT sidebar 'Search record types...' box and click the EXACT 'People' match (not 'Person Job Functions'/'Member Profiles'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=MJ_BizApps_Common:%20People. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Type 'Rodriguez' in the grid's filter box ('Filter records...'), click the row for Elena Rodriguez, then click 'Open Full Record' to view it in read mode. Find her Email field (elena.rodriguez.000101@lakemail.example). It should render as a styled clickable link with an envelope icon after the address (tooltip 'Send email'), not as plain text. Success is the Email field rendering as a styled link with the envelope icon.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Elena Rodriguez's populated Email field renders as a clickable link with an envelope icon after the address\",\n    \"The email address is styled as a hyperlink, visibly different from the plain-text values of non-link fields such as First Name\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
     "Configuration": {
       "headless": true,
       "maxSteps": 35,
@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t044-entity-form-email-and-url-field-link-rendering.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,form",
@@ -51,7 +52,7 @@
     "ID": "E9FD01B7-CF62-4E87-B545-F5EAF492CB80"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.800Z",
-    "checksum": "bd74384d2b547919c854c9335f0baedfd0c561a11c107cad3864fd420e4bc850"
+    "lastModified": "2026-11-13T09:22:10.950Z",
+    "checksum": "0719c5bb3fdc07067e1aae2cad1d3ff0ff31803f6d4b31cae717c5651dc3a72e"
   }
 }

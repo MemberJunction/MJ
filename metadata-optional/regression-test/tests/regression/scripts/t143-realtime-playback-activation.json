@@ -1,0 +1,81 @@
+{
+  "TestId": "04425273-7252-4E75-8DEC-DBFEE6EDB78F",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "d9228a6d",
+  "RecordedAt": "2026-11-13T09:14:30.240Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to open the 'Realtime Recordings' application via the application switcher dropdown next to the logo. In the interactive elements, index 1 is the 'Switch application — current: Home' button, or",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Switch application — current: Home",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 62,
+            "YMin": 12,
+            "XMax": 168,
+            "YMax": 48
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      }
+    },
+    {
+      "Instruction": "The application switcher dialog is open and 'Realtime Recordings' is visible (interactive element index 15). I will click on it to open the Realtime Recordings app.",
+      "UrlBefore": "http://localhost:4200/app/home/Home",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "link",
+          "Name": "Realtime Recordings",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/header[1]/mj-app-switcher[1]/div[1]/dialog[1]/div[2]/div[4]/div[8]",
+          "Scope": "group:All applications",
+          "BoundingBox": {
+            "XMin": 502,
+            "YMin": 486,
+            "XMax": 778,
+            "YMax": 564
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/home/Home"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/realtime-recordings/Recordings"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/realtime-recordings/Recordings",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}

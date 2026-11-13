@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t070-ps-models-door-tour.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,predictive-studio",
@@ -51,7 +52,7 @@
     "ID": "728C5900-3980-4E8B-9F05-91A9B8D2918D"
   },
   "sync": {
-    "lastModified": "2026-11-12T19:36:07.778Z",
-    "checksum": "9f6e662139c31d20de45a8b2c75d4f3b5df773a3b667ec4a9e0d42b944c8faa6"
+    "lastModified": "2026-11-13T09:22:10.942Z",
+    "checksum": "aff2a7c910b27871d327bfb1945aeebe6b36e37b2944fae6b650213e6543b810"
   }
 }
