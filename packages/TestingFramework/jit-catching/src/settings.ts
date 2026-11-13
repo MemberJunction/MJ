@@ -4,10 +4,17 @@ import type { Bucket, GenerationLimits, Vendor } from './types';
 
 export const SettingsSchema = z.object({
     GeneratorModel: z.string(),
+    /**
+     * How hard the generator model thinks. Absent means the provider default. The Gemini runner sends it as `effortLevel`;
+     * the Claude Agent SDK runner ignores it.
+     */
+    GeneratorEffort: z.enum(['low', 'medium', 'high']).optional(),
     AnalyzerModel: z.string(),
+    /** `Staged`: the first bucket judge runs first, and a Low from it skips the other bucket judges. */
     Judges: z.object({
         TpProbModel: z.string(),
         BucketModels: z.array(z.object({ Vendor: z.enum(['Anthropic', 'OpenAI', 'Gemini']), Model: z.string() })).min(1),
+        Staged: z.boolean(),
     }),
     /** TokensPerSession counts input, cache reads and output (D37); UsdPerSession is the cap that acts first on a normal session (D42). */
     Limits: z.object({
@@ -35,7 +42,7 @@ export type { GenerationLimits, Bucket, Vendor };
 export const DEFAULT_SETTINGS: Settings = {
     GeneratorModel: 'claude-opus-5-5',
     AnalyzerModel: 'claude-sonnet-5-5',
-    Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }] },
+    Judges: { TpProbModel: 'gpt-4.1-mini', BucketModels: [{ Vendor: 'Anthropic', Model: 'claude-opus-5-5' }, { Vendor: 'Gemini', Model: 'gemini-4-argon' }, { Vendor: 'OpenAI', Model: 'gpt-5.1' }], Staged: true },
     Limits: { TestsPerPackage: 5, RisksPerPackage: 3, TestsPerRisk: 2, PackagesPerPR: 3, ParallelSessions: 4, TurnsPerSession: 30, TokensPerSession: 2_000_000, UsdPerSession: 3 },
     Repeats: 3,
     Coverage: true,

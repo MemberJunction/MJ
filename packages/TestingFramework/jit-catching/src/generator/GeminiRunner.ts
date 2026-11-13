@@ -62,7 +62,7 @@ async function* runSession(llm: () => BaseLLM, prompt: string, system: string, o
     for (;;) {
         const stop = limitReached(usage, turns, o);
         if (stop) { yield result(stop); return; }
-        const r = await SafeChat(model, { model: o.Model, messages: [...history], tools: TOOLS, toolChoice: 'auto', maxOutputTokens: MAX_OUTPUT_TOKENS, enableCaching: true });
+        const r = await SafeChat(model, { model: o.Model, messages: [...history], tools: TOOLS, toolChoice: 'auto', maxOutputTokens: MAX_OUTPUT_TOKENS, enableCaching: true, ...(o.Effort ? { effortLevel: o.Effort } : {}) });
         if (!r.Ok) throw new SessionError(r.Error, usage);
         turns++;
         usage = AddUsage(usage, UsageFromChat(o.Model, r.Result.data.usage, o.Price));

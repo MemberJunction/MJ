@@ -29,6 +29,20 @@ describe('LoadSettings', () => {
     writeFileSync(p, JSON.stringify({ Coverage: false }));
     expect(LoadSettings(p).Coverage).toBe(false);
   });
+  it('stages the bucket judges by default and a settings file can turn it off', () => {
+    expect(LoadSettings(undefined).Judges.Staged).toBe(true);
+    const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json');
+    writeFileSync(p, JSON.stringify({ Judges: { Staged: false } }));
+    expect(LoadSettings(p).Judges.Staged).toBe(false);
+  });
+  it('reads GeneratorEffort, leaves it out by default and rejects an unknown level', () => {
+    expect(LoadSettings(undefined).GeneratorEffort).toBeUndefined();
+    const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json');
+    writeFileSync(p, JSON.stringify({ GeneratorEffort: 'low' }));
+    expect(LoadSettings(p).GeneratorEffort).toBe('low');
+    writeFileSync(p, JSON.stringify({ GeneratorEffort: 'extreme' }));
+    expect(() => LoadSettings(p)).toThrow(/GeneratorEffort/);
+  });
   it('does not echo the content of a settings file that is not valid JSON', () => {
     const token = 'ghp_' + 'A1b2C3d4'.repeat(5);
     const p = join(mkdtempSync(join(tmpdir(), 'jit-')), 's.json'); writeFileSync(p, `${token} is not json`);

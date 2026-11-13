@@ -64,6 +64,15 @@ describe('GeminiRunner', () => {
     expect(out.filter((m) => m.Type === 'tool').map((m) => m.Type === 'tool' && m.Name)).toEqual(['write_test', 'run_test']);
     expect(out.at(-1)).toEqual({ Type: 'result', Usage: { InputTokens: 150, OutputTokens: 15, CacheReadTokens: 0 }, CostUSD: (150 * 1 + 15 * 2) / 1_000_000, Turns: 2, Subtype: 'success' });
   });
+  it('sends Effort as effortLevel and leaves the field out when Effort is absent', async () => {
+    const root = worktree();
+    const withEffort = new TestLLM().Script(reply('done'));
+    await collect(withEffort, options(root, {}, { Effort: 'low' }));
+    expect(withEffort.Calls[0].effortLevel).toBe('low');
+    const without = new TestLLM().Script(reply('done'));
+    await collect(without, options(root));
+    expect('effortLevel' in without.Calls[0]).toBe(false);
+  });
   it('marks a write_test refusal as an error result', async () => {
     const llm = new TestLLM().Script(reply('', [call('c1', 'write_test', { File: 'x.ts', Source: 's' })]), reply('done'));
     await collect(llm, options(worktree(), { WriteFile: async () => 'denied: not a listed file' }));

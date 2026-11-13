@@ -59,6 +59,13 @@ describe('ClaudeAgentGenerator', () => {
     expect(result.EndReason).toBe('error_max_turns'); expect(result.Turns).toBe(31);
     expect(result.Tokens.Role).toBe('Generator');
   });
+  it('passes the GeneratorEffort setting to the runner as Effort', async () => {
+    const root = world(); let effort: string | undefined = 'unset';
+    const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: { ...DEFAULT_SETTINGS, GeneratorEffort: 'low' }, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: async function* (_p, _s, o) { effort = o.Effort; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; } });
+    await gen.Generate(req(root));
+    expect(effort).toBe('low');
+  });
   it('refuses a write outside the jit folder', async () => {
     const root = world(); let denied = '';
     const gen = new ClaudeAgentGenerator({ Sandbox: {} as never, ScratchRoot: root, Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,

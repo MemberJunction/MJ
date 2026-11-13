@@ -22,7 +22,8 @@ export type AgentMessage =
     | { Type: 'assistant'; Text: string }
     | { Type: 'tool'; Name: string; Input: unknown; Output: unknown };
 export interface AgentHooks { WriteFile: (repoRelative: string, source: string) => Promise<string>; RunTest: (file: string, mutant?: { Edits: MutantEdit[] }) => Promise<RunTestOutput>; }
-export interface AgentRunOptions { Cwd: string; Model: string; MaxTurns: number; TokenBudget: number; BudgetUsd: number; Price: Price | null; Hooks: AgentHooks; }
+/** `Effort` is the generator's thinking effort; absent means the provider default. Only the Gemini runner uses it. */
+export interface AgentRunOptions { Cwd: string; Model: string; MaxTurns: number; TokenBudget: number; BudgetUsd: number; Price: Price | null; Hooks: AgentHooks; Effort?: 'low' | 'medium' | 'high'; }
 export type AgentRunner = (prompt: string, system: string, o: AgentRunOptions) => AsyncIterable<AgentMessage>;
 /** The part of `RunTestTool` the generator uses. */
 export type RunTestRunner = Pick<RunTestTool, 'Run' | 'LastMutant'>;
@@ -58,7 +59,7 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         try {
             const ctx = buildContext(s);
             const options: AgentRunOptions = { Cwd: r.BaseRootDir, Model: r.Model, MaxTurns: r.Limits.TurnsPerSession, TokenBudget: r.Limits.TokensPerSession, BudgetUsd: r.Limits.UsdPerSession,
-                Price: this.o.Settings.Prices[r.Model] ?? null, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
+                Price: this.o.Settings.Prices[r.Model] ?? null, Effort: this.o.Settings.GeneratorEffort, Hooks: { WriteFile: (rel, source) => writeTest(s, rel, source), RunTest: (file, mutant) => runTest(s, file, mutant) } };
             for await (const m of (this.o.Runner ?? RunnerForModel(r.Model))(BuildTaskPrompt(r, ctx), BuildSystemPrompt(ctx), options)) {
                 if (m.Type === 'result') { usage = { Model: r.Model, ...m.Usage, CostUSD: m.CostUSD }; subtype = m.Subtype; turns = m.Turns; }
                 else if (m.Type === 'assistant') s.Transcript.push(`ASSISTANT ${m.Text.slice(0, 500)}`);

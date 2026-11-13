@@ -17,6 +17,7 @@ Any other write is denied. Each file must be a complete vitest file that passes 
 
 How to run: the run_test tool runs ONE of those files on base ({"File": "<repo-relative path>"}). You have no shell and no network.
 A file counts only if run_test reports Status "Pass" for it. Run every file you hand in, and run it again after every rewrite.
+You may make several read, search and list calls in one reply; batch the reads you already know you need.
 
 Style: import from 'vitest'; follow the package's existing tests, e.g. ${c.ExistingTestPaths.slice(0, 3).join(', ') || '(none)'}.
 Use @memberjunction/unit-testing stubs (DatabaseProviderStub, EntitiesOnlyProvider, TestLLM, MockRunView) instead of a database. No network, no filesystem, no timers left running. Finish in under 5 seconds per file.

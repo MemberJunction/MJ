@@ -116,6 +116,6 @@ function defaultDeps(o: AssessOptions, redaction: RedactionCheck): AssessDeps {
     const build = (): JudgePanel => new JudgePanel([
         new TpProbJudge(CreateLLM('OpenAI'), o.Settings.Judges.TpProbModel, o.Settings.Prices[o.Settings.Judges.TpProbModel] ?? null),
         ...o.Settings.Judges.BucketModels.map((b) => new BucketJudge(CreateLLM(b.Vendor), b.Model, o.Settings.Prices[b.Model] ?? null)),
-    ]);
+    ], o.Settings.Judges.Staged);
     return { JudgePanel: { Judge: (c) => (panel ??= build()).Judge(c) }, Rules: new RuleFilter(AllRules()), Store: new FileCatchStore(o.StoreDir, redaction), Redaction: redaction };
 }
