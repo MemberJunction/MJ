@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T156 - MoreCheese Competition Entry Form",
+    "Description": "In the MoreCheese app, open 'Competition Entries' from the app's navigation (if it is not there, type 'Competition Entries' in the LEFT sidebar 'Search record types...' box and click that match, or navigate to http://localhost:4200/app/data-explorer/Data?entity=MoreCheese:%20Competition%20Entries). The grid lists competition entries. Type 'Old Alderwick' in the grid's filter box ('Filter records...') so that only Old Alderwick entries show. Open the entry with Entry Key ICF-000107:2019:1 (Henri Dubois, 2019): click its row and then 'Open Full Record', or double-click the row. Pages can take 10-30s to load — wait, don't navigate away.",
+    "InputDefinition": "{\n  \"goal\": \"In the MoreCheese app, open 'Competition Entries' from the app's navigation (if it is not there, type 'Competition Entries' in the LEFT sidebar 'Search record types...' box and click that match, or navigate to http://localhost:4200/app/data-explorer/Data?entity=MoreCheese:%20Competition%20Entries). The grid lists competition entries. Type 'Old Alderwick' in the grid's filter box ('Filter records...') so that only Old Alderwick entries show. Open the entry with Entry Key ICF-000107:2019:1 (Henri Dubois, 2019): click its row and then 'Open Full Record', or double-click the row. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200/app/morecheese\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200/app/morecheese\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 30,\n  \"judgeValidationCriteria\": [\n    \"The Competition Entries grid of the MoreCheese app shows entries, and the 'Old Alderwick' filter narrows it to Old Alderwick rows\",\n    \"The Competition Entry form for ICF-000107:2019:1 is open and shows Person Henri Dubois, Entry Year 2019, Category 'Aged Cheddar & Territorials' and Result Silver\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 360000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,open-apps",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "SkipEmbeddings": false,
+    "RubricID": null
+  },
+  "primaryKey": {
+    "ID": "EE88DA19-190D-40CF-9136-C8B4C94BA439"
+  }
+}
