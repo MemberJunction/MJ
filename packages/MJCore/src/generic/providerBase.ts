@@ -5269,7 +5269,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
         const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
-            params = await hook(params, contextUser);
+            params = await hook(params, contextUser, this);
         }
         return params;
     }
@@ -5288,7 +5288,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
         const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
-            result = await hook(params, result, contextUser);
+            result = await hook(params, result, contextUser, this);
         }
         return result;
     }

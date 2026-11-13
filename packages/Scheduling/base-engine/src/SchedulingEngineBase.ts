@@ -9,6 +9,12 @@ import { ToEpochMs, UUIDsEqual } from '@memberjunction/global';
 import { Observable, Subject } from 'rxjs';
 
 /**
+ * Work gate for one job, supplied by the server-side engine (#6217): `undefined` when the job's
+ * driver does not gate it, `null` when it has nothing pending, otherwise when its work is due.
+ */
+export type JobWorkDueResolver = (job: MJScheduledJobEntity, now: Date) => Date | null | undefined;
+
+/**
  * Base engine for scheduling system with metadata caching
  *
  * This engine loads and caches scheduling metadata including:
@@ -148,39 +154,75 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     }
 
     /**
-     * Calculate and update the active polling interval based on scheduled jobs
-     * This should be called whenever jobs are added, modified, or deleted
+     * Upper bound on the poll timer, in ms (default 1 hour). Doubles as the safety-net cadence:
+     * even with nothing due, the server-side engine wakes this often to re-read state another
+     * server may have changed without a cache event.
      */
-    public UpdatePollingInterval(): void {
+    public MaxPollingIntervalMs: number = 60 * 60_000;
+
+    /** Lower bound on the poll timer for a job due in the future, in ms. */
+    public static readonly MinPollingIntervalMs = 1_000;
+
+    /**
+     * Retry cadence, in ms, for a job whose due time has already passed but which has not run yet
+     * (held by another server's lock, waiting for a free slot, or awaiting NextRunAt seeding).
+     */
+    public static readonly OverduePollingIntervalMs = 10_000;
+
+    /**
+     * Calculate and update the active polling interval based on scheduled jobs.
+     * This should be called whenever jobs are added, modified, or deleted.
+     *
+     * The timer is armed for the earliest due time (#6217), not half of it, so an idle server
+     * wakes only when something is due. A job whose driver gates it on pending work (see
+     * `workDueAt`) counts at the later of its `NextRunAt` and its work-due time, and not at all
+     * when it has nothing pending.
+     *
+     * @param workDueAt - Optional per-job work gate (supplied by the server-side engine, which
+     *   knows the drivers): `undefined` = not gated, `null` = nothing pending, a date = pending at.
+     */
+    public UpdatePollingInterval(workDueAt?: JobWorkDueResolver): void {
         if (this._scheduledJobs.length === 0) {
             // No active jobs, stop polling
             this._activePollingInterval = null;
             return;
         }
 
-        // Find the minimum time until next run across all active jobs
-        let minInterval = Number.MAX_SAFE_INTEGER;
         const now = Date.now();
+        const nowDate = new Date(now);
+        let earliestDueMs = Number.MAX_SAFE_INTEGER;
+        let awaitingSeed = false;
 
         for (const job of this._scheduledJobs) {
-            if (job.Status !== 'Active' || !job.NextRunAt) {
+            if (job.Status !== 'Active') {
+                continue;
+            }
+            if (!job.NextRunAt) {
+                awaitingSeed = true;
                 continue;
             }
 
-            const timeUntilNext = Math.max(0, ToEpochMs(job.NextRunAt) - now);
-            if (timeUntilNext < minInterval) {
-                minInterval = timeUntilNext;
+            let dueMs = ToEpochMs(job.NextRunAt);
+            const workDue = workDueAt?.(job, nowDate);
+            if (workDue === null) {
+                continue; // gated, nothing pending
             }
+            if (workDue !== undefined) {
+                dueMs = Math.max(dueMs, ToEpochMs(workDue));
+            }
+            earliestDueMs = Math.min(earliestDueMs, dueMs);
         }
 
-        // Set polling interval to half the minimum interval, with bounds
-        // Min: 10 seconds (10000ms), Max: 1 week (604800000ms)
-        if (minInterval === Number.MAX_SAFE_INTEGER) {
-            this._activePollingInterval = 10000; // Default 10 seconds
-        } else {
-            const halfInterval = Math.floor(minInterval / 2);
-            this._activePollingInterval = Math.max(10000, Math.min(604800000, halfInterval));
+        const max = Math.max(SchedulingEngineBase.MinPollingIntervalMs, this.MaxPollingIntervalMs);
+        if (earliestDueMs === Number.MAX_SAFE_INTEGER) {
+            this._activePollingInterval = awaitingSeed ? SchedulingEngineBase.OverduePollingIntervalMs : max;
+            return;
         }
+
+        const untilDue = earliestDueMs - now;
+        this._activePollingInterval = untilDue <= 0
+            ? SchedulingEngineBase.OverduePollingIntervalMs
+            : Math.max(SchedulingEngineBase.MinPollingIntervalMs, Math.min(max, untilDue));
     }
 
     /**

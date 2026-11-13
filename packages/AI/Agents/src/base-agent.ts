@@ -2605,7 +2605,8 @@ export class BaseAgent {
             const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
                 params.agent.ID,
                 params.contextUser,
-                this._agentRun?.ID
+                this._agentRun?.ID,
+                params.provider || this._activeProvider
             );
 
             const totalSources =
@@ -2666,40 +2667,37 @@ export class BaseAgent {
                 return; // No step needed when there are no data sources at all
             }
 
-            // Create a step entity to track data preloading in the agent run
-            const stepEntity = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: 'Data Source Preloading',
-                contextUser: params.contextUser
-            });
-
-            // Surface any data source failures in the agent run step and agent run record
-            if (preloadedResult.failedSources.length > 0) {
+            const hasFailures = preloadedResult.failedSources.length > 0;
+            let warningMessage: string | undefined;
+            if (hasFailures) {
                 const failureDetails = preloadedResult.failedSources
                     .map(f => `${f.name}${f.entityName ? ` (Entity: ${f.entityName})` : ''}: ${f.errorMessage}`)
                     .join('; ');
 
-                const warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+                warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+            }
 
-                // Finalize step as completed but with error details captured
-                await this.finalizeStepEntity(stepEntity, true, warningMessage, {
-                    loadedSources: preloadedResult.loadedSources,
-                    failedSources: preloadedResult.failedSources
-                });
-
-                // Append warning to the agent run's ErrorMessage for top-level visibility
-                if (this._agentRun) {
-                    const existing = this._agentRun.ErrorMessage || '';
-                    this._agentRun.ErrorMessage = existing
-                        ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
-                        : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            // Record data preloading in a single INSERT now that its outcome is already known
+            await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Data Source Preloading',
+                contextUser: params.contextUser,
+                completed: {
+                    success: true,
+                    errorMessage: warningMessage,
+                    outputData: hasFailures
+                        ? { loadedSources: preloadedResult.loadedSources, failedSources: preloadedResult.failedSources }
+                        : { loadedSources: preloadedResult.loadedSources }
                 }
-            } else {
-                // All sources loaded successfully
-                await this.finalizeStepEntity(stepEntity, true, undefined, {
-                    loadedSources: preloadedResult.loadedSources
-                });
+            });
+
+            // Append warning to the agent run's ErrorMessage for top-level visibility
+            if (hasFailures && this._agentRun && warningMessage) {
+                const existing = this._agentRun.ErrorMessage || '';
+                this._agentRun.ErrorMessage = existing
+                    ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
+                    : `[Data Preloading Warning] ${warningMessage}`;
+                await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2933,7 +2931,12 @@ export class BaseAgent {
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts);
+                this._artifactToolManager.Initialize(inputArtifacts, {
+                    contextUser: params.contextUser,
+                    provider: this.ProviderToUse,
+                    getAgentRun: () => this._agentRun,
+                    agentName: params.agent?.Name ?? undefined,
+                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
@@ -2996,7 +2999,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -7037,9 +7040,31 @@ export class BaseAgent {
         });
     }
 
+    private static readonly _messageFingerprintCache = new WeakMap<
+        ChatMessage,
+        {
+            role: ChatMessage['role'];
+            content: ChatMessage['content'];
+            toolCalls: AgentChatMessage['toolCalls'];
+            fingerprint: string;
+        }
+    >();
+
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
     private static messageFingerprint(m: ChatMessage): string {
-        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        const toolCalls = (m as AgentChatMessage).toolCalls;
+        const cached = BaseAgent._messageFingerprintCache.get(m);
+        if (cached && cached.role === m.role && cached.content === m.content && cached.toolCalls === toolCalls) {
+            return cached.fingerprint;
+        }
+        const fingerprint = JSON.stringify([m.role, m.content, toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        BaseAgent._messageFingerprintCache.set(m, {
+            role: m.role,
+            content: m.content,
+            toolCalls,
+            fingerprint,
+        });
+        return fingerprint;
     }
 
     /**
@@ -21790,8 +21815,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
@@ -21849,8 +21874,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
@@ -21926,6 +21951,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -22019,7 +22057,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -23224,17 +23262,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);

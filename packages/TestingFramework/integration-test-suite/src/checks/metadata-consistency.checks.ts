@@ -23,7 +23,8 @@
  *   MC1 every non-virtual entity with BaseViewGenerated=1 has its BaseView in sys.objects
  *   MC2 every entity with Allow*API + sp*Generated has its spCreate/spUpdate/spDelete present
  *   MC3 every column-level CHECK constraint that parses as a value list == its EntityFieldValue rows
- *   MC4 every FK column has its IDX_AUTO_MJ_FKEY_{Table}_{Column} index (name truncated to 128)
+ *   MC4 every FK column has its IDX_AUTO_MJ_FKEY_{Table}_{Column} index (name truncated to 128), or
+ *       another unfiltered index that leads with the column (CodeGen then skips its own, #6466)
  *   MC5 field Sequences are gapless from 1, duplicate-free, and match base-view column order
  *   MC6 every physical core-schema field carries a non-empty Description (MS_Description)
  *   MC8 SchemaInfo coverage + casing agreement with the physical catalog
@@ -36,6 +37,7 @@
  */
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { RunView } from '@memberjunction/core';
+import type { MJActionCategoryEntity, MJTagEntity } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import { Assert, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -73,6 +75,12 @@ interface QualifiedIndexRow {
     SchemaName: string;
     TableName: string;
     IndexName: string;
+}
+
+interface LeadingIndexColumnRow {
+    SchemaName: string;
+    TableName: string;
+    ColumnName: string;
 }
 
 interface ViewColumnRow {
@@ -175,6 +183,23 @@ async function fetchIndexNames(pool: sql.ConnectionPool): Promise<Set<string>> {
         INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
         WHERE i.name IS NOT NULL`);
     return new Set(rows.map(r => indexKey(r.SchemaName, r.TableName, r.IndexName)));
+}
+
+/**
+ * `schema.table.column` for every column that leads an enabled, unfiltered index (key ordinal 1).
+ * CodeGen's FK index guard skips its own index when one of these covers the column (#6466).
+ */
+async function fetchLeadingIndexedColumns(pool: sql.ConnectionPool): Promise<Set<string>> {
+    const rows = await catalogQuery<LeadingIndexColumnRow>(pool, `
+        SELECT s.name AS SchemaName, t.name AS TableName, c.name AS ColumnName
+        FROM sys.indexes i
+        INNER JOIN sys.tables t ON i.object_id = t.object_id
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+        WHERE i.has_filter = 0 AND i.is_disabled = 0 AND i.is_hypothetical = 0
+          AND ic.key_ordinal = 1 AND ic.is_included_column = 0`);
+    return new Set(rows.map(r => indexKey(r.SchemaName, r.TableName, r.ColumnName)));
 }
 
 /** Physical view columns in ordinal order, keyed by `schema.view`. */
@@ -462,17 +487,20 @@ const MC3: NamedCheck = {
 
 const MC4: NamedCheck = {
     Id: 'metadata-consistency.MC4',
-    Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index',
+    Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index or another index leading with it',
     Fn: async (ctx: IntegrationCheckContext) => {
         const pool = await poolOrSkip(ctx);
         const indexes = await fetchIndexNames(pool);
+        const leadingColumns = await fetchLeadingIndexedColumns(pool);
         const offenders: string[] = [];
         let scanned = 0;
         for (const entity of physicalEntities(ctx.Provider)) {
             for (const field of indexableForeignKeys(entity)) {
                 scanned++;
                 const name = foreignKeyIndexName(entity, field);
-                if (!indexes.has(indexKey(entity.SchemaName, entity.BaseTable, name))) {
+                const covered = indexes.has(indexKey(entity.SchemaName, entity.BaseTable, name))
+                    || leadingColumns.has(indexKey(entity.SchemaName, entity.BaseTable, field.Name));
+                if (!covered) {
                     offenders.push(`${entity.Name}.${field.Name} → ${name}`);
                 }
             }
@@ -610,7 +638,173 @@ function schemaOffenses(
     return offenses;
 }
 
-export const MetadataConsistencyChecks: NamedCheck[] = [MC1, MC2, MC3, MC4, MC5, MC6, MC8];
+interface SqlModuleRow {
+    ObjectName: string;
+    Definition: string | null;
+}
+
+interface UpdatedAtRow {
+    UpdatedAt: Date | string;
+}
+
+const MC9: NamedCheck = {
+    Id: 'metadata-consistency.MC9',
+    Name: 'MC9: single-write __mj_UpdatedAt in spUpdate* + IF NOT UPDATE trigger guard across entities',
+    Fn: async (ctx: IntegrationCheckContext) => {
+        const pool = await poolOrSkip(ctx);
+
+        // Part A — Full Catalog Sweep
+        const moduleRows = await catalogQuery<SqlModuleRow>(
+            pool,
+            `SELECT o.name AS ObjectName, m.definition AS Definition
+             FROM sys.sql_modules m
+             INNER JOIN sys.objects o ON o.object_id = m.object_id
+             INNER JOIN sys.schemas s ON s.schema_id = o.schema_id
+             WHERE s.name = '__mj' AND o.type IN ('P', 'TR')`
+        );
+        const modules = new Map<string, string>();
+        for (const row of moduleRows) {
+            if (row.Definition) {
+                modules.set(row.ObjectName.toLowerCase(), row.Definition);
+            }
+        }
+
+        const offenders: string[] = [];
+        let scanned = 0;
+        const triggerGuardRegex = /IF\s+NOT\s+UPDATE\s*\(\s*\[?__mj_UpdatedAt\]?\s*\)/i;
+        const spUpdateAtRegex = /\[?__mj_UpdatedAt\]?\s*=\s*GETUTCDATE\s*\(\s*\)/i;
+
+        for (const entity of physicalEntities(ctx.Provider)) {
+            if (entity.SchemaName.toLowerCase() !== '__mj') {
+                continue;
+            }
+            if (!entity.Fields.some(f => f.Name.toLowerCase() === '__mj_updatedat')) {
+                continue;
+            }
+            scanned++;
+
+            const trigName = `trgUpdate${entity.BaseTableCodeName}`;
+            const trigDef = modules.get(trigName.toLowerCase());
+            if (!trigDef) {
+                offenders.push(`${entity.Name}: missing trigger ${trigName}`);
+            } else if (!triggerGuardRegex.test(trigDef)) {
+                offenders.push(`${entity.Name}: trigger ${trigName} missing IF NOT UPDATE([__mj_UpdatedAt]) guard`);
+            }
+
+            if (entity.AllowUpdateAPI && entity.spUpdateGenerated) {
+                const hasUpdatableField = entity.Fields.some(
+                    f =>
+                        !f.IsPrimaryKey &&
+                        f.AllowUpdateAPI &&
+                        !f.AutoIncrement &&
+                        !f.ReadOnly &&
+                        !['__mj_createdat', '__mj_updatedat', '__mj_deletedat'].includes(f.Name.toLowerCase())
+                );
+                if (hasUpdatableField) {
+                    const spName =
+                        entity.spUpdate && entity.spUpdate.length > 0
+                            ? entity.spUpdate
+                            : `spUpdate${entity.BaseTableCodeName}`;
+                    const spDef = modules.get(spName.toLowerCase());
+                    if (!spDef) {
+                        offenders.push(`${entity.Name}: missing ${spName}`);
+                    } else if (!spUpdateAtRegex.test(spDef)) {
+                        offenders.push(`${entity.Name}: ${spName} missing [__mj_UpdatedAt] = GETUTCDATE()`);
+                    }
+                }
+            }
+        }
+
+        assertNoOffenders(offenders, 'MC9', 'entities failing single-write __mj_UpdatedAt contract', scanned);
+
+        // Part B — Live End-to-End Multi-Entity Execution (MJ: Action Categories and MJ: Tags)
+        const stamp = Date.now();
+        let cat: MJActionCategoryEntity | undefined;
+        let tag: MJTagEntity | undefined;
+
+        try {
+            cat = await ctx.Provider.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories', ctx.User);
+            cat.NewRecord();
+            cat.Name = `mj-mc9-${stamp}-cat (mj-integration-test — safe to delete)`;
+            cat.Status = 'Active';
+            Assert(await cat.Save(), `MC9: failed to create throwaway Action Category: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            tag = await ctx.Provider.GetEntityObject<MJTagEntity>('MJ: Tags', ctx.User);
+            tag.NewRecord();
+            tag.Name = `mj-mc9-${stamp}-tag (mj-integration-test — safe to delete)`;
+            tag.DisplayName = tag.Name;
+            tag.Status = 'Active';
+            tag.IsGlobal = true;
+            Assert(await tag.Save(), `MC9: failed to create throwaway Tag: ${tag.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            // Path 1: BaseEntity.Save() -> spUpdate* single-write path
+            const catCreated0 = cat.__mj_CreatedAt.getTime();
+            const catUpdated0 = cat.__mj_UpdatedAt.getTime();
+            const tagCreated0 = tag.__mj_CreatedAt.getTime();
+            const tagUpdated0 = tag.__mj_UpdatedAt.getTime();
+
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            cat.Description = 'MC9 updated via Save()';
+            tag.Description = 'MC9 updated via Save()';
+            Assert(await cat.Save(), `MC9: Path 1 cat.Save() failed: ${cat.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            Assert(await tag.Save(), `MC9: Path 1 tag.Save() failed: ${tag.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+
+            Assert(cat.__mj_UpdatedAt.getTime() > catUpdated0, 'MC9 Path 1: Action Category __mj_UpdatedAt should advance after Save()');
+            Assert(cat.__mj_CreatedAt.getTime() === catCreated0, 'MC9 Path 1: Action Category __mj_CreatedAt must remain unchanged');
+            Assert(tag.__mj_UpdatedAt.getTime() > tagUpdated0, 'MC9 Path 1: Tag __mj_UpdatedAt should advance after Save()');
+            Assert(tag.__mj_CreatedAt.getTime() === tagCreated0, 'MC9 Path 1: Tag __mj_CreatedAt must remain unchanged');
+
+            // Path 2: Direct SQL UPDATE omitting __mj_UpdatedAt -> trgUpdate* fallback fires
+            await new Promise(resolve => setTimeout(resolve, 50));
+            const catUpdated1 = cat.__mj_UpdatedAt.getTime();
+
+            await pool
+                .request()
+                .input('id', cat.ID)
+                .query("UPDATE [__mj].[ActionCategory] SET [Description] = N'MC9 direct SQL without UpdatedAt' WHERE [ID] = @id");
+
+            const path2Res = await pool
+                .request()
+                .input('id', cat.ID)
+                .query<UpdatedAtRow>('SELECT [__mj_UpdatedAt] AS UpdatedAt FROM [__mj].[ActionCategory] WHERE [ID] = @id');
+            const path2Rows = path2Res.recordset ?? [];
+            Assert(path2Rows.length === 1, 'MC9 Path 2: expected 1 row for ActionCategory');
+            Assert(
+                new Date(path2Rows[0].UpdatedAt).getTime() > catUpdated1,
+                'MC9 Path 2: trgUpdate fallback should advance __mj_UpdatedAt when omitted from direct SQL UPDATE'
+            );
+
+            // Path 3: Direct SQL UPDATE with explicit [__mj_UpdatedAt] -> IF NOT UPDATE([__mj_UpdatedAt]) skips second write
+            const explicitIso = '2035-06-15T12:34:56.000Z';
+            await pool
+                .request()
+                .input('id', cat.ID)
+                .input('ts', new Date(explicitIso))
+                .query("UPDATE [__mj].[ActionCategory] SET [Description] = N'MC9 direct SQL with explicit UpdatedAt', [__mj_UpdatedAt] = @ts WHERE [ID] = @id");
+
+            const path3Res = await pool
+                .request()
+                .input('id', cat.ID)
+                .query<UpdatedAtRow>('SELECT [__mj_UpdatedAt] AS UpdatedAt FROM [__mj].[ActionCategory] WHERE [ID] = @id');
+            const path3Rows = path3Res.recordset ?? [];
+            Assert(path3Rows.length === 1, 'MC9 Path 3: expected 1 row for ActionCategory');
+            Assert(
+                new Date(path3Rows[0].UpdatedAt).toISOString() === explicitIso,
+                `MC9 Path 3: trigger should preserve explicit __mj_UpdatedAt (${explicitIso}), got ${new Date(path3Rows[0].UpdatedAt).toISOString()}`
+            );
+        } finally {
+            if (tag?.IsSaved) {
+                await tag.Delete().catch(() => {});
+            }
+            if (cat?.IsSaved) {
+                await cat.Delete().catch(() => {});
+            }
+        }
+    }
+};
+
+export const MetadataConsistencyChecks: NamedCheck[] = [MC1, MC2, MC3, MC4, MC5, MC6, MC8, MC9];
 
 for (const check of MetadataConsistencyChecks) {
     IntegrationCheckRegistry.Instance.Register(check);

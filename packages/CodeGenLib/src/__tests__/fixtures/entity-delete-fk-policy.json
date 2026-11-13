@@ -74,6 +74,16 @@
       "reason": "NOT NULL reference; the row cannot exist without the entity."
     },
     {
+      "table": "Artifact",
+      "column": "DelegateEntityID",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference; cleared with DelegateRecordID (CK_Artifact_DelegateBinding both-or-neither CHECK) so the row survives without the entity.",
+      "alsoNull": [
+        "DelegateRecordID"
+      ]
+    },
+    {
       "table": "AuditLog",
       "column": "EntityID",
       "nullable": true,

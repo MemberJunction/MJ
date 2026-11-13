@@ -7,8 +7,11 @@
  * stubbed. This locks in the ordering + non-fatal-failure contract that had no coverage before.
  */
 import { describe, it, expect, vi } from 'vitest';
+import type { ChatMessage } from '@memberjunction/ai';
 import { BaseAgent } from '../base-agent';
+import { AgentDataPreloader } from '../AgentDataPreloader';
 import { PriorTurnToolResultCache } from '../prior-turn-tool-result-cache';
+import { AgentRunWatchdog } from '../agent-run-watchdog';
 
 /** The fire-and-forget save queue's Flush result shape. */
 type FlushResult = { failures: number; rejections: number };
@@ -676,5 +679,125 @@ describe('BaseAgent.compactMessage (AI Summary) — shared prompt runner, tree b
     expect(a._treeBudget?.totalCost).toBeCloseTo(0.0045, 6);
   });
 });
+
+/**
+ * MJAPI's event-loop stall warning names the agent runs "in flight" from AgentRunWatchdog's tracked
+ * set (MJ #5510). A run must leave that set as soon as its terminal state is saved, or the warning
+ * names runs that finished minutes ago (the periodic prune only runs every 5 minutes).
+ */
+describe('BaseAgent terminal saves — release the run from the watchdog', () => {
+  const RUN_ID = 'a1b2c3d4-0000-4000-8000-000000005510';
+  const trackedSet = () => (AgentRunWatchdog.Instance as unknown as { _trackedRuns: Map<string, unknown> | Set<string> })._trackedRuns;
+
+  function trackedAgent(saveResult = true) {
+    const made = makeFinalizeAgent({ failures: 0, rejections: 0 });
+    made.run.ID = RUN_ID.toUpperCase(); // SQL Server hands IDs back upper-case
+    made.run.Save = async () => { made.run.saved = true; return saveResult; };
+    (made.agent as unknown as { startPostTurnCompaction(): void }).startPostTurnCompaction = () => undefined;
+    const ts = trackedSet();
+    if (ts instanceof Set) {
+      ts.add(RUN_ID.toLowerCase());
+    } else if (ts instanceof Map) {
+      ts.set(RUN_ID.toLowerCase(), {} as never);
+    }
+    return made;
+  }
+  const isTracked = () => AgentRunWatchdog.Instance.TrackedRunIDs.includes(RUN_ID.toLowerCase());
+
+  it('a Completed run is no longer tracked once finalize saves it', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a Failed final step is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await finalize(agent, { step: 'Failed', errorMessage: 'boom' });
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a cancelled run is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createCancelledResult(m: string): Promise<unknown> }).createCancelledResult('stop');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('a run ended by createFailureResult is no longer tracked', async () => {
+    const { agent } = trackedAgent();
+    await (agent as unknown as { createFailureResult(m: string): Promise<unknown> }).createFailureResult('bad');
+    expect(isTracked()).toBe(false);
+  });
+
+  it('stays tracked when the final save fails', async () => {
+    const { agent } = trackedAgent(false);
+    await finalize(agent, { step: 'Success', message: 'done' });
+    expect(isTracked()).toBe(true);
+  });
+});
+
+describe('Wave 5.1 preloadAgentData single-write step & messageFingerprint memoization', () => {
+  it('preloadAgentData records Data Source Preloading via a single INSERT', async () => {
+    const log: string[] = [];
+    const step = new MockStep('preload', log);
+    const { agent, pending } = makeAgent([step]);
+
+    const preloadSpy = vi.spyOn(AgentDataPreloader.Instance, 'PreloadAgentData').mockResolvedValueOnce({
+      data: { ALL_ENTITIES: [{ Name: 'Users' }] },
+      context: {},
+      payload: {},
+      loadedSources: ['ALL_ENTITIES'],
+      failedSources: [],
+    });
+
+    try {
+      const preloadFn = Reflect.get(agent, 'preloadAgentData') as (params: {
+        agent: { ID: string; Name: string };
+        contextUser: { ID: string; Name: string };
+        conversationMessages: ChatMessage[];
+        data: Record<string, string | object>;
+        payload: Record<string, string | object>;
+      }) => Promise<void>;
+
+      await preloadFn.call(agent, {
+        agent: { ID: 'a1', Name: 'TestAgent' },
+        contextUser: { ID: 'u1', Name: 'Tester' },
+        conversationMessages: [],
+        data: {},
+        payload: {},
+      });
+      await pending();
+    } finally {
+      preloadSpy.mockRestore();
+    }
+
+    expect(log).toEqual(['preload:start:1', 'preload:end:1']);
+    expect(step.saveOptions).toHaveLength(1);
+    expect(step.Status).toBe('Completed');
+    expect(step.Success).toBe(true);
+  });
+
+  it('BaseAgent.messageFingerprint memoizes unchanged ChatMessage instances via WeakMap and invalidates on mutation', () => {
+    const msg: ChatMessage = { role: 'user', content: 'hello world' };
+    const stringifySpy = vi.spyOn(JSON, 'stringify');
+
+    try {
+      const fingerprintFn = Reflect.get(BaseAgent, 'messageFingerprint') as (m: ChatMessage) => string;
+      const fp1 = fingerprintFn.call(BaseAgent, msg);
+      const fp2 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp1).toBe(fp2);
+      expect(stringifySpy).toHaveBeenCalledTimes(1);
+
+      msg.content = 'updated';
+      const fp3 = fingerprintFn.call(BaseAgent, msg);
+
+      expect(fp3).not.toBe(fp1);
+      expect(stringifySpy).toHaveBeenCalledTimes(2);
+    } finally {
+      stringifySpy.mockRestore();
+    }
+  });
+});
+
 
 

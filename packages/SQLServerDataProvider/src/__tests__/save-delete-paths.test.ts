@@ -1814,3 +1814,140 @@ describe('SQLServerDataProvider Record Change snapshot built from the returned r
     expect(save.sql).toContain('@FullRecordJSON=@p$');
   });
 });
+
+describe('SQLServerDataProvider concurrency check inside a TransactionGroup', () => {
+  let previousProvider: IMetadataProvider | undefined;
+  beforeEach(() => {
+    mssqlState.Reset();
+    previousProvider = Metadata.Provider;
+  });
+  afterEach(() => {
+    Metadata.Provider = previousProvider as IMetadataProvider;
+  });
+
+  /** A provider in `mode`, set as the metadata provider the group's submit resolves. */
+  function groupProvider(mode: 'off' | 'log' | 'enforce', info: EntityInfo): SaveDeleteTestProvider {
+    const provider = makeProvider();
+    provider.ConcurrencyCheck = mode;
+    provider.SetTestEntities([info]);
+    Metadata.Provider = provider as unknown as IMetadataProvider;
+    return provider;
+  }
+
+  /** Queues a rename of a saved widget and a new widget into `group`. */
+  async function queueRenameAndCreate(provider: SaveDeleteTestProvider, info: EntityInfo, group: SQLServerTransactionGroup) {
+    const renamed = makeSavedWidgetEntity(info, TEST_USER);
+    renamed.TransactionGroup = group;
+    renamed.Set('Name', 'Writer A Rename');
+    const created = makeNewWidgetEntity(info, TEST_USER);
+    created.TransactionGroup = group;
+    created.Set('ID', 'w-9999');
+    created.Set('Name', 'Created');
+    created.Set('IsActive', true);
+    expect(await provider.Save(renamed, TEST_USER, new EntitySaveOptions())).toBe(true);
+    expect(await provider.Save(created, TEST_USER, new EntitySaveOptions())).toBe(true);
+    return { renamed, created };
+  }
+
+  it('enforce: a conflicting update rejects the whole group after only the locked read, inside the group transaction', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('enforce', info);
+    const group = new SQLServerTransactionGroup();
+    const { renamed, created } = await queueRenameAndCreate(provider, info, group);
+    mssqlState.QueueResult({ rows: [{ Name: 'Writer B Rename' }] });
+
+    expect(await group.Submit()).toBe(false);
+
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
+    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK)');
+    expect(mssqlState.Queries[0].viaTransaction).toBe(true);
+    expect(renamed.LatestResult?.Success).toBe(false);
+    expect(renamed.LatestResult?.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+    expect(renamed.LatestResult?.Message).toContain('Concurrent modification conflict on Widgets for field(s): Name');
+    expect(created.LatestResult?.Success).toBe(false);
+  });
+
+  it('enforce: with no conflict, the locked read runs first and the writes still go as one batch', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('enforce', info);
+    const group = new SQLServerTransactionGroup();
+    group.BatchedSubmit = true;
+    await queueRenameAndCreate(provider, info, group);
+    mssqlState.QueueResult({ rows: [{ Name: 'Widget One' }] });
+    mssqlState.QueueResult({
+      recordsets: [
+        [{ __mj_batch_item: 0 }], [{ ...savedWidgetRow(), Name: 'Writer A Rename' }],
+        [{ __mj_batch_item: 1 }], [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Created' }],
+      ],
+    });
+
+    expect(await group.Submit()).toBe(true);
+
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+    expect(mssqlState.Queries[0].sql).toContain('WITH (UPDLOCK, ROWLOCK)');
+    expect(mssqlState.Queries[1].sql).toContain('spUpdateWidget');
+    expect(mssqlState.Queries[1].sql).toContain('spCreateWidget');
+    expect(mssqlState.Queries.every((q) => q.viaTransaction)).toBe(true);
+  });
+
+  it('log: a conflict is logged and the group still commits', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('log', info);
+    const group = new SQLServerTransactionGroup();
+    await queueRenameAndCreate(provider, info, group);
+    mssqlState.QueueResult({ rows: [{ Name: 'Writer B Rename' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Writer A Rename' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Created' }] });
+
+    expect(await group.Submit()).toBe(true);
+
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'query', 'commit']);
+    expect(mssqlState.Queries[0].sql).toContain('WITH (UPDLOCK, ROWLOCK)');
+  });
+
+  it('per-save enforce on a provider that defaults to off is honored for a queued update', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('off', info);
+    const group = new SQLServerTransactionGroup();
+    const renamed = makeSavedWidgetEntity(info, TEST_USER);
+    renamed.TransactionGroup = group;
+    renamed.Set('Name', 'Writer A Rename');
+    const opts = new EntitySaveOptions();
+    opts.ConcurrencyCheck = 'enforce';
+    await provider.Save(renamed, TEST_USER, opts);
+    mssqlState.QueueResult({ rows: [{ Name: 'Writer B Rename' }] });
+
+    expect(await group.Submit()).toBe(false);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'rollback']);
+    expect(renamed.LatestResult?.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+  });
+
+  it('off: no locked read is added to the group', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('off', info);
+    const group = new SQLServerTransactionGroup();
+    await queueRenameAndCreate(provider, info, group);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Writer A Rename' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), ID: 'w-9999', Name: 'Created' }] });
+
+    expect(await group.Submit()).toBe(true);
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
+    expect(mssqlState.Queries.some((q) => q.sql.includes('UPDLOCK'))).toBe(false);
+  });
+
+  it('compares the values captured when the update was queued, not later edits to the object', async () => {
+    const info = makeWidgetEntityInfo();
+    const provider = groupProvider('enforce', info);
+    const group = new SQLServerTransactionGroup();
+    const renamed = makeSavedWidgetEntity(info, TEST_USER);
+    renamed.TransactionGroup = group;
+    renamed.Set('Name', 'Writer A Rename');
+    await provider.Save(renamed, TEST_USER, new EntitySaveOptions());
+    renamed.Set('Description', 'edited after queueing');
+    mssqlState.QueueResult({ rows: [{ Name: 'Widget One' }] });
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Writer A Rename' }] });
+
+    expect(await group.Submit()).toBe(true);
+    expect(mssqlState.Queries[0].sql).toContain('SELECT [Name] FROM [dbo].[Widget] WITH (UPDLOCK, ROWLOCK)');
+  });
+});

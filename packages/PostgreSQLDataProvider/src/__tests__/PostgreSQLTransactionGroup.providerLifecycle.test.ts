@@ -157,6 +157,42 @@ describe('PostgreSQLTransactionGroup — provider-scoped transaction lifecycle',
         ]);
     });
 
+    it('runs a pre-submit check on the group client before any write, and rolls back without writing when it rejects', async () => {
+        const rejecting = await provider.CreateTransactionGroup();
+        const rejected = makeItem('SELECT * FROM sp_update_widget($1)');
+        rejected.CheckBeforeSubmit = async () => {
+            await provider.ExecuteSQL(`SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`);
+            return false;
+        };
+        rejecting.AddTransaction(rejected);
+
+        expect(await rejecting.Submit()).toBe(false);
+        expect(client.queries).toEqual([
+            'BEGIN',
+            `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
+            'ROLLBACK',
+        ]);
+        expect(pool.queries).toEqual([]);
+
+        client.queries.length = 0;
+        const passing = await provider.CreateTransactionGroup();
+        const passed = makeItem('SELECT * FROM sp_update_widget($1)');
+        passed.CheckBeforeSubmit = async () => {
+            await provider.ExecuteSQL(`SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`);
+            return true;
+        };
+        passing.AddTransaction(passed);
+
+        expect(await passing.Submit()).toBe(true);
+        expect(client.queries).toEqual([
+            'BEGIN',
+            `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
+            'SELECT * FROM sp_update_widget($1)',
+            'COMMIT',
+        ]);
+        expect(pool.queries).toEqual([]);
+    });
+
     it('shares the single active PoolClient via SAVEPOINT when nested inside provider.BeginTransaction() and recovers cleanly on group failure', async () => {
         const fired: string[] = [];
         await provider.BeginTransaction();

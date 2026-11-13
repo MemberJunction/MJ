@@ -3470,50 +3470,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- ML Scoring Runs Section -->
+    <!-- Artifact Working States Section -->
     <mj-collapsible-panel
-        SectionKey="mJMLScoringRuns"
-        SectionName="ML Scoring Runs"
-        Icon="fa fa-chart-line"
+        SectionKey="mJArtifactWorkingStates"
+        SectionName="Artifact Working States"
+        Icon="fa fa-file-code"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLScoringRuns')"
+        [BadgeCount]="GetSectionRowCount('mJArtifactWorkingStates')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Scoring Runs','RequestedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Scoring Runs','RequestedByUserID')"
-                [AllowLoad]="IsSectionExpanded('mJMLScoringRuns')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Working States','LastModifiedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Working States','LastModifiedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactWorkingStates')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLScoringRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- ML Model Publish Records Section -->
-    <mj-collapsible-panel
-        SectionKey="mJMLModelPublishRecords"
-        SectionName="ML Model Publish Records"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLModelPublishRecords')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Publish Records','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Publish Records','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJMLModelPublishRecords')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLModelPublishRecords', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactWorkingStates', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -3056,25 +3056,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- ML Scoring Runs Section -->
+    <!-- Artifacts Section -->
     <mj-collapsible-panel
-        SectionKey="mJMLScoringRuns"
-        SectionName="ML Scoring Runs"
-        Icon="fa fa-chart-line"
+        SectionKey="mJArtifacts"
+        SectionName="Artifacts"
+        Icon="fa fa-file"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLScoringRuns')"
+        [BadgeCount]="GetSectionRowCount('mJArtifacts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Scoring Runs','ScopeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Scoring Runs','ScopeEntityID')"
-                [AllowLoad]="IsSectionExpanded('mJMLScoringRuns')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','DelegateEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifacts','DelegateEntityID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifacts')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLScoringRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifacts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

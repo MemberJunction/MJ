@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import {
@@ -27,10 +27,11 @@ import { HostAllowedAgentIDs } from './decision-discovery';
 import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
 import {
     MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJArtifactEntity, MJArtifactVersionEntity,
-    MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJAIAgentConfigurationEntity,
-    MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage
+    MJArtifactPermissionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJAIAgentConfigurationEntity,
+    MJEnvironmentEntityExtended, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage
 } from '@memberjunction/core-entities';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -660,6 +661,9 @@ export class AgentRunner {
                         const detail = agentResponseDetail;
                         const message: string = progress.message;
                         progressSaves = progressSaves.then(async () => {
+                            if (agentExecutionCompleted) {
+                                return;
+                            }
                             try {
                                 detail.Message = message;
                                 if (!(await detail.Save())) {
@@ -670,12 +674,13 @@ export class AgentRunner {
                                 LogError(`Failed to save agent response detail progress update: ${error}`, undefined, error);
                             }
                         });
-                        await progressSaves;
                     }
-                    // Call original callback if provided
+                    // Call original callback immediately if provided so WebSocket progress is emitted without waiting on DB save
                     if (originalOnProgress) {
                         await originalOnProgress(progress);
                     }
+                    // Wait for in-flight progress saves to settle so callers that await onProgress still wait for the save
+                    await progressSaves;
                 }
                 : originalOnProgress;
 
@@ -690,7 +695,7 @@ export class AgentRunner {
             // Brand-new conversations created right above have zero prior artifacts, so skip the 3 DB queries.
             const inputArtifacts = isNewConversation
                 ? []
-                : await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId);
+                : await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom, runBranchId, params.provider);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -1671,7 +1676,20 @@ export class AgentRunner {
                 contextUser
             );
 
-            if (!(await version.Load(junction.ArtifactVersionID))) {
+            let loaded = false;
+            try {
+                loaded = await version.Load(junction.ArtifactVersionID);
+            } catch (loadError) {
+                LogStatus(
+                    `Previous artifact version ${junction.ArtifactVersionID} is not accessible to user ${contextUser.ID} (${(loadError as Error)?.message ?? 'access denied'}) — falling back to create-new`
+                );
+                return null;
+            }
+
+            if (!loaded) {
+                LogStatus(
+                    `Previous artifact version ${junction.ArtifactVersionID} could not be loaded for user ${contextUser.ID} — falling back to create-new`
+                );
                 return null;
             }
 
@@ -1839,11 +1857,18 @@ export class AgentRunner {
             // source id back as its target used to do exactly that: rejected as model output, then
             // versioned anyway as a caller id, logged as both "not readable" and "creating version N").
             const rejectedIds = new Set<string>();
+            const rejectedCandidateIds: string[] = [];
             while (plan.kind === 'version') {
+                const candidateId = typeof plan.artifactId === 'string' && IsValidUUID(plan.artifactId)
+                    ? plan.artifactId.trim()
+                    : undefined;
                 const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
                 if (vetted) {
                     plan = vetted;
                     break;
+                }
+                if (candidateId) {
+                    rejectedCandidateIds.push(candidateId);
                 }
                 plan = plan.source === 'directive'
                     ? PlanArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
@@ -1853,6 +1878,8 @@ export class AgentRunner {
             let artifactId: string;
             let newVersionNumber: number;
             let isNewArtifact = false;
+            let forkedSourceArtifactId: string | undefined;
+            let forkCommentNote: string | undefined;
             // Known for a new header; looked up for an existing artifact when the version is built.
             let artifactTypeId: string | null = null;
 
@@ -1863,21 +1890,100 @@ export class AgentRunner {
                 LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.source === 'directive' ? 'agent directive' : 'sourceArtifactId'})`);
             } else {
                 // Legacy: look behind this message (only inside a conversation). 'create-new' skips the lookup.
-                const previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
+                let previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
                     ? await this.FindPreviousArtifactForMessage(conversationDetailId, contextUser, md)
                     : null;
+
+                if (previousArtifact) {
+                    const prevCandidateId = IsValidUUID(previousArtifact.artifactId)
+                        ? previousArtifact.artifactId.trim()
+                        : undefined;
+                    const vettedPrevious = await this.VetArtifactVersionTarget(
+                        { kind: 'version', artifactId: previousArtifact.artifactId, source: 'caller' },
+                        contextUser,
+                        md,
+                        agent?.Name,
+                        rejectedIds,
+                        'legacy previousArtifact'
+                    );
+                    if (!vettedPrevious) {
+                        if (prevCandidateId) {
+                            rejectedCandidateIds.push(prevCandidateId);
+                        }
+                        LogStatus(
+                            `Previous artifact ${previousArtifact.artifactId} is not editable by user ${contextUser.ID} — falling back to create-new`
+                        );
+                        previousArtifact = null;
+                    } else {
+                        previousArtifact = {
+                            artifactId: vettedPrevious.artifactId,
+                            versionNumber: previousArtifact.versionNumber
+                        };
+                    }
+                }
 
                 if (previousArtifact) {
                     artifactId = previousArtifact.artifactId;
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
+                    if (plan.kind !== 'create-new') {
+                        const normalizedCallerSource =
+                            typeof sourceArtifactId === 'string' && IsValidUUID(sourceArtifactId)
+                                ? sourceArtifactId.trim()
+                                : undefined;
+                        forkedSourceArtifactId =
+                            normalizedCallerSource && rejectedIds.has(normalizedCallerSource.toLowerCase())
+                                ? normalizedCallerSource
+                                : rejectedCandidateIds[0];
+                        if (forkedSourceArtifactId) {
+                            const callerDisplayName =
+                                contextUser.Name?.trim() || contextUser.Email?.trim() || 'current user';
+                            forkCommentNote =
+                                `Forked new artifact from ${forkedSourceArtifactId} because edit access was not granted on the source artifact for user ${callerDisplayName}.`;
+                        }
+                    }
+                    const artifact = await this.createArtifactHeader(
+                        md,
+                        contextUser,
+                        agent,
+                        creationMode,
+                        directive,
+                        payload,
+                        forkCommentNote
+                    );
                     artifactId = artifact.ID;
                     artifactTypeId = artifact.TypeID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
                     LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
+                    if (forkedSourceArtifactId) {
+                        const failedGrantRecipients = await this.grantForkedArtifactReadPermissions(
+                            md,
+                            artifactId,
+                            forkedSourceArtifactId,
+                            conversationDetailId,
+                            contextUser
+                        );
+                        if (failedGrantRecipients.length > 0) {
+                            const warningNote =
+                                `Warning: read access could not be automatically granted to conversation participant(s): ${failedGrantRecipients.join(', ')}.`;
+                            forkCommentNote = forkCommentNote
+                                ? `${forkCommentNote} ${warningNote}`
+                                : warningNote;
+                            artifact.Comments = forkCommentNote;
+                            const savedWarning = await artifact.Save();
+                            if (!savedWarning) {
+                                LogError(
+                                    `Failed to save fork permission warning comment on artifact ${artifact.ID}: ${
+                                        artifact.LatestResult?.CompleteMessage ||
+                                        artifact.LatestResult?.Message ||
+                                        'Save() returned false'
+                                    }`
+                                );
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1942,6 +2048,9 @@ export class AgentRunner {
             }
             if (directiveDescription || payloadDescription) {
                 version.Description = directiveDescription || payloadDescription || null;
+            }
+            if (forkCommentNote) {
+                version.Comments = forkCommentNote;
             }
 
             if (!(await version.Save())) {
@@ -2150,9 +2259,11 @@ export class AgentRunner {
         contextUser: UserInfo,
         md: IMetadataProvider,
         agentName: string | undefined,
-        rejectedIds: Set<string>
+        rejectedIds: Set<string>,
+        originLabel?: string
     ): Promise<Extract<ArtifactTargetPlan, { kind: 'version' }> | null> {
-        const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
+        const origin = originLabel
+            ?? (plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId');
 
         if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
             LogError(`Ignoring ${origin}: "${AgentRunner.describeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
@@ -2164,53 +2275,231 @@ export class AgentRunner {
             LogError(`Ignoring ${origin}: artifact ${artifactId} was already rejected for this run`);
             return null;
         }
-        if (plan.source !== 'directive') {
-            return { ...plan, artifactId };
-        }
 
         const reject = (reason: string): null => {
             rejectedIds.add(artifactId.toLowerCase());
-            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason}`);
+            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason} — falling back to create-new`);
             return null;
         };
 
         try {
-            const rv = RunView.FromMetadataProvider(md);
-            // One round trip for both questions: does the artifact exist, and may this user add to it.
-            const [ownerResult, grantResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: Artifacts',
-                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
-                    Fields: ['ID', 'UserID'],
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple',
-                },
-                {
-                    EntityName: 'MJ: Artifact Permissions',
-                    ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(contextUser.ID)}' AND CanEdit=1`,
-                    Fields: ['ID'],
-                    MaxRows: 1,
-                    SkipTotalRowCount: true,
-                    ResultType: 'simple',
-                },
-            ], contextUser);
-
-            const owner = ownerResult?.Success ? (ownerResult.Results?.[0] as { UserID?: string } | undefined) : undefined;
-            if (!owner) {
-                return reject('was not found or is not readable');
-            }
-            if (UUIDsEqual(owner.UserID, contextUser.ID)) {
+            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                md,
+                artifactId,
+                contextUser
+            );
+            if (perms.CanEdit) {
                 return { ...plan, artifactId };
             }
-            if (grantResult?.Success && (grantResult.Results?.length ?? 0) > 0) {
-                return { ...plan, artifactId };
-            }
-            return reject(`is owned by another user and this user holds no CanEdit grant on it`);
+            const reasonDetail = perms.Reason
+                ? `user holds no CanEdit grant on it (${perms.Reason})`
+                : 'user holds no CanEdit grant on it';
+            return reject(reasonDetail);
         } catch (error) {
             // Fail closed: an unavailable lookup must not become an unchecked write.
             return reject(`could not be verified (${(error as Error)?.message ?? 'unknown error'})`);
         }
+    }
+
+    /**
+     * Grants explicit `CanRead = true` on a newly forked artifact to the original source
+     * artifact's owner, the conversation's owner, and every distinct conversation participant (`D3`).
+     * Returns human-readable display names for any recipients whose grant could not be persisted
+     * (never raw user GUIDs).
+     */
+    private async grantForkedArtifactReadPermissions(
+        md: IMetadataProvider,
+        newArtifactId: string,
+        sourceArtifactId: string,
+        conversationDetailId: string | undefined,
+        contextUser: UserInfo
+    ): Promise<string[]> {
+        const failedRecipients: string[] = [];
+        const recipientByNormId = new Map<string, string>();
+        const displayNameByNormId = new Map<string, string>();
+        try {
+            const rv = RunView.FromMetadataProvider(md);
+            const addRecipient = (
+                candidateUserId: string | null | undefined,
+                candidateDisplayName?: string | null
+            ): void => {
+                const trimmed = (candidateUserId ?? '').trim();
+                if (!trimmed || UUIDsEqual(trimmed, contextUser.ID)) {
+                    return;
+                }
+                const norm = NormalizeUUID(trimmed);
+                if (!recipientByNormId.has(norm)) {
+                    recipientByNormId.set(norm, trimmed);
+                }
+                const cleanDisplay = (candidateDisplayName ?? '').trim();
+                if (cleanDisplay && !displayNameByNormId.has(norm)) {
+                    displayNameByNormId.set(norm, cleanDisplay);
+                }
+            };
+
+            const sourceArtRes = await rv.RunView<{ ID: string; UserID?: string | null; User?: string | null }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(sourceArtifactId)}'`,
+                    Fields: ['ID', 'UserID', 'User'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                contextUser
+            );
+            if (sourceArtRes.Success && sourceArtRes.Results?.length) {
+                addRecipient(sourceArtRes.Results[0].UserID, sourceArtRes.Results[0].User);
+            }
+
+            if (conversationDetailId && IsValidUUID(conversationDetailId)) {
+                const detailRes = await rv.RunView<{ ID: string; ConversationID?: string | null }>(
+                    {
+                        EntityName: 'MJ: Conversation Details',
+                        ExtraFilter: `ID='${EscapeSQLString(conversationDetailId.trim())}'`,
+                        Fields: ['ID', 'ConversationID'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple'
+                    },
+                    contextUser
+                );
+                const convId = detailRes.Success ? detailRes.Results?.[0]?.ConversationID?.trim() : undefined;
+                if (convId && IsValidUUID(convId)) {
+                    const safeConvId = EscapeSQLString(convId);
+                    const participantPageSize = 500;
+                    const maxParticipantPages = 100;
+                    const fetchAllParticipantRows = async (): Promise<
+                        Array<{ UserID?: string | null; User?: string | null }>
+                    > => {
+                        const collected: Array<{ UserID?: string | null; User?: string | null }> = [];
+                        let startRow = 0;
+                        for (let page = 0; page < maxParticipantPages; page++) {
+                            const pageRes = await rv.RunView<{ UserID?: string | null; User?: string | null }>(
+                                {
+                                    EntityName: 'MJ: Conversation Details',
+                                    ExtraFilter: `ConversationID='${safeConvId}' AND UserID IS NOT NULL`,
+                                    Fields: ['UserID', 'User'],
+                                    OrderBy: '__mj_CreatedAt ASC, ID ASC',
+                                    MaxRows: participantPageSize,
+                                    StartRow: startRow,
+                                    SkipTotalRowCount: true,
+                                    ResultType: 'simple'
+                                },
+                                contextUser
+                            );
+                            if (!pageRes.Success) {
+                                LogError(
+                                    `Failed to query conversation participants for forked artifact ${newArtifactId} (conversation ${convId}): ${
+                                        pageRes.ErrorMessage || 'RunView returned Success=false'
+                                    }`
+                                );
+                                break;
+                            }
+                            const rows = Array.isArray(pageRes.Results) ? pageRes.Results : [];
+                            collected.push(...rows);
+                            if (rows.length < participantPageSize) {
+                                break;
+                            }
+                            if (page === maxParticipantPages - 1 && rows.length === participantPageSize) {
+                                LogError(
+                                    `Participant paging reached the ${maxParticipantPages}-page (${
+                                        maxParticipantPages * participantPageSize
+                                    }-row) safety cap for conversation ${convId} while sharing forked artifact ${newArtifactId}.`
+                                );
+                            }
+                            startRow += rows.length;
+                        }
+                        return collected;
+                    };
+
+                    const [convRes, participantRows] = await Promise.all([
+                        rv.RunView<{ ID: string; UserID?: string | null; User?: string | null }>(
+                            {
+                                EntityName: 'MJ: Conversations',
+                                ExtraFilter: `ID='${safeConvId}'`,
+                                Fields: ['ID', 'UserID', 'User'],
+                                MaxRows: 1,
+                                SkipTotalRowCount: true,
+                                ResultType: 'simple'
+                            },
+                            contextUser
+                        ),
+                        fetchAllParticipantRows()
+                    ]);
+                    if (convRes.Success && convRes.Results?.length) {
+                        addRecipient(convRes.Results[0].UserID, convRes.Results[0].User);
+                    }
+                    for (const row of participantRows) {
+                        addRecipient(row.UserID, row.User);
+                    }
+                }
+            }
+
+            const userByNormId = new Map<string, UserInfo>();
+            const cachedUsers = UserCache.Instance.Users;
+            if (Array.isArray(cachedUsers)) {
+                for (const u of cachedUsers) {
+                    if (u?.ID) {
+                        userByNormId.set(NormalizeUUID(u.ID), u);
+                    }
+                }
+            }
+
+            const formatRecipientLabel = (normId: string): string => {
+                const u = userByNormId.get(normId);
+                const fromUser = u?.Name?.trim() || u?.Email?.trim();
+                if (fromUser) {
+                    return fromUser;
+                }
+                const fromRow = displayNameByNormId.get(normId);
+                if (fromRow) {
+                    return fromRow;
+                }
+                return 'participant';
+            };
+
+            for (const [normId, recipientUserId] of recipientByNormId.entries()) {
+                try {
+                    const perm = await md.GetEntityObject<MJArtifactPermissionEntity>(
+                        'MJ: Artifact Permissions',
+                        contextUser
+                    );
+                    perm.NewRecord();
+                    perm.ArtifactID = newArtifactId;
+                    perm.UserID = recipientUserId;
+                    perm.CanRead = true;
+                    perm.CanEdit = false;
+                    perm.CanDelete = false;
+                    perm.CanShare = false;
+                    perm.SharedByUserID = contextUser.ID;
+                    if (!(await perm.Save())) {
+                        failedRecipients.push(formatRecipientLabel(normId));
+                        LogError(
+                            `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
+                                perm.LatestResult?.CompleteMessage ||
+                                perm.LatestResult?.Message ||
+                                'Save() returned false'
+                            }`
+                        );
+                    }
+                } catch (saveErr) {
+                    failedRecipients.push(formatRecipientLabel(normId));
+                    LogError(
+                        `Failed to grant CanRead on forked artifact ${newArtifactId} to user ${recipientUserId}: ${
+                            saveErr instanceof Error ? saveErr.message : String(saveErr)
+                        }`
+                    );
+                }
+            }
+        } catch (err) {
+            LogError(
+                `Failed to grant read visibility on forked artifact ${newArtifactId}: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+        }
+        return failedRecipients;
     }
 
     /**
@@ -2288,7 +2577,8 @@ export class AgentRunner {
         agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
         creationMode: string | undefined,
         directive: ArtifactDirective | undefined,
-        payload?: unknown
+        payload?: unknown,
+        comments?: string
     ): Promise<MJArtifactEntity> {
         const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
 
@@ -2322,6 +2612,9 @@ export class AgentRunner {
             LogStatus(`Artifact marked as "System Only" per agent configuration`);
         } else {
             artifact.Visibility = 'Always';
+        }
+        if (comments) {
+            artifact.Comments = comments;
         }
 
         if (!(await artifact.Save())) {
@@ -3108,7 +3401,7 @@ export class AgentRunner {
         if (!conversationId) {
             return params;
         }
-        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser, params.ConversationHistoryFrom, params.ConversationBranchID);
+        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser, params.ConversationHistoryFrom, params.ConversationBranchID, params.provider);
         return inputArtifacts.length > 0 ? { ...params, inputArtifacts } : params;
     }
 
@@ -3138,11 +3431,12 @@ export class AgentRunner {
      * @param branchId The run's branch; only artifacts of messages on its path that no rerun
      *   replaced are gathered.
      */
-    private async gatherConversationArtifacts(
+    protected async gatherConversationArtifacts(
         conversationId: string,
         contextUser: UserInfo,
         historyFrom?: Date,
-        branchId?: string | null
+        branchId?: string | null,
+        provider?: IMetadataProvider
     ): Promise<InputArtifact[]> {
         try {
             const rv = new RunView();
@@ -3209,7 +3503,35 @@ export class AgentRunner {
                 if (!versionResult.Success) {
                     LogError(`[AgentRunner] GetArtifactVersionsByID failed: ${versionResult.ErrorMessage}`);
                 } else {
-                    for (const row of versionResult.Results as ArtifactVersionRow[]) {
+                    const rows = versionResult.Results as ArtifactVersionRow[];
+                    const canReadByArtifactId = new Map<string, boolean>();
+                    const permissionProvider = provider ?? this._provider;
+
+                    for (const row of rows) {
+                        const artId = (row.ArtifactID ?? '').trim();
+                        if (!artId) {
+                            continue;
+                        }
+                        const normArtId = NormalizeUUID(artId);
+                        if (!canReadByArtifactId.has(normArtId)) {
+                            if (!permissionProvider) {
+                                canReadByArtifactId.set(normArtId, false);
+                                continue;
+                            }
+                            const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                                permissionProvider,
+                                artId,
+                                contextUser
+                            );
+                            canReadByArtifactId.set(normArtId, perms.CanRead === true);
+                        }
+                    }
+
+                    for (const row of rows) {
+                        const rowArtifactId = (row.ArtifactID ?? '').trim();
+                        if (!rowArtifactId || canReadByArtifactId.get(NormalizeUUID(rowArtifactId)) !== true) {
+                            continue;
+                        }
                         const artifactName = row.VersionName || row.ArtifactName || 'Untitled';
                         const typeName = row.TypeName || 'Text';
 

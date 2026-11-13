@@ -11138,6 +11138,54 @@ export const MJArtifactVersionSchema = z.object({
 export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Working States
+ */
+export const MJArtifactWorkingStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+        * * Description: The Artifact whose active collaborative CRDT state is stored in this working state record (1:1 relationship).`),
+    YjsState: z.string().nullable().describe(`
+        * * Field Name: YjsState
+        * * Display Name: Yjs State
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: Compacted Yjs CRDT state vector (Y.encodeStateAsUpdate) stored as binary bytes (exposed as base64 in TypeScript entities). Periodically checkpointed during active editing and compacted into MJ: Artifact Versions on save or session close.`),
+    LastModifiedByUserID: z.string().nullable().describe(`
+        * * Field Name: LastModifiedByUserID
+        * * Display Name: Last Modified By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who most recently modified or checkpointed this working state.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact Name
+        * * SQL Data Type: nvarchar(255)`),
+    LastModifiedByUser: z.string().nullable().describe(`
+        * * Field Name: LastModifiedByUser
+        * * Display Name: Last Modified By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJArtifactWorkingStateEntityType = z.infer<typeof MJArtifactWorkingStateSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifacts
  */
 export const MJArtifactSchema = z.object({
@@ -11197,6 +11245,17 @@ export const MJArtifactSchema = z.object({
     *   * Always
     *   * System Only
         * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
+    DelegateEntityID: z.string().nullable().describe(`
+        * * Field Name: DelegateEntityID
+        * * Display Name: Delegate Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Optional foreign key to MJ: Entities identifying the host entity that delegates read/edit/delete/share permissions for this artifact via IArtifactPermissionDelegate (or parent artifact inheritance). Must be paired with DelegateRecordID.`),
+    DelegateRecordID: z.string().nullable().describe(`
+        * * Field Name: DelegateRecordID
+        * * Display Name: Delegate Record ID
+        * * SQL Data Type: nvarchar(700)
+        * * Description: Primary key or composite key string of the record in DelegateEntityID that governs permissions for this artifact. When NULL (along with DelegateEntityID), permissions are evaluated strictly from MJ: Artifact Permissions and artifact ownership.`),
     Environment: z.string().nullable().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -11209,6 +11268,10 @@ export const MJArtifactSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    DelegateEntity: z.string().nullable().describe(`
+        * * Field Name: DelegateEntity
+        * * Display Name: Delegate Entity Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJArtifactEntityType = z.infer<typeof MJArtifactSchema>;
@@ -77914,6 +77977,155 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
 
 /**
+ * MJ: Artifact Working States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactWorkingState
+ * * Base View: vwArtifactWorkingStates
+ * * @description Stores the live compacted Yjs CRDT binary working state (1:1 per Artifact) for active collaborative editing sessions across MJ Docs, Slides, Sheets, and inline OLE artifacts before compaction into immutable MJ: Artifact Versions checkpoints.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Working States')
+export class MJArtifactWorkingStateEntity extends BaseEntity<MJArtifactWorkingStateEntityType> {
+    /**
+    * Loads the MJ: Artifact Working States record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Working States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJArtifactWorkingStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Artifact Working States - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactWorkingStateEntity
+    * @throws {Error} - Save is not allowed for MJ: Artifact Working States, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Artifact Working States, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Artifact Working States - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJArtifactWorkingStateEntity
+    * @throws {Error} - Delete is not allowed for MJ: Artifact Working States, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Artifact Working States, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    * * Description: The Artifact whose active collaborative CRDT state is stored in this working state record (1:1 relationship).
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: YjsState
+    * * Display Name: Yjs State
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: Compacted Yjs CRDT state vector (Y.encodeStateAsUpdate) stored as binary bytes (exposed as base64 in TypeScript entities). Periodically checkpointed during active editing and compacted into MJ: Artifact Versions on save or session close.
+    */
+    get YjsState(): string | null {
+        return this.Get('YjsState');
+    }
+    set YjsState(value: string | null) {
+        this.Set('YjsState', value);
+    }
+
+    /**
+    * * Field Name: LastModifiedByUserID
+    * * Display Name: Last Modified By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who most recently modified or checkpointed this working state.
+    */
+    get LastModifiedByUserID(): string | null {
+        return this.Get('LastModifiedByUserID');
+    }
+    set LastModifiedByUserID(value: string | null) {
+        this.Set('LastModifiedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: LastModifiedByUser
+    * * Display Name: Last Modified By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastModifiedByUser(): string | null {
+        return this.Get('LastModifiedByUser');
+    }
+}
+
+
+/**
  * MJ: Artifacts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Artifact
@@ -78074,6 +78286,33 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     }
 
     /**
+    * * Field Name: DelegateEntityID
+    * * Display Name: Delegate Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Optional foreign key to MJ: Entities identifying the host entity that delegates read/edit/delete/share permissions for this artifact via IArtifactPermissionDelegate (or parent artifact inheritance). Must be paired with DelegateRecordID.
+    */
+    get DelegateEntityID(): string | null {
+        return this.Get('DelegateEntityID');
+    }
+    set DelegateEntityID(value: string | null) {
+        this.Set('DelegateEntityID', value);
+    }
+
+    /**
+    * * Field Name: DelegateRecordID
+    * * Display Name: Delegate Record ID
+    * * SQL Data Type: nvarchar(700)
+    * * Description: Primary key or composite key string of the record in DelegateEntityID that governs permissions for this artifact. When NULL (along with DelegateEntityID), permissions are evaluated strictly from MJ: Artifact Permissions and artifact ownership.
+    */
+    get DelegateRecordID(): string | null {
+        return this.Get('DelegateRecordID');
+    }
+    set DelegateRecordID(value: string | null) {
+        this.Set('DelegateRecordID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -78098,6 +78337,15 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     */
     get User(): string | null {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: DelegateEntity
+    * * Display Name: Delegate Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DelegateEntity(): string | null {
+        return this.Get('DelegateEntity');
     }
 }
 
