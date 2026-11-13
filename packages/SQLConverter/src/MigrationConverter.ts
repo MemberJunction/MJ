@@ -7,7 +7,10 @@
  * It does NOT try to translate everything. Content is routed by which generator
  * produced it:
  *   - Category A (CodeGen objects)      → DROPPED; regenerated natively by `mj codegen` on PG.
- *   - Category M (mj-sync metadata)     → DROPPED; re-seeded by `mj sync push` on PG.
+ *   - Category M (mj-sync metadata)     → an mj-sync log file is converted inline through the
+ *     legacy rule pipeline's EXEC-block conversion (one `DO` block per save), so a migrate-only
+ *     install (an Open App) gets its seed rows (#5543). Metadata DML inside a schema migration
+ *     is still dropped as before.
  *   - Category B (regular hand DDL/DML) → transpiled via the AST dialect (sqlglot `mj_postgres.py`).
  *   - Category C (hand-written procedural SQL) → schema DDL still transpiled; the
  *     procedural routines are surfaced as NEEDS-HAND-AUTHORING gaps.
@@ -30,6 +33,8 @@ import { CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComment
 import { SeedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 import { SP_REFRESHVIEW_CALL, DescribeRefreshView } from './rules/StatementClassifier.js';
 import { GetPGCatalogViewDefinition } from './rules/CatalogViewRule.js';
+import { ConvertFile } from './rules/BatchConverter.js';
+import { GetTSQLToPostgresRules } from './rules/TSQLToPostgresRules.js';
 
 export type ConversionStatus =
   /** Category-B content was transpiled into `pgSQL`. */
@@ -382,6 +387,9 @@ export async function ConvertMigration(
 ): Promise<MigrationConversionResult> {
   const kept = ExtractKeptTSQL(sql, fileName);
   const warnings = RefreshViewWarnings(sql, fileName);
+  if (IsMetadataSyncLog(kept)) {
+    return convertSyncLogInline(sql, kept, warnings, options);
+  }
   const stmts = SplitByStatement(sql, { HandWrittenViews: ViewsAreHandWritten(kept.split, sql) });
   const sourceStatements = stmts.filter((s) => s.kind !== 'noise').length;
 
@@ -544,6 +552,101 @@ export async function ConvertMigration(
       gaps: unhandled.length + kept.handProcedural.length,
       accountingLeak,
       suspiciousEmptyOutput,
+    },
+    warnings,
+  };
+}
+
+/**
+ * Whether a migration is an mj-sync log: named `…Metadata_Sync…`, or with nothing but mj-sync
+ * metadata regions and nothing for the AST transpiler. Such a file is converted inline
+ * ({@link convertSyncLogInline}) instead of becoming a "re-seeded by `mj sync push`" marker.
+ */
+export function IsMetadataSyncLog(kept: KeptTSQL): boolean {
+  if (/Metadata_Sync/i.test(kept.fileName)) return true;
+  const regions = kept.split.handAuthoredRegions;
+  return !kept.tsql.trim() && regions.length > 0 && regions.every((r) => r.kind === 'metadata-sync');
+}
+
+/**
+ * Convert an mj-sync log on the split path through the legacy rule pipeline, which turns each
+ * save's `DECLARE … EXEC [schema].spX …` block into a `DO $mj$` block (#5543 item 1).
+ *
+ * The split path used to write a marker saying the metadata is re-seeded by `mj sync push`. That
+ * holds for MJ core's release, but the Open App installer runs migrations only, so a PostgreSQL
+ * install of an app had none of its seed rows or entity settings. There is no CodeGen in a sync
+ * log, so there is nothing to bake. The legacy pipeline's own checks still apply: a save with no
+ * converted block is a `-- MISSING SAVES` gap, and every gap marker is reported here as unhandled.
+ */
+/** What the legacy pipeline writes for an EXEC it skips as SQL Server-only. */
+const SKIPPED_EXEC_NOTE = '-- SKIPPED EXEC (not supported in PG)';
+/** The legacy pipeline's catch-all output section. */
+const OTHER_SECTION_HEADER = '-- ===================== Other =====================';
+
+/** True when the legacy output's catch-all section holds anything but comments (the session footer). */
+function hasCodeInOtherSection(output: string): boolean {
+  const start = output.indexOf(OTHER_SECTION_HEADER);
+  if (start < 0) return false;
+  const rest = output.slice(start + OTHER_SECTION_HEADER.length);
+  const next = rest.search(/^-- =====================/m);
+  const section = next < 0 ? rest : rest.slice(0, next);
+  return section.split('\n').some((line) => line.trim() !== '' && !line.trim().startsWith('--'));
+}
+
+function convertSyncLogInline(
+  sql: string,
+  kept: KeptTSQL,
+  warnings: string[],
+  options: ConvertMigrationOptions,
+): MigrationConversionResult {
+  const schema = options.schema ?? '__mj';
+  const coreSchema = options.coreSchema ?? '__mj';
+  const result = ConvertFile({
+    Source: sql,
+    SourceIsFile: false,
+    Rules: GetTSQLToPostgresRules(),
+    Schema: schema,
+    IncludeHeader: false,
+    EnablePostProcess: true,
+  });
+  const unhandled: UnhandledStatement[] = [
+    ...result.Stats.GapBatches.map((g) => ({ kind: 'SYNC-LOG-GAP', snippet: g })),
+    ...result.Stats.ErrorBatches.map((e) => ({ kind: 'SYNC-LOG-ERROR', snippet: e })),
+  ];
+  // A sync log holds save blocks and nothing else. A batch the legacy pipeline skipped as
+  // SQL Server-only, or routed to its catch-all section, is a save it did not convert.
+  if (result.OutputSQL.includes(SKIPPED_EXEC_NOTE)) {
+    unhandled.push({ kind: 'SYNC-LOG-EXEC-SKIPPED', snippet: 'an EXEC in the mj-sync log was skipped as SQL Server-only' });
+  }
+  if (hasCodeInOtherSection(result.OutputSQL)) {
+    unhandled.push({ kind: 'SYNC-LOG-UNCLASSIFIED', snippet: 'part of the mj-sync log is not a save block and was passed through unconverted' });
+  }
+  const body = result.OutputSQL.trim()
+    // Same substitution as the transpiled path (assemblePgSQL): `${mjSchema}` is MJ core, and
+    // `--bake-codegen` executes this body against the working database (#3838).
+    .replaceAll('${mjSchema}', () => coreSchema);
+  const parts: string[] = [];
+  if (options.includeHeader ?? true) parts.push(pgHeader(kept.fileName));
+  const gaps = gapComments([], unhandled);
+  if (gaps) parts.push(gaps);
+  parts.push(`-- mj-sync log converted inline (one DO block per save).\n${body}`);
+  const emittedStatements = (body.match(/^DO \$mj\$/gm) ?? []).length;
+  return {
+    fileName: kept.fileName,
+    status: unhandled.length > 0 ? 'needs-hand-authoring' : 'converted',
+    pgSQL: parts.join('\n\n') + '\n',
+    split: kept.split,
+    droppedCodeGenLines: 0,
+    unhandled,
+    handProcedural: [],
+    droppedObjects: [],
+    notes: [`mj-sync log converted inline: ${emittedStatements} save block(s).`],
+    reconciliation: {
+      sourceStatements: (sql.match(/^[ \t]*-- Save\b/gm) ?? []).length,
+      emittedStatements,
+      gaps: unhandled.length,
+      accountingLeak: false,
+      suspiciousEmptyOutput: false,
     },
     warnings,
   };

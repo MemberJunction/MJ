@@ -240,6 +240,7 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // at each emission site so a gap from ANY rule — present or future — is counted: rules
   // return their marker as an ordinary string, so nothing else in this pipeline can tell
   // that the batch it just counted as `Converted` is unusable SQL (issue #3857).
+  fullOutput = restoreCoreSchemaPlaceholder(fullOutput);
   fullOutput = appendMissingSavesMarker(rawSQL, fullOutput);
   recordOutputGaps(fullOutput, stats);
 
@@ -289,9 +290,31 @@ function recordOutputGaps(output: string, stats: ConversionStats): void {
 /** The `GapBatches` prefix of a line that kept a T-SQL bracket identifier inside a dollar-quoted block. */
 const GAP_BRACKET_IN_DOLLAR_BLOCK = 'T-SQL bracket identifier left in a dollar-quoted block:';
 
-/** Replace Flyway placeholders with target schema */
+/**
+ * Stand-in for an Open App's `${mjSchema}` core-schema placeholder while the rules run (#5543).
+ * The placeholder is not an identifier, so a core call `EXEC [${mjSchema}].spUpdateEntityField …`
+ * matched none of the classifier's EXEC patterns and was skipped. Word characters only, so it
+ * classifies and converts like any schema name; {@link restoreCoreSchemaPlaceholder} puts the
+ * placeholder back, and the Open App installer substitutes it at apply time (decision pg.1, A).
+ */
+export const CORE_SCHEMA_SENTINEL = '__mj_core_schema_placeholder__';
+
+/** Replace Flyway placeholders with target schema, and protect `${mjSchema}` used as a schema qualifier. */
 function preprocess(sql: string, schema: string): string {
-  return sql.replace(/\$\{flyway:defaultSchema\}/g, schema);
+  return sql
+    .replace(/\$\{flyway:defaultSchema\}/g, schema)
+    // `[${mjSchema}].x` and `${mjSchema}.x` only: a name BUILT from the placeholder
+    // (`[${mjSchema}_BizAppsCommon]`) is not the core schema and keeps its own handling.
+    .replace(/\[\$\{mjSchema\}\](?=\s*\.)/g, () => `[${CORE_SCHEMA_SENTINEL}]`)
+    .replace(/\$\{mjSchema\}(?=\s*\.)/g, () => CORE_SCHEMA_SENTINEL);
+}
+
+/** Put the `${mjSchema}` placeholder back wherever the rules emitted the sentinel. */
+function restoreCoreSchemaPlaceholder(sql: string): string {
+  return sql
+    .replaceAll(`"${CORE_SCHEMA_SENTINEL}"`, () => '${mjSchema}')
+    .replaceAll(`[${CORE_SCHEMA_SENTINEL}]`, () => '${mjSchema}')
+    .replaceAll(CORE_SCHEMA_SENTINEL, () => '${mjSchema}');
 }
 
 /** An mj-sync log announces each save with a `-- Save <entity>…` line above its block. */
