@@ -27,7 +27,8 @@ import type {
 } from '@memberjunction/server-extensions-core';
 import { CreateMCPRouters, MCPCorsMiddleware, ToolFilterOptions } from './Server.js';
 import type { MCPTransportRouter } from './Server.js';
-import { SetHostedResourceIdentifier } from './auth/OAuthConfig.js';
+import { GetResourceIdentifier, SetHostedResourceIdentifier } from './auth/OAuthConfig.js';
+import { InitConfig, McpServerSettings } from './config.js';
 
 /**
  * The extension entry MJAPI mounts when this package is listed in `dynamicPackages.server[]`.
@@ -51,11 +52,13 @@ export interface MCPMount {
  * Works out the mount and public URLs from the extension context.
  *
  * `RootPath` arrives already composed under MJAPI's base path, so it is mounted as-is. The public
- * URL follows the extension contract: `publicUrl` (where the world reaches MJAPI, prefix included)
- * plus the root relative to `apiRootPath` — never `publicUrl` + the composed `RootPath`, which
- * would count the prefix twice. The two paths can differ when a proxy rewrites the prefix.
+ * URL is the root relative to `apiRootPath`, made absolute by `absoluteApiRoute` — MJServer's
+ * `ApiRoute(subpath, { absolute: true })`, which uses `MJAPI_PUBLIC_URL` (prefix included) or,
+ * without it, `baseUrl:port` + the base path. The context's `publicUrl` is not used: without
+ * `MJAPI_PUBLIC_URL` it falls back to `baseUrl:port` + `GRAPHQL_ROOT_PATH` and loses the base path.
+ * The mount path and the public path can differ when a proxy rewrites the prefix.
  */
-export function ResolveMCPMount(rootPath: string, apiRootPath: string | undefined, publicUrl: string | undefined): MCPMount {
+export function ResolveMCPMount(rootPath: string, apiRootPath: string | undefined, absoluteApiRoute: (subpath: string) => string): MCPMount {
     const mountPath = trimTrailingSlashes(rootPath);
     const basePath = trimTrailingSlashes(apiRootPath ?? '');
     if (!mountPath.startsWith('/')) {
@@ -64,11 +67,11 @@ export function ResolveMCPMount(rootPath: string, apiRootPath: string | undefine
     if (basePath && mountPath !== basePath && !mountPath.startsWith(`${basePath}/`)) {
         throw new Error(`MCPServerExtension RootPath '${rootPath}' is not under MJAPI's base path '${basePath}'`);
     }
-    if (!publicUrl) {
-        throw new Error('MCPServerExtension needs MJAPI\'s public URL (MJAPI_PUBLIC_URL) to build its OAuth resource identifier');
+    const relativeRoot = mountPath.slice(basePath.length);
+    if (!relativeRoot) {
+        throw new Error(`MCPServerExtension RootPath '${rootPath}' must be below MJAPI's base path, not equal to it`);
     }
-    const relativeRoot = mountPath.slice(basePath.length) || '/';
-    const publicEndpointUrl = `${trimTrailingSlashes(publicUrl)}${relativeRoot === '/' ? '' : relativeRoot}`;
+    const publicEndpointUrl = trimTrailingSlashes(absoluteApiRoute(relativeRoot));
     const publicPath = trimTrailingSlashes(new URL(publicEndpointUrl).pathname);
     return { MountPath: mountPath, PublicEndpointUrl: publicEndpointUrl, SSEMessagesPath: `${publicPath}/messages` };
 }
@@ -127,12 +130,15 @@ export class MCPServerExtension extends BaseServerExtension {
     public async Initialize(contextOrApp: ServerExtensionInitContext | Application, config?: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
             const context = requireContext(contextOrApp, config);
-            const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, context.publicUrl);
-            if (context.config.OwnsCORS !== true) {
-                console.warn('[MCPServerExtension] OwnsCORS is not true: MJAPI\'s CORS answers preflights for the MCP routes, so browser-based MCP clients may be refused. Set OwnsCORS: true on the serverExtensions entry.');
-            }
+            // Dynamic import, as in auth/TokenValidator.ts: @memberjunction/server reads process.env when
+            // first evaluated, and the standalone server (which also loads this module) must load its .env
+            // first. Inside MJAPI the module is already loaded, so this costs nothing.
+            const { ApiRoute } = await import('@memberjunction/server');
+            const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => ApiRoute(sub, { absolute: true }));
 
+            await InitConfig();
             SetHostedResourceIdentifier(mount.PublicEndpointUrl);
+            warnAboutHostedSettings(context.config, mount);
             const routers = await CreateMCPRouters({
                 SSEMessagesPath: mount.SSEMessagesPath,
                 filterOptions: ParseMCPExtensionToolFilter(context.config.Settings),
@@ -164,6 +170,20 @@ export class MCPServerExtension extends BaseServerExtension {
             Name: 'MCPServerExtension',
             Details: { Routes: [...this.routes], OpenSessions: this.transport?.SessionCount() ?? 0 },
         };
+    }
+}
+
+/** Logs settings that don't behave inside MJAPI the way they do on the standalone server. */
+function warnAboutHostedSettings(config: ServerExtensionConfig, mount: MCPMount): void {
+    if (config.OwnsCORS !== true) {
+        console.warn('[MCPServerExtension] OwnsCORS is not true: MJAPI\'s CORS answers preflights for the MCP routes, so browser-based MCP clients may be refused. Set OwnsCORS: true on the serverExtensions entry.');
+    }
+    const advertised = GetResourceIdentifier();
+    if (advertised !== mount.PublicEndpointUrl) {
+        console.warn(`[MCPServerExtension] mcpServerSettings.auth.resourceIdentifier (${advertised}) overrides the URL MCP is served at (${mount.PublicEndpointUrl}). OAuth clients will look for metadata under ${advertised}; remove the setting unless a proxy maps it here.`);
+    }
+    if (McpServerSettings?.trustProxy !== undefined) {
+        console.warn('[MCPServerExtension] mcpServerSettings.trustProxy has no effect inside MJAPI: Express reads trust proxy from MJAPI\'s app, which the extension does not change. Set it with an MJAPI server middleware if the OAuth proxy rate limit needs real client IPs.');
     }
 }
 

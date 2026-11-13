@@ -7,9 +7,12 @@ import { ValidateServerExtensionRootPath, GetCorsOwningServerExtensionRoots, Pre
 import { ResolveMCPMount, ParseMCPExtensionToolFilter, MCPServerExtension, MJ_SERVER_EXTENSIONS } from '../MCPServerExtension.js';
 import { GetResourceIdentifier, SetHostedResourceIdentifier } from '../auth/OAuthConfig.js';
 
+/** Stands in for MJServer's ApiRoute(subpath, { absolute: true }) with a given public base. */
+const publicBase = (base: string) => (subpath: string) => `${base}${subpath}`;
+
 describe('ResolveMCPMount', () => {
     it('serves under the base path: Explorer at /, MJAPI at /api', () => {
-        expect(ResolveMCPMount('/api/mcp', '/api', 'https://app.example.com/api')).toEqual({
+        expect(ResolveMCPMount('/api/mcp', '/api', publicBase('https://app.example.com/api'))).toEqual({
             MountPath: '/api/mcp',
             PublicEndpointUrl: 'https://app.example.com/api/mcp',
             SSEMessagesPath: '/api/mcp/messages',
@@ -17,33 +20,32 @@ describe('ResolveMCPMount', () => {
     });
 
     it('serves at the root when MJAPI has no base path', () => {
-        expect(ResolveMCPMount('/mcp', '', 'https://api.example.com')).toEqual({
+        expect(ResolveMCPMount('/mcp', '', publicBase('https://api.example.com'))).toEqual({
             MountPath: '/mcp',
             PublicEndpointUrl: 'https://api.example.com/mcp',
             SSEMessagesPath: '/mcp/messages',
         });
     });
 
-    it('builds public URLs from publicUrl, not from the mount path, when a proxy rewrites the prefix', () => {
+    it('builds public URLs from the public base, not from the mount path, when a proxy rewrites the prefix', () => {
         // The proxy serves MJAPI at /backend publicly and forwards to MJAPI's /api.
-        const mount = ResolveMCPMount('/api/mcp', '/api', 'https://app.example.com/backend');
+        const mount = ResolveMCPMount('/api/mcp', '/api', publicBase('https://app.example.com/backend'));
         expect(mount.MountPath).toBe('/api/mcp');
         expect(mount.PublicEndpointUrl).toBe('https://app.example.com/backend/mcp');
         expect(mount.SSEMessagesPath).toBe('/backend/mcp/messages');
     });
 
-    it('tolerates trailing slashes', () => {
-        expect(ResolveMCPMount('/api/mcp/', '/api/', 'https://app.example.com/api/').PublicEndpointUrl)
-            .toBe('https://app.example.com/api/mcp');
+    it('passes the root relative to the base path, and tolerates trailing slashes', () => {
+        const seen: string[] = [];
+        const mount = ResolveMCPMount('/api/mcp/', '/api/', (sub) => { seen.push(sub); return `https://app.example.com/api${sub}/`; });
+        expect(seen).toEqual(['/mcp']);
+        expect(mount.PublicEndpointUrl).toBe('https://app.example.com/api/mcp');
     });
 
-    it('refuses a RootPath outside the base path', () => {
-        expect(() => ResolveMCPMount('/mcp', '/api', 'https://x.example/api')).toThrow(/not under MJAPI's base path/);
-        expect(() => ResolveMCPMount('/apimcp', '/api', 'https://x.example/api')).toThrow(/not under MJAPI's base path/);
-    });
-
-    it('refuses to guess when MJAPI has no public URL', () => {
-        expect(() => ResolveMCPMount('/mcp', '', undefined)).toThrow(/public URL/);
+    it('refuses a RootPath outside, or equal to, the base path', () => {
+        expect(() => ResolveMCPMount('/mcp', '/api', publicBase('https://x.example/api'))).toThrow(/not under MJAPI's base path/);
+        expect(() => ResolveMCPMount('/apimcp', '/api', publicBase('https://x.example/api'))).toThrow(/not under MJAPI's base path/);
+        expect(() => ResolveMCPMount('/api', '/api', publicBase('https://x.example/api'))).toThrow(/below MJAPI's base path/);
     });
 });
 
