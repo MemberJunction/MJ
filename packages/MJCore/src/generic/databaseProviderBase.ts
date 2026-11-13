@@ -3219,6 +3219,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   `DiffObjects`. Defaults to single quote.
      * @param cloneContext When non-null, populates `source='Clone'` and the
      *   structured `changeContext` JSON payload.
+     * @param skipFullRecordJSON When true (because the dialect builds `FullRecordJSON` in SQL
+     *   from the returned row), skips `EscapeQuotesInProperties` and `JSON.stringify` for
+     *   `fullRecordJSON`, returning `''`.
      */
     protected BuildRecordChangePayload(
         newData: Record<string, unknown> | null,
@@ -3230,6 +3233,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         restoreContext?: RestoreContext | null,
         quoteToEscape: string = "'",
         cloneContext?: CloneContext | null,
+        skipFullRecordJSON: boolean = false,
     ): RecordChangePayload | null {
         if (restoreContext && cloneContext) {
             throw new Error('BuildRecordChangePayload: both restoreContext and cloneContext were provided; an operation cannot be both a restore and a clone');
@@ -3245,8 +3249,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const changesKeys = changes ? Object.keys(changes) : [];
         if (changesKeys.length === 0 && !isCreateOrDelete) return null;
 
-        const dataForFullJSON = newData ?? oldData;
-        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        let fullRecordJSON = '';
+        if (!skipFullRecordJSON) {
+            const dataForFullJSON = newData ?? oldData;
+            fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        }
         const changesJSON = changes !== null ? JSON.stringify(changes) : '';
         const changesDescription = (oldData && newData)
             ? this.CreateUserDescriptionOfChanges(changes!)
