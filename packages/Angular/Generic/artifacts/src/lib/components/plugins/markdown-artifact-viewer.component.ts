@@ -7106,6 +7106,17 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  /**
+   * @deprecated Use {@link FocusEditableSegment} instead.
+   */
+  public focusEditableSegment(
+    segmentId: string,
+    position: 'start' | 'end' | number = 'start',
+    listItemIndex?: number,
+  ): void {
+    this.FocusEditableSegment(segmentId, position, listItemIndex);
+  }
+
   private placeCaretInEditableElement(
     el: HTMLElement,
     position: 'start' | 'end' | number,
