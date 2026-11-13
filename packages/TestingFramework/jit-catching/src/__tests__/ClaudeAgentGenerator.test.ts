@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ClaudeAgentGenerator, FilterProcessWarnings, RunnerForModel, SdkRunner, type AgentMessage } from '../generator/ClaudeAgentGenerator';
 import { GeminiRunner } from '../generator/GeminiRunner';
+import { RunTestTool } from '../generator/RunTestTool';
+import { Sandbox } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
 import { SessionError } from '../generator/UsageCounter';
 import type { GenerationRequest } from '../types';
@@ -183,6 +185,25 @@ describe('ClaudeAgentGenerator risk groups', () => {
       Runner: async function* (_p, _s, o) { seen = [o.MaxTurns, o.TokenBudget, o.BudgetUsd]; yield { Type: 'result', Usage: { InputTokens: 1, OutputTokens: 1, CacheReadTokens: 0 }, CostUSD: 0, Turns: 1, Subtype: 'success' }; } });
     await gen.Generate(group(root, ['R1', 'R2', 'R3']));
     expect(seen).toEqual([90, 3000, 6]);
+  });
+});
+
+describe('ClaudeAgentGenerator with type errors', () => {
+  it('does not count a file that passes vitest but has type errors as proved on base', async () => {
+    const root = world(); mkdirSync(join(root, 'node_modules')); mkdirSync(join(root, 'packages/MJCore/node_modules'));
+    const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
+    let file = '';
+    vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => {
+      const tsc = o.Command.join(' ').includes('tsc');
+      const stdout = tsc ? `src/__tests__/jit/${file}(2,1): error TS2459: Module declares 'RunViewParams' locally, but it is not exported.`
+        : `JIT_REPORT ${JSON.stringify({ ModuleErrors: [], Tests: [{ File: `/work/${JIT}/${file}`, Name: 't', State: 'passed', DurationMs: 1, Errors: [] }] })}\n`;
+      return { ExitCode: tsc ? 2 : 0, TimedOut: false, Stdout: stdout, Stderr: '', DurationMs: 1 };
+    });
+    const gen = new ClaudeAgentGenerator({ Sandbox: sandbox, ScratchRoot: mkdtempSync(join(tmpdir(), 'jit-sc-')), Settings: DEFAULT_SETTINGS, PackageMap: { Get: () => ({ Name: '@memberjunction/core', Dir: 'packages/MJCore', HasVitest: true, HasTests: true }) } as never, TranscriptDir: root,
+      Runner: scriptedRunner(async (h, ids) => { file = `${ids[0]}.jit.test.ts`; await h.WriteFile(`${JIT}/${file}`, 'typed wrong'); await h.RunTest(`${JIT}/${file}`); }),
+      RunTestFactory: (x) => new RunTestTool(x) });
+    const r = await gen.Generate(req(root));
+    expect(r.Tests[0]).toMatchObject({ GenerationOutcome: 'Failed', FailureReason: 'never proved to pass on base' });
   });
 });
 

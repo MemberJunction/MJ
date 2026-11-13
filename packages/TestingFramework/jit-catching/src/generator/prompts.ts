@@ -30,7 +30,11 @@ Never (these produce false alarms and the pipeline drops them):
   - mock the function under test, or put the failing logic inside vi.mock factories or beforeEach
   - leave Date, Math.random or time zone unpinned (use vi.useFakeTimers / vi.setSystemTime; TZ is UTC)
   - use any, as any, it.skip, it.todo, expect(true).toBe(true)
-  - construct an abstract class (BaseEntity, BaseEngine, ...) or call a constructor with missing arguments: the pipeline type-checks every file with tsc and a type error makes the test Invalid, even when run_test passes; extend the class in the test or use the stubs
+  - construct an abstract class (BaseEntity, BaseEngine, ...) or call a constructor with missing arguments; extend the class in the test or use the stubs
+  - spy on or call private or protected methods (vi.spyOn(obj, 'protectedMethod') does not type-check)
+  - import names a module does not export
+
+Type errors: when a file passes, run_test also type-checks it with tsc. A file with type errors comes back with Status "CompileError" and the tsc errors in Error; it does not count until you fix the errors and run_test reports Pass.
 
 A good test: calls public API with a concrete input, asserts a concrete output or a thrown error, and reads as a specification: it('canRead returns false for a user without the role').`;
 }

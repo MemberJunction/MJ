@@ -23,7 +23,7 @@ function setup(stdout: string, stderr = '', onRun: (root: string) => void = () =
   const sandbox = new Sandbox(DEFAULT_SETTINGS.Sandbox, async () => ({ ExitCode: 0, TimedOut: false, Stdout: '', Stderr: '', DurationMs: 1 }));
   vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => { calls.push(o); onRun(root); return { ExitCode: 1, TimedOut: false, Stdout: stdout, Stderr: stderr, DurationMs: 2 }; });
   const tool = new RunTestTool({ Sandbox: sandbox, BaseRootDir: root, PackageRelDir: 'packages/MJCore', PackageName: '@memberjunction/core', ScratchRoot: mkdtempSync(join(tmpdir(), 'jit-sc-')), Settings: DEFAULT_SETTINGS });
-  return { tool, calls, root };
+  return { tool, calls, root, sandbox };
 }
 const jitLine = (o: object) => `JIT_REPORT ${JSON.stringify({ ModuleErrors: [], ...o })}\n`;
 const passReport = jitLine({ Tests: [{ File: `/work/packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, Name: 't', State: 'passed', DurationMs: 1, Errors: [] }] });
@@ -129,5 +129,38 @@ describe('RunTestTool', () => {
       expect(out.Ran).toBe(false);
     }
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('RunTestTool type check', () => {
+  const FILE = `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`;
+  const TS_ERROR = `src/__tests__/jit/${ID}.jit.test.ts(4,20): error TS2345: Argument of type '"InternalRunViews"' is not assignable to parameter of type 'never'.`;
+  /** A tool whose sandbox answers vitest with `vitest` and tsc with `tsc`, logging each command. */
+  function typed(vitest: string, tsc: { Stdout: string; ExitCode: number }) {
+    const { tool, calls, sandbox } = setup(vitest);
+    vi.spyOn(sandbox, 'Run').mockImplementation(async (o) => {
+      calls.push(o);
+      const isTsc = o.Command.join(' ').includes('tsc');
+      return { ExitCode: isTsc ? tsc.ExitCode : 1, TimedOut: false, Stdout: isTsc ? tsc.Stdout : vitest, Stderr: '', DurationMs: 2 };
+    });
+    const tscCalls = () => calls.filter((c) => c.Command.join(' ').includes('tsc'));
+    return { tool, tscCalls };
+  }
+  it('reports CompileError with the tsc lines of the file when a passing file has type errors', async () => {
+    const { tool } = typed(passReport, { Stdout: `${TS_ERROR}\nsrc/other.ts(1,1): error TS1: elsewhere`, ExitCode: 2 });
+    const out = await tool.Run({ File: FILE });
+    expect(out).toMatchObject({ Ran: true, Status: 'CompileError' });
+    expect(out.Error).toContain('TS2345'); expect(out.Error).not.toContain('elsewhere');
+  });
+  it('keeps the vitest result when tsc cannot check the package', async () => {
+    const { tool, tscCalls } = typed(passReport, { Stdout: "error TS5058: The specified path does not exist: 'tsconfig.json'.", ExitCode: 1 });
+    const out = await tool.Run({ File: FILE });
+    expect(tscCalls()).toHaveLength(1); expect(out.Status).toBe('Pass');
+  });
+  it('type-checks the passing base run and not the mutant run', async () => {
+    const { tool, tscCalls } = typed(passReport, { Stdout: '', ExitCode: 0 });
+    expect((await tool.Run({ File: FILE })).Status).toBe('Pass');
+    await tool.Run({ File: FILE, Mutant: { Edits: [{ File: 'packages/MJCore/src/a.ts', Find: '=> 1', Replace: '=> 2' }] } });
+    expect(tscCalls()).toHaveLength(1);
   });
 });
