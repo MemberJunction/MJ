@@ -1,8 +1,9 @@
 # Regression Suite Automation — Design and Plan
 
 **Date:** 2026-11-12
-**Status:** Phases 0–3 done (PR #6613). The `mj test scripts` exit fix has unit tests but no run in
-the stack yet (Phase 4 uses it). The MoreCheese move (§8, M1–M5) is planned.
+**Status:** Phases 0–5 and 7 done in PR #6613 (§9). M1 and M2 are committed on their own branches,
+not pushed. M3–M5 and Phase 6 are open. Decisions made without review are in
+`2026-11-13-overnight-decisions.md`.
 **Scope:** The MJ Explorer regression suite (Computer Use tests in `metadata-optional/regression-test/`).
 
 ## 1. Goals
@@ -574,3 +575,34 @@ No test covers these today. Each is a small `mj test regression new` test:
 - **MoreCheese replaces AssociationDB v1** as the stack's data. No second data set.
 - **Pin app versions in `docker/regression/open-apps.json`.**
 - **The move comes before the first harvest.** Phase 6 depends on M3.
+
+## 9. Results of Phases 4, 5 and 7 (2026-11-13)
+
+### Phase 4 — the replay-script PR skill
+
+Run on a worktree of this branch at `62245bf` with `--test` for T001 and T002:
+
+- Only the two named tests ran. Both passed on the LLM tier (1 min of test time).
+- `mj test scripts` exited by itself.
+- `sync pull` processed 155 records and changed only the two test files (the `ReplayScript`
+  reference) and the two new script files. The harvest check and the parity guard passed.
+- The PR body was written. No PR was opened: the base was a feature branch.
+
+Found in the run: the build was older than the recorder fix, so both scripts held the Auth0 tenant
+URL. The recorder now stores URLs on another origin as paths (`ab4dbe5117`), and the harvest check
+fails a script with an absolute URL off `localhost` (decision D25). On the same files the check now
+reports both scripts.
+
+### Phase 5 — the authoring skill
+
+`.claude/skills/author-regression-test/`: the skill, a helper that lists the branch's UI changes and
+the related tests, and a duplicate-ID check in the parity guard. `AGENTS.md`,
+`.claude/rules/testing.md`, `docker/regression/REGRESSION_TESTING.md` and the test README now point
+to the scaffold and the skill. Skill tests: baseline and with-skill subagent runs (D10).
+
+### Phase 7 — the GitHub workflow
+
+`.github/workflows/regression-replay-scripts.yml` runs the Part C helpers on demand (and nightly if
+`vars.REGRESSION_NIGHTLY` is `true`). It needs the `REGRESSION_*` secrets and a GitHub App, so it was
+not run. Its YAML parses and its shell steps pass `bash -n`.
+
