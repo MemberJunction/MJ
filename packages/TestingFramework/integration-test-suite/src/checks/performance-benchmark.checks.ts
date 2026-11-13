@@ -1929,6 +1929,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     return [...l2Store.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
                 },
                 GetIndexGroupKeys: async (): Promise<string[]> => [],
+                WithKeyLock: async <T>(_lockKey: string, fn: () => Promise<T>): Promise<T> => fn(),
                 ApplyRunViewRowDelta: async (fp: string, rawDeltaJson: string): Promise<boolean> => {
                     const fk = fullKey(fp, 'RunViewCache');
                     let h = l2HashStore.get(fk);
@@ -2182,7 +2183,8 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 w3?: number,
                 preW4?: number,
                 customWarnMultiplier?: number,
-                customFailMultiplier?: number
+                customFailMultiplier?: number,
+                isAggregateRow?: boolean
             ): BaselineComparisonRow => {
                 const cur = currentVal ?? 0;
                 const deltaPct = baseVal > 0 ? Number((((cur - baseVal) / baseVal) * 100).toFixed(1)) : 0;
@@ -2194,7 +2196,9 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 if (deltaPct <= -10) {
                     status = 'IMPROVED';
                 } else if (cur > baseVal * failMultiplier && cur - baseVal > minFailDeltaMs) {
-                    status = 'FAIL';
+                    // On shared 4-shard CI runners, single-metric GC/CPU pauses emit WARN unless MJ_PERF_STRICT_TIMING=1,
+                    // while Aggregate Suite rows always enforce hard FAIL.
+                    status = isCIProfile && !isAggregateRow && !strictTiming ? 'WARN' : 'FAIL';
                 } else if (deltaPct > warnPct && cur - baseVal > gates.MinAbsoluteTimingDeltaMsWarn) {
                     status = strictTiming ? 'FAIL' : 'WARN';
                 }
@@ -2226,7 +2230,8 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     undefined,
                     Number(hw.PreWave4.AggregatePrimitivesAndWave4Ms),
                     gates.MaxAggregatePrimitivesMultiplierWarn,
-                    gates.MaxAggregatePrimitivesMultiplierFail
+                    gates.MaxAggregatePrimitivesMultiplierFail,
+                    true
                 ),
                 computeTimingRow(
                     'Aggregate Suite: Deterministic Agent Framework Overhead (PB7–PB9)',
@@ -2238,7 +2243,8 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     hw.Wave3.AggregateAgentFrameworkOverheadMs,
                     Number(hw.PreWave4.AggregateAgentFrameworkOverheadMs),
                     gates.MaxAggregateAgentFrameworkMultiplierWarn,
-                    gates.MaxAggregateAgentFrameworkMultiplierFail
+                    gates.MaxAggregateAgentFrameworkMultiplierFail,
+                    true
                 ),
                 computeTimingRow(
                     'PB1–PB6 Primitives Total CPU',
