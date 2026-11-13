@@ -606,3 +606,23 @@ to the scaffold and the skill. Skill tests: baseline and with-skill subagent run
 `vars.REGRESSION_NIGHTLY` is `true`). It needs the `REGRESSION_*` secrets and a GitHub App, so it was
 not run. Its YAML parses and its shell steps pass `bash -n`.
 
+
+## 10. Results of the MoreCheese move and Phase 6 (2026-11-13)
+
+Branch `CB-regression-morecheese` (stacked on this branch; it holds a copy of M1, MemberJunction/MJ#6630).
+Decisions D19–D41 are in [`2026-11-13-overnight-decisions.md`](2026-11-13-overnight-decisions.md).
+
+- **M1–M3.** The stack installs MoreCheese 1.3.2 and its 10 apps (all `Active`). Three breaks
+  between MoreCheese 1.3.2 and MJ 6.3 needed stack-only changes: Sonar's client package is left out
+  of Explorer (D33), `legacy-conversation-type` (D35) and `drop-uncoded-view-fields` (D37, D39).
+- **M4.** T156–T159 (MoreCheese competition entry, People form Membership panel, Committees
+  meeting, Issues record).
+- **M5.** Not built (D36): `db-setup` takes about 18.5 minutes, 15 of them the Open App install.
+- **Phase 6.** A full run (`run-20261113T083613Z`) passed 139/155. The harvest recorded 73
+  scripts (D38). 66 passed tests recorded none, because the recorder found no element to replay.
+- **Reruns.** Four reruns of the failed and new tests on the same stack. Every test passed at
+  least once except T106 (D43) and T118 (D40). The 7 Meetings tests pass after D39 and D42.
+  T072, T089, T098, T131 and T136 failed in the full run and passed later; T074, T078 and T158
+  passed and failed on the same code (LLM variance). The reruns added 9 scripts (82 in all).
+- **Integration tier** on a clean-room database: 143/146 passed, 1 skipped, 2 failed, neither
+  from this work (D41).
