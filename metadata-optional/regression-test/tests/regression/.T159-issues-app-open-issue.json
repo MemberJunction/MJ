@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T159 - Issues App Open Issue",
+    "Description": "In the Issues app, find issue MC-0031: search or filter the issue list for 'MC-0031' (or 'Gorsemere'), then open the issue. Pages can take 10-30s to load — wait, don't navigate away.",
+    "InputDefinition": "{\n  \"goal\": \"In the Issues app, find issue MC-0031: search or filter the issue list for 'MC-0031' (or 'Gorsemere'), then open the issue. Pages can take 10-30s to load — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200/app/issues\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200/app/issues\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 30,\n  \"judgeValidationCriteria\": [\n    \"The Issues app shows a list of issues\",\n    \"Issue MC-0031 'Please update my employer — Gorsemere Cheesemaking Supply no longer current' is open and shows Status Closed and type Data Correction\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 30,
+      "maxExecutionTime": 360000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 30
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,open-apps",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "SkipEmbeddings": false,
+    "RubricID": null
+  },
+  "primaryKey": {
+    "ID": "60091CB8-4C3A-4E21-8967-6B18FE06A5B9"
+  }
+}

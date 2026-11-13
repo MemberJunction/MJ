@@ -2339,6 +2339,50 @@
           "lastModified": "2026-09-09T20:02:53.266Z",
           "checksum": "d24aed7008b7b27158d730cb2400b5d420277f60b015da5a4af53c3c0615380d"
         }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T156 - MoreCheese Competition Entry Form",
+          "Sequence": 156,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "24B6CCB8-98A4-484D-B2CC-383864FB61C4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T157 - People Form MoreCheese Membership Section",
+          "Sequence": 157,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "407C8E27-5627-49BC-9767-1402A6A03E19"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T158 - Committees Meeting Record",
+          "Sequence": 158,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1C5A2331-E780-4D5F-84CB-CE85E58CEB1E"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T159 - Issues App Open Issue",
+          "Sequence": 159,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D2E1699F-747B-4819-BCB4-5FD89C3940BD"
+        }
       }
     ]
   },
