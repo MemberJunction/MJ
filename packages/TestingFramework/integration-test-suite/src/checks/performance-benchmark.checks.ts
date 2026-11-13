@@ -2139,7 +2139,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 if (deltaPct <= -10) {
                     status = 'IMPROVED';
                 } else if (cur > baseVal * gates.MaxTimingRegressionMultiplierFailCI && cur - baseVal > 25) {
-                    status = strictTiming ? 'FAIL' : 'WARN';
+                    status = 'FAIL';
                 } else if (deltaPct > gates.MaxTimingRegressionPercentWarn && cur - baseVal > 5) {
                     status = strictTiming ? 'FAIL' : 'WARN';
                 }
