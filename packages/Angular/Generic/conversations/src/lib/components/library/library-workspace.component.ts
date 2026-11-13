@@ -2388,7 +2388,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       ['all', 'collections', 'shared', 'starred', 'collection', 'drive'].includes(params.section)
     ) {
       this.NavigatorSection = params.section as LibraryNavigatorSection;
-    } else {
+    } else if (params.mode !== 'hub') {
       this.NavigatorSection = fallbackSection;
     }
 
