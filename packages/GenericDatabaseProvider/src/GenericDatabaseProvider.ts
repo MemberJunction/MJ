@@ -8750,8 +8750,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     /**
      * Attempts to fully decompose an RLS WHERE clause into the lower-cased column names it
      * references. Returns the columns ONLY when the whole clause is a conjunction of simple
-     * `column <op> literal` terms — anything else (OR, parentheses beyond term grouping,
-     * functions, subqueries, arithmetic, unrecognized syntax) returns null, meaning "not
+     * `column <op> literal` or `column IS [NOT] NULL` terms, where the literal is a string,
+     * a number or NULL — anything else (OR, parentheses beyond term grouping, functions,
+     * subqueries, arithmetic, a non-literal right side, unrecognized syntax) returns null, meaning "not
      * fully understood, run the post-image check". Partial extraction is never returned:
      * a missed column reference here would silently skip a required authorization check.
      */
@@ -8764,7 +8765,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         const terms = noStrings.replace(/^\s*\(|\)\s*$/g, '').split(/\bAND\b/i);
         const columns: string[] = [];
-        const simpleTerm = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*(?:=|<>|!=|<=|>=|<|>|\bLIKE\b|\bIS\s+(?:NOT\s+)?NULL\b|\bIN\b)/i;
+        // The whole term must match: the right side is a stripped string literal, a number or NULL.
+        const simpleTerm = /^\s*(?:\[([^\]]+)\]|"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*(?:(?:=|<>|!=|<=|>=|<|>|\bLIKE\b)\s*(?:N?''|-?\d+(?:\.\d+)?|NULL)|IS\s+(?:NOT\s+)?NULL)\s*$/i;
         for (const term of terms) {
             const m = simpleTerm.exec(term);
             if (!m) {
