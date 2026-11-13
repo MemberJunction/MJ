@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { join, basename, relative, sep } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { HARVEST_DIR, IsTestRecordPath, ParsePorcelain, FindOrphanScripts, CheckHarvest, BuildPrBody } from './lib/harvest.mjs';
+import { HARVEST_DIR, SUITES_DIR, IsTestRecordPath, ParsePorcelain, FindOrphanScripts, CheckHarvest, BuildPrBody } from './lib/harvest.mjs';
 
 const SCRIPTS_DIR = `${HARVEST_DIR}/regression/scripts`;
 
@@ -82,6 +82,16 @@ function headVersion(worktree, path) {
     }
 }
 
+function readSuites(worktree, paths) {
+    return paths.flatMap((path) => {
+        try {
+            return [{ path, record: JSON.parse(readFileSync(join(worktree, path), 'utf8')), head: headVersion(worktree, path) }];
+        } catch {
+            return [];
+        }
+    });
+}
+
 function removeOrphans(worktree, tests, scriptPaths) {
     const orphans = FindOrphanScripts(tests, scriptPaths);
     for (const orphan of orphans) rmSync(join(worktree, orphan));
@@ -115,6 +125,7 @@ function check(opts) {
         entries,
         tests: tests.map((t) => ({ ...t, head: modified.has(t.path) ? headVersion(opts.worktree, t.path) : null })),
         scripts: scriptPaths.map((path) => ({ path, text: readFileSync(join(opts.worktree, path), 'utf8') })),
+        suites: readSuites(opts.worktree, [...modified].filter((p) => p.startsWith(`${SUITES_DIR}/`))),
     });
     result.problems.unshift(...problems);
     result.orphansRemoved = orphans;

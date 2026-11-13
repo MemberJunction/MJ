@@ -163,6 +163,9 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 
 ## Adding a New Test
 
+The `author-regression-test` Claude skill runs these steps from your branch's UI changes: it lists
+the related tests, proposes new ones, scaffolds them, and can record the first replay script.
+
 1. **Scaffold it.** The command picks the next free number, writes the test file, adds the suite member, and runs the parity check. It does not touch a database.
    ```bash
    pnpm mj test regression new --name "My new test" --priority P1 --tags my-area \
@@ -225,6 +228,18 @@ Three things worth knowing:
 - **Pulling without those `externalizeFields` entries inlines every script.** Externalization is
   driven by the config, not by what the file already contains — so a pull with the entries removed
   writes the scripts into the test JSONs and orphans the files.
+
+**Getting scripts into git.** Two paths run the suite, pull the scripts back into these files, check
+that only script files and their `ReplayScript`/`PendingReplayScript` references changed, and open
+a PR:
+
+- The `regression-replay-pr` Claude skill, on your machine, for any branch (usually `next`).
+- The `Regression replay scripts` GitHub workflow (`.github/workflows/regression-replay-scripts.yml`),
+  on demand, or nightly when the `REGRESSION_NIGHTLY` repository variable is `true`. It needs the
+  secrets listed at the top of the workflow.
+
+Neither path promotes a pending script by itself: the PR body lists each pending script with its
+drift report, for a person to promote or discard.
 
 ## Tuning Failing Tests
 

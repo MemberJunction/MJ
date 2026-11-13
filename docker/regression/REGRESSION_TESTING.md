@@ -624,10 +624,10 @@ The weighted oracle scores combine into a final test score (0.0 to 1.0). A test 
 
 See [`metadata-optional/regression-test/README.md`](../../metadata-optional/regression-test/README.md) for the full test-author guide. Quick summary:
 
-1. Create a new `.json` file in `metadata-optional/regression-test/tests/regression/` following the T001 pattern
-2. Add a `relatedEntities` entry in `metadata-optional/regression-test/test-suites/.regression-suite.json` linking the test
-3. The test runner automatically syncs metadata on each run — no rebuild needed
-4. Metadata files are bind-mounted from the host, so edits are picked up immediately
+1. Scaffold the test with `pnpm mj test regression new` (it picks the next number, writes the test file and its suite member, and runs the parity check). Do not hand-copy a test file: the copy keeps the other test's `primaryKey`. The `author-regression-test` Claude skill walks through the whole flow from a branch's UI changes.
+2. Check the files with `pnpm run check:regression-suite` (CI runs the same check).
+3. The test runner syncs metadata on each run, so no rebuild is needed. Metadata files are bind-mounted from the host, so edits are picked up immediately.
+4. Run only the new test with `mj test regression up --test "T156 - My new test"`.
 
 ### Validating a Test Before Running
 

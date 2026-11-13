@@ -170,7 +170,7 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 
 ### Skills — load only when invoked
 
-`debug-build-failures` (build fails, Turbo, circular deps), `playwright-cli` (browser automation + MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (from-scratch DB on a private name: clean-room checks, isolation), `regression-replay-pr` (branch regression run → replay-script PR).
+`debug-build-failures` (build fails, Turbo, circular deps), `playwright-cli` (browser automation, dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (from-scratch private DB), `author-regression-test` (UI change → new test), `regression-replay-pr` (suite run → replay-script PR).
 
 ### Project-wide standards
 

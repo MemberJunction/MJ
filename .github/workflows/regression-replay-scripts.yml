@@ -1,0 +1,209 @@
+name: Regression replay scripts
+
+# Runs the MJ Explorer regression suite in the Docker regression stack and opens a pull request
+# with the replay scripts the run recorded. It is the unattended form of the
+# `regression-replay-pr` Claude skill and uses that skill's helper scripts
+# (.claude/skills/regression-replay-pr/scripts/), so both follow the same rules:
+#   - the harvest may change only replay-script files and their Configuration references
+#     (harvest-report.mjs check); anything else fails the run and opens no pull request;
+#   - pending re-recordings stay pending: a person promotes or discards them, and the pull
+#     request body lists them with their drift report.
+#
+# WHEN. On demand (workflow_dispatch). The nightly schedule runs only when the repository
+# variable REGRESSION_NIGHTLY is 'true', because a full run costs LLM tokens and a large runner.
+#
+# WHAT IT WRITES. Nothing to the base branch. When the harvest changes files, it pushes ONE
+# commit to the bot-owned branch chore/regression-replay-scripts-<base> (rebuilt from the base
+# on every run) and opens a pull request into the base, or updates the one already open.
+#
+# NEEDS.
+#   Secrets: REGRESSION_AUTH0_DOMAIN, REGRESSION_AUTH0_CLIENTID, REGRESSION_TEST_UID,
+#   REGRESSION_TEST_PWD, and at least one of REGRESSION_GEMINI_API_KEY and
+#   REGRESSION_ANTHROPIC_API_KEY. The Auth0 application must allow http://localhost:4200.
+#   APP_CLIENT_ID / APP_PRIVATE_KEY (the GitHub App publish.yml uses), because required checks
+#   never start on a pull request opened with GITHUB_TOKEN.
+#   A runner with Docker, about 16 GB of memory and 40 GB of free disk: the `runner` input or
+#   the REGRESSION_RUNNER variable (default ubuntu-latest, after freeing disk).
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Branch to run the suite on and open the pull request into'
+        default: next
+        required: true
+      tests:
+        description: 'Optional: comma-separated exact test names to run (default: the whole suite)'
+        default: ''
+        required: false
+      runner:
+        description: 'Optional: runner label (default: the REGRESSION_RUNNER variable, else ubuntu-latest)'
+        default: ''
+        required: false
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-replay-scripts-${{ inputs.base || 'next' }}
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    name: Run the regression suite and harvest replay scripts
+    if: >-
+      github.repository == 'MemberJunction/MJ' &&
+      (github.event_name == 'workflow_dispatch' || vars.REGRESSION_NIGHTLY == 'true')
+    runs-on: ${{ inputs.runner || vars.REGRESSION_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 300
+    env:
+      BASE: ${{ inputs.base || 'next' }}
+      TESTS: ${{ inputs.tests || '' }}
+      SKILL: .claude/skills/regression-replay-pr/scripts
+      ENV_FILE: docker/regression/.env.test
+    steps:
+      - name: Checkout the base branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BASE }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The stack images and build cache need about 40 GB; a hosted runner starts with less.
+      - name: Free disk space on a hosted runner
+        if: runner.environment == 'github-hosted'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af >/dev/null
+          df -h /
+
+      # Generated per run: the database and its encryption key are thrown away after the run.
+      - name: Write the stack's env file
+        env:
+          AUTH0_DOMAIN: ${{ secrets.REGRESSION_AUTH0_DOMAIN }}
+          AUTH0_CLIENTID: ${{ secrets.REGRESSION_AUTH0_CLIENTID }}
+          TEST_UID: ${{ secrets.REGRESSION_TEST_UID }}
+          TEST_PWD: ${{ secrets.REGRESSION_TEST_PWD }}
+          GEMINI_KEY: ${{ secrets.REGRESSION_GEMINI_API_KEY }}
+          ANTHROPIC_KEY: ${{ secrets.REGRESSION_ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          sa_password="Rg1!$(openssl rand -hex 16)"
+          echo "::add-mask::$sa_password"
+          {
+            echo "TEST_SA_PASSWORD=$sa_password"
+            echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+            echo "AUTH0_DOMAIN=$AUTH0_DOMAIN"
+            echo "AUTH0_CLIENTID=$AUTH0_CLIENTID"
+            echo "TEST_UID=$TEST_UID"
+            echo "TEST_PWD=$TEST_PWD"
+            echo "AI_VENDOR_API_KEY__GeminiLLM=$GEMINI_KEY"
+            echo "AI_VENDOR_API_KEY__AnthropicLLM=$ANTHROPIC_KEY"
+          } > "$ENV_FILE"
+          mkdir -p docker/regression/test-results
+
+      - name: Preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash "$SKILL/preflight.sh" "$BASE" "$ENV_FILE"
+
+      - name: Run the suite
+        id: run
+        run: |
+          set -uo pipefail
+          names=()
+          if [ -n "$TESTS" ]; then
+            IFS=',' read -ra parts <<< "$TESTS"
+            for part in "${parts[@]}"; do
+              name="$(echo "$part" | sed -e 's/^ *//' -e 's/ *$//')"
+              [ -n "$name" ] && names+=("$name")
+            done
+          fi
+          bash "$SKILL/run-stack.sh" "$GITHUB_WORKSPACE" "${names[@]}" | tee "$RUNNER_TEMP/run-stack.log"
+          [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+          run_dir="$(grep '^RUN_DIR=' "$RUNNER_TEMP/run-stack.log" | tail -1 | cut -d= -f2-)"
+          echo "run_dir=$run_dir" >> "$GITHUB_OUTPUT"
+          echo "run_name=$(basename "$run_dir")" >> "$GITHUB_OUTPUT"
+          passed="$(node -e 'console.log(require(process.argv[1]).passedTests ?? 0)' "$run_dir/results.json")"
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          cat "$run_dir/report.md" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - name: Harvest the replay scripts
+        if: steps.run.outputs.passed != '0'
+        run: |
+          set -euo pipefail
+          bash "$SKILL/harvest.sh" "$GITHUB_WORKSPACE" report >> "$GITHUB_STEP_SUMMARY"
+          bash "$SKILL/harvest.sh" "$GITHUB_WORKSPACE" pull
+
+      - name: Tear down the stack
+        if: always()
+        run: bash "$SKILL/teardown.sh" "$GITHUB_WORKSPACE" || true
+
+      - name: Upload the run folder
+        if: always() && steps.run.outputs.run_dir != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-${{ steps.run.outputs.run_name }}
+          path: ${{ steps.run.outputs.run_dir }}
+          retention-days: 14
+
+      - name: Detect a change
+        id: diff
+        if: steps.run.outputs.passed != '0'
+        run: |
+          if [ -z "$(git status --porcelain -- metadata-optional/regression-test/tests metadata-optional/regression-test/test-suites)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The run recorded no new or changed replay scripts." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint the App token
+        if: steps.diff.outputs.changed == 'true'
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push the bot branch and open or update the pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          APP_TOKEN: ${{ steps.token.outputs.token }}
+          APP_SLUG: ${{ steps.token.outputs.app-slug }}
+          RUN_DIR: ${{ steps.run.outputs.run_dir }}
+          RUN_NAME: ${{ steps.run.outputs.run_name }}
+        run: |
+          set -euo pipefail
+          branch="chore/regression-replay-scripts-${BASE//\//-}"
+          bot_id=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add metadata-optional/regression-test/tests metadata-optional/regression-test/test-suites
+          git commit -m "test(regression): refresh replay scripts from $BASE run $RUN_NAME"
+          # Force is safe here and only here: the branch belongs to this workflow and is rebuilt
+          # from the base on every run. Never point it at a branch a person works on.
+          git push --force "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}" "HEAD:refs/heads/${branch}"
+
+          node "$SKILL/harvest-report.mjs" pr-body --worktree "$GITHUB_WORKSPACE" --run-dir "$RUN_DIR" --base "$BASE" > /dev/null
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --base "$BASE" --state open --json number --jq '.[0].number // ""')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" --body-file "$RUN_DIR/pr-body.md"
+            echo "Updated pull request #$existing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base "$BASE" --head "$branch" \
+            --title "Refresh regression replay scripts from $BASE" --body-file "$RUN_DIR/pr-body.md")
+          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"

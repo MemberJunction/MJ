@@ -101,6 +101,18 @@ describe('checkRegressionSuite', () => {
         expect(problemsOf(root)).toContainEqual(expect.stringContaining('Name must start with "T001 - "'));
     });
 
+    it('reports two test files with the same primaryKey ID (a copied file)', () => {
+        const copy = testRecord(2, { record: { primaryKey: { ID: uuid(1).toLowerCase() } } });
+        const root = makeRepo({ tests: { '.T001-sample-1.json': testRecord(1), '.T002-sample-2.json': copy } });
+        expect(problemsOf(root)).toEqual([expect.stringContaining(`primaryKey.ID ${uuid(1)} is used by`)]);
+    });
+
+    it('reports two suite members with the same primaryKey ID', () => {
+        const second = { ...member('T002 - Sample 2', 2, 2), primaryKey: { ID: uuid(1001) } };
+        const root = makeRepo({ members: [member('T001 - Sample 1', 1, 1), second] });
+        expect(problemsOf(root)).toEqual([expect.stringContaining(`primaryKey.ID ${uuid(1001)} is used by`)]);
+    });
+
     it('reports a duplicate Sequence', () => {
         const root = makeRepo({ members: [member('T001 - Sample 1', 1, 1), member('T002 - Sample 2', 1, 2)] });
         expect(problemsOf(root)).toEqual([expect.stringContaining('Sequence 1 is used by')]);
