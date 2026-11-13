@@ -1,6 +1,6 @@
 /**
- * decision-guards.ts — the network guards the subq-mercury-decisions bundle puts over the decision
- * drivers: a guarded driver is the shipped class with only `SendRequest`, its one network
+ * decision-guards.ts — the network guards the subq-mercury-decisions and gemini-decisions bundles put over
+ * the decision drivers: a guarded driver is the shipped class with only `SendRequest`, its one network
  * call, replaced. It records each request and answers only while a check arms it, refusing with a 500
  * otherwise, so no request leaves the process.
  *
@@ -18,6 +18,7 @@ import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 export interface GuardedRequest {
     Url: string;
     Authorization: string | null;
+    XGoogApiKey: string | null;
     Body: unknown;
 }
 
@@ -49,7 +50,13 @@ export function JSONResponse(status: number, body: unknown): Response {
  * @param service The vendor's name, for the refusal's message.
  */
 export function GuardedSend(guard: GuardState, service: string, url: string, init: RequestInit): Response {
-    const request: GuardedRequest = { Url: url, Authorization: new Headers(init.headers).get('Authorization'), Body: JSON.parse(String(init.body)) };
+    const headers = new Headers(init.headers);
+    const request: GuardedRequest = {
+        Url: url,
+        Authorization: headers.get('Authorization'),
+        XGoogApiKey: headers.get('x-goog-api-key'),
+        Body: JSON.parse(String(init.body)),
+    };
     guard.Requests.push(request);
     return guard.Respond
         ? guard.Respond(request)
@@ -91,6 +98,20 @@ export function AssertOneRequest(guard: GuardState, before: number, url: string,
     AssertEqual(sent.Url, url, `${label}: request URL`);
     Assert(!(sent.Authorization ?? '').includes('{'), `${label}: the bearer is a credential's JSON, not its token: ${String(sent.Authorization)}`);
     AssertEqual(sent.Authorization, `Bearer ${key}`, `${label}: Authorization header`);
+    AssertEqual(JSON.stringify(sent.Body), JSON.stringify(body), `${label}: request body`);
+}
+
+/**
+ * Asserts exactly one request reached `guard` since `before`, to `url`, with `key` in `x-goog-api-key`
+ * (never a credential's JSON and with no `Authorization` header), and `body`.
+ */
+export function AssertOneGoogleRequest(guard: GuardState, before: number, url: string, key: string, body: unknown, label: string): void {
+    AssertEqual(guard.Requests.length - before, 1, `${label}: requests`);
+    const sent = guard.Requests[guard.Requests.length - 1];
+    AssertEqual(sent.Url, url, `${label}: request URL`);
+    Assert(!(sent.XGoogApiKey ?? '').includes('{'), `${label}: x-goog-api-key is a credential's JSON, not its token: ${String(sent.XGoogApiKey)}`);
+    AssertEqual(sent.XGoogApiKey, key, `${label}: x-goog-api-key header`);
+    AssertEqual(sent.Authorization, null, `${label}: Authorization header must be absent`);
     AssertEqual(JSON.stringify(sent.Body), JSON.stringify(body), `${label}: request body`);
 }
 

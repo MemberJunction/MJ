@@ -2,7 +2,7 @@
 
 # @memberjunction/ai-gemini
 
-MemberJunction AI provider for Google Gemini models. Provides LLM, image generation, embedding and realtime (Gemini Live) capabilities, supporting Gemini 2.5, Gemini 3, and Flash model families with native multimodal support, thinking/reasoning, and streaming.
+MemberJunction AI provider for Google Gemini models. Provides LLM, image generation, embedding, decision (Gemini Decisions API) and realtime (Gemini Live) capabilities, supporting Gemini 2.5, Gemini 3, and Flash model families with native multimodal support, thinking/reasoning, and streaming.
 
 ## Architecture
 
@@ -61,6 +61,13 @@ graph TD
 - **The relay pieces** MJAPI's realtime relay uses: the setup writer and the frame policy
 
 See [Gemini Live (realtime)](#gemini-live-realtime) below.
+
+### Decisions (GeminiDecision)
+- **Typed answers, not text**: answers Likelihood, Choice and Score questions through the Gemini Decisions API with Gemini Decision 1 (`gemini-decision-1`)
+- **One forward pass**: up to 1,000 questions about one shared input (up to 262,144 tokens), with a probability for every option or level
+- **Input tokens only**: no output tokens are billed
+
+See [Decisions](#decisions) below.
 
 ## Installation
 
@@ -136,6 +143,56 @@ const multimodal = await embedding.EmbedContent({
 });
 console.log(multimodal.vector.length); // 3072
 ```
+
+### Decisions
+
+`GeminiDecision` is a `BaseDecision` driver for the [Gemini Decisions API](https://blog.google/innovation-and-ai/technology/developers-tools/gemini-decisions-api/)
+(`POST https://generativelanguage.googleapis.com/v1beta/decisions`). It extends `BaseHostedSystemOneDecision`
+from `@memberjunction/ai`, because Gemini's questions and answers are the System One shape the other decision
+drivers share: a Likelihood goes out as `noul`, a Choice's options as `criteria: { value: description }`, a
+Score's levels as `criteria: [...]`, and the answers come back keyed by question name. What differs is handled
+in the driver:
+
+| Gemini | System One | Driver |
+|---|---|---|
+| `x-goog-api-key` header | bearer token | `GetRequestHeaders` |
+| `input` (text or `Content` blocks) | `state` | `BuildRequestBody` sends the state as `input`; an object state as JSON text |
+| `usage.total_input_tokens` / `total_output_tokens` | `usage.input_tokens` / `output_tokens` | `UnwrapResponse` (Google omits `model` and `cost`; `ResolvedModel` stays `undefined`) |
+| `prompt_feedback.block_reason` (no answers) | — | `UnwrapResponse` fails the call with the reason (`BLOCK_REASON_UNSPECIFIED` ignored), allowing failover |
+| `400 INVALID_ARGUMENT` or `invalid_request` / `403 PERMISSION_DENIED` | — | `GetHTTPErrorType` pins both to a failover-eligible `ModelError`, so a rejected request or a bad key never ends `Default Decision`'s failover loop; `401` stays a fatal `Authentication` error |
+
+```typescript
+import { GeminiDecision } from "@memberjunction/ai-gemini";
+
+const decider = new GeminiDecision("your-google-api-key");
+const result = await decider.Decide({
+    Model: "gemini-decision-1",
+    State: "Breakroom counter check before the 9 AM client meeting: a brown puddle next to the sugar jar.",
+    Questions: {
+        has_spill: { Kind: "Likelihood", Instructions: "Is there an uncleaned liquid spill on the counter?" },
+        next_action: {
+            Kind: "Choice",
+            Instructions: "Which cleanup action fits the scene?",
+            Options: [
+                { Value: "wipe_with_cloth", Description: "Small counter spill with a cloth nearby." },
+                { Value: "dispatch_janitorial", Description: "Large floor hazard or broken glass." },
+                { Value: "ready_for_meeting", Description: "Counter is clean and ready." },
+            ],
+        },
+        severity: {
+            Kind: "Score",
+            Instructions: "Rate the severity of the counter mess.",
+            Levels: ["Clean and ready.", "Minor localized spill.", "Major spill or safety hazard."],
+        },
+    },
+});
+```
+
+**Two routes.** The `Gemini Decision 1` model (`metadata/ai-models/.gemini-decision-models.json`, type `Decision`, `PowerRank` 61, $0.10 per million input tokens, $0 output) has two Inference Provider rows:
+- **Google** (`GeminiDecision`, `APIName`: `gemini-decision-1`, `Priority`: 2, preferred): takes an `API Key` credential bound to the Google vendor, the model, or its Google row, or `AI_VENDOR_API_KEY__GEMINIDECISION` (note: `AI_VENDOR_API_KEY__GeminiLLM` is keyed to `GeminiLLM` and does not activate `GeminiDecision`). An `API Key with Endpoint` credential (or the constructor's second argument) overrides the endpoint for a gateway. MJ sends text only; the API also accepts images, audio, video and PDFs in `input`, which `DecisionParams` cannot carry yet.
+- **OpenRouter** (`OpenRouterDecision` in [`@memberjunction/ai-openrouter`](../OpenRouter/readme.md), `APIName`: `google/gemini-decision-1-20261111`, `Priority`: 1, 262,144-token context): takes an OpenRouter `API Key` credential or `AI_VENDOR_API_KEY__OPENROUTERDECISION` over OpenRouter's System One Decisions endpoint.
+
+**As a fallback.** `Gemini Decision 1` is not explicitly bound to `Default Decision` (which tries `Jev` and `LLM Decision` first), so without credentials it is skipped. Because it is an active `Decision` model (`PowerRank` 61, distance 4 from `Default Decision`'s target rank 57), any host with a credential bound to the `Google` vendor (for example, an existing Gemini API key bound at the vendor level) or to `OpenRouter` (or `AI_VENDOR_API_KEY__GEMINIDECISION` / `AI_VENDOR_API_KEY__OPENROUTERDECISION`) includes its matching route in `Default Decision`'s power-matched fallback list when the primary models ahead of it fail. To keep `Default Decision` off a route while retaining the vendor credential for other models, set `Status = 'Inactive'` on that `MJ: AI Model Vendors` row (or bind the credential to the specific models it is meant for rather than the vendor).
 
 ## Thinking Budget / Effort Level
 
@@ -224,6 +281,7 @@ A browser session on Gemini Enterprise runs through MJAPI's realtime relay (see 
 - `GeminiImageGenerator` -- Registered via `@RegisterClass(BaseImageGenerator, 'GeminiImageGenerator')`
 - `GeminiEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, 'GeminiEmbedding')`
 - `GeminiRealtime` -- Registered via `@RegisterClass(BaseRealtimeModel, 'GeminiRealtime')`
+- `GeminiDecision` -- Registered via `@RegisterClass(BaseDecision, 'GeminiDecision')`
 
 ## Dependencies
 

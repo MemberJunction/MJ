@@ -1,5 +1,5 @@
 /**
- * Saved-query metadata is not loaded into the metadata object by default (IT172, client transport,
+ * Saved-query metadata is not loaded into the metadata object by default (IT175, client transport,
  * QM3 mutates).
  *
  * A browser's provider leaves the query items of the MJ_Metadata dataset unread: it asks the server
@@ -113,7 +113,7 @@ async function checkQm3SavedQueryLeavesMetadataCurrent(): Promise<void> {
     }
     AssertEqual(await f.Reader.CheckToSeeIfRefreshNeeded(undefined, true), false, 'QM3 precondition: the reader is current');
 
-    const tag = `it172-${Date.now()}`;
+    const tag = `it175-${Date.now()}`;
     const category = await f.Writer.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', f.User);
     category.NewRecord();
     category.Name = `${tag} (safe to delete)`;

@@ -1660,7 +1660,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT172 - Saved-Query Metadata Not Loaded Into Metadata",
+            "TestID": "@lookup:MJ: Tests.Name=IT175 - Saved-Query Metadata Not Loaded Into Metadata",
             "Sequence": 85,
             "Status": "Active"
           },
@@ -1677,6 +1677,17 @@
           },
           "primaryKey": {
             "ID": "9C325FFD-F122-4114-88C6-4FCD88758AF7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
         }
       ]

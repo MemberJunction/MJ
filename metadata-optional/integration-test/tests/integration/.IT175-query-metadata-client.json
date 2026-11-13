@@ -1,7 +1,7 @@
 {
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
-    "Name": "IT172 - Saved-Query Metadata Not Loaded Into Metadata",
+    "Name": "IT175 - Saved-Query Metadata Not Loaded Into Metadata",
     "Description": "A GraphQL client session, configured as a browser is by default, leaves the saved-query items of the MJ_Metadata dataset unread and gets saved queries from QueryEngine. QM1 the deprecated Queries / QueryFields getters are empty, MJ: Queries is not a metadata member while MJ: Entities is, and the session's QueryEngine holds the saved queries; QM2 the server's metadata status reports no rows for the skipped MJ: Queries item and still reports the MJ: Entities rows; QM3 a query saved by a second session leaves the first session's metadata current. QM3 is mutating and self-cleaning.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
