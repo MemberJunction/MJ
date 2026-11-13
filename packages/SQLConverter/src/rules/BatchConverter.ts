@@ -9,23 +9,26 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ClassifyBatch } from './StatementClassifier.js';
+import { ClassifyBatch, SP_REFRESHVIEW_CALL, DescribeRefreshView } from './StatementClassifier.js';
 import { SubSplitCompoundBatch } from './SubSplitter.js';
 import { InlineScalarSelectVariables } from './ScalarVariableInliner.js';
 import { StripComments } from './ExpressionHelpers.js';
 import { PostProcess } from './PostProcessor.js';
 import { FindBracketIdentifiersInDollarBlocks } from './ExpressionHelpers.js';
 import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
+import { CollectTSQLBitColumns, MergeTableColumns } from './BitColumnRegistry.js';
+import type { TableColumnRegistry } from './BitColumnRegistry.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
   OutputGroups, StatementType,
 } from './types.js';
 import {
   CreateConversionContext, CreateConversionStats, CreateOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_BATCH_ERROR,
+  GAP_MARKER_MISSING_SAVES, GAP_MARKER_EXEC_SKIPPED,
 } from './types.js';
 
 /** Batch type groupings for ordered output */
-const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX', 'CONDITIONAL_DDL']);
+const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX', 'DROP_INDEX', 'CONDITIONAL_DDL']);
 const FK_TYPES = new Set<StatementType>(['FK_CONSTRAINT', 'CHECK_CONSTRAINT', 'UNIQUE_CONSTRAINT', 'ENABLE_CONSTRAINT']);
 const VIEW_TYPES = new Set<StatementType>(['CREATE_VIEW']);
 const FUNC_TYPES = new Set<StatementType>(['CREATE_PROCEDURE', 'CREATE_FUNCTION']);
@@ -56,6 +59,13 @@ export interface BatchConverterConfig {
   IncludeHeader?: boolean;
   /** Enable post-processing pass (default: true) */
   EnablePostProcess?: boolean;
+  /**
+   * Run-wide column registry (#5016). When given, its columns seed this file's conversion context
+   * (so a view comparing a boolean column of a table created by an earlier file converts `= 1` to
+   * `= TRUE`), and this file's own tables and BIT columns are added to it afterwards for the files
+   * that follow. Build it with {@link CollectTSQLBitColumns} from the latest baseline.
+   */
+  TableColumns?: TableColumnRegistry;
 }
 
 /** Result of batch conversion */
@@ -86,6 +96,11 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
     ? readFileSync(config.Source, 'utf-8')
     : config.Source;
   log(`  File size: ${rawSQL.length.toLocaleString()} bytes, ${rawSQL.split('\n').length.toLocaleString()} lines`);
+
+  // Seed the context with the run's columns and this file's own BIT columns (CREATE TABLE and
+  // ALTER TABLE … ADD), so a statement earlier in the file than the ALTER, or a later file, sees them.
+  if (config.TableColumns) MergeTableColumns(context.TableColumns, config.TableColumns);
+  CollectTSQLBitColumns(rawSQL, context.TableColumns);
 
   // Detect DDL changes (ALTER TABLE, CREATE TABLE) — used by ViewRule to decide
   // whether DROP CASCADE is needed (column lists may change) or just CREATE OR REPLACE
@@ -126,6 +141,8 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // Convert each batch
   log('Converting batches...');
   let lastPct = -1;
+  // Tables an earlier batch deletes rows from, for keeping a later unique index after the delete.
+  const deletedFrom = new Set<string>();
 
   for (let i = 0; i < batches.length; i++) {
     const pct = Math.floor(((i + 1) * 100) / stats.TotalBatches);
@@ -140,7 +157,12 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
     try {
       const result = convertBatch(batch, batchType, sortedRules, context, stats);
       if (result !== null) {
-        routeToGroup(result, batchType, groups, batch);
+        if (createsUniqueIndexOnDeletedTable(result, deletedFrom)) {
+          groups.Data.push(result);
+        } else {
+          routeToGroup(result, batchType, groups, batch);
+        }
+        for (const table of deletedTables(result)) deletedFrom.add(table);
         stats.Converted++;
       }
     } catch (err) {
@@ -151,6 +173,9 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
       groups.Other.push(`-- Original (first 200 chars): ${batch.slice(0, 200)}\n\n`);
     }
   }
+
+  // Hand this file's columns to the files that follow in the run.
+  if (config.TableColumns) MergeTableColumns(config.TableColumns, context.TableColumns);
 
   // Inject hand-written PG blocks for complex migration patterns
   // (cursor + dynamic SQL + temp procedures that can't be auto-converted)
@@ -215,6 +240,7 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // at each emission site so a gap from ANY rule — present or future — is counted: rules
   // return their marker as an ordinary string, so nothing else in this pipeline can tell
   // that the batch it just counted as `Converted` is unusable SQL (issue #3857).
+  fullOutput = appendMissingSavesMarker(rawSQL, fullOutput);
   recordOutputGaps(fullOutput, stats);
 
   // Write output
@@ -268,6 +294,67 @@ function preprocess(sql: string, schema: string): string {
   return sql.replace(/\$\{flyway:defaultSchema\}/g, schema);
 }
 
+/** An mj-sync log announces each save with a `-- Save <entity>…` line above its block. */
+const SAVE_MARKER = /^[ \t]*-- Save\b/;
+
+/**
+ * The note mj-sync writes under a save that changed no fields. Such a save has no SQL, so it
+ * is not expected in the output.
+ */
+const NO_OP_SAVE_NOTE = 'saved with no field changes; nothing to replay';
+
+/**
+ * Compare the saves an mj-sync log announces with the saves present in the output. Any
+ * shortfall means saves were lost with no marker of their own (issue #6097, where a
+ * post-processing regex deleted 278 of 279 saves and the run still passed), so a gap marker
+ * naming the counts is appended for the gap scan to count.
+ */
+function appendMissingSavesMarker(source: string, output: string): string {
+  const sourceLines = source.split('\n');
+  const announced =
+    sourceLines.filter(line => SAVE_MARKER.test(line)).length -
+    sourceLines.filter(line => line.includes(NO_OP_SAVE_NOTE)).length;
+  if (announced <= 0) return output;
+  const kept = countConvertedSaves(output) + countSkippedExecBlocks(output);
+  if (kept >= announced) return output;
+  return `${output}\n${GAP_MARKER_MISSING_SAVES}: the source announces ${announced} save(s), the output holds ${kept}\n`;
+}
+
+/**
+ * Saves the converter kept: a `-- Save` line whose following lines, past blanks and other
+ * comments, reach a `DO $mj$` block (ExecBlockRule keeps a block's leading comments above it).
+ * Another `-- Save` line first means this one has no block.
+ */
+function countConvertedSaves(output: string): number {
+  const lines = output.split('\n');
+  let kept = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!SAVE_MARKER.test(lines[i])) continue;
+    let next = i + 1;
+    while (next < lines.length && !SAVE_MARKER.test(lines[next]) && isBlankOrComment(lines[next])) next++;
+    if (lines[next]?.trim() === 'DO $mj$') kept++;
+  }
+  return kept;
+}
+
+function isBlankOrComment(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed === '' || trimmed.startsWith('--');
+}
+
+function countSkippedExecBlocks(output: string): number {
+  return output.split('\n').filter(line => line.startsWith(GAP_MARKER_EXEC_SKIPPED)).length;
+}
+
+/** True when `lines` hold only blanks and comments, the last comment being a `-- Save` line. */
+function endsWithSaveAnnouncement(lines: string[]): boolean {
+  if (!lines.every(isBlankOrComment)) return false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() !== '') return SAVE_MARKER.test(lines[i]);
+  }
+  return false;
+}
+
 /** Split SQL on GO batch separators */
 function splitOnGo(sql: string): string[] {
   const batches: string[] = [];
@@ -277,6 +364,9 @@ function splitOnGo(sql: string): string[] {
   for (const line of lines) {
     const stripped = line.trim().toUpperCase();
     if (stripped === 'GO' || /^GO\s*(--.*)?$/i.test(stripped)) {
+      // Older mj-sync logs put a `GO` between a `-- Save` line and its block. Keep that
+      // comment-only batch with the next one, so the save stays above the block it announces.
+      if (endsWithSaveAnnouncement(currentBatch)) continue;
       const batch = currentBatch.join('\n').trim();
       if (batch.length > 0) batches.push(batch);
       currentBatch = [];
@@ -306,6 +396,16 @@ function convertBatch(
       stats.SkippedBatches.push(`${batchType}: ${batch.slice(0, 80)}...`);
     }
     return null;
+  }
+
+  // sp_refreshview: no PostgreSQL equivalent. A named warning, not a gap — the run still passes —
+  // and a comment in the output where the call stood (issue #5649).
+  if (batchType === 'REFRESH_VIEW') {
+    stats.Skipped++;
+    const views = [...batch.matchAll(SP_REFRESHVIEW_CALL)].map(m => m[1]);
+    const lines = views.map(v => DescribeRefreshView(v));
+    stats.Warnings.push(...lines);
+    return lines.map(l => `-- WARNING: ${l}`).join('\n') + '\n';
   }
 
   // Comment-only: pass through
@@ -418,6 +518,31 @@ function routeToGroup(result: string, batchType: StatementType, groups: OutputGr
   } else {
     groups.Other.push(result);
   }
+}
+
+/** `schema.table` → `table`, unquoted and lower-cased, for comparing table references. */
+function tableKey(ref: string): string {
+  return (ref.split('.').pop() ?? ref).replace(/["[\]]/g, '').toLowerCase();
+}
+
+/** The tables a converted batch deletes rows from (`DELETE FROM t …`), as {@link tableKey}s. */
+function deletedTables(sql: string): string[] {
+  return [...StripComments(sql).matchAll(/\bDELETE\s+FROM\s+([^\s(;]+)/gi)].map(m => tableKey(m[1]));
+}
+
+/**
+ * True when a converted batch creates a unique index on a table an earlier batch deleted rows
+ * from. The output puts DDL before data, which would build the index before the delete that
+ * removes the duplicates it forbids (the ListDetail clean-up of v5.48), and the index fails. Such
+ * an index goes with the data instead, so it keeps its source order after the delete.
+ */
+function createsUniqueIndexOnDeletedTable(sql: string, deletedFrom: Set<string>): boolean {
+  if (deletedFrom.size === 0) return false;
+  const code = StripComments(sql);
+  for (const m of code.matchAll(/\bCREATE\s+UNIQUE\s+(?:\w+\s+)?INDEX\b[^;]*?\bON\s+([^\s(;]+)\s*\(/gi)) {
+    if (deletedFrom.has(tableKey(m[1]))) return true;
+  }
+  return false;
 }
 
 /** True when a conditional batch's statements are data changes or data assertions, with no DDL. */

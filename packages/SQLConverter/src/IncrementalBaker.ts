@@ -72,6 +72,63 @@ export interface BakerWorkingDB {
    * {@link SelectBakeableEntities} implements the selection over the provider's entity list.
    */
   listBakeableEntities(schema: string): Promise<string[]>;
+  /**
+   * Run PostgreSQL's EntityField sync (`spUpdateExistingEntityFieldsFromSchema`, after ensuring
+   * CodeGen's metadata support objects) for the named entities and return the EntityField
+   * `DefaultValue` changes it made (issue #5650). Called after a migration's hand body is applied
+   * and before the capture, so a default the migration added to an existing column reaches the
+   * metadata the baked `spCreate…` is generated from. Optional: a working DB without it bakes as
+   * before.
+   */
+  syncFieldDefaults?(entityDisplayNames: string[]): Promise<FieldDefaultChange[]>;
+}
+
+/** One EntityField row as {@link BakerWorkingDB.syncFieldDefaults} snapshots it. */
+export interface EntityFieldDefault {
+  ID: string;
+  EntityName: string;
+  FieldName: string;
+  DefaultValue: string | null;
+}
+
+/** A `DefaultValue` the field sync changed: the row after the sync, with the value before it. */
+export interface FieldDefaultChange extends EntityFieldDefault {
+  PreviousDefaultValue: string | null;
+}
+
+/**
+ * The `DefaultValue` changes between two EntityField snapshots, matched on ID (case-insensitive),
+ * in `after` order. A row present only after the sync (a new field) is not a change: its
+ * registration already carries the default.
+ */
+export function DiffFieldDefaults(
+  before: ReadonlyArray<EntityFieldDefault>,
+  after: ReadonlyArray<EntityFieldDefault>,
+): FieldDefaultChange[] {
+  const prior = new Map(before.map((f) => [f.ID.toLowerCase(), f]));
+  const changes: FieldDefaultChange[] = [];
+  for (const f of after) {
+    const old = prior.get(f.ID.toLowerCase());
+    if (old && old.DefaultValue !== f.DefaultValue) changes.push({ ...f, PreviousDefaultValue: old.DefaultValue });
+  }
+  return changes;
+}
+
+/**
+ * The EntityField UPDATEs that carry `DefaultValue` changes into a baked migration, so a fresh
+ * install (which never runs the field sync) gets the same metadata the bake used (issue #5650).
+ */
+export function FieldDefaultUpdatesSQL(changes: ReadonlyArray<FieldDefaultChange>, coreSchema: string): string {
+  if (changes.length === 0) return '';
+  const literal = (v: string | null) => (v === null ? 'NULL' : `'${v.replace(/'/g, "''")}'`);
+  return [
+    '-- EntityField DefaultValue changes from the PostgreSQL field sync (a fresh install does not run it)',
+    ...changes.map(
+      (c) =>
+        `-- ${c.EntityName}.${c.FieldName}\n` +
+        `UPDATE ${coreSchema}."EntityField" SET "DefaultValue" = ${literal(c.DefaultValue)} WHERE "ID" = '${c.ID}';`,
+    ),
+  ].join('\n');
 }
 
 /** The entity fields {@link SelectBakeableEntities} reads (a structural subset of `EntityInfo`). */
@@ -130,6 +187,8 @@ export interface BakedMigrationResult {
   unhandled: UnhandledStatement[];
   /** Hand-written procedural routines the migration carries (require human PG authoring). */
   handProcedural: string[];
+  /** Named, non-blocking warnings from the conversion (never a reason not to bake). */
+  warnings: string[];
   /**
    * `'baked'` — native CodeGen captured + assembled into `pgSQL`.
    * `'preserved'` — a transpile gap (unhandled statement / hand-procedural) made an auto-bake
@@ -138,6 +197,44 @@ export interface BakedMigrationResult {
    * capture) and `pgSQL` is the transpile-only artifact for hand-authoring (issue #3252 RC3).
    */
   mode: 'baked' | 'preserved' | 'gap-no-bake';
+}
+
+/** Options for one {@link IncrementalBaker.BakeMigration} call. */
+export interface BakeMigrationOptions {
+  /**
+   * Skip applying the migration to the working DB and only capture its CodeGen: the migration is
+   * already applied (a capture that failed after the apply, or a hand-finished file applied by
+   * hand). Used by `mj migrate rebake --file … --capture-only` (#6538 item 5, #6348).
+   */
+  CaptureOnly?: boolean;
+}
+
+/** The two regions of a baked `.pg.sql`: everything above the CodeGen section, and the section. */
+export interface BakedFileRegions {
+  /** Header, hand-written DDL and metadata DML — the part a person may have finished by hand. */
+  handRegion: string;
+  /** The baked CodeGen section, header line included; empty when the file has none. */
+  codeGenSection: string;
+}
+
+/** Line that opens the header {@link IncrementalBaker} writes on every baked file. */
+const BAKED_HEADER_MARKER = '-- Split-and-regenerate with INLINE NATIVE CodeGen baking';
+
+/**
+ * Split a committed `.pg.sql` that the baker wrote (or a `.needs-hand` artifact a person finished)
+ * at the CodeGen section header. Returns null for a file the baker did not write — a legacy
+ * conversion has no hand/CodeGen boundary to keep.
+ */
+export function SplitBakedFile(pgSql: string): BakedFileRegions | null {
+  if (!pgSql.includes(BAKED_HEADER_MARKER)) return null;
+  const at = pgSql.indexOf(CODEGEN_SECTION_HEADER);
+  if (at < 0) return { handRegion: pgSql.trimEnd(), codeGenSection: '' };
+  return { handRegion: pgSql.slice(0, at).trimEnd(), codeGenSection: pgSql.slice(at).trimEnd() };
+}
+
+/** The command that resumes a bake whose capture failed after the migration was applied. */
+export function CaptureOnlyResumeCommand(fileName: string): string {
+  return `mj migrate rebake --file ${fileName} --capture-only`;
 }
 
 const DEFAULT_SCHEMA = '__mj';
@@ -185,7 +282,13 @@ export class IncrementalBaker {
    * gaps (`needs-hand-authoring`); they aren't referenced by base views/sprocs, so the capture is
    * complete regardless and the caller authors them into the final `.pg.sql`.
    */
-  async BakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
+  async BakeMigration(
+    ssSql: string,
+    fileName: string,
+    committedPgSql?: string,
+    options: BakeMigrationOptions = {},
+  ): Promise<BakedMigrationResult> {
+    const captureOnly = options.CaptureOnly === true;
     const conv = await ConvertMigration(ssSql, fileName, {
       transpiler: this.opts.transpiler,
       schema: this.schema,
@@ -200,6 +303,7 @@ export class IncrementalBaker {
       affectedEntities: entities,
       unhandled: conv.unhandled,
       handProcedural: conv.handProcedural,
+      warnings: conv.warnings,
     };
 
     // The transpile-only artifact (header + gap comments + transpiled DDL, no CodeGen). Preserved
@@ -207,9 +311,20 @@ export class IncrementalBaker {
     const transpiledArtifact = this.assemble(fileName, handBody, []);
 
     if (committedPgSql !== undefined) {
+      const regions = SplitBakedFile(committedPgSql);
       return this.applyAndCapture(fileName, committedPgSql, async () => {
-        await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
+        if (!captureOnly) await this.opts.db.apply(committedPgSql); // advance via the known-good committed file
         await this.opts.db.refreshMetadata();
+        if (regions) {
+          // A file the baker wrote: keep its hand region byte for byte (a person may have finished
+          // it) and replace only the CodeGen section. Gaps in the fresh transpile no longer matter,
+          // because the transpile is not used (#3345 item 4, #6348).
+          if (entities.length === 0) return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
+          const captured = await this.captureEntities(entities);
+          return { ...base, pgSQL: this.withCodeGenSection(regions.handRegion, captured), mode: 'baked' };
+        }
+        // A legacy conversion has no hand/CodeGen boundary; rebuild it from the fresh transpile,
+        // which is only safe when the transpile has no gaps.
         if (conv.status === 'needs-hand-authoring' || conv.unhandled.length > 0) {
           return { ...base, pgSQL: committedPgSql, mode: 'preserved' };
         }
@@ -237,18 +352,44 @@ export class IncrementalBaker {
     }
 
     return this.applyAndCapture(fileName, transpiledArtifact, async () => {
-      if (handBody) {
+      if (handBody && !captureOnly) {
         await this.opts.db.apply(this.withSearchPath(handBody));
       }
-      await this.opts.db.refreshMetadata();
-      const captured = await this.captureEntities(entities);
-      return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+      // From here on the working DB is advanced past this migration. A capture failure must say
+      // so and name the way to resume, or a re-run starts from an inconsistent state (#6538 item 5).
+      // (One transaction around apply + capture does not work: CodeGen reads metadata through
+      // other pool connections, which cannot see uncommitted DDL.)
+      try {
+        // Field sync between apply and capture (issue #5650): a default added to an existing column
+        // reaches the metadata the capture reads, and the change is baked into the file.
+        const defaults = this.opts.db.syncFieldDefaults && entities.length > 0
+          ? await this.opts.db.syncFieldDefaults(entities)
+          : [];
+        await this.opts.db.refreshMetadata();
+        const captured = await this.captureEntities(entities);
+        const body = [handBody, FieldDefaultUpdatesSQL(defaults, this.coreSchema)].filter((p) => p).join('\n\n');
+        return { ...base, pgSQL: this.assemble(fileName, body, captured), mode: 'baked' };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new BakeApplyError(
+          fileName,
+          transpiledArtifact,
+          `CodeGen capture failed after ${fileName} was applied to the working DB (${msg}). ` +
+            `The working DB is now past this migration. Finish the .needs-hand file, save it as the ` +
+            `.pg.sql counterpart, then resume with: ${CaptureOnlyResumeCommand(fileName)}`,
+        );
+      }
     });
   }
 
   /** @deprecated Use {@link BakeMigration}. */
-  async bakeMigration(ssSql: string, fileName: string, committedPgSql?: string): Promise<BakedMigrationResult> {
-    return this.BakeMigration(ssSql, fileName, committedPgSql);
+  async bakeMigration(
+    ssSql: string,
+    fileName: string,
+    committedPgSql?: string,
+    options: BakeMigrationOptions = {},
+  ): Promise<BakedMigrationResult> {
+    return this.BakeMigration(ssSql, fileName, committedPgSql, options);
   }
 
   /**
@@ -297,6 +438,16 @@ export class IncrementalBaker {
       // Replacement functions, not strings — see MigrationConverter.assemblePgSQL (issue #3171).
       .replaceAll('${flyway:defaultSchema}', () => this.schema)
       .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
+  }
+
+  /** A committed hand region followed by a freshly captured CodeGen section. */
+  private withCodeGenSection(handRegion: string, captured: string[]): string {
+    const parts = [handRegion.trimEnd()];
+    if (captured.length > 0) {
+      parts.push(CODEGEN_SECTION_HEADER);
+      parts.push(captured.join('\n\n'));
+    }
+    return parts.join('\n\n') + '\n';
   }
 
   private bakedHeader(fileName: string): string {

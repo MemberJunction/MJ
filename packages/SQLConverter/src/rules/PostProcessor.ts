@@ -47,30 +47,10 @@ export function PostProcess(sql: string): string {
     "RAISE EXCEPTION '$1';"
   );
 
-  // Fix remaining SQL Server type names used in procedure parameters
-  // NOTE: Type conversions must run BEFORE type unquoting so that
-  // e.g. "INT" → "INTEGER" gets cleaned up by the unquoting pass below.
-  sql = sql.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
-  sql = sql.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
-  sql = sql.replace(/\bnvarchar\b/gi, 'TEXT');
-  sql = sql.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
-  // int → INTEGER (standalone word only, avoid matching into "integer")
-  sql = sql.replace(/\bint\b(?!eger)/gi, 'INTEGER');
-  // varbinary → BYTEA
-  sql = sql.replace(/\bvarbinary\b/gi, 'BYTEA');
-
-  // Fix quoted type names — PG types are case-sensitive when quoted.
-  // Runs AFTER type conversions above so "INT"→"INTEGER" gets unquoted here.
-  sql = sql.replace(/"UUID"/g, 'UUID');
-  sql = sql.replace(/"BOOLEAN"/g, 'BOOLEAN');
-  sql = sql.replace(/"TIMESTAMPTZ"/g, 'TIMESTAMPTZ');
-  sql = sql.replace(/"INTEGER"/g, 'INTEGER');
-  sql = sql.replace(/"SMALLINT"/g, 'SMALLINT');
-  sql = sql.replace(/"BIGINT"/g, 'BIGINT');
-  sql = sql.replace(/"TEXT"/g, 'TEXT');
-  sql = sql.replace(/"DOUBLE PRECISION"/g, 'DOUBLE PRECISION');
-  sql = sql.replace(/"BYTEA"/g, 'BYTEA');
-  sql = sql.replace(/"REAL"/g, 'REAL');
+  // Fix remaining SQL Server type names, and unquote quoted PG type names. Code only: a
+  // literal such as an EntityField row's `Type = 'nvarchar'` or a JSON `"UUID"` is data
+  // (issues #5838, #5567 item 3).
+  sql = TransformCodeOnly(sql, convertTypeNames);
 
   // Fix boolean comparisons: =(1) → =TRUE, =(0) → =FALSE in WHERE clauses.
   // The negative lookbehind keeps this from matching the `=` inside `>=`, `<=`
@@ -435,17 +415,22 @@ function removeFlywayHistoryReferences(sql: string): string {
     .join('\n');
 }
 
-/** Truncate index names longer than 63 chars with hash suffix */
+/**
+ * Truncate index names longer than 63 chars with hash suffix. A DROP INDEX gets the same name
+ * the CREATE INDEX did, or it would miss the index it drops.
+ */
 function fixLongIndexNames(sql: string): string {
-  return sql.replace(
-    /(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi,
-    (match, keyword: string, name: string, rest: string) => {
-      if (name.length <= 63) return match;
-      const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
-      const shortName = name.slice(0, 54) + '_' + hash;
-      return `${keyword}"${shortName}"${rest}`;
-    }
-  );
+  const shorten = (match: string, keyword: string, name: string, rest: string): string => {
+    if (name.length <= 63) return match;
+    const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
+    const shortName = name.slice(0, 54) + '_' + hash;
+    return `${keyword}"${shortName}"${rest}`;
+  };
+  return sql
+    .replace(/(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi,
+      (m: string, keyword: string, name: string, rest: string) => shorten(m, keyword, name, rest))
+    .replace(/(DROP\s+INDEX\s+IF\s+EXISTS\s+(?:[\w$]+\.)?)"([^"]+)"(\s*;)/gi,
+      (m: string, keyword: string, name: string, rest: string) => shorten(m, keyword, name, rest));
 }
 
 /** Fix lines starting with backslash inside INSERT string literals */
@@ -479,6 +464,38 @@ function fixBackslashLines(sql: string): string {
   }
 
   return fixedLines.join('\n');
+}
+
+/**
+ * SQL Server type names → PostgreSQL (`nvarchar(MAX)` → TEXT, `int` → INTEGER, …), then the
+ * quoted PG type names unquoted. Applied to code segments only.
+ */
+function convertTypeNames(code: string): string {
+  // Fix remaining SQL Server type names used in procedure parameters
+  // NOTE: Type conversions must run BEFORE type unquoting so that
+  // e.g. "INT" → "INTEGER" gets cleaned up by the unquoting pass below.
+  code = code.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
+  code = code.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
+  code = code.replace(/\bnvarchar\b/gi, 'TEXT');
+  code = code.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
+  // int → INTEGER (standalone word only, avoid matching into "integer")
+  code = code.replace(/\bint\b(?!eger)/gi, 'INTEGER');
+  // varbinary → BYTEA
+  code = code.replace(/\bvarbinary\b/gi, 'BYTEA');
+
+  // Fix quoted type names — PG types are case-sensitive when quoted.
+  // Runs AFTER type conversions above so "INT"→"INTEGER" gets unquoted here.
+  code = code.replace(/"UUID"/g, 'UUID');
+  code = code.replace(/"BOOLEAN"/g, 'BOOLEAN');
+  code = code.replace(/"TIMESTAMPTZ"/g, 'TIMESTAMPTZ');
+  code = code.replace(/"INTEGER"/g, 'INTEGER');
+  code = code.replace(/"SMALLINT"/g, 'SMALLINT');
+  code = code.replace(/"BIGINT"/g, 'BIGINT');
+  code = code.replace(/"TEXT"/g, 'TEXT');
+  code = code.replace(/"DOUBLE PRECISION"/g, 'DOUBLE PRECISION');
+  code = code.replace(/"BYTEA"/g, 'BYTEA');
+  code = code.replace(/"REAL"/g, 'REAL');
+  return code;
 }
 
 /** Count net single quotes (excluding doubled '') */

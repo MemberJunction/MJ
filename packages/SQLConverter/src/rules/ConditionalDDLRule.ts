@@ -16,6 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
+import { ConvertDropIndex } from './CreateIndexRule.js';
 import { ConvertIdentifiers, RemoveCollate, ConvertCommonFunctions, RemoveNPrefix, CastBooleanInsertValues, ConvertBooleanLiteralComparisons, StripComments, ConvertObjectIdCalls, UnquoteBuiltinFunctionCalls, IsKeywordNamedColumn } from './ExpressionHelpers.js';
 
 /** One migration placeholder — `${mjSchema}`, `${flyway:defaultSchema}` — as it appears in source SQL. */
@@ -80,6 +81,10 @@ export class ConditionalDDLRule implements IConversionRule {
     // Try guarded constraint drop → PG-native DROP CONSTRAINT IF EXISTS
     const dropConstraintResult = this.tryConvertGuardedDropConstraint(result);
     if (dropConstraintResult) return dropConstraintResult + '\n';
+
+    // Guarded index drop → DROP INDEX IF EXISTS (issue #3166)
+    const dropIndexResult = this.tryConvertGuardedDropIndex(result);
+    if (dropIndexResult) return dropIndexResult + '\n';
 
     // Try CREATE INDEX IF NOT EXISTS pattern first (no BEGIN/END wrapper)
     const indexResult = this.tryConvertConditionalIndex(result);
@@ -194,6 +199,29 @@ export class ConditionalDDLRule implements IConversionRule {
       if (!m) return null;
       converted.push(`ALTER TABLE ${m[1]} DROP CONSTRAINT IF EXISTS ${m[2]};`);
     }
+    return converted.join('\n');
+  }
+
+  /**
+   * `IF EXISTS (SELECT … FROM sys.indexes …) [BEGIN] DROP INDEX x ON t [END]` →
+   * `DROP INDEX IF EXISTS <schema>."x";`. The PostgreSQL form is already idempotent, so the guard
+   * is dropped, whatever it probes. Null unless every body statement is an index drop.
+   */
+  private tryConvertGuardedDropIndex(sql: string): string | null {
+    const ifMatch = sql.match(/^\s*IF\s+EXISTS\s*\(/i);
+    if (!ifMatch || ifMatch.index === undefined) return null;
+    const openPos = sql.indexOf('(', ifMatch.index);
+    const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
+    if (closePos < 0) return null;
+
+    // Trailing comments first: a batch that runs on into the next statement's heading comment
+    // (`END\n-- 2b. Drop …`) otherwise keeps its END, and the body no longer reads as drops.
+    const body = ConditionalDDLRule.stripTrailingComments(sql.slice(closePos + 1))
+      .replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
+    const statements = body.split(';').map(s => s.trim()).filter(Boolean);
+    if (statements.length === 0) return null;
+    const converted = statements.map(s => ConvertDropIndex(s));
+    if (converted.some(c => c === null)) return null;
     return converted.join('\n');
   }
 

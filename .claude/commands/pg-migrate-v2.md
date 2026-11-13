@@ -277,7 +277,19 @@ MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 pnpm mj migrate convert --split 
 
 Only bake the NEW migration(s) you just converted. **Never run `mj migrate rebake` across the
 committed set** — committed `.pg.sql` are immutable (Rule 1); `rebake` is only for re-capturing a
-single migration's baked block in place.
+single migration's baked block in place. Without `--file`, `rebake` is a dry run unless `--write` is
+passed.
+
+**A migration with hand-written routines** (function / procedure / trigger): the bake halts and
+writes `<name>.pg.sql.needs-hand`. Finish the hand part, save it as `<name>.pg.sql`, apply it to the
+working DB, then bake its CodeGen with
+`mj migrate rebake --file <name>.sql --capture-only`. Re-bake keeps everything above the
+`-- ===================== CodeGen (native PG, baked) =====================` line byte for byte and
+replaces only the CodeGen section.
+
+**A capture that fails after the apply** (`BakeApplyError`): the working DB is already past that
+migration. The error names the file and prints the same `rebake --file … --capture-only` command;
+fix the cause, then run it instead of re-running `convert` (which would apply the file again).
 
 ---
 
