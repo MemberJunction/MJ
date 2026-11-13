@@ -111,6 +111,24 @@ Cause 2, not separated yet: low thinking level, or the shared session, or both, 
 - **C. Round 3 = default thinking + shared session + type check.** Pro: separates the shared session from the thinking level. Con: the most expensive of the three; a second round is still needed to find the cheapest good level.
 - **Choice: B.** If wrong: one more round (C) of about 4 USD.
 
+## N13. Round 3 result and the separating round
+
+Round 3 (thinking level medium, risks of a package in one session, type check in `run_test`, staged judges):
+
+| PR | Round 1 USD | Round 3 USD | Round 1 result | Round 3 result |
+|---|---|---|---|---|
+| #3831 | 2.22 | 0.99 | 3 reported, matched | 11 tests, 6 weak catches, 3 reported (match check pending); no Invalid test |
+| #5906 | 2.23 | 0.48 | 1 reported, matched | 13 tests, all pass on both revisions |
+| #5513 | 2.79 | 0.72 | 7 weak catches, 0 reported | 5 weak catches, 0 reported |
+
+Cost is 70% lower than round 1. The type check removed the Invalid tests. #5906 lost its catch again: the shared session used 21 turns for 4 risks, where round 1 used 13 to 27 turns for each risk.
+Each result is one run of a model that does not repeat exactly, so one lost catch is weak evidence.
+
+- **A. Accept round 3 settings.** Pro: cheapest working configuration. Con: one of the two matched catches is lost.
+- **B. Round 4 = medium thinking, one session per risk, on #5906 and #5513.** Pro: shows whether the shared session is the cause; two PRs, about 30 minutes. Con: about 2 to 3 USD.
+- **C. Go straight to 2 risks per session.** Pro: a middle setting. Con: a guess with no measurement of either end.
+- **Choice: B.** If #5906's catch returns, the shared session costs catches and the default stays at one risk per session (or 2 after one more check). If it does not return, the cause is the thinking level or run-to-run variation.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -119,3 +137,4 @@ Cause 2, not separated yet: low thinking level, or the shared session, or both, 
 | A1 | Analyzer only, 30 tuning bug PRs, Sonnet | 2.65 | 6.07 |
 | 1 | Hydrogen, new pipeline: #3831, #5906, #4450, #5513 | 10.09 | 16.16 |
 | 2 | Hydrogen, all cost changes, thinking low: #3831, #5906, #5513 | 1.18 | 17.34 |
+| 3 | Hydrogen, thinking medium, shared session, type check: #3831, #5906, #5513 | 2.19 | 19.53 |

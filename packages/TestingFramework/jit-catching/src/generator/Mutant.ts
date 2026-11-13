@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join, normalize, basename } from 'node:path';
 import type { MutantEdit } from '../types';
+import { MutantEditSchema } from '../schemas';
 
 const TEST_SEGMENTS = new Set(['__tests__', '__mocks__', '__fixtures__', 'test', 'tests']);
 
@@ -13,12 +14,13 @@ function IsTestPath(file: string): boolean {
     return segments.slice(0, -1).some((s) => TEST_SEGMENTS.has(s)) || name.includes('.test.') || name.includes('.spec.');
 }
 
-/** Edits may touch only non-test `src/` files of the package the test lives in (D13). */
+/** Edits may touch only non-test `.ts` files under `src/` of the package the test lives in, with paths the stored record accepts (D13). */
 export function ValidateMutantEdits(packageRelDir: string, edits: MutantEdit[]): string | null {
     for (const e of edits) {
         if (e.File !== normalize(e.File) || e.File.includes('..')) return `path not allowed: ${e.File}`;
         if (!e.File.startsWith(`${packageRelDir}/src/`)) return `edit outside the package under test: ${e.File}`;
         if (IsTestPath(e.File.slice(packageRelDir.length + 1))) return `a mutant may not edit test files: ${e.File}`;
+        if (!MutantEditSchema.shape.File.safeParse(e.File).success) return `a mutant may edit only .ts source files with plain path names: ${e.File}`;
         if (e.Find.length === 0) return 'Find must not be empty';
     }
     return edits.length > 0 ? null : 'no edits';

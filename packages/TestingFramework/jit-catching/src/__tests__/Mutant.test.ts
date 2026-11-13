@@ -7,6 +7,10 @@ import { ApplyMutantEdits, ValidateMutantEdits, CopyPackageForMutant } from '../
 function pkg(): string { const d = mkdtempSync(join(tmpdir(), 'jit-mut-')); mkdirSync(join(d, 'src/__tests__'), { recursive: true }); writeFileSync(join(d, 'src/a.ts'), 'export function f(u: string) {\n  return u === "admin";\n}\n'); writeFileSync(join(d, 'package.json'), '{}'); return d; }
 
 describe('ValidateMutantEdits', () => {
+  it('refuses a file the stored record cannot hold, such as a template or a name with a space', () => {
+    expect(ValidateMutantEdits('packages/Angular/Generic/whiteboard', [{ File: 'packages/Angular/Generic/whiteboard/src/lib/board.component.html', Find: 'x', Replace: 'y' }])).toMatch(/\.ts/);
+    expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/my file.ts', Find: 'x', Replace: 'y' }])).toMatch(/\.ts/);
+  });
   it('accepts edits to src files of the package and rejects tests, other packages and traversal', () => {
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/a.ts', Find: 'x', Replace: 'y' }])).toBeNull();
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/__tests__/a.test.ts', Find: 'x', Replace: 'y' }])).toMatch(/test/);
