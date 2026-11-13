@@ -582,7 +582,13 @@ is default-ON per `tiers.ts`, so the pin is explicit — no token cost, no flaki
 members execute rather than skipping. Anything still gated (Predictive Studio; mutation checks
 outside the nightly lane) reports a real `Skipped` status in the summary. Scheduled lanes cover
 the rest: nightly `RUN_MUTATION_TESTS=1` + the cross-server Redis rig; weekly Live Model
-(gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret).
+(gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret). The cross-server rig, the only lane that runs
+MJAPI with `REDIS_URL`, also runs on pull requests that change the shared-cache stack or the server
+bootstrap (the `cachestack` filter in the workflow's `changes` job).
+
+The lanes in this workflow that boot MJAPI wait with `.github/scripts/wait-for-mjapi.sh`, which stops as soon as
+`/healthcheck` reports a failed start (including one that loaded no entity metadata) instead of
+polling until it times out, and prints that answer with the log tail.
 
 ---
 

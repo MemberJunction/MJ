@@ -117,6 +117,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       codegen: ${{ steps.filter.outputs.codegen }}
+      cachestack: ${{ steps.filter.outputs.cachestack }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -139,8 +140,18 @@ jobs:
             else
               echo "codegen=false" >> "$GITHUB_OUTPUT"
             fi
+            # The shared-cache stack and the server bootstrap that loads metadata through it. A defect
+            # here can pass every single-process lane (none runs with Redis) and leave a server that
+            # boots with no metadata; the cross-server rig is the lane that runs MJAPI on Redis.
+            if echo "$CHANGED" | grep -qE '^(packages/RedisProvider/|packages/MJCore/src/generic/localCacheManager\.ts|packages/MJServer/src/(sharedCache|index|startupGate|startupState|metadataReadiness)\.ts|packages/ServerBootstrap/src/|\.github/scripts/wait-for-mjapi\.sh)'; then
+              echo "cachestack=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "cachestack=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "codegen=true" >> "$GITHUB_OUTPUT"
+            # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
+            echo "cachestack=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Lockfile preflight (MJ#4650). Every heavy job below installs for itself, so a lockfile that
@@ -585,19 +596,10 @@ jobs:
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
           # REST is off by default; the REST members (IT134 CW7/CW8) skip without it.
           MJ_REST_API_ENABLED: 'true'
+        # Without a ready MJAPI the 19 client-transport members would skip, so a failed boot fails here.
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          echo "Waiting for MJAPI /healthcheck..."
-          for i in $(seq 1 36); do
-            if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
-              echo "MJAPI is up (attempt $i)."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot within 3 minutes — the 19 client-transport members would skip. Log tail:"
-          tail -200 /tmp/mjapi.log
-          exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       # The deterministic tier via the single entry path: `mj test suite` loads the private
       # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
@@ -1003,12 +1005,8 @@ jobs:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          for i in $(seq 1 36); do
-            curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1 && { echo "MJAPI is up."; exit 0; }
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot"; tail -200 /tmp/mjapi.log; exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       - name: Run Live Model suite
         if: steps.prereq.outputs.READY == 'true'
@@ -1040,11 +1038,15 @@ jobs:
   # remote-invalidate). The July-2026 fingerprint bugs (31f38be52, d4947ed73) showed this
   # can be 100% broken while every unit test and the whole single-process integration tier
   # stay green — the failure only manifests when a second server's lookup misses.
+  #
+  # It is also the only lane that boots MJAPI with REDIS_URL set, so it runs on pull requests that
+  # change the shared-cache stack or the server bootstrap (`changes.outputs.cachestack`), not only
+  # nightly: a server that loads no metadata through the Redis-backed cache passes every other lane.
   cross-server-invalidation:
-    name: Cross-server invalidation rig (nightly)
-    needs: [preflight]
+    name: Cross-server invalidation rig (nightly + cache-stack PRs)
+    needs: [preflight, changes]
     # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.cachestack == 'true')
     timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
@@ -1152,22 +1154,15 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+        # Ready means the server loaded entity metadata: a start that loaded none fails, and
+        # /healthcheck then answers 503 with the failed phase, which the wait script stops on.
         run: |
-          (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
-          (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)
-          for PORT in 4000 4001; do
-            UP=0
-            for i in $(seq 1 36); do
-              curl -fsS "http://localhost:${PORT}/healthcheck" >/dev/null 2>&1 && { UP=1; break; }
-              sleep 5
-            done
-            if [ "$UP" != "1" ]; then
-              echo "::error::MJAPI on port ${PORT} failed to boot"
-              tail -200 "/tmp/mjapi-$([ "$PORT" = "4000" ] && echo a || echo b).log"
-              exit 1
-            fi
-            echo "MJAPI on ${PORT} is up."
-          done
+          (cd packages/MJAPI && GRAPHQL_PORT=4000 exec node dist/index.js > /tmp/mjapi-a.log 2>&1) &
+          PID_A=$!
+          (cd packages/MJAPI && GRAPHQL_PORT=4001 exec node dist/index.js > /tmp/mjapi-b.log 2>&1) &
+          PID_B=$!
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-a.log 36 5 "$PID_A"
+          .github/scripts/wait-for-mjapi.sh http://localhost:4001 /tmp/mjapi-b.log 36 5 "$PID_B"
 
       # ANTI-VACUITY. Every assertion in the rig presupposes that both processes actually
       # swapped LocalCacheManager to RedisLocalStorageProvider — that is the only thing that
@@ -1175,6 +1170,10 @@ jobs:
       # both would silently fall back to the in-memory cache, no cross-server event would be
       # emitted, and XS1–XS7 would all PASS while testing nothing. A green lane asserting
       # nothing is worse than a red one.
+      #
+      # Both servers reaching ready (previous step) already proves each loaded entity metadata:
+      # MJServer fails a start that loaded none. What it does not prove is that they loaded it
+      # through Redis.
       #
       # MJServer logs the swap only at `verbose` (index.ts: startupLog.LogIf('verbose', …)),
       # so the log is not a dependable signal. Assert against Redis itself: two servers that
@@ -1198,7 +1197,7 @@ jobs:
                 process.exit(0);
               })
               .catch(e => { console.log('::error::Could not reach Redis: ' + e.message); process.exit(1); });
-          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; exit 1; }
+          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; echo '--- mjapi-b ---'; tail -100 /tmp/mjapi-b.log || true; exit 1; }
 
       - name: Run cross-server invalidation rig
         env:
