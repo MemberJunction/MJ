@@ -159,12 +159,6 @@ export interface ColumnDefinition {
   dataType: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
-  /**
-   * Set to `'discovery'` when key discovery (not the database schema) set `isPrimaryKey`, so a
-   * later re-apply can clear exactly those flags and leave declared keys alone. Absent for keys
-   * read from the schema.
-   */
-  primaryKeySource?: 'discovery';  // case-violation-ok-legacy-back-compat: camelCase to match the rest of this exported interface
   isForeignKey: boolean;
   foreignKeyReferences?: ForeignKeyReference;
   /**

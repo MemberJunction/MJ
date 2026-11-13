@@ -7,7 +7,6 @@
 "@memberjunction/ng-explorer-core": minor
 "@memberjunction/ng-simple-record-list": minor
 "@memberjunction/ng-resource-permissions": minor
-"@memberjunction/db-auto-doc": minor
 "@memberjunction/generic-database-provider": minor
 "@memberjunction/graphql-dataprovider": minor
 "@memberjunction/integration-engine": minor
@@ -24,4 +23,4 @@
 "@memberjunction/esignature": minor
 ---
 
-Data integrity fixes: failed reads are reported instead of read as "no rows"; transaction groups refuse missing rows, settled groups and unchecked variable writes; client saves send dirty companions and only the fields a create set; reads after a write see the write; queue tasks can be `Pending` and user settings are unique per key (migration); system-user lookups skip inactive users; list record ids use the compact key; integration sync skips missing source properties; DBAutoDoc applies only the best primary-key candidate. Behaviour changes: `UserCache.GetSystemUser()` returns `undefined` for an inactive system user, `BaseEntity.LatestResult` is typed `BaseEntityResult | null`, and the shared metadata graph is frozen in development unless `MJ_FREEZE_METADATA=false`.
+Data integrity fixes: failed reads are reported instead of read as "no rows"; transaction groups refuse missing rows, settled groups and unchecked variable writes; client saves send dirty companions and only the fields a create set; reads after a write see the write; queue tasks can be `Pending` and user settings are unique per key (migration); system-user lookups skip inactive users; list record ids use the compact key; integration sync skips missing source properties. Behaviour changes: `UserCache.GetSystemUser()` returns `undefined` for an inactive system user, `BaseEntity.LatestResult` is typed `BaseEntityResult | null`, and the shared metadata graph is frozen in development unless `MJ_FREEZE_METADATA=false`.

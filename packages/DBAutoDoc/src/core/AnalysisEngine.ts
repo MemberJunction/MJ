@@ -29,7 +29,6 @@ import { IterationTracker } from '../state/IterationTracker.js';
 import { BackpropagationEngine } from './BackpropagationEngine.js';
 import { ConvergenceDetector } from './ConvergenceDetector.js';
 import { GuardrailsManager } from './GuardrailsManager.js';
-import { ApplyBestPrimaryKeysToState } from '../discovery/ApplyPrimaryKeys.js';
 
 export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
@@ -269,12 +268,6 @@ export class AnalysisEngine {
     }
 
     const kept = allPKs.length - removed;
-    // Pruning only changes candidate status; re-apply so a pruned candidate's columns are no
-    // longer flagged and the next-best candidate takes its place (#6004).
-    if (removed > 0) {
-      const minimumConfidence = (this.config.analysis.relationshipDiscovery?.confidence.primaryKeyMinimum ?? 0.7) * 100;
-      ApplyBestPrimaryKeysToState(state, discoveryPhase.discovered.primaryKeys, minimumConfidence);
-    }
     console.log(`[AnalysisEngine] PK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
     this.onProgress('PK pruning complete', { removed, kept, model: effectiveModel });
     this.stateManager.updateSummary(state);
