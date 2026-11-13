@@ -21,6 +21,7 @@ import {
     ExtractHarnessCredentialSecret,
     NormalizeAntigravityEnvironment,
     ResolveDriverVendorFallbackEnvironment,
+    ScrubHarnessSecrets,
 } from './HarnessCredentialResolver.js';
 import { ISandboxProvider, SandboxHandle, WorkspaceKey } from './sandbox/ISandboxProvider.js';
 import { LocalDirectorySandboxProvider } from './sandbox/LocalDirectorySandboxProvider.js';
@@ -117,6 +118,7 @@ export class HarnessAgentBase extends BaseAgent {
     protected sandboxProvider: ISandboxProvider | null = null;
     protected sandboxHandle: SandboxHandle | null = null;
     protected harnessRow: MJAIAgentHarnessEntity | null = null;
+    protected sessionEnvironment: Record<string, string> = {};
     protected turnIndex = 0;
 
     /**
@@ -176,6 +178,7 @@ export class HarnessAgentBase extends BaseAgent {
         });
 
         const environment = await this.resolveGrantedEnvironment(contextUser);
+        this.sessionEnvironment = environment;
 
         // Permissions are declared in agent metadata and applied BEFORE the session starts, so
         // adapters can fold them into launch flags. Runtime overrides arrive through the same
@@ -376,6 +379,10 @@ export class HarnessAgentBase extends BaseAgent {
             }
         }
 
+        turn.RawText = ScrubHarnessSecrets(turn.RawText, this.sessionEnvironment);
+        if (turn.ErrorMessage) {
+            turn.ErrorMessage = ScrubHarnessSecrets(turn.ErrorMessage, this.sessionEnvironment);
+        }
         turn.SessionId = adapter.SessionId;
         turn.ReportedModel = adapter.ReportedModel;
         return turn;
