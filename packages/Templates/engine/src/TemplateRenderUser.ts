@@ -19,6 +19,10 @@ const renderScope = new AsyncLocalStorage<TemplateRenderScope>();
 
 /** Runs `work` with `user` as the template render user for everything it does, sync or async. */
 export function RunAsTemplateRenderUser<T>(user: UserInfo | undefined, work: () => T): T {
+    const existing = renderScope.getStore();
+    if (existing !== undefined && existing.User === user) {
+        return work();
+    }
     return renderScope.run({ User: user }, work);
 }
 

@@ -23,7 +23,7 @@
  * @module @memberjunction/core
  */
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsVerboseLoggingEnabled, LogStatus } from './logging';
@@ -221,6 +221,22 @@ export type RelatedRecordCollectionWire = {
  * ```
  */
 export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends EntityCompanion<RelatedRecordCollectionWire> {
+    /**
+     * Lazy per-donor-array index keyed by join field then normalized parent key so repeated
+     * cached lookups (e.g. N parents sharing one cached entity engine array) are O(1) instead
+     * of O(M) full-array scans. Uses a WeakMap so stale engine arrays are GC'd automatically,
+     * and invalidates whenever array length or boundary elements change on in-place mutation.
+     */
+    private static readonly _donorJoinIndex = new WeakMap<
+        readonly BaseEntity[],
+        {
+            length: number;
+            first: BaseEntity | undefined;
+            last: BaseEntity | undefined;
+            byJoinField: Map<string, Map<string, BaseEntity[]>>;
+        }
+    >();
+
     private items: T[] = [];
     private removed: T[] = [];
     private loaded = false;
@@ -738,10 +754,10 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
         const joinField = this.RelatedEntityJoinField;
         const records = current as T[];
-        const mine = records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
+        const mine = this.filterAndSortCachedRecords(records, joinField, String(parentKey));
         this.cacheDonor.array = records as unknown[];
         this.cacheDonor.length = records.length;
-        this.adoptEngineInstances(this.sortLikeOrderBy(mine));
+        this.adoptEngineInstances(mine);
     }
 
     /**
@@ -902,8 +918,52 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
 
         const joinField = this.RelatedEntityJoinField;
-        const mine = donor.records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
-        return this.sortLikeOrderBy(mine);
+        return this.filterAndSortCachedRecords(donor.records as T[], joinField, String(parentKey));
+    }
+
+    /**
+     * Looks up cached donor rows matching `joinField === parentKey` in O(1) using the
+     * lazily built WeakMap index keyed by `(records array -> joinField -> NormalizeUUID(fk))`,
+     * then returns a sorted defensive copy via {@link sortLikeOrderBy}.
+     */
+    private filterAndSortCachedRecords(records: readonly T[], joinField: string, parentKey: string): T[] {
+        const recordCount = records.length;
+        let cacheEntry = RelatedRecordCollection._donorJoinIndex.get(records);
+        const first = recordCount > 0 ? records[0] : undefined;
+        const last = recordCount > 0 ? records[recordCount - 1] : undefined;
+        if (
+            !cacheEntry ||
+            cacheEntry.length !== recordCount ||
+            cacheEntry.first !== first ||
+            cacheEntry.last !== last
+        ) {
+            cacheEntry = {
+                length: recordCount,
+                first,
+                last,
+                byJoinField: new Map<string, Map<string, BaseEntity[]>>(),
+            };
+            RelatedRecordCollection._donorJoinIndex.set(records, cacheEntry);
+        }
+
+        let fieldBuckets = cacheEntry.byJoinField.get(joinField);
+        if (!fieldBuckets) {
+            fieldBuckets = new Map<string, BaseEntity[]>();
+            for (let i = 0; i < recordCount; i++) {
+                const record = records[i];
+                const normalizedKey = NormalizeUUID(String(record.Get(joinField) ?? ''));
+                let bucket = fieldBuckets.get(normalizedKey);
+                if (!bucket) {
+                    bucket = [];
+                    fieldBuckets.set(normalizedKey, bucket);
+                }
+                bucket.push(record);
+            }
+            cacheEntry.byJoinField.set(joinField, fieldBuckets);
+        }
+
+        const mine = fieldBuckets.get(NormalizeUUID(parentKey));
+        return this.sortLikeOrderBy(mine ? (mine.slice() as T[]) : []);
     }
 
     /**

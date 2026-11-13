@@ -542,4 +542,34 @@ describe('SimpleVectorService', () => {
       expect(score).toBeCloseTo(1, 5);
     });
   });
+
+  describe('HasMatching', () => {
+    it('returns false on empty store with or without filter', () => {
+      expect(service.HasMatching()).toBe(false);
+      expect(service.HasMatching(() => true)).toBe(false);
+    });
+
+    it('returns true on non-empty store when no filter is supplied', () => {
+      service.AddVector('k1', [1, 0], { agentId: 'a1' });
+      expect(service.HasMatching()).toBe(true);
+    });
+
+    it('short-circuits on first live match and ignores deleted entries', () => {
+      service.AddVector('k1', [1, 0], { agentId: 'a1' });
+      service.AddVector('k2', [0, 1], { agentId: 'a2' });
+      service.AddVector('k3', [1, 1], { agentId: 'a1' });
+
+      let evalCount = 0;
+      const foundA1 = service.HasMatching((meta) => {
+        evalCount++;
+        return meta?.agentId === 'a1';
+      });
+      expect(foundA1).toBe(true);
+      expect(evalCount).toBe(1);
+
+      expect(service.HasMatching((meta) => meta?.agentId === 'a2')).toBe(true);
+      service.RemoveVector('k2');
+      expect(service.HasMatching((meta) => meta?.agentId === 'a2')).toBe(false);
+    });
+  });
 });

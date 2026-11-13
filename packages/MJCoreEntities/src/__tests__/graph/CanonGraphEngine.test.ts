@@ -34,6 +34,31 @@ describe('CanonGraphEngine', () => {
         stubQueries();
     });
 
+    describe('ResolveGraphIDs', () => {
+        it('returns active canon graph IDs when graphNames is undefined and excludes disabled graphs', async () => {
+            await setup();
+            const ids = CanonGraphEngine.Instance.ResolveGraphIDs(undefined);
+            expect(ids.Size).toBe(2);
+            expect(ids.Has(IDS.GraphCanon)).toBe(true);
+            expect(ids.Has(IDS.GraphNetwork)).toBe(true);
+            expect(ids.Has(IDS.GraphDisabled)).toBe(false);
+        });
+
+        it('resolves named active graphs and ignores disabled or unknown graph names', async () => {
+            await setup();
+            const ids = CanonGraphEngine.Instance.ResolveGraphIDs(['MJ Canon', 'Old Graph', 'No Such Graph']);
+            expect(ids.Size).toBe(1);
+            expect(ids.Has(IDS.GraphCanon)).toBe(true);
+        });
+
+        it('returns an empty UUIDSet when all canon graphs are inactive', async () => {
+            await setup({
+                'MJ: Graphs': CanonMetadataRows()['MJ: Graphs'].map((g) => ({ ...g, Status: 'Inactive' })),
+            });
+            expect(CanonGraphEngine.Instance.ResolveGraphIDs(undefined).Size).toBe(0);
+        });
+    });
+
     describe('FindConcepts', () => {
         it('matches by name and synonym and returns only concepts the caller can read', async () => {
             await setup();
@@ -153,6 +178,27 @@ describe('CanonGraphEngine', () => {
             const explained = await CanonGraphEngine.Instance.ExplainEntity('SecretDeals', analyst);
             expect(explained.DescribedConcepts).toEqual([]);
             expect(explained.Edges).toEqual([]);
+        });
+
+        it('returns an empty explanation without calling Subgraph when no active canon graphs exist', async () => {
+            await setup({
+                'MJ: Graphs': CanonMetadataRows()['MJ: Graphs'].map((g) => ({ ...g, Status: 'Inactive' })),
+            });
+            const subgraphSpy = vi.spyOn(GraphEngine.Instance, 'Subgraph');
+            try {
+                const explained = await CanonGraphEngine.Instance.ExplainEntity('Invoices', analyst);
+                expect(explained).toEqual({
+                    EntityName: 'Invoices',
+                    DescribedConcepts: [],
+                    AlternateBaseViews: [],
+                    ReadingQueries: [],
+                    MeasuringQueries: [],
+                    Edges: [],
+                });
+                expect(subgraphSpy).not.toHaveBeenCalled();
+            } finally {
+                subgraphSpy.mockRestore();
+            }
         });
     });
 

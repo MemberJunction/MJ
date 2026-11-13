@@ -1,4 +1,4 @@
-import { EntityInfo, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
+import { EntityInfo, IsVerboseLoggingEnabled, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
 import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
@@ -175,7 +175,9 @@ export class AgentContextInjector {
 
         // Build scope pre-filter so FindNearest only returns scope-valid (and, under SharedOnly, shared) candidates
         const scopePreFilter = this.buildScopePreFilter<NoteEmbeddingMetadata>(params, m => m.noteEntity);
-        LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
+        }
 
         // Stage 1: Vector search (scope filtering happens inside FindNearest)
         const matches = await AIEngine.Instance.FindSimilarAgentNotes(
@@ -188,15 +190,19 @@ export class AgentContextInjector {
             scopePreFilter
         );
 
-        LogStatus(`AgentContextInjector: FindSimilarAgentNotes returned ${matches.length} matches: ${matches.map(m => m.note.SecondaryScopes || 'GLOBAL').join(', ')}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: FindSimilarAgentNotes returned ${matches.length} matches: ${matches.map(m => m.note.SecondaryScopes || 'GLOBAL').join(', ')}`);
+        }
 
-        // If no reranker config or disabled, return vector results directly
-        if (!config?.enabled) {
+        // If no reranker config, disabled, or 0-1 matches (nothing to reorder), return vector results directly
+        if (!config?.enabled || matches.length <= 1) {
             return matches.slice(0, params.maxNotes).map(m => m.note);
         }
 
         // Stage 2: Rerank candidates with fallback handling
-        LogStatus(`AgentContextInjector: Reranking ${matches.length} candidates to top ${params.maxNotes}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: Reranking ${matches.length} candidates to top ${params.maxNotes}`);
+        }
         const rerankerService = RerankerService.Instance;
 
         try {
@@ -215,7 +221,9 @@ export class AgentContextInjector {
 
             // Return top N reranked notes
             const result = rerankResult.notes.slice(0, params.maxNotes).map(m => m.note);
-            LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
+            if (IsVerboseLoggingEnabled()) {
+                LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
+            }
             return result;
 
         } catch (error) {
@@ -224,7 +232,9 @@ export class AgentContextInjector {
 
             if (config.fallbackOnError) {
                 // Graceful fallback to vector search results (already scope-filtered)
-                LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
+                if (IsVerboseLoggingEnabled()) {
+                    LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
+                }
                 return matches.slice(0, params.maxNotes).map(m => m.note);
             }
 
@@ -265,9 +275,9 @@ export class AgentContextInjector {
             scopePreFilter
         );
 
-        if (!config) {
-            // Return entities directly from vector service (no database round-trip)
-            return matches.map(m => m.example);
+        if (!config || matches.length <= 1) {
+            // Return entities directly from vector service (no database round-trip or LLM rerank needed)
+            return matches.slice(0, params.maxExamples).map(m => m.example);
         }
         return this.rerankExamples(matches, params, config);
     }
@@ -279,7 +289,9 @@ export class AgentContextInjector {
      * This is not a failure, so it does not depend on fallbackOnError.
      */
     private logEmptyRerank(kind: 'note' | 'example', config: RerankerConfiguration): void {
-        LogStatus(`AgentContextInjector: No ${kind} reached the rerank threshold (${config.minRelevanceThreshold}), keeping the vector search results`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: No ${kind} reached the rerank threshold (${config.minRelevanceThreshold}), keeping the vector search results`);
+        }
     }
 
     /** The observability options a rerank runs under, from the caller's, or none. */
@@ -311,7 +323,9 @@ export class AgentContextInjector {
         params: GetExamplesParams,
         config: RerankerConfiguration
     ): Promise<MJAIAgentExampleEntity[]> {
-        LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
+        }
         try {
             const reranked = await RerankerService.Instance.RerankExamples(
                 matches,
@@ -328,7 +342,9 @@ export class AgentContextInjector {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             if (config.fallbackOnError) {
-                LogStatus(`AgentContextInjector: Example reranking failed (${message}), falling back to vector search results`);
+                if (IsVerboseLoggingEnabled()) {
+                    LogStatus(`AgentContextInjector: Example reranking failed (${message}), falling back to vector search results`);
+                }
                 return matches.slice(0, params.maxExamples).map(m => m.example);
             }
             LogError(`AgentContextInjector: Example reranking failed and fallbackOnError is false: ${message}`);

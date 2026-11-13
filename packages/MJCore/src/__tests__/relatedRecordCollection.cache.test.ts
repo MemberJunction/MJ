@@ -269,3 +269,63 @@ describe('Source: cache — a lazy miss throws, and says which kind of miss it i
         expect(collection.Items).toEqual([]);
     });
 });
+
+describe('Source: cache — shared donor join-field WeakMap index', () => {
+    it('indexes the donor array once for O(1) multi-parent & case-insensitive UUID lookups', () => {
+        const uuid1Lower = 'a1b2c3d4-0000-0000-0000-000000000001';
+        const uuid1Upper = 'A1B2C3D4-0000-0000-0000-000000000001';
+        const uuid2Lower = 'a1b2c3d4-0000-0000-0000-000000000002';
+
+        let joinGetCount = 0;
+        const records = [
+            makeRecord('r1', uuid1Lower),
+            makeRecord('r2', uuid2Lower),
+            ...Array.from({ length: 18 }, (_, i) => makeRecord(`other-${i}`, `other-parent-${i}`)),
+        ];
+        for (const rec of records) {
+            const origGet = rec.Get.bind(rec);
+            rec.Get = (fieldName: string) => {
+                joinGetCount++;
+                return origGet(fieldName);
+            };
+        }
+
+        const engine = makeEngine(true, records);
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+
+        const makeParentWithKey = (pk: string): BaseEntity => {
+            const owner = makeOwner();
+            Reflect.set(owner, 'FirstPrimaryKey', { Value: pk });
+            Reflect.set(owner, 'PrimaryKey', { ToString: () => pk });
+            return owner;
+        };
+
+        // First lookup indexes all 20 records once; subsequent lookups across different parents
+        // (including uppercase vs lowercase UUID) do O(1) bucket lookups without rescanning.
+        const cUpper = makeCollection({ Load: 'lazy', OrderBy: '' }, makeParentWithKey(uuid1Upper));
+        const c2 = makeCollection({ Load: 'lazy', OrderBy: '' }, makeParentWithKey(uuid2Lower));
+        const cMissing = makeCollection({ Load: 'lazy', OrderBy: '' }, makeParentWithKey('nonexistent-parent'));
+
+        const upperItems = cUpper.Items;
+        expect(joinGetCount).toBe(20);
+        expect(upperItems.map(r => r.Get('ID'))).toEqual(['r1']);
+
+        const countAfterUpper = joinGetCount;
+        const c2Items = c2.Items;
+        const missingItems = cMissing.Items;
+        expect(joinGetCount).toBe(countAfterUpper);
+        expect(c2Items.map(r => r.Get('ID'))).toEqual(['r2']);
+        expect(missingItems).toEqual([]);
+
+        // In-place push invalidates the index on next lookup
+        const added = makeRecord('r3', uuid1Upper);
+        engine.ActionParams.push(added);
+        const cUpperAfterPush = makeCollection({ Load: 'lazy', OrderBy: '' }, makeParentWithKey(uuid1Lower));
+        expect(cUpperAfterPush.Items.map(r => r.Get('ID'))).toEqual(['r1', 'r3']);
+
+        // Wholesale array reassignment builds a fresh index for the new array
+        engine.ActionParams = [makeRecord('r4', uuid2Lower)];
+        const c2AfterReplace = makeCollection({ Load: 'lazy', OrderBy: '' }, makeParentWithKey(uuid2Lower));
+        expect(c2AfterReplace.Items.map(r => r.Get('ID'))).toEqual(['r4']);
+    });
+});

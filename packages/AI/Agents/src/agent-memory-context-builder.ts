@@ -109,49 +109,53 @@ export class AgentMemoryContextBuilder {
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
         const rerankObservability = this.rerankObservability(observability);
 
-        // Get notes if injection enabled
-        const notes = agent.InjectNotes
-            ? await injector.GetNotesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
-                maxNotes: agent.MaxNotesToInject || 5,
-                contextUser: contextUser!,
-                rerankerConfig,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig,
-                SharedOnly: sharedOnly,
-                // Pass observability context for run step tracking
-                observability: rerankObservability()
-            })
-            : [];
-        logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+        const fetchNotes = () => injector.GetNotesForContext({
+            agentId: agent.ID,
+            userId,
+            companyId,
+            currentInput: input,
+            strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
+            maxNotes: agent.MaxNotesToInject || 5,
+            contextUser: contextUser!,
+            rerankerConfig,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            secondaryScopeConfig,
+            SharedOnly: sharedOnly,
+            // Pass observability context for run step tracking
+            observability: rerankObservability()
+        });
 
-        // Get examples if injection enabled
-        const examples = agent.InjectExamples
-            ? await injector.GetExamplesForContext({
-                agentId: agent.ID,
-                userId,
-                companyId,
-                currentInput: input,
-                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
-                maxExamples: agent.MaxExamplesToInject || 3,
-                contextUser: contextUser!,
-                // Examples are reranked only when the configuration sets rerankExamples
-                rerankerConfig,
-                primaryScopeEntityId,
-                primaryScopeRecordId,
-                secondaryScopes,
-                secondaryScopeConfig,
-                SharedOnly: sharedOnly,
-                // Numbered after the notes rerank's step, when there was one
-                observability: rerankObservability()
-            })
-            : [];
+        const fetchExamples = () => injector.GetExamplesForContext({
+            agentId: agent.ID,
+            userId,
+            companyId,
+            currentInput: input,
+            strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
+            maxExamples: agent.MaxExamplesToInject || 3,
+            contextUser: contextUser!,
+            // Examples are reranked only when the configuration sets rerankExamples
+            rerankerConfig,
+            primaryScopeEntityId,
+            primaryScopeRecordId,
+            secondaryScopes,
+            secondaryScopeConfig,
+            SharedOnly: sharedOnly,
+            // Numbered after the notes rerank's step, when there was one (sequential path)
+            observability: rerankObservability()
+        });
+
+        let notes: MJAIAgentNoteEntity[];
+        let examples: MJAIAgentExampleEntity[];
+        if (agent.InjectNotes && agent.InjectExamples && !observability) {
+            [notes, examples] = await Promise.all([fetchNotes(), fetchExamples()]);
+            logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+        } else {
+            notes = agent.InjectNotes ? await fetchNotes() : [];
+            logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
+            examples = agent.InjectExamples ? await fetchExamples() : [];
+        }
 
         // Format and inject memory context into conversation messages
         if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
