@@ -41,6 +41,26 @@
           "description": "Override global sorting setting for this column"
         }
       }
+    },
+    "HeaderStyle": {
+      "description": "Colors for the header row. Each field is optional; an unset field keeps the theme's header styling.",
+      "properties": {
+        "background": {
+          "type": "string",
+          "required": false,
+          "description": "Header row fill color"
+        },
+        "color": {
+          "type": "string",
+          "required": false,
+          "description": "Header text color"
+        },
+        "borderColor": {
+          "type": "string",
+          "required": false,
+          "description": "Color of the 2px accent border under the header row"
+        }
+      }
     }
   },
   "properties": [
@@ -201,6 +221,12 @@
       "description": "When true, columns auto-fit to container width. When false, columns use fixed widths with horizontal scrolling",
       "required": false,
       "defaultValue": true
+    },
+    {
+      "name": "headerStyle",
+      "type": "HeaderStyle",
+      "description": "Optional header row colors: { background, color, borderColor }. Each field is optional; an unset field keeps the theme's header, and borderColor draws a 2px border under the header row. Example: headerStyle={{ background: '#1F3A5F', color: '#FFFFFF', borderColor: '#0F2440' }}.",
+      "required": false
     }
   ],
   "events": [
