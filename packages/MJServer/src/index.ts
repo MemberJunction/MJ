@@ -17,7 +17,7 @@ import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgr
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
 import { ResolvePostRestartFields, type IntrospectedSchema } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
-import compression from 'compression'; // Add compression middleware
+import { CreateCompressionMiddleware } from './compressionMiddleware.js';
 import cors from 'cors';
 import express, { Application } from 'express';
 import { default as fg } from 'fast-glob';
@@ -1471,25 +1471,7 @@ const setupComplete$ = new ReplaySubject(1);
   // Never advertise the framework (`X-Powered-By: Express`) — the host may have passed its own app.
   app.disable('x-powered-by');
 
-  app.use(compression({
-    // Don't compress responses smaller than 1KB
-    threshold: 1024,
-    // Skip compression for images, videos, and other binary files
-    filter: (req, res) => {
-      if (req.headers['content-type']) {
-        const contentType = req.headers['content-type'];
-        if (contentType.includes('image/') || 
-            contentType.includes('video/') ||
-            contentType.includes('audio/') ||
-            contentType.includes('application/octet-stream')) {
-          return false;
-        }
-      }
-      return compression.filter(req, res);
-    },
-    // High compression level (good balance between CPU and compression ratio)
-    level: 6
-  }) as object as express.RequestHandler);
+  app.use(CreateCompressionMiddleware());
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).

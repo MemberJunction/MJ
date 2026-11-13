@@ -22,7 +22,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, Router } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
@@ -179,8 +179,6 @@ let _config!: ConfigInfo;
 /** MCP server port - populated after config is loaded */
 let mcpServerPort!: number;
 
-/** Map of SSE transports keyed by session ID for message endpoint routing */
-const transports: Map<string, SSEServerTransport> = new Map();
 
 /*******************************************************************************
  * DATABASE CONFIGURATION
@@ -996,35 +994,688 @@ async function loadOpenAppServerPackages(): Promise<void> {
 }
 
 /**
- * Initializes and starts the MemberJunction MCP server.
+ * What the MCP transport routes need from their host: authenticate a request, and build the MCP
+ * server for an authenticated session. {@link CreateMCPRouters} supplies the real implementation;
+ * tests supply a fake so the routes can run without a database.
+ */
+export interface MCPSessionFactory {
+    /** Authenticates an incoming request (API key, OAuth bearer token, or both — per config). */
+    Authenticate(req: Request): Promise<AuthResult>;
+    /** Builds an MCP server whose tools run as the session's user. */
+    CreateSessionServer(session: MCPSessionContext): Promise<McpServer>;
+}
+
+/** Options for {@link BuildMCPTransportRouter}. */
+export interface MCPTransportRouterOptions {
+    /**
+     * The path clients POST SSE messages to, as clients see it: the legacy SSE transport sends it to
+     * the client verbatim. `/mcp/messages` standalone; `/api/mcp/messages` when mounted inside MJAPI
+     * at `/mcp` with `MJAPI_BASE_PATH=/api`.
+     */
+    SSEMessagesPath: string;
+    Sessions: MCPSessionFactory;
+}
+
+/** A transport router plus the live sessions it holds. */
+export interface MCPTransportRouter {
+    /** `/` (Streamable HTTP), `/sse` and `/messages` (legacy SSE). */
+    Router: Router;
+    /** Open sessions across both transports. */
+    SessionCount(): number;
+    /** Closes every open session. */
+    Shutdown(): Promise<void>;
+}
+
+/**
+ * Builds the MCP transport routes. Paths are relative to wherever the router is mounted (`/mcp`
+ * standalone, the extension's `RootPath` inside MJAPI). Sessions live in memory, so a server
+ * behind a load balancer needs sticky sessions keyed on the `mcp-session-id` header.
+ */
+export function BuildMCPTransportRouter(options: MCPTransportRouterOptions): MCPTransportRouter {
+    if (!options.SSEMessagesPath.startsWith('/')) {
+        throw new Error(`SSEMessagesPath must be an absolute path, got: ${options.SSEMessagesPath}`);
+    }
+    const router = express.Router();
+    const sseTransports = new Map<string, SSEServerTransport>();
+    const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+
+    router.get('/sse', (req: Request, res: Response) =>
+        handleSSEConnect(req, res, options.Sessions, options.SSEMessagesPath, sseTransports));
+    router.post('/messages', (req: Request, res: Response) => handleSSEMessage(req, res, sseTransports));
+    router.all('/', (req: Request, res: Response) =>
+        handleStreamableRequest(req, res, options.Sessions, streamableTransports));
+
+    return {
+        Router: router,
+        SessionCount: () => sseTransports.size + streamableTransports.size,
+        Shutdown: () => closeAllTransports([...sseTransports.values(), ...streamableTransports.values()]),
+    };
+}
+
+/** Closes every transport, logging (not throwing) individual failures so the rest still close. */
+async function closeAllTransports(all: Array<SSEServerTransport | StreamableHTTPServerTransport>): Promise<void> {
+    const results = await Promise.allSettled(all.map(t => t.close()));
+    for (const r of results) {
+        if (r.status === 'rejected') {
+            console.error('[MCP] Error closing a session during shutdown:', r.reason);
+        }
+    }
+}
+
+/** GET `/sse`: opens a legacy SSE session for an authenticated client. */
+async function handleSSEConnect(
+    req: Request,
+    res: Response,
+    sessions: MCPSessionFactory,
+    sseMessagesPath: string,
+    transports: Map<string, SSEServerTransport>
+): Promise<void> {
+    // Authenticate the request with full result for proper error handling
+    const authResult = await sessions.Authenticate(req);
+    if (!authResult.authenticated) {
+        SendAuthErrorResponse(res, authResult);
+        return;
+    }
+
+    const sessionContext = ToSessionContext(authResult);
+
+    try {
+        // Create a new MCP server for this connection, with tools scoped to the session's user
+        const mcpServer = await sessions.CreateSessionServer(sessionContext);
+
+        // Create SSE transport for this connection
+        const transport = new SSEServerTransport(sseMessagesPath, res);
+
+        // Store transport for message routing
+        const sessionId = transport.sessionId;
+        transports.set(sessionId, transport);
+        console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
+
+        // Set up keepalive ping to prevent connection timeout (every 15 seconds)
+        const keepaliveInterval = setInterval(() => {
+            if (!res.writableEnded) {
+                // SSE comment line (starts with colon) - keeps connection alive
+                res.write(':ping\n\n');
+            }
+        }, 15000);
+
+        // Clean up on connection close
+        res.on('close', () => {
+            clearInterval(keepaliveInterval);
+            transports.delete(sessionId);
+        });
+
+        res.on('error', (err: NodeJS.ErrnoException) => {
+            // ECONNRESET is normal when client disconnects - don't log as error
+            if (err.code !== 'ECONNRESET') {
+                console.error(`[SSE] Connection error for session ${sessionId}:`, err);
+            }
+        });
+
+        req.on('error', (err: NodeJS.ErrnoException) => {
+            // ECONNRESET is normal when client disconnects - don't log as error
+            if (err.code !== 'ECONNRESET') {
+                console.error(`[SSE] Request error for session ${sessionId}:`, err);
+            }
+        });
+
+        // Connect the server to the transport
+        await mcpServer.connect(transport);
+
+    } catch (error) {
+        console.error('[SSE] Connection error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: 'internal_error',
+                message: error instanceof Error ? error.message : 'Connection failed'
+            });
+        }
+    }
+}
+
+/**
+ * POST `/messages`: routes a message to an existing SSE session.
+ * Authentication happens when establishing the SSE connection (`/sse`); the sessionId acts as a
+ * session token, so clients must first authenticate there.
+ */
+async function handleSSEMessage(req: Request, res: Response, transports: Map<string, SSEServerTransport>): Promise<void> {
+    const sessionId = req.query.sessionId as string;
+
+    if (!sessionId) {
+        // Protocol error - client didn't follow MCP protocol
+        res.status(400).json({
+            error: 'invalid_request',
+            message: 'Missing sessionId query parameter. Establish a session via /mcp/sse first.'
+        });
+        return;
+    }
+
+    const transport = transports.get(sessionId);
+    if (!transport) {
+        // Session expired or invalid - client needs to re-authenticate
+        // When OAuth is enabled, include WWW-Authenticate header to guide client
+        if (IsOAuthEnabled()) {
+            Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                errorDescription: 'Session not found - establish a new authenticated session'
+            });
+        } else {
+            res.status(401).json({
+                error: 'session_expired',
+                message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
+            });
+        }
+        return;
+    }
+
+    // Buffer the body then pass to transport
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+    }
+    const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
+
+    // Create a new readable stream from the buffered body for the transport
+    const bodyStream = new Readable({
+        read() {
+            this.push(bodyBuffer);
+            this.push(null);
+        }
+    });
+
+    // Create a mock request with the buffered body stream
+    const mockReq = Object.assign(bodyStream, {
+        headers: req.headers,
+        method: req.method,
+        url: req.url,
+        query: req.query
+    });
+
+    try {
+        await transport.handlePostMessage(mockReq as unknown as Request, res);
+    } catch (error) {
+        console.error('[Messages] Error handling message:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: error instanceof Error ? error.message : 'Internal server error'
+            });
+        }
+    }
+}
+
+/** ALL `/`: the Streamable HTTP transport (the current MCP transport — one endpoint, GET and POST). */
+async function handleStreamableRequest(
+    req: Request,
+    res: Response,
+    sessions: MCPSessionFactory,
+    streamableTransports: Map<string, StreamableHTTPServerTransport>
+): Promise<void> {
+    // Get or validate session ID from header
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+    // For existing sessions, route to the existing transport
+    if (sessionId && streamableTransports.has(sessionId)) {
+        const transport = streamableTransports.get(sessionId)!;
+        try {
+            // Pass parsed body to handleRequest - required for SDK to properly parse the message
+            await transport.handleRequest(req, res, req.body);
+        } catch (error) {
+            console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        }
+        return;
+    }
+
+    // For new sessions (no session ID or unknown session ID with initialization request)
+    // We need to authenticate and create a new transport
+    const authResult = await sessions.Authenticate(req);
+    if (!authResult.authenticated) {
+        SendAuthErrorResponse(res, authResult);
+        return;
+    }
+
+    const sessionContext = ToSessionContext(authResult);
+
+    try {
+        // Create a new MCP server for this session, with tools scoped to the session's user
+        const mcpServer = await sessions.CreateSessionServer(sessionContext);
+
+        // Create Streamable HTTP transport with session ID generation
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID()
+        });
+
+        // Connect the server to the transport
+        await mcpServer.connect(transport);
+
+        // Store for future requests (after first request establishes session)
+        transport.onclose = () => {
+            const sid = transport.sessionId;
+            if (sid) {
+                streamableTransports.delete(sid);
+            }
+        };
+
+        // Handle the current request
+        // Pass the parsed body to help the SDK recognize the initialize request
+        await transport.handleRequest(req, res, req.body);
+
+        // Store the transport after successful request handling
+        const newSessionId = transport.sessionId;
+        if (newSessionId) {
+            streamableTransports.set(newSessionId, transport);
+            console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+        } else {
+            console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
+        }
+
+    } catch (error) {
+        console.error('[StreamableHTTP] Connection error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: 'internal_error',
+                message: error instanceof Error ? error.message : 'Connection failed'
+            });
+        }
+    }
+}
+
+/**
+ * CORS for the MCP routes. Answers preflights itself, so when the routes are mounted inside MJAPI
+ * the extension entry must set `OwnsCORS: true` (MJAPI's global CORS would answer them first).
+ */
+export function MCPCorsMiddleware(req: Request, res: Response, next: NextFunction): void {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-api-key, x-mj-api-key');
+    res.header('Access-Control-Expose-Headers', 'Content-Type');
+
+    // Handle preflight requests immediately - don't let other middleware process them
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+        return;
+    }
+    next();
+}
+
+/**
+ * Loads the engines authentication needs and validates the auth configuration.
+ * @returns the system user, used for server-level work (tool discovery), never for tool execution
+ */
+async function initializeAuth(): Promise<UserInfo> {
+    // Use system user for server initialization tasks (loading credentials, discovering agents)
+    // Note: Individual tool executions use the authenticated session user, not this system user
+    const systemUser = UserCache.Instance.GetSystemUser();
+    if (!systemUser) {
+        throw new Error('System user not found in UserCache - required for server initialization');
+    }
+
+    // Load credentials for server operations
+    console.log('Loading credentials into cache...');
+    await CredentialEngine.Instance.Config(false, systemUser);
+    console.log('Credentials loaded successfully.');
+
+    // Initialize API Key engine for scope-based authorization
+    console.log('Initializing API Key engine...');
+    const apiKeyEngine = GetAPIKeyEngine();
+    await apiKeyEngine.Config(false, systemUser);
+    console.log(`API Key engine initialized. Scopes loaded: ${apiKeyEngine.Scopes.length}`);
+
+    // Initialize AuthGate configuration for unified authentication
+    authGateConfig = {
+        validateApiKey: validateApiKey,
+        getSystemUser: () => UserCache.Instance.GetSystemUser(),
+    };
+
+    // Validate OAuth configuration if OAuth is enabled
+    const authMode = GetAuthMode();
+    let effectiveAuthMode = authMode;
+    let configuredProviderNames: string[] = [];
+
+    if (authMode === 'oauth' || authMode === 'both') {
+        // Check if auth providers are configured
+        const providersConfigured = await HasAuthProviders();
+        const validationResult = ValidateOAuthConfig(providersConfigured);
+
+        if (validationResult.errors.length > 0) {
+            console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
+            if (authMode === 'oauth') {
+                throw new Error(`OAuth configuration invalid: ${validationResult.errors.join('; ')}`);
+            }
+        }
+
+        if (validationResult.warnings.length > 0) {
+            for (const warning of validationResult.warnings) {
+                console.warn(`[Auth] ${warning}`);
+            }
+        }
+
+        effectiveAuthMode = validationResult.effectiveMode;
+
+        // Get provider names for logging
+        if (providersConfigured) {
+            try {
+                const factory = AuthProviderFactory.Instance;
+                configuredProviderNames = factory.getAllProviders().map((p) => p.name);
+            } catch {
+                // Ignore errors getting provider names - just for logging
+            }
+        }
+    }
+
+    // Log auth configuration
+    LogAuthConfig(effectiveAuthMode, configuredProviderNames);
+
+    return systemUser;
+}
+
+/**
+ * Mounts the OAuth proxy authorization server (RFC 7591, RFC 8414) on `router` when enabled.
+ * @returns the proxy's base URL (its issuer), or `undefined` when the proxy is not running
+ */
+function mountOAuthProxy(router: Router): string | undefined {
+    const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
+    let oauthProxyBaseUrl: string | undefined;
+
+    if (IsOAuthEnabled() && oauthProxyEnabled) {
+        try {
+            // Get the upstream provider configuration
+            const factory = AuthProviderFactory.Instance;
+            const providers = factory.getAllProviders();
+
+            if (providers.length === 0) {
+                console.warn('[OAuth Proxy] No auth providers configured - OAuth proxy disabled');
+            } else {
+                // Find the upstream provider (use configured name or first available)
+                const upstreamProviderName = _config.mcpServerSettings?.auth?.proxy?.upstreamProvider;
+                const upstreamProvider = upstreamProviderName
+                    ? providers.find((p: { name: string }) => p.name === upstreamProviderName)
+                    : providers[0];
+
+                if (!upstreamProvider) {
+                    console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
+                } else {
+                    // Build OAuth proxy configuration
+                    oauthProxyBaseUrl = GetResourceIdentifier();
+
+                    // Derive the upstream OAuth endpoints from the provider's issuer.
+                    // Cast to access provider properties (IAuthProvider interface)
+                    const provider = upstreamProvider as {
+                        issuer: string;
+                        audience: string;
+                        name: string;
+                        clientId?: string;
+                        domain?: string;
+                    };
+                    const { flavor, authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(provider);
+
+                    // Build scopes for upstream - use standard OIDC scopes only
+                    // Note: We don't include api://.../.default because that would cause
+                    // AADSTS90009 "app requesting token for itself" when using a single app registration.
+                    // The OAuth proxy only needs to authenticate the user, not access an API resource.
+                    const upstreamScopes: string[] = ['openid', 'profile', 'email'];
+                    if (flavor === 'generic') {
+                        // Auth0/Okta need offline_access to get a refresh token.
+                        // Azure AD v2.0 returns one without it, and Cognito has no such scope at
+                        // all - asking for it makes the hosted UI reject the request as invalid_scope.
+                        upstreamScopes.push('offline_access');
+                    }
+
+                    // For OAuth proxy, we need client ID from environment or config
+                    // Priority: provider.clientId → WEB_CLIENT_ID env var → audience (Azure AD uses audience as clientId)
+                    // NOTE: Provider-specific clientId takes priority because WEB_CLIENT_ID may be for a different provider
+                    // Client secret is OPTIONAL - the proxy uses PKCE for upstream token exchange
+                    // (same technique as MJExplorer SPA), so no secret is required
+                    const upstreamClientId = provider.clientId || process.env.WEB_CLIENT_ID || provider.audience || '';
+                    const upstreamClientSecret = process.env.WEB_CLIENT_SECRET || undefined;
+
+                    // Log warning if no valid client_id found
+                    if (!upstreamClientId) {
+                        console.error('[OAuth Proxy] ERROR: No upstream client_id configured!');
+                        console.error('[OAuth Proxy] Set WEB_CLIENT_ID env var or add clientId to your auth provider config');
+                    } else {
+                        console.log(`[OAuth Proxy] Upstream client_id: ${upstreamClientId}`);
+                    }
+
+                    // Note: clientSecret is optional - proxy uses PKCE for upstream auth
+                    if (upstreamClientSecret) {
+                        console.log('[OAuth Proxy] Using client secret for upstream authentication');
+                    } else {
+                        console.log('[OAuth Proxy] Using PKCE-only for upstream authentication (no client secret)');
+                    }
+
+                    // Build JWT config from proxy settings
+                    // Falls back to MCP_JWT_SECRET env var if not configured in mj.config.cjs
+                    const proxySettings = _config.mcpServerSettings?.auth?.proxy;
+                    const jwtSigningSecret = proxySettings?.jwtSigningSecret ?? process.env.MCP_JWT_SECRET;
+                    const jwtConfig = jwtSigningSecret ? {
+                        signingSecret: jwtSigningSecret,
+                        expiresIn: proxySettings?.jwtExpiresIn ?? '1h',
+                        issuer: proxySettings?.jwtIssuer ?? 'urn:mj:mcp-server',
+                    } : undefined;
+
+                    const proxyConfig: OAuthProxyConfig = {
+                        baseUrl: oauthProxyBaseUrl,
+                        upstream: {
+                            authorizationEndpoint,
+                            tokenEndpoint,
+                            clientId: upstreamClientId,
+                            clientSecret: upstreamClientSecret,
+                            scopes: upstreamScopes,
+                            providerName: provider.name,
+                        },
+                        enableDynamicRegistration: true,
+                        stateTtlMs: proxySettings?.stateTtlMs,
+                        jwt: jwtConfig,
+                        enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
+                        rateLimit: proxySettings?.rateLimit,
+                    };
+
+                    // Create and mount OAuth proxy router
+                    const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
+                    router.use(oauthProxyRouter);
+
+                    console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
+                    console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
+                    console.log(`[OAuth Proxy] Token endpoint: ${tokenEndpoint}`);
+                    console.log(`[OAuth Proxy] Base URL: ${oauthProxyBaseUrl}`);
+                    if (jwtConfig) {
+                        console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
+                        // Configure TokenValidator to accept proxy-signed JWTs
+                        SetProxyTokenConfig({
+                            signingSecret: jwtConfig.signingSecret,
+                            issuer: jwtConfig.issuer,
+                            audience: oauthProxyBaseUrl,
+                        });
+                    } else {
+                        console.log('[OAuth Proxy] JWT signing disabled - passing through upstream tokens');
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[OAuth Proxy] Failed to initialize:', error);
+        }
+    }
+
+    return oauthProxyBaseUrl;
+}
+
+/** Mounts the Protected Resource Metadata endpoint (RFC 9728) when OAuth is enabled. */
+function mountProtectedResourceMetadata(router: Router, oauthProxyEnabled: boolean, oauthProxyBaseUrl: string | undefined): void {
+    if (IsOAuthEnabled()) {
+        router.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
+            try {
+                const factory = AuthProviderFactory.Instance;
+                const providers = factory.getAllProviders();
+
+                // Extract issuer URLs from configured auth providers
+                const authorizationServers = ExtractAuthorizationServers(
+                    providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
+                );
+
+                if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
+                    console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
+                }
+
+                const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
+                    authorizationServers,
+                    resourceName: 'MemberJunction MCP Server',
+                    providers, // Pass providers for automatic scope generation
+                    // When OAuth proxy is enabled, point to ourselves as the authorization server
+                    useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
+                    oauthProxyBaseUrl,
+                });
+
+                res.json(metadata);
+            } catch (error) {
+                console.error('[OAuth] Error building Protected Resource Metadata:', error);
+                res.status(500).json({
+                    error: 'internal_error',
+                    message: 'Failed to generate protected resource metadata',
+                });
+            }
+        });
+        console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
+    }
+}
+
+/** OAuth discovery, the OAuth proxy, and `/health`. Paths are relative to the mount point. */
+function buildDiscoveryRouter(): Router {
+    const router = express.Router();
+    const oauthProxyBaseUrl = mountOAuthProxy(router);
+    const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
+    mountProtectedResourceMetadata(router, oauthProxyEnabled, oauthProxyBaseUrl);
+
+    router.get('/health', (_req: Request, res: Response) => {
+        res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+    return router;
+}
+
+/** The production session factory: real authentication, and the full tool set per session. */
+function createSessionFactory(systemUser: UserInfo): MCPSessionFactory {
+    return {
+        Authenticate: (req: Request) => authenticateRequestWithResult(req),
+        CreateSessionServer: async (session: MCPSessionContext) => {
+            const mcpServer = new McpServer({ name: "MemberJunction", version: "1.0.0" });
+            await registerAllTools(mcpServer, session, systemUser);
+            return mcpServer;
+        },
+    };
+}
+
+/** Options for {@link CreateMCPRouters}. */
+export interface MCPRouterOptions extends MCPServerOptions {
+    /** See {@link MCPTransportRouterOptions.SSEMessagesPath}. */
+    SSEMessagesPath: string;
+}
+
+/** Everything the MCP server serves, as routers a host mounts. */
+export interface MCPRouters {
+    /** The transports — see {@link MCPTransportRouter}. */
+    Transport: MCPTransportRouter;
+    /**
+     * OAuth discovery (`/.well-known/*`), the OAuth proxy (`/oauth/*`) and `/health`. Mount it AFTER
+     * {@link Transport}: the OAuth proxy parses JSON bodies, which would consume the body the SSE
+     * `/messages` route reads as a raw stream.
+     */
+    Discovery: Router;
+}
+
+/**
+ * Builds the MCP server's routers without starting a listener. Used by the standalone server
+ * ({@link InitializeServer}) and by `MCPServerExtension`, which mounts them inside MJAPI.
+ *
+ * Preconditions: the MemberJunction data provider is set up (UserCache loaded), and — when hosted
+ * at a public URL other than the configured resource identifier — `SetHostedResourceIdentifier()`
+ * has been called, since the OAuth proxy and token validation read it here.
+ */
+export async function CreateMCPRouters(options: MCPRouterOptions): Promise<MCPRouters> {
+    _config = await InitConfig();
+
+    // Store filter options and custom providers for use by tool registration
+    activeFilterOptions = options.filterOptions || {};
+    activeCustomToolProviders = options.customToolProviders || [];
+
+    const systemUser = await initializeAuth();
+    const transport = BuildMCPTransportRouter({
+        SSEMessagesPath: options.SSEMessagesPath,
+        Sessions: createSessionFactory(systemUser),
+    });
+    return { Transport: transport, Discovery: buildDiscoveryRouter() };
+}
+
+/** Connects the standalone server's own pool and sets up the SQL Server data provider. */
+async function connectStandaloneDatabase(): Promise<void> {
+    const poolConfig = buildPoolConfig();
+    const pool = new sql.ConnectionPool(poolConfig);
+    await pool.connect();
+
+    const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
+    await setupSQLServerClient(sqlConfig);
+    console.log("Database connection setup completed.");
+}
+
+/** The standalone server's Express app: CORS, body handling, then the MCP routers. */
+function createStandaloneApp(routers: MCPRouters): express.Express {
+    const app = express();
+
+    // Behind a reverse proxy (CloudFront, a load balancer, ...) trust its forwarded client address
+    // before anything reads req.ip; otherwise every client shares the OAuth proxy's per-IP rate limit.
+    const trustProxy = _config.mcpServerSettings?.trustProxy;
+    if (ApplyTrustProxy(app, trustProxy)) {
+        console.log(`[MCP Server] Express trust proxy: ${JSON.stringify(trustProxy)}`);
+    }
+
+    // CORS must be FIRST - browser preflight OPTIONS requests need immediate handling
+    app.use(MCPCorsMiddleware);
+
+    // Enable JSON parsing for POST requests EXCEPT MCP endpoints
+    // Both SSE and Streamable HTTP transports handle their own body parsing
+    app.use((req: Request, res: Response, next: NextFunction) => {
+        if (req.path === '/mcp/messages' || req.path === '/mcp') {
+            next();
+        } else {
+            express.json()(req, res, next);
+        }
+    });
+
+    app.use('/mcp', routers.Transport.Router);
+    app.use(routers.Discovery);
+    return app;
+}
+
+/**
+ * Initializes and starts the standalone MemberJunction MCP server on its own port
+ * (`mcpServerSettings.port`, default 3100).
+ *
+ * To serve MCP from MJAPI instead, add an `MCPServerExtension` entry to `serverExtensions[]` —
+ * see the package README.
  *
  * This function performs the following setup:
- * 1. Establishes database connection using configured credentials
- * 2. Sets up SQL Server client and MemberJunction metadata
- * 3. Loads API keys into the CredentialEngine cache for fast validation
- * 4. Sets up Express server with SSE transport for MCP protocol
- * 5. Creates per-connection MCP server instances with authenticated user context
- *
- * The server uses API key authentication. Each authenticated request gets a session
- * with the user context from the API key, which is used for all tool executions.
+ * 1. Loads configuration and the installed Open Apps' server packages
+ * 2. Connects to the database and sets up the SQL Server data provider
+ * 3. Builds the MCP routers ({@link CreateMCPRouters}): auth engines, transports, OAuth discovery
+ * 4. Starts an Express server with those routers
  *
  * @param optionsOrFilterOptions - Either MCPServerOptions or ToolFilterOptions (backward compatible)
  * @throws Error if MCP server is disabled in configuration or database connection fails
  *
  * @example
  * // Start with all tools
- * await initializeServer();
+ * await InitializeServer();
  *
  * @example
  * // Start with filtered tools
- * await initializeServer({
+ * await InitializeServer({
  *   includePatterns: ['Get_*', 'Run_Agent'],
  *   excludePatterns: ['*_AuditLog_*']
  * });
  *
  * @example
  * // Start with custom tool providers
- * await initializeServer({
+ * await InitializeServer({
  *   customToolProviders: [myCustomProvider]
  * });
  */
@@ -1040,525 +1691,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
-        // Store filter options and custom providers for use by tool registration
-        activeFilterOptions = options.filterOptions || {};
-        activeCustomToolProviders = options.customToolProviders || [];
-
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
             throw new Error("MCP Server is disabled in the configuration.");
         }
 
-        // Initialize database connection
-        const poolConfig = buildPoolConfig();
-        const pool = new sql.ConnectionPool(poolConfig);
-        await pool.connect();
-
-        // Setup SQL Server client
-        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
-        await setupSQLServerClient(sqlConfig);
-        console.log("Database connection setup completed.");
-
-        // Use system user for server initialization tasks (loading credentials, discovering agents)
-        // Note: Individual tool executions use the authenticated session user, not this system user
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache - required for server initialization');
-        }
-
-        // Load credentials for server operations
-        console.log('Loading credentials into cache...');
-        await CredentialEngine.Instance.Config(false, systemUser);
-        console.log('Credentials loaded successfully.');
-
-        // Initialize API Key engine for scope-based authorization
-        console.log('Initializing API Key engine...');
-        const apiKeyEngine = GetAPIKeyEngine();
-        await apiKeyEngine.Config(false, systemUser);
-        console.log(`API Key engine initialized. Scopes loaded: ${apiKeyEngine.Scopes.length}`);
-
-        // Initialize AuthGate configuration for unified authentication
-        authGateConfig = {
-            validateApiKey: validateApiKey,
-            getSystemUser: () => UserCache.Instance.GetSystemUser(),
-        };
-
-        // Validate OAuth configuration if OAuth is enabled
-        const authMode = GetAuthMode();
-        let effectiveAuthMode = authMode;
-        let configuredProviderNames: string[] = [];
-
-        if (authMode === 'oauth' || authMode === 'both') {
-            // Check if auth providers are configured
-            const providersConfigured = await HasAuthProviders();
-            const validationResult = ValidateOAuthConfig(providersConfigured);
-
-            if (validationResult.errors.length > 0) {
-                console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
-                if (authMode === 'oauth') {
-                    throw new Error(`OAuth configuration invalid: ${validationResult.errors.join('; ')}`);
-                }
-            }
-
-            if (validationResult.warnings.length > 0) {
-                for (const warning of validationResult.warnings) {
-                    console.warn(`[Auth] ${warning}`);
-                }
-            }
-
-            effectiveAuthMode = validationResult.effectiveMode;
-
-            // Get provider names for logging
-            if (providersConfigured) {
-                try {
-                    const factory = AuthProviderFactory.Instance;
-                    configuredProviderNames = factory.getAllProviders().map((p) => p.name);
-                } catch {
-                    // Ignore errors getting provider names - just for logging
-                }
-            }
-        }
-
-        // Log auth configuration
-        LogAuthConfig(effectiveAuthMode, configuredProviderNames);
-
-        // Create Express app for SSE transport
-        const app = express();
-
-        // Behind a reverse proxy (CloudFront, a load balancer, ...) trust its forwarded client address
-        // before anything reads req.ip; otherwise every client shares the OAuth proxy's per-IP rate limit.
-        const trustProxy = _config.mcpServerSettings?.trustProxy;
-        if (ApplyTrustProxy(app, trustProxy)) {
-            console.log(`[MCP Server] Express trust proxy: ${JSON.stringify(trustProxy)}`);
-        }
-
-        // CORS must be FIRST - browser preflight OPTIONS requests need immediate handling
-        // before any other middleware touches the request
-        app.use((req: Request, res: Response, next: NextFunction) => {
-            res.header('Access-Control-Allow-Origin', '*');
-            res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, x-api-key, x-mj-api-key');
-            res.header('Access-Control-Expose-Headers', 'Content-Type');
-
-            // Handle preflight requests immediately - don't let other middleware process them
-            if (req.method === 'OPTIONS') {
-                res.sendStatus(200);
-                return;
-            }
-            next();
-        });
-
-        // Enable JSON parsing for POST requests EXCEPT MCP endpoints
-        // Both SSE and Streamable HTTP transports handle their own body parsing
-        app.use((req: Request, res: Response, next: NextFunction) => {
-            if (req.path === '/mcp/messages' || req.path === '/mcp') {
-                // Skip JSON parsing - the MCP transports handle it
-                next();
-            } else {
-                express.json()(req, res, next);
-            }
-        });
-
-        // =====================================================================
-        // OAUTH PROXY AUTHORIZATION SERVER (RFC 7591, RFC 8414)
-        // =====================================================================
-        // When enabled, the MCP Server acts as an OAuth Authorization Server
-        // that supports dynamic client registration and proxies auth to upstream.
-        const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
-        let oauthProxyBaseUrl: string | undefined;
-
-        if (IsOAuthEnabled() && oauthProxyEnabled) {
-            try {
-                // Get the upstream provider configuration
-                const factory = AuthProviderFactory.Instance;
-                const providers = factory.getAllProviders();
-
-                if (providers.length === 0) {
-                    console.warn('[OAuth Proxy] No auth providers configured - OAuth proxy disabled');
-                } else {
-                    // Find the upstream provider (use configured name or first available)
-                    const upstreamProviderName = _config.mcpServerSettings?.auth?.proxy?.upstreamProvider;
-                    const upstreamProvider = upstreamProviderName
-                        ? providers.find((p: { name: string }) => p.name === upstreamProviderName)
-                        : providers[0];
-
-                    if (!upstreamProvider) {
-                        console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
-                    } else {
-                        // Build OAuth proxy configuration
-                        oauthProxyBaseUrl = GetResourceIdentifier();
-
-                        // Derive the upstream OAuth endpoints from the provider's issuer.
-                        // Cast to access provider properties (IAuthProvider interface)
-                        const provider = upstreamProvider as {
-                            issuer: string;
-                            audience: string;
-                            name: string;
-                            clientId?: string;
-                            domain?: string;
-                        };
-                        const { flavor, authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(provider);
-
-                        // Build scopes for upstream - use standard OIDC scopes only
-                        // Note: We don't include api://.../.default because that would cause
-                        // AADSTS90009 "app requesting token for itself" when using a single app registration.
-                        // The OAuth proxy only needs to authenticate the user, not access an API resource.
-                        const upstreamScopes: string[] = ['openid', 'profile', 'email'];
-                        if (flavor === 'generic') {
-                            // Auth0/Okta need offline_access to get a refresh token.
-                            // Azure AD v2.0 returns one without it, and Cognito has no such scope at
-                            // all - asking for it makes the hosted UI reject the request as invalid_scope.
-                            upstreamScopes.push('offline_access');
-                        }
-
-                        // For OAuth proxy, we need client ID from environment or config
-                        // Priority: provider.clientId → WEB_CLIENT_ID env var → audience (Azure AD uses audience as clientId)
-                        // NOTE: Provider-specific clientId takes priority because WEB_CLIENT_ID may be for a different provider
-                        // Client secret is OPTIONAL - the proxy uses PKCE for upstream token exchange
-                        // (same technique as MJExplorer SPA), so no secret is required
-                        const upstreamClientId = provider.clientId || process.env.WEB_CLIENT_ID || provider.audience || '';
-                        const upstreamClientSecret = process.env.WEB_CLIENT_SECRET || undefined;
-
-                        // Log warning if no valid client_id found
-                        if (!upstreamClientId) {
-                            console.error('[OAuth Proxy] ERROR: No upstream client_id configured!');
-                            console.error('[OAuth Proxy] Set WEB_CLIENT_ID env var or add clientId to your auth provider config');
-                        } else {
-                            console.log(`[OAuth Proxy] Upstream client_id: ${upstreamClientId}`);
-                        }
-
-                        // Note: clientSecret is optional - proxy uses PKCE for upstream auth
-                        if (upstreamClientSecret) {
-                            console.log('[OAuth Proxy] Using client secret for upstream authentication');
-                        } else {
-                            console.log('[OAuth Proxy] Using PKCE-only for upstream authentication (no client secret)');
-                        }
-
-                        // Build JWT config from proxy settings
-                        // Falls back to MCP_JWT_SECRET env var if not configured in mj.config.cjs
-                        const proxySettings = _config.mcpServerSettings?.auth?.proxy;
-                        const jwtSigningSecret = proxySettings?.jwtSigningSecret ?? process.env.MCP_JWT_SECRET;
-                        const jwtConfig = jwtSigningSecret ? {
-                            signingSecret: jwtSigningSecret,
-                            expiresIn: proxySettings?.jwtExpiresIn ?? '1h',
-                            issuer: proxySettings?.jwtIssuer ?? 'urn:mj:mcp-server',
-                        } : undefined;
-
-                        const proxyConfig: OAuthProxyConfig = {
-                            baseUrl: oauthProxyBaseUrl,
-                            upstream: {
-                                authorizationEndpoint,
-                                tokenEndpoint,
-                                clientId: upstreamClientId,
-                                clientSecret: upstreamClientSecret,
-                                scopes: upstreamScopes,
-                                providerName: provider.name,
-                            },
-                            enableDynamicRegistration: true,
-                            stateTtlMs: proxySettings?.stateTtlMs,
-                            jwt: jwtConfig,
-                            enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
-                            rateLimit: proxySettings?.rateLimit,
-                        };
-
-                        // Create and mount OAuth proxy router
-                        const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
-                        app.use(oauthProxyRouter);
-
-                        console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
-                        console.log(`[OAuth Proxy] Authorization endpoint: ${authorizationEndpoint}`);
-                        console.log(`[OAuth Proxy] Token endpoint: ${tokenEndpoint}`);
-                        console.log(`[OAuth Proxy] Base URL: ${oauthProxyBaseUrl}`);
-                        if (jwtConfig) {
-                            console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
-                            // Configure TokenValidator to accept proxy-signed JWTs
-                            SetProxyTokenConfig({
-                                signingSecret: jwtConfig.signingSecret,
-                                issuer: jwtConfig.issuer,
-                                audience: oauthProxyBaseUrl,
-                            });
-                        } else {
-                            console.log('[OAuth Proxy] JWT signing disabled - passing through upstream tokens');
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('[OAuth Proxy] Failed to initialize:', error);
-            }
-        }
-
-        // =====================================================================
-        // PROTECTED RESOURCE METADATA ENDPOINT (RFC 9728)
-        // =====================================================================
-        // This endpoint allows MCP clients to discover how to authenticate.
-        // It's required by the MCP Authorization specification when OAuth is enabled.
-        if (IsOAuthEnabled()) {
-            app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
-                try {
-                    const factory = AuthProviderFactory.Instance;
-                    const providers = factory.getAllProviders();
-
-                    // Extract issuer URLs from configured auth providers
-                    const authorizationServers = ExtractAuthorizationServers(
-                        providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
-                    );
-
-                    if (authorizationServers.length === 0 && !oauthProxyBaseUrl) {
-                        console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
-                    }
-
-                    const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
-                        authorizationServers,
-                        resourceName: 'MemberJunction MCP Server',
-                        providers, // Pass providers for automatic scope generation
-                        // When OAuth proxy is enabled, point to ourselves as the authorization server
-                        useOAuthProxy: oauthProxyEnabled && !!oauthProxyBaseUrl,
-                        oauthProxyBaseUrl,
-                    });
-
-                    res.json(metadata);
-                } catch (error) {
-                    console.error('[OAuth] Error building Protected Resource Metadata:', error);
-                    res.status(500).json({
-                        error: 'internal_error',
-                        message: 'Failed to generate protected resource metadata',
-                    });
-                }
-            });
-            console.log('[OAuth] Protected Resource Metadata endpoint registered at /.well-known/oauth-protected-resource');
-        }
-
-        // SSE endpoint for establishing MCP connections
-        app.get('/mcp/sse', async (req: Request, res: Response) => {
-            // Authenticate the request with full result for proper error handling
-            const authResult = await authenticateRequestWithResult(req);
-            if (!authResult.authenticated) {
-                SendAuthErrorResponse(res, authResult);
-                return;
-            }
-
-            const sessionContext = ToSessionContext(authResult);
-
-            try {
-                // Create a new MCP server for this connection
-                const mcpServer = new McpServer({
-                    name: "MemberJunction",
-                    version: "1.0.0"
-                });
-
-                // Register all tools with user-scoped context
-                await registerAllTools(mcpServer, sessionContext, systemUser);
-
-                // Create SSE transport for this connection
-                const transport = new SSEServerTransport('/mcp/messages', res);
-
-                // Store transport for message routing
-                const sessionId = transport.sessionId;
-                transports.set(sessionId, transport);
-                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
-
-                // Set up keepalive ping to prevent connection timeout (every 15 seconds)
-                const keepaliveInterval = setInterval(() => {
-                    if (!res.writableEnded) {
-                        // SSE comment line (starts with colon) - keeps connection alive
-                        res.write(':ping\n\n');
-                    }
-                }, 15000);
-
-                // Clean up on connection close
-                res.on('close', () => {
-                    clearInterval(keepaliveInterval);
-                    transports.delete(sessionId);
-                });
-
-                res.on('error', (err: NodeJS.ErrnoException) => {
-                    // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code !== 'ECONNRESET') {
-                        console.error(`[SSE] Connection error for session ${sessionId}:`, err);
-                    }
-                });
-
-                req.on('error', (err: NodeJS.ErrnoException) => {
-                    // ECONNRESET is normal when client disconnects - don't log as error
-                    if (err.code !== 'ECONNRESET') {
-                        console.error(`[SSE] Request error for session ${sessionId}:`, err);
-                    }
-                });
-
-                // Connect the server to the transport
-                await mcpServer.connect(transport);
-
-            } catch (error) {
-                console.error('[SSE] Connection error:', error);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        error: 'internal_error',
-                        message: error instanceof Error ? error.message : 'Connection failed'
-                    });
-                }
-            }
-        });
-
-        // Message endpoint for receiving MCP messages from clients
-        // Note: Authentication happens when establishing the SSE connection (/mcp/sse).
-        // This endpoint routes messages to existing authenticated sessions.
-        // The sessionId acts as a session token - clients must first authenticate via SSE.
-        app.post('/mcp/messages', async (req: Request, res: Response) => {
-            const sessionId = req.query.sessionId as string;
-
-            if (!sessionId) {
-                // Protocol error - client didn't follow MCP protocol
-                res.status(400).json({
-                    error: 'invalid_request',
-                    message: 'Missing sessionId query parameter. Establish a session via /mcp/sse first.'
-                });
-                return;
-            }
-
-            const transport = transports.get(sessionId);
-            if (!transport) {
-                // Session expired or invalid - client needs to re-authenticate
-                // When OAuth is enabled, include WWW-Authenticate header to guide client
-                if (IsOAuthEnabled()) {
-                    Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
-                        errorDescription: 'Session not found - establish a new authenticated session'
-                    });
-                } else {
-                    res.status(401).json({
-                        error: 'session_expired',
-                        message: 'Session not found. Please re-establish connection via /mcp/sse endpoint.'
-                    });
-                }
-                return;
-            }
-
-            // Buffer the body then pass to transport
-            const chunks: Buffer[] = [];
-            for await (const chunk of req) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-            }
-            const bodyBuffer = Buffer.concat(chunks as unknown as Uint8Array[]);
-
-            // Create a new readable stream from the buffered body for the transport
-            const bodyStream = new Readable({
-                read() {
-                    this.push(bodyBuffer);
-                    this.push(null);
-                }
-            });
-
-            // Create a mock request with the buffered body stream
-            const mockReq = Object.assign(bodyStream, {
-                headers: req.headers,
-                method: req.method,
-                url: req.url,
-                query: req.query
-            });
-
-            try {
-                await transport.handlePostMessage(mockReq as unknown as Request, res);
-            } catch (error) {
-                console.error('[Messages] Error handling message:', error);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        error: error instanceof Error ? error.message : 'Internal server error'
-                    });
-                }
-            }
-        });
-
-        // Health check endpoint
-        app.get('/health', (_req: Request, res: Response) => {
-            res.json({ status: 'ok', timestamp: new Date().toISOString() });
-        });
-
-        // =====================================================================
-        // STREAMABLE HTTP TRANSPORT (newer MCP protocol - single endpoint)
-        // =====================================================================
-
-        // Store for Streamable HTTP transports (session ID -> transport)
-        const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
-
-        // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
-        // This is the newer, recommended MCP transport
-        app.all('/mcp', async (req: Request, res: Response) => {
-            // Get or validate session ID from header
-            const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-            // For existing sessions, route to the existing transport
-            if (sessionId && streamableTransports.has(sessionId)) {
-                const transport = streamableTransports.get(sessionId)!;
-                try {
-                    // Pass parsed body to handleRequest - required for SDK to properly parse the message
-                    await transport.handleRequest(req, res, req.body);
-                } catch (error) {
-                    console.error(`[StreamableHTTP] Error on session ${sessionId}:`, error);
-                    if (!res.headersSent) {
-                        res.status(500).json({ error: 'Internal server error' });
-                    }
-                }
-                return;
-            }
-
-            // For new sessions (no session ID or unknown session ID with initialization request)
-            // We need to authenticate and create a new transport
-            const authResult = await authenticateRequestWithResult(req);
-            if (!authResult.authenticated) {
-                SendAuthErrorResponse(res, authResult);
-                return;
-            }
-
-            const sessionContext = ToSessionContext(authResult);
-
-            try {
-                // Create a new MCP server for this session
-                const mcpServer = new McpServer({
-                    name: "MemberJunction",
-                    version: "1.0.0"
-                });
-
-                // Register all tools with user-scoped context
-                await registerAllTools(mcpServer, sessionContext, systemUser);
-
-                // Create Streamable HTTP transport with session ID generation
-                const transport = new StreamableHTTPServerTransport({
-                    sessionIdGenerator: () => randomUUID()
-                });
-
-                // Connect the server to the transport
-                await mcpServer.connect(transport);
-
-                // Store for future requests (after first request establishes session)
-                transport.onclose = () => {
-                    const sid = transport.sessionId;
-                    if (sid) {
-                        streamableTransports.delete(sid);
-                    }
-                };
-
-                // Handle the current request
-                // Pass the parsed body to help the SDK recognize the initialize request
-                await transport.handleRequest(req, res, req.body);
-
-                // Store the transport after successful request handling
-                const newSessionId = transport.sessionId;
-                if (newSessionId) {
-                    streamableTransports.set(newSessionId, transport);
-                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
-                } else {
-                    console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
-                }
-
-            } catch (error) {
-                console.error('[StreamableHTTP] Connection error:', error);
-                if (!res.headersSent) {
-                    res.status(500).json({
-                        error: 'internal_error',
-                        message: error instanceof Error ? error.message : 'Connection failed'
-                    });
-                }
-            }
-        });
+        await connectStandaloneDatabase();
+        const routers = await CreateMCPRouters({ ...options, SSEMessagesPath: '/mcp/messages' });
+        const app = createStandaloneApp(routers);
 
         // Start the Express server
         app.listen(mcpServerPort, () => {
@@ -3271,3 +3411,14 @@ async function loadAgentToolsForListing(systemUser: UserInfo): Promise<void> {
         }
     }
 }
+
+/*******************************************************************************
+ * MJAPI SERVER EXTENSION
+ ******************************************************************************/
+
+// Exported from the package entry: MJAPI reads MJ_SERVER_EXTENSIONS off this module when the package
+// is listed in dynamicPackages.server[], and importing it registers the extension class.
+// MCPServerExtension.ts imports from this module; the cycle is safe because neither side uses the
+// other's bindings while the modules are being evaluated.
+export { MCPServerExtension, MJ_SERVER_EXTENSIONS, ResolveMCPMount, ParseMCPExtensionToolFilter } from './MCPServerExtension.js';
+export type { MCPMount } from './MCPServerExtension.js';

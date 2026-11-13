@@ -116,8 +116,11 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
   router.use(urlencoded({ extended: true }));
   router.use(json());
 
-  // Authorization Server Metadata (RFC 8414)
-  router.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
+  // Authorization Server Metadata (RFC 8414). Also served at the OpenID Connect discovery path:
+  // for an issuer with a path (`https://host/api/mcp`), the MCP spec's last client fallback is
+  // `{issuer}/.well-known/openid-configuration` — the only form that lands under the issuer's own
+  // path, so it is the one that reaches MJAPI when another app (Explorer) owns the host root.
+  router.get(['/.well-known/oauth-authorization-server', '/.well-known/openid-configuration'], (req: Request, res: Response) => {
     handleMetadataEndpoint(req, res, config);
   });
 
@@ -156,7 +159,7 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
   // Consent Endpoints (only enabled if consent screen is configured)
   if (config.enableConsentScreen) {
     router.get('/oauth/consent', (req: Request, res: Response) => {
-      handleGetConsentEndpoint(req, res, stateManager);
+      handleGetConsentEndpoint(req, res, config, stateManager);
     });
 
     router.post('/oauth/consent', (req: Request, res: Response) => {
@@ -1099,6 +1102,7 @@ async function handleScopesEndpoint(
 async function handleGetConsentEndpoint(
   req: Request,
   res: Response,
+  config: OAuthProxyConfig,
   stateManager: AuthorizationStateManager
 ): Promise<void> {
   const { request_id } = readStringQueryParams(req, ['request_id'] as const);
@@ -1115,7 +1119,7 @@ async function handleGetConsentEndpoint(
   }
 
   // Render the consent page
-  const html = RenderConsentPage(consentRequest);
+  const html = RenderConsentPage(consentRequest, `${config.baseUrl}/oauth/consent`);
   res.type('html').send(html);
 }
 
