@@ -10,6 +10,7 @@ import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    BuildArtifactVersionConfigurationWithPreview,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
     MJArtifactEntity,
@@ -584,6 +585,15 @@ export class DocumentCollaborationResolver extends ResolverBase {
             version.UserID = user.ID;
             version.Content = initialContent;
             version.ContentHash = createHash('sha256').update(initialContent, 'utf8').digest('hex');
+            const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+                null,
+                initialContent,
+                null,
+                childArtifact.Name ?? null
+            );
+            if (enrichedConfig) {
+                version.Configuration = enrichedConfig;
+            }
 
             const savedVersion = await version.Save();
             if (!savedVersion) {
@@ -1355,7 +1365,15 @@ export class DocumentCollaborationResolver extends ResolverBase {
         restoredVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
         restoredVer.ContentHash = sourceVersion.ContentHash;
         restoredVer.Content = sourceVersion.Content;
-        if (sourceVersion.Configuration !== null && sourceVersion.Configuration !== undefined) {
+        const enrichedRestoredConfig = BuildArtifactVersionConfigurationWithPreview(
+            sourceVersion.Configuration,
+            sourceVersion.Content,
+            null,
+            sourceVersion.Name ?? null
+        );
+        if (enrichedRestoredConfig !== null && enrichedRestoredConfig !== undefined) {
+            restoredVer.Configuration = enrichedRestoredConfig;
+        } else if (sourceVersion.Configuration !== null && sourceVersion.Configuration !== undefined) {
             restoredVer.Configuration = sourceVersion.Configuration;
         }
 

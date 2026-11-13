@@ -24,6 +24,7 @@ import {
   MJConversationEntity,
   MJConversationDetailEntity,
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   UserInfoEngine,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
@@ -4647,9 +4648,13 @@ export class SlideDeckArtifactViewerComponent
         }
       }),
       this.session.VersionSaved$.subscribe(({ versionNumber }) => {
+        const isNewSavedVersion = versionNumber > this.LastSavedVersionNumber;
         this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
         this.LastSavedVersionNumber = versionNumber;
         this.CurrentVersionNumber = versionNumber;
+        if (isNewSavedVersion) {
+          this.ContentCommitted.emit(SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck));
+        }
         this.cdr.markForCheck();
       }),
     );
@@ -5176,6 +5181,15 @@ export class SlideDeckArtifactViewerComponent
       ver.VersionNumber = 1;
       ver.Name = artifact.Name;
       ver.Content = emptyWhiteboardJson;
+      const wbConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        emptyWhiteboardJson,
+        null,
+        artifact.Name,
+      );
+      if (wbConfig) {
+        ver.Configuration = wbConfig;
+      }
 
       const verSaved = await ver.Save();
       if (!verSaved || !ver.ID) {
@@ -5260,6 +5274,15 @@ export class SlideDeckArtifactViewerComponent
       ver.VersionNumber = nextVerNum;
       ver.Name = this.Deck.Title || this.artifactVersion?.Name || 'Presentation';
       ver.Content = serializedContent;
+      const deckConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        serializedContent,
+        'SlideDeckArtifactViewerComponent',
+        ver.Name,
+      );
+      if (deckConfig) {
+        ver.Configuration = deckConfig;
+      }
       const saved = await ver.Save();
       if (!saved) {
         const msg = ver.LatestResult?.Message || 'Failed to save presentation version.';

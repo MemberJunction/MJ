@@ -24,6 +24,7 @@ import {
   MJConversationEntity,
   MJConversationDetailEntity,
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   UserInfoEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
@@ -3252,10 +3253,14 @@ export class SpreadsheetArtifactViewerComponent
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        const isNewSavedVersion = saved.versionNumber > (this.LastSavedVersionNumber ?? 0);
         this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         this.LastSavedVersionNumber = saved.versionNumber;
         this.IsSavingVersion = false;
         this.StatusBannerMessage = `Saved immutable Artifact Version v${saved.versionNumber}`;
+        if (isNewSavedVersion) {
+          this.ContentCommitted.emit(SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook));
+        }
         this.cdr.markForCheck();
       }),
     );
@@ -5236,6 +5241,15 @@ export class SpreadsheetArtifactViewerComponent
       nextVer.Name = embed.Title;
       nextVer.UserID = user.ID;
       nextVer.Content = nextContent;
+      const embedConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        nextContent,
+        null,
+        embed.Title,
+      );
+      if (embedConfig) {
+        nextVer.Configuration = embedConfig;
+      }
 
       const saved = await nextVer.Save();
       if (!saved || !nextVer.ID) {
@@ -5682,6 +5696,15 @@ export class SpreadsheetArtifactViewerComponent
       ver.Name = this.Workbook.Title || this.artifactVersion.Name || 'Workbook';
       ver.UserID = user.ID;
       ver.Content = serialized;
+      const sheetConfig = BuildArtifactVersionConfigurationWithPreview(
+        serialized,
+        serialized,
+        'SpreadsheetArtifactViewerComponent',
+        ver.Name,
+      );
+      if (sheetConfig) {
+        ver.Configuration = sheetConfig;
+      }
 
       const saved = await ver.Save();
       if (!saved) {

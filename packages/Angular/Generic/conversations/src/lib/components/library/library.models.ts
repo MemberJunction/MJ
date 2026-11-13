@@ -1,11 +1,11 @@
 import { CompositeKey } from '@memberjunction/core';
 import {
+  ArtifactPreviewSnapshot,
   MJArtifactEntity,
   MJArtifactVersionEntity,
   MJCollectionEntity,
   StorageAccountWithProvider,
 } from '@memberjunction/core-entities';
-import type { ArtifactPreviewSnapshot } from '@memberjunction/ng-artifacts';
 
 /**
  * Primary surface layout mode of the Library workspace:

@@ -31,14 +31,6 @@ export * from './lib/components/previews/audio-artifact-preview.component';
 // Snapshot helpers (pure functions for creating DataSnapshots from artifact content)
 export * from './lib/snapshot-helpers';
 export { ComputeLineDiff, type LineDiffLine, type LineDiffResult } from './lib/utils/line-diff';
-export {
-  BuildArtifactPreviewSnapshot,
-  BuildSvgThumbnailDataUrl,
-  MergeArtifactVersionPreviewConfig,
-  ParseArtifactVersionConfiguration,
-  type ArtifactPreviewSnapshot,
-  type ArtifactVersionConfiguration,
-} from './lib/utils/artifact-preview-thumbnail';
 
 // Artifact type plugin viewer (loads appropriate plugin based on DriverClass)
 export * from './lib/components/artifact-type-plugin-viewer.component';

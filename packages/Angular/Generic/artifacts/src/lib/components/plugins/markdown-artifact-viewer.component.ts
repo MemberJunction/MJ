@@ -3,6 +3,7 @@ import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IM
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   DocumentLiveBlockEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
@@ -10442,6 +10443,15 @@ export class MarkdownArtifactViewerComponent
       ver.Name = block.Title || 'Embedded Artifact';
       ver.UserID = user.ID;
       ver.Content = serializedContent;
+      const embedConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        serializedContent,
+        null,
+        ver.Name,
+      );
+      if (embedConfig) {
+        ver.Configuration = embedConfig;
+      }
 
       const saved = await ver.Save();
       if (!saved || !ver.ID) {
@@ -11421,6 +11431,15 @@ export class MarkdownArtifactViewerComponent
       ver.Name = this.getDisplayTitle() || 'Document';
       ver.UserID = user.ID;
       ver.Content = content;
+      const docConfig = BuildArtifactVersionConfigurationWithPreview(
+        this.artifactVersion?.Configuration,
+        content,
+        'MarkdownArtifactViewerComponent',
+        ver.Name,
+      );
+      if (docConfig) {
+        ver.Configuration = docConfig;
+      }
       const ok = await ver.Save();
       if (!ok) {
         const msg = ver.LatestResult?.Message || 'Failed to save document version.';
@@ -11750,6 +11769,7 @@ export class MarkdownArtifactViewerComponent
             Content: this.MarkdownContent,
             Timestamp: new Date().toLocaleTimeString(),
           });
+          this.ContentCommitted.emit(this.MarkdownContent);
         }
         this.StatusBannerMessage = `Saved document version v${savedEvt.versionNumber}.`;
         this.cdr.markForCheck();

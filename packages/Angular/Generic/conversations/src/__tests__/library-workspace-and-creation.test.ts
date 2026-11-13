@@ -1933,4 +1933,35 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       expect(text).not.toMatch(/\brgba?\s*\(/);
     }
   });
+
+  it('updates live item card preview snapshot & thumbnail when OnViewerVersionSaved fires and unifies root Library without 8-item cap', () => {
+    const { component } = buildWorkspaceComponent();
+    expect(component.UnifiedScope).toBe('home');
+    expect(component.LibraryBreadcrumbs.map((b) => b.Label)).toEqual(['Library']);
+    expect(component.ContinueWorkingItems).toHaveLength(component.FilteredItems.length);
+
+    component.OnViewerVersionSaved({
+      ArtifactID: 'item-doc-1',
+      VersionID: 'ver-doc-99',
+      VersionNumber: 9,
+      PreviewSnapshot: {
+        Kind: 'doc',
+        Heading: 'Updated Plan',
+        Excerpt: 'Live thumbnail refreshed from save event',
+      },
+      ThumbnailDataUrl: 'data:image/svg+xml;base64,dGVzdA==',
+      UpdatedAt: new Date('2026-11-13T16:00:00.000Z'),
+    });
+
+    const updated = component.AllItems.find((i) => i.Id === 'item-doc-1');
+    expect(updated?.LatestVersionId).toBe('ver-doc-99');
+    expect(updated?.LatestVersionNumber).toBe(9);
+    expect(updated?.VersionCount).toBe(9);
+    expect(updated?.PreviewSnapshot).toEqual({
+      Kind: 'doc',
+      Heading: 'Updated Plan',
+      Excerpt: 'Live thumbnail refreshed from save event',
+    });
+    expect(updated?.ThumbnailDataUrl).toBe('data:image/svg+xml;base64,dGVzdA==');
+  });
 });

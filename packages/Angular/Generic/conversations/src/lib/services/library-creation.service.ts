@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   MJArtifactEntity,
   MJArtifactTypeEntity,
   MJArtifactVersionEntity,
@@ -674,6 +675,15 @@ export class LibraryCreationService {
     version.MimeType = params.MimeType;
     version.FileName = params.FileName;
     version.ContentSizeBytes = params.ContentSizeBytes;
+    const initialConfig = BuildArtifactVersionConfigurationWithPreview(
+      null,
+      params.Content,
+      params.ArtifactType?.DriverClass ?? null,
+      params.Title,
+    );
+    if (initialConfig) {
+      version.Configuration = initialConfig;
+    }
 
     const versionSaved = await version.Save();
     if (!versionSaved) {

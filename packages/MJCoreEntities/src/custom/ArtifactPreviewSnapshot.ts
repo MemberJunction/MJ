@@ -1,4 +1,5 @@
-import { SlideDeckEngine, SpreadsheetEngine } from '@memberjunction/core-entities';
+import { SlideDeckEngine } from './SlideDeckEngine';
+import { SpreadsheetEngine } from './SpreadsheetEngine';
 
 /**
  * Structured preview metadata stored inside `MJArtifactVersionEntity.Configuration.previewSnapshot`
@@ -43,34 +44,41 @@ export interface ArtifactVersionConfiguration {
 export function ParseArtifactVersionConfiguration(
   rawConfig: string | null | undefined,
 ): ArtifactVersionConfiguration | null {
-  if (!rawConfig || typeof rawConfig !== 'string' || !rawConfig.trim()) {
+  if (!rawConfig || typeof rawConfig !== 'string') {
+    return null;
+  }
+  const trimmed = rawConfig.trim();
+  if (!trimmed.startsWith('{')) {
     return null;
   }
   try {
-    const parsed: unknown = JSON.parse(rawConfig);
+    const parsed: unknown = JSON.parse(trimmed);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as ArtifactVersionConfiguration;
     }
+    return null;
   } catch {
-    // Ignore malformed Configuration JSON
+    return null;
   }
-  return null;
 }
 
 /**
- * Builds a compact structured preview snapshot from raw artifact `Content` + `DriverClass`.
+ * Builds a compact structured preview snapshot from raw artifact `Content` + optional `DriverClass`.
+ * When `driverClass` is omitted (e.g. server-side room compaction), JSON payloads for Sheets,
+ * Slides, and Whiteboards are auto-detected safely before falling back to Markdown extraction.
  */
 export function BuildArtifactPreviewSnapshot(
   content: string | null | undefined,
-  driverClass: string | null | undefined,
+  driverClass?: string | null,
   fallbackTitle?: string,
 ): ArtifactPreviewSnapshot | null {
   if (!content || typeof content !== 'string' || !content.trim()) {
     return null;
   }
   const driver = (driverClass ?? '').trim();
+  const trimmed = content.trim();
 
-  if (driver === 'MarkdownArtifactViewerPlugin' || (!driver && !content.trim().startsWith('{'))) {
+  if (driver === 'MarkdownArtifactViewerPlugin') {
     return extractDocSnapshot(content, fallbackTitle);
   }
 
@@ -84,6 +92,29 @@ export function BuildArtifactPreviewSnapshot(
 
   if (driver === 'WhiteboardArtifactViewerPlugin') {
     return extractWhiteboardSnapshot(content);
+  }
+
+  if (!driver) {
+    if (!trimmed.startsWith('{')) {
+      return extractDocSnapshot(content, fallbackTitle);
+    }
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const obj = parsed as Record<string, unknown>;
+        if (Array.isArray(obj['Worksheets'])) {
+          return extractSheetSnapshot(content);
+        }
+        if (Array.isArray(obj['Slides']) || Array.isArray(obj['slides'])) {
+          return extractSlideSnapshot(content, fallbackTitle);
+        }
+        if (Array.isArray(obj['pages']) || Array.isArray(obj['items']) || Array.isArray(obj['elements'])) {
+          return extractWhiteboardSnapshot(content);
+        }
+      }
+    } catch {
+      return extractDocSnapshot(content, fallbackTitle);
+    }
   }
 
   return null;
@@ -105,7 +136,12 @@ function extractDocSnapshot(markdown: string, fallbackTitle?: string): ArtifactP
       continue;
     }
     if (!callout && line.startsWith('>')) {
-      callout = line.replace(/^>\s*/, '').replace(/\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, '').replace(/[*_`]/g, '').trim().slice(0, 100);
+      callout = line
+        .replace(/^>\s*/, '')
+        .replace(/\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i, '')
+        .replace(/[*_`]/g, '')
+        .trim()
+        .slice(0, 100);
       continue;
     }
     const clean = line
@@ -212,11 +248,23 @@ function extractWhiteboardSnapshot(rawContent: string): ArtifactPreviewSnapshot 
     const parsed: unknown = JSON.parse(rawContent);
     if (!parsed || typeof parsed !== 'object') return null;
     const obj = parsed as Record<string, unknown>;
-    const rawItems = Array.isArray(obj['items'])
-      ? obj['items']
-      : Array.isArray(obj['elements'])
-        ? obj['elements']
-        : [];
+    const rawItems: unknown[] = [];
+
+    if (Array.isArray(obj['items'])) {
+      rawItems.push(...obj['items']);
+    } else if (Array.isArray(obj['elements'])) {
+      rawItems.push(...obj['elements']);
+    } else if (Array.isArray(obj['pages'])) {
+      for (const page of obj['pages']) {
+        if (page && typeof page === 'object') {
+          const pRec = page as Record<string, unknown>;
+          if (Array.isArray(pRec['items'])) {
+            rawItems.push(...pRec['items']);
+          }
+        }
+      }
+    }
+
     const nodes: string[] = [];
     for (const entry of rawItems) {
       if (entry && typeof entry === 'object') {
@@ -234,6 +282,9 @@ function extractWhiteboardSnapshot(rawContent: string): ArtifactPreviewSnapshot 
         }
       }
       if (nodes.length >= 3) break;
+    }
+    if (nodes.length === 0 && rawItems.length > 0) {
+      nodes.push(`${rawItems.length} element${rawItems.length === 1 ? '' : 's'}`);
     }
     return nodes.length > 0 ? { Kind: 'whiteboard', Nodes: nodes } : null;
   } catch {
@@ -329,4 +380,19 @@ export function MergeArtifactVersionPreviewConfig(
     ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
   };
   return JSON.stringify(merged);
+}
+
+/**
+ * Convenience helper: derives `previewSnapshot` + base64 SVG `thumbnailDataUrl` from raw
+ * `content` and merges them into `rawConfig`.
+ */
+export function BuildArtifactVersionConfigurationWithPreview(
+  rawConfig: string | null | undefined,
+  content: string | null | undefined,
+  driverClass?: string | null,
+  fallbackTitle?: string | null,
+): string | null {
+  const snapshot = BuildArtifactPreviewSnapshot(content, driverClass, fallbackTitle ?? undefined);
+  const thumbnailDataUrl = BuildSvgThumbnailDataUrl(snapshot);
+  return MergeArtifactVersionPreviewConfig(rawConfig, snapshot, thumbnailDataUrl);
 }

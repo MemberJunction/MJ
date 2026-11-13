@@ -25,6 +25,7 @@ import {
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     ArtifactPermissionEngine,
+    BuildArtifactVersionConfigurationWithPreview,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
     SlideDeckEngine,
@@ -1180,6 +1181,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const latestRes = await rv.RunView<{
                 ID: string;
                 VersionNumber: number;
+                Name?: string | null;
                 Content?: string | null;
                 Configuration?: string | null;
                 ContentHash?: string | null;
@@ -1193,6 +1195,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     Fields: [
                         'ID',
                         'VersionNumber',
+                        'Name',
                         'Content',
                         'Configuration',
                         'ContentHash',
@@ -1284,10 +1287,25 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             versionEntity.NewRecord();
             versionEntity.ArtifactID = room.ArtifactID;
             versionEntity.VersionNumber = nextVersionNumber;
+            if (latest?.Name) {
+                versionEntity.Name = latest.Name;
+            }
             versionEntity.UserID = contextUser.ID;
             versionEntity.Content = currentContent;
             versionEntity.ContentHash = contentHash;
-            if (room.Doc.getMap('worksheetsById').size > 0) {
+            const rawBaseConfig =
+                room.Doc.getMap('worksheetsById').size > 0
+                    ? currentContent
+                    : (latest?.Configuration ?? null);
+            const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+                rawBaseConfig,
+                currentContent,
+                null,
+                latest?.Name ?? null
+            );
+            if (enrichedConfig) {
+                versionEntity.Configuration = enrichedConfig;
+            } else if (room.Doc.getMap('worksheetsById').size > 0) {
                 versionEntity.Configuration = currentContent;
             }
 

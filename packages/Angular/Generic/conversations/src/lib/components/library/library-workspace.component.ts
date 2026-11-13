@@ -22,13 +22,14 @@ import {
   MJCollectionEntity,
   MJCollectionPermissionEntity,
   MJEnvironmentEntityExtended,
+  ParseArtifactVersionConfiguration,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import {
   ArtifactIconService,
-  ParseArtifactVersionConfiguration,
+  type ArtifactVersionSavedEvent,
 } from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
@@ -400,7 +401,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public get ContinueWorkingItems(): LibraryItemSummary[] {
-    return this.FilteredItems.slice(0, 8);
+    return this.FilteredItems;
   }
 
   public get HighlightCollections(): LibraryCollectionNode[] {
@@ -449,10 +450,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     if (this.SurfaceMode === 'navigator') {
       if (this.NavigatorSection === 'shared') return 'shared';
       if (this.NavigatorSection === 'starred') return 'starred';
-      return 'all';
+      return 'home';
     }
     if (this.HubTab === 'shared') return 'shared';
-    if (this.HubTab === 'all') return 'all';
     return 'home';
   }
 
@@ -1183,6 +1183,32 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       EntityName: event.entityName,
       CompositeKey: event.compositeKey,
     });
+  }
+
+  public OnViewerVersionSaved(event: ArtifactVersionSavedEvent): void {
+    const idx = this.AllItems.findIndex((i) => UUIDsEqual(i.Id, event.ArtifactID));
+    if (idx < 0) {
+      return;
+    }
+    const existing = this.AllItems[idx];
+    const parsedConfig = ParseArtifactVersionConfiguration(event.Configuration);
+    const nextSnapshot = event.PreviewSnapshot ?? parsedConfig?.previewSnapshot ?? existing.PreviewSnapshot ?? null;
+    const nextThumb = event.ThumbnailDataUrl ?? parsedConfig?.thumbnailDataUrl ?? existing.ThumbnailDataUrl ?? null;
+    const updated: LibraryItemSummary = {
+      ...existing,
+      LatestVersionId: event.VersionID ?? existing.LatestVersionId,
+      LatestVersionNumber: Math.max(existing.LatestVersionNumber, event.VersionNumber),
+      VersionCount: Math.max(existing.VersionCount, event.VersionNumber),
+      PreviewSnapshot: nextSnapshot,
+      ThumbnailDataUrl: nextThumb,
+      UpdatedAt: event.UpdatedAt,
+    };
+    this.AllItems = [
+      ...this.AllItems.slice(0, idx),
+      updated,
+      ...this.AllItems.slice(idx + 1),
+    ];
+    this.cdr.detectChanges();
   }
 
   public OnViewerNavigateToLink(event: {

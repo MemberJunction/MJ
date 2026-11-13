@@ -82,6 +82,7 @@
         (SaveToCollectionRequested)="OpenSaveToCollectionModal($event)"
         (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
         (NavigateToLink)="OnViewerNavigateToLink($event)"
+        (VersionSaved)="OnViewerVersionSaved($event)"
       ></mj-artifact-viewer-panel>
     </div>
   </div>
@@ -178,17 +179,7 @@
                 data-testid="rail-nav-home"
               >
                 <i class="fa-solid fa-house rail-item-icon"></i>
-                <span class="rail-item-label">Home</span>
-              </button>
-              <button
-                type="button"
-                class="rail-item"
-                [class.active]="UnifiedScope === 'all'"
-                (click)="SetUnifiedScope('all')"
-                data-testid="rail-nav-all"
-              >
-                <i class="fa-solid fa-layer-group rail-item-icon"></i>
-                <span class="rail-item-label">All Items</span>
+                <span class="rail-item-label">Library</span>
                 <span class="rail-badge">{{ AllItems.length }}</span>
               </button>
               <button
@@ -507,6 +498,7 @@
                     (SaveToCollectionRequested)="OpenSaveToCollectionModal($event)"
                     (OpenEntityRecord)="OnViewerOpenEntityRecord($event)"
                     (NavigateToLink)="OnViewerNavigateToLink($event)"
+                    (VersionSaved)="OnViewerVersionSaved($event)"
                   ></mj-artifact-viewer-panel>
                 </div>
               </div>
@@ -627,22 +619,13 @@
                   </section>
                 }
 
-                <!-- Continue Working Section -->
+                <!-- Library Items Section -->
                 <section class="hub-section" aria-labelledby="hub-continue-working">
                   <div class="section-heading-row">
-                    <h2 id="hub-continue-working" class="section-title">Continue Working</h2>
-                    @if (AllItems.length > 8) {
-                      <button
-                        type="button"
-                        class="section-link-btn"
-                        (click)="SetUnifiedScope('all')"
-                      >
-                        View all {{ AllItems.length }} items
-                        <i class="fa-solid fa-arrow-right"></i>
-                      </button>
-                    }
+                    <h2 id="hub-continue-working" class="section-title">All Items</h2>
+                    <span class="section-hint">{{ FilteredItems.length }} items</span>
                   </div>
-                  @if (ContinueWorkingItems.length === 0) {
+                  @if (FilteredItems.length === 0) {
                     <mj-empty-state
                       Size="compact"
                       Icon="fa-solid fa-book-open"
@@ -651,11 +634,11 @@
                     ></mj-empty-state>
                   } @else if (UnifiedLayout === 'list') {
                     <ng-container
-                      *ngTemplateOutlet="itemTableTemplate; context: { $implicit: ContinueWorkingItems }"
+                      *ngTemplateOutlet="itemTableTemplate; context: { $implicit: FilteredItems }"
                     ></ng-container>
                   } @else {
                     <ng-container
-                      *ngTemplateOutlet="itemCardsTemplate; context: { $implicit: ContinueWorkingItems }"
+                      *ngTemplateOutlet="itemCardsTemplate; context: { $implicit: FilteredItems }"
                     ></ng-container>
                   }
                 </section>
