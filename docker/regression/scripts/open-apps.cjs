@@ -10,7 +10,8 @@
  *                                        that the installed app packages use, then fails if a
  *                                        workspace @memberjunction package now also has a registry
  *                                        copy.
- *   node open-apps.cjs database          db-setup (database up). Runs `--database-only` for each app.
+ *   node open-apps.cjs database          db-setup (database up). Applies the `mjCompat` changes that an
+ *                                        entry names, then runs `--database-only` for each app.
  *   node open-apps.cjs check-duplicates  Only the duplicate check.
  *
  * Every install runs with `--non-interactive`. An empty list does nothing.
@@ -32,8 +33,11 @@ const MJ_CLI = 'packages/MJCLI/bin/run.js';
 const ROOT_MANIFEST = 'package.json';
 const CONFIG_PATH = 'mj.config.cjs';
 const PNPM_STORE = 'node_modules/.pnpm';
+const MJ_CORE_SCHEMA = '__mj';
+/** Database changes an entry can ask for, so an app built for an older MJ installs. */
+const MJ_COMPAT = ['legacy-conversation-type'];
 
-/** Reads and checks the pinned list: an array of { repo, version }. */
+/** Reads and checks the pinned list: an array of { repo, version, disableClientPackages?, mjCompat? }. */
 function readAppList() {
     const apps = JSON.parse(fs.readFileSync(LIST_PATH, 'utf8'));
     if (!Array.isArray(apps)) throw new Error(`${LIST_PATH} must hold a JSON array`);
@@ -47,6 +51,10 @@ function readAppList() {
         const off = app.disableClientPackages ?? [];
         if (!Array.isArray(off) || off.some((name) => typeof name !== 'string')) {
             throw new Error(`"disableClientPackages" in ${LIST_PATH} must be an array of package names: ${JSON.stringify(app)}`);
+        }
+        const compat = app.mjCompat ?? [];
+        if (!Array.isArray(compat) || compat.some((name) => !MJ_COMPAT.includes(name))) {
+            throw new Error(`"mjCompat" in ${LIST_PATH} must be an array of ${MJ_COMPAT.join(', ')}: ${JSON.stringify(app)}`);
         }
     }
     return apps;
@@ -202,7 +210,25 @@ function checkDuplicates() {
     console.log(`No registry copies of the ${workspace.size} workspace @memberjunction packages.`);
 }
 
-function main() {
+/**
+ * Applies the `mjCompat` changes that the entries name. `legacy-conversation-type` lets the
+ * conversation procedures accept the `@Type` name that apps built before MJ 6.3 pass.
+ */
+async function applyCompat(apps) {
+    const names = [...new Set(apps.flatMap((app) => app.mjCompat ?? []))];
+    if (!names.includes('legacy-conversation-type')) return;
+    const { connect } = require('./lib/db.cjs');
+    const { ApplyLegacyConversationType } = require('./lib/legacy-conversation-type.cjs');
+    const pool = await connect();
+    try {
+        const changed = await ApplyLegacyConversationType(pool, MJ_CORE_SCHEMA);
+        console.log(`mjCompat legacy-conversation-type: ${changed.length ? `added @Type to ${changed.join(', ')}` : 'not needed'}`);
+    } finally {
+        await pool.close();
+    }
+}
+
+async function main() {
     const step = process.argv[2];
     if (step === 'check-duplicates') return checkDuplicates();
     if (step !== 'packages' && step !== 'database') {
@@ -223,8 +249,12 @@ function main() {
         buildWorkspacePackagesUsedByApps(env);
         checkDuplicates();
     } else {
+        await applyCompat(apps);
         installAll(apps, '--database-only', env);
     }
 }
 
-main();
+main().catch((err) => {
+    console.error(err.message);
+    process.exit(1);
+});
