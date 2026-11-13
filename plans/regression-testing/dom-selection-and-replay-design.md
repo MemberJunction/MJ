@@ -132,15 +132,20 @@ permanent assertion.
 
 ## 5. Where scripts live
 
-**A script lives in the test row, in `Configuration.ReplayScript`.**
+**At run time a script lives in the test row, in `Configuration.ReplayScript`. In git it
+lives in a file next to the test, and that file is the source of truth.**
 
-An earlier draft committed scripts to the repository as `T042.trace.json` files,
-reasoning that they are compiled artifacts like snapshot files and belong in git where
-a diff is reviewable. That was wrong for a simpler reason than the argument was
-sophisticated: a script is a *generated artifact of a test*, and it belongs with the
-test. Keeping it in the row means it travels with the test, arrives already in the
-TestingEngine's cache, and cannot drift away from what it describes. No mount, no
-promotion step, no second store to keep in sync.
+- **In the database.** The script travels with the test row and arrives already in the
+  TestingEngine's cache. A run records a new script into the row (see §6.1 for the
+  `ReplayScript` / `PendingReplayScript` slots).
+- **In git.** `metadata-optional/regression-test/tests/.mj-sync.json` externalizes both
+  fields: `Configuration.ReplayScript` holds `@file:regression/scripts/<name>.json`, and
+  the script is in that file (`<name>.pending.json` for a pending one). `mj sync push`
+  loads the files into the rows before a run.
+- **From a run back to git.** The stack's database is thrown away after each run, so a
+  recorded script reaches git only through `mj sync pull --entity="MJ: Tests"` before
+  teardown (the harvest in `2026-11-12-regression-automation-plan.md`, Part B). A
+  reviewed PR then carries the new or changed script files.
 
 `Configuration` already exists on `MJ: Tests` as `NVARCHAR(MAX) NULL`, so **there is no
 migration**. What this branch adds is JSONType metadata on the existing column, so

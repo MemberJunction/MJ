@@ -9,6 +9,7 @@ export default class TestSuite extends Command {
     '<%= config.bin %> <%= command.id %> --name="Agent Quality Suite"',
     '<%= config.bin %> <%= command.id %> <suite-id> --format=json',
     '<%= config.bin %> <%= command.id %> <suite-id> --output=suite-results.json',
+    '<%= config.bin %> <%= command.id %> --name="MJ Explorer Regression Suite" --test="T001 - Login Smoke"',
   ];
 
   static args = {
@@ -74,6 +75,10 @@ export default class TestSuite extends Command {
       description: 'Filter suite tests by transport layer (server, client, or all).',
       options: ['server', 'client', 'all'],
     }),
+    test: Flags.string({
+      description: 'Run only this suite test, by exact name. Repeat the flag to run more than one.',
+      multiple: true,
+    }),
   };
 
   async run(): Promise<void> {
@@ -104,6 +109,7 @@ export default class TestSuite extends Command {
         checksModule: flags['checks-module'],
         shard: flags.shard,
         transport: flags.transport as 'server' | 'client' | 'all' | undefined,
+        test: flags.test,
       });
 
     } catch (error) {

@@ -44,13 +44,14 @@
     "RepeatCount": null,
     "MaxExecutionTimeMS": null,
     "Variables": null,
-    "SkipEmbeddings": false
+    "SkipEmbeddings": false,
+    "RubricID": null
   },
   "primaryKey": {
     "ID": "9EF07C67-7824-46D8-971F-F257C0CDB6FC"
   },
   "sync": {
-    "lastModified": "2026-09-11T21:36:53.398Z",
-    "checksum": "198c94be5da158c483abad0bc87cfbfdead609be44601bbcf74a2921e5236d41"
+    "lastModified": "2026-11-12T19:36:07.801Z",
+    "checksum": "48fb9818676e3e9b998895e908a0c6c0284052b62f00981aff34aefa706de8b2"
   }
 }

@@ -470,6 +470,15 @@ Any key that is not one of the reserved keys above is preserved but ignored duri
 }
 ```
 
+### File format on rewrite
+
+Push and pull write record files with 2-space indentation. When they rewrite an existing file, they keep two of its text conventions, so an unchanged record writes the same bytes:
+
+- **Trailing newline.** A file that ends with a newline keeps it.
+- **Non-ASCII escapes.** A file that writes non-ASCII characters as `\uXXXX` escapes (and has no literal non-ASCII characters) keeps that style.
+
+A new file has no trailing newline and uses literal characters.
+
 ## Special Reference Types
 
 The tool supports special reference types that can be used in any field that accepts text content. These references are processed during push/pull operations to handle external content, lookups, and environment-specific values.

@@ -72,9 +72,12 @@ async function resolveLookup(pool, value) {
                 .input('scope', sql.NVarChar, f.ApplicationScope ?? 'Global')
                 .input('archived', sql.Bit, !!f.IsArchived)
                 .input('pinned', sql.Bit, !!f.IsPinned)
-                .query(`INSERT INTO __mj.Conversation (Name, Description, UserID, EnvironmentID, Type, Status, ApplicationScope, IsArchived, IsPinned)
+                .query(`INSERT INTO __mj.Conversation (Name, Description, UserID, EnvironmentID, TypeID, Status, ApplicationScope, IsArchived, IsPinned)
                         OUTPUT inserted.ID
-                        VALUES (@name, @description, @userId, @environmentId, @type, @status, @scope, @archived, @pinned)`)).recordset[0].ID;
+                        VALUES (@name, @description, @userId, @environmentId,
+                                COALESCE((SELECT ID FROM __mj.ConversationType WHERE Name = @type),
+                                         (SELECT ID FROM __mj.ConversationType WHERE Name = 'Chat')),
+                                @status, @scope, @archived, @pinned)`)).recordset[0].ID;
 
             const details = conversation.relatedEntities?.['MJ: Conversation Details'] ?? [];
             for (let i = 0; i < details.length; i++) {

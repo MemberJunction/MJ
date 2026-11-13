@@ -510,7 +510,7 @@ If `my-feature` tracks `origin/next`:
 
 ## 🚨 Integration Testing — REQUIRED Before Any Project Is "Done" 🚨
 
-MemberJunction has a **live, headless integration suite** at [`packages/MJServer/integration-test-scripts/`](packages/MJServer/integration-test-scripts/) that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
+MemberJunction has a **live, headless integration suite** (check bundles in [`packages/TestingFramework/integration-test-suite/`](packages/TestingFramework/integration-test-suite/), tests and suites in [`metadata-optional/integration-test/`](metadata-optional/integration-test/), run by `mj test`) that exercises real server componentry against the live dev database (real SQLServerDataProvider, real engines, real entity saves — no mocks, no LLM calls in the deterministic tier). It sits between unit tests and the browser regression suite and catches the **seams between packages** that unit tests mock away.
 
 **The rule: no feature/PR is considered DONE until the deterministic integration tier has been run headless and passes.** Unit tests passing is necessary but NOT sufficient.
 
@@ -518,12 +518,13 @@ MemberJunction has a **live, headless integration suite** at [`packages/MJServer
 # The whole deterministic tier (from repo root) — REQUIRED before declaring done
 npm run test:integration
 
-# A single suite while iterating
-npx tsx packages/MJServer/integration-test-scripts/ai-skills-tests.ts
+# A single test bundle while iterating
+npx mj test run "IT01 - Server Cache"
 ```
 
 - The **deterministic tier** runs by default: credential-light, self-cleaning fixtures, no LLM cost. The **live-model tier** (real agent/prompt runs) is gated behind `RUN_AGENT_TESTS=1`; the **Predictive Studio tier** behind `PS_INTEGRATION=1`.
-- **Extend the suite with every feature.** When you ship server-side capability (new engine methods, new columns with runtime semantics, new gates), add deterministic cases to the matching `*-tests.ts` script (or create one and register it in `run-all.ts`). New suites must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records. Update the folder README's suite table when you do.
+- **Extend the suite with every feature.** When you ship server-side capability (new engine methods, new columns with runtime semantics, new gates), add deterministic checks to the matching bundle (or add a bundle and its `MJ: Tests` record). New checks must be **self-cleaning** (create + delete their own fixtures, tagged `(mj-integration-test — safe to delete)`) and reference-only toward existing records. How: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
+- **UI changes get a browser regression test.** When you change what a user sees or does in MJ Explorer, add or update a test in [`metadata-optional/regression-test/`](metadata-optional/regression-test/README.md) with `mj test regression new` (the `author-regression-test` skill walks through it). `pnpm run check:regression-suite` checks the files.
 - Suites live against the real DB, so run them AFTER migrations + CodeGen have been applied — they double as a smoke test that the schema, generated types, and engines agree.
 
 ## Unit Testing
@@ -579,7 +580,7 @@ describe('ClassName', () => {
 ### CI/CD Integration
 
 - **Every PR** must pass unit tests before merging (GitHub Actions gate)
-- **Every release** runs the full-stack regression suite via Docker Compose
+- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not a PR gate (`regression-replay-scripts.yml` runs it on demand to refresh replay scripts)
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
 ## Switching Database Platforms (SQL Server ↔ PostgreSQL)

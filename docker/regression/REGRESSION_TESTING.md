@@ -61,6 +61,10 @@ mj test regression build
 # 3. Run the full stack — creates docker/regression/test-results/run-{TIMESTAMP}/
 #    Fast path: docker compose up under the "full" profile, no codegen.
 mj test regression up
+#    Only some tests: mj test regression up --test "T001 - Login Smoke" (repeatable;
+#    sets TEST_NAMES, a comma-separated list of exact names, for the test runner)
+#    Harvest a run's replay scripts before you run tests again on the same stack: the
+#    test runner pushes the test files at start, which replaces a script not yet pulled.
 
 # 4. Check results — see "Output Structure" below for what gets generated
 ls docker/regression/test-results/latest/
@@ -444,7 +448,7 @@ The image is built by [`docker/agentic-test-runner/Dockerfile`](../agentic-test-
 
 ## Environment Variables
 
-All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for the template.
+All variables go in `docker/regression/.env.test` (gitignored). Copy [`.env.test.example`](.env.test.example) to start.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -452,7 +456,7 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 | `MJ_BASE_ENCRYPTION_KEY` | Yes | Base64 encryption key (`openssl rand -base64 32`) |
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
-| `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
+| `AUTH0_CLIENT_SECRET` | No | Auth0 application client secret. An SPA login does not use it: MJAPI checks tokens with the tenant's public keys |
 | `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA). The entrypoint maps this onto `MJ_TEST_VAR_authUsername`, which is what the tests bind as `{{authUsername}}` |
 | `TEST_PWD` | Yes | Test user password in Auth0. Mapped onto `MJ_TEST_VAR_authPassword` the same way |
 | `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
@@ -599,10 +603,10 @@ The weighted oracle scores combine into a final test score (0.0 to 1.0). A test 
 
 See [`metadata-optional/regression-test/README.md`](../../metadata-optional/regression-test/README.md) for the full test-author guide. Quick summary:
 
-1. Create a new `.json` file in `metadata-optional/regression-test/tests/regression/` following the T001 pattern
-2. Add a `relatedEntities` entry in `metadata-optional/regression-test/test-suites/.regression-suite.json` linking the test
-3. The test runner automatically syncs metadata on each run — no rebuild needed
-4. Metadata files are bind-mounted from the host, so edits are picked up immediately
+1. Scaffold the test with `pnpm mj test regression new` (it picks the next number, writes the test file and its suite member, and runs the parity check). Do not hand-copy a test file: the copy keeps the other test's `primaryKey`. The `author-regression-test` Claude skill walks through the whole flow from a branch's UI changes.
+2. Check the files with `pnpm run check:regression-suite` (CI runs the same check).
+3. The test runner syncs metadata on each run, so no rebuild is needed. Metadata files are bind-mounted from the host, so edits are picked up immediately.
+4. Run only the new test with `mj test regression up --test "T156 - My new test"`.
 
 ### Validating a Test Before Running
 

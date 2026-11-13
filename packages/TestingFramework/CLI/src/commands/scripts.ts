@@ -9,8 +9,10 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJTestEntity, MJTestEntity_IReplayScript, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';
 import { ScriptsFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
-import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
 import { SummarizeScriptDrift, ScriptDrift } from '../utils/script-drift';
+import { FormatScriptDriftReport } from '../utils/script-drift-report';
+import { FlushAndExit } from '../utils/flush-and-exit';
 import chalk from 'chalk';
 
 /** A test whose recorded script differs from the one replay is using. */
@@ -29,71 +31,63 @@ interface PendingEntry {
  * `Configuration.PendingReplayScript` rather than replacing what replay uses. This
  * command is where a human sees what changed and decides. Without it, a UI change
  * would silently rewrite the suite's scripts and stay green.
+ *
+ * The command exits the process when it is done: engines loaded during startup can keep
+ * the event loop open after the database connection closes.
  */
 export class ScriptsCommand {
     async Execute(flags: ScriptsFlags, contextUser?: UserInfo): Promise<void> {
         try {
-            await initializeMJProvider();
-            if (!contextUser) {
-                contextUser = await getContextUser();
-            }
+            await InitializeMJProvider();
+            const user = contextUser ?? await GetContextUser();
             const engine = TestEngine.Instance;
-            await engine.Config(false, contextUser);
-
-            const matchedTests = flags.test ? this.findTests(engine, flags.test) : undefined;
-            if (matchedTests && matchedTests.length === 0) {
-                // A name nobody has is not the same as a test with nothing pending.
-                // Reporting both as "no pending script" made a typo look like success.
-                console.log(chalk.yellow(`\nNo test matches "${flags.test}".\n`));
-                process.exitCode = 1;
-                await closeMJProvider();
-                return;
-            }
-
-            const entries = this.collectPending(engine, flags.test);
-
-            if (entries.length === 0) {
-                console.log(chalk.gray(flags.test
-                    ? `\nNo pending replay script for "${flags.test}".\n`
-                    : '\nNo pending replay scripts — every recorded script matches what replay is using.\n'));
-                await closeMJProvider();
-                return;
-            }
-
-            if ((flags.promote || flags.discard) && !flags.test && !flags.yes && entries.length > 1) {
-                // Resolving every pending script at once is the operation you least
-                // want to perform by accident: promoting ratifies UI changes nobody
-                // looked at, discarding throws away recordings that cost model time.
-                this.report(entries);
-                console.log(chalk.yellow(
-                    `This would ${flags.promote ? 'promote' : 'discard'} all ${entries.length} pending script(s) at once.\n` +
-                    `Re-run with --yes to confirm, or narrow it with --test "<name>".\n`));
-                process.exitCode = 1;
-                await closeMJProvider();
-                return;
-            }
-
-            if (flags.promote || flags.discard) {
-                await this.resolve(entries, flags);
-            } else {
-                this.report(entries);
-            }
-
-            await closeMJProvider();
+            await engine.Config(false, user);
+            await this.review(engine, flags);
+            await CloseMJProvider();
+            await FlushAndExit(typeof process.exitCode === 'number' ? process.exitCode : 0);
         } catch (error) {
             console.error(OutputFormatter.formatError('Failed to review replay scripts', error as Error));
             try {
-                await closeMJProvider();
+                await CloseMJProvider();
             } catch {
                 // Ignore cleanup errors
             }
-            process.exit(1);
+            await FlushAndExit(1);
         }
     }
 
     /** @deprecated Use {@link Execute}. */
     async execute(flags: ScriptsFlags, contextUser?: UserInfo): Promise<void> {
         return this.Execute(flags, contextUser);
+    }
+
+    /** Report the pending scripts, or promote or discard them. Sets `process.exitCode` on failure. */
+    private async review(engine: TestEngine, flags: ScriptsFlags): Promise<void> {
+        if (flags.test && this.findTests(engine, flags.test).length === 0) {
+            // A name nobody has is not the same as a test with nothing pending.
+            // Reporting both as "no pending script" made a typo look like success.
+            console.log(chalk.yellow(`\nNo test matches "${flags.test}".\n`));
+            process.exitCode = 1;
+            return;
+        }
+
+        const entries = this.collectPending(engine, flags.test);
+        const resolving = flags.promote || flags.discard;
+
+        if (resolving && entries.length > 0 && !flags.test && !flags.yes && entries.length > 1) {
+            // Resolving every pending script at once is the operation you least
+            // want to perform by accident: promoting ratifies UI changes nobody
+            // looked at, discarding throws away recordings that cost model time.
+            this.report(entries, { ...flags, format: 'console', output: undefined });
+            console.log(chalk.yellow(
+                `This would ${flags.promote ? 'promote' : 'discard'} all ${entries.length} pending script(s) at once.\n` +
+                `Re-run with --yes to confirm, or narrow it with --test "<name>".\n`));
+            process.exitCode = 1;
+        } else if (resolving && entries.length > 0) {
+            await this.resolve(entries, flags);
+        } else {
+            this.report(entries, flags);
+        }
     }
 
     /** Every test matching a name-or-ID filter, regardless of pending state. */
@@ -129,22 +123,23 @@ export class ScriptsCommand {
         return entries;
     }
 
-    /** Print the drift each pending script represents, newest information first. */
-    private report(entries: PendingEntry[]): void {
-        console.log(chalk.bold(`\nPending replay scripts (${entries.length}):\n`));
-        for (const e of entries) {
-            const heading = e.drift.MeaningfulDrift > 0 ? chalk.yellow(e.test.Name) : chalk.cyan(e.test.Name);
-            console.log(`  ${heading}`);
-            console.log(chalk.gray(`    ${e.drift.Summary}`));
-            for (const change of e.drift.Changes.slice(0, 8)) {
-                console.log(chalk.gray(`      step ${change.index + 1}: ${change.kind} — ${change.detail}`));
-            }
-            if (e.drift.Changes.length > 8) {
-                console.log(chalk.gray(`      … and ${e.drift.Changes.length - 8} more`));
-            }
+    /** Print the drift each pending script represents, or write it to `--output` in `--format`. */
+    private report(entries: PendingEntry[], flags: ScriptsFlags): void {
+        const format = flags.format ?? 'console';
+        if (entries.length === 0 && format === 'console') {
+            console.log(chalk.gray(flags.test
+                ? `\nNo pending replay script for "${flags.test}".\n`
+                : '\nNo pending replay scripts — every recorded script matches what replay is using.\n'));
+            return;
         }
-        console.log(chalk.gray('\n  Promote with --promote (add --test "<name>" to pick one), or drop with --discard.\n'));
+        const text = FormatScriptDriftReport(entries.map(e => ({ TestName: e.test.Name, Drift: e.drift })), format);
+        if (flags.output) {
+            OutputFormatter.WriteToFile(text, flags.output);
+        } else {
+            console.log(text);
+        }
     }
+
 
     /** Promote or discard, one save per test. */
     private async resolve(entries: PendingEntry[], flags: ScriptsFlags): Promise<void> {

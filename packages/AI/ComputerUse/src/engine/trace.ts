@@ -206,6 +206,52 @@ export interface RecordTraceOptions {
     viewport?: { width: number; height: number };
     /** Distilled goal-level postconditions; [] when none. */
     goalPostconditions?: GoalPostcondition[];
+    /**
+     * The app's origin, or any URL on it (for example the test's start URL). Recorded URLs on
+     * other origins are stored as path fragments (see {@link LocalizeTraceUrl}). Defaults to the
+     * origin of the first step's URL.
+     */
+    appOrigin?: string;
+}
+
+/** The origin of an absolute URL, or undefined (also for a URL with no origin, such as about:blank). */
+function originOf(url: string | undefined): string | undefined {
+    if (!url) {
+        return undefined;
+    }
+    try {
+        const origin = new URL(url).origin;
+        return origin === 'null' ? undefined : origin;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * A normalized URL as a recorded script stores it: unchanged on the app's origin (or when it is
+ * not absolute), and only its path on another origin, such as an identity provider. A path
+ * fragment matches by containment, so the script works on any tenant of that provider and does
+ * not name it.
+ */
+export function LocalizeTraceUrl(url: string, appOrigin: string | undefined): string {
+    const origin = originOf(url);
+    const app = originOf(appOrigin);
+    if (!origin || !app || origin === app) {
+        return url;
+    }
+    return new URL(url).pathname;
+}
+
+/** Goal postconditions with their URL patterns localized; the inputs are not changed. */
+function localizeGoalPostconditions(posts: GoalPostcondition[], appOrigin: string | undefined): GoalPostcondition[] {
+    return posts.map(p => {
+        if (!p.UrlPattern) {
+            return p;
+        }
+        const copy = Object.assign(new GoalPostcondition(), p);
+        copy.UrlPattern = LocalizeTraceUrl(p.UrlPattern, appOrigin);
+        return copy;
+    });
 }
 
 /** Browser-action types that distill to a replay TraceStep. */
@@ -371,7 +417,9 @@ export function RecordTrace(options: RecordTraceOptions): ComputerUseTrace {
     trace.GoalHash = HashGoal(options.goal);
     trace.RecordedAt = options.recordedAt;
     trace.Variables = options.variables ?? [];
-    trace.GoalPostconditions = options.goalPostconditions ?? [];
+    const firstStep = options.result.Steps[0];
+    const appOrigin = options.appOrigin ?? firstStep?.UrlBefore ?? firstStep?.Url;
+    trace.GoalPostconditions = localizeGoalPostconditions(options.goalPostconditions ?? [], appOrigin);
 
     const viewport = new TraceViewport();
     if (options.viewport) {
@@ -381,7 +429,7 @@ export function RecordTrace(options: RecordTraceOptions): ComputerUseTrace {
     trace.Viewport = viewport;
 
     for (const step of options.result.Steps) {
-        trace.Steps.push(...distillStep(step, volatile, options.variableValues));
+        trace.Steps.push(...distillStep(step, volatile, appOrigin, options.variableValues));
     }
 
     // Final sweep: every string in the finished trace, not just the fields someone
@@ -433,10 +481,11 @@ function successfulActions(step: StepRecord): BrowserAction[] {
 function distillStep(
     step: StepRecord,
     volatile: string[],
+    appOrigin: string | undefined,
     variableValues?: Record<string, string>
 ): TraceStep[] {
-    const urlBefore = NormalizeTraceUrl(step.UrlBefore || step.Url, volatile);
-    const urlAfter = NormalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile);
+    const urlBefore = LocalizeTraceUrl(NormalizeTraceUrl(step.UrlBefore || step.Url, volatile), appOrigin);
+    const urlAfter = LocalizeTraceUrl(NormalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile), appOrigin);
     // Tokenized like Text/Url: the controller narrates what it is doing, so a
     // login step's reasoning quotes the very credentials it was handed
     // ("log in using (user / hunter2)"). Untokenized, every recorded login wrote

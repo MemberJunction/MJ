@@ -79,7 +79,7 @@ return value, or modifying behavior.
 ## CI/CD integration
 
 - **Every PR** must pass unit tests before merging (`.github/workflows/test.yml` gate; merges to `next` and a nightly cron re-run the full suite as a backstop)
-- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not CI
+- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not a PR gate (`regression-replay-scripts.yml` runs it on demand to refresh replay scripts)
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
 ## Related

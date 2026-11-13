@@ -13,6 +13,7 @@ export default class TestRegression extends Command {
     '<%= config.bin %> <%= command.id %> export     # Export a run as a portable standalone HTML',
     '<%= config.bin %> <%= command.id %> remote --target=staging-mj  # Mode B/C/D against a remote URL',
     '<%= config.bin %> <%= command.id %> init generic-web            # Scaffold one of the example dirs',
+    '<%= config.bin %> <%= command.id %> new --name "..." --goal "..." --criteria "..." --priority P1  # Add a test to the suite',
   ];
 
   async run(): Promise<void> {
@@ -26,6 +27,7 @@ export default class TestRegression extends Command {
     this.log('  mj test regression export             Export a run as a portable standalone HTML report');
     this.log('  mj test regression remote --target=X  Run against a remote URL (Mode B/C/D)');
     this.log('  mj test regression init <name>        Scaffold a starter example into the cwd');
+    this.log('  mj test regression new                Add a new test file + suite member (no database)');
     this.log('');
     this.log('Most subcommands shell out to docker compose using the regression stack at');
     this.log('docker/regression/. `init` works both inside the monorepo (copies locally) and');
