@@ -986,6 +986,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     height: runParams.BrowserConfig?.ViewportHeight ?? 720,
                 },
                 goalPostconditions,
+                appOrigin: runParams.StartUrl,
             });
             const saved = await SaveScript(context.test, trace);
             if (saved.Saved) {

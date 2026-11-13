@@ -248,6 +248,28 @@ describe('maybeRecordScript gating', () => {
         expect(test.ConfigurationObject?.ReplayScript).toBeUndefined();
     });
 
+    it('stores identity-provider URLs as path fragments when the run starts on the IdP page', async () => {
+        const run = recordable();
+        run.Steps = [{
+            StepNumber: 1,
+            UrlBefore: 'https://dev-tenant.us.auth0.com/u/login?state=abc',
+            UrlAfter: 'http://app/data',
+            ControllerReasoning: 'log in',
+            InteractiveElements: [{ Index: 0, Role: 'button', Name: 'Continue', Selector: '#c' }],
+            ActionResults: [{ Success: true, Action: { Type: 'ClickElement', Index: 0 } }],
+            ToolCalls: [],
+        }] as never;
+        const runParams = params();
+        runParams.StartUrl = 'http://app/';
+        const test = fakeTest(null);
+
+        await driver.record(recordArgs(test, { result: run, runParams }));
+
+        const script = test.ConfigurationObject?.ReplayScript;
+        expect(script?.Steps[0].UrlBefore).toBe('/u/login');
+        expect(JSON.stringify(script)).not.toContain('auth0.com');
+    });
+
     it('does not record when the test opts out with recordReplayScript:false', async () => {
         const test = fakeTest(null);
         await driver.record(recordArgs(test, { config: { recordReplayScript: false } }));
