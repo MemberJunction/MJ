@@ -271,7 +271,7 @@ All reasoning configuration lives on the `MJ: Entity Documents` record, per enti
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `EnableLLMReasoning` | `boolean` | `false` | Master switch. Off = vector-only behavior, unchanged. |
-| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` | Which provider runs (see below). |
+| `ReasoningMode` | `'Prompt' \| 'Agent' \| 'Decision' \| 'DecisionThenPrompt'` | `'Prompt'` (column default) | Which provider runs (see below). **Recommended: `'DecisionThenPrompt'`** -- see [Choosing a mode](#choosing-a-reasoning-mode). |
 | `ReasoningThreshold` | `number \| null` | `null` | Vector-score gate (0–1). LLM runs only when the set's top score clears this. `null` = reason over any non-empty set. |
 | `ReasoningPromptID` | `string \| null` | -- | The AI Prompt to use in `'Prompt'` mode. Falls back to the seeded "Duplicate Resolution" prompt. |
 | `ReasoningAgentID` | `string \| null` | -- | The AI Agent to use in `'Agent'` mode. Falls back to the seeded "Duplicate Resolution Agent". |
@@ -312,6 +312,21 @@ export class MyReasoningProvider extends DuplicateReasoningProvider {
     }
 }
 ```
+
+### Choosing a reasoning mode
+
+**Use `'DecisionThenPrompt'` for new entity documents.** It keeps the prompt's precision (and its
+ability to recommend `Merge`) while the decision clears the obvious non-duplicates first, so most sets
+cost one input-only decision call instead of a chat completion. Its pre-filter is recall-oriented
+(a calibrated `0.3`), a candidate with no calibration is kept, and a failed decision sends every
+candidate to the prompt, so it never does worse than `'Prompt'` on recall. It also turns on the
+[entry-time check](#entry-time-check).
+
+The column still defaults to `'Prompt'`. That default lives in the database
+(`DF_EntityDocument_ReasoningMode` on `__mj.EntityDocument`), not in this package: the detector runs
+whatever mode the document names and cannot tell a chosen `'Prompt'` from a defaulted one, so the
+package does not override it. Changing the default for new rows is a schema change, and an existing
+document moves only when someone sets its `ReasoningMode`.
 
 ### Per-candidate verdicts
 

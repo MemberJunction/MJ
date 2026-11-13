@@ -45,13 +45,16 @@ export const DECISION_ROUTING_TIMEOUT_MS = 350;
  * leaves the thread only when its **calibrated** probability of continuing (see
  * {@link ROUTING_CONTINUES_CALIBRATION_KEY}) is at most `1 - DECISION_ROUTING_MIN_CONFIDENCE`.
  *
- * **What the bar means in a chat.** The calibration was fitted on a corpus that is mostly switches
- * (174 switches, 127 continuations), and a chat is mostly continuations. A calibrated 0.30 is a 30%
- * chance that the message continues only at the corpus's mix; at a 90%-continue prior it is about an
- * 84% chance (see {@link ROUTING_CONTINUES_CALIBRATION_KEY}). In raw terms, routing leaves the thread when
- * Jev's raw probability is at most about 0.80 (LLM Decision's, about 0.78). Before calibration the
- * bar was a raw 0.30. This value was not chosen for a chat's mix. Routing ships off, and the bar
- * should be set on the prior-weighted figures below before routing is turned on.
+ * **What the bar means in a chat.** The shipped calibration is targeted at a chat's mix: fitted on a
+ * corpus that is mostly switches (174 switches, 127 continuations), then shifted to a 90%-continue
+ * prior (see {@link ROUTING_CONTINUES_CALIBRATION_KEY}). So a calibrated 0.30 is a 30% chance that the
+ * message continues in a chat, and routing leaves the thread only when it is at least 70% likely the
+ * person moved on. In raw terms that is Jev's raw probability at most about 0.50 (LLM Decision's,
+ * about 0.43).
+ *
+ * **Before the shift**, the fits were at the corpus's mix, where the same bar left the thread at a raw
+ * 0.80, which at a chat's mix is an 84% chance the message continues. The figures below were measured
+ * at that old bar, and are why routing shipped off until the shift.
  *
  * **Measured at a calibrated 0.30** in the Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), on that
  * corpus. Jev left the thread on 155 points, and 150 of them were real switches. So it caught 86.2%
@@ -89,14 +92,13 @@ export const DECISION_ROUTING_USE = 'conversation-routing';
  * other model, including Jev at another version or `LLM Decision` answered by another chat model, is
  * treated as unsure, so routing keeps continuity.
  *
- * **Calibrated at the corpus's mix, not a chat's.** Platt's `B` absorbs the base rate of the data it
- * was fitted on: 127 continuations to 174 switches, so 42% of messages continue. A calibrated value
- * is the chance that the message continues when 42% of messages do. Both models' raw answers lean
- * toward "continues": at the corpus's mix, Jev's raw 0.5 is a calibrated 0.03. At a 90%-continue
- * prior, closer to a chat, the calibrated logit gains ln(9 × 174/127) ≈ 2.51. Jev's raw 0.5 is then
- * about 0.30, and the leave bar of a calibrated 0.30 ({@link DECISION_ROUTING_MIN_CONFIDENCE}) is about
- * an 84% chance that the message continues. `B` is kept as fitted; that constant says what the bar
- * does at a chat's mix.
+ * **Calibrated at a chat's mix.** Platt's `B` absorbs the base rate of the data it was fitted on:
+ * 127 continuations to 174 switches, so 42% of messages continue. A chat is mostly continuations, so
+ * the shipped `B` is shifted to a 90%-continue prior: the calibrated logit gains
+ * logit(0.9) − logit(127/301) = ln(9 × 174/127) ≈ 2.5121 (the label-shift correction the
+ * `fit-decision-calibration` rig applies with `--target-prior`). Jev's raw 0.5, a calibrated 0.03 at
+ * the corpus's mix, is a calibrated 0.30 in a chat. The fitted (corpus-mix) values were Jev `B` -3.3506
+ * and LLM Decision `B` -2.9110; `A` is unchanged by the shift.
  *
  * **Where the fits come from.** The Phase 2 Decision Eval (plan Task 2.4, 2026-09-29), cell
  * `production` (the production state layout and question), on the labelled continuity corpus with
@@ -128,8 +130,8 @@ export const DECISION_ROUTING_USE = 'conversation-routing';
  *
  * **Where the fits live.** On the `Jev` and `LLM Decision` rows in `metadata/ai-models`, as
  * `ModelConfiguration.Decision.Calibrations` entries with `Use: 'conversation-routing'` and
- * `Question: 'continues'`: Jev at `typesafe/jev-1.13-20260917` (`A` 1.7757, `B` -3.3506) and LLM
- * Decision at `GPT-OSS-120B` (`A` 1.6508, `B` -2.9110).
+ * `Question: 'continues'`: Jev at `typesafe/jev-1.13-20260917` (`A` 1.7757, `B` -0.8385) and LLM
+ * Decision at `GPT-OSS-120B` (`A` 1.6508, `B` -0.3989), both `B` shifted to a chat's mix.
  */
 export const ROUTING_CONTINUES_CALIBRATION_KEY: DecisionCalibrationKey = Object.freeze({
     Use: DECISION_ROUTING_USE,

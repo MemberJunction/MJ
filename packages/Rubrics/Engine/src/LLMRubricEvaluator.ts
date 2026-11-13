@@ -1,7 +1,7 @@
 import type { RubricVersionSnapshot } from '@memberjunction/rubrics-base';
 import { CleanAndParseJSON, RegisterClass } from '@memberjunction/global';
 import type { RubricSubjectContent } from './content.js';
-import { BaseRubricEvaluator, type EvidenceRef } from './RubricEvaluator.js';
+import { BaseRubricEvaluator, type EvidenceRef, type RubricCandidate } from './RubricEvaluator.js';
 import type {
     RubricEvaluatorContext, RubricEvaluatorRun, RubricEvaluatorType, RubricJsonValue, RubricPromptMode, RubricPromptRef,
 } from './evaluatorServices.js';
@@ -109,16 +109,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         const criterionPrompt = PromptRef(settings.CriterionPromptID, settings.CriterionPromptName, RUBRIC_CRITERION_PROMPT);
         const criteria = await RenderCriteriaText(context.Version, prompts, criterionPrompt);
         const promptRunIds: string[] = [];
-        const runner: RubricPromptRunner = {
-            async run(request) {
-                const output = await prompts.Run({
-                    Prompt: system, Judge: judge, Data: request.Data, Subject: request.Subject,
-                    ModelID: settings.ModelID, ModelSelection: settings.ModelSelection,
-                });
-                if (output.PromptRunID) promptRunIds.push(output.PromptRunID);
-                return output.Text;
-            },
-        };
+        const runner = PromptServiceRunner(context, promptRunIds);
         const mode = settings.Mode ?? this.mode;
         const samples = SampleCount(settings.Samples);
         const evaluator = new LLMRubricEvaluator(runner, mode);
@@ -140,6 +131,23 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         return { ...result, aiPromptRunId: promptRunIds.length === 1 ? promptRunIds[0] : null, metadata };
     }
 
+    /**
+     * Asks the given criteria and returns their accepted answers as candidates, without scoring.
+     * DecisionThenLLM uses it to ask only the criteria its decision pass could not settle, then
+     * scores everything together. Same rules as {@link EvaluateContent}.
+     */
+    public async AnswerCriteria(
+        version: RubricVersionSnapshot,
+        content: RubricSubjectContent,
+        criteria: RubricCriterionPromptData[] = BuildCriteriaPromptData(version),
+        subject: { entityName: string; recordId: string } = { entityName: '', recordId: '' },
+    ): Promise<{ candidates: RubricCandidate[]; droppedUnknownKeys: number; droppedQuotes: number }> {
+        const decisions = this.mode === 'SinglePass'
+            ? await this.singlePass(version, content, criteria, subject)
+            : await this.perCriterion(version, content, criteria, subject);
+        return this.candidatesFrom(version, content, decisions);
+    }
+
     private get promptRunner(): RubricPromptRunner {
         if (!this.runner) throw new Error('An LLM evaluation requires a prompt runner.');
         return this.runner;
@@ -155,14 +163,20 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         criteria: RubricCriterionPromptData[] = BuildCriteriaPromptData(version),
         subject: { entityName: string; recordId: string } = { entityName: '', recordId: '' },
     ): Promise<LLMRubricResult> {
+        const answered = await this.AnswerCriteria(version, content, criteria, subject);
+        const scored = this.Evaluate(version, answered.candidates);
+        return { ...scored, droppedUnknownKeys: answered.droppedUnknownKeys, droppedQuotes: answered.droppedQuotes };
+    }
+
+    /** The accepted decisions as candidates: unknown keys and quotes not in the subject are dropped and counted. */
+    private candidatesFrom(
+        version: RubricVersionSnapshot, content: RubricSubjectContent, decisions: LLMDecision[],
+    ): { candidates: RubricCandidate[]; droppedUnknownKeys: number; droppedQuotes: number } {
         const text = content.text ?? '';
-        const decisions = this.mode === 'SinglePass'
-            ? await this.singlePass(version, content, criteria, subject)
-            : await this.perCriterion(version, content, criteria, subject);
         let droppedUnknownKeys = 0;
         let droppedQuotes = 0;
         const byKey = new Map(LeafNodes(version).map(node => [node.key, node]));
-        const candidates = [];
+        const candidates: RubricCandidate[] = [];
         for (const decision of decisions) {
             const node = decision.key ? byKey.get(decision.key) : undefined;
             if (!node) {
@@ -197,8 +211,7 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
                 confidence,
             });
         }
-        const scored = this.Evaluate(version, candidates);
-        return { ...scored, droppedUnknownKeys, droppedQuotes };
+        return { candidates, droppedUnknownKeys, droppedQuotes };
     }
 
     /**
@@ -293,6 +306,30 @@ export class LLMRubricEvaluator extends BaseRubricEvaluator {
         }
         return decisions;
     }
+}
+
+/**
+ * A runner that sends each call through the context's prompt service: the evaluator prompt (the
+ * settings' SystemPromptID/Name, else `Rubric Evaluator`) with the judge (PromptID/Name, else the
+ * default judge) in its slot, on the settings' ModelID and ModelSelection. Each prompt run it writes
+ * is appended to `promptRunIds`.
+ */
+export function PromptServiceRunner(context: RubricEvaluatorContext, promptRunIds: string[]): RubricPromptRunner {
+    const prompts = context.Services.Prompts;
+    if (!prompts) throw new Error('An LLM evaluation requires a prompt service.');
+    const settings = context.Settings;
+    const system = PromptRef(settings.SystemPromptID, settings.SystemPromptName, RUBRIC_EVALUATOR_PROMPT);
+    const judge = PromptRef(settings.PromptID, settings.PromptName, DEFAULT_RUBRIC_JUDGE_PROMPT);
+    return {
+        async run(request) {
+            const output = await prompts.Run({
+                Prompt: system, Judge: judge, Data: request.Data, Subject: request.Subject,
+                ModelID: settings.ModelID, ModelSelection: settings.ModelSelection,
+            });
+            if (output.PromptRunID) promptRunIds.push(output.PromptRunID);
+            return output.Text;
+        },
+    };
 }
 
 /** The evaluator prompt's template data for one call. */

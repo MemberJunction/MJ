@@ -2270,6 +2270,16 @@ export class BaseAgent {
     private _runExecutionScope: AIPromptExecutionScope | undefined;
 
     /**
+     * The current run's {@link AIPromptExecutionScope} (its user, provider, configuration, runtime API
+     * keys and credential scope), set when the run starts, or undefined before one has. A subclass that
+     * asks a decision or runs a prompt outside the agent's own turn passes it on, so the call runs on
+     * the run's keys and configuration rather than the platform's.
+     */
+    protected get RunExecutionScope(): AIPromptExecutionScope | undefined {
+        return this._runExecutionScope;
+    }
+
+    /**
      * Whether the run answers its conversation's opening request ({@link IsOpeningTurn}), read from
      * the messages it started with. Decision discovery asks about no other turn.
      * @private

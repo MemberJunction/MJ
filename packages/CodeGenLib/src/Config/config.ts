@@ -386,6 +386,15 @@ const advancedGenerationSchema = z.object({
    *  — can bound spend, and so that bound is enforced in the one place every call is already
    *  counted rather than estimated after the fact. */
   maxRunCostUSD: z.number().min(0).default(0),
+  /** How Smart Field Identification is answered (`Misc/smart-field-decision.ts`):
+   *  - `Prompt` (default): only the `CodeGen: Smart Field Identification` prompt answers, as before.
+   *  - `Shadow`: the prompt answers; a decision model is asked the same closed-set questions beside
+   *    it, and its run records how far the two agreed (`RunName = 'Shadow: codegen-smart-fields'`).
+   *  - `Decision`: the decision answers, and the prompt runs only when it fails or the answering model
+   *    has no calibration for this use.
+   *  Opt-in: a decision cannot give the prompt's reasons, search predicates or full-text settings, and
+   *  CodeGen's output is committed, so a deployment chooses this deliberately. */
+  smartFieldDecisionMode: z.enum(['Prompt', 'Shadow', 'Decision']).default('Prompt'),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default(() => CopyDefaultAdvancedGenerationFeatures()),
@@ -1151,6 +1160,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     callTimeoutMS: 90_000,
     stallFailureCircuitThreshold: 3,
     maxRunCostUSD: 0,
+    smartFieldDecisionMode: 'Prompt',
     features: CopyDefaultAdvancedGenerationFeatures(),
   },
   SQLOutput: {

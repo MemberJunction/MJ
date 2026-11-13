@@ -9,7 +9,16 @@ import {
     MJAIAgentRunStepEntity,
     IsInjectableNoteStatus
 } from '@memberjunction/core-entities';
-import { AIPromptRunner, AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import {
+    AIPromptRunner,
+    AIDecisionRunResult,
+    AIDecisionParams,
+    RunDecisionUse,
+    ResolveDecisionUseMode,
+    type DecisionUseMode,
+    type ShadowDecisionComparison,
+    type ShadowDecisionRunner
+} from '@memberjunction/ai-prompts';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -20,7 +29,8 @@ import {
     MJAIPromptEntityExtended,
     MJAIAgentRunStepEntityExtended,
     DescribeAnsweringModel,
-    type DecisionAnsweringModel
+    type DecisionAnsweringModel,
+    type AIPromptExecutionScope
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -35,6 +45,25 @@ import {
     GroupMemoryNotesByConversation,
     MEMORY_NOTE_MIN_PROBABILITY
 } from './memory-note-gate';
+import {
+    BuildContradictionDecision,
+    BuildExampleDedupeDecision,
+    BuildNoteDedupeDecision,
+    CompareContradictionDecision,
+    CompareDedupeDecision,
+    ContradictionVerdictFromDecision,
+    DedupeVerdictFromDecision,
+    MEMORY_CONTRADICTION_USE,
+    MEMORY_DECISION_DEFAULT_MODE,
+    MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY,
+    MEMORY_EXAMPLE_DEDUPE_USE,
+    MEMORY_NOTE_DEDUPE_CALIBRATION_KEY,
+    MEMORY_NOTE_DEDUPE_USE,
+    type MemoryContradictionNote,
+    type MemoryContradictionVerdict,
+    type MemoryDecisionRequest,
+    type MemoryDedupeVerdict
+} from './memory-decision-uses';
 
 /**
  * Minimal shape of a conversation message that ExtractExamples needs. Lets callers pass
@@ -233,6 +262,36 @@ interface ContradictionPairEvaluation {
     revokeNoteId?: string;
     reason: string;
     triplesExtracted: number;
+}
+
+/**
+ * How one Memory Manager decision use reads a decision and compares it with the LLM prompt it may
+ * replace (see `memory-decision-uses.ts`).
+ */
+interface MemoryDecisionHandlers<T> {
+    /** The result from the decision's answers, or null when it is unsure. */
+    FromDecision: (run: AIDecisionRunResult, answeredBy: DecisionAnsweringModel) => T | null;
+    /** The decision against the prompt's result, for a shadow run. */
+    Compare: (answers: Record<string, DecisionAnswer>, existing: T, answeredBy: DecisionAnsweringModel) => ShadowDecisionComparison;
+    /** The LLM prompt that answers today. */
+    RunExisting: () => Promise<T>;
+}
+
+/** The model that answered a decision, as its result reports it. */
+function answeredByOf(run: AIDecisionRunResult): DecisionAnsweringModel {
+    return { ModelName: run.modelInfo?.modelName, ResolvedModel: run.DecisionResult?.ResolvedModel };
+}
+
+/** A stored note as the contradiction decision and its authority rule read it. */
+function contradictionNoteOf(note: MJAIAgentNoteEntity): MemoryContradictionNote {
+    return {
+        ID: note.ID,
+        Type: note.Type,
+        Note: note.Note,
+        CreatedAt: note.__mj_CreatedAt,
+        ImportanceScore: note.ImportanceScore,
+        AccessCount: note.AccessCount
+    };
 }
 
 /**
@@ -527,8 +586,19 @@ export class MemoryManagerAgent extends BaseAgent {
     private _stepCounter: number = 0;
     /** Context user for step operations */
     private _contextUser: UserInfo | null = null;
-    /** Flag to enable typed decision gate instead of self-confidence threshold */
-    private _enableDecisionGate: boolean = false;
+    /**
+     * Whether the typed decision gate may replace the self-confidence threshold. On by default; it
+     * still needs the master switch ({@link DecisionsEnabled}), and a run turns it off with
+     * `data.enableDecisionGate: false`.
+     */
+    private _enableDecisionGate: boolean = true;
+    /**
+     * How the run answers its dedupe and contradiction calls (`data.memoryDecisionMode`), see
+     * {@link MEMORY_DECISION_DEFAULT_MODE}.
+     */
+    private _memoryDecisionMode: DecisionUseMode = MEMORY_DECISION_DEFAULT_MODE;
+    /** The run's execution scope (keys, configuration, credential scope), passed to every decision call */
+    private _memoryDecisionScope: AIPromptExecutionScope | undefined;
     /**
      * The run's merged agent-type prompt params, read when the run starts. They carry the master
      * switch for decision-model use ({@link DecisionsEnabled}), which the note gate needs.
@@ -538,10 +608,10 @@ export class MemoryManagerAgent extends BaseAgent {
     private _cancellationToken: AbortSignal | undefined;
 
     /**
-     * Whether the typed decision gate is enabled for filtering extracted memory notes.
-     * When false (default), uses the self-reported confidence filter (confidence >= 80).
-     * The gate also needs the master switch: the run's agent-type prompt params must set
-     * `decisionsEnabled: true` ({@link DecisionsEnabled}), or the confidence filter is used.
+     * Whether the typed decision gate is enabled for filtering extracted memory notes. True by
+     * default. When false, or when the master switch is off (the run's agent-type prompt params must
+     * set `decisionsEnabled: true`, {@link DecisionsEnabled}), the self-reported confidence filter
+     * (confidence >= 80) is used.
      */
     public get EnableDecisionGate(): boolean {
         return this._enableDecisionGate;
@@ -1246,7 +1316,7 @@ export class MemoryManagerAgent extends BaseAgent {
             return [];
         }
 
-        const cap = MemoryNotePromptQuestionCap(AIEngine.Instance, 'Default Decision');
+        const cap = MemoryNotePromptQuestionCap(AIEngine.Instance, this.decisionPromptName());
         const grouping = GroupMemoryNotesByConversation(lengthFiltered, conversationThreads.map(t => ({
             ConversationId: t.conversationId,
             Turns: t.messages.map(m => ({ role: m.role, text: m.message }))
@@ -1292,10 +1362,11 @@ export class MemoryManagerAgent extends BaseAgent {
         const decisionService = this._agentDecisionService ?? new AgentDecisionService();
         const result = await decisionService.Ask({
             ContextUser: contextUser,
-            PromptName: 'Default Decision',
+            PromptName: this.decisionPromptName(),
             State: state,
             Questions: questions,
             AgentID: this.AgentRun?.AgentID ?? undefined,
+            ExecutionScope: this._memoryDecisionScope,
             CancellationToken: this._cancellationToken
         });
 
@@ -1509,7 +1580,7 @@ export class MemoryManagerAgent extends BaseAgent {
             return true;
         }
 
-        const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similarNotes, contextUser);
+        const decision = await this.decideNoteDedupe(runner, dedupePrompt, candidate, similarNotes, contextUser);
         stats.llmCallCount++;
         if (decision.shouldAdd) {
             if (this._verbose) LogStatus(`Memory Manager: Approved note - ${decision.reason}`);
@@ -1553,6 +1624,163 @@ export class MemoryManagerAgent extends BaseAgent {
             return { shouldAdd: result.result.shouldAdd, reason: result.result.reason || '' };
         }
         return { shouldAdd: false, reason: result.result?.reason || 'too similar to existing notes' };
+    }
+
+    /**
+     * Whether a candidate note adds to its similar stored notes, answered in the run's memory decision
+     * mode: by the dedupe prompt, by the prompt with a decision recorded beside it (`Shadow`), or by a
+     * calibrated decision that falls back to the prompt when unsure (`Decision`). Fails closed as the
+     * prompt does: no path adds a note on a failure.
+     */
+    private async decideNoteDedupe(
+        runner: AIPromptRunner,
+        dedupePrompt: MJAIPromptEntityExtended,
+        candidate: ExtractedNote,
+        similarNotes: Array<{ note: MJAIAgentNoteEntity; similarity: number }>,
+        contextUser: UserInfo
+    ): Promise<MemoryDedupeVerdict> {
+        const request = BuildNoteDedupeDecision(candidate, similarNotes.map(s => ({
+            type: s.note.Type,
+            content: s.note.Note ?? '',
+            similarity: s.similarity
+        })));
+        return this.runMemoryDecisionUse<MemoryDedupeVerdict>(MEMORY_NOTE_DEDUPE_USE, request, contextUser, {
+            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_NOTE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            RunExisting: () => this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similarNotes, contextUser)
+        });
+    }
+
+    /**
+     * Whether a candidate example adds to its similar stored examples, answered in the run's memory
+     * decision mode, as {@link decideNoteDedupe} answers it for notes.
+     */
+    private async decideExampleDedupe(
+        runner: AIPromptRunner,
+        dedupePrompt: MJAIPromptEntityExtended,
+        candidate: ExtractedExample,
+        similarExamples: Array<{ example: MJAIAgentExampleEntity; similarity: number }>,
+        contextUser: UserInfo
+    ): Promise<MemoryDedupeVerdict> {
+        const request = BuildExampleDedupeDecision(candidate, similarExamples.map(s => ({
+            input: s.example.ExampleInput ?? '',
+            output: s.example.ExampleOutput ?? '',
+            successScore: s.example.SuccessScore,
+            similarity: s.similarity
+        })));
+        return this.runMemoryDecisionUse<MemoryDedupeVerdict>(MEMORY_EXAMPLE_DEDUPE_USE, request, contextUser, {
+            FromDecision: (run, answeredBy) => DedupeVerdictFromDecision(run.Answers, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareDedupeDecision(answers, existing, MEMORY_EXAMPLE_DEDUPE_CALIBRATION_KEY, answeredBy),
+            RunExisting: () => this.runExampleDedupePrompt(runner, dedupePrompt, candidate, similarExamples, contextUser)
+        });
+    }
+
+    /**
+     * Invoke the example dedupe LLM prompt for one candidate against its similar stored examples. A
+     * failed or unreadable call skips the example.
+     */
+    private async runExampleDedupePrompt(
+        runner: AIPromptRunner,
+        dedupePrompt: MJAIPromptEntityExtended,
+        candidate: ExtractedExample,
+        similarExamples: Array<{ example: MJAIAgentExampleEntity; similarity: number }>,
+        contextUser: UserInfo
+    ): Promise<MemoryDedupeVerdict> {
+        const dedupeParams = new AIPromptParams();
+        dedupeParams.prompt = dedupePrompt;
+        dedupeParams.data = {
+            candidateExample: candidate,
+            similarExamples: similarExamples.map(s => ({
+                input: s.example.ExampleInput,
+                output: s.example.ExampleOutput,
+                successScore: s.example.SuccessScore,
+                similarity: s.similarity
+            }))
+        };
+        dedupeParams.contextUser = contextUser;
+        dedupeParams.attemptJSONRepair = true;
+        dedupeParams.additionalParameters = { temperature: 0 };
+        const result = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+        if (result.success && result.result) {
+            return { shouldAdd: result.result.shouldAdd === true, reason: result.result.reason || '' };
+        }
+        return { shouldAdd: false, reason: result.result?.reason || 'too similar' };
+    }
+
+    /**
+     * Answers one Memory Manager closed-set call through `RunDecisionUse`, in the run's mode. The
+     * decision is built from the run's decision prompt and execution scope, and asked only in `Shadow`
+     * and `Decision` modes.
+     */
+    private async runMemoryDecisionUse<T>(
+        use: string,
+        request: MemoryDecisionRequest,
+        contextUser: UserInfo,
+        handlers: MemoryDecisionHandlers<T>
+    ): Promise<T> {
+        const outcome = await RunDecisionUse<T>({
+            Use: use,
+            Mode: this.effectiveMemoryDecisionMode(),
+            BuildDecision: () => this.buildMemoryDecision(request, contextUser),
+            FromDecision: run => handlers.FromDecision(run, answeredByOf(run)),
+            RunExisting: handlers.RunExisting,
+            Compare: (answers, existing, run) => handlers.Compare(answers, existing, answeredByOf(run)),
+            Runner: this.CreateMemoryDecisionRunner()
+        });
+        if (this._verbose && outcome.AnsweredBy === 'Decision') {
+            LogStatus(`Memory Manager: '${use}' answered by the decision model`);
+        }
+        return outcome.Value;
+    }
+
+    /**
+     * The mode the run's dedupe and contradiction calls use: the configured `data.memoryDecisionMode`,
+     * or `Prompt` when the master switch for decision-model use is off ({@link DecisionsEnabled}),
+     * since a shadow decision is a decision call too.
+     */
+    private effectiveMemoryDecisionMode(): DecisionUseMode {
+        return this.DecisionsEnabled(this._runPromptParams) ? this._memoryDecisionMode : 'Prompt';
+    }
+
+    /** A Memory Manager decision as the runner takes it, or null when the decision prompt is missing. */
+    private buildMemoryDecision(request: MemoryDecisionRequest, contextUser: UserInfo): AIDecisionParams | null {
+        return AgentDecisionService.BuildDecisionParams({
+            ContextUser: contextUser,
+            PromptName: this.decisionPromptName(),
+            State: request.State,
+            Questions: request.Questions,
+            AgentID: this.AgentRun?.AgentID ?? undefined,
+            ExecutionScope: this._memoryDecisionScope,
+            CancellationToken: this._cancellationToken
+        });
+    }
+
+    /**
+     * The runner `RunDecisionUse` asks the Memory Manager's decisions with, or undefined for a new
+     * `AIDecisionRunner`. An override point for tests and for hosts that route decisions elsewhere.
+     */
+    protected CreateMemoryDecisionRunner(): ShadowDecisionRunner | undefined {
+        return undefined;
+    }
+
+    /** The run's decision prompt: its agent-type prompt params' `decisionPromptName`, else `Default Decision`. */
+    private decisionPromptName(): string {
+        const name = this._runPromptParams?.decisionPromptName;
+        return typeof name === 'string' && name.trim().length > 0 ? name : AgentDecisionService.DEFAULT_PROMPT_NAME;
+    }
+
+    /**
+     * The run's execution scope for its decision calls: the scope `BaseAgent` recorded for the run,
+     * or, when this run did not start through `Execute`, the same scope built from its params.
+     */
+    private memoryDecisionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
+        return this.RunExecutionScope ?? {
+            contextUser: params.contextUser,
+            provider: params.provider,
+            configurationId: params.configurationId,
+            apiKeys: params.apiKeys,
+            CredentialScope: params.CredentialScope
+        };
     }
 
     /**
@@ -1688,33 +1916,18 @@ export class MemoryManagerAgent extends BaseAgent {
             );
 
             if (dedupePrompt && similarExamples.length > 0) {
-                const dedupeParams = new AIPromptParams();
-                dedupeParams.prompt = dedupePrompt;
-                dedupeParams.data = {
-                    candidateExample: candidate,
-                    similarExamples: similarExamples.map(s => ({
-                        input: s.example.ExampleInput,
-                        output: s.example.ExampleOutput,
-                        successScore: s.example.SuccessScore,
-                        similarity: s.similarity
-                    }))
-                };
-                dedupeParams.contextUser = contextUser;
-
-                dedupeParams.attemptJSONRepair = true;
-                dedupeParams.additionalParameters = { temperature: 0 };
-                const dedupeResult = await runner.ExecutePrompt<{ shouldAdd: boolean; reason: string }>(dedupeParams);
+                const verdict = await this.decideExampleDedupe(runner, dedupePrompt, candidate, similarExamples, contextUser);
                 exampleDedupeLlmCallCount++;
 
-                if (dedupeResult.success && dedupeResult.result && dedupeResult.result.shouldAdd) {
+                if (verdict.shouldAdd) {
                     approvedExamples.push(candidate);
                     if (this._verbose) {
-                        LogStatus(`Memory Manager: Approved example - ${dedupeResult.result.reason}`);
+                        LogStatus(`Memory Manager: Approved example - ${verdict.reason}`);
                     }
                 } else {
                     exampleDedupeRejectedCount++;
                     if (this._verbose) {
-                        LogStatus(`Memory Manager: Skipped duplicate example - ${dedupeResult.result?.reason || 'too similar'}`);
+                        LogStatus(`Memory Manager: Skipped duplicate example - ${verdict.reason || 'too similar'}`);
                     }
                 }
             } else {
@@ -2619,7 +2832,7 @@ export class MemoryManagerAgent extends BaseAgent {
         for (const [noteA, noteB] of candidatePairs) {
             result.pairsAnalyzed++;
 
-            const llmResult = await this.evaluateContradictionPair(noteA, noteB, prompt, runner, contextUser);
+            const llmResult = await this.decideContradiction(noteA, noteB, prompt, runner, contextUser);
             if (!llmResult) continue;
 
             result.entityTriplesExtracted += llmResult.triplesExtracted;
@@ -2664,6 +2877,27 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         return pairs;
+    }
+
+    /**
+     * Whether two stored notes contradict each other, answered in the run's memory decision mode. The
+     * decision answers only whether they conflict; the winner follows the prompt's own stated rule
+     * (`PickContradictionAuthority`). A failed prompt still skips the pair.
+     */
+    private async decideContradiction(
+        noteA: MJAIAgentNoteEntity,
+        noteB: MJAIAgentNoteEntity,
+        prompt: MJAIPromptEntityExtended,
+        runner: AIPromptRunner,
+        contextUser: UserInfo
+    ): Promise<ContradictionPairEvaluation | null> {
+        const a = contradictionNoteOf(noteA);
+        const b = contradictionNoteOf(noteB);
+        return this.runMemoryDecisionUse<MemoryContradictionVerdict | null>(MEMORY_CONTRADICTION_USE, BuildContradictionDecision(a, b), contextUser, {
+            FromDecision: (run, answeredBy) => ContradictionVerdictFromDecision(run.Answers, a, b, answeredBy),
+            Compare: (answers, existing, answeredBy) => CompareContradictionDecision(answers, existing, answeredBy),
+            RunExisting: () => this.evaluateContradictionPair(noteA, noteB, prompt, runner, contextUser)
+        });
     }
 
     /** Evaluate a single note pair for contradiction using the LLM prompt. */
@@ -3679,7 +3913,7 @@ export class MemoryManagerAgent extends BaseAgent {
                     userId: note.UserID || undefined,
                     companyId: note.CompanyID || undefined,
                 };
-                const decision = await this.runDedupePromptForCandidate(runner, dedupePrompt, candidate, similar, contextUser);
+                const decision = await this.decideNoteDedupe(runner, dedupePrompt, candidate, similar, contextUser);
                 if (!decision.shouldAdd) {
                     const target = similar[0].note;
                     note.Status = 'Archived';
@@ -4033,8 +4267,10 @@ export class MemoryManagerAgent extends BaseAgent {
             if (typeof params.data?.enableDecisionGate === 'boolean') {
                 this._enableDecisionGate = params.data.enableDecisionGate;
             }
+            this._memoryDecisionMode = ResolveDecisionUseMode(params.data?.memoryDecisionMode, MEMORY_DECISION_DEFAULT_MODE);
             this._runPromptParams = this.runPromptParams(params);
             this._cancellationToken = params.cancellationToken;
+            this._memoryDecisionScope = this.memoryDecisionScope(params);
 
             // Initialize observability state for this run
             this._agentRunID = this.AgentRun?.ID || null;

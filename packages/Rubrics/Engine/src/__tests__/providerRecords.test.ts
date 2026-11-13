@@ -73,6 +73,8 @@ vi.mock('@memberjunction/ai-prompts', () => ({
                 success: true,
                 Answers: { clarity: { Kind: 'Score', Value: 1, Probabilities: { Low: 0.2, High: 0.8 }, Confidence: 0.8 } },
                 promptRun: { ID: 'decision-run' },
+                modelInfo: { modelId: 'jev-id', modelName: 'Jev' },
+                DecisionResult: { ResolvedModel: 'typesafe/jev-1.13-20260917' },
             };
         }
     },
@@ -173,6 +175,8 @@ describe('provider evaluator services', () => {
         expect(decisionCalls[0]).toMatchObject({ State: 'The text.', Questions: questions });
         expect(output.PromptRunID).toBe('decision-run');
         expect(output.Answers.clarity.Probabilities.High).toBe(0.8);
+        expect(output.ModelName).toBe('Jev');
+        expect(output.ResolvedModel).toBe('typesafe/jev-1.13-20260917');
     });
 });
 

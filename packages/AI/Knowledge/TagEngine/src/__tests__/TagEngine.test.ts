@@ -18,6 +18,15 @@ const {
     mockCreateTaggedItem: vi.fn(),
 }));
 
+// The decision layer: RunDecisionUse records the request and answers it as its mode says, with the
+// decision's run scripted per test (null: the existing path answers).
+const { decisionUse } = vi.hoisted(() => ({
+    decisionUse: {
+        requests: [] as Array<{ Use: string; Mode: string }>,
+        run: null as null | { Answers: Record<string, unknown>; modelInfo?: { modelName?: string }; DecisionResult?: { ResolvedModel?: string } },
+    },
+}));
+
 vi.mock('@memberjunction/global', async (importOriginal) => ({
     // Real codec: TagEngine persists fresh vectors in both JSON and binary (base64 float32) form.
     Float32VectorToBase64: (await importOriginal<typeof import('@memberjunction/global')>()).Float32VectorToBase64,
@@ -83,7 +92,25 @@ vi.mock('@memberjunction/ai-prompts', () => {
             return { Success: true, Vectors: vectors, PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
         }
     }
+    type UseRequest = {
+        Use: string;
+        Mode: string;
+        BuildDecision: () => unknown;
+        FromDecision: (run: unknown) => unknown;
+        RunExisting: () => Promise<unknown>;
+    };
     return {
+        AIDecisionParams: class {},
+        ResolveDecisionUseMode: (v: unknown, fallback: string) =>
+            ['Prompt', 'Shadow', 'Decision'].find(m => typeof v === 'string' && m.toLowerCase() === v.trim().toLowerCase()) ?? fallback,
+        RunDecisionUse: async (req: UseRequest) => {
+            decisionUse.requests.push({ Use: req.Use, Mode: req.Mode });
+            if (req.Mode === 'Decision' && decisionUse.run && req.BuildDecision()) {
+                const value = req.FromDecision(decisionUse.run);
+                if (value !== null) return { Value: value, AnsweredBy: 'Decision' };
+            }
+            return { Value: await req.RunExisting(), AnsweredBy: 'Existing' };
+        },
         AIModelRunner: MockEmbeddingRunner,
         AIEmbeddingRunner: MockEmbeddingRunner,
         AIPromptRunner: class {
@@ -181,7 +208,10 @@ vi.mock('@memberjunction/aiengine', () => ({
         Instance: {
             Config: vi.fn(),
             Loaded: true,
-            Prompts: [],
+            Prompts: [{ Name: 'Default Decision', Status: 'Active' }],
+            // A fixture fit for the tag-match use: calibrated = raw.
+            CalibrateDecisionProbability: (key: { Use: string }, raw: number, by: { ModelName?: string }) =>
+                key.Use === 'tag-match' && by.ModelName === 'Jev' ? raw : null,
             Models: [
                 { ID: 'model-1', Name: 'text-embedding-3-small', IsActive: true, AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],
@@ -193,6 +223,8 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 import { TagEngine } from '../TagEngine';
+import { TagGovernanceEngine } from '../TagGovernanceEngine';
+import { SetTagMatchDecisionMode } from '../tag-match-decision';
 
 describe('TagEngine', () => {
     let engine: TagEngine;
@@ -282,6 +314,63 @@ describe('TagEngine', () => {
                 mockFindNearest.mockReturnValue([]);
                 const result = await engine.ResolveTag('Quantum Physics', 0.8, 'constrained', null, 0.9, {} as never);
                 expect(result).toBeNull();
+            });
+        });
+
+        describe('a near miss (the suggestion band)', () => {
+            // Threshold 0.9 puts the band at [0.85, 0.9)
+            const nearMiss = () => mockFindNearest.mockReturnValue([{ key: 'tag-1', score: 0.87, metadata: { Name: 'Machine Learning', ParentID: 'tag-root' } }]);
+            let enqueue: ReturnType<typeof vi.spyOn>;
+
+            beforeEach(() => {
+                decisionUse.requests.length = 0;
+                decisionUse.run = null;
+                SetTagMatchDecisionMode(undefined);
+                // The mocked BaseSingleton builds a new instance per access, so spy on the prototype
+                enqueue = vi.spyOn(TagGovernanceEngine.prototype, 'EnqueueSuggestion').mockResolvedValue(undefined as never);
+            });
+
+            it('queues it for review and runs the tag-match decision in Shadow by default', async () => {
+                nearMiss();
+                const result = await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never);
+                expect(result).toBeNull();
+                expect(decisionUse.requests).toEqual([{ Use: 'tag-match', Mode: 'Shadow' }]);
+                expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ reason: 'BelowThreshold', bestMatchTagID: 'tag-1', bestMatchScore: 0.87 }), expect.anything());
+            });
+
+            it('applies the tag in Decision mode when the calibrated answer is confident', async () => {
+                nearMiss();
+                decisionUse.run = { Answers: { same: { Kind: 'Likelihood', Probability: 0.93 } }, modelInfo: { modelName: 'Jev' } };
+                const result = await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never, { decisionMode: 'Decision' });
+                expect(result?.ID).toBe('tag-1');
+                expect(enqueue).not.toHaveBeenCalled();
+            });
+
+            it('queues it in Decision mode when the answer is unsure or uncalibrated', async () => {
+                nearMiss();
+                decisionUse.run = { Answers: { same: { Kind: 'Likelihood', Probability: 0.6 } }, modelInfo: { modelName: 'Jev' } };
+                expect(await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never, { decisionMode: 'Decision' })).toBeNull();
+                decisionUse.run = { Answers: { same: { Kind: 'Likelihood', Probability: 0.99 } }, modelInfo: { modelName: 'Other' } };
+                expect(await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never, { decisionMode: 'Decision' })).toBeNull();
+                expect(enqueue).toHaveBeenCalledTimes(2);
+            });
+
+            it('takes the process setting, and records no shadow decision on a dry run', async () => {
+                nearMiss();
+                SetTagMatchDecisionMode('prompt');
+                await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never);
+                SetTagMatchDecisionMode(undefined);
+                await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never, { dryRun: true });
+                expect(decisionUse.requests.map(r => r.Mode)).toEqual(['Prompt', 'Prompt']);
+                expect(enqueue).toHaveBeenCalledTimes(1);
+            });
+
+            it('does not ask about a strong match or a miss below the band', async () => {
+                mockFindNearest.mockReturnValue([{ key: 'tag-1', score: 0.95, metadata: {} }]);
+                await engine.ResolveTag('ML Methods', 0.8, 'constrained', null, 0.9, {} as never);
+                mockFindNearest.mockReturnValue([{ key: 'tag-1', score: 0.5, metadata: {} }]);
+                await engine.ResolveTag('Pottery', 0.8, 'constrained', null, 0.9, {} as never);
+                expect(decisionUse.requests).toEqual([]);
             });
         });
 

@@ -1,12 +1,24 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { z } from 'zod';
 import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIDecisionParams, ResolveDecisionUseMode, RunDecisionUse } from '@memberjunction/ai-prompts';
+import {
+  BuildFeedbackQuestions,
+  BuildFeedbackState,
+  CompareFeedbackClassification,
+  FEEDBACK_CLASSIFIER_USE,
+  GetFeedbackDecisionRunner,
+  ReadFeedbackClassification,
+} from '../services/FeedbackClassificationDecision.js';
+
+/** The decision prompt feedback classification asks. */
+const FEEDBACK_DECISION_PROMPT_NAME = 'Default Decision';
 import { MJGlobal } from '@memberjunction/global';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -326,7 +338,10 @@ export class FeedbackResolver {
   }
 
   /**
-   * Classify feedback using an LLM to suggest category and severity.
+   * Classify feedback to suggest a category and severity. Answered as configured by
+   * `feedbackSettings.decisionMode` (default `Decision`): two Choice questions through the
+   * `Default Decision` prompt, falling back to the chat-completion classifier when the decision
+   * fails or cannot be asked. See `services/FeedbackClassificationDecision.ts`.
    */
   @Mutation(() => FeedbackClassificationResult)
   async ClassifyFeedback(
@@ -342,6 +357,50 @@ export class FeedbackResolver {
       const contextUser = ctx.userPayload?.userRecord;
       await AIEngine.Instance.Config(false, contextUser);
 
+      const outcome = await RunDecisionUse<FeedbackClassificationResult>({
+        Use: FEEDBACK_CLASSIFIER_USE,
+        Mode: ResolveDecisionUseMode(configInfo.feedbackSettings?.decisionMode, 'Decision'),
+        BuildDecision: () => this.buildFeedbackDecision(input, contextUser),
+        FromDecision: (run) => {
+          const classification = ReadFeedbackClassification(run.Answers);
+          return classification ? { Success: true, Category: classification.Category, Severity: classification.Severity } : null;
+        },
+        RunExisting: () => this.classifyWithChatModel(input),
+        Compare: (answers, existing) => CompareFeedbackClassification(answers, existing.Success ? existing : null),
+        Runner: GetFeedbackDecisionRunner(),
+      });
+      return outcome.Value;
+    } catch (error) {
+      LogError('Error classifying feedback', undefined, error);
+      return { Success: false, Error: 'Classification failed' };
+    }
+  }
+
+  /**
+   * The classification decision, asked as the requesting user, or null when there is no user or no
+   * active `Default Decision` prompt. Never falls back to another identity.
+   */
+  private buildFeedbackDecision(input: ClassifyFeedbackInput, contextUser: UserInfo | undefined): AIDecisionParams | null {
+    const decisionPrompt = AIEngine.Instance.Prompts?.find(
+      (p) => p.Name === FEEDBACK_DECISION_PROMPT_NAME && p.Status === 'Active'
+    );
+    if (!contextUser || !decisionPrompt) {
+      return null;
+    }
+    const params = new AIDecisionParams();
+    params.prompt = decisionPrompt;
+    params.contextUser = contextUser;
+    params.State = BuildFeedbackState(input.Title, input.Description);
+    params.Questions = BuildFeedbackQuestions();
+    return params;
+  }
+
+  /**
+   * The chat-completion classifier: the path that answered before decisions, kept as the fallback.
+   * Never throws; a failure is a result with `Success: false`.
+   */
+  private async classifyWithChatModel(input: ClassifyFeedbackInput): Promise<FeedbackClassificationResult> {
+    try {
       // Get active LLM models with valid API keys (guard against null DriverClass)
       const allModels = AIEngine.Instance.Models.filter(m =>
         m.AIModelType?.trim().toLowerCase() === 'llm' && m.IsActive && m.DriverClass
@@ -420,7 +479,7 @@ Step 2 — SEVERITY. Strictly follow these rules:
         Severity: parsed.severity
       };
     } catch (error) {
-      LogError('Error classifying feedback', undefined, error);
+      LogError('Error classifying feedback with the chat model', undefined, error);
       return { Success: false, Error: 'Classification failed' };
     }
   }

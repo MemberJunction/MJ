@@ -17,7 +17,10 @@
       "InjectExamples": false,
       "MaxExamplesToInject": 0,
       "ExampleInjectionStrategy": "Recent",
-      "IconClass": "fa-solid fa-brain"
+      "IconClass": "fa-solid fa-brain",
+      "AgentTypePromptParams": {
+        "decisionsEnabled": true
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [

@@ -1,6 +1,7 @@
 import { MJGlobal } from '@memberjunction/global';
 import { AgentRubricEvaluator } from './AgentRubricEvaluator.js';
 import { DecisionRubricEvaluator } from './DecisionRubricEvaluator.js';
+import { DecisionThenLLMRubricEvaluator } from './DecisionThenLLMRubricEvaluator.js';
 import { DeterministicRubricEvaluator } from './DeterministicRubricEvaluator.js';
 import { HumanRubricEvaluator } from './HumanRubricEvaluator.js';
 import { LLMRubricEvaluator } from './LLMRubricEvaluator.js';
@@ -12,17 +13,22 @@ import type { RubricEvaluatorSettings, RubricEvaluatorType, RubricJsonValue, Rub
  * registrations, in every bundle that imports the registry.
  */
 export const BUILT_IN_RUBRIC_EVALUATORS = [
-    LLMRubricEvaluator, DecisionRubricEvaluator, AgentRubricEvaluator, DeterministicRubricEvaluator, HumanRubricEvaluator,
+    LLMRubricEvaluator, DecisionRubricEvaluator, DecisionThenLLMRubricEvaluator, AgentRubricEvaluator, DeterministicRubricEvaluator, HumanRubricEvaluator,
 ] as const;
 
-/** The evaluator that runs when nothing names one. */
+/**
+ * The evaluator that runs when nothing names one. It stays LLM: a rubric that requires evidence
+ * needs the LLM anyway, and decision confidences stay raw until calibrations for `rubric-evaluation`
+ * are fitted. Opt into the decision model per agent rubric link (EvaluatorConfig.EvaluatorName =
+ * `DecisionThenLLM`), per evaluation call, or per test.
+ */
 export const DEFAULT_RUBRIC_EVALUATOR = 'LLM';
 
 /**
  * Names that resolve to a registered evaluator. `AI` was the engine's word for the Agent
  * evaluator; `AIPrompt` is the EvaluatorType an LLM evaluation is stored with.
  */
-const ALIASES: Record<string, string> = { ai: 'Agent', aiprompt: 'LLM' };
+const ALIASES: Record<string, string> = { ai: 'Agent', aiprompt: 'LLM', hybrid: 'DecisionThenLLM' };
 
 /** One registered evaluator, as {@link ListRubricEvaluators} reports it. */
 export interface RubricEvaluatorInfo {
@@ -123,6 +129,8 @@ function settingsFrom(record: Record<string, unknown>): RubricEvaluatorSettings 
     const mode = textField(record, 'Mode');
     if (mode !== undefined) settings.Mode = promptMode(mode);
     if (typeof record.Samples === 'number' && Number.isFinite(record.Samples)) settings.Samples = record.Samples;
+    const threshold = record.DecisionConfidenceThreshold;
+    if (threshold !== undefined && threshold !== null) settings.DecisionConfidenceThreshold = confidenceThreshold(threshold);
     if (record.Extensions && typeof record.Extensions === 'object' && !Array.isArray(record.Extensions)) {
         settings.Extensions = record.Extensions as Record<string, RubricJsonValue>;
     }
@@ -132,7 +140,13 @@ function settingsFrom(record: Record<string, unknown>): RubricEvaluatorSettings 
 /** The settings copied as trimmed text when present. */
 const TEXT_SETTINGS = [
     'PromptID', 'PromptName', 'SystemPromptID', 'SystemPromptName', 'CriterionPromptID', 'CriterionPromptName', 'ModelID', 'AgentID',
+    'DecisionPromptID', 'DecisionPromptName', 'DecisionModelID',
 ] as const;
+
+function confidenceThreshold(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1) return value;
+    throw new Error(`DecisionConfidenceThreshold must be a number from 0 to 1, not ${JSON.stringify(value)}.`);
+}
 
 function modelSelection(value: string): RubricModelSelection {
     if (value === 'System' || value === 'Judge') return value;

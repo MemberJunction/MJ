@@ -20,14 +20,27 @@
 import { LogError, LogStatus, LogStatusEx, UserInfo, IMetadataProvider, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams } from '@memberjunction/ai-core-plus';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams, type DecisionAnsweringModel } from '@memberjunction/ai-core-plus';
+import {
+    AIDecisionParams,
+    AIPromptRunner,
+    RunDecisionUse,
+    type AIDecisionRunResult,
+    type ShadowDecisionRunner
+} from '@memberjunction/ai-prompts';
 import {
     ResolveEffectiveRealtimeConfig,
     GetEffectiveModeratorConfig,
     GetEffectiveTurnMode,
     RealtimeModeratorConfig,
 } from './realtime-coagent-config';
+import {
+    BuildModeratorQuestions,
+    CompareModeratorDecision,
+    ModeratorSpeakersFromDecision,
+    REALTIME_MODERATOR_USE,
+    type ModeratorDecisionState
+} from './realtime-moderator-decision';
 
 /** The agent-type name whose `DefaultConfiguration` carries the room-wide moderator settings. */
 const REALTIME_AGENT_TYPE_NAME = 'Realtime';
@@ -121,16 +134,79 @@ export class RealtimeTurnModerator {
 
         try {
             const agentRunId = ctx.AgentRunID ?? (await this.resolveAgentRunId(ctx));
-            const decision = await this.withTimeout(this.runPrompt(ctx, cfg, agentRunId), cfg.timeoutMs);
-            const names = (decision?.speakers ?? []).map((s) => s.agent);
-            if (decision?.note) {
-                LogStatus(`[RealtimeTurnModerator] note: ${decision.note}`);
-            }
+            const names = await this.withTimeout(this.decideSpeakers(ctx, cfg, agentRunId), cfg.timeoutMs);
             return this.mapNamesToSessions(names, ctx);
         } catch (err) {
             LogError(`[RealtimeTurnModerator] decision failed (${cfg.onError} fallback): ${err instanceof Error ? err.message : String(err)}`);
             return cfg.onError === 'addressed-only' ? this.addressedFallback(ctx) : [];
         }
+    }
+
+    /**
+     * The speakers' names, in order, answered in the room's `decisionMode` through `RunDecisionUse`: the
+     * moderator prompt alone (`Prompt`), the prompt with a decision recorded beside it (`Shadow`), or the
+     * calibrated decision, falling back to the prompt when it cannot pick (`Decision`). The prompt's
+     * errors propagate to {@link Decide}'s `onError` policy, as before.
+     */
+    private async decideSpeakers(ctx: TurnModeratorContextInput, cfg: Required<RealtimeModeratorConfig>, agentRunId?: string): Promise<string[]> {
+        const state = this.buildData(ctx, cfg);
+        const outcome = await RunDecisionUse<string[]>({
+            Use: REALTIME_MODERATOR_USE,
+            Mode: cfg.decisionMode,
+            BuildDecision: () => this.buildDecision(ctx, cfg, state),
+            FromDecision: (run) => ModeratorSpeakersFromDecision(run.Answers, state.agents, answeredByOf(run)),
+            RunExisting: () => this.runPromptForSpeakers(ctx, cfg, state, agentRunId),
+            Compare: (answers, existing, run) => CompareModeratorDecision(answers, existing, state.agents, answeredByOf(run)),
+            Runner: this.CreateDecisionRunner(),
+        });
+        if (outcome.AnsweredBy === 'Decision') {
+            LogStatusEx({ message: `[RealtimeTurnModerator] decision picked [${outcome.Value.join(', ')}]`, verboseOnly: true });
+        }
+        return outcome.Value;
+    }
+
+    /** The moderator prompt's speakers, by name, logging its note. Throws on a missing prompt or a failed run. */
+    private async runPromptForSpeakers(
+        ctx: TurnModeratorContextInput,
+        cfg: Required<RealtimeModeratorConfig>,
+        state: ModeratorDecisionState,
+        agentRunId?: string,
+    ): Promise<string[]> {
+        const decision = await this.runPrompt(ctx, cfg, state, agentRunId);
+        if (decision?.note) {
+            LogStatus(`[RealtimeTurnModerator] note: ${decision.note}`);
+        }
+        return (decision?.speakers ?? []).map((s) => s.agent);
+    }
+
+    /**
+     * The moderator's decision: the prompt's own data as state, one Likelihood per roster agent. Null
+     * when the decision prompt is not in the catalog or the room has nobody to ask about.
+     */
+    private buildDecision(
+        ctx: TurnModeratorContextInput,
+        cfg: Required<RealtimeModeratorConfig>,
+        state: ModeratorDecisionState,
+    ): AIDecisionParams | null {
+        const target = cfg.decisionPromptName.trim().toLowerCase();
+        const prompt = AIEngine.Instance.Prompts.find((p) => (p.Name ?? '').trim().toLowerCase() === target);
+        if (!prompt || state.agents.length === 0) {
+            return null;
+        }
+        const params = new AIDecisionParams();
+        params.prompt = prompt;
+        params.contextUser = ctx.ContextUser;
+        params.State = { ...state };
+        params.Questions = BuildModeratorQuestions(state.agents);
+        return params;
+    }
+
+    /**
+     * The runner the moderator's decisions run on, or undefined for a new `AIDecisionRunner`. An
+     * override point for tests and for hosts that route decisions elsewhere.
+     */
+    protected CreateDecisionRunner(): ShadowDecisionRunner | undefined {
+        return undefined;
     }
 
     /** Resolves the room-wide moderator config from the Realtime agent type's `DefaultConfiguration` (cache-backed). */
@@ -219,7 +295,12 @@ export class RealtimeTurnModerator {
     }
 
     /** Runs the moderator prompt and returns its parsed decision. Throws on a missing prompt / failed run. */
-    private async runPrompt(ctx: TurnModeratorContextInput, cfg: Required<RealtimeModeratorConfig>, agentRunId?: string): Promise<ModeratorDecision | undefined> {
+    private async runPrompt(
+        ctx: TurnModeratorContextInput,
+        cfg: Required<RealtimeModeratorConfig>,
+        state: ModeratorDecisionState,
+        agentRunId?: string,
+    ): Promise<ModeratorDecision | undefined> {
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, cfg.promptId));
         if (!prompt) {
             throw new Error(`moderator prompt '${cfg.promptId}' not found in the AIEngine cache`);
@@ -227,7 +308,7 @@ export class RealtimeTurnModerator {
         const params = new AIPromptParams();
         params.prompt = prompt;
         params.contextUser = ctx.ContextUser;
-        params.data = this.buildData(ctx, cfg);
+        params.data = { ...state };
         const result = await this.runner.ExecutePrompt<ModeratorDecision>(params);
         if (!result.success) {
             throw new Error(result.errorMessage ?? 'moderator prompt run failed');
@@ -253,7 +334,7 @@ export class RealtimeTurnModerator {
      * window so a prompt template can keep the roster near the top (cacheable prefix) and the variable
      * lookback at the bottom. The lookback is narrowed to the configured window + clipped per turn.
      */
-    private buildData(ctx: TurnModeratorContextInput, cfg: Required<RealtimeModeratorConfig>): Record<string, unknown> {
+    private buildData(ctx: TurnModeratorContextInput, cfg: Required<RealtimeModeratorConfig>): ModeratorDecisionState {
         const agents = ctx.Roster.map((r) => {
             // Resolve the live role + participation mode from the agent's own config (the TARGET agent it
             // voices, falling back to its co-agent id). The engine ships defaults; this fills in the real values.
@@ -320,6 +401,11 @@ export class RealtimeTurnModerator {
             );
         });
     }
+}
+
+/** The model that answered a decision, as its result reports it. */
+function answeredByOf(run: AIDecisionRunResult): DecisionAnsweringModel {
+    return { ModelName: run.modelInfo?.modelName, ResolvedModel: run.DecisionResult?.ResolvedModel };
 }
 
 /** The one shared moderator wired into the engine (no per-call construction cost). */

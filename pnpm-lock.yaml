@@ -10812,6 +10812,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../AI/BaseAIEngine
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -15520,6 +15523,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.3.0-edge.0
         version: link:../../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.0
+        version: link:../../AI/BaseAIEngine
       '@memberjunction/ai-prompts':
         specifier: 6.3.0-edge.0
         version: link:../../AI/Prompts
