@@ -621,6 +621,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public SwitchSurfaceMode(mode: LibrarySurfaceMode, persistPreference = true): void {
     this.IsFullCanvasOpen = false;
+    if (mode === 'hub') {
+      this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
+    }
     this.SurfaceMode = mode;
     if (persistPreference) {
       this.preferredSurfaceMode = mode;
@@ -670,6 +674,10 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
   public SetUnifiedScope(scope: LibraryUnifiedScope, collectionId?: string | null): void {
     this.IsFullCanvasOpen = false;
+    if (this.UnifiedLayout !== 'split') {
+      this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
+    }
     if (scope === 'collection') {
       const targetId = collectionId ?? this.SelectedCollectionId;
       if (!targetId) {
@@ -721,6 +729,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       this.SwitchSurfaceMode('navigator', true);
       return;
     }
+    this.ActiveArtifactId = null;
+    this.ActiveVersionNumber = undefined;
     const nextListStyle: LibraryListStyle = layout === 'list' ? 'list' : 'cards';
     this.ListStyle = nextListStyle;
     this.saveSettingSafe(SETTING_LIST_STYLE, nextListStyle);

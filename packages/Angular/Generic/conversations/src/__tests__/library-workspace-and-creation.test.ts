@@ -1858,6 +1858,54 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.IsLoadingMoreArtifacts).toBe(false);
   });
 
+  it('preserves collection context across Grid, List, and Split layouts and clears ActiveArtifactId when leaving Split', () => {
+    const { component } = buildWorkspaceComponent();
+    component.IsLoading = false;
+
+    component.OpenCollectionById('col-1');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.FilteredItems.map((i) => i.Id)).toEqual(['item-doc-1']);
+
+    // Switch to Split layout: stays inside col-1 and opens first item in Split pane
+    component.SetUnifiedLayout('split');
+    expect(component.UnifiedLayout).toBe('split');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBe('item-doc-1');
+    expect(component.IsFullCanvasOpen).toBe(false);
+
+    // Switch to Grid or List layout: clears ActiveArtifactId so item grid/list stays visible (never bounces to full canvas)
+    component.SetUnifiedLayout('grid');
+    expect(component.UnifiedLayout).toBe('grid');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.IsFullCanvasOpen).toBe(false);
+    expect(component.FilteredItems.map((i) => i.Id)).toEqual(['item-doc-1']);
+
+    // Simulating route param echo after switching to hub/grid keeps item grid visible
+    component.ApplyExternalRouteState({
+      mode: 'hub',
+      collectionId: 'col-1',
+      section: 'collection',
+      artifactId: null,
+    });
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.IsFullCanvasOpen).toBe(false);
+
+    component.SetUnifiedLayout('split');
+    expect(component.ActiveArtifactId).toBe('item-doc-1');
+
+    component.SetUnifiedLayout('list');
+    expect(component.UnifiedLayout).toBe('list');
+    expect(component.UnifiedScope).toBe('collection');
+    expect(component.SelectedCollectionId).toBe('col-1');
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.IsFullCanvasOpen).toBe(false);
+  });
+
   it('uses 100% --mj-* semantic CSS design tokens with zero hardcoded hex or rgb colors', () => {
     const filesToCheck = [
       resolve(__dirname, '../lib/components/library/library-workspace.component.css'),

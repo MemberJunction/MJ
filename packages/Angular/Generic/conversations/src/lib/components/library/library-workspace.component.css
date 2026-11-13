@@ -1424,6 +1424,7 @@
 .unified-layout-switch {
   display: inline-flex;
   align-items: center;
+  height: 32px;
   padding: 2px;
   border-radius: var(--mj-radius-md);
   background: var(--mj-bg-surface-sunken);
@@ -1434,26 +1435,29 @@
 .layout-switch-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: var(--mj-radius-sm);
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--mj-text-secondary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+  white-space: nowrap;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
 }
 
 .layout-switch-btn:hover {
   color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
 }
 
 .layout-switch-btn.active {
   background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-strong);
   color: var(--mj-brand-primary);
-  box-shadow: var(--mj-shadow-sm, 0 1px 2px var(--mj-border-default));
 }
 
 .unified-category-bar {
@@ -1466,6 +1470,47 @@
   border-bottom: 1px solid var(--mj-border-subtle);
   flex-shrink: 0;
   flex-wrap: wrap;
+}
+
+.category-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.cat-chip i {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.cat-chip:hover {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-primary);
+}
+
+.cat-chip.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 55%, var(--mj-border-default));
+  color: var(--mj-brand-primary);
 }
 
 .unified-count-pill {
