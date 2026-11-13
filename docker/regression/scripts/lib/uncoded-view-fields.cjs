@@ -44,6 +44,62 @@ function FieldsNotInType(fields, types) {
     });
 }
 
+/** A bracket-quoted SQL Server identifier. */
+function quoteName(name) {
+    return `[${name.replace(/]/g, ']]')}]`;
+}
+
+/**
+ * The SQL batches that keep a view under the name `<view>__Full` and recreate the view with only
+ * the given columns and the given grants.
+ * @param {string} schema
+ * @param {string} view
+ * @param {string[]} columns
+ * @param {{ Permission: string, Grantee: string }[]} grants
+ * @returns {string[]}
+ */
+function NarrowViewBatches(schema, view, columns, grants) {
+    const full = `${view}__Full`;
+    const viewName = `${quoteName(schema)}.${quoteName(view)}`;
+    const list = columns.map(quoteName).join(', ');
+    return [
+        `EXEC sp_rename '${viewName.replace(/'/g, "''")}', '${full.replace(/'/g, "''")}';`,
+        `CREATE VIEW ${viewName} AS SELECT ${list} FROM ${quoteName(schema)}.${quoteName(full)};`,
+        ...grants.map((grant) => `GRANT ${grant.Permission} ON ${viewName} TO ${quoteName(grant.Grantee)};`),
+    ];
+}
+
+/**
+ * Narrows the base view of each named entity to the columns that have entity fields, so a
+ * procedure's `SELECT *` read-back matches the metadata. Views that already match are left alone.
+ * @param {import('mssql').ConnectionPool} pool
+ * @param {string} schema The MJ core schema.
+ * @param {string[]} entityNames
+ */
+async function NarrowBaseViews(pool, schema, entityNames) {
+    for (const entityName of entityNames) {
+        const entity = (await pool.request().input('name', entityName).query(
+            `SELECT ID, SchemaName, BaseView FROM [${schema}].vwEntities WHERE Name = @name`
+        )).recordset[0];
+        if (!entity) continue;
+        const viewName = `${quoteName(entity.SchemaName)}.${quoteName(entity.BaseView)}`;
+        const columns = (await pool.request().input('view', viewName).input('entity', entity.ID).query(
+            `SELECT c.name AS Name, CASE WHEN f.ID IS NULL THEN 0 ELSE 1 END AS HasField
+             FROM sys.columns c LEFT JOIN [${schema}].EntityField f ON f.EntityID = @entity AND f.Name = c.name
+             WHERE c.object_id = OBJECT_ID(@view) ORDER BY c.column_id`
+        )).recordset;
+        const keep = columns.filter((column) => column.HasField === 1).map((column) => column.Name);
+        if (keep.length === 0 || keep.length === columns.length) continue;
+        const grants = (await pool.request().input('view', viewName).query(
+            `SELECT permission_name AS Permission, USER_NAME(grantee_principal_id) AS Grantee
+             FROM sys.database_permissions WHERE major_id = OBJECT_ID(@view) AND state = 'G'`
+        )).recordset;
+        for (const batch of NarrowViewBatches(entity.SchemaName, entity.BaseView, keep, grants)) {
+            await pool.request().batch(batch);
+        }
+    }
+}
+
 /** The npm scopes of the `dynamicPackages` entries in mj.config.cjs, without `@memberjunction`. */
 function PackageScopes(config) {
     const entries = [...(config.dynamicPackages?.server ?? []), ...(config.dynamicPackages?.client ?? [])];
@@ -85,7 +141,7 @@ function appTypeFields(storeDir, scopes) {
 
 /**
  * Deletes the virtual fields of app entities that the app's GraphQL type does not define, with
- * the rows that reference them.
+ * the rows that reference them, and narrows those entities' base views to match.
  * @param {import('mssql').ConnectionPool} pool
  * @param {string} schema The MJ core schema.
  * @param {object} config The loaded mj.config.cjs.
@@ -110,7 +166,15 @@ async function DropUncodedViewFields(pool, schema, config, storeDir) {
              DELETE FROM [${schema}].EntityField WHERE ID = @id;`
         );
     }
+    await NarrowBaseViews(pool, schema, [...new Set(drop.map((field) => field.Entity))]);
     return drop.map(({ Entity, Field }) => ({ Entity, Field }));
 }
 
-module.exports = { CollectTypeFields, FieldsNotInType, PackageScopes, DropUncodedViewFields };
+module.exports = {
+    CollectTypeFields,
+    FieldsNotInType,
+    NarrowViewBatches,
+    NarrowBaseViews,
+    PackageScopes,
+    DropUncodedViewFields,
+};

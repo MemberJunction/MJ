@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { CollectTypeFields, FieldsNotInType, PackageScopes } = require('../lib/uncoded-view-fields.cjs');
+const { CollectTypeFields, FieldsNotInType, NarrowViewBatches, PackageScopes } = require('../lib/uncoded-view-fields.cjs');
 
 describe('FieldsNotInType', () => {
     it('returns the fields that the GraphQL type of their entity does not define, even when the name is in other code', () => {
@@ -19,6 +19,16 @@ describe('FieldsNotInType', () => {
             { Entity: 'Other: Things', ClassName: 'otherThing', Field: 'Anything' },
         ];
         expect(FieldsNotInType(fields, CollectTypeFields(code))).toEqual([{ ...meeting, Field: 'AgendaItemCount' }]);
+    });
+});
+
+describe('NarrowViewBatches', () => {
+    it('keeps the full view under a new name and recreates the view with only the given columns and the same grants', () => {
+        expect(NarrowViewBatches('app', 'vwMeetings', ['ID', 'Odd]Name'], [{ Permission: 'SELECT', Grantee: 'cdp_UI' }])).toEqual([
+            "EXEC sp_rename '[app].[vwMeetings]', 'vwMeetings__Full';",
+            'CREATE VIEW [app].[vwMeetings] AS SELECT [ID], [Odd]]Name] FROM [app].[vwMeetings__Full];',
+            'GRANT SELECT ON [app].[vwMeetings] TO [cdp_UI];',
+        ]);
     });
 });
 
