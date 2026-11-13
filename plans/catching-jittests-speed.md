@@ -107,3 +107,9 @@
 - Spec coverage: analyzer §8.1 (Task 1); §5.4 build and cache (Task 5); gate-1 inputs unchanged (Task 3 removes only promotions from backtests); cost table (Task 2); measurement (Task 4) for the speed claims.
 - Type consistency: `Settings.Coverage` (Task 3) is read in `Execute.ts`; `Prepare(revision, packages?)` (Task 6) is the only signature change and every caller is listed; `Timings` names are the same in types, schemas and report.
 - Order: Tasks 1–4 are independent of each other; Task 5 and Task 6 both touch `VitestCatchTarget.ts` and run last, Task 5 before Task 6.
+
+---
+
+## Follow-up found by the first Hydrogen run (2026-11-13)
+
+The sandbox build used `turbo run build --filter=<pkg>...`. Turbo reads `<pkg>...` as the package and its dependents, the reverse of pnpm. For `@memberjunction/core` at `373f180` that selected 157 packages. With the full install the build passed but compiled most of the workspace. With the filtered install (Task 6) it failed on packages that had no `node_modules` (#3831, base build, `export-engine`). Fix `95ef909f8a`: the build filter is `--filter=...<pkg>`, the package and its dependencies, which is the same closure the install covers.
