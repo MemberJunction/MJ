@@ -103,8 +103,8 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             return [];
         }
         await this.EnsureConfigured(user, options.provider);
-        const graphIds = this.ResolveGraphIds(options.GraphNames);
-        if (graphIds.Size === 0) {
+        const graphIDs = this.ResolveGraphIDs(options.GraphNames);
+        if (graphIDs.Size === 0) {
             return [];
         }
 
@@ -120,7 +120,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             Name: IsFieldReadableByAll(conceptEntity, 'Name', principals),
             Synonyms: IsFieldReadableByAll(conceptEntity, 'Synonyms', principals),
         };
-        const scored = this.scoreConcepts(query, graphIds, includeProposed, matchable);
+        const scored = this.scoreConcepts(query, graphIDs, includeProposed, matchable);
         if (scored.length === 0) {
             return [];
         }
@@ -164,7 +164,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         if (!entityInfo || !CanUserReadEntity(entityInfo, user)) {
             return empty;
         }
-        if (this.ResolveGraphIds(undefined).Size === 0) {
+        if (this.ResolveGraphIDs(undefined).Size === 0) {
             return { ...empty, EntityName: entityInfo.Name };
         }
 
@@ -257,12 +257,12 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         if (mjCanon) {
             return mjCanon.Name;
         }
-        const canonIds = this.ResolveGraphIds(undefined);
-        return graphs.find((g) => canonIds.Has(g.ID))?.Name ?? PRIMARY_CANON_GRAPH_NAME;
+        const canonIDs = this.ResolveGraphIDs(undefined);
+        return graphs.find((g) => canonIDs.Has(g.ID))?.Name ?? PRIMARY_CANON_GRAPH_NAME;
     }
 
     /** Active graph IDs named in `graphNames`, or the active canon graphs when none are named. */
-    public ResolveGraphIds(graphNames: readonly string[] | undefined): UUIDSet {
+    public ResolveGraphIDs(graphNames: readonly string[] | undefined): UUIDSet {
         const ids = new UUIDSet();
         const engine = GraphEngine.Instance;
         if (graphNames && graphNames.length > 0) {
@@ -390,7 +390,7 @@ export class CanonGraphExpansionService implements IGraphExpansionService {
             return [];
         }
         await this.canon.EnsureConfigured(contextUser, provider);
-        if (this.canon.ResolveGraphIds(graphNames).Size === 0) {
+        if (this.canon.ResolveGraphIDs(graphNames).Size === 0) {
             return []; // no active graph to search: the lane is a no-op
         }
         const graphName = graphNames && graphNames.length > 0 ? graphNames[0] : this.canon.ResolvePrimaryCanonGraphName();
