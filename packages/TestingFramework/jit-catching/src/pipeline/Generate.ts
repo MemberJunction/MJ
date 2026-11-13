@@ -1,0 +1,194 @@
+import { join } from 'node:path';
+import { GitHub, type PullRequestInfo } from '../git/GitHub';
+import { GitRepo } from '../git/GitRepo';
+import { ChangeAnalyzer, type PullRequestText } from '../analyzer/ChangeAnalyzer';
+import { ClaudeAgentGenerator, RiskText, SessionRiskID } from '../generator/ClaudeAgentGenerator';
+import { NoUsage, SessionError } from '../generator/UsageCounter';
+import { CreateLLM } from '../judges/ProviderFactory';
+import type { PackageMap } from '../analyzer/PackageMap';
+import type { BaseTestGenerator } from '../contracts/BaseTestGenerator';
+import type { RedactionCheck } from '../sandbox/Redaction';
+import type { Settings } from '../settings';
+import type { ChangeAnalysis, GenerationRequest, GenerationResult, GenerationTimings, Risk, Run, SessionRecord, TokenUsage, Trigger } from '../types';
+import { NewID, NewRunID } from '../ids';
+import { RedactTail } from '../sandbox/Redaction';
+import { RunDir } from './RunDir';
+import { RunWithConcurrency } from './concurrency';
+import { DefaultRedaction, DefaultRunTarget, type PipelineTarget } from './Deps';
+import { PreflightEnv } from './Preflight';
+import { Seconds, Timed } from './Timing';
+
+/** The tools that write into one run's folder, built once the run ID is known. */
+export interface GenerateTools {
+    Target: Pick<PipelineTarget, 'Prepare' | 'BuildPackages' | 'PackagesAt'>;
+    Analyzer: Pick<ChangeAnalyzer, 'Analyze' | 'Usage'>;
+    Generator: Pick<BaseTestGenerator, 'Generate'>;
+    PackageMap: Pick<PackageMap, 'Get' | 'PackageForPath'>;
+    /** Builds the sandbox image; called once before the first Prepare. */
+    EnsureImage: () => Promise<void>;
+}
+export interface GenerateDeps {
+    GitHub: Pick<GitHub, 'GetPullRequest'>;
+    Repo: Pick<GitRepo, 'Fetch' | 'MergeBase' | 'Subject'>;
+    Redaction: RedactionCheck;
+    ForRun: (dir: RunDir) => GenerateTools;
+    /** The clock the stage timers read; `Date.now` when not given. */
+    Now?: () => number;
+}
+/**
+ * With `PR` null, `HeadSHA` is required. With `PR` set, `HeadSHA` (when given) replaces the PR's head and the PR still gives the title and body.
+ * `BaseSHA` defaults to the merge base of head and `origin/next`.
+ * `Env` is the environment the preflight check reads; it defaults to `process.env`.
+ */
+export interface GenerateOptions { PR: number | null; BaseSHA?: string; HeadSHA?: string; Trigger: Trigger; RepoRoot: string; Settings: Settings; Deps?: GenerateDeps; Env?: NodeJS.ProcessEnv; }
+
+/** Generate failed after the analyzer ran. `Usage` holds the analyzer's usage and every finished session's, with `Role`; the original error is `cause`. */
+export class GenerateError extends Error {
+    constructor(public readonly RunID: string, public readonly Usage: TokenUsage[], cause: unknown) {
+        super(cause instanceof Error ? cause.message : String(cause), { cause });
+        this.name = 'GenerateError';
+    }
+}
+
+/**
+ * Job 1: checks the environment, resolves the revisions, analyses the change, prepares base for the packages under test and builds it, runs one generation session per
+ * (package, method[, risk group]) and writes `generation.json` with one record per session, the analyzer's and the sessions' tokens per role and model, and the time of each stage,
+ * which it also prints on one stdout line. The base worktree stays for the execute and assess jobs.
+ * A failure from the analyzer on is thrown as a `GenerateError`; an earlier failure is thrown as it is.
+ */
+export async function GenerateStep(o: GenerateOptions): Promise<{ RunID: string }> {
+    PreflightEnv(o.Settings, o.Env ?? process.env, 'Generate');
+    const d = o.Deps ?? DefaultGenerateDeps(o);
+    const pr = o.PR !== null ? await d.GitHub.GetPullRequest(o.PR) : null;
+    const { BaseSHA, HeadSHA } = await resolveRevisions(o, d, pr);
+    const run: Run = { ID: NewRunID(o.PR, HeadSHA), Trigger: o.Trigger, PRNumber: o.PR, BaseSHA, HeadSHA, Status: 'Generated', GeneratorModel: o.Settings.GeneratorModel,
+        TokensByModel: [], RunnerMinutes: 0, StartedAt: new Date().toISOString(), EndedAt: null };
+    const dir = new RunDir(o.RepoRoot, run.ID, d.Redaction);
+    dir.Create();
+    const t = d.ForRun(dir);
+    await t.EnsureImage();
+    const now = d.Now ?? Date.now;
+    const text = await pullRequestText(d, pr, HeadSHA);
+    const finished: TokenUsage[] = [];
+    try { await analyzeAndGenerate(run, dir, t, BaseSHA, text, o.Settings, finished, now); }
+    catch (e) { throw new GenerateError(run.ID, SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...finished]), e); }
+    return { RunID: run.ID };
+}
+
+/**
+ * Analyses the change, prepares base for the packages under test, keeps the packages base has, builds base, runs the sessions
+ * (adding each finished session's usage to `finished`) and writes `generation.json` with the analyze, prepare, build and generate times on `now`.
+ */
+async function analyzeAndGenerate(run: Run, dir: RunDir, t: GenerateTools, baseSHA: string, text: PullRequestText, settings: Settings, finished: TokenUsage[],
+    now: () => number): Promise<void> {
+    const analyzed = await Timed(now, () => t.Analyzer.Analyze(run, text));
+    const found = analyzed.Result;
+    const prepared = await Timed(now, () => t.Target.Prepare({ Kind: 'Base', SHA: baseSHA }, found.PackagesToTest));
+    const base = prepared.Result;
+    const present = t.Target.PackagesAt(base, found.PackagesToTest);
+    for (const name of found.PackagesToTest) if (!present.includes(name)) process.stderr.write(`run ${run.ID}: ${name} is not in base; skipped\n`);
+    const analysis: ChangeAnalysis = { ...found, PackagesToTest: present };
+    const built = await Timed(now, () => t.Target.BuildPackages(base, analysis.PackagesToTest));
+    const requests = buildRequests(run, analysis, base.RootDir, settings, t.PackageMap);
+    const generated = await Timed(now, () => RunWithConcurrency(requests, settings.Limits.ParallelSessions, async (r) => {
+        const result = await generateOrFail(t, r);
+        finished.push({ ...result.Tokens, Role: 'Generator' });
+        return result;
+    }));
+    const results = generated.Result;
+    const timings: GenerationTimings = { AnalyzeMs: analyzed.Ms, PrepareBaseMs: prepared.Ms, BuildBaseMs: built.Ms, GenerateMs: generated.Ms };
+    const tests = results.flatMap((r) => r.Tests);
+    const sessions: SessionRecord[] = requests.map((r, i) => ({ RunID: run.ID, Package: r.Package, Method: r.Method, RiskID: SessionRiskID(r), EndReason: results[i].EndReason,
+        Turns: results[i].Turns, Tokens: results[i].Tokens, TranscriptURL: results[i].TranscriptPath,
+        Produced: results[i].Tests.filter((x) => x.GenerationOutcome === 'Produced').length, Failed: results[i].Tests.filter((x) => x.GenerationOutcome === 'Failed').length }));
+    run.TokensByModel = SumTokens([{ ...t.Analyzer.Usage, Role: 'Analyzer' }, ...results.map((r) => ({ ...r.Tokens, Role: 'Generator' as const }))]); run.EndedAt = new Date().toISOString();
+    dir.WriteGeneration({ Run: run, Analysis: analysis, Tests: tests, BaseRootDir: base.RootDir, Sessions: sessions, BaseSourceDir: null, Timings: timings });
+    const produced = tests.filter((x) => x.GenerationOutcome === 'Produced').length;
+    process.stdout.write(`run ${run.ID}: ${produced} produced, ${tests.length - produced} failed, ${requests.length} sessions\n`);
+    process.stdout.write(`run ${run.ID}: stages analyze ${Seconds(timings.AnalyzeMs)}, prepare base ${Seconds(timings.PrepareBaseMs)}, build base ${Seconds(timings.BuildBaseMs)}, generate ${Seconds(timings.GenerateMs)}\n`);
+}
+
+/**
+ * Head from `HeadSHA`, else from the PR; base from `BaseSHA` or the merge base with `origin/next`.
+ * A PR with an explicit head is a landing commit on `next`, so `next` is fetched for it; otherwise the PR ref or the head is fetched, and `next` only for the merge base.
+ */
+async function resolveRevisions(o: GenerateOptions, d: GenerateDeps, pr: PullRequestInfo | null): Promise<{ BaseSHA: string; HeadSHA: string }> {
+    const head = o.HeadSHA ?? pr?.HeadSHA;
+    if (!head) throw new Error('generate needs --pr or --head');
+    const landing = pr !== null && o.HeadSHA !== undefined;
+    if (landing) await d.Repo.Fetch('next');
+    else await d.Repo.Fetch(pr ? `refs/pull/${pr.Number}/head` : head).catch(() => undefined);
+    if (o.BaseSHA) return { BaseSHA: o.BaseSHA, HeadSHA: head };
+    if (!landing) await d.Repo.Fetch('next');
+    return { BaseSHA: await d.Repo.MergeBase('origin/next', head), HeadSHA: head };
+}
+
+/** The PR's title and body, or the head commit's subject and an empty body when there is no PR. */
+async function pullRequestText(d: GenerateDeps, pr: PullRequestInfo | null, headSHA: string): Promise<PullRequestText> {
+    if (pr) return { Title: pr.Title, Body: pr.Body };
+    return { Title: await d.Repo.Subject(headSHA), Body: '' };
+}
+
+/**
+ * Per package to test: one DodgyDiff request, then the package's risks (up to `RisksPerPackage`, in rank order) in
+ * IntentAware requests of at most `RisksPerSession` risks each.
+ */
+function buildRequests(run: Run, analysis: ChangeAnalysis, baseRoot: string, settings: Settings, map: Pick<PackageMap, 'Get' | 'PackageForPath'>): GenerationRequest[] {
+    const requests: GenerationRequest[] = [];
+    for (const pkg of analysis.PackagesToTest) {
+        const info = map.Get(pkg); if (!info) throw new Error(`unknown package ${pkg}`);
+        const common = { Run: run, Analysis: analysis, Package: pkg, PackageDir: join(baseRoot, info.Dir), BaseRootDir: baseRoot, Model: settings.GeneratorModel, Limits: settings.Limits };
+        requests.push({ ...common, Method: 'DodgyDiff', Risks: [] });
+        const risks = analysis.Risks.filter((r) => map.PackageForPath(r.File)?.Name === pkg).slice(0, settings.Limits.RisksPerPackage);
+        const size = settings.Limits.RisksPerSession;
+        for (let i = 0; i < risks.length; i += size) requests.push({ ...common, Method: 'IntentAware', Risks: risks.slice(i, i + size) });
+    }
+    return requests;
+}
+
+/**
+ * Runs one generation session. A session that throws becomes one failed test per risk of its request (one test for
+ * DodgyDiff), each with its own risk, the redacted first line of the error as reason, the tokens a `SessionError` carries (zero otherwise) with role `Generator` and end reason `error`, so the other sessions still finish.
+ */
+async function generateOrFail(t: GenerateTools, r: GenerationRequest): Promise<GenerationResult> {
+    try { return await t.Generator.Generate(r); }
+    catch (e) {
+        const message = (e instanceof Error ? e.message : String(e)).split('\n')[0].trim();
+        const dir = t.PackageMap.Get(r.Package)?.Dir;
+        if (!dir) throw e;
+        const tokens: TokenUsage = { ...(e instanceof SessionError ? e.Usage : NoUsage(r.Model)), Role: 'Generator' };
+        const risks: (Risk | null)[] = r.Risks.length ? r.Risks : [null];
+        return { Tokens: tokens, TranscriptPath: null, EndReason: 'error', Turns: 0, Tests: risks.map((risk) => {
+            const id = NewID();
+            return { ID: id, RunID: r.Run.ID, Package: r.Package, Method: r.Method, RiskID: risk?.ID ?? null, RiskText: risk ? RiskText(risk) : null, Mutant: null, MutantFailure: null,
+                FilePath: `${dir}/src/__tests__/jit/${id}.jit.test.ts`, Source: '', GenerationOutcome: 'Failed' as const, FailureReason: `generation session failed: ${RedactTail(message)}`, Tokens: tokens, TranscriptURL: null };
+        }) };
+    }
+}
+
+/** Token usage summed per role and model, in first-seen order. A summed record keeps `Role` when its usages have one. */
+export function SumTokens(usages: TokenUsage[]): TokenUsage[] {
+    const byKey = new Map<string, TokenUsage>();
+    for (const u of usages) {
+        const key = `${u.Role ?? ''}|${u.Model}`;
+        const s = byKey.get(key) ?? { Model: u.Model, ...(u.Role ? { Role: u.Role } : {}), InputTokens: 0, OutputTokens: 0, CacheReadTokens: 0, CostUSD: 0 };
+        byKey.set(key, { ...s, InputTokens: s.InputTokens + u.InputTokens, OutputTokens: s.OutputTokens + u.OutputTokens, CacheReadTokens: s.CacheReadTokens + u.CacheReadTokens, CostUSD: s.CostUSD + u.CostUSD });
+    }
+    return [...byKey.values()];
+}
+
+/** The real dependencies: `gh`, the host repo, and per run the target, the analyzer and the Agent SDK generator. */
+export function DefaultGenerateDeps(o: Pick<GenerateOptions, 'RepoRoot' | 'Settings'>): GenerateDeps {
+    const repo = new GitRepo(o.RepoRoot);
+    return {
+        GitHub: new GitHub(), Repo: repo, Redaction: DefaultRedaction(),
+        ForRun: (dir) => {
+            const rt = DefaultRunTarget(o.RepoRoot, dir.Path, o.Settings, repo);
+            return {
+                Target: rt.Target, PackageMap: rt.PackageMap, EnsureImage: rt.EnsureImage,
+                Analyzer: new ChangeAnalyzer({ Repo: repo, PackageMap: rt.PackageMap, LLM: CreateLLM('Anthropic'), Model: o.Settings.AnalyzerModel, Settings: o.Settings }),
+                Generator: new ClaudeAgentGenerator({ Sandbox: rt.Sandbox, ScratchRoot: join(dir.Path, 'scratch'), Settings: o.Settings, PackageMap: rt.PackageMap, TranscriptDir: dir.TranscriptDir }),
+            };
+        },
+    };
+}

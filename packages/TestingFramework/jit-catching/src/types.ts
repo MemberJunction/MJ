@@ -1,0 +1,107 @@
+/** Record and contract types shared by every part. Field names follow MJ entity conventions (§11). */
+
+import type { TestAst } from './rules/TestAst';
+
+export type Trigger = 'Nightly' | 'Label' | 'Recheck' | 'Backtest' | 'Local';
+export type RunStatus = 'Generated' | 'Executed' | 'Assessed' | 'Failed';
+export type RevisionKind = 'Base' | 'Head' | 'Mutant';
+export type GenerationMethod = 'DodgyDiff' | 'IntentAware';
+export type IntentType = 'feature' | 'fix' | 'refactor' | 'perf' | 'dead_code_removal' | 'logging' | 'config' | 'other';
+export type ExecutionStatus = 'Pass' | 'Fail' | 'Timeout' | 'CompileError' | 'RunnerError';
+export type VerdictLabel = 'WeakCatch' | 'PassesBoth' | 'ApiChanged' | 'Invalid' | 'Flaky';
+export type Bucket = 'High' | 'Medium' | 'Low';
+export type FeedbackAnswer = 'Bug' | 'Intended' | 'TestFault' | 'AuthorChangedPR';
+export type RuleKind = 'Drop' | 'Boost';
+export type Vendor = 'Anthropic' | 'OpenAI' | 'Gemini';
+
+/** The pipeline part that spent tokens. */
+export type TokenRole = 'Generator' | 'Analyzer' | 'Judge';
+/**
+ * InputTokens = uncached input + cache-creation tokens; CacheReadTokens = cache reads (priced as cached input).
+ * `Role` keeps usage of parts that share a model apart in run totals.
+ */
+export interface TokenUsage { Model: string; Role?: TokenRole; InputTokens: number; OutputTokens: number; CacheReadTokens: number; CostUSD: number; }
+
+export interface Run {
+    ID: string; Trigger: Trigger; PRNumber: number | null; BaseSHA: string; HeadSHA: string; Status: RunStatus;
+    GeneratorModel: string; TokensByModel: TokenUsage[]; RunnerMinutes: number; StartedAt: string; EndedAt: string | null;
+}
+
+export interface DiffHunk { Path: string; OldStart: number; OldLines: number; NewStart: number; NewLines: number; Lines: string[]; }
+export interface ChangedFile { Path: string; Package: string | null; AddedLines: number[]; RemovedLineCount: number; Hunks: DiffHunk[]; }
+export interface Risk { ID: string; File: string; Symbol: string; WhatCouldBreak: string; HowObserved: string; }
+/** `Fallback` is true when the analyzer reply was invalid twice; the analysis then has no risks and no LLM-ranked packages. It is null in an analysis that did not record it. */
+export interface ChangeAnalysis {
+    RunID: string; IntentType: IntentType; Summary: string; Risks: Risk[]; PackagesToTest: string[];
+    ChangedFiles: ChangedFile[]; CommitPrefix: string | null; RiskScore: number; Title: string; Body: string;
+    Fallback: boolean | null;
+}
+
+export interface MutantEdit { File: string; Find: string; Replace: string; }
+export interface Mutant { Edits: MutantEdit[]; Patch: string; }
+export interface FailureDetail {
+    Assertion: string | null; Expected: string | null; Actual: string | null; Message: string; StackExcerpt: string | null; ErrorName: string | null;
+}
+
+export interface CandidateTest {
+    ID: string; RunID: string; Package: string; Method: GenerationMethod; RiskID: string | null; RiskText: string | null;
+    Mutant: Mutant | null; MutantFailure: FailureDetail | null; FilePath: string; Source: string;
+    GenerationOutcome: 'Produced' | 'Failed'; FailureReason: string | null; Tokens: TokenUsage; TranscriptURL: string | null;
+}
+
+export interface ExecutionResult {
+    CandidateTestID: string; Revision: RevisionKind; RunIndex: number; Status: ExecutionStatus; TestName: string | null;
+    Failure: FailureDetail | null; DurationMs: number;
+}
+
+export interface Verdict { Label: VerdictLabel; Timeout: boolean; Reason: string; }
+/** One bucket judge's answer. `Bucket` is null when the judge errored; `Reason` then holds the error. */
+export interface JudgeBucket { Model: string; Bucket: Bucket | null; Reason: string; }
+
+export interface Catch {
+    ID: string; RunID: string; CandidateTestID: string; Verdict: Verdict; DroppedByRule: string | null; Boosts: string[];
+    TPProb: number | null; JudgeBuckets: JudgeBucket[]; Median: Bucket | null; Rank: number | null; Reported: boolean; CommentID: string | null;
+}
+
+export interface Feedback { CatchID: string; User: string; Answer: FeedbackAnswer; Source: 'Comment' | 'Label' | 'Recheck'; At: string; }
+export interface PromotionCandidate { CandidateTestID: string; RunID: string; NewlyCoveredLines: number; State: 'Offered' | 'Added'; }
+
+// ---- contract value types (§5.2) ----
+export interface RevisionRef { Kind: RevisionKind; SHA: string; }
+/** A checked-out, installed and built revision. `RootDir` is the worktree root on the host. */
+export interface PreparedRevision { Ref: RevisionRef; RootDir: string; }
+/** Repo-relative path → changed (added) line numbers at head. */
+export type ChangedLines = Record<string, number[]>;
+export interface CoverageResult { CandidateTestID: string; CoveredChangedLines: number; }
+
+export interface CatchContext {
+    Run: Run; Analysis: ChangeAnalysis; Test: CandidateTest; Base: ExecutionResult[]; Head: ExecutionResult[]; Verdict: Verdict;
+    /** Base worktree root, for rules that need the TypeScript program. */
+    BaseRootDir: string; Boosts: string[];
+    /** The program over the test and base sources, filled once per catch by the rule filter. */
+    Ast?: TestAst;
+}
+export interface RuleOutcome { Fired: boolean; Reason: string; }
+/** `Usage` is the tokens and priced cost of the judge's provider calls, when any call returned. */
+export interface JudgeScore { Judge: string; Model: string; Score: number; Bucket: Bucket | null; Reason: string; Usage?: TokenUsage; }
+
+export interface GenerationLimits {
+    TestsPerPackage: number; RisksPerPackage: number; TestsPerRisk: number; PackagesPerPR: number; ParallelSessions: number;
+    TurnsPerSession: number; TokensPerSession: number; UsdPerSession: number;
+}
+/** `Risks` holds the risks one IntentAware session covers, in rank order; it is empty for DodgyDiff. */
+export interface GenerationRequest {
+    Run: Run; Analysis: ChangeAnalysis; Package: string; PackageDir: string; BaseRootDir: string; Method: GenerationMethod;
+    Risks: Risk[]; Model: string; Limits: GenerationLimits;
+}
+/** `EndReason` is how the session ended (the SDK result subtype, `aborted_token_budget`, or `error` when it threw); `Turns` is its turn count. */
+export interface GenerationResult { Tests: CandidateTest[]; Tokens: TokenUsage; TranscriptPath: string | null; EndReason: string; Turns: number; }
+/** One generation session of a run: how it ended, what it cost and how many tests it produced and failed. */
+export interface SessionRecord {
+    RunID: string; Package: string; Method: GenerationMethod; RiskID: string | null; EndReason: string; Turns: number; Tokens: TokenUsage;
+    TranscriptURL: string | null; Produced: number; Failed: number;
+}
+/** Milliseconds spent in each stage of the generate step. */
+export interface GenerationTimings { AnalyzeMs: number; PrepareBaseMs: number; BuildBaseMs: number; GenerateMs: number; }
+/** Milliseconds spent in each stage of the execute step; `CoverageMs` is 0 when coverage is not measured. */
+export interface ExecutionTimings { PrepareHeadMs: number; BuildHeadMs: number; TypeCheckMs: number; RunMs: number; CoverageMs: number; }
