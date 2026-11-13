@@ -201,10 +201,10 @@ describe('Dataset Caching in GetDatasetByName', () => {
         expect(result.Results[0].Results).toEqual(entityData);
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
-        // Write-through to cache. Match the full SetRunViewResult signature —
-        // GenericDatabaseProvider invokes it with all 9 args (fingerprint,
-        // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
-        // provider?, ttlMs?, options?), and toHaveBeenCalledWith is arity-strict.
+        // Write-through to cache. toHaveBeenCalledWith is arity-strict: GenericDatabaseProvider
+        // passes (fingerprint, params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
+        // provider) and no options — MJ_Metadata rows are frozen like every other dataset's,
+        // because the cache serves them to later readers (every client's metadata request).
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
             expect.any(String),         // fingerprint
@@ -214,19 +214,11 @@ describe('Dataset Caching in GetDatasetByName', () => {
             undefined,                  // aggregateResults
             undefined,                  // totalRowCount
             expect.anything(),          // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
-            undefined,                  // ttlMs
-            // Dataset items are provider-internal scaffolding: GetAllMetadata's
-            // PostProcessEntityMetadata hydrates these very rows in place (sorts the array,
-            // attaches child collections), so they must stay exempt from the cache's
-            // defensive deep-freeze or metadata bootstrap throws.
-            { ProviderInternalScaffolding: true }
         );
     });
 
     it('does NOT mark a non-metadata dataset write as provider-internal scaffolding', async () => {
-        // Target contract (PR #3425 review, finding C2, now fixed): the
-        // scaffolding exemption exists for MJ_Metadata, whose rows only the provider's own
-        // assembly steps mutate. Every OTHER dataset is served to arbitrary consumers
+        // No dataset is provider-internal scaffolding. Every dataset is served to arbitrary consumers
         // (BaseEngine.Load hands `item.Results` — the live cached arrays — to every engine
         // subclass), so those slots must stay under the defensive deep-freeze or the original
         // corruption class stays open for the whole dataset path.

@@ -11,7 +11,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type {
     AgentRunAudience,
     ExecuteAgentParams,
@@ -19,7 +19,7 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { AIEngine } from '@memberjunction/aiengine';
-import { BrandKitEngine, VideoStudioEngine } from '@memberjunction/core-entities';
+import { BrandKitEngine, QueryEngine, VideoStudioEngine } from '@memberjunction/core-entities';
 import type { VideoFormat, VideoGenerationSpec } from '@memberjunction/video-studio-core';
 import {
     BuildProduceVideoRequest,
@@ -98,6 +98,7 @@ export class ProduceVideoAction extends BaseAction {
             AIEngine.Instance.Config(false, params.ContextUser, params.Provider),
             VideoStudioEngine.Instance.Config(false, params.ContextUser, params.Provider),
             BrandKitEngine.Instance.Config(false, params.ContextUser, params.Provider),
+            this.queryEngineFor(params).Config(false, params.ContextUser, this.providerFor(params)),
         ]);
     }
 
@@ -160,11 +161,19 @@ export class ProduceVideoAction extends BaseAction {
         );
     }
 
+    /** Finds a saved query by name (trimmed, case-insensitive) in the caller's provider's `QueryEngine`. */
     private lookupQueryByName(params: RunActionParams, name: string): { ID: string; Name?: string } | undefined {
-        const normalized = name.trim().toLowerCase();
-        const provider = params.Provider ?? Metadata.Provider;
-        const queries = provider?.Queries ?? [];
-        return queries.find((q) => q.Name?.trim().toLowerCase() === normalized);
+        return this.queryEngineFor(params).FindQueryByName(name);
+    }
+
+    /** The provider the action runs against: the caller's, or the process default. */
+    private providerFor(params: RunActionParams): IMetadataProvider {
+        return params.Provider ?? Metadata.Provider; // global-provider-ok: fallback when the caller passes none
+    }
+
+    /** The `QueryEngine` bound to the action's provider. */
+    private queryEngineFor(params: RunActionParams): QueryEngine {
+        return QueryEngine.GetProviderInstance(this.providerFor(params), QueryEngine) as QueryEngine;
     }
 
     private async handleRunResult(

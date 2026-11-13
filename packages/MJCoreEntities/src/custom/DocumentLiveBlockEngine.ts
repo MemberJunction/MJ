@@ -4,7 +4,6 @@ import {
     IRunQueryProvider,
     Metadata,
     ProjectEntityValueRowsForUser,
-    QueryInfo,
     RunQuery,
     RunQueryParams,
     RunView,
@@ -14,6 +13,8 @@ import {
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
+import { QueryEngine } from '../engines/QueryEngine';
+import type { MJQueryEntityExtended } from './MJQueryEntityExtended';
 
 /**
  * Extracted tabular/chart dataset returned by a registered spreadsheet chart extractor (`D5`).
@@ -524,7 +525,7 @@ export class EntityViewDocumentBlock extends BaseDocumentBlock {
  * Handler for `Kind === 'SavedQuery'` live blocks.
  * Enforces query execution permissions, strips `SERVER_ONLY_RUN_QUERY_PARAMS` and any parameter
  * marked `IsServerSet === true` on `MJ: Query Parameters`, and applies FLS output projection
- * across any entities referenced by the query (`QueryInfo.Entities`).
+ * across any entities referenced by the query (its `QueryEntities` rows).
  */
 @RegisterClass(BaseDocumentBlock, 'SavedQuery')
 export class SavedQueryDocumentBlock extends BaseDocumentBlock {
@@ -555,8 +556,8 @@ export class SavedQueryDocumentBlock extends BaseDocumentBlock {
             return buildErrorResult(spec, validation.ErrorMessage ?? 'Invalid SavedQuery specification.');
         }
 
-        const queryInfo = resolveQueryInfo(provider, spec.QueryID, spec.QueryName, spec.CategoryPath);
-        if (queryInfo && !queryInfo.UserCanRun(user)) {
+        const queryInfo = await resolveSavedQuery(provider, user, spec.QueryID, spec.QueryName, spec.CategoryPath);
+        if (queryInfo && !queryInfo.UserCanRun(user).canRun) {
             return {
                 BlockID: spec.BlockID,
                 Kind: spec.Kind,
@@ -2094,13 +2095,20 @@ function buildErrorResult(spec: DocumentBlockSpec, message: string): DocumentBlo
     };
 }
 
-function resolveQueryInfo(
+/**
+ * The saved query a block names — by ID, else by name (narrowed by category path when given) — from the
+ * `QueryEngine` bound to `provider`, loaded as `user`.
+ */
+async function resolveSavedQuery(
     provider: IMetadataProvider,
+    user: UserInfo,
     queryId?: string,
     queryName?: string,
     categoryPath?: string
-): QueryInfo | undefined {
-    const queries = provider.Queries ?? [];
+): Promise<MJQueryEntityExtended | undefined> {
+    const engine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await engine.Config(false, user, provider);
+    const queries = engine.Queries;
     if (queryId) {
         const byId = queries.find((q) => UUIDsEqual(q.ID, queryId));
         if (byId) {
@@ -2124,7 +2132,7 @@ function resolveQueryInfo(
 }
 
 function sanitizeClientQueryParameters(
-    queryInfo: QueryInfo | undefined,
+    queryInfo: MJQueryEntityExtended | undefined,
     rawParameters: Record<string, unknown> | undefined
 ): { cleanParameters: Record<string, unknown>; strippedNames: string[] } {
     if (!rawParameters || typeof rawParameters !== 'object') {
@@ -2132,8 +2140,8 @@ function sanitizeClientQueryParameters(
     }
 
     const serverSetNamesLower = new Set<string>(['context']);
-    if (queryInfo && Array.isArray(queryInfo.Parameters)) {
-        for (const param of queryInfo.Parameters) {
+    if (queryInfo) {
+        for (const param of queryInfo.QueryParameters) {
             if (param.IsServerSet) {
                 serverSetNamesLower.add(param.Name.trim().toLowerCase());
             }
@@ -2154,8 +2162,8 @@ function sanitizeClientQueryParameters(
     return { cleanParameters, strippedNames };
 }
 
-function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInfo: QueryInfo | undefined): EntityInfo[] {
-    if (!queryInfo || !Array.isArray(queryInfo.Entities) || !provider.Entities) {
+function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInfo: MJQueryEntityExtended | undefined): EntityInfo[] {
+    if (!queryInfo || !provider.Entities) {
         return [];
     }
     const entityById = IndexByUUID(provider.Entities);
@@ -2164,7 +2172,7 @@ function resolveReferencedEntitiesForQuery(provider: IMetadataProvider, queryInf
         entityByName.set(e.Name, e);
     }
     const results: EntityInfo[] = [];
-    for (const qe of queryInfo.Entities) {
+    for (const qe of queryInfo.QueryEntities) {
         const found = (qe.EntityID ? entityById.Get(qe.EntityID) : undefined) ?? entityByName.get(qe.Entity);
         if (found) {
             results.push(found);

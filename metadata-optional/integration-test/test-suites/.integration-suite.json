@@ -1660,6 +1660,28 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT175 - Saved-Query Metadata Not Loaded Into Metadata",
+            "Sequence": 85,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C75CCCD-9D4A-46BD-8E44-C995007B32A0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - Metadata Dataset Rows Reach Clients Once",
+            "Sequence": 86,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C325FFD-F122-4114-88C6-4FCD88758AF7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
             "Sequence": 49,
             "Status": "Active"

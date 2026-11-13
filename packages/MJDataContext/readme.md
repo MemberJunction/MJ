@@ -234,11 +234,11 @@ context.Items.push(recordItem);
 #### From a Query
 
 ```typescript
-import { QueryInfo } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 
-const queryInfo = md.Queries.find(q => q.Name === 'Monthly Revenue');
-if (queryInfo) {
-  const queryItem = DataContextItem.FromQuery(queryInfo);
+const query = QueryEngine.Instance.FindQueryByName('Monthly Revenue');
+if (query) {
+  const queryItem = DataContextItem.FromQuery(query);
   context.Items.push(queryItem);
 }
 ```

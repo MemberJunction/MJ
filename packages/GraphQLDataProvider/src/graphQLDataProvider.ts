@@ -12,7 +12,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameCache,
          EntityRecordNameResult, RecordDependency, GetRecordDependenciesOptions, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
-         RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
+         RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec, QueryCacheAuthorization, FindQueryContextTokens, type ContextToken,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
@@ -21,7 +21,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          GetEffectiveAlternateBaseViewName, TelemetryManager, GetDiagnosticContext, IsDiagnosticCaptureSuppressed,
          CompositeFilter } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, NormalizeUUID, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
-import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
+import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
@@ -928,6 +928,69 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             ExecutionTime: 0,
             ErrorMessage: 'Ad-hoc query execution failed — no response from server'
         };
+    }
+
+    /**
+     * Resolves a RunQuery request for the RunQuery cache from `QueryEngine` — the engine bound to
+     * this provider's connection — rather than from the metadata object, which holds no saved
+     * queries unless the provider is configured with `LoadQueryMetadata`. The answer names the
+     * cache slot (the resolved query's ID, name and category path), the `Context.*` tokens the query
+     * reads (so a result that depends on the user or the day is not reused across them), and whether
+     * `user` may run it (`MJQueryEntityExtended.UserCanRun`). No `definition`: the server validates a
+     * client's slots. Non-throwing: an engine that is not loaded, or a lookup that fails, answers
+     * unresolvable, and the cache gate falls back to its warmer rule.
+     */
+    protected override ResolveQueryCacheAuthorization(params: RunQueryParams, user?: UserInfo): QueryCacheAuthorization {
+        try {
+            const engine = this.cacheQueryEngine();
+            const query = engine ? GraphQLDataProvider.findCacheQuery(engine, params) : undefined;
+            if (!engine || !query) {
+                return { resolvable: false, authorized: false };
+            }
+            return {
+                resolvable: true,
+                authorized: !user || query.UserCanRun(user).canRun,
+                categoryPath: query.CategoryPath,
+                queryName: query.Name,
+                contextTokens: GraphQLDataProvider.queryContextTokens(engine, query.ID),
+                queryId: query.ID
+            };
+        } catch (e) {
+            LogStatusEx({ message: `ResolveQueryCacheAuthorization: resolution failed (${e instanceof Error ? e.message : String(e)}) — treating as unresolvable.`, verboseOnly: true });
+            return { resolvable: false, authorized: false };
+        }
+    }
+
+    /** The loaded `QueryEngine` for this provider's connection, or null while it is not loaded. */
+    private cacheQueryEngine(): QueryEngine | null {
+        const engine = QueryEngine.GetProviderInstance(this, QueryEngine) as QueryEngine;
+        return engine.Loaded ? engine : null;
+    }
+
+    /**
+     * The query a request names: by ID when it has one, otherwise by name (case- and
+     * whitespace-insensitive), where a stated category path must also match.
+     */
+    private static findCacheQuery(engine: QueryEngine, params: RunQueryParams): MJQueryEntityExtended | undefined {
+        if (params.QueryID) {
+            return engine.Queries.find(q => UUIDsEqual(q.ID, params.QueryID));
+        }
+        const name = params.QueryName?.trim().toLowerCase();
+        if (!name) {
+            return undefined;
+        }
+        const path = params.CategoryPath?.trim().toLowerCase();
+        return engine.Queries.find(q => q.Name?.trim().toLowerCase() === name
+            && (!path || q.CategoryPath?.trim().toLowerCase() === path));
+    }
+
+    /** The `Context.*` tokens query `queryID` reads, with every query it composes and their platform variants. */
+    private static queryContextTokens(engine: QueryEngine, queryID: string): ContextToken[] {
+        return FindQueryContextTokens(
+            queryID,
+            id => [engine.Queries.find(q => UUIDsEqual(q.ID, id))?.SQL, ...engine.QuerySQLs.filter(s => UUIDsEqual(s.QueryID, id)).map(s => s.SQL)],
+            id => engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, id)).map(d => d.DependsOnQueryID)
+        );
     }
 
     protected async InternalRunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {

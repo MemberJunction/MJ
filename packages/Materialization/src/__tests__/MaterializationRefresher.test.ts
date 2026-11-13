@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import type { EntityInfo } from '@memberjunction/core';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { QueryEngine } from '@memberjunction/core-entities';
 import { MaterializationRefresher, MATERIALIZATION_SURROGATE_COLUMN, FULL_REBUILD_EVERY_N_INCREMENTAL_REFRESHES, WATERMARK_SAFETY_OVERLAP_MS } from '../MaterializationRefresher';
 
 /**
@@ -856,42 +857,88 @@ describe('MaterializationRefresher.isSafeObjectName (fail-closed re-check for th
  */
 describe('MaterializationRefresher.resolvePlatformQuerySQL (snapshot the statement the read path runs)', () => {
     const QID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
-    /** Minimal provider stub: only `.Queries` is read, and only `.ID` / `.GetPlatformSQL` off each entry. */
-    const providerWith = (queries: Array<{ ID: string; GetPlatformSQL: (p: string) => string }>) =>
-        ({ Queries: queries }) as unknown as Parameters<typeof MaterializationRefresher.resolvePlatformQuerySQL>[0];
+    /** A cached query as `QueryEngine` holds it: only `.ID` / `.Name` / `.GetPlatformSQL` are read. */
+    type CachedQueryStub = { ID: string; Name: string; GetPlatformSQL: (p: string) => string };
+    /** The engine's private query cache, which its real `FindQueryByID` searches. */
+    type EngineCache = { _queries: CachedQueryStub[] };
+    const engineCache = () => QueryEngine.Instance as unknown as EngineCache;
+    /** The deprecated provider query list stays empty: the query must come from `QueryEngine`. */
+    const provider = { Queries: [] } as unknown as IMetadataProvider;
+    let savedQueries: CachedQueryStub[];
+    let providerEngineLookup: ReturnType<typeof vi.spyOn>;
 
-    const variantQuery = (id: string) => ({
+    const engineWith = (queries: CachedQueryStub[]) => {
+        engineCache()._queries = queries;
+    };
+
+    const variantQuery = (id: string): CachedQueryStub => ({
         ID: id,
+        Name: 'Variant Query',
         GetPlatformSQL: (p: string) => (p === 'postgresql' ? 'SELECT pg_variant' : 'SELECT ss_variant'),
     });
 
-    it('prefers the platform variant over the base SQL, per engine', () => {
-        const p = providerWith([variantQuery(QID)]);
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT ss_variant');
+    beforeEach(() => {
+        savedQueries = engineCache()._queries;
+        // The refresh provider's connection is bound to the engine under test.
+        providerEngineLookup = vi.spyOn(QueryEngine, 'GetProviderInstance').mockReturnValue(QueryEngine.Instance);
     });
 
-    it('matches the query through UUIDsEqual, so platform resolution survives cross-platform ID casing', () => {
+    afterEach(() => {
+        engineCache()._queries = savedQueries;
+        vi.restoreAllMocks();
+    });
+
+    it('prefers the platform variant over the base SQL, per engine', () => {
+        engineWith([variantQuery(QID)]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', false)).toBe('SELECT ss_variant');
+    });
+
+    it("reads the QueryEngine bound to the refresh provider, not the process-wide one", () => {
+        const otherEngine = { FindQueryByID: () => variantQuery(QID) } as unknown as QueryEngine;
+        providerEngineLookup.mockReturnValue(otherEngine);
+        engineWith([]); // the global engine does not hold the query
+
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', true)).toBe('SELECT pg_variant');
+        expect(providerEngineLookup).toHaveBeenCalledWith(provider, QueryEngine);
+    });
+
+    it('matches the query case-insensitively, so platform resolution survives cross-platform ID casing', () => {
         // SQL Server returns UUIDs uppercase and PostgreSQL lowercase; a `===` match would silently miss here
         // and fall back to the base SQL — reintroducing the very divergence this resolves.
-        const p = providerWith([variantQuery(QID.toLowerCase())]);
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID.toUpperCase(), 'SELECT base', false)).toBe('SELECT ss_variant');
+        engineWith([variantQuery(QID.toLowerCase())]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID.toUpperCase(), 'SELECT base', false)).toBe('SELECT ss_variant');
     });
 
-    it('falls back to the entity SQL when the query is absent from provider metadata (previous behavior)', () => {
-        const p = providerWith([]);
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+    it('falls back to the entity SQL when the query is absent from the QueryEngine cache (previous behavior)', () => {
+        engineWith([]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', false)).toBe('SELECT base');
     });
 
     it('falls back to the entity SQL when the resolved variant is empty/whitespace', () => {
-        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '   ' }]);
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, 'SELECT base', false)).toBe('SELECT base');
+        engineWith([{ ID: QID, Name: 'Blank', GetPlatformSQL: () => '   ' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, 'SELECT base', false)).toBe('SELECT base');
     });
 
     it('returns null when neither source yields a usable statement', () => {
-        const p = providerWith([{ ID: QID, GetPlatformSQL: () => '' }]);
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, null, false)).toBeNull();
-        expect(MaterializationRefresher.resolvePlatformQuerySQL(p, QID, '  ', false)).toBeNull();
+        engineWith([{ ID: QID, Name: 'Empty', GetPlatformSQL: () => '' }]);
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, null, false)).toBeNull();
+        expect(MaterializationRefresher.resolvePlatformQuerySQL(provider, QID, '  ', false)).toBeNull();
+    });
+
+    it('loads QueryEngine through the refresh provider before resolving the snapshot SQL', async () => {
+        engineWith([variantQuery(QID)]);
+        const config = vi.spyOn(QueryEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const user = { ID: 'user-1' } as UserInfo;
+        type SnapshotResolver = {
+            resolveQuerySnapshotSQL(p: IMetadataProvider, u: UserInfo, id: string, sql: string | null, pg: boolean): Promise<string | null>;
+        };
+        const refresher = new MaterializationRefresher() as unknown as SnapshotResolver;
+
+        const sql = await refresher.resolveQuerySnapshotSQL(provider, user, QID, 'SELECT base', true);
+
+        expect(config).toHaveBeenCalledWith(false, user, provider);
+        expect(sql).toBe('SELECT pg_variant');
     });
 });
 

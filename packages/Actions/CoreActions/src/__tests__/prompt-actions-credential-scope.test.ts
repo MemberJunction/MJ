@@ -34,6 +34,7 @@ vi.mock('@memberjunction/core', () => ({
 vi.mock('@memberjunction/generic-database-provider', () => ({ QueryCompositionEngine: {}, QueryPagingEngine: {} }));
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({ SQLServerDataProvider: class SQLServerDataProvider {} }));
 vi.mock('@memberjunction/ai-core-plus', () => ({ AIPromptParams: class AIPromptParams {} }));
+vi.mock('@memberjunction/core-entities', () => ({ QueryEngine: { Instance: {} } }));
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: { Instance: { Config: vi.fn().mockResolvedValue(undefined), get Prompts() { return h.prompts; } } },
 }));

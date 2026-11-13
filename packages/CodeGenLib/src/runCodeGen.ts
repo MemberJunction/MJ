@@ -28,8 +28,8 @@ import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { RemoteOperationGeneratorBase, ResolveRemoteOperationSchema } from './Misc/remote_operations_codegen';
-import { TypedQueryGeneratorBase } from './Misc/typed_query_codegen';
-import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
+import { TypedQueryCodeGenQueriesFromEngine, TypedQueryGeneratorBase } from './Misc/typed_query_codegen';
+import { MJRemoteOperationEntity, QueryEngine } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
@@ -93,6 +93,13 @@ export class RunCodeGenBase {
     logError(`${context}: ${message}`);
     CodeGenReporter.Instance.note(`${context}: ${message}`);
   }
+
+  /**
+   * Where the CORE typed-query file imports `DefineTypedQuery` from. That file is generated into
+   * `@memberjunction/core-entities` (`src/generated/queries/`), which defines `DefineTypedQuery` in
+   * `src/custom/typedQuery.ts`; a package cannot import its own name, so the import is relative.
+   */
+  public static CoreTypedQueryDefinerModule = '../../custom/typedQuery.js';
 
   /**
    * True when a CORE file-generation pass has no in-scope entities, so it must not run (#3384). Those
@@ -1134,7 +1141,9 @@ export class RunCodeGenBase {
         (entitySubClassOutputDir ? path.join(entitySubClassOutputDir, 'queries') : undefined);
       if (coreTypedQueriesDir || nonCoreTypedQueriesDir) {
         const typedQueryGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<TypedQueryGeneratorBase>(TypedQueryGeneratorBase)!;
-        const allQueries = md.Queries ?? [];
+        // Forced: earlier phases of this run may have rewritten query SQL.
+        await QueryEngine.Instance.Config(true, currentUser);
+        const allQueries = TypedQueryCodeGenQueriesFromEngine(QueryEngine.Instance.Queries);
         const platform = DbPlatform();
 
         if (coreTypedQueriesDir && !RunCodeGenBase.SkipEmptyCorePass('CORE Typed Queries', coreEntities)) {
@@ -1145,7 +1154,7 @@ export class RunCodeGenBase {
               md.Entities,
               coreTypedQueriesDir,
               [mjCoreSchema],
-              { platform },
+              { platform, definerModule: RunCodeGenBase.CoreTypedQueryDefinerModule },
             ),
           );
           if (!ok) {

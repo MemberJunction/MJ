@@ -76,6 +76,18 @@ export class ProviderConfigDataBase<D = any> {
     public DeltaUpdates?: boolean;
 
     /**
+     * Whether the provider loads the saved-query metadata (queries, their categories, fields,
+     * parameters, permissions, entities, dependencies, platform SQL and SQL dialects) into its
+     * metadata object, where the deprecated `Queries`, `QueryFields`, … getters read it. Defaults to
+     * `false`: those items are not read, a saved query does not refresh the metadata, and the
+     * getters return empty arrays. `QueryEngine` (`@memberjunction/core-entities`) is the source of
+     * query metadata either way. Set to `true` only for code that still reads the deprecated
+     * getters; the option is removed with them in 7.0. Every process sharing a metadata cache
+     * should use the same setting.
+     */
+    public LoadQueryMetadata?: boolean;
+
+    /**
      * Constructor for ProviderConfigDataBase
      * @param data 
      * @param MJCoreSchemaName 
@@ -1018,23 +1030,23 @@ export interface IMetadataProvider {
      */
     get AuthorizationRoles(): AuthorizationRoleInfo[]
 
-    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get Queries(): QueryInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryFields(): QueryFieldInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryCategories(): QueryCategoryInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryPermissions(): QueryPermissionInfo[]
-    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryEntities(): QueryEntityInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryParameters(): QueryParameterInfo[]
-    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QueryDependencies(): QueryDependencyInfo[]
-    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get SQLDialects(): SQLDialectInfo[]
-    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
@@ -2216,23 +2228,23 @@ export class AllMetadata {
      * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
      */
     AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryCategories: QueryCategoryInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueries: QueryInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryFields: QueryFieldInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryPermissions: QueryPermissionInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryEntities: QueryEntityInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryParameters: QueryParameterInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQueryDependencies: QueryDependencyInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllSQLDialects: SQLDialectInfo[] = [];
-    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
+    /** @deprecated Saved-query metadata: use `QueryEngine` from `@memberjunction/core-entities`. Empty unless the provider is configured with `LoadQueryMetadata`; removed in 7.0. */
     AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];

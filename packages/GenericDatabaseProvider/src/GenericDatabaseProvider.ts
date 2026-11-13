@@ -63,7 +63,6 @@ import {
     QueryCacheAuthorization,
     QueryDefinitionSignature,
     RunQueryCacheStatus,
-    QueryCategoryInfo,
     AggregateResult,
     AggregateValue,
     CompositeKey,
@@ -142,6 +141,7 @@ import type { RecordChangePayload } from '@memberjunction/core';
 import {
     GetQueryApprovalStateAsync,
     MJEntityAIActionEntity,
+    MJQueryCategoryEntity,
     MJQueryEntityExtended,
     RenderedSQLCheckResult,
     MJQueryParameterEntity,
@@ -6876,17 +6876,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
     }
 
     /**
-     * Resolves a category path string to a QueryCategoryInfo ID.
+     * Resolves a category path string to a query category ID, from `QueryEngine`.
      */
     protected resolveCategoryPath(categoryPath: string): string | null {
         if (!categoryPath) return null;
         const segments = categoryPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return null;
 
-        let currentCategory: QueryCategoryInfo | null = null;
+        const categories = QueryEngine.Instance.QueryCategories;
+        let currentCategory: MJQueryCategoryEntity | null = null;
         for (const segment of segments) {
             const parentId: string | null = currentCategory !== null ? currentCategory.ID : null;
-            currentCategory = this.QueryCategories.find(cat =>
+            currentCategory = categories.find(cat =>
                 cat.Name.trim().toLowerCase() === segment.toLowerCase() && UUIDsEqual(cat.ParentID, parentId),
             ) ?? null;
             if (!currentCategory) return null;
@@ -8292,13 +8293,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // No enricher registered under this key (providing package not loaded) — no-op.
                 return rows;
             }
-            // Resolve the QueryInfo metadata for the executed query (best-effort; an enricher
-            // can use it to find the query's associated entity). Undefined is acceptable.
-            const queryInfo: QueryInfo | undefined = this.Queries.find(q => UUIDsEqual(q.ID, query.ID));
+            // The QueryInfo metadata exists only when this provider loads query metadata; the ID
+            // always reaches the enricher, which can resolve the query from QueryEngine.
+            const queryInfo: QueryInfo | undefined = this.LoadsQueryMetadata ? this.Queries.find(q => UUIDsEqual(q.ID, query.ID)) : undefined;
             return await enricher.EnrichResults({
                 rows,
                 config: enrichment.Config ?? {},
                 query: queryInfo,
+                queryID: query.ID,
                 contextUser,
                 provider: this,
             });
@@ -9465,24 +9467,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
-                // consumed by this provider's own assembly steps, which mutate them in place by
-                // design: PostProcessEntityMetadata sorts the entity array and attaches child
-                // collections onto each entity/field row, and GetAllMetadata's Applications
-                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
-                // Freezing them makes metadata bootstrap throw and the process starts blind.
-                //
-                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
-                // item.Results — these very arrays — to every engine subclass), so those slots
-                // must stay under the defensive deep-freeze like any RunView result.
-                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
-                const rowsForCache = isMetadataScaffolding
-                    ? itemData
-                    : provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName));
+                // Every dataset's slots — MJ_Metadata's included — hold rows that later readers are
+                // served (BaseEngine.Load hands item.Results to every engine subclass; the GraphQL
+                // dataset resolver hands MJ_Metadata to every client), so they are frozen like any
+                // RunView result. The metadata assembly copies the rows it writes to.
                 await cache.SetRunViewResult(
-                    uncachedFingerprints[i], syntheticParams, rowsForCache, maxUpdatedAt,
-                    undefined, undefined, this, undefined,
-                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                    uncachedFingerprints[i], syntheticParams,
+                    provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName)), maxUpdatedAt,
+                    undefined, undefined, this
                 );
             }
 

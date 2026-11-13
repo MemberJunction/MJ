@@ -101,6 +101,8 @@ import { SqlPipeMatrixClientChecks } from '../checks/sqlpipe-matrix-client.check
 import { CiphertextCacheChecks } from '../checks/ciphertext-cache.checks';
 import { RecordChangeSnapshotChecks } from '../checks/record-change-snapshot.checks';
 import { ConcurrencyConflictClientChecks } from '../checks/concurrency-conflict-client.checks';
+import { QueryMetadataClientChecks } from '../checks/query-metadata-client.checks';
+import { MetadataPayloadClientChecks } from '../checks/metadata-payload-client.checks';
 import { TransactionGroupConcurrencyClientChecks } from '../checks/transaction-group-concurrency-client.checks';
 import { EntityStatusFanoutClientChecks } from '../checks/entity-status-fanout-client.checks';
 import { EncryptedReadClientChecks } from '../checks/encrypted-read-client.checks';
@@ -294,9 +296,11 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['runview-features', RunViewFeatureChecks, 12], // RVF1-RVF12 RunView cross-feature edges and RunViewParams.Parameters wire binding (IT32)
         ['work-bus-core', WorkBusCoreChecks, 10], // WBC1-WBC10 Conversation Types, Comments IS-A Conversation, Comment Types, Field Suggestions IS-A Comment, SubtypeSelector AutoEnsureOnSave/Refuse, PostSaveHook superseding, and Workstream wakes (IT164)
         ['record-change-snapshot', RecordChangeSnapshotChecks, 4], // RCS1-RCS4 Record Change snapshots record the stored row: server-set values, another writer's change, apostrophes, ciphertext (IT169)
+        ['query-metadata-client', QueryMetadataClientChecks, 3], // QM1-QM3 a client leaves the saved-query metadata items unread, the server reports none of their rows, a saved query leaves the client current (IT175)
+        ['metadata-payload-client', MetadataPayloadClientChecks, 3], // MP1-MP3 entity, field and application rows reach a client without nested child collections (IT174)
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 4], // ISP1-ISP4 live SQL native typing, key capping, and Soft PK/FK/Organic Key auto-indexing (IT165)
-        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT172)
+        ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -435,6 +439,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-entity-read': 2,
         'materialized-read': 3,
         'metadata-consistency': 8,
+        'metadata-payload-client': 3,
         'metadata-sync': 9,
         'metadata-sync-push': 12,
         'metadata-sync-queries': 10,
@@ -519,6 +524,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'query-api-lifecycle': 12,
         'query-approvals': 5,
         'query-extraction': 15,
+        'query-metadata-client': 3,
         'query-refresh': 16,
         'query-security': 10,
         'queue': 7,
@@ -609,7 +615,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(242);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(244);
     });
 });
 
@@ -994,6 +1000,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-truth-datasets.W9-multiclass-s43',
         'ps-truth-datasets.W9-multiclass-s44',
         'ps-truth-datasets.W9-multiclass-s9042',
+        'query-metadata-client.QM3',
         'realtime-session-guard.RSG1',
         'realtime-session-guard.RSG2',
         'realtime-session-verification.RSV1',

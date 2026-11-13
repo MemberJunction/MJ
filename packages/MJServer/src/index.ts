@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -107,6 +107,7 @@ import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
+  SetTypedQueryDriftMode,
 } from '@memberjunction/core-entities';
 import {
   ServerExtensionLoader,
@@ -651,6 +652,7 @@ const setupComplete$ = new ReplaySubject(1);
     pgConfigData.LocalStorageProvider = effectiveStorageProvider;
     pgConfigData.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     pgConfigData.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    pgConfigData.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -869,6 +871,7 @@ const setupComplete$ = new ReplaySubject(1);
     config.LocalStorageProvider = effectiveStorageProvider;
     config.ConcurrencyCheck = configInfo.databaseSettings?.concurrencyCheck ?? 'off';
     config.DeltaUpdates = configInfo.databaseSettings?.deltaUpdates ?? true;
+    config.LoadQueryMetadata = configInfo.databaseSettings?.loadQueryMetadata ?? false;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });

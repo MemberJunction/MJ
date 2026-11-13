@@ -11,6 +11,7 @@
  */
 import { BaseRemotableOperation, EntityInfo, IMetadataProvider, IRunQueryProvider, ProjectEntityValueRowsForUser, RunQuery, RunView, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import {
     EXCEL_WORKBOOK_CONTRACT_VERSION,
     ExcelAddinBuildWorkbookInput,
@@ -46,6 +47,17 @@ import { ExcelSourceError, ResolveSingleWorkbookSource, ResolveViewByNameOrId, R
 import { BuildConnectedWorkbook } from './workbook-builder';
 
 const MAX_FILE_NAME_LENGTH = 100;
+
+/**
+ * The saved query an `=MJ.QUERY(...)` target names — by ID, else by name (trimmed, case-insensitive) —
+ * from the `QueryEngine` bound to the request provider, loaded as the caller. Permission is not
+ * checked here; `ResolveSingleWorkbookSource` applies it.
+ */
+async function findQueryByIdOrName(provider: IMetadataProvider, user: UserInfo, target: string): Promise<MJQueryEntityExtended | undefined> {
+    const engine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await engine.Config(false, user, provider);
+    return engine.FindQueryByID(target) ?? engine.FindQueryByName(target);
+}
 
 /** Reports whether this host serves the Excel add-in. */
 @RegisterClass(BaseRemotableOperation, 'ExcelAddin.GetStatus')
@@ -168,16 +180,14 @@ export class ExcelAddinEvaluateCustomFunctionServerOperation extends ExcelAddinE
 
         if (input?.Kind === 'Query') {
             const target = (input.Target ?? '').trim();
-            const query = (provider.Queries ?? []).find(
-                q => UUIDsEqual(q.ID, target) || q.Name.toLowerCase() === target.toLowerCase()
-            );
+            const query = await findQueryByIdOrName(provider, user, target);
             if (!query) {
                 throw new Error(`The saved query "${target}" doesn't exist, or you don't have access to it.`);
             }
             // Map positional arguments to caller-settable parameters when needed
             const mergedParams: Record<string, ExcelParameterValue> = { ...(input.Parameters ?? {}) };
             if (Array.isArray(input.PositionalArguments) && input.PositionalArguments.length > 0) {
-                const callerParams = (query.Parameters ?? []).filter(p => !p.IsServerSet);
+                const callerParams = (query.QueryParameters ?? []).filter(p => !p.IsServerSet);
                 for (let i = 0; i < input.PositionalArguments.length && i < callerParams.length; i++) {
                     const pName = callerParams[i].Name;
                     if (mergedParams[pName] === undefined) {

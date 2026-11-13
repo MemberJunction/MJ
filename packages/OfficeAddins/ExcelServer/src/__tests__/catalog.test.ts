@@ -1,18 +1,38 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     ApplicationEntityInfo,
     ApplicationInfo,
     EntityInfo,
     EntityPermissions,
     IMetadataProvider,
-    QueryCategoryInfo,
-    QueryInfo,
-    QueryParameterInfo,
     RunViewParams,
     RunViewResult,
     UserInfo,
 } from '@memberjunction/core';
+import type { MJQueryCategoryEntity, MJQueryEntityExtended, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+
+/** A cached query as the catalog reads it. */
+type QueryStub = Pick<MJQueryEntityExtended, 'ID' | 'Name' | 'Description' | 'CategoryID' | 'Status'> & {
+    UserCanRun: () => { canRun: boolean; deniedEntities: string[] };
+    QueryParameters: Array<Partial<MJQueryParameterEntity>>;
+};
+/** A cached query category as the catalog reads it. */
+type CategoryStub = Pick<MJQueryCategoryEntity, 'ID' | 'Name' | 'ParentID'>;
+
+const { queryEngineStub } = vi.hoisted(() => ({
+    queryEngineStub: {
+        Queries: [] as QueryStub[],
+        QueryCategories: [] as CategoryStub[],
+        Config: vi.fn(async () => undefined),
+    },
+}));
+
+vi.mock('@memberjunction/core-entities', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core-entities')>()),
+    // GetProviderInstance: the engine bound to the request provider's connection (the same stub here).
+    QueryEngine: { Instance: queryEngineStub, GetProviderInstance: vi.fn(() => queryEngineStub) },
+}));
 import { BuildExcelCatalog, ExcelViewRunner, LoadExcelEntityViews } from '../catalog';
 import { ExcelSourceError } from '../sources';
 
@@ -64,10 +84,8 @@ function makeApp(id: string, name: string, entityIds: string[]): ApplicationInfo
     return app;
 }
 
-function makeCategory(id: string, name: string, parentId: string | null): QueryCategoryInfo {
-    const c = Object.create(QueryCategoryInfo.prototype) as QueryCategoryInfo;
-    Object.assign(c, { ID: id, Name: name, ParentID: parentId });
-    return c;
+function makeCategory(id: string, name: string, parentId: string | null): CategoryStub {
+    return { ID: id, Name: name, ParentID: parentId };
 }
 
 function makeQuery(
@@ -75,11 +93,9 @@ function makeQuery(
     name: string,
     categoryId: string | null,
     canRun: boolean,
-    status: QueryInfo['Status'] = 'Approved',
-): QueryInfo {
-    const q = Object.create(QueryInfo.prototype) as QueryInfo;
-    const yearParam = Object.create(QueryParameterInfo.prototype) as QueryParameterInfo;
-    Object.assign(yearParam, {
+    status: MJQueryEntityExtended['Status'] = 'Approved',
+): QueryStub {
+    const yearParam: Partial<MJQueryParameterEntity> = {
         Name: 'Year',
         Type: 'number',
         IsRequired: true,
@@ -87,25 +103,22 @@ function makeQuery(
         Description: 'Fiscal year',
         SampleValue: '2026',
         IsServerSet: false,
-    });
-    const tenantParam = Object.create(QueryParameterInfo.prototype) as QueryParameterInfo;
-    Object.assign(tenantParam, {
+    };
+    const tenantParam: Partial<MJQueryParameterEntity> = {
         Name: 'TenantID',
         Type: 'string',
         IsRequired: true,
         IsServerSet: true,
-    });
-    const params = [yearParam, tenantParam];
-    Object.assign(q, {
+    };
+    return {
         ID: id,
         Name: name,
         Description: `${name} query`,
         CategoryID: categoryId,
         Status: status,
-        UserCanRun: () => canRun,
-    });
-    Object.defineProperty(q, 'Parameters', { get: () => params });
-    return q;
+        UserCanRun: () => ({ canRun, deniedEntities: canRun ? [] : ['SecretAudit'] }),
+        QueryParameters: [yearParam, tenantParam],
+    };
 }
 
 function makeView(
@@ -126,8 +139,26 @@ function makeView(
 }
 
 describe('BuildExcelCatalog', () => {
-    it('filters applications, entities, categories, queries, and server-set parameters to caller permissions', () => {
+    function setEngine(queries: QueryStub[], categories: CategoryStub[]): void {
+        queryEngineStub.Queries = queries;
+        queryEngineStub.QueryCategories = categories;
+    }
+
+    it('filters applications, entities, categories, queries, and server-set parameters to caller permissions', async () => {
         const user = makeUser();
+        setEngine(
+            [
+                makeQuery('q-allowed', 'Active Members', CAT_CHILD_ID, true, 'Approved'),
+                makeQuery('q-denied', 'Executive Compensation', CAT_CHILD_ID, false, 'Approved'),
+                makeQuery('q-rejected', 'Broken Draft', CAT_ROOT_ID, true, 'Rejected'),
+            ],
+            [
+                makeCategory(CAT_ROOT_ID, 'Membership', null),
+                makeCategory(CAT_CHILD_ID, 'Renewals', CAT_ROOT_ID),
+                makeCategory(CAT_UNUSED_ID, 'Empty Folder', null),
+            ],
+        );
+        // The deprecated provider query lists stay empty: queries and categories come from QueryEngine.
         const provider = {
             Entities: [
                 makeEntity(ENT_PEOPLE_ID, 'MJ: People', 'People', true),
@@ -137,19 +168,12 @@ describe('BuildExcelCatalog', () => {
                 makeApp(APP_CRM_ID, 'CRM', [ENT_PEOPLE_ID.toUpperCase(), ENT_SECRET_ID]),
                 makeApp(APP_EMPTY_ID, 'Admin Only', [ENT_SECRET_ID]),
             ],
-            QueryCategories: [
-                makeCategory(CAT_ROOT_ID, 'Membership', null),
-                makeCategory(CAT_CHILD_ID, 'Renewals', CAT_ROOT_ID),
-                makeCategory(CAT_UNUSED_ID, 'Empty Folder', null),
-            ],
-            Queries: [
-                makeQuery('q-allowed', 'Active Members', CAT_CHILD_ID, true, 'Approved'),
-                makeQuery('q-denied', 'Executive Compensation', CAT_CHILD_ID, false, 'Approved'),
-                makeQuery('q-rejected', 'Broken Draft', CAT_ROOT_ID, true, 'Rejected'),
-            ],
+            QueryCategories: [],
+            Queries: [],
         } as Partial<IMetadataProvider> as IMetadataProvider;
 
-        const catalog = BuildExcelCatalog(provider, user);
+        const catalog = await BuildExcelCatalog(provider, user);
+        expect(queryEngineStub.Config).toHaveBeenCalledWith(false, user, provider);
         expect(catalog.Entities.map(e => e.ID)).toEqual([ENT_PEOPLE_ID]);
         expect(catalog.Applications).toEqual([
             {
@@ -163,7 +187,9 @@ describe('BuildExcelCatalog', () => {
         expect(catalog.Queries).toHaveLength(1);
         expect(catalog.Queries[0].Name).toBe('Active Members');
         expect(catalog.Queries[0].CategoryPath).toBe('Membership / Renewals');
-        expect(catalog.Queries[0].Parameters.map(p => p.Name)).toEqual(['Year']);
+        expect(catalog.Queries[0].Parameters).toEqual([
+            { Name: 'Year', Type: 'number', IsRequired: true, DefaultValue: '2026', Description: 'Fiscal year', SampleValue: '2026' },
+        ]);
     });
 });
 

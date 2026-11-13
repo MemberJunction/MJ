@@ -237,6 +237,8 @@ export * from './checks/agent-execution-primitives.checks';
 export * from './checks/agent-execution-primitives-live.checks';
 export * from './checks/ciphertext-cache.checks';
 export * from './checks/concurrency-conflict-client.checks';
+export * from './checks/query-metadata-client.checks';
+export * from './checks/metadata-payload-client.checks';
 export * from './checks/entity-status-fanout-client.checks';
 export * from './checks/encrypted-read-client.checks';
 export * from './checks/diagnostics.checks';

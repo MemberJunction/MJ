@@ -172,8 +172,9 @@ const entities = md.Entities;          // EntityInfo[]
 const applications = md.Applications;  // ApplicationInfo[]
 const currentUser = md.CurrentUser;    // UserInfo
 const roles = md.Roles;               // RoleInfo[]
-const queries = md.Queries;            // QueryInfo[]
 ```
+
+Saved-query metadata comes from `QueryEngine` in `@memberjunction/core-entities` (`QueryEngine.Instance.Queries`, `FindQueryByID`, `FindQueryByName`, …). The deprecated `Queries`, `QueryFields`, `QueryCategories`, `QueryPermissions`, `QueryEntities`, `QueryParameters`, `QueryDependencies`, `SQLDialects` and `QuerySQLs` getters are empty unless the provider is configured with `LoadQueryMetadata: true` (`databaseSettings.loadQueryMetadata` on MJAPI), and are removed in 7.0. With it off (the default) the provider does not read those items from the `MJ_Metadata` dataset, and saving a query does not refresh the metadata.
 
 #### Metadata Properties
 
@@ -186,10 +187,10 @@ const queries = md.Queries;            // QueryInfo[]
 | `AuditLogTypes` | `AuditLogTypeInfo[]` | Available audit log types |
 | `Authorizations` | `AuthorizationInfo[]` | Authorization definitions |
 | `Libraries` | `LibraryInfo[]` | Registered libraries |
-| `Queries` | `QueryInfo[]` | Query definitions |
-| `QueryFields` | `QueryFieldInfo[]` | Query field metadata |
-| `QueryCategories` | `QueryCategoryInfo[]` | Query categorization |
-| `QueryPermissions` | `QueryPermissionInfo[]` | Query-level permissions |
+| `Queries` | `QueryInfo[]` | Query definitions. Deprecated: empty unless `LoadQueryMetadata`; use `QueryEngine` |
+| `QueryFields` | `QueryFieldInfo[]` | Query field metadata. Deprecated: empty unless `LoadQueryMetadata`; use `QueryEngine` |
+| `QueryCategories` | `QueryCategoryInfo[]` | Query categorization. Deprecated: empty unless `LoadQueryMetadata`; use `QueryEngine` |
+| `QueryPermissions` | `QueryPermissionInfo[]` | Query-level permissions. Deprecated: empty unless `LoadQueryMetadata`; use `QueryEngine` |
 | `VisibleExplorerNavigationItems` | `ExplorerNavigationItem[]` | Navigation items visible to the current user |
 | `AllExplorerNavigationItems` | `ExplorerNavigationItem[]` | All navigation items (including hidden) |
 | `ProviderType` | `'Database' \| 'Network'` | Whether the active provider connects directly to DB or via network |
