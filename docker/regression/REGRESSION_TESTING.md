@@ -454,7 +454,7 @@ All variables go in `docker/regression/.env.test` (gitignored). Copy [`.env.test
 | `MJ_BASE_ENCRYPTION_KEY` | Yes | Base64 encryption key (`openssl rand -base64 32`) |
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
-| `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
+| `AUTH0_CLIENT_SECRET` | No | Auth0 application client secret. An SPA login does not use it: MJAPI checks tokens with the tenant's public keys |
 | `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA). The entrypoint maps this onto `MJ_TEST_VAR_authUsername`, which is what the tests bind as `{{authUsername}}` |
 | `TEST_PWD` | Yes | Test user password in Auth0. Mapped onto `MJ_TEST_VAR_authPassword` the same way |
 | `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |

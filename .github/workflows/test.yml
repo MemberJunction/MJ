@@ -122,6 +122,8 @@ jobs:
             .github/scripts/backstop-alarm.mjs
             .github/scripts/vitest.config.mts
             .github/scripts/__tests__/**
+            # Repo-skill helper scripts; their tests run in the guard-script suite.
+            .claude/skills/*/scripts/**
             # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
             # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
             # run it. Without this entry the one change that most needs the suite skips it.

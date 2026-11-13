@@ -239,8 +239,10 @@ output stays the default.
 ### Part C — The replay-script PR skill
 
 `.claude/skills/regression-replay-pr/SKILL.md` plus helper scripts in
-`.claude/skills/regression-replay-pr/scripts/` (`preflight.sh`, `harvest.sh`). The helpers do
-the fixed steps. The SKILL.md handles decisions and talks to the user.
+`.claude/skills/regression-replay-pr/scripts/`: `preflight.sh`, `worktree.sh`, `run-stack.sh`,
+`harvest.sh` (report, promote, discard, pull), `teardown.sh`, `cleanup.sh`, and
+`harvest-report.mjs` (the harvest check and the PR body, with its logic in `lib/harvest.mjs`).
+The helpers do the fixed steps. The SKILL.md handles decisions and talks to the user.
 
 #### C1. Flow
 
