@@ -92,6 +92,25 @@ Round 1 result after the match check: 2 of 5 PRs have a reported catch that is t
 - **B. All changes in one round on three round 1 PRs (#3831, #5906, #5513): thinking level low, 5 risks in one session, staged judges, read hint.** Pro: the largest saving is known after one round; the token counts still show the share of each change (output for the thinking level, new input for the shared session, judge usage for staging). Con: if the two matched catches are lost, the cause is not known and a second round must separate the changes.
 - **Choice: B.** If wrong: one more round of about 6 USD.
 
+## N12. Round 2 result and what to change next
+
+Round 2 (thinking level low, 5 risks in one session, staged judges, read hint), against round 1 on the same PRs:
+
+| PR | Round 1 USD | Round 2 USD | Round 1 result | Round 2 result |
+|---|---|---|---|---|
+| #3831 | 2.22 | 0.47 | 10 tests, 3 reported, matched | 12 tests, all Invalid (type errors) |
+| #5906 | 2.23 | 0.31 | 11 tests, 1 reported, matched | 10 tests, all pass on both revisions |
+| #5513 | 2.79 | 0.40 | 13 tests, 7 weak catches, 0 reported | 10 tests, 6 weak catches, 0 reported |
+
+Cost fell by 84%, and both matched catches were lost. Staged judges worked: judge cost 0.15 USD on #5513 (round 1: about 0.50), same result. Sessions were much shorter (5 to 27 turns).
+Cause 1: `run_test` ran vitest only, so the agent never saw type errors that job 2 then rejects. Fixed: `run_test` now type-checks a passing file and returns the compiler errors (failing tests first).
+Cause 2, not separated yet: low thinking level, or the shared session, or both, gave weaker tests on #5906.
+
+- **A. Round 3 = low thinking + shared session + type check.** Pro: cheapest configuration; shows whether the type check alone brings the catches back. Con: #5906 had no type errors and still lost its catch, so low thinking is a likely cause by itself.
+- **B. Round 3 = medium thinking + shared session + type check.** Pro: the middle point; if the catches return, the configuration is found in one round. Con: if they do not, the shared session and the thinking level are still not separated.
+- **C. Round 3 = default thinking + shared session + type check.** Pro: separates the shared session from the thinking level. Con: the most expensive of the three; a second round is still needed to find the cheapest good level.
+- **Choice: B.** If wrong: one more round (C) of about 4 USD.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -99,3 +118,4 @@ Round 1 result after the match check: 2 of 5 PRs have a reported catch that is t
 | 0 | Hydrogen #5897 (first run) + one failed #3831 attempt | 3.42 | 3.42 |
 | A1 | Analyzer only, 30 tuning bug PRs, Sonnet | 2.65 | 6.07 |
 | 1 | Hydrogen, new pipeline: #3831, #5906, #4450, #5513 | 10.09 | 16.16 |
+| 2 | Hydrogen, all cost changes, thinking low: #3831, #5906, #5513 | 1.18 | 17.34 |
