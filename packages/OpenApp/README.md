@@ -227,6 +227,7 @@ Rules:
 - Underscores in the description replace spaces
 - Files are applied in version order
 - Once applied, a migration is **never re-run** (tracked in `flyway_schema_history`)
+- Each SQL request may run for 30 minutes, as with `mj migrate`. Set `MJ_MIGRATION_REQUEST_TIMEOUT` (milliseconds) or `dbRequestTimeout` in `mj.config.cjs` for a longer data migration
 
 #### Migration Content
 

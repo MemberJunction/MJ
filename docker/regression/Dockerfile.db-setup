@@ -1,6 +1,6 @@
 # MemberJunction Database Setup — One-Shot Init Container
 # Creates the database, runs Flyway migrations, installs AssociationDB demo data,
-# and runs CodeGen. Exits 0 on success.
+# runs CodeGen, then the database step of the Open Apps in open-apps.json. Exits 0 on success.
 #
 # This is a one-shot container: it runs to completion and then stops.
 # MJAPI depends on it via service_completed_successfully in docker-compose.
@@ -56,10 +56,16 @@ COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 
 RUN pnpm install --frozen-lockfile
 
-RUN pnpm run build:api
-
-# Copy MJ config (same one MJAPI uses)
+# Package step for the Open Apps pinned in open-apps.json (see scripts/open-apps.cjs). It needs
+# mj.config.cjs, because it writes dynamicPackages, entityPackageName and excludeSchemas into it.
+# GITHUB_TOKEN is a BuildKit secret (compose build.secrets), so it is in no image layer; without
+# it, public repos still install.
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/open-apps.json ./docker/regression/open-apps.json
+COPY docker/regression/scripts/open-apps.cjs ./docker/regression/scripts/open-apps.cjs
+RUN --mount=type=secret,id=github_token node docker/regression/scripts/open-apps.cjs packages
+
+RUN pnpm run build:api
 
 # Patch autoCreateNewUsers for test environment
 RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false/autoCreateNewUsers: true/' mj.config.cjs

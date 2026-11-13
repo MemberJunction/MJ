@@ -36,6 +36,15 @@ COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/g
 
 RUN pnpm install --frozen-lockfile
 
+# Package step for the Open Apps pinned in open-apps.json (see scripts/open-apps.cjs). It needs
+# mj.config.cjs, because it writes dynamicPackages, entityPackageName and excludeSchemas into it.
+# GITHUB_TOKEN is a BuildKit secret (compose build.secrets), so it is in no image layer; without
+# it, public repos still install.
+COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/open-apps.json ./docker/regression/open-apps.json
+COPY docker/regression/scripts/open-apps.cjs ./docker/regression/scripts/open-apps.cjs
+RUN --mount=type=secret,id=github_token node docker/regression/scripts/open-apps.cjs packages
+
 RUN pnpm run build:api
 
 # ─── Runtime ───────────────────────────────────────────────────────────────
@@ -46,8 +55,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 WORKDIR /app
 
+# Includes mj.config.cjs with the Open Apps' package-step changes.
 COPY --from=builder /app ./
-COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 COPY docker/regression/scripts/ ./docker/regression/scripts/
 
 # Patch userHandling config for the test environment.

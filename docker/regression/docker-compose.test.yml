@@ -1,7 +1,8 @@
 # MemberJunction Full-Stack Regression Test Environment
 #
 # Architecture:
-#   sqlserver → db-setup (migrations + AssociationDB + CodeGen) → mjapi → mjexplorer → test-runner
+#   sqlserver → db-setup (migrations + AssociationDB + CodeGen + the Open Apps in open-apps.json)
+#             → mjapi → mjexplorer → test-runner
 #
 # Usage (from repo root, via the MJ CLI):
 #   cp docker/regression/.env.test.example docker/regression/.env.test
@@ -63,6 +64,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.db-setup
+      secrets: [github_token]
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -75,6 +77,14 @@ services:
       # here — scripts/set-demo-field-types.cjs sets them.
       AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
       AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
+      # Database step of the Open Apps in open-apps.json (scripts/open-apps.cjs). GITHUB_TOKEN is
+      # optional: rate limits and private repos. MJ_INSTALL_USER_EMAIL is empty by default, so no
+      # app's template user is copied (see REGRESSION_TESTING.md). The template is never set as the
+      # new-user template, because that would edit this container's mj.config.cjs only.
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      MJ_INSTALL_USER_EMAIL: "${MJ_INSTALL_USER_EMAIL:-}"
+      MJ_INSTALL_TEMPLATE_FOR_NEW_USERS: "no"
+      MORECHEESE_SHARED_KEY: "${MORECHEESE_SHARED_KEY:-}"
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -86,6 +96,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.db-setup
+      secrets: [github_token]
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -128,6 +139,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.api
+      secrets: [github_token]
     depends_on:
       db-setup:
         condition: service_completed_successfully
@@ -138,6 +150,8 @@ services:
       AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
       GRAPHQL_PORT: "4000"
       NODE_ENV: test
+      # Decrypts MoreCheese's shipped credentials (Skip dashboards, Dropbox source). Optional.
+      MORECHEESE_SHARED_KEY: "${MORECHEESE_SHARED_KEY:-}"
     ports:
       - "14000:4000"
     # Auto-restart if MJAPI crashes (e.g. OOM under heavy regression load)
@@ -155,6 +169,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.explorer
+      secrets: [github_token]
       args:
         AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
         AUTH0_CLIENTID: "${AUTH0_CLIENTID:-${AUTH0_CLIENT_ID:-}}"
@@ -172,6 +187,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.test-runner
+      secrets: [github_token]
     depends_on:
       # `required: false` lets compose skip these deps when the targets
       # aren't in the active profile (Modes B/C/D run remote-target with no
@@ -270,3 +286,9 @@ services:
       # into the JSON files after a push.
       - ../../metadata-optional:/app/metadata-optional
       - ./test-metadata:/app/test-metadata:ro
+
+# BuildKit secret for the Open Apps' package step in every image build. Read from the host's
+# GITHUB_TOKEN; when it is unset the secret is empty and public repos still install.
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN

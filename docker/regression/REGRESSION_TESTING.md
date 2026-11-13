@@ -459,6 +459,9 @@ All variables go in `docker/regression/.env.test` (gitignored). Copy [`.env.test
 | `TEST_PWD` | Yes | Test user password in Auth0. Mapped onto `MJ_TEST_VAR_authPassword` the same way |
 | `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
 | `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
+| `GITHUB_TOKEN` | No | GitHub token for the Open Apps in `open-apps.json`. All pinned repos are public, so it only raises the GitHub rate limit, or reaches a private repo. The image builds get it as a BuildKit secret, so it is in no image layer. Keep the empty `GITHUB_TOKEN=` line in `.env.test` when you do not set it: the build secret reads the variable |
+| `MORECHEESE_SHARED_KEY` | No | The MoreCheese shared key (from the MoreCheese team). MJAPI uses it to decrypt MoreCheese's shipped credentials. Without it MoreCheese installs and runs, but the Skip dashboards and the Knowledge Hub Dropbox source do not load |
+| `MJ_INSTALL_USER_EMAIL` | No | When set, the Open Apps' database step copies each app's template user (MoreCheese's demo user, with its dashboards and conversations) to a new user with this email. Empty by default: the test-user metadata push (`test-metadata/users`) creates `computeruse@bluecypress.io` itself and fails on a user that already exists |
 
 > **Credentials reach the tests as variables.** Every test binds `{{authUsername}}` /
 > `{{authPassword}}` rather than literal credentials, and those resolve from
@@ -468,6 +471,22 @@ All variables go in `docker/regression/.env.test` (gitignored). Copy [`.env.test
 > unresolved variable — it no longer submits a blank login.
 
 \* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`). The same keys are also passed to `db-setup` and `form-generator`, where CodeGen's advanced generation uses them to turn CHECK constraints into field validators. They do not set field `ExtendedType`: `scripts/set-demo-field-types.cjs` marks the demo email and URL fields between CodeGen passes, so the generated forms render them as links (T044).
+
+### Open Apps (`open-apps.json`)
+
+[`open-apps.json`](open-apps.json) pins the Open Apps the stack installs, as `[{ "repo": "<https GitHub URL>", "version": "<x.y.z>" }]`. Today it holds MoreCheese 1.3.2, which brings its 10 dependency apps. Change a version only in a reviewed PR, so that a run is reproducible. An empty array (`[]`) gives the stack without Open Apps.
+
+The install runs in two steps ([`scripts/open-apps.cjs`](scripts/open-apps.cjs)):
+
+1. **Package step, at image build** (all four Dockerfiles, after `pnpm install --frozen-lockfile` and before the build): `mj app install <repo> --version <v> --packages-only --non-interactive`. It adds the app packages to MJAPI and MJExplorer, runs `pnpm install`, and writes `dynamicPackages`, `entityPackageName` and `excludeSchemas` into the image's `mj.config.cjs`. Then the build fails if a workspace `@memberjunction` package also has a registry copy in `node_modules/.pnpm` (for example a second `@memberjunction/core`).
+2. **Database step, in `db-setup`** (after MJ's migrations and CodeGen, before the metadata push): `mj app install <repo> --version <v> --database-only --non-interactive`. It creates the app schemas and runs their migrations, which carry the demo data.
+
+A change to `open-apps.json` needs `mj test regression build`. The build already runs the duplicate check; to repeat it by hand (the MJAPI runtime image has no pnpm, so `pnpm why` runs in the db-setup image):
+
+```bash
+docker run --rm --entrypoint node mj-regression-mjapi docker/regression/scripts/open-apps.cjs check-duplicates
+docker run --rm mj-regression-db-setup pnpm why @memberjunction/core
+```
 
 ### Auth0 Setup Requirements
 
@@ -484,7 +503,8 @@ The Auth0 SPA application must have:
 ```
 docker/regression/
 ├── docker-compose.test.yml       # Orchestration (5 services + opt-in form-generator)
-├── Dockerfile.db-setup           # DB init: migrations + AssociationDB + CodeGen (one-shot)
+├── open-apps.json                # Open Apps the stack installs (repo + pinned version)
+├── Dockerfile.db-setup           # DB init: migrations + AssociationDB + CodeGen + Open Apps (one-shot)
 ├── Dockerfile.api                # MJAPI: GraphQL server only (no setup)
 ├── Dockerfile.explorer           # MJExplorer: Angular AOT build + nginx reverse proxy
 ├── Dockerfile.test-runner        # Test runner: full monorepo build + Playwright Chromium
@@ -502,6 +522,7 @@ docker/regression/
 │   │   ├── db.cjs                # Shared mssql connection helper (sql + connect)
 │   │   └── probes.cjs            # Shared HTTP/TCP probes (preflight + health-monitor)
 │   ├── bootstrap-db.cjs          # CREATE DATABASE + install AssociationDB (one-shot)
+│   ├── open-apps.cjs             # Open Apps in open-apps.json: package step, database step, duplicate check
 │   ├── patch-test-api-config.cjs # Bake-time MJAPI config patch (Dockerfile.api)
 │   ├── gen-environment-ts.cjs    # Bake-time MJExplorer environment.ts gen
 │   ├── setup-test-user.cjs       # SQL safety-net: user + roles + apps + favorites

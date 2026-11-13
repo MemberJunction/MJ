@@ -19,6 +19,8 @@
 #         migration fails with "Invalid object name".
 #   2. Run Flyway migrations (`mj migrate`)
 #   3. Run CodeGen (`mj codegen`)
+#   3b. Database step of the Open Apps in open-apps.json (`mj app install
+#       --database-only`, via scripts/open-apps.cjs). The images ran the package step.
 #   4. Push application metadata (the baseline migration only seeds 2 of ~20)
 #   5. Push prompt metadata (refreshes Computer Use controller/judge templates
 #      if their .template.md files have changed)
@@ -112,6 +114,13 @@ node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
 echo "  ↻ CodeGen pass 1 complete; re-running against the typed demo fields..."
 node /app/packages/MJCLI/bin/run.js codegen
 echo "  ✓ CodeGen complete (2 passes)"
+echo ""
+
+# Step 3b: Open Apps — schemas, migrations (with their data) and app records. The database
+# is new on every `up`, so no app is installed yet. An empty open-apps.json does nothing.
+echo "Step 3b: Installing the database step of the pinned Open Apps..."
+node "$SCRIPTS/open-apps.cjs" database
+echo "  ✓ Open Apps database step complete"
 echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)
