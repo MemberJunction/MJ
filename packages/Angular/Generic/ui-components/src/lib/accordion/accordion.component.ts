@@ -82,7 +82,7 @@ export class MJAccordionBodyDirective {
 }
 
 /**
- * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
+ * mj-accordion-panel — Collapsible panel.
  *
  * Supports two title modes:
  * - Simple string: `[Title]="'Details'"` — plain text title

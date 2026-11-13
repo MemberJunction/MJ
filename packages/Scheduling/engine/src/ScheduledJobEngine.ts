@@ -27,6 +27,16 @@ import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
 
 /**
+ * Bookkeeping for one execution started by {@link SchedulingEngine.DispatchScheduledJobs}, shared
+ * by the execution's own completion path and the lease sweep, so that exactly one of them records
+ * the run's outcome.
+ */
+interface DispatchedExecution {
+    /** Set by whichever of the two records the outcome first; the other leaves the statistics alone. */
+    OutcomeRecorded: boolean;
+}
+
+/**
  * Engine for managing scheduled job execution
  *
  * This engine uses composition to delegate metadata operations to SchedulingEngineBase
@@ -65,6 +75,50 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
 
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
+
+    /** The running poll callback, kept so a due-time change can re-arm the timer for it (#6217). */
+    private pollTick?: () => Promise<void>;
+
+    /**
+     * One driver instance per DriverClass, used only to ask work-gated drivers when their work is
+     * due ({@link BaseScheduledJob.NextWorkDueAt}). Runs still get a fresh instance each.
+     * `null` records a DriverClass that does not resolve.
+     */
+    private readonly gateDrivers = new Map<string, BaseScheduledJob | null>();
+
+    /** Drivers whose {@link BaseScheduledJob.WorkGateChanged$} this engine already listens to. */
+    private readonly gateSubscriptions = new Map<BaseScheduledJob, Subscription>();
+
+    /**
+     * Longest the poll timer sleeps, and how stale a work gate's state may get before it is
+     * re-read (#6217). Without Redis, a change another server makes reaches this one only through
+     * that re-read, so this bounds how late such a change applies. Default 60 minutes
+     * (`scheduledJobs.routineIndexRefreshMinutes` in MJServer).
+     */
+    public get WorkGateRefreshMs(): number {
+        return this.Base.MaxPollingIntervalMs;
+    }
+    public set WorkGateRefreshMs(value: number) {
+        if (!Number.isFinite(value) || value < 60_000) {
+            throw new Error(`WorkGateRefreshMs must be at least 60000 ms; got ${value}`);
+        }
+        this.Base.MaxPollingIntervalMs = value;
+    }
+
+    /**
+     * How often a polling tick checks the `MJ: Scheduled Jobs` table for rows written behind the engine's back (#4822):
+     * by a script, raw SQL, or a process that publishes no cache event. One cheap query (row count and newest
+     * `__mj_UpdatedAt`); a difference reloads the job list. The baseline is taken when polling starts, and each tick
+     * checks before it dispatches. The check rides existing ticks and adds no wake-ups, so when the tick interval is
+     * longer than this it runs on every tick. Since the timer sleeps until the next due time (#6217), up to
+     * {@link WorkGateRefreshMs}, a job added or moved earlier without a cache event can be noticed that late; a job
+     * with `MissedRunPolicy = Skip` whose next occurrence passes in that time skips it. 0 turns it off.
+     */
+    public JobReconcileIntervalMs: number = 5 * 60_000;
+
+    /** When the last reconcile check ran, and what it saw. */
+    private _lastReconcileAt = 0;
+    private _jobTableSnapshot?: { Count: number; MaxUpdatedAt: string | null };
     private hasInitialized: boolean = false;
 
     /**
@@ -153,19 +207,26 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     /**
      * Promises for jobs currently dispatched but not yet settled. Keyed by job ID.
      *
-     * Three purposes:
+     * Four purposes:
      *   1. Bounded concurrency — DispatchScheduledJobs checks size vs MaxConcurrentJobs.
      *   2. Sweep untracking — sweepStaleInflightJobs deletes by ID for jobs whose
      *      lease has expired, freeing the cap slot even though the JS promise leaks
      *      (see README "Leaked promise behavior").
      *   3. Graceful shutdown — StopPolling can await all in-flight via .values().
+     *   4. Same-process re-dispatch guard — DispatchScheduledJobs never dispatches a
+     *      job whose ID is here. Across processes, the atomic lock sproc does that job.
      *
      * Self-cleans via identity-checked .finally() on each dispatched promise
      * (no-op if a sweep + re-dispatch already replaced the entry).
-     *
-     * NOT used for double-dispatch prevention — that's the atomic lock sproc's job.
      */
     private inflightJobPromises: Map<string, Promise<MJScheduledJobRunEntity | null>> = new Map();
+
+    /**
+     * The {@link DispatchedExecution} for each promise in {@link inflightJobPromises}. Keyed by the
+     * promise, not the job ID, so a later dispatch of the same job gets its own record and a swept
+     * execution keeps its record after the sweep has untracked it.
+     */
+    private dispatchedExecutions = new WeakMap<Promise<MJScheduledJobRunEntity | null>, DispatchedExecution>();
 
     /**
      * When false, DispatchScheduledJobs becomes a no-op. Set false in StopPolling
@@ -274,9 +335,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         return this.Base.GetRunsForJob(jobId);
     }
 
-    /** Calculate and update the active polling interval. */
+    /** Calculate and update the active polling interval, counting work-gated jobs at their work-due time. */
     public UpdatePollingInterval(): void {
-        this.Base.UpdatePollingInterval();
+        this.Base.UpdatePollingInterval((job, now) => this.workDueAt(job, now));
     }
 
     // ========================================================================
@@ -342,6 +403,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         this.warnAboutHighFrequencyJobs();
+        await this.prepareWorkGates(contextUser);
+        this.UpdatePollingInterval();
 
         this.isPolling = true;
         this.acceptingDispatches = true;
@@ -362,6 +425,17 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 this.pollingTimer = setTimeout(poll, interval);
             }
 
+            // Reconcile before dispatching (#4822): the timer wakes exactly at a job's due time, so a job
+            // paused, removed or moved without a cache event must be reloaded before the due check reads it.
+            try {
+                await this.ReconcileJobsIfDue(contextUser);
+            } catch (error) {
+                this.logError('Error during scheduled job reconcile', error);
+            }
+
+            // Re-read gate state that has gone stale (cheap when it has not), before due checks use it.
+            await this.prepareWorkGates(contextUser);
+
             try {
                 const result = await this.DispatchScheduledJobs(contextUser);
                 if (result.swept > 0 || result.dispatched > 0 || result.lockedOut > 0 || result.skippedAtCapacity > 0) {
@@ -380,12 +454,72 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 // No fallback timer needed — re-arm at top of function already
                 // scheduled the next poll before any await could fire.
             }
+
+            // The timer armed at the top used the interval from before this tick's dispatch. Now that
+            // the tick has moved NextRunAt values on, arm it for the next due time instead (#6217).
+            this.rearmPollingTimer();
         };
+        this.pollTick = poll;
 
         // First poll fires on the timer (not immediate) so observers can stop
         // us between StartPolling returning and the first poll firing.
         this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
         this.log('Started scheduled job polling');
+
+        // Take the reconcile baseline now (#4822), so a job row written without a cache event before the
+        // first tick shows up as a change at that tick. After isPolling is set, so a change found here
+        // cannot re-enter StartPolling through onBaseJobsChanged.
+        try {
+            await this.ReconcileJobsIfDue(contextUser);
+        } catch (error) {
+            this.logError('Error during scheduled job reconcile', error);
+        }
+    }
+
+    /**
+     * #4822 — reloads the job list when the `MJ: Scheduled Jobs` table changed without a cache event. Runs at most once
+     * per {@link JobReconcileIntervalMs}; the first call only records what it saw. Public so a host (or a test) can force
+     * a check; the polling tick calls it.
+     *
+     * @returns true when a change was found and the jobs were reloaded
+     */
+    public async ReconcileJobsIfDue(contextUser: UserInfo, now: number = Date.now()): Promise<boolean> {
+        if (this.JobReconcileIntervalMs <= 0 || now - this._lastReconcileAt < this.JobReconcileIntervalMs) {
+            return false;
+        }
+        this._lastReconcileAt = now;
+
+        const rv = new RunView(this.Base.RunViewProviderToUse);
+        const result = await rv.RunView<{ ID: string; __mj_UpdatedAt: Date | string | null }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            Fields: ['ID', '__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'simple',
+            // The question is whether the database changed without telling the cache, so the cache cannot answer it.
+            BypassCache: true,
+            Telemetry: { Exempt: true, Reason: 'Reconcile probe for job rows written without a cache event' },
+        }, contextUser);
+        if (!result.Success) {
+            this.logError('Scheduled job reconcile probe failed', result.ErrorMessage);
+            return false;
+        }
+
+        const newest = result.Results[0]?.__mj_UpdatedAt ?? null;
+        const snapshot = {
+            Count: result.TotalRowCount ?? result.Results.length,
+            MaxUpdatedAt: newest === null ? null : new Date(newest).toISOString(),
+        };
+        const previous = this._jobTableSnapshot;
+        this._jobTableSnapshot = snapshot;
+        if (!previous || (previous.Count === snapshot.Count && previous.MaxUpdatedAt === snapshot.MaxUpdatedAt)) {
+            return false;
+        }
+
+        this.log(`[reconcile] Scheduled Jobs changed outside this process (rows ${previous.Count} → ${snapshot.Count}); reloading`);
+        await this.Config(true, contextUser);
+        await this.onBaseJobsChanged();
+        return true;
     }
 
     /**
@@ -445,6 +579,19 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
+     * IDs of the scheduled jobs this process is executing right now (a copy). Read by MJAPI's
+     * event-loop stall monitor to name what was running during a stall.
+     */
+    public get InflightJobIDs(): string[] {
+        return Array.from(this.inflightJobPromises.keys());
+    }
+
+    /** Alias for {@link InflightJobIDs}. */
+    public get ExecutingJobIDs(): string[] {
+        return this.InflightJobIDs;
+    }
+
+    /**
      * Handle job changes (create, update, delete)
      * Reloads job metadata and restarts polling if needed
      *
@@ -501,6 +648,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             this._jobsChangedSubscription.unsubscribe();
             this._jobsChangedSubscription = undefined;
         }
+        for (const subscription of this.gateSubscriptions.values()) {
+            subscription.unsubscribe();
+        }
+        this.gateSubscriptions.clear();
     }
 
     /**
@@ -513,6 +664,9 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async onBaseJobsChanged(): Promise<void> {
         try {
+            if (this._pollingContextUser) {
+                await this.prepareWorkGates(this._pollingContextUser);
+            }
             this.UpdatePollingInterval();
 
             // A job activated while polling is live arrives with a null NextRunAt, which
@@ -526,9 +680,100 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (!this.isPolling && this.ScheduledJobs.length > 0 && this._pollingContextUser) {
                 console.log(`📅 Scheduled Jobs: Job activated, starting polling`);
                 await this.StartPolling(this._pollingContextUser);
+            } else {
+                // A job that changed may now be due sooner than the armed timer (#6217).
+                this.UpdatePollingInterval();
+                this.rearmPollingTimer();
             }
         } catch (error) {
             this.logError('Error handling scheduled job change notification', error);
+        }
+    }
+
+    /**
+     * Re-arm the poll timer for the current {@link ActivePollingInterval} (#6217). The timer now
+     * sleeps until the next due time, up to an hour, so anything that moves a due time earlier
+     * (a job saved, a gated driver's work changing, a tick advancing NextRunAt) re-arms it.
+     * No-op when not polling; a null interval is left for the next tick to stop polling on.
+     */
+    private rearmPollingTimer(): void {
+        if (!this.isPolling || !this.pollTick) {
+            return;
+        }
+        const interval = this.ActivePollingInterval;
+        if (interval === null) {
+            return;
+        }
+        if (this.pollingTimer) {
+            clearTimeout(this.pollingTimer);
+        }
+        this.pollingTimer = setTimeout(this.pollTick, interval);
+    }
+
+    /**
+     * The driver instance for a job's type, used only for work-gate questions; null when the type
+     * or its DriverClass does not resolve.
+     */
+    private getGateDriver(job: MJScheduledJobEntity): BaseScheduledJob | null {
+        const jobType = this.ScheduledJobTypes.find(t => UUIDsEqual(t.ID, job.JobTypeID));
+        const driverClass = jobType?.DriverClass;
+        if (!driverClass) {
+            return null;
+        }
+        if (!this.gateDrivers.has(driverClass)) {
+            let driver: BaseScheduledJob | null = null;
+            try {
+                driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseScheduledJob>(BaseScheduledJob, driverClass) ?? null;
+            } catch {
+                driver = null;
+            }
+            this.gateDrivers.set(driverClass, driver);
+        }
+        return this.gateDrivers.get(driverClass) ?? null;
+    }
+
+    /**
+     * When a job's driver says its work is due (#6217): `undefined` = not gated, `null` = nothing
+     * pending. Fails open: a driver that throws is treated as not gated, so the job keeps its cron.
+     */
+    private workDueAt(job: MJScheduledJobEntity, now: Date): Date | null | undefined {
+        const driver = this.getGateDriver(job);
+        if (!driver) {
+            return undefined;
+        }
+        try {
+            return driver.NextWorkDueAt(job, now);
+        } catch (error) {
+            this.logError(`Work gate for job ${job.Name} threw; running it on its cron`, error);
+            return undefined;
+        }
+    }
+
+    /**
+     * Let each active job's driver load or refresh its work-gate state, and listen once to each
+     * gated driver's changes so the timer re-arms when its work moves (#6217). Best-effort: a
+     * failure is logged and the driver keeps answering from what it has (or `undefined`).
+     */
+    private async prepareWorkGates(contextUser: UserInfo): Promise<void> {
+        const seen = new Set<BaseScheduledJob>();
+        for (const job of this.ScheduledJobs) {
+            const driver = this.getGateDriver(job);
+            if (!driver || seen.has(driver)) {
+                continue;
+            }
+            seen.add(driver);
+            try {
+                await driver.PrepareWorkGate(contextUser, this.Base.ProviderToUse, this.WorkGateRefreshMs);
+            } catch (error) {
+                this.logError(`Preparing the work gate for job ${job.Name} failed`, error);
+            }
+            const changed$ = driver.WorkGateChanged$;
+            if (changed$ && !this.gateSubscriptions.has(driver)) {
+                this.gateSubscriptions.set(driver, changed$.subscribe(() => {
+                    this.UpdatePollingInterval();
+                    this.rearmPollingTimer();
+                }));
+            }
         }
     }
 
@@ -674,7 +919,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt ? new Date(ToEpochMs(job.NextRunAt)).toISOString() : 'NULL'}, Status=${job.Status}`);
 
             if (this.isJobDue(job, evalTime)) {
-                if (this.shouldSkipMissedRun(job, evalTime)) {
+                if (this.appliesMissedRunPolicy(job, evalTime)) {
                     console.log(`    ⏭ Missed run skipped per MissedRunPolicy`);
                     await this.advancePastMissedRuns(job, evalTime);
                     continue;
@@ -765,9 +1010,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      *     If at-cap, remaining due jobs counted via `skippedAtCapacity` and
      *     picked up by subsequent polls as slots free (no in-memory queueing).
      *
-     * Same-instance double-dispatch is structurally prevented by the atomic
-     * lock sproc — its WHERE clause filters held-and-not-stale locks, so any
-     * second attempt against the same job ID returns Acquired=0.
+     * Double-dispatch is prevented at two levels. Across processes, the atomic
+     * lock sproc's WHERE clause filters held-and-not-stale locks, so a second
+     * attempt against the same job ID returns Acquired=0. Within this process, a
+     * job whose promise is still in `inflightJobPromises` is skipped before any
+     * of that: its entry can read as due mid-run (see the loop), and contending
+     * for its own lock is not harmless.
      *
      * In-flight dispatched promises are tracked in `inflightJobPromises` so
      * `StopPolling({ waitForInflight: true })` can perform graceful shutdown.
@@ -793,10 +1041,21 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         for (const job of this.ScheduledJobs) {
             if (!this.isJobDue(job, evalTime)) continue;
 
+            // A job this process is still running is not dispatched again by it, whatever its entry
+            // says. The entry reads as due mid-run: the object captured at dispatch keeps its pre-run
+            // NextRunAt until the run finishes, and a mid-run reload (any ScheduledJob save fires
+            // OnJobChanged → Config(true)) brings the pre-run NextRunAt back from the database. Left to
+            // the lock sproc, every tick would contend for the job's own lock (a lockedOut count), write
+            // a Queue-mode job a Cancelled "queued" run behind itself, and, once a Skip-policy run
+            // outlasts its next occurrence, full-Save the running job's row in advancePastMissedRuns,
+            // which triggers yet another reload. A hung run is still reclaimed: the sweep above
+            // untracks it first.
+            if (this.inflightJobPromises.has(job.ID)) continue;
+
             // A job whose fire time passed while nothing was running asks a question the schedule
             // alone cannot answer — should the missed occurrences happen now? Its policy decides,
             // and 'Skip' answers by advancing past them without running.
-            if (this.shouldSkipMissedRun(job, evalTime)) {
+            if (this.appliesMissedRunPolicy(job, evalTime)) {
                 await this.advancePastMissedRuns(job, evalTime);
                 continue;
             }
@@ -819,8 +1078,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             // attaching catch/finally. A synchronous throw in executeJobWithLock
             // (e.g. ClassFactory.CreateInstance failing on a missing DriverClass)
             // would otherwise fire .finally before .set runs and orphan the entry.
-            const promise = this.executeJobWithLock(job, lockResult.token!, contextUser);
+            const execution: DispatchedExecution = { OutcomeRecorded: false };
+            const promise = this.executeJobWithLock(job, lockResult.token!, contextUser, execution);
             this.inflightJobPromises.set(job.ID, promise);
+            this.dispatchedExecutions.set(promise, execution);
 
             promise
                 .catch(error => {
@@ -891,7 +1152,25 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         // Job is due if NextRunAt is in the past or very close to now (within 1 second tolerance)
-        return ToEpochMs(job.NextRunAt) <= evalMs + 1000;
+        if (ToEpochMs(job.NextRunAt) > evalMs + 1000) {
+            return false;
+        }
+
+        // A work-gated job (#6217) is due only when its driver also has work due: an idle one sends
+        // nothing at all (no lock, no run row, no statistics write).
+        const workDue = this.workDueAt(job, evalTime);
+        if (workDue === null) {
+            return false;
+        }
+        return workDue === undefined || ToEpochMs(workDue) <= evalMs + 1000;
+    }
+
+    /**
+     * Whether the missed-run policy applies to a job. A work-gated job (#6217) does not take it:
+     * its NextRunAt passes long before it next has work, by design, so every run would look missed.
+     */
+    private appliesMissedRunPolicy(job: MJScheduledJobEntity, evalTime: Date): boolean {
+        return this.workDueAt(job, evalTime) === undefined && this.shouldSkipMissedRun(job, evalTime);
     }
 
     /**
@@ -914,6 +1193,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      * @param lockToken - The token returned by tryAcquireLock, or null for
      *                    Concurrent mode where no lock was acquired.
      * @param contextUser - User context for execution.
+     * @param execution - Present when DispatchScheduledJobs started this run; shared
+     *                    with the lease sweep so the run's outcome is recorded once.
      * @returns The created run record (Completed or Failed), or null if a
      *          synchronous setup error prevented run creation.
      * @private
@@ -921,7 +1202,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async executeJobWithLock(
         job: MJScheduledJobEntity,
         lockToken: string | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        execution?: DispatchedExecution
     ): Promise<MJScheduledJobRunEntity | null> {
         let run: MJScheduledJobRunEntity | null = null;
 
@@ -984,7 +1266,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             }
 
             // Update job statistics
-            await this.updateJobStatistics(job, result.Success, run.ID);
+            await this.recordRunOutcome(job, result.Success, run.ID, execution);
 
             // Send notifications if configured
             await this.sendNotificationsIfNeeded(job, context, result, plugin);
@@ -1011,7 +1293,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     );
                     // Continue — stats update + release still need to happen.
                 }
-                await this.updateJobStatistics(job, false, run.ID);
+                await this.recordRunOutcome(job, false, run.ID, execution);
             }
             this.logError(`Job failed: ${job.Name}`, error);
             return run;
@@ -1051,7 +1333,35 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     }
 
     /**
-     * Update job statistics after execution
+     * Record a run's outcome in the job statistics, once per execution.
+     *
+     * A run started by DispatchScheduledJobs carries a {@link DispatchedExecution} that the lease
+     * sweep also sees. If the sweep presumed the run hung, it has already counted it as failed and
+     * moved the job to its next occurrence; the execution settling afterwards must not count again
+     * or move NextRunAt again (for a 'RunAll' job that would step past an occurrence). The same flag
+     * stops the failure path re-counting a run whose success was recorded before a later step threw.
+     * Runs started any other way (ExecuteScheduledJob(s)) pass no record and always count.
+     * @private
+     */
+    private async recordRunOutcome(
+        job: MJScheduledJobEntity,
+        success: boolean,
+        runId: string,
+        execution?: DispatchedExecution
+    ): Promise<void> {
+        if (execution) {
+            if (execution.OutcomeRecorded) {
+                this.log(`Outcome of run ${runId} for "${job.Name}" is already recorded; not counting it again.`);
+                return;
+            }
+            execution.OutcomeRecorded = true;
+        }
+        await this.updateJobStatistics(job, success, runId);
+    }
+
+    /**
+     * Update job statistics after execution: in memory on `job` and on the live
+     * `ScheduledJobs` entry for the same ID, and in the database via the stats sproc.
      * @private
      */
     private async updateJobStatistics(
@@ -1069,14 +1379,20 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
 
         // Update in-memory entity so callers reading job.RunCount/job.NextRunAt
         // immediately after see the new values without a Load round-trip.
-        job.RunCount++;
-        if (success) {
-            job.SuccessCount++;
-        } else {
-            job.FailureCount++;
+        this.applyRunStatistics(job, success, now, nextRun);
+
+        // ...and the LIVE entry, when it is no longer `job`. `job` is the object captured at
+        // dispatch, but any ScheduledJob save during the run (advancePastMissedRuns for another
+        // job, a schedule toggle, expireFinishedJobs) fires OnJobChanged → Config(true), which
+        // replaces ScheduledJobs with entities read before this run finished, still carrying its
+        // pre-run NextRunAt. The sproc below raises no entity event, so nothing else corrects that
+        // entry, and the next poll would dispatch the job it just ran. The entry gets the same
+        // increments rather than a copy of `job`'s totals: it mirrors the row it was read from, and
+        // the sproc increments that row.
+        const liveEntry = this.ScheduledJobs.find(j => UUIDsEqual(j.ID, job.ID));
+        if (liveEntry && liveEntry !== job) {
+            this.applyRunStatistics(liveEntry, success, now, nextRun);
         }
-        job.LastRunAt = now;
-        job.NextRunAt = nextRun;
 
         // Persist via the targeted sproc — touches ONLY the 5 stats columns.
         // We deliberately do NOT call job.Save() here: a full-entity Save would
@@ -1116,6 +1432,22 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Best-effort (see invalidateScheduledJobsCache): the stats UPDATE has already
         // persisted, so the worst case is one cached dashboard view stays stale until its TTL.
         await this.invalidateScheduledJobsCache('stats update');
+    }
+
+    /**
+     * Apply one run to a job entity in memory, the same change spUpdateScheduledJobStatistics
+     * makes to its row.
+     * @private
+     */
+    private applyRunStatistics(entry: MJScheduledJobEntity, success: boolean, ranAt: Date, nextRun: Date): void {
+        entry.RunCount++;
+        if (success) {
+            entry.SuccessCount++;
+        } else {
+            entry.FailureCount++;
+        }
+        entry.LastRunAt = ranAt;
+        entry.NextRunAt = nextRun;
     }
 
     /**
@@ -1549,6 +1881,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      *
      * For each stale entry:
      *   - Untrack the leaked promise from inflightJobPromises (frees cap slot).
+     *   - Count the abandoned run as failed and move the job to its next occurrence
+     *     (see recordSweptRunAsFailed), unless the execution already recorded its own outcome.
      *   - FIRE-AND-FORGET abandon any orphaned `Status='Running'` run records.
      *     NOT awaited because cleanup must not delay dispatch under a fleet-wide
      *     hang event where the sweep finds many zombies at once.
@@ -1599,8 +1933,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 `lease=${row.ExpectedCompletionAt?.toISOString() ?? 'NULL'}, now=${nowIso}. ` +
                 `Original execution presumed hung. See README "Leaked promise behavior".`
             );
+            const sweptPromise = this.inflightJobPromises.get(row.ID);
             this.inflightJobPromises.delete(row.ID);
             swept++;
+
+            // Awaited, unlike the cleanup below: the job's NextRunAt must have moved before this
+            // tick's dispatch loop looks at it.
+            await this.recordSweptRunAsFailed(row.ID, jobName, sweptPromise);
 
             // FIRE-AND-FORGET: cleanup must not block dispatch.
             this.abandonOrphanedRunRecords(row.ID, contextUser).catch(err =>
@@ -1609,6 +1948,48 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         }
 
         return swept;
+    }
+
+    /**
+     * Account for a run the sweep has given up on: count it as failed and move the job to its next
+     * occurrence, on the live `ScheduledJobs` entry and in the database.
+     *
+     * Without this the job's NextRunAt stays in the past, its lease is reclaimable, and the dispatch
+     * loop of the very tick that swept it starts it again, then again every lease interval while the
+     * original execution may still be running in this process. A hung job is still retried, at its
+     * next scheduled time.
+     *
+     * Skipped when the execution already recorded its own outcome. The sweep's query also matches a
+     * run that finished and released its lock while the query was in flight (see
+     * abandonOrphanedRunRecords), and a run whose lease ran out while it was writing its statistics;
+     * neither is a failure. The swept execution's record is marked, so if it does settle later it is
+     * not counted a second time (see recordRunOutcome).
+     *
+     * Best-effort: a failure is logged, never thrown; the sweep must keep going.
+     * @private
+     */
+    private async recordSweptRunAsFailed(
+        jobId: string,
+        jobName: string,
+        sweptPromise: Promise<MJScheduledJobRunEntity | null> | undefined
+    ): Promise<void> {
+        const execution = sweptPromise ? this.dispatchedExecutions.get(sweptPromise) : undefined;
+        if (!execution || execution.OutcomeRecorded) {
+            return;
+        }
+        // A job no longer in the active set (disabled or deleted mid-run) is not dispatched, so there
+        // is nothing to advance; if its execution ever settles, that records the outcome.
+        const liveJob = this.ScheduledJobs.find(j => UUIDsEqual(j.ID, jobId));
+        if (!liveJob) {
+            return;
+        }
+        execution.OutcomeRecorded = true;
+        try {
+            // The abandoned run's record is found by abandonOrphanedRunRecords; the stats need only the job.
+            await this.updateJobStatistics(liveJob, false, '');
+        } catch (error) {
+            this.logError(`[sweep] Could not count the abandoned run of ${jobName} or advance its NextRunAt (non-fatal)`, error);
+        }
     }
 
     /**

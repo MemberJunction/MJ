@@ -171,9 +171,12 @@ export class MaintenanceEngine {
     }
     const context: DriftContext = {
       modelId: model.ID,
+      recordProcessId: binding.RecordProcessID ?? undefined,
       trainedRowCount,
       currentRowCount,
       lastScoredRowCount: binding.LastRowCount ?? undefined,
+      contextUser: deps.contextUser,
+      provider: deps.provider,
     };
     const result = await deps.driftDetector.detectDrift(context);
     if (result.drifted) {

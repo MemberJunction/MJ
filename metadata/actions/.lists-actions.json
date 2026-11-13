@@ -14,6 +14,270 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.264Z",
       "checksum": "eb4e58c8ebec0d61918f435d342bfbd515545913d31c68d49f8f34cce43d9a6e"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ViewID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The User View whose current results become the new list.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A665A0A5-1BE5-4CFD-938E-A8F2866800FD"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.800Z",
+            "checksum": "6b906e6b742849611270c1b04ebc2a22439bd3de6df0d26bd8a7ec87ae21d85b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name for the new list.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "69786112-2626-43F0-B6B7-02DC72F66725"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.821Z",
+            "checksum": "235043c6128291a85f5c712a5c9308254687d3a23b8d4e3addf6c478ff390dc1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Description for the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C4A39B71-E1DC-479A-B2F3-8600120810EF"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.841Z",
+            "checksum": "3b221e32990255a4a157a22b89f6609745892b96a3a06ce0807e6ce47ca6cc68"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CategoryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "List Category to file the new list under.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5EA7252-0504-475F-88B4-047A26E65AC3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.860Z",
+            "checksum": "4c2f520b2babdb8be99a96e24a810e504b3bb4c310467fa748af1cb80b476b2b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RememberLineage",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Store the source view on the list so it can be refreshed later with Refresh List From Source.",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "41C886E4-7570-4F37-9C6C-2F99A09367C1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.880Z",
+            "checksum": "dc88d96be735c5316550d129f45e1c935943e31669ee13757c0608f0ec7929b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UseSnapshot",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Store a snapshot of the view's filter at creation, so later refreshes use that filter even if the view changes.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "D21F836F-8ED6-4398-B5D0-45E4499F950A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.901Z",
+            "checksum": "86bd058e666f31581e132cf4534eae9eb497025de2b63666adfcb5d143790b57"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RefreshMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "How later refreshes apply: 'Additive' (only add) or 'Sync' (add and remove).",
+            "IsRequired": false,
+            "DefaultValue": "Additive"
+          },
+          "primaryKey": {
+            "ID": "79F558DF-4F2A-4D91-84EF-457971A4CA76"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.920Z",
+            "checksum": "12c53ec0bfcf8fb6ab85c0237dfe193be798debbcad651e30802f87575af93d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedListID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "66B477E7-365A-459F-8168-85306A723855"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.939Z",
+            "checksum": "7e8e883736bb65e0be90026bc451010b31f80e4479feed397e4cb34be2205921"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added to the new list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "823E332F-C39D-4CBA-9F8C-FF60F10A21E0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.959Z",
+            "checksum": "74a5fd71f84a741cb5d2bb4fa3a43d4c83e1a05347352387eae042b98030f93c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4E32F0BC-6A14-4621-B447-7BF6E7578BEE"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.981Z",
+            "checksum": "ca8da54c81c287159820d03b89578932237977647e6ef2ec922ec86ddc8a4cf1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "A6BE522B-3774-4284-AD57-F1C22DDB5698"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:34.996Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "CC908B2C-EF04-40A9-BC7A-D8E8CBFEF23C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.008Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "36573886-FA84-4986-B22F-C958C3D22B29"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.021Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some records were applied and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "CB269C79-3D94-41F0-AAC3-59D5AD7DDBD6"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.033Z",
+            "checksum": "79e09f4931137c49c5f4d05de25e6827c11016ce4c9a03f3c6c0dfae99302556"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "C0CF6C96-5AF7-49E3-B29C-0D862AAA1D90"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.047Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -31,6 +295,192 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.282Z",
       "checksum": "2c612188bd8346482bb83e387074ffa869f9590a01ab21d0f8b3de723a7a291d"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ViewID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The User View whose current results are added.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "114E1B23-47AB-4482-A77C-27C7190505CE"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.068Z",
+            "checksum": "d7bd53dd1986d83b2728b67337432154a88c9d9c54e3970c77b6ac477fea2662"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list to add them to. Always additive: nothing is removed.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DC4576A7-06AC-40E8-94B8-251328A20BFA"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.088Z",
+            "checksum": "a8614f8eeed431f031f8e50c9a01c69c4445e32a562e996c2d17fa9ed6ef4410"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "953729A0-322C-4E1C-9ED2-15187B1E896C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.109Z",
+            "checksum": "7836beb5841525ae11d9cbeecd49fc6e7a745429a5bf0e1f2d1caa56bbee2c71"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Removed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records removed (always 0).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D9A0A5C7-CEDC-49E6-A94D-C1ABFBCEFE7A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.130Z",
+            "checksum": "672a29347347fdd1bc15b3aade47fa6fcad7328a21b8ca9a82d95d9d206c95c9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "197F5DEB-0E2B-4899-87BB-EC7C9FCF458A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.150Z",
+            "checksum": "ca8da54c81c287159820d03b89578932237977647e6ef2ec922ec86ddc8a4cf1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "8356A7EB-CD99-469F-898E-1C5F9C60BEC7"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.163Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "9D86C9D4-2D65-4BF0-BA8E-0FD994701F9E"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.177Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STALE_DELTA",
+            "IsSuccess": false,
+            "Description": "The list changed while the operation ran; recompute and retry."
+          },
+          "primaryKey": {
+            "ID": "440473B2-A943-4555-A426-FF0D1D9C0329"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.191Z",
+            "checksum": "d9bfbf4a64385bfcd4b42ed51329d12579d5dea480c2d1202e65bdb179ac6d8e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "The change-set token was invalid or expired."
+          },
+          "primaryKey": {
+            "ID": "E205D9E6-D9A1-4899-8F9B-321D98BF20ED"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.204Z",
+            "checksum": "1f856b7d971867d3955b0fc7aaa326c68ea60e16fd7b4ac7b5d58fb1fc377e17"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some records were applied and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "044B26A8-690E-4199-A1C7-1E97E5F478DA"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.218Z",
+            "checksum": "79e09f4931137c49c5f4d05de25e6827c11016ce4c9a03f3c6c0dfae99302556"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "367F40CF-C592-4B02-BCC9-A7AD5F517C51"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.232Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -48,6 +498,257 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.297Z",
       "checksum": "9bba7ad7602eb0d1840eafb05b3e6bd5b879c828319c0af3fa3aab34cbb1d180"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list to refresh. It must have a source view (lineage).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D4B93E77-A590-4700-8DE4-5039AC59084C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.251Z",
+            "checksum": "956ef4234990af9048a9999409d9dbe02f486808a40196cc0d0e265913ef5a19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'Additive' adds new matches only; 'Sync' also removes members that no longer match.",
+            "IsRequired": false,
+            "DefaultValue": "Additive"
+          },
+          "primaryKey": {
+            "ID": "89D5A236-8064-4192-9FD9-A27B027239C6"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.271Z",
+            "checksum": "9acb5d416f46692a7dd1f355cbbc2907fe905128553823e1f80615aa763991a5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmDrops",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Must be true for a Sync refresh that would remove members; otherwise the refresh is rejected with DROP_NOT_CONFIRMED and nothing changes.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "288E02EC-B372-4D9E-8977-0B92B034DA38"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.289Z",
+            "checksum": "77f2f8fa68e8b5032ac356fb95c5e26d63778862dfe62cabb4fe9aac461b90d5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "13A822FE-C733-4C76-AB19-0A9A8705B6FC"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.310Z",
+            "checksum": "7836beb5841525ae11d9cbeecd49fc6e7a745429a5bf0e1f2d1caa56bbee2c71"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Removed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records removed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2E2EDD6D-37F3-4643-A477-5AEA8A637556"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.329Z",
+            "checksum": "223aaeb06cb00710668219320db6025ebb22e06a6d0c6bb1254440bd734987d7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be applied.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6BE78851-4925-47AA-82D3-9404BF5E6A35"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.349Z",
+            "checksum": "24ab5c4e0ac6672ca350dd15daccafbee74e9399b8e1cd247aa310aefc6d1739"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "A75BAE30-06F8-4981-8DE4-9E49314DDCD8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.361Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "71E2B4D4-5ABB-4008-BD36-1B89D2C97EC1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.371Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "0F339491-11B2-4C03-8376-75D84B361BE5"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.382Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DROP_NOT_CONFIRMED",
+            "IsSuccess": false,
+            "Description": "The operation would remove records and ConfirmDrops was not true. Nothing was changed."
+          },
+          "primaryKey": {
+            "ID": "CDD2B7E1-A0ED-4E88-8B39-12658C9D01F8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.393Z",
+            "checksum": "6bcdf4da328ffd23be8cfc6b96aa83806738a0b40da01614e071f4f1843f7e01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STALE_DELTA",
+            "IsSuccess": false,
+            "Description": "The list changed while the operation ran; recompute and retry."
+          },
+          "primaryKey": {
+            "ID": "1EA2771A-AF26-45D8-8758-604844E6A3A2"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.403Z",
+            "checksum": "d9bfbf4a64385bfcd4b42ed51329d12579d5dea480c2d1202e65bdb179ac6d8e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "The change-set token was invalid or expired."
+          },
+          "primaryKey": {
+            "ID": "571911C6-2B99-437B-A82A-3F7F063E17E8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.415Z",
+            "checksum": "1f856b7d971867d3955b0fc7aaa326c68ea60e16fd7b4ac7b5d58fb1fc377e17"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TARGET_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The list was not found."
+          },
+          "primaryKey": {
+            "ID": "1CE939D1-D7BD-435B-894A-08FAB32694B5"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.427Z",
+            "checksum": "078621d263dccdfe1fff6c489fcf681ba4b469cefaa24d0a096223fa5e14e92c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some records were applied and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "41CA8FAF-EF8C-4E66-813C-90CD4ABABAB1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.438Z",
+            "checksum": "79e09f4931137c49c5f4d05de25e6827c11016ce4c9a03f3c6c0dfae99302556"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "F4465ED9-6432-494F-8284-2825F752DA18"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.450Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -65,6 +766,364 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.316Z",
       "checksum": "491b29393df1da4501a9a3147c5431552a603e952a13adc0971785b93489b748"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Op",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Set operation: 'union', 'intersection' or 'difference'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D80D5469-0F86-483D-BB87-852A4E839941"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.468Z",
+            "checksum": "005f735b2a9ea98cd6e16bac80c169f3174eb118ed7849e2cf71621e9d8d7993"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Inputs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-stringified array of at least 2 ListSource objects to combine. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "88F0D4FD-A01A-4789-B081-61034CFF37AE"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.486Z",
+            "checksum": "3c3c3c1f67aa42ee335de921c6fc49e1f81b4258baf6017b848061c6411476dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Target",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional ListSource for the list to write the result into. Omit for a preview that changes nothing. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "93E8BED1-0B52-4E70-8E6A-FC3681D19405"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.505Z",
+            "checksum": "440f5b808327560eb39a5e8aa0ced93e07b8d96882ec6835fca6f254a6855939"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmDrops",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Must be true when writing into Target would remove members.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "912349EA-6867-4EB6-B6A4-70731FB08294"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.524Z",
+            "checksum": "6319e8076d2b4b200d7e9b8aa1f2a244cd2d81a877a0a562d3748e2d767d9aac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DeltaToken",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Token identifying the computed change set.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "59E9DD71-23D8-4A32-A193-0027F80C0587"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.542Z",
+            "checksum": "9065b54344d26db6162728b2ee6102741690c403cf94fda5cdbcaeeb384565b3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Add",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records the result would add to Target.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA2454F8-9536-41CF-AFE4-9CE8B6955C38"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.561Z",
+            "checksum": "1f92e44eda4e1154dfef2d84a1f121549fb26aa880975ea71648aa9c03e7fbb6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Remove",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records the result would remove from Target.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2EE59933-2A9C-4210-B4FE-C71E342E6FE1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.579Z",
+            "checksum": "cec9f2419d40e8c526b3690b7c88359442dd5cde7933c87ad6c82230ed97eef8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Unchanged",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records already in Target.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F8517731-5EDB-4AFB-BB84-767A8E924965"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.599Z",
+            "checksum": "b679ddc3c806cb863846bc933fa877ec7e1d2c9b5b9934199741c4228d41a3bd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Warnings about the operation (Code, Message).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "370F2194-5FAC-44C7-976E-B83E63684936"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.617Z",
+            "checksum": "2dac7242f49bd08daafbc7310d41af30f39b6f286971ffd88afce2a024166732"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added (only when Target is given).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8ED857D-3914-4DA2-8F2F-5DA152E269EF"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.636Z",
+            "checksum": "a070637cb26e1c1720c93c48aca05d58801d4ae945d3a8a0a31d760335797b1b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Removed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records removed (only when Target is given).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ACD5580D-745A-4A90-AD73-C6A0431998DB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.655Z",
+            "checksum": "387df290fd9039cff2ccd3ebe4f243e909d748c50ad0cd78fc900c1edebf781d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be applied (only when Target is given).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A4207C14-7790-43D8-8800-F41555A0AC96"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.675Z",
+            "checksum": "f3402a6ff56ebc7cb1bfb1ebd2bb8171cb33b1eb8de8663a47f96932815a71b5"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "0BD8C15C-443D-4EEE-AB5C-A1AB15B311ED"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.686Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "7D1B4D59-CAFA-4D63-B90D-4D3FE19A82D3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.697Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "656255E2-FF4A-4F37-B251-EA74D74E32BB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.709Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DROP_NOT_CONFIRMED",
+            "IsSuccess": false,
+            "Description": "The operation would remove records and ConfirmDrops was not true. Nothing was changed."
+          },
+          "primaryKey": {
+            "ID": "68A459BF-218D-4B36-9484-42A0337CF0E3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.723Z",
+            "checksum": "6bcdf4da328ffd23be8cfc6b96aa83806738a0b40da01614e071f4f1843f7e01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "STALE_DELTA",
+            "IsSuccess": false,
+            "Description": "Target changed while the operation ran; recompute and retry."
+          },
+          "primaryKey": {
+            "ID": "0878A1D7-CFC0-47F9-A98E-D2E6BE6163F1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.735Z",
+            "checksum": "5294be486f98c00b2cab6ad149c8b7f40ffbc255f60a772f1267a7e5305a6c01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "The change-set token was invalid or expired."
+          },
+          "primaryKey": {
+            "ID": "DF9EE06B-A8EF-4A5F-9EE5-3D53C9837166"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.747Z",
+            "checksum": "1f856b7d971867d3955b0fc7aaa326c68ea60e16fd7b4ac7b5d58fb1fc377e17"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TARGET_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The list was not found."
+          },
+          "primaryKey": {
+            "ID": "DA52FF1E-74F9-4F4B-A72F-4D29785C5C55"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.760Z",
+            "checksum": "078621d263dccdfe1fff6c489fcf681ba4b469cefaa24d0a096223fa5e14e92c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some records were applied and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "EA006A8F-DD1C-45CA-8335-F753A1A81626"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.773Z",
+            "checksum": "79e09f4931137c49c5f4d05de25e6827c11016ce4c9a03f3c6c0dfae99302556"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "5938A9E6-1BBB-4E31-9461-E510C5E35D6A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.784Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -74,14 +1133,174 @@
       "DriverClass": "Share List",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-share-nodes"
+      "IconClass": "fa-solid fa-share-nodes",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "F6B7278E-5602-4A3B-A2E3-A21895FE2644"
     },
     "sync": {
-      "lastModified": "2026-05-21T15:44:47.334Z",
-      "checksum": "2199721e88193d64193f4e8627f17d2c4f6419b7e5084910402f2671f84648b5"
+      "lastModified": "2026-11-10T23:41:34.757Z",
+      "checksum": "9c1aba4ab759c025b782b4c45ab359d43630ee42f8265e930c321d8c8e75da4b"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list to share.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "EBEB9799-56FE-42D3-9749-748739E0FC43"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.805Z",
+            "checksum": "a44bde81aeeeec0ed20fd81c89b34d3b56e13d61a25a8ee9bc0314a899b7877f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetKind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Who to share with: 'user' or 'role'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BCF22F7B-6A2A-4EAC-8939-34DF2CE23911"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.823Z",
+            "checksum": "8e7a0541c21ba4a866778135c9ee4ea7b15e0434164f0d1521f223fd67086f10"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The UserID or RoleID matching TargetKind.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8176224D-C289-4538-AC90-AC06C9E0CC36"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.842Z",
+            "checksum": "c112adf010e16c06845f6411f0dab2aa62808015e4c3f20bca1bebcfabc6cc15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PermissionLevel",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'View', 'Edit' or 'Owner'.",
+            "IsRequired": false,
+            "DefaultValue": "View"
+          },
+          "primaryKey": {
+            "ID": "CCC3E09B-8ED2-4DE0-9C03-FF43B0317509"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.861Z",
+            "checksum": "f511a870049e829ede0386cd82f1e76341a147332c375845cd725b5f6a3c5d19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PermissionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the permission row granted. Pass it to Unshare List to remove the share.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E66B3026-868D-4B42-8688-9DE38B32140D"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.881Z",
+            "checksum": "2236903653f753588331ce9a62d4b327d37c7c709a80fac8ff1ff6812bf04694"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "3DE6B0EA-D901-4458-BF41-FA20A2B2521A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.892Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "AC6BD579-30C3-41CF-BF38-74939D286AC3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.904Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "81A23972-06FE-4E06-AD94-B26D1DC9189C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.916Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "E5BD3746-C8A0-4A2A-A961-609823CBEE40"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.928Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -91,14 +1310,211 @@
       "DriverClass": "Invite To List",
       "Type": "Custom",
       "Status": "Active",
-      "IconClass": "fa-solid fa-envelope"
+      "IconClass": "fa-solid fa-envelope",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "7C7A4E3F-BC57-406C-876B-7067D9010312"
     },
     "sync": {
-      "lastModified": "2026-05-21T15:44:47.353Z",
-      "checksum": "db681b9a2c442abe88d8923a0aaec70f91687131c7c15f583e44f86a9103ee67"
+      "lastModified": "2026-11-10T23:41:34.767Z",
+      "checksum": "66848d36ef008daa51d986fb139f8166543bc556eaff3b89882193a8e63f1c3a"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list to share.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0839D4D9-1411-4E19-9DC9-97A6CA2E864C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.948Z",
+            "checksum": "a44bde81aeeeec0ed20fd81c89b34d3b56e13d61a25a8ee9bc0314a899b7877f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email address of the person to invite.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CB2A364B-9BFA-49BD-AD45-51E3552101A8"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.967Z",
+            "checksum": "e92724747b79f9aba6e052ed998ffc9f9875ddeb7abe7687338d384647551eb8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Role",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'Editor' or 'Viewer'.",
+            "IsRequired": false,
+            "DefaultValue": "Viewer"
+          },
+          "primaryKey": {
+            "ID": "7DC5C8C6-46FF-498B-94B9-8DDC14A26023"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:35.988Z",
+            "checksum": "0e360cc1199c67871dd192215cdec3515ab5a9c23784baa4f0c2a76f85ae122f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TtlHours",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Hours until the invitation expires. Defaults to 7 days.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "31ED9CA8-4A9C-4469-BD85-316EFCF9688F"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.008Z",
+            "checksum": "1067141a87425e3348d7f04b52eb6651c4deddf21bdd10cd6df6939380756574"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InvitationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the invitation. Pass it to Revoke List Invitation to cancel it.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3AD442B0-652D-43E7-8197-E3A0B4FC29C0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.027Z",
+            "checksum": "45b0e131c801964b58734aadace06eeb257e6e0a94a9613ce5d5cd7dfb5ff9b3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Token",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Invitation token for the accept link. The caller delivers it to the recipient.",
+            "IsRequired": false,
+            "LogValue": false
+          },
+          "primaryKey": {
+            "ID": "DC4F1BE0-E62B-4BB1-8EA1-CEFE7E51FC99"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.046Z",
+            "checksum": "9da917bcab9d0a18419dd05b8b963efc22de603829d5d8778acd01da1c57053f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExpiresAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When the invitation expires (ISO 8601).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8994670A-7844-4A06-8A54-EAD68624230C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.067Z",
+            "checksum": "c334ac5b2164a645960bb5bdcaa840067086a8761f453d6b83983c0bc513d3ee"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "78FC39A9-4E51-4375-89E4-B178EB7737D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.081Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "23FF8ADF-CD0F-4D25-9E12-7D100F850393"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.094Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "04D353FB-9179-4858-A1B7-683BEF9293AE"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.106Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "82C093FD-D44A-4C5F-B62D-3FFEB228CB0A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.118Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -116,6 +1532,90 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.369Z",
       "checksum": "61cf28f1d8c066938666fea0034a48ff57694b3770ba78f2d516c6772ca29046"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PermissionID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The permission row to revoke (from Share List). The row is kept with Status Revoked.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D00D4E8A-738E-4981-A229-BE5609872ED7"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.139Z",
+            "checksum": "8641aa66e95ced595fd56cd8d0d1c68d3cb2857ba58bf0ac8cab18d209765d60"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "2060212E-354C-4D85-BD07-70D26F5D008B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.151Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "383A6B8F-32DA-4A7D-A1AD-4B2319806AA0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.164Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The permission row was not found."
+          },
+          "primaryKey": {
+            "ID": "1CA9F460-99D0-4128-963F-4EB7F91ABBEA"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.177Z",
+            "checksum": "7f557d30f8b4a15294d5317edd35571091ee0100fca9c1e6c35b0b8665706079"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "83538841-CA51-442B-BF1C-34D435B319AB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.189Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -133,6 +1633,105 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.385Z",
       "checksum": "463bb61a529df24aff90ef7050211203b86aafea38ec8cb89c384e6897039aba"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InvitationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The pending invitation to revoke (from Invite To List).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "7C859555-4F07-40B8-8269-E5A2FAB8AE24"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.212Z",
+            "checksum": "9f20f944412e4ef6c90924b22ae1206d3951812174a4064d4799e455f8fe5a34"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "13DE29BA-EC10-49A0-9F82-E9A52262BC19"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.225Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "E9D30722-8382-49A6-AEC4-FE81B4B6341B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.238Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVITATION_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The invitation was not found."
+          },
+          "primaryKey": {
+            "ID": "68FA9E35-52B5-4865-B604-DE0DF449F8D9"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.250Z",
+            "checksum": "8eec2a1b25a22c016ea8a033c95d3cf8f06460c90a650f09f6f4a2da262d7c09"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVITATION_ALREADY_USED",
+            "IsSuccess": false,
+            "Description": "The invitation was already accepted; use Unshare List on the resulting permission instead."
+          },
+          "primaryKey": {
+            "ID": "16F9004B-956D-4F07-A02A-841C315CB40A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.264Z",
+            "checksum": "bbaf43b7e853a56cb4285e9a17fdde30f03047769626971b3e7aa9dc176512f0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "31B5D471-7490-4B65-B693-8CC09963587E"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.276Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -150,6 +1749,144 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.402Z",
       "checksum": "26615efc74ad1fb82bce49cbe87bbaadad496c7f5e1eb23ef8424136570e9626"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Source",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The audience to resolve. Read-only: nothing is changed. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "112EB224-D7C7-4D02-98D7-AB19A427E206"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.297Z",
+            "checksum": "c545cdf8cafae397f0bbc7a8ce0f1d0f7cb1d580c16145990f1a3c4dd77d19ce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The audience's entity.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7071FB9F-41C0-4D0D-AC30-3982670EEA4C"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.318Z",
+            "checksum": "a18bda4a0a1f88a31f5974ff6b4dc0e7419be098f46df91d3983b24bc240adb8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "How many records the audience resolves to.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C2C92785-D83D-49B2-835E-05BD350914E3"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.337Z",
+            "checksum": "51aca9ebf282a5321ab3463b35d5294058d01fc1ef8a5b4dd1a12599a7464892"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordIDs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "The resolved record IDs.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DACD87D7-4BFF-4041-8245-E950B3C196FD"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.357Z",
+            "checksum": "5b3070d15ff392ec01fa1c0f48d8fd6527886d92015defb3ff02935f1088dfee"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "041AC73B-04F0-416C-90EB-784E3EF1C77E"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.369Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "670F2DE1-F7B7-4C1C-BF70-4E90459888B1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.382Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "2349F11A-880B-43D5-9704-42FB30EE9975"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.394Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "2B6FC3AC-E373-490B-982C-91C5A957905D"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.406Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -167,6 +1904,251 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.416Z",
       "checksum": "6e731fded086b2891dfc12ad1f354417e880fba79f571d4c3c469dbd95142f8d"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list the records are in.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A73FDBD3-80DA-486F-8D34-212835ED3C59"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.427Z",
+            "checksum": "b5f95eb840f5161f3095ea56d84662aa5d34a44ca2ae2fffebd9287a900b3486"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list to move or copy them to.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2ECCCDB8-AE5A-4865-9611-1726CD0C5177"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.446Z",
+            "checksum": "58ee271c94ae456beb981f75e8cc31fcefdf94fe74d45dff184d83c03c93d5f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-stringified array of RecordID values (as stored in MJ: List Details.RecordID).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CB136C50-E3D7-489E-BABF-0C1E7BED42E9"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.466Z",
+            "checksum": "cbbc25ac7d7c32460c308794a3a5464990eedd6cb5f10fd099ed006c5e45a108"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'move' (add to target, remove from source) or 'copy' (add to target only).",
+            "IsRequired": false,
+            "DefaultValue": "move"
+          },
+          "primaryKey": {
+            "ID": "37C3D689-0F63-4E31-980F-17E1E56C1F3B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.507Z",
+            "checksum": "6c7939efddce43a947f5a19d5303e3003e25d562592195bc49d1684280dc932d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfirmDrops",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Must be true for Mode 'move' to remove records from the source list.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "0DC6A74D-4F50-45BA-8839-EF8D9F563F75"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.527Z",
+            "checksum": "954c9429edb3f95898524f4d3171fbc97989e19ad412ca1751540ae30a7d008f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Added",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records added to the target list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A434B1D-D01B-4A2C-BAB1-475775406687"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.548Z",
+            "checksum": "1e8e2de142f5e366794b5f304f680513d253eaa62eefbbfbd48fac7c46718016"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Removed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records removed from the source list.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "959B4B9E-3146-4A6D-A69A-649968BFC43A"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.567Z",
+            "checksum": "35b06979d4004abb176261cd1417c4dd992f5bd7f7772c4bd9e0b3a74c0fb0b0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records that could not be added.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7028723F-4941-49B6-8F34-B4A1255C54B6"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.587Z",
+            "checksum": "ca8da54c81c287159820d03b89578932237977647e6ef2ec922ec86ddc8a4cf1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Errors",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Error messages for failed records.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E7B6B5D9-E033-4B37-BA9F-C4C87F50300B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.606Z",
+            "checksum": "69fc1ce8dd32f27ac8726702a33ec0541928c80c04790f02d6d6fb18cbbb35a7"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "C90DAA03-F5E9-4DF2-AAE3-D2FD28F6B359"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.619Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "73B93847-536E-486C-AB3C-5B0072426A45"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.634Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "7B8A5A60-EBC2-41B8-9D4A-BD8EB33EDA7E"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.648Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DROP_NOT_CONFIRMED",
+            "IsSuccess": false,
+            "Description": "The operation would remove records and ConfirmDrops was not true. Nothing was changed."
+          },
+          "primaryKey": {
+            "ID": "FA9DDBEC-7C54-4C55-AFA1-B74FB52D5419"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.660Z",
+            "checksum": "6bcdf4da328ffd23be8cfc6b96aa83806738a0b40da01614e071f4f1843f7e01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some records were applied and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "3B840ACA-3290-47E7-86B2-C58256C0D87E"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.673Z",
+            "checksum": "79e09f4931137c49c5f4d05de25e6827c11016ce4c9a03f3c6c0dfae99302556"
+          }
+        }
+      ]
     }
   },
   {
@@ -184,6 +2166,195 @@
     "sync": {
       "lastModified": "2026-05-21T15:44:47.456Z",
       "checksum": "44b279a5a8fe48d775cff01b647c42529538bea942757b4708a38aef32a508aa"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ListID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The list whose items are updated.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F852926B-4A0F-4F50-A58E-582CFE30FDFC"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.694Z",
+            "checksum": "e2b296b0251af6ae3805dd2cbda8f36f096fe04d8a410e0f49df51e3e56b4ef5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-stringified array of RecordID values to update.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5A9E818A-1809-4A4A-9A37-EA068C3E8BC7"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.712Z",
+            "checksum": "abe3dd9d05777197a7bdb994aa1fcfc79f1f250f38a86082cb804ebefbb3c1e1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewStatus",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The new status: Active, Complete, Disabled, Error, Other, Pending or Rejected.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6DA7A0BA-B4F6-41D8-B885-216F2B8E1A04"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.733Z",
+            "checksum": "9012daeb68f7bdc9112fb7d6bdb5732a27358ff1854e5856707fe6a5533ddeaa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Updated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Items updated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "732DB247-5D0A-4CAA-A892-A3DAF0A43310"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.753Z",
+            "checksum": "587fec34530c22be5c6d0696d78f5bbf490768873751a76db17109e854446903"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Failed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Items that could not be updated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3B76CB28-B18F-418D-BF9B-474FDE4956D0"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.774Z",
+            "checksum": "ae073ac406eb6fc2844d161b153d4c2b0c05e389d173880720329903d150c6aa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Errors",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Error messages for failed items.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "56ACB41A-80ED-4FBD-A802-005E5B14850F"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.794Z",
+            "checksum": "762fa0f6ab95661bceb3ef9ac61821dad6755e034419294027a4ac1de3a40d03"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "C5827989-6D00-44E6-8D7A-38F9652F9740"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.806Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "0D8D38E5-1C6D-4300-A8CE-7C0E4024B150"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.818Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "C74C9C4D-9F2D-4DCF-A4E8-3B8CD8310795"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.832Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some items were updated and some failed; see Failed."
+          },
+          "primaryKey": {
+            "ID": "D16E4BAB-6AC5-4B72-B01D-A500376A6BBB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.847Z",
+            "checksum": "e10b4a61d0a9dde22479bd577ad0aa2f81e564ad619b13c79536ff134b83b3db"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "5689CB6C-3EE3-4C3D-B447-ADD2AFDFFE55"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.859Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   },
   {
@@ -194,14 +2365,385 @@
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-paper-plane",
-      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "Config": {
+        "disallowWhenTainted": true
+      }
     },
     "primaryKey": {
       "ID": "F6D50EA9-5DC3-4585-89D7-2FB951732921"
     },
     "sync": {
-      "lastModified": "2026-05-21T15:44:47.474Z",
-      "checksum": "1273eb9343733113770e1b75a4470a60ac0387d9e7edd8ab1b37dbab83addfa7"
+      "lastModified": "2026-11-10T23:41:34.780Z",
+      "checksum": "1a694f857bc7c1e9d40db670659eaa8ff86eb8676010058abbb8bdaecc85564f"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Source",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The audience to send to. JSON-stringified ListSource: {kind:'list', listId} | {kind:'view', viewId} | {kind:'adhoc', entityName, extraFilter}.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8C1D1E67-E5E7-4F4A-8D92-1A71D7703DCC"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.879Z",
+            "checksum": "ea58689458977760940bd5d415c5c3264f36430750a02cf1243572a65f576738"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecipientField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field on the audience's entity that holds the recipient address (e.g. Email).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F6EC507E-D00D-4ABC-9BEA-E0F762FF248F"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.898Z",
+            "checksum": "57264edabfde92b6c302cafcf57d691a08ece2a30da2a167ada08825dee2fccd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProviderName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Communication provider (e.g. SendGrid).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B60010BA-7FA4-4A03-8BBC-8FE864841DEF"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.917Z",
+            "checksum": "d374110c8186e9401c6c46f9a30d5ea624e8af0212b193ee95218c80a6366803"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProviderMessageTypeName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider message type (e.g. SingleEmail).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CABC8869-C3FA-4A8A-BADA-228B47F2FFA9"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.939Z",
+            "checksum": "b879b37a6266bb0bc3793c333820a5cbcf2d3336d3ae2e210eff251096a9dcf3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "From",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sender address.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5A2C5B6A-2179-4CA1-BCAC-94E7A9392BD4"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.960Z",
+            "checksum": "cdc3d370e6bd9ac465275bfaeb0134d29907e0f0d8a143e67456f3ab6f366962"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Message subject.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1619DABA-3694-47A5-993F-DE46563436E5"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:36.983Z",
+            "checksum": "20830350149ea5885a99a0f5e9acb9ad9031b37b155876c408c625ba91145d33"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Body",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Message body. May include record tokens the channel evaluates per recipient.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5753F545-9872-48C7-A40B-CA763F9FF451"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.005Z",
+            "checksum": "8a5f869ad7eafe419e47b2da278ecccbe7b6051d1fdbfb8146eb0b9a5cfa6ea0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FullNameField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field holding the recipient's full name, for 'Name <address>' formatting.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "15F6874A-F661-41FF-ABD9-7914B788BDE9"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.030Z",
+            "checksum": "ea8a6119211ac9d2b4c43446eade10727b749b39efd908c309604a48100d155c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviewOnly",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, resolve the audience and count recipients without sending.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "79645D54-0B5E-403A-9036-F99FC062B3EB"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.054Z",
+            "checksum": "3949f78ab770bf7831de06d538eba0f75811b7ef3099a04cd02bb2fb148c633a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Credentials",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON-stringified per-request provider credential override.",
+            "IsRequired": false,
+            "LogValue": false
+          },
+          "primaryKey": {
+            "ID": "CD7171F6-E620-4677-A3A2-9B7C8F6946FE"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.077Z",
+            "checksum": "55fe7638df798ef026ab557c144bf4638d4739a22ccfb2b2347d3ebe8813cd92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalAudienceSize",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records in the audience.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F48767A4-FCE0-4C8F-92FF-AF3926043420"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.099Z",
+            "checksum": "aaaea099aa79d813233c03005825d4cb209ce138e273fb5eb60472a124a3f650"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WillReceiveCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records with a usable recipient address.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D61B1A67-2B58-4D74-9CF6-AA24332E6AF7"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.122Z",
+            "checksum": "5786526ce108b8e6487c3671793063f2379d47ac86aa58ffb47c9188ab4e3e23"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkippedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Records skipped.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "65EE2044-9117-489D-AE3F-E14F29835998"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.146Z",
+            "checksum": "980891fd9ba83aa6916c278099c079b2182786b4462c667ef2ab4099c5de85da"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FailedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sends that failed.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8B87558E-DA11-4851-B3BC-9D3952A0EE52"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.170Z",
+            "checksum": "3f14461dd04d7b2249cbbd4fe6be2b9909da325a17c0b65067ec5f7a5e96ff31"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkippedRecords",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of skipped records: RecordID, Reason, Message.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A67063B1-62FC-4E1E-A357-ED0109114413"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.192Z",
+            "checksum": "72aa4f2bbeb46ebe88d9488889b4fb08b43649d6e441427d82bb95ddf9b0d6ef"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The operation completed."
+          },
+          "primaryKey": {
+            "ID": "8237C006-3B7D-4A91-AFF9-7AB474C4450B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.206Z",
+            "checksum": "07aedd7f514263802024e093c87178e289b6875d192cd67cbd68c7a9405ea219"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A required parameter was not supplied."
+          },
+          "primaryKey": {
+            "ID": "178836C3-D9B3-4936-A760-4F87B6765680"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.220Z",
+            "checksum": "1894baea2b42c6143e313d3d4d344e867991294314bb884d92e702c2f34dc505"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "IsSuccess": false,
+            "Description": "A parameter had an invalid value."
+          },
+          "primaryKey": {
+            "ID": "6F51AC2D-4591-4C84-96D9-87D7750AE778"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.235Z",
+            "checksum": "4c88b000d465c0351144f6d7dbc39e266f1d64caf85199186cfc0df39cce1549"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PREVIEW",
+            "IsSuccess": true,
+            "Description": "Preview only: recipients counted, nothing sent."
+          },
+          "primaryKey": {
+            "ID": "4C8CD32E-4FCD-49E0-95AE-864673B7A57B"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.250Z",
+            "checksum": "f8e63968817310be9b5c62a6b6a3ee64671945e7da91f1ac38bf8b2395948630"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PARTIAL_SUCCESS",
+            "IsSuccess": false,
+            "Description": "Some sends failed; see FailedCount."
+          },
+          "primaryKey": {
+            "ID": "23159DA0-6DC4-471A-A06A-D79D8EAEC5AA"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.264Z",
+            "checksum": "8589181b53d527610c3a0711be104d77056391c8df5acace69e0516d80774566"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred."
+          },
+          "primaryKey": {
+            "ID": "D1D8B8EE-57D2-4C4E-AFB7-729F89A423A1"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:37.294Z",
+            "checksum": "c381c730e84efa725c6340d8fbbe4bc4b6748db6701b6959103c071f0388c266"
+          }
+        }
+      ]
     }
   }
 ]

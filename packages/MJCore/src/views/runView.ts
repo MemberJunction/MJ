@@ -71,9 +71,27 @@ export const KEYSET_PAGINATION_ORDERABLE_PK_TYPES: ReadonlyArray<string> = [
  */
 export function IsKeysetPaginationOrderableType(sqlTypeName: string | null | undefined): boolean {
     if (!sqlTypeName) return false;
-    // Strip parameterization like "nvarchar(255)" or "decimal(10, 2)"
-    const normalized = sqlTypeName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(normalized);
+    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(SqlTypeBaseName(sqlTypeName));
+}
+
+/**
+ * A SQL type name without its trailing parameter list, trimmed and lower-cased:
+ * `NVARCHAR(255)` → `nvarchar`, `decimal(10, 2)` → `decimal`, `int` → `int`.
+ *
+ * Returns what `type.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase()` returned, but by index:
+ * that regex retries from every `(`, which is quadratic on a value holding many of them.
+ */
+export function SqlTypeBaseName(sqlTypeName: string): string {
+    const trimmed = sqlTypeName.trimEnd();
+    const close = trimmed.length - 1;
+    if (close >= 0 && trimmed[close] === ')') {
+        // The regex's `\(` matched the first `(` after the last earlier `)`.
+        const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1);
+        if (open !== -1 && open < close) {
+            return trimmed.substring(0, open).trim().toLowerCase();
+        }
+    }
+    return trimmed.trim().toLowerCase();
 }
 
 /**

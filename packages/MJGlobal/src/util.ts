@@ -1,5 +1,6 @@
 import { v4 } from 'uuid';
 import _ from 'lodash';
+import { ExtractJavaScriptFences, FindJsonFence } from './util/MarkdownFences';
 
 /**
  * Type definition for the global object store that allows arbitrary string indexing.
@@ -46,6 +47,14 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
         __globalObjectStore = null;
     }
     return __globalObjectStore;
+}
+
+/**
+ * Returns `true` when executing in a browser environment (where the global `window` object is
+ * defined and non-null), and `false` in Node.js or other non-browser runtimes.
+ */
+export function IsBrowser(): boolean {
+    return typeof window !== 'undefined' && Boolean(window);
 }
 
 
@@ -709,16 +718,11 @@ function escapeJSONStringChar(char: string): string {
  * @returns
  */
 export function CleanJavaScript(javaScriptCode: string): string {
-    // Regular expression to match JavaScript code blocks within Markdown fences
-    // This regex looks for ``` optionally followed by js or javascript (case-insensitive), then captures until the closing ```
-    const markdownRegex = /```(?:js|javascript)?\s*([\s\S]*?)```/gi;
+    const blocks = ExtractJavaScriptFences(javaScriptCode);
 
-    // Check if the input contains Markdown code fences for JavaScript
-    const matches = Array.from(javaScriptCode.matchAll(markdownRegex));
-
-    if (matches.length > 0) {
-        // If there are matches, concatenate all captured groups (in case there are multiple code blocks)
-        return matches.map(match => match[1].trim()).join('\n');
+    if (blocks.length > 0) {
+        // If there are fenced blocks, concatenate them (in case there are multiple code blocks)
+        return blocks.join('\n');
     } else {
         // If there are no Markdown code fences, assume the input is plain JavaScript code
         return javaScriptCode.trim();
@@ -1588,11 +1592,86 @@ export function stripTrailingChars(s: string, charsToStrip: string, skipIfExactM
  * ```
  */
 export function TrimTrailingSlashes(s: string): string {
+    return TrimTrailingChars(s, '/');
+}
+
+/**
+ * Removes every trailing character that appears in `chars`, the linear-time replacement for an
+ * end-anchored run such as `/=+$/`, `/ +$/` or `/[-_]+$/`.
+ *
+ * Those regexes backtrack quadratically on a string holding many of the characters that are NOT
+ * at the end: the engine retries the run from each one. This walks back from the end once.
+ *
+ * @param s - The string to trim.
+ * @param chars - Every character to strip; `'='` strips `=` only, `'-_'` strips both.
+ *
+ * @example
+ * ```typescript
+ * TrimTrailingChars('abc===', '=');   // 'abc'
+ * TrimTrailingChars('a-b-_-', '-_');  // 'a-b'
+ * ```
+ */
+export function TrimTrailingChars(s: string, chars: string): string {
     let end = s.length;
-    while (end > 0 && s.charCodeAt(end - 1) === 47 /* '/' */) {
+    while (end > 0 && chars.includes(s[end - 1])) {
         end--;
     }
     return end === s.length ? s : s.substring(0, end);
+}
+
+/**
+ * Removes every leading character that appears in `chars`. The start-anchored counterpart of
+ * {@link TrimTrailingChars}.
+ *
+ * @example
+ * ```typescript
+ * TrimLeadingChars('//a/b', '/'); // 'a/b'
+ * ```
+ */
+export function TrimLeadingChars(s: string, chars: string): string {
+    let start = 0;
+    while (start < s.length && chars.includes(s[start])) {
+        start++;
+    }
+    return start === 0 ? s : s.substring(start);
+}
+
+/**
+ * Removes every leading and trailing character that appears in `chars`, the linear-time
+ * replacement for `/^x+|x+$/g`.
+ *
+ * @example
+ * ```typescript
+ * TrimChars('//a/b//', '/');  // 'a/b'
+ * TrimChars('--a-b--', '-');  // 'a-b'
+ * ```
+ */
+export function TrimChars(s: string, chars: string): string {
+    return TrimTrailingChars(TrimLeadingChars(s, chars), chars);
+}
+
+/**
+ * Whether a string has the loose `local@domain.tld` shape: no whitespace, exactly one `@`, a
+ * non-empty local part, and a domain with a `.` that is neither its first nor its last character.
+ * Not RFC validation.
+ *
+ * Accepts exactly what `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` accepts, but checks by index: that regex's
+ * overlapping classes make a crafted value cost quadratic time.
+ *
+ * @example
+ * ```typescript
+ * IsEmailShaped('a@b.co');   // true
+ * IsEmailShaped('a@b.');     // false
+ * IsEmailShaped('a b@c.co'); // false
+ * ```
+ */
+export function IsEmailShaped(value: string): boolean {
+    if (/\s/.test(value)) return false;
+    const at = value.indexOf('@');
+    if (at <= 0 || value.indexOf('@', at + 1) !== -1) return false;
+    const domain = value.substring(at + 1);
+    const dot = domain.indexOf('.', 1);
+    return dot > 0 && dot < domain.length - 1;
 }
 
 /**
@@ -2160,12 +2239,12 @@ function recursiveReplaceString(str: string, options: Required<ParseJSONOptions>
   if (options?.extractInlineJson) {
       // Look for JSON patterns within the string
       // First try ```json blocks
-      const codeBlockMatch = str.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (codeBlockMatch) {
+      const codeBlock = FindJsonFence(str);
+      if (codeBlock) {
         try {
-          const parsedJson = JSON.parse(codeBlockMatch[1]);
+          const parsedJson = JSON.parse(codeBlock.Body);
           return {
-            text: str.replace(codeBlockMatch[0], '').trim(),
+            text: str.replace(codeBlock.Whole, '').trim(),
             json: parseJSONRecursiveWithDepth(parsedJson, options, depth + 1, `${path}[embedded-json]`)
           };
         } catch (e) {

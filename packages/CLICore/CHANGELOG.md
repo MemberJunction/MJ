@@ -1,5 +1,19 @@
 # @memberjunction/cli-core
 
+## 6.3.0-edge.0
+
+### Patch Changes
+
+- 16ac431: Fix dynamic imports that break under pnpm (#3741). SearchEngine declares `@elastic/elasticsearch` and `@huggingface/transformers` as optional dependencies and its load errors no longer tell users to add them to their own project. MJServer now logs which resolver module failed to load. Plugin, check-module, AI driver and realtime-bridge native addon names that come from configuration load through `ImportFromHost`, so a package installed by the host application resolves; AIEngine skips the import when the driver class is already registered. A new `check:dynamic-imports` guard fails on a dynamic import of a package the importing package does not declare.
+- Updated dependencies [03bb8b6]
+- Updated dependencies [31cc053]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [c889b72]
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/dynamic-packages@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Patch Changes

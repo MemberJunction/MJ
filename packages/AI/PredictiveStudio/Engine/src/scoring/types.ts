@@ -29,7 +29,7 @@
 
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { UUIDSet } from '@memberjunction/global';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import type {
   PredictRequest,
   PredictResponse,
@@ -50,6 +50,7 @@ import type { IRecordHistoryReader } from '../feature-assembly/as-of/record-hist
 import type { IPredictionUnitStore } from '../prediction-unit/unit-store';
 
 import type { DatedSourceSpec } from '../feature-assembly';
+import type { ShadowScoringCoordinator } from './shadow-scoring';
 
 /**
  * Read seam for loading the immutable `MJ: ML Models` row to score against.
@@ -98,7 +99,7 @@ export interface ISidecarPredictor {
    *
    * @param req the predict request (artifact + frozen preprocessing + schema + rows)
    */
-  predict(req: PredictRequest): Promise<PredictResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  predict(req: PredictRequest, signal?: AbortSignal): Promise<PredictResponse>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -222,6 +223,12 @@ export interface MLModelInferenceProcessorOptions {
   autoTrain?: MLAutoTrainConfig;
   /** The trainer that fulfils {@link autoTrain}. Required for auto-train to take effect. */
   autoTrainer?: IModelAutoTrainer;
+  /** Optional RecordProcessID associated with this scoring processor instance. */
+  recordProcessId?: string;
+  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
+  challengerConfig?: MJRecordProcessEntity_IRecordProcessChallengerConfig;
+  /** Optional WS-4.4 shadow scoring coordinator. */
+  shadowCoordinator?: ShadowScoringCoordinator;
 }
 
 /**

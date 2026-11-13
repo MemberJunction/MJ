@@ -163,7 +163,9 @@ export interface ParameterTypeInfo {
 /**
  * Maps SQL Server types to JavaScript types
  */
-export function MapSQLTypeToJSType(sqlType: string): string {
+export function MapSQLTypeToJSType(sqlType: string | null | undefined): string {
+  // A field or parameter without a type (sqlType is optional on both) is unknown, like an unrecognized type.
+  if (!sqlType) return 'unknown';
   const type = sqlType.toLowerCase();
 
   // If already a JavaScript type, return it directly
@@ -206,7 +208,7 @@ export function MapSQLTypeToJSType(sqlType: string): string {
 }
 
 /** @deprecated Use {@link MapSQLTypeToJSType}. */
-export function mapSQLTypeToJSType(sqlType: string): string {
+export function mapSQLTypeToJSType(sqlType: string | null | undefined): string {
   return MapSQLTypeToJSType(sqlType);
 }
 

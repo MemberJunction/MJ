@@ -169,6 +169,13 @@ export class GetQuickBooksTransactionsAction extends QuickBooksBaseAction {
             conditions.push(`TotalAmt <= ${maxAmount}`);
         }
 
+        // Document number filter (#5823): the verb's DocumentNumber, so a caller looking up one journal
+        // entry does not read a whole posting date and filter client-side.
+        const documentNumber = this.getParamValue(params.Params, 'DocumentNumber');
+        if (documentNumber !== undefined && documentNumber !== null && String(documentNumber).trim() !== '') {
+            conditions.push(`DocNumber = '${EscapeQBOString(String(documentNumber).trim())}'`);
+        }
+
         // Add entity filter based on transaction type
         const entityId = this.getParamValue(params.Params, 'EntityID');
         if (entityId) {
@@ -312,4 +319,12 @@ export class GetQuickBooksTransactionsAction extends QuickBooksBaseAction {
                line.DepositLineDetail?.AccountRef?.name ||
                line.JournalEntryLineDetail?.AccountRef?.name;
     }
+}
+
+/**
+ * Escapes a value for a single-quoted string literal in the QuickBooks Online query language, where a
+ * backslash escapes the next character.
+ */
+export function EscapeQBOString(value: string): string {
+    return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }

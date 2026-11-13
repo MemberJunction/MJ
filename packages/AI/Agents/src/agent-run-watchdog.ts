@@ -54,7 +54,15 @@ const CONFIG_KEYS: ReadonlyArray<keyof AgentRunWatchdogConfig> = [
 /** The row shape the cancellation poll reads back from the AI Agent Runs view. */
 interface CancelledRunRow {
     ID: string;
+    Status: string;
     CancellationReason: string | null;
+    ErrorMessage: string | null;
+}
+
+/** The row shape the prune reads back for tracked runs that left `Running` while a controller was registered. */
+interface FailedRunRow {
+    ID: string;
+    ErrorMessage: string | null;
 }
 
 /** Matches a canonical UUID. Tracked IDs come from provider-generated PKs, but we validate
@@ -119,6 +127,19 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** The abort reason the stop relay raises for a row cancelled with any other reason. */
     public static readonly ExternalCancelAbortReason = 'Cancelled externally';
+
+    /**
+     * The prefix of every `ErrorMessage` the watchdog's stored procedures write when they force-fail
+     * a run, and of the abort reason the stop relay raises for such a run (#4883). The relay passes
+     * the row's whole message as the reason, so the owning agent finalizes `Failed` with the same
+     * text the row already carries instead of overwriting it (see {@link IsForceFailedAbortReason}).
+     */
+    public static readonly ForceFailedAbortReason = '[watchdog]';
+
+    /** Whether an abort reason (or a run's `ErrorMessage`) is a watchdog force-fail. */
+    public static IsForceFailedAbortReason(reason: string | null | undefined): reason is string {
+        return typeof reason === 'string' && reason.startsWith(AgentRunWatchdog.ForceFailedAbortReason);
+    }
 
     private _config: AgentRunWatchdogConfig = DEFAULT_CONFIG;
     /** Guarded runs keyed by lowercased run ID, storing each run's own provider and contextUser for multi-tenant isolation. */
@@ -244,6 +265,14 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     /** Number of runs this process is currently guarding (primarily for tests/diagnostics). */
     public get TrackedCount(): number {
         return this._trackedRuns.size;
+    }
+
+    /**
+     * IDs of the runs this process is currently guarding — i.e. the agent runs executing here.
+     * A copy; read by MJAPI's event-loop stall monitor to name what was running during a stall.
+     */
+    public get TrackedRunIDs(): string[] {
+        return this.trackedIds();
     }
 
     /**
@@ -430,11 +459,14 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * The stop relay's read side. One RunView per (provider, contextUser) over the AI Agent Runs entity
-     * for the tracked runs that have a registered controller and whose row is now `Cancelled`; each one
-     * has its controller aborted with a reason derived from the row's `CancellationReason`, and leaves the
-     * tracked set (the agent's own cancelled-result save follows). Runs without a controller are
-     * left to the prune. Never throws (runs on a timer); overlapping ticks are skipped rather than
-     * stacked.
+     * for the tracked runs that have a registered controller and whose row is now `Cancelled` or
+     * `Failed`. A `Cancelled` row has its controller aborted with a reason derived from the row's
+     * `CancellationReason`. A `Failed` row whose `ErrorMessage` the watchdog wrote (a sweep that took
+     * a live run for dead) is aborted with that message (#4883): otherwise the row says Failed while
+     * the work keeps running. Any other `Failed` row is the agent's own finish and is left alone.
+     * Aborted runs leave the tracked set (the agent's own result save follows). Runs without a
+     * controller are left to the prune. Never throws (runs on a timer); overlapping ticks are skipped
+     * rather than stacked.
      */
     private async pollCancellations(): Promise<void> {
         if (this._cancellationPollInFlight || this._abortControllers.size === 0) {
@@ -454,13 +486,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
                 const rows = await this.readTrackedRunsForContext<CancelledRunRow>(
                     group.provider,
                     group.contextUser,
-                    MJAIAgentRunEntityExtended.CancelledStatus,
+                    [MJAIAgentRunEntityExtended.CancelledStatus, 'Failed'],
                     ids,
-                    ['ID', 'CancellationReason'],
+                    ['ID', 'Status', 'CancellationReason', 'ErrorMessage'],
                     'AgentRunWatchdog cancellation poll'
                 );
                 for (const row of rows) {
                     if (typeof row?.ID !== 'string') {
+                        continue;
+                    }
+                    if (row.Status === 'Failed') {
+                        this.abortIfForceFailed(row);
                         continue;
                     }
                     const reason = AgentRunWatchdog.abortReasonFor(row.CancellationReason);
@@ -477,6 +513,24 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     /**
+     * Aborts a tracked run whose row the watchdog force-failed, passing the row's message as the
+     * abort reason so the agent finalizes `Failed` with it. A `Failed` row with any other message is
+     * the agent's own finish and is left alone.
+     *
+     * @returns true when the run's controller was aborted.
+     */
+    private abortIfForceFailed(row: FailedRunRow): boolean {
+        if (!AgentRunWatchdog.IsForceFailedAbortReason(row.ErrorMessage)) {
+            return false;
+        }
+        const aborted = this.RequestCancel(row.ID, row.ErrorMessage);
+        if (aborted) {
+            LogStatus(`[AgentRunWatchdog] Run ${row.ID} was force-failed by the watchdog while still running here; aborting the in-flight agent`);
+        }
+        return aborted;
+    }
+
+    /**
      * The tracked runs (among `ids`) whose row carries `status`, read through RunView against the
      * entity so the read goes where every other entity read goes: the entity's view, under the
      * tracked user's read permission, with the fields named. `ids` is the quoted, UUID-validated
@@ -486,15 +540,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     private async readTrackedRunsForContext<T>(
         provider: DatabaseProviderBase,
         contextUser: UserInfo,
-        status: string,
+        status: string | string[],
         ids: string,
         fields: string[],
         description: string
     ): Promise<T[]> {
+        const statuses = Array.isArray(status) ? status : [status];
+        const statusFilter = statuses.map((s) => `Status='${s}'`).join(' OR ');
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<T>({
             EntityName: AGENT_RUN_ENTITY,
-            ExtraFilter: `Status='${status}' AND ID IN (${ids})`,
+            ExtraFilter: `(${statusFilter}) AND ID IN (${ids})`,
             Fields: fields,
             ResultType: 'simple',
             IgnoreMaxRows: true,
@@ -514,7 +570,9 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     /**
      * Drop any tracked run that is no longer `Running` so the in-memory set can't grow unbounded
      * over a long-lived process. One RunView per (provider, contextUser) of the still-running subset;
-     * the rest are pruned.
+     * the rest are pruned. Before a run that still has a controller is dropped, a second read checks
+     * whether the watchdog force-failed it; such a run is aborted rather than silently forgotten
+     * (#4883), since dropping its controller would leave the work running with no way to stop it.
      */
     private async pruneTerminalRuns(): Promise<void> {
         const groups = this.groupRunsByProviderAndUser(this.trackedIds());
@@ -541,16 +599,40 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
                         stillRunning.add(row.ID.toLowerCase());
                     }
                 }
-                for (const tracked of group.ids) {
-                    if (!stillRunning.has(tracked)) {
-                        this._trackedRuns.delete(tracked);
-                        this._abortControllers.delete(tracked);
-                    }
+                const leaving = group.ids.filter((tracked) => !stillRunning.has(tracked));
+                await this.abortForceFailedAmong(group.provider, group.contextUser, leaving);
+                for (const tracked of leaving) {
+                    this._trackedRuns.delete(tracked);
+                    this._abortControllers.delete(tracked);
                 }
             }
             this.stopIdleTimers();
         } catch (err) {
             LogError(`AgentRunWatchdog prune failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Of the runs about to leave the tracked set, aborts those that still hold a controller and whose
+     * row the watchdog force-failed. One read, only when such a run exists.
+     */
+    private async abortForceFailedAmong(provider: DatabaseProviderBase, contextUser: UserInfo, leaving: string[]): Promise<void> {
+        const withController = AgentRunWatchdog.idList(leaving.filter((id) => this._abortControllers.has(id)));
+        if (!withController) {
+            return;
+        }
+        const rows = await this.readTrackedRunsForContext<FailedRunRow>(
+            provider,
+            contextUser,
+            'Failed',
+            withController,
+            ['ID', 'ErrorMessage'],
+            'AgentRunWatchdog force-failed check'
+        );
+        for (const row of rows) {
+            if (typeof row?.ID === 'string') {
+                this.abortIfForceFailed(row);
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 import { ApiError } from '@google/genai';
 
 /* ------------------------------------------------------------------ */
@@ -109,6 +110,7 @@ vi.mock('@memberjunction/ai', () => {
     CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
     BaseImageGenerator: MockBaseImageGenerator,
+    BaseRealtimeSession: class {},
     ImageGenerationParams: class {},
     ImageGenerationResult: class {},
     ImageEditParams: class {},
@@ -117,10 +119,12 @@ vi.mock('@memberjunction/ai', () => {
     GeneratedImage: MockGeneratedImage,
     BaseRealtimeModel: MockBaseRealtimeModel,
     BaseEmbeddings: class {},
+    NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
   };
 });
 
-import { GeminiLLM } from '../index';
+import { GeminiLLM, GEMINI_USER_TURN_SEPARATOR_TEXT } from '../index';
+import { WithoutCacheAnchor } from './cache-anchor-test-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Tests                                                              */
@@ -160,7 +164,7 @@ describe('GeminiLLM', () => {
 
   /* ---- geminiMessageSpacing ---- */
   describe('geminiMessageSpacing', () => {
-    it('should combine consecutive messages with same role', () => {
+    it('keeps consecutive user text turns apart with a separator model turn, so each is a cache boundary', () => {
       const fn = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['geminiMessageSpacing']
         .bind(llm);
       const messages = [
@@ -169,10 +173,38 @@ describe('GeminiLLM', () => {
         { role: 'model', parts: [{ text: 'Hi!' }] },
       ];
       const result = fn(messages) as Array<{ role: string; parts: Array<{ text: string }> }>;
-      expect(result).toHaveLength(2);
-      expect(result[0].parts).toHaveLength(2);
-      expect(result[0].parts[0].text).toBe('Hello');
-      expect(result[0].parts[1].text).toBe('World');
+      expect(result.map((c) => c.role)).toEqual(['user', 'model', 'user', 'model']);
+      expect(result[1].parts).toEqual([{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }]);
+      expect(result[2].parts[0].text).toBe('World');
+    });
+
+    it('still combines consecutive model turns', () => {
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['geminiMessageSpacing']
+        .bind(llm);
+      const messages = [
+        { role: 'user', parts: [{ text: 'Q' }] },
+        { role: 'model', parts: [{ text: 'A' }] },
+        { role: 'model', parts: [{ text: 'B' }] },
+      ];
+      const result = fn(messages) as Array<{ role: string; parts: Array<{ text: string }> }>;
+      expect(result.map((c) => c.role)).toEqual(['user', 'model']);
+      expect(result[1].parts.map((p) => p.text)).toEqual(['A', 'B']);
+    });
+
+    it('never separates a function-response turn from the call turn before it', () => {
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => unknown>)['geminiMessageSpacing']
+        .bind(llm);
+      const messages = [
+        { role: 'user', parts: [{ text: 'Q' }] },
+        { role: 'model', parts: [{ functionCall: { id: 'c1', name: 'f', args: {} } }, { functionCall: { id: 'c2', name: 'g', args: {} } }] },
+        { role: 'user', parts: [{ functionResponse: { id: 'c1', name: 'f', response: {} } }] },
+        { role: 'user', parts: [{ functionResponse: { id: 'c2', name: 'g', response: {} } }] },
+        { role: 'user', parts: [{ text: 'Turn 2 of 10.' }] },
+      ];
+      const result = fn(messages) as Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+      // Both responses in one turn right after the calls; the text after them stays its own turn, as before.
+      expect(result.map((c) => c.role)).toEqual(['user', 'model', 'user', 'user']);
+      expect(result[2].parts.every((p) => !!p.functionResponse)).toBe(true);
     });
 
     it('should return empty array for empty input', () => {
@@ -533,7 +565,7 @@ describe('GeminiLLM — native tool calling', () => {
 
   /** The history the driver handed chats.create(). */
   let create: Mock;
-  const sentHistory = (): Array<Record<string, unknown>> => create.mock.calls[0][0].history;
+  const sentHistory = (): Array<Record<string, unknown>> => WithoutCacheAnchor(create.mock.calls[0][0].history as Array<Record<string, unknown>>);
 
   /**
    * The parts of the CURRENT turn. Gemini splits the conversation: everything but the last turn is
@@ -778,11 +810,11 @@ describe('GeminiLLM — native tool calling', () => {
       expect(String(result.errorMessage)).toContain('No output received from model');
     });
 
-    it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+    it("leaves toolCalls undefined and normalizes Gemini's STOP to 'stop' on an ordinary turn", async () => {
       const result = await run({ messages: [{ role: 'user', content: 'x' }] });
 
       expect(result.data.choices[0].message.toolCalls).toBeUndefined();
-      expect(result.data.choices[0].finish_reason).toBe('STOP');
+      expect(result.data.choices[0].finish_reason).toBe('stop');
     });
   });
 });

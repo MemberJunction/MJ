@@ -36,7 +36,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/ai', () => ({}));
-vi.mock('@memberjunction/ai-prompts', () => ({ AIEmbeddingRunner: class {} }));
+vi.mock('@memberjunction/ai-prompts', () => ({ AIEmbeddingRunner: class {}, EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' } }));
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: class {},
 }));

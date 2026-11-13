@@ -20,6 +20,7 @@ import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
     UserCache,
+    GetServerPrincipal,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -93,10 +94,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const conn = new PostgreSQLCodeGenConnection(pool);
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
         if (!currentUser) {
-            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+            throw new Error('No active system user or Owner found in PostgreSQL; CodeGen needs one to run as.');
         }
 
         // Run MJ startup with the same 'task' entry-point default as the SQL Server path
@@ -1345,12 +1345,17 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     )
     SELECT
         a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
-        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
-        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
-        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
-        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+        a.depth::INTEGER AS "Depth",
+        a.path::TEXT AS "Path",
+        (ch.child_count = 0)::BOOLEAN AS "IsLeaf",
+        ch.child_count AS "ChildCount"
     FROM
         cte_ancestors a
+    CROSS JOIN LATERAL (
+        SELECT COUNT(1)::INTEGER AS child_count
+        FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id
+    ) ch
     WHERE
         a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
     ORDER BY
@@ -2608,6 +2613,7 @@ WHERE p.prokind IN ('f', 'p')
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult> {
         // [Large Schema Series] pooled client (was `new pg.Client()` per entity —
         // the per-entity handshake that dominated manageSQLScriptsAndExecution).
@@ -2640,6 +2646,7 @@ WHERE p.prokind IN ('f', 'p')
                         CreateOrReplaceSQL: opts.viewSQL,
                         WillRegenerate: opts.willRegenerate,
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
+                        OnDependentViewUnrestored: opts.OnDependentViewUnrestored,
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                     await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);
@@ -2882,10 +2889,13 @@ WHERE p.prokind IN ('f', 'p')
             };
         }
 
-        // Composite keys or non-auto, non-UUID PKs
-        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) =>
-            `${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`
-        ).join(' AND ');
+        // Composite keys or non-auto, non-UUID PKs. #3526: a key column that allows NULL is matched
+        // NULL-safely (IS NOT DISTINCT FROM would not use a btree index).
+        const selectWhere = entity.PrimaryKeys.map((k: EntityFieldInfo) => {
+            const col = pgDialect.QuoteIdentifier(k.Name);
+            const param = pgDialect.ParameterRef(k.CodeName);
+            return k.AllowsNull ? `(${col} = ${param} OR (${col} IS NULL AND ${param} IS NULL))` : `${col} = ${param}`;
+        }).join(' AND ');
 
         // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
         // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
@@ -3156,17 +3166,42 @@ WHERE p.prokind IN ('f', 'p')
             ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
-WITH fk_cache AS (
-   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
+WITH fk_all AS (
+   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema",
+          COUNT(*) OVER (PARTITION BY "FK_NAME", "schema_name", "table") AS "ComponentCount"
    FROM ${qs(schema, 'vwForeignKeys')}
 ),
+-- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
 pk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT "TableName", "ColumnName", "SchemaName",
+          COUNT(*) OVER (PARTITION BY "SchemaName", "TableName") AS "KeyColumnCount"
    FROM ${qs(schema, 'vwTablePrimaryKeys')}
 ),
+-- Only columns that are, alone, the key of a non-partial unique index or constraint (#4536).
+-- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
 uk_cache AS (
-   SELECT "TableName", "ColumnName", "SchemaName"
+   SELECT DISTINCT "TableName", "ColumnName", "SchemaName"
    FROM ${qs(schema, 'vwTableUniqueKeys')}
+   WHERE "KeyColumnCount" = 1
+     AND NOT "IsFiltered"
+),
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+fk_cache AS (
+   SELECT fk.*
+   FROM fk_all fk
+   WHERE fk."ComponentCount" = 1
+      OR EXISTS (
+            SELECT 1 FROM pk_cache pk
+            WHERE pk."SchemaName" = fk."referenced_schema" AND pk."TableName" = fk."referenced_table"
+              AND pk."ColumnName" = fk."referenced_column" AND pk."KeyColumnCount" = 1
+         )
+      OR EXISTS (
+            SELECT 1 FROM uk_cache uk
+            WHERE uk."SchemaName" = fk."referenced_schema" AND uk."TableName" = fk."referenced_table"
+              AND uk."ColumnName" = fk."referenced_column"
+         )
 ),
 max_sequences AS (
    SELECT
@@ -3204,7 +3239,7 @@ numbered_rows AS (
       CASE WHEN sf."FieldName" = 'Name' THEN TRUE ELSE FALSE END AS "IsNameField",
       CASE WHEN pk."ColumnName" IS NOT NULL THEN TRUE ELSE FALSE END AS "IsPrimaryKey",
       CASE
-            WHEN pk."ColumnName" IS NOT NULL THEN TRUE
+            WHEN pk."ColumnName" IS NOT NULL AND pk."KeyColumnCount" = 1 THEN TRUE
             WHEN uk."ColumnName" IS NOT NULL THEN TRUE
             ELSE FALSE
       END AS "IsUnique",

@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, IsValueEncrypted, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { buffer, debounceTime, filter } from "rxjs/operators";
@@ -32,6 +32,8 @@ type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
  */
 interface PrimaryKeyIndex {
     map: Map<string, number> | null;
+    /** Weak membership set of element references currently in the array for O(1) negative `indexOf` checks. */
+    refs: WeakSet<BaseEntity>;
     pks: PrimaryKeyColumn[];
     /** The key columns the index was built for, from {@link primaryKeySignature}. */
     signature: string;
@@ -43,6 +45,36 @@ interface PrimaryKeyIndex {
 
 /** Key indexes by cached array. The index of a replaced array is collected with it. */
 const primaryKeyIndexes = new WeakMap<BaseEntity[], PrimaryKeyIndex>();
+
+/**
+ * Cached canonical primary-key index for external `row_delta` merges so consecutive deltas update
+ * in `O(Δ)` without re-scanning all `N` held rows on every event.
+ */
+interface DeltaRowKeyIndex {
+    signature: string;
+    length: number;
+    first: BaseEntity | Record<string, CacheRowValue> | undefined;
+    last: BaseEntity | Record<string, CacheRowValue> | undefined;
+    map: Map<string, number>;
+    keys: string[];
+}
+
+const deltaHeldRowIndexes = new WeakMap<
+    ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
+    DeltaRowKeyIndex
+>();
+
+/**
+ * Reads a field value from an entity, falling back to `entity.Get(fieldName)` when no generated
+ * property getter exists on the instance (e.g. generic `BaseEntity` fallback instances).
+ */
+function readEntityFieldValue(entity: BaseEntity, fieldName: string): unknown {
+    const direct: unknown = Reflect.get(entity, fieldName);
+    if (direct !== undefined) {
+        return direct;
+    }
+    return typeof entity.Get === 'function' ? entity.Get(fieldName) : undefined;
+}
 
 /**
  * One key column as a string with the same equality as {@link BaseEngine.findEntityIndexByPrimaryKeys}:
@@ -66,7 +98,18 @@ function primaryKeyPart(value: unknown, isUuid: boolean): string | undefined {
 /** The index key of a row: its key columns in order, or undefined when a column cannot be represented. */
 function primaryKeyOfRow(row: BaseEntity | undefined, pks: PrimaryKeyColumn[]): string | undefined {
     if (row == null) return undefined;
-    const record = row as unknown as Record<string, unknown>;
+    if (pks.length === 1) return primaryKeyPart(readEntityFieldValue(row, pks[0].Name), pks[0].IsUniqueIdentifier);
+    let key = '';
+    for (const pk of pks) {
+        const part = primaryKeyPart(readEntityFieldValue(row, pk.Name), pk.IsUniqueIdentifier);
+        if (part === undefined) return undefined;
+        key += part.length + ':' + part;
+    }
+    return key;
+}
+
+/** The index key of a plain field snapshot (such as `OldValues` on a delete event). */
+function primaryKeyOfRecord(record: Record<string, unknown>, pks: PrimaryKeyColumn[]): string | undefined {
     if (pks.length === 1) return primaryKeyPart(record[pks[0].Name], pks[0].IsUniqueIdentifier);
     let key = '';
     for (const pk of pks) {
@@ -86,17 +129,25 @@ function primaryKeySignature(pks: PrimaryKeyColumn[]): string {
 function buildPrimaryKeyIndex(dataArray: BaseEntity[], pks: PrimaryKeyColumn[], signature: string): PrimaryKeyIndex | null {
     try {
         let map: Map<string, number> | null = new Map();
+        const refs = new WeakSet<BaseEntity>();
         let duplicates = false;
         for (let i = 0; i < dataArray.length; i++) {
-            const key = primaryKeyOfRow(dataArray[i], pks);
-            if (key === undefined) {
-                map = null;
-                break;
+            const row = dataArray[i];
+            if (row != null && typeof row === 'object') {
+                refs.add(row);
             }
-            if (map.has(key)) duplicates = true;
-            else map.set(key, i);
+            if (map) {
+                const key = primaryKeyOfRow(row, pks);
+                if (key === undefined) {
+                    map = null;
+                } else if (map.has(key)) {
+                    duplicates = true;
+                } else {
+                    map.set(key, i);
+                }
+            }
         }
-        const index: PrimaryKeyIndex = { map, pks, signature, duplicates, length: dataArray.length, last: dataArray[dataArray.length - 1] };
+        const index: PrimaryKeyIndex = { map, refs, pks, signature, duplicates, length: dataArray.length, last: dataArray[dataArray.length - 1] };
         primaryKeyIndexes.set(dataArray, index);
         return index;
     }
@@ -135,6 +186,9 @@ function primaryKeyIndexAppended(dataArray: BaseEntity[], row: BaseEntity): void
             if (index.map.has(key)) index.duplicates = true;
             else index.map.set(key, n - 1);
         }
+        if (row != null && typeof row === 'object') {
+            index.refs.add(row);
+        }
         index.length = n;
         index.last = row;
     }
@@ -144,7 +198,7 @@ function primaryKeyIndexAppended(dataArray: BaseEntity[], row: BaseEntity): void
 }
 
 /** Keeps the key index of `dataArray` after a row was written in place at `pos`; drops it when the row's key is not indexed at `pos`. */
-function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: BaseEntity): void {
+function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: BaseEntity, previousRow?: BaseEntity): void {
     const index = primaryKeyIndexes.get(dataArray);
     if (!index) return;
     try {
@@ -153,6 +207,12 @@ function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: Base
         if (!current || (index.map && index.map.get(primaryKeyOfRow(row, index.pks) ?? '') !== pos)) {
             primaryKeyIndexes.delete(dataArray);
             return;
+        }
+        if (previousRow && previousRow !== row && !index.duplicates) {
+            index.refs.delete(previousRow);
+        }
+        if (row != null && typeof row === 'object') {
+            index.refs.add(row);
         }
         if (pos === n - 1) index.last = row;
     }
@@ -182,6 +242,7 @@ function primaryKeyIndexRemoved(dataArray: BaseEntity[], pos: number, removed: B
             return;
         }
         index.map.delete(key);
+        index.refs.delete(removed);
         for (const [k, p] of index.map) {
             if (p > pos) index.map.set(k, p - 1);
         }
@@ -1506,7 +1567,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // multi-provider client setups instantiate entities against the correct server.
             const md = this.ProviderToUse;
             const originalEntityName = matchingConfigs[0].EntityName!;
-            const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
+            const entity = await this.instantiateEntityForHydration(md, originalEntityName, this._contextUser);
             await entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
@@ -1529,8 +1590,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                 }
                 if (index >= 0) {
+                    const prev = currentData[index];
                     currentData[index] = entity;
-                    primaryKeyIndexReplaced(currentData, index, entity);
+                    primaryKeyIndexReplaced(currentData, index, entity, prev);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
@@ -1834,27 +1896,106 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Fast `O(1)` reference membership check backed by {@link PrimaryKeyIndex.refs}, falling back
+     * to `Array.prototype.indexOf` only when `entity` is recorded in `refs` or the array cannot
+     * be indexed.
+     */
+    private indexOfEntityByRefFast(currentData: BaseEntity[], entity: BaseEntity): number {
+        const pks: PrimaryKeyColumn[] | undefined = entity?.EntityInfo?.PrimaryKeys;
+        if (!pks || pks.length === 0 || !Array.isArray(currentData)) {
+            return currentData.indexOf(entity);
+        }
+        const signature = primaryKeySignature(pks);
+        let index: PrimaryKeyIndex | null | undefined = primaryKeyIndexes.get(currentData);
+        if (!index || index.signature !== signature || index.length !== currentData.length || index.last !== currentData[currentData.length - 1]) {
+            index = buildPrimaryKeyIndex(currentData, pks, signature);
+        }
+        if (index && !index.refs.has(entity)) {
+            return -1;
+        }
+        if (index?.map) {
+            const key = primaryKeyOfRow(entity, pks);
+            if (key !== undefined) {
+                const pos = index.map.get(key);
+                if (pos !== undefined && currentData[pos] === entity) {
+                    return pos;
+                }
+            }
+        }
+        return currentData.indexOf(entity);
+    }
+
+    /**
      * Index of `entity` in `currentData` by reference, else by primary key. When `preDeleteValues`
      * carries a complete key it is the ONLY key used: after a delete the live entity's key has
      * been regenerated by NewRecord(), so it can never match the deleted row (see
      * {@link isEntityInArrayByRefOrKey}).
      */
     private indexOfEntityByRefOrKey(currentData: BaseEntity[], entity: BaseEntity, preDeleteValues?: Record<string, unknown>): number {
-        const byRef = currentData.indexOf(entity);
+        const byRef = this.indexOfEntityByRefFast(currentData, entity);
         if (byRef >= 0) {
             return byRef;
         }
 
         if (preDeleteValues) {
-            const key = new CompositeKey();
-            key.LoadFromEntityInfoAndRecord(entity.EntityInfo, preDeleteValues);
-            if (key.KeyValuePairs.length > 0 && !key.KeyValuePairs.some(kv => kv.Value == null)) {
-                return currentData.findIndex(e => e.PrimaryKey.Equals(key));
+            const bySnapshot = this.findEntityIndexByRecordPrimaryKeys(currentData, entity?.EntityInfo, preDeleteValues);
+            if (bySnapshot !== undefined) {
+                return bySnapshot;
             }
         }
 
         // Fallback: the entity's current primary key
         return this.findEntityIndexByPrimaryKeys(currentData, entity);
+    }
+
+    /**
+     * Looks up a plain pre-delete field snapshot (`OldValues`) in `currentData` via `PrimaryKeyIndex`
+     * in `O(1)` when all primary key fields are present; returns `undefined` when the snapshot does
+     * not carry a complete key so the caller can fall back to `entity`'s current key.
+     */
+    private findEntityIndexByRecordPrimaryKeys(
+        dataArray: BaseEntity[],
+        entityInfo: EntityInfo | undefined,
+        record: Record<string, unknown>
+    ): number | undefined {
+        const pks: PrimaryKeyColumn[] | undefined = entityInfo?.PrimaryKeys;
+        if (pks && pks.length > 0 && Array.isArray(dataArray)) {
+            const hasCompleteKey = !pks.some(pk => record[pk.Name] == null);
+            if (!hasCompleteKey) {
+                return undefined;
+            }
+            const key = primaryKeyOfRecord(record, pks);
+            if (key !== undefined) {
+                const signature = primaryKeySignature(pks);
+                let index: PrimaryKeyIndex | null | undefined = primaryKeyIndexes.get(dataArray);
+                if (!index || index.signature !== signature || index.length !== dataArray.length || index.last !== dataArray[dataArray.length - 1]) {
+                    index = buildPrimaryKeyIndex(dataArray, pks, signature);
+                }
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    if (!index || !index.map) {
+                        break;
+                    }
+                    const pos = index.map.get(key);
+                    if (pos === undefined) {
+                        return -1;
+                    }
+                    if (rowHasPrimaryKey(dataArray, pos, pks, key)) {
+                        return pos;
+                    }
+                    index = attempt === 0 ? buildPrimaryKeyIndex(dataArray, pks, signature) : null;
+                }
+            }
+        }
+
+        if (!entityInfo) {
+            return undefined;
+        }
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromEntityInfoAndRecord(entityInfo, record);
+        if (compositeKey.KeyValuePairs.length > 0 && !compositeKey.KeyValuePairs.some(kv => kv.Value == null)) {
+            return dataArray.findIndex(e => e.PrimaryKey.Equals(compositeKey));
+        }
+        return undefined;
     }
 
     /**
@@ -2133,64 +2274,44 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 }
             }
 
-            // Clone the entity so the cache holds an instance owned by THIS engine's provider,
-            // not the saving provider. Falling back to the original entity here would reintroduce
-            // the leak, so on clone failure we bail and let the next full refresh fix the cache.
-            const cached = await this.cloneEntityForCache(entity, config);
-            if (!cached) {
-                LogError(`BaseEngine.applyImmediateMutation: failed to clone entity for ${config.EntityName}; skipping immediate mutation`);
-                return;
-            }
-
-            if (event.saveSubType === 'create') {
-                // For create, first check if the exact object is already in the array
-                const existsByRef = currentData.indexOf(entity) >= 0;
-                if (!existsByRef) {
-                    // Check by composite primary key in case it was added with a different object reference
-                    const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
-                    if (indexByKey >= 0) {
-                        // Already exists by key, treat as update
-                        currentData[indexByKey] = cached;
-                        primaryKeyIndexReplaced(currentData, indexByKey, cached);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'update', cached);
-                    } else {
-                        // Add the new entity to the array
-                        currentData.push(cached);
-                        primaryKeyIndexAppended(currentData, cached);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'add', cached);
-                    }
-                } else {
+            // Check reference membership in O(1) BEFORE cloning: when an engine mutates and saves
+            // its own cached instance in place (or pushes a new entity before Save settles), we
+            // skip constructing + hydrating a throwaway clone altogether.
+            const existsByRef = this.indexOfEntityByRefFast(currentData, entity) >= 0;
+            if (existsByRef) {
+                if (event.saveSubType === 'create') {
                     // Already in the array by reference (engine code pushed it manually after
                     // Save) — the array is current, but DataChange$ subscribers still need to
-                    // hear about the change. Pass the in-array instance, not the clone.
+                    // hear about the change. Pass the in-array instance, not a clone.
                     primaryKeyIndexDropped(currentData);
                     this.NotifyDataChange(config, currentData, 'add', entity);
-                }
-            } else {
-                // Update: first check if the exact object is already in the array
-                const existsByRef = currentData.indexOf(entity) >= 0;
-                if (!existsByRef) {
-                    // Find by composite primary key and replace
-                    const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
-                    if (index >= 0) {
-                        currentData[index] = cached;
-                        primaryKeyIndexReplaced(currentData, index, cached);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'update', cached);
-                    } else {
-                        // Entity not found in array - this shouldn't happen normally,
-                        // but if it does, add it (might have been created before we started listening)
-                        currentData.push(cached);
-                        primaryKeyIndexAppended(currentData, cached);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'add', cached);
-                    }
                 } else {
                     // In-place save of the array's own cached instance — the array is already
                     // current, but DataChange$ subscribers still need to hear about the change.
                     this.NotifyDataChange(config, currentData, 'update', entity);
+                }
+            } else {
+                // Clone the entity so the cache holds an instance owned by THIS engine's provider,
+                // not the saving provider. Falling back to the original entity here would reintroduce
+                // the leak, so on clone failure we bail and let the next full refresh fix the cache.
+                const cached = await this.cloneEntityForCache(entity, config);
+                if (!cached) {
+                    LogError(`BaseEngine.applyImmediateMutation: failed to clone entity for ${config.EntityName}; skipping immediate mutation`);
+                    return;
+                }
+
+                const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
+                if (indexByKey >= 0) {
+                    const prev = currentData[indexByKey];
+                    currentData[indexByKey] = cached;
+                    primaryKeyIndexReplaced(currentData, indexByKey, cached, prev);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                    this.NotifyDataChange(config, currentData, 'update', cached);
+                } else {
+                    currentData.push(cached);
+                    primaryKeyIndexAppended(currentData, cached);
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                    this.NotifyDataChange(config, currentData, 'add', cached);
                 }
             }
         } else if (event.type === 'delete') {
@@ -2221,6 +2342,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
     }
 
+    private instantiateEntityForHydration(
+        provider: IMetadataProvider,
+        entityName: string,
+        contextUser?: UserInfo
+    ): Promise<BaseEntity> {
+        if (provider.GetEntityObjectWithOptions) {
+            return provider.GetEntityObjectWithOptions<BaseEntity>(entityName, { SkipNewRecord: true }, contextUser);
+        }
+        return provider.GetEntityObject<BaseEntity>(entityName, contextUser);
+    }
+
     /**
      * Creates a fresh BaseEntity owned by this engine's provider and populates it from the
      * given source entity's field values. Used by applyImmediateMutation to avoid pinning
@@ -2232,7 +2364,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!provider) {
                 return null;
             }
-            const fresh = await provider.GetEntityObject<BaseEntity>(config.EntityName, this._contextUser);
+            const fresh = await this.instantiateEntityForHydration(provider, config.EntityName, this._contextUser);
             if (!fresh) {
                 return null;
             }
@@ -2377,12 +2509,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         // Get target entity's primary key values
-        const targetKeyValues = primaryKeys.map(pk => (targetEntity as unknown as Record<string, unknown>)[pk.Name]);
+        const targetKeyValues = primaryKeys.map(pk => readEntityFieldValue(targetEntity, pk.Name));
 
         return dataArray.findIndex(e => {
             // Compare all primary key values
             return primaryKeys.every((pk, idx) => {
-                const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
+                const entityValue = readEntityFieldValue(e, pk.Name);
                 const targetValue = targetKeyValues[idx];
                 // UUID columns must compare case-insensitively: the SAME id can arrive with
                 // different casing depending on its source (a client-minted lowercase UUID from
@@ -2433,8 +2565,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entityConfigsToLoad = configsToLoad.filter(c => c.Type === 'entity');
         const datasetConfigsToLoad = configsToLoad.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
-                           this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        try {
+            await Promise.all([...datasetConfigsToLoad.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                               this.LoadMultipleEntityConfigs(entityConfigsToLoad, contextUser, bypassCache)]);
+        } finally {
+            // Runs even when a read threw, so a failed load still starts (or stops) the timed refresh.
+            this.reconcileExpirationTimers();
+        }
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -2974,16 +3111,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (event.type === 'save') {
                 const provider = this.ProviderToUse;
                 if (!provider) continue;
-                const cached = await provider.GetEntityObject<BaseEntity>(mapping.entityName, this._contextUser);
-                if (!cached) continue;
-                await cached.LoadFromData(entity.GetAll());
-
-                const existsByRef = currentData.indexOf(entity) >= 0;
+                const existsByRef = this.indexOfEntityByRefFast(currentData, entity) >= 0;
                 if (!existsByRef) {
+                    const cached = await this.instantiateEntityForHydration(provider, mapping.entityName, this._contextUser);
+                    if (!cached) continue;
+                    await cached.LoadFromData(entity.GetAll());
+
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
+                        const prev = currentData[index];
                         currentData[index] = cached;
-                        primaryKeyIndexReplaced(currentData, index, cached);
+                        primaryKeyIndexReplaced(currentData, index, cached, prev);
                     } else {
                         currentData.push(cached);
                         primaryKeyIndexAppended(currentData, cached);
@@ -3080,7 +3218,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const singleObject: Record<string, BaseEntity[]> = {};
                     await Promise.all(result.Results.map(async (item) => {
                         const entities = await Promise.all(item.Results.map(async (entityData) => {
-                            const entity: BaseEntity = await p.GetEntityObject(item.EntityName, contextUser);
+                            const entity: BaseEntity = await this.instantiateEntityForHydration(p, item.EntityName, contextUser);
                             await entity.LoadFromData(entityData);
                             return entity;
                         }));
@@ -3361,14 +3499,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const isUuidPk = pkFields.map(fieldName =>
             Boolean(entityInfo?.FieldByName(fieldName)?.IsUniqueIdentifier)
         );
+        const deltaSignature = pkFields
+            .map((fieldName, idx) => `${isUuidPk[idx] ? 'u:' : 's:'}${fieldName}`)
+            .join('\u001f');
 
-        const heldIndexByKey = this.indexHeldRowsForDelta(heldRows, pkFields, isUuidPk);
-        if (!heldIndexByKey) {
+        let heldDeltaIndex = this.getOrBuildHeldRowsDeltaIndex(heldRows, pkFields, isUuidPk, deltaSignature);
+        if (!heldDeltaIndex) {
             return 'reload';
         }
 
-        const keyPlan = this.planRowDeltaKeys(delta, heldRows.length, heldIndexByKey, pkFields, isUuidPk);
-        if (!keyPlan) {
+        let keyPlan = this.planRowDeltaKeys(delta, heldRows, heldDeltaIndex.map, pkFields, isUuidPk);
+        if (keyPlan === 'stale_index') {
+            deltaHeldRowIndexes.delete(heldRows);
+            heldDeltaIndex = this.getOrBuildHeldRowsDeltaIndex(heldRows, pkFields, isUuidPk, deltaSignature);
+            if (!heldDeltaIndex) {
+                return 'reload';
+            }
+            keyPlan = this.planRowDeltaKeys(delta, heldRows, heldDeltaIndex.map, pkFields, isUuidPk);
+        }
+        if (!keyPlan || keyPlan === 'stale_index') {
             return 'reload';
         }
 
@@ -3377,7 +3526,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (
             keyPlan.matchedDeleteKeys.size === 0 &&
             keyPlan.netNewInserts === 0 &&
-            this.upsertsMatchHeldTimestamps(heldRows, heldIndexByKey, delta.upsertedRows, keyPlan.upsertKeys, entityInfo)
+            this.upsertsMatchHeldTimestamps(heldRows, heldDeltaIndex.map, delta.upsertedRows, keyPlan.upsertKeys, entityInfo)
         ) {
             LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds row_delta versions — skipped`, verboseOnly: true });
             return 'applied';
@@ -3398,10 +3547,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return 'superseded';
         }
 
+        // Re-verify heldRows did not change while materializeCacheEventRows awaited.
+        const currentHeldRows = this.getHeldRowsForDelta(config);
+        if (
+            currentHeldRows !== heldRows ||
+            heldDeltaIndex.length !== heldRows.length ||
+            heldDeltaIndex.first !== heldRows[0] ||
+            heldDeltaIndex.last !== heldRows[heldRows.length - 1]
+        ) {
+            return 'reload';
+        }
+
         const nextRows = this.mergeMaterializedDeltaRows(
             heldRows,
-            pkFields,
-            isUuidPk,
+            heldDeltaIndex,
+            deltaSignature,
             keyPlan.matchedDeleteKeys,
             keyPlan.upsertKeys,
             materializedUpserts as Array<BaseEntity | Record<string, CacheRowValue>>
@@ -3421,36 +3581,62 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return 'applied';
     }
 
-    private indexHeldRowsForDelta(
+    private getOrBuildHeldRowsDeltaIndex(
         heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
         pkFields: string[],
-        isUuidPk: boolean[]
-    ): Map<string, number> | null {
-        const heldIndexByKey = new Map<string, number>();
+        isUuidPk: boolean[],
+        signature: string
+    ): DeltaRowKeyIndex | null {
+        const cached = deltaHeldRowIndexes.get(heldRows);
+        if (
+            cached &&
+            cached.signature === signature &&
+            cached.length === heldRows.length &&
+            cached.first === heldRows[0] &&
+            cached.last === heldRows[heldRows.length - 1]
+        ) {
+            return cached;
+        }
+        const map = new Map<string, number>();
+        const keys: string[] = new Array<string>(heldRows.length);
         for (let i = 0; i < heldRows.length; i++) {
             const key = this.canonicalHeldRowPkKey(heldRows[i], pkFields, isUuidPk);
-            if (key === null) {
+            if (key === null || map.has(key)) {
                 return null;
             }
-            heldIndexByKey.set(key, i);
+            map.set(key, i);
+            keys[i] = key;
         }
-        return heldIndexByKey.size === heldRows.length ? heldIndexByKey : null;
+        const built: DeltaRowKeyIndex = {
+            signature,
+            length: heldRows.length,
+            first: heldRows[0],
+            last: heldRows[heldRows.length - 1],
+            map,
+            keys,
+        };
+        deltaHeldRowIndexes.set(heldRows, built);
+        return built;
     }
 
     private planRowDeltaKeys(
         delta: CacheRowDeltaPayload,
-        heldRowCount: number,
+        heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
         heldIndexByKey: Map<string, number>,
         pkFields: string[],
         isUuidPk: boolean[]
-    ): { matchedDeleteKeys: Set<string>; upsertKeys: string[]; netNewInserts: number } | null {
+    ): { matchedDeleteKeys: Set<string>; upsertKeys: string[]; netNewInserts: number } | 'stale_index' | null {
         const matchedDeleteKeys = new Set<string>();
         for (const delPk of delta.deletedPrimaryKeys) {
             const key = this.canonicalPlainRecordPkKey(delPk, pkFields, isUuidPk);
             if (key === null) {
                 return null;
             }
-            if (heldIndexByKey.has(key)) {
+            const pos = heldIndexByKey.get(key);
+            if (pos !== undefined) {
+                if (pos >= heldRows.length || this.canonicalHeldRowPkKey(heldRows[pos], pkFields, isUuidPk) !== key) {
+                    return 'stale_index';
+                }
                 matchedDeleteKeys.add(key);
             }
         }
@@ -3465,14 +3651,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             }
             seenUpsertKeys.add(key);
             upsertKeys.push(key);
-            if (!heldIndexByKey.has(key) || matchedDeleteKeys.has(key)) {
+            const pos = heldIndexByKey.get(key);
+            if (pos !== undefined) {
+                if (pos >= heldRows.length || this.canonicalHeldRowPkKey(heldRows[pos], pkFields, isUuidPk) !== key) {
+                    return 'stale_index';
+                }
+            }
+            if (pos === undefined || matchedDeleteKeys.has(key)) {
                 netNewInserts++;
             }
         }
 
         // Strict cardinality verification: detects uninitialized state, missed pub/sub messages,
         // or filtered-slot membership divergence and falls back to reading the warm cache slot.
-        const expectedNextLength = heldRowCount - matchedDeleteKeys.size + netNewInserts;
+        const expectedNextLength = heldRows.length - matchedDeleteKeys.size + netNewInserts;
         if (expectedNextLength !== delta.rowCount) {
             return null;
         }
@@ -3481,35 +3673,111 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     private mergeMaterializedDeltaRows(
         heldRows: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>,
-        pkFields: string[],
-        isUuidPk: boolean[],
+        heldDeltaIndex: DeltaRowKeyIndex,
+        signature: string,
         matchedDeleteKeys: ReadonlySet<string>,
         upsertKeys: ReadonlyArray<string>,
         materializedUpserts: ReadonlyArray<BaseEntity | Record<string, CacheRowValue>>
     ): Array<BaseEntity | Record<string, CacheRowValue>> {
-        const upsertByKey = new Map<string, BaseEntity | Record<string, CacheRowValue>>();
-        for (let i = 0; i < upsertKeys.length; i++) {
-            upsertByKey.set(upsertKeys[i], materializedUpserts[i]);
+        // Fast O(Δ) path when no rows are deleted (updates and/or net-new appends):
+        // native `slice()` shallow-copies the backing array in C++ without reading any fields on
+        // untouched rows, updates changed slots in place, appends net-new rows, and carries the
+        // updated key index forward to `nextRows`.
+        if (matchedDeleteKeys.size === 0) {
+            const nextRows = heldRows.slice();
+            deltaHeldRowIndexes.delete(heldRows);
+            const nextMap = heldDeltaIndex.map;
+            const nextKeys = heldDeltaIndex.keys;
+            for (let i = 0; i < upsertKeys.length; i++) {
+                const key = upsertKeys[i];
+                const existingIdx = nextMap.get(key);
+                if (existingIdx !== undefined) {
+                    nextRows[existingIdx] = materializedUpserts[i];
+                } else {
+                    const appendedIdx = nextRows.length;
+                    nextRows.push(materializedUpserts[i]);
+                    nextKeys.push(key);
+                    nextMap.set(key, appendedIdx);
+                }
+            }
+            deltaHeldRowIndexes.set(nextRows, {
+                signature,
+                length: nextRows.length,
+                first: nextRows[0],
+                last: nextRows[nextRows.length - 1],
+                map: nextMap,
+                keys: nextKeys,
+            });
+            return nextRows;
         }
 
-        const consumedUpsertKeys = new Set<string>();
-        const nextRows: Array<BaseEntity | Record<string, CacheRowValue>> = [];
-        for (let i = 0; i < heldRows.length; i++) {
-            const existingRow = heldRows[i];
-            const key = this.canonicalHeldRowPkKey(existingRow, pkFields, isUuidPk)!;
-            if (upsertByKey.has(key)) {
-                nextRows.push(upsertByKey.get(key)!);
-                consumedUpsertKeys.add(key);
-            } else if (!matchedDeleteKeys.has(key)) {
-                nextRows.push(existingRow);
-            }
-        }
+        // Delete + optional upsert path: update surviving upserts via O(1) index lookup,
+        // compact out deleted indices using `heldDeltaIndex.keys` without re-extracting PKs
+        // from untouched rows, and carry the compacted index forward to `nextRows`.
+        deltaHeldRowIndexes.delete(heldRows);
+        const workingRows = heldRows.slice();
+        const workingKeys = heldDeltaIndex.keys;
+        const nextMap = heldDeltaIndex.map;
+
+        const netNewRows: Array<BaseEntity | Record<string, CacheRowValue>> = [];
+        const netNewKeys: string[] = [];
         for (let i = 0; i < upsertKeys.length; i++) {
             const key = upsertKeys[i];
-            if (!consumedUpsertKeys.has(key)) {
-                nextRows.push(upsertByKey.get(key)!);
+            const existingIdx = nextMap.get(key);
+            if (existingIdx !== undefined && !matchedDeleteKeys.has(key)) {
+                workingRows[existingIdx] = materializedUpserts[i];
+            } else {
+                netNewRows.push(materializedUpserts[i]);
+                netNewKeys.push(key);
             }
         }
+
+        const deletedIndices: number[] = [];
+        for (const delKey of matchedDeleteKeys) {
+            const idx = nextMap.get(delKey);
+            if (idx !== undefined) {
+                deletedIndices.push(idx);
+                nextMap.delete(delKey);
+            }
+        }
+        deletedIndices.sort((a, b) => a - b);
+
+        const nextLen = workingRows.length - deletedIndices.length + netNewRows.length;
+        const nextRows = new Array<BaseEntity | Record<string, CacheRowValue>>(nextLen);
+        const nextKeys = new Array<string>(nextLen);
+        let writePos = 0;
+        let delCursor = 0;
+        const minChangedPos = deletedIndices[0] ?? workingRows.length;
+
+        for (let readPos = 0; readPos < workingRows.length; readPos++) {
+            if (delCursor < deletedIndices.length && readPos === deletedIndices[delCursor]) {
+                delCursor++;
+                continue;
+            }
+            nextRows[writePos] = workingRows[readPos];
+            const rowKey = workingKeys[readPos];
+            nextKeys[writePos] = rowKey;
+            if (writePos >= minChangedPos) {
+                nextMap.set(rowKey, writePos);
+            }
+            writePos++;
+        }
+
+        for (let i = 0; i < netNewRows.length; i++) {
+            nextRows[writePos] = netNewRows[i];
+            nextKeys[writePos] = netNewKeys[i];
+            nextMap.set(netNewKeys[i], writePos);
+            writePos++;
+        }
+
+        deltaHeldRowIndexes.set(nextRows, {
+            signature,
+            length: nextRows.length,
+            first: nextRows[0],
+            last: nextRows[nextRows.length - 1],
+            map: nextMap,
+            keys: nextKeys,
+        });
         return nextRows;
     }
 
@@ -4231,6 +4499,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * path performs, and enforces in this direction the same type-homogeneity invariant
      * {@link canUseImmediateMutation} enforces for the sibling mutation path.
      *
+     * Server caches hold encrypted fields as ciphertext at rest, and only the provider's cache-read
+     * path decrypts them. A payload carrying ciphertext is therefore never assigned: the reload it
+     * falls back to reads the same slot through that path and gets the decrypted values.
+     *
      * @returns the rows to assign, or null when they cannot be safely materialized (caller should
      *          fall back to a full reload).
      */
@@ -4238,6 +4510,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         config: BaseEnginePropertyConfig,
         rows: Array<Record<string, unknown>>
     ): Promise<Array<BaseEntity> | Array<Record<string, unknown>> | null> {
+        if (this.cacheEventRowsCarryCiphertext(config, rows)) {
+            return null;
+        }
         const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
         if (effectiveResultType === 'simple') {
             return rows; // property holds plain objects by design
@@ -4251,6 +4526,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * True when any payload row holds ciphertext (`$ENC$…`) on one of the entity's encrypted
+     * fields. Applying such a row would hand consumers the stored ciphertext as the field's value.
+     */
+    private cacheEventRowsCarryCiphertext(config: BaseEnginePropertyConfig, rows: Array<Record<string, unknown>>): boolean {
+        const entityInfo = config.EntityName ? this.ProviderToUse?.EntityByName?.(config.EntityName) : undefined;
+        const encryptedFields = entityInfo?.EncryptedFields ?? [];
+        if (encryptedFields.length === 0) {
+            return false;
+        }
+        return rows.some(row => encryptedFields.some(field => {
+            const value = row[field.Name];
+            return typeof value === 'string' && IsValueEncrypted(value);
+        }));
+    }
+
+    /**
      * Sets an expiration timer for a metadata property.
      * @param propertyName - The name of the property
      * @param expiration - The expiration time in milliseconds
@@ -4259,8 +4550,61 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
-        const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
+        const timer = setTimeout(() => this.runExpirationRefresh(propertyName, expiration, timer as unknown as number), expiration);
+        // A cache-refresh timer must never keep a Node process alive on its own (CLI tools and
+        // test runners load engines and then expect to exit). Browsers return a number: no-op.
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
         this._expirationTimers.set(propertyName, timer as unknown as number);
+    }
+
+    /**
+     * Makes the running timers match the loaded configs: a config with an Expiration and no timer
+     * gets one, and a timer whose config no longer has an Expiration is stopped.
+     *
+     * A successful load arms its own timer from {@link HandleSingleViewResult}, but a failed one does
+     * not — without this a failed first load would leave that property with no refresh until restart.
+     * And a reload that drops the Expiration (an interval set to 0) must stop the timer, which
+     * {@link runExpirationRefresh} would otherwise keep re-arming at the old interval.
+     */
+    private reconcileExpirationTimers(): void {
+        for (const c of this._metadataConfigs) {
+            if (c.Expiration && !this._expirationTimers.has(c.PropertyName)) {
+                this.setExpirationTimer(c.PropertyName, c.Expiration);
+            } else if (!c.Expiration && this._expirationTimers.has(c.PropertyName)) {
+                clearTimeout(this._expirationTimers.get(c.PropertyName));
+                this._expirationTimers.delete(c.PropertyName);
+            }
+        }
+    }
+
+    /**
+     * Runs one timed refresh and keeps the timer alive. A successful load re-arms the timer from
+     * {@link HandleSingleViewResult}; a failed one (an unsuccessful result, or a thrown connection
+     * error) does not, so without this the refresh would stop for good after a single failed read
+     * and the property would keep its last rows indefinitely.
+     * The re-arm uses the config as it is now, so a reload that dropped the Expiration while this
+     * tick was running stops the timer instead of keeping it at the old interval.
+     * @param timer - The handle that fired; if the map no longer holds it, a successful load, a
+     *                {@link reconcileExpirationTimers} or a {@link RemoveDynamicConfig} already
+     *                decided what happens next.
+     */
+    private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
+        try {
+            await this.RefreshItem(propertyName);
+        } catch (e) {
+            LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
+        }
+        if (this._expirationTimers.get(propertyName) !== timer) {
+            return;
+        }
+        const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
+        if (config?.Expiration) {
+            this.setExpirationTimer(propertyName, config.Expiration);
+        } else {
+            this._expirationTimers.delete(propertyName);
+        }
     }
 
     /**
@@ -4302,7 +4646,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     public async RefreshItem(propertyName: string): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+            // A config with an Expiration exists to pick up changes made outside this process, which
+            // the local cache never hears about — so its timed refresh must read the database.
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ !!config.Expiration, /*suppressEmit*/ true);
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
         }

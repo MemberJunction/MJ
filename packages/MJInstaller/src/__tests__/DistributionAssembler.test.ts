@@ -53,11 +53,14 @@ async function seedBaseFixture(dir: string): Promise<void> {
     'packages/MJExplorer/tsconfig.json',
     '{ "extends": "../../tsconfig.angular.json", "compilerOptions": { "paths": { "@memberjunction/ng-bootstrap": ["x"] } } }',
   );
-  await writeUnder(dir, 'packages/MJExplorer/angular.json', '{ "version": 1 }');
+  await writeUnder(
+    dir,
+    'packages/MJExplorer/angular.json',
+    '{ "version": 1, "projects": { "MJExplorer": { "architect": { "serve": { "options": { "prebundle": { "exclude": ["@memberjunction/*"] } } } } } } }',
+  );
   await writeUnder(dir, 'packages/MJExplorer/src/main.ts', 'bootstrap();');
   await writeUnder(dir, 'packages/MJExplorer/src/environments/environment.ts', 'export const secret = 1;');
   await writeUnder(dir, 'packages/MJExplorer/src/app/generated/form.ts', 'export const f = 1;');
-  await writeUnder(dir, 'packages/MJExplorer/kendo-ui-license.txt', 'LICENSE');
 
   // Generated packages (server)
   await writeUnder(dir, 'packages/GeneratedEntities/package.json', '{ "name": "mj_generatedentities", "scripts": { "build": "tsc && tsc-alias" } }');
@@ -116,14 +119,13 @@ describe('DistributionAssembler.Plan', () => {
     expect(d).toContain('SQL Scripts/MJ_Base.sql');
   });
 
-  it('excludes generated, node_modules, environments, kendo, and SQL exclusions', async () => {
+  it('excludes generated, node_modules, environments, and SQL exclusions', async () => {
     const ops = await new DistributionAssembler().Plan({ SourceDir: sourceDir });
     const d = dests(ops);
     expect(d).not.toContain('apps/MJAPI/src/generated/gen.ts');
     expect(d.some((p) => p.includes('node_modules'))).toBe(false);
     expect(d).not.toContain('apps/MJExplorer/src/environments/environment.ts');
     expect(d).not.toContain('apps/MJExplorer/src/app/generated/form.ts');
-    expect(d).not.toContain('apps/MJExplorer/kendo-ui-license.txt');
     expect(d).not.toContain('SQL Scripts/_all_entities.sql');
     expect(d).not.toContain('SQL Scripts/generated/gen.sql');
     expect(d).not.toContain('SQL Scripts/internal_only/secret.sql');
@@ -363,7 +365,8 @@ describe('DistributionAssembler sinks', () => {
       const apiPkg = JSON.parse(await readFile(path.join(dest, 'apps', 'MJAPI', 'package.json'), 'utf-8')) as { scripts: Record<string, string> };
       expect(apiPkg.scripts.build).toBe('tsc');
       const angularJson = await readFile(path.join(dest, 'apps', 'MJExplorer', 'angular.json'), 'utf-8');
-      expect(JSON.parse(angularJson)).toEqual({ version: 1 });
+      // The monorepo's @memberjunction/* prebundle exclude is dropped; the empty list stays for mj dev workspace.
+      expect(JSON.parse(angularJson)).toEqual({ version: 1, projects: { MJExplorer: { architect: { serve: { options: { prebundle: { exclude: [] } } } } } } });
       const rootEntries = await readdir(dest);
       expect(rootEntries).toContain('package.json');
       expect(rootEntries).not.toContain('migrations');

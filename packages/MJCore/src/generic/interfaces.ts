@@ -844,12 +844,39 @@ export interface ILocalStorageProvider {
      * next process waiting for it can proceed. Does nothing for a lease held by someone else.
      */
     ReleaseLease?(name: string): Promise<void>;
+
+    /**
+     * Applies an incremental row-level delta to an existing `RunViewCache` entry in place without
+     * serializing or transmitting the full row array.
+     *
+     * Implemented by two-tier L1+L2 and Redis HASH storage providers so single-row saves/deletes on
+     * large cached views update only the mutated row keys in $O(\Delta)$ instead of rewriting the
+     * entire multi-megabyte snapshot.
+     *
+     * @param fingerprint - The `RunViewCache` slot key
+     * @param deltaPayloadJson - Compact JSON string encoding `CacheRowDeltaPayload`
+     * @param updatedSlotValue - Full post-mutation slot object (`CachedRunViewData`) already held in memory by `LocalCacheManager` (so L1 reference-sharing tiers can adopt the frozen reference in $O(1)$ without re-parsing)
+     * @param options - Per-write TTL, `IndexGroup`, `PrimaryKeyFields`, and pub/sub hints
+     * @returns `true` when the provider applied the delta in place (skipping `SetItem`), or `false` when the slot was absent/incompatible and the caller should fall back to `SetItem`.
+     */
+    ApplyRunViewRowDelta?<T = unknown>(
+        fingerprint: string,
+        deltaPayloadJson: string,
+        updatedSlotValue: T,
+        options?: LocalStorageWriteOptions
+    ): Promise<boolean>;
 }
 
 /**
  * Per-write options for {@link ILocalStorageProvider.SetItem}.
  */
 export interface LocalStorageWriteOptions {
+    /**
+     * Ordered primary-key field names for `RunViewCache` entries so storage providers like
+     * Redis HASH / TwoTier L1+L2 can index rows by PK without heuristics.
+     */
+    PrimaryKeyFields?: string[];
+
     /**
      * Seconds until the entry expires, overriding the provider's default. `0` stores the entry
      * without expiry. Omit to use the provider's default.
@@ -912,6 +939,23 @@ export interface IFileSystemProvider {
      * @param filePath - Full path to the file
      */
     FileExists(filePath: string): Promise<boolean>;
+}
+
+/**
+ * Options controlling how {@link IMetadataProvider.GetEntityObject} initializes a newly
+ * instantiated entity when no `loadKey` is supplied.
+ */
+export interface GetEntityObjectOptions {
+    /**
+     * When `true`, skips calling `NewRecord()` after constructing and configuring the entity.
+     *
+     * Use this only when the caller immediately hydrates the entity via `LoadFromData(...)` or
+     * `LoadFromDataBatchAsISAParent(...)`. Skipping `NewRecord()` avoids minting a throwaway
+     * UUID primary key, hydrating all `EntityField` instances for defaults that `LoadFromData`
+     * immediately discards, and broadcasting a synthetic `'new_record'` event — keeping
+     * `BaseEntity`'s lazy `_raw` row fast path intact.
+     */
+    SkipNewRecord?: boolean;
 }
 
 /**
@@ -1025,6 +1069,14 @@ export interface IMetadataProvider {
      * @throws Error if the record cannot be found or loaded
      */
     GetEntityObject<T extends BaseEntity>(entityName: string, loadKey: CompositeKey, contextUser?: UserInfo): Promise<T>
+
+    /**
+     * Optional fast-path entity instantiation method accepting {@link GetEntityObjectOptions}
+     * (for example `{ SkipNewRecord: true }` prior to `LoadFromData`).
+     * Keeping this separate and optional on `IMetadataProvider` preserves exact backwards
+     * compatibility for lightweight test stubs and custom `IMetadataProvider` implementations.
+     */
+    GetEntityObjectWithOptions?<T extends BaseEntity>(entityName: string, options: GetEntityObjectOptions, contextUser?: UserInfo): Promise<T>
     /**
      * Returns a list of dependencies - records that are linked to the specified Entity/RecordID combination. A dependency is as defined by the relationships in the database. The MemberJunction metadata that is used
      * for this simply reflects the foreign key relationships that exist in the database. The CodeGen tool is what detects all of the relationships and generates the metadata that is used by MemberJunction. The metadata in question

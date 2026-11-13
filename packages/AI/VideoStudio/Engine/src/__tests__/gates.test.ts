@@ -15,6 +15,13 @@ import { VideoStudioAgent } from '../agents/video-studio-agent.js';
 import { DEFAULT_VIDEO_STUDIO_SETTINGS, ParseVideoStudioSettings } from '../settings.js';
 import { CreateDeliveredSpecFixture, DELIVERED_SPEC_FIXTURE } from './fixtures/delivered-spec.fixture.js';
 
+/**
+ * Wall-clock ceiling for the "pathological input in linear time" checks. They guard against
+ * quadratic/backtracking scans of 50,000-character inputs (which take seconds), not against a slow
+ * machine: a 200 ms bound failed the v6.3.0-edge.0 publish gate at 211 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 function getGate(gates: ReadonlyArray<GateRecord>, gateId: GateRecord['Gate']): GateRecord {
     const found = gates.find((g) => g.Gate === gateId);
     if (!found) {
@@ -720,7 +727,7 @@ describe('VideoStudio gates', () => {
             const elapsedMs = performance.now() - start;
 
             expect(decision).toBe('Reject');
-            expect(elapsedMs).toBeLessThan(200);
+            expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
 
             expect(ReadApprovalDecision('Approve İstanbul cut\n@form:{"decision":"reject"}')).toBe('Reject');
             expect(ReadApprovalDecision('Reject İstanbul cut\n@form:{"decision":"approve"}')).toBe('Approve');
