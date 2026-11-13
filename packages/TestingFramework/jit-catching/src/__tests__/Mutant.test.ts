@@ -40,6 +40,15 @@ describe('ApplyMutantEdits', () => {
     expect(r.Changed).toEqual(['src/a.ts']);
     expect(r.Patch).toContain('+  return true;'); expect(r.Patch).toContain('+export function g');
   });
+  it('names the file by its repository path in the diff, with no host folder', () => {
+    const d = pkg();
+    const r = ApplyMutantEdits(d, [{ File: 'packages/MJCore/src/a.ts', Find: 'u === "admin"', Replace: 'true' }], 'packages/MJCore');
+    expect(r.Patch).toContain('diff --git a/packages/MJCore/src/a.ts b/packages/MJCore/src/a.ts\n');
+    expect(r.Patch).toContain('--- a/packages/MJCore/src/a.ts\n');
+    expect(r.Patch).toContain('+++ b/packages/MJCore/src/a.ts\n');
+    expect(r.Patch).not.toContain(d);
+    expect(r.Patch).not.toContain(tmpdir());
+  });
   it('rejects a Find that is missing or not unique', () => {
     expect(() => ApplyMutantEdits(pkg(), [{ File: 'packages/MJCore/src/a.ts', Find: 'nope', Replace: 'x' }], 'packages/MJCore')).toThrow(/not found/);
     expect(() => ApplyMutantEdits(pkg(), [{ File: 'packages/MJCore/src/a.ts', Find: 'u', Replace: 'x' }], 'packages/MJCore')).toThrow(/once/);

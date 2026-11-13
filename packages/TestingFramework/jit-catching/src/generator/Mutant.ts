@@ -1,7 +1,7 @@
-import { cpSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { join, normalize, basename } from 'node:path';
+import { join, normalize, basename, dirname } from 'node:path';
 import type { MutantEdit } from '../types';
 import { MutantEditSchema } from '../schemas';
 
@@ -36,24 +36,24 @@ export function CopyPackageForMutant(packageDir: string, scratchRoot: string): s
     return dest;
 }
 
-/** Returns the unified diff from `before` to `after`; `git diff --no-index` exits 1 when the files differ. */
-function DiffFiles(before: string, after: string): string {
-    const r = spawnSync('git', ['diff', '--no-index', '--no-color', before, after], { encoding: 'utf8' });
+/** Returns the unified diff from `a/<file>` to `b/<file>` under `cwd`, named by those paths; `git diff --no-index` exits 1 when the files differ. */
+function DiffFiles(cwd: string, file: string): string {
+    const r = spawnSync('git', ['diff', '--no-index', '--no-color', '--no-prefix', `a/${file}`, `b/${file}`], { cwd, encoding: 'utf8' });
     if (r.error) throw r.error;
     if (r.status === null || r.status > 1) throw new Error(`git diff failed (${r.status ?? r.signal}): ${r.stderr}`);
     return r.stdout;
 }
 
 /**
- * Applies exact-string edits in place; each Find must occur exactly once. Returns a unified diff for the record.
+ * Applies exact-string edits in place; each Find must occur exactly once. Returns a unified diff for the record, with each file named by its repo path.
  * `packageRelDir` is the package's repo-relative folder, stripped from each edit's File to find the file under `packageDir`.
  */
 export function ApplyMutantEdits(packageDir: string, edits: MutantEdit[], packageRelDir: string): { Patch: string; Changed: string[] } {
-    const originals = new Map<string, string>(); const changed: string[] = [];
+    const originals = new Map<string, { File: string; Text: string }>(); const changed: string[] = [];
     for (const e of edits) {
         const rel = e.File.slice(packageRelDir.length + 1);
         const abs = join(packageDir, rel); const text = readFileSync(abs, 'utf8');
-        if (!originals.has(abs)) originals.set(abs, text);
+        if (!originals.has(abs)) originals.set(abs, { File: e.File, Text: text });
         const first = text.indexOf(e.Find); if (first < 0) throw new Error(`mutant Find not found in ${e.File}`);
         if (text.indexOf(e.Find, first + 1) >= 0) throw new Error(`mutant Find must occur exactly once in ${e.File}`);
         writeFileSync(abs, text.slice(0, first) + e.Replace + text.slice(first + e.Find.length));
@@ -61,11 +61,15 @@ export function ApplyMutantEdits(packageDir: string, edits: MutantEdit[], packag
     }
     let patch = '';
     for (const [abs, original] of originals) {
-        const origDir = mkdtempSync(join(tmpdir(), 'jit-orig-'));
+        const dir = mkdtempSync(join(tmpdir(), 'jit-orig-'));
         try {
-            const tmp = join(origDir, basename(abs)); writeFileSync(tmp, original);
-            patch += DiffFiles(tmp, abs);
-        } finally { rmSync(origDir, { recursive: true, force: true }); }
+            for (const [side, text] of [['a', original.Text], ['b', readFileSync(abs, 'utf8')]] as const) {
+                const path = join(dir, side, original.File);
+                mkdirSync(dirname(path), { recursive: true });
+                writeFileSync(path, text);
+            }
+            patch += DiffFiles(dir, original.File);
+        } finally { rmSync(dir, { recursive: true, force: true }); }
     }
     return { Patch: patch, Changed: changed };
 }
