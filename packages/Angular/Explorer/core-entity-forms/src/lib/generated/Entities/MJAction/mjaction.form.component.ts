@@ -32,10 +32,11 @@ export class MJActionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityActions', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Execution Logs', isExpanded: false },
             { sectionKey: 'mJActionAuthorizations', sectionName: 'Authorizations', isExpanded: false },
-            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJActionsParentID', sectionName: 'Actions', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJAISkillActions', sectionName: 'AI Skill Actions', isExpanded: false },
-            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false }
+            { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
+            { sectionKey: 'mJActionsCompensationActionID', sectionName: 'Actions (Compensation Action ID)', isExpanded: false }
         ]);
     }
 }

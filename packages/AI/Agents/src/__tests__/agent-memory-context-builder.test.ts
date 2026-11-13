@@ -133,6 +133,18 @@ describe('AgentMemoryContextBuilder', () => {
             expect(messages[0].content).toContain('NOTES(1)');
         });
 
+        it('formats notes and examples for the run\'s user, so the text holds only fields they may read', async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectContextMemory('hi', makeAgent({ InjectNotes: true, InjectExamples: true }),
+                undefined, undefined, fakeUser, [{ role: 'user', content: 'hi' }]);
+
+            expect(formatNotes).toHaveBeenCalledWith([{ ID: 'n1' }], true, fakeUser);
+            expect(formatExamples).toHaveBeenCalledWith([{ ID: 'e1' }], fakeUser);
+        });
+
         it('combines notes and examples into a single system message and returns both', async () => {
             getNotes.mockResolvedValueOnce([{ ID: 'n1' }, { ID: 'n2' }]);
             getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);

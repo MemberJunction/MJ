@@ -1,0 +1,15 @@
+{
+  "id": "W2-noise",
+  "seeds": [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119],
+  "freshSeed": 9100,
+  "nPersons": 2999,
+  "cycles": [2021, 2022, 2023, 2024, 2025, 2026],
+  "target": 0.5,
+  "betas": { "EventsAttended": 0, "Premium": 0, "AutoRenew": 0, "IncomeK": 0 },
+  "era": { "fromCycle": null, "deltaIntercept": 0, "betaOverrides": {} },
+  "churn": true,
+  "censorLastCycle": "none",
+  "leaks": { "statusOnRow": false, "personStatusInPlace": false },
+  "extraNoise": { "PostalCode400": false, "MemberNumberUnique": false },
+  "multiclass": false
+}

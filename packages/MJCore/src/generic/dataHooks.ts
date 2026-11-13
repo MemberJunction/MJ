@@ -10,7 +10,7 @@
  */
 
 import { GetGlobalObjectStore, GlobalObjectStore } from '@memberjunction/global';
-import type { RunViewResult } from './interfaces';
+import type { IMetadataProvider, RunViewResult } from './interfaces';
 import type { RunViewParams } from '../views/runView';
 import type { UserInfo } from './securityInfo';
 import type { BaseEntity } from './baseEntity';
@@ -22,7 +22,8 @@ import type { BaseEntity } from './baseEntity';
  */
 export type PreRunViewHook = (
   params: RunViewParams,
-  contextUser: UserInfo | undefined
+  contextUser: UserInfo | undefined,
+  provider?: IMetadataProvider
 ) => RunViewParams | Promise<RunViewParams>;
 
 /**
@@ -37,7 +38,8 @@ export type PreRunViewHook = (
 export type PostRunViewHook = (
   params: RunViewParams,
   results: RunViewResult,
-  contextUser: UserInfo | undefined
+  contextUser: UserInfo | undefined,
+  provider?: IMetadataProvider
 ) => RunViewResult | Promise<RunViewResult>;
 
 /**
@@ -50,8 +52,31 @@ export type PreSaveHook = (
   contextUser: UserInfo | undefined
 ) => boolean | string | Promise<boolean | string>;
 
+/**
+ * Hook that runs after a Save operation on a BaseEntity has committed.
+ * Receives the saved entity, active user, the names of fields modified by the save,
+ * and whether the save created or updated the record. Errors thrown by PostSave hooks
+ * are logged and do not roll back the already-committed database write.
+ */
+export type PostSaveHook = (
+  entity: BaseEntity,
+  contextUser: UserInfo | undefined,
+  changedFieldNames: ReadonlyArray<string>,
+  saveSubType: 'create' | 'update'
+) => void | Promise<void>;
+
+/**
+ * Hook that runs before a Delete operation on a BaseEntity.
+ * Return `true` to allow the delete, `false` to reject with a default message,
+ * or a string to reject with that custom error message.
+ */
+export type PreDeleteHook = (
+  entity: BaseEntity,
+  contextUser: UserInfo | undefined
+) => boolean | string | Promise<boolean | string>;
+
 /** Well-known hook names used by the data hooks system */
-export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave';
+export type HookName = 'PreRunView' | 'PostRunView' | 'PreSave' | 'PostSave' | 'PreDelete';
 
 const DATA_HOOKS_KEY = '__mj_dataHooks';
 

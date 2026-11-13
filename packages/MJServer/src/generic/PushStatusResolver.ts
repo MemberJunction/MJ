@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Arg, Field, ID, ObjectType, PubSubEngine, Resolver, ResolverFilterData, Root, Subscription } from 'type-graphql';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { UserPayload } from '../types.js';
+import { ResolveSessionScopeIdentity, type SessionAccessPrincipal } from '../realtimeSessions/sessionAccess.js';
 
 export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 
@@ -233,17 +234,46 @@ export interface StatusUpdatesFilterContext {
 }
 
 /**
+ * The owner key of a status update for `user`: its user ID, or, for an anonymous visitor, its user ID plus its scope
+ * identity (`ResolveSessionScopeIdentity`). Every anonymous visitor shares one Anonymous user and the session id is
+ * chosen by the client (`x-session-id`), so the user ID alone would let one visitor receive another's run events.
+ * An anonymous visitor with no scope identity gets no key and receives nothing.
+ */
+export function StatusUpdateOwnerKey(user: SessionAccessPrincipal | null | undefined): string {
+  if (!user?.ID) {
+    return '';
+  }
+  if (!user.IsMagicLinkAnonymous) {
+    return user.ID;
+  }
+  const scope = ResolveSessionScopeIdentity(user);
+  return scope ? `${user.ID.toLowerCase()}|${scope}` : '';
+}
+
+/**
+ * The owner key a status update is published with: that of the request's user, or, on a payload elevated by
+ * `ElevateUserPayload`, of the user the elevated principal stands in for (a public widget guest). The guest's socket
+ * is authenticated as the guest, so an update stamped with the elevated system user would never pass
+ * {@link StatusUpdatesFilter} and the guest would wait forever for its run to finish.
+ */
+export function StatusUpdateOwnerID(userPayload: UserPayload | undefined): string {
+  return StatusUpdateOwnerKey(userPayload?.ElevatedFrom ?? userPayload?.userRecord);
+}
+
+/**
  * Filter predicate for the `statusUpdates` subscription. Exported so it can be unit-tested in
  * isolation (it is the security-critical gate). A push reaches a subscriber only when BOTH hold:
- *   1. the push's `sessionId` matches the subscriber's requested `sessionId` (tab routing), AND
- *   2. the push's `ownerUserId` matches the subscriber CONNECTION's authenticated identity
- *      (`context.userPayload.userRecord.ID`, established once at WS connect).
+ *   1. the push's `sessionId` matches the subscriber's requested `sessionId` (tab routing), or is `'*'`, AND
+ *   2. the push's `ownerUserId` matches the owner key ({@link StatusUpdateOwnerKey}) of the subscriber
+ *      CONNECTION's authenticated identity (`context.userPayload.userRecord`, established once at WS
+ *      connect): the user ID for a named user, compared as a UUID; for an anonymous visitor, the user ID
+ *      plus its scope identity, compared exactly because the scope part is case-significant.
  *
  * Condition (2) is the fix for the session-hijack class (B49): `sessionId` is a client-chosen
  * correlation value, so a subscriber who lifts another user's `sessionId` would previously receive
  * their pushes. Binding delivery to the connection's server-authenticated identity means knowing a
- * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
- * matches.
+ * `sessionId` is no longer sufficient; the scope part does the same between anonymous visitors, who all
+ * share one Anonymous user. Fails CLOSED — a missing owner or connection key never matches.
  */
 export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
@@ -254,11 +284,13 @@ export function StatusUpdatesFilter(data: {
   if (payload.sessionId !== '*' && payload.sessionId !== args.sessionId) {
     return false;
   }
-  const connectionUserId: string | undefined = context?.userPayload?.userRecord?.ID;
-  if (!connectionUserId || !payload.ownerUserId) {
+  const connectionUser: SessionAccessPrincipal | undefined = context?.userPayload?.userRecord;
+  const connectionKey = StatusUpdateOwnerKey(connectionUser);
+  if (!connectionKey || !payload.ownerUserId) {
     return false; // fail closed — no identity on either side means no delivery
   }
-  return UUIDsEqual(payload.ownerUserId, connectionUserId);
+  // An anonymous visitor's key carries its scope identity (case-significant), so it must match exactly.
+  return connectionUser?.IsMagicLinkAnonymous ? payload.ownerUserId === connectionKey : UUIDsEqual(payload.ownerUserId, connectionKey);
 }
 
 /** @deprecated Use {@link StatusUpdatesFilter}. */

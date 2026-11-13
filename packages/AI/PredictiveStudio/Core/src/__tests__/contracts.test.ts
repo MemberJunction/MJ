@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isErrorMetric } from '../index';
+import { MetricDirections, ValidateBudget } from '../index';
 import type {
-  TrainRequest,
   PredictResponse,
   FeatureStep,
   FeatureStepGraph,
@@ -10,15 +9,16 @@ import type {
   ValidationStrategy,
 } from '../index';
 
-describe('isErrorMetric', () => {
+describe('MetricDirections.IsErrorMetric', () => {
   it('flags lower-is-better error metrics (case/whitespace-insensitive)', () => {
-    for (const m of ['rmse', 'RMSE', ' mae ', 'mse', 'loss', 'logloss', 'log_loss']) {
-      expect(isErrorMetric(m)).toBe(true);
+    for (const m of ['rmse', 'RMSE', ' mae ', 'mse', 'loss', 'logloss', 'log_loss', 'brier', 'log-loss',
+      'multiclass-log-loss', 'poisson-deviance', 'tweedie-deviance', 'mase', 'mape', 'pinball']) {
+      expect(MetricDirections.IsErrorMetric(m)).toBe(true);
     }
   });
   it('does NOT flag higher-is-better ranking metrics', () => {
     for (const m of ['roc_auc', 'auc', 'f1', 'accuracy', 'r2', 'explained_variance']) {
-      expect(isErrorMetric(m)).toBe(false);
+      expect(MetricDirections.IsErrorMetric(m)).toBe(false);
     }
   });
 });
@@ -30,36 +30,13 @@ describe('isErrorMetric', () => {
  * the assertions document the intended structure.
  */
 describe('predictive-studio-core contracts', () => {
-  it('TrainRequest accepts an inline-matrix training request', () => {
-    const req: TrainRequest = {
-      algorithm: 'xgboost',
-      problem_type: 'classification',
-      hyperparameters: { max_depth: 6 },
-      validation: { strategy: 'train_test_split', test_size: 0.2 },
-      feature_schema: [
-        { Name: 'tenure', Kind: 'numeric' },
-        { Name: 'city', Kind: 'categorical' },
-        { Name: 'emb_0', Kind: 'embedding' },
-      ],
-      preprocessing: [
-        { op: 'impute', col: 'tenure', strategy: 'mean' },
-        { op: 'onehot', col: 'city' },
-      ],
-      target: 'renewed',
-      data: { columns: ['tenure', 'city', 'emb_0', 'renewed'], rows: [[3, 'NYC', 0.12, 1]] },
-    };
-
-    expect(req.algorithm).toBe('xgboost');
-    expect(req.feature_schema).toHaveLength(3);
-    expect(req.data?.rows[0]).toHaveLength(4);
-  });
-
   it('PredictResponse aligns predictions positionally', () => {
     const resp: PredictResponse = {
       predictions: [
-        { score: 0.83, class: 'renew' },
-        { score: 0.21, class: 'lapse' },
+        { score: 0.83, class: 'renew', probabilities: [0.17, 0.83] },
+        { score: 0.21, class: 'lapse', probabilities: [0.79, 0.21] },
       ],
+      classOrder: ['lapse', 'renew'],
     };
     expect(resp.predictions[0].score).toBeGreaterThan(resp.predictions[1].score);
   });
@@ -111,5 +88,14 @@ describe('predictive-studio-core contracts', () => {
     expect(plan.TargetDefinition.AsOfStrategy?.Mode).toBe('offset');
     expect(plan.ValidationStrategy.K).toBe(5);
     expect(plan.ProposedExperiments[0].AlgorithmName).toBe('xgboost');
+  });
+});
+
+describe('ValidateBudget', () => {
+  it('carries a compute-seconds bound through validation and refuses a non-positive one', () => {
+    const budget = { MaxRuns: 4, MaxComputeCost: 2.5, MaxWallclockMinutes: 30, MaxComputeSeconds: 120 };
+    expect(ValidateBudget(budget)).toEqual({ ok: true, value: budget });
+    expect(ValidateBudget(JSON.parse(JSON.stringify(budget)))).toEqual({ ok: true, value: budget });
+    expect(ValidateBudget({ MaxComputeSeconds: 0 })).toMatchObject({ ok: false, error: expect.stringContaining('MaxComputeSeconds') });
   });
 });

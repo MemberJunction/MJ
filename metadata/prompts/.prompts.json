@@ -194,8 +194,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:10.735Z",
-      "checksum": "9caf03339d92d050ab5010b0f7bc5c7b0d00df5f63aaaf818a007dcbaf4ab9ed"
+      "lastModified": "2026-11-01T22:53:41.995Z",
+      "checksum": "99c0bc77372529835a66cf9f9765168416a43b7604066c526b061add9de1751f"
     }
   },
   {
@@ -1196,7 +1196,7 @@
   {
     "fields": {
       "Name": "SQL Query Parameter Extraction",
-      "Description": "Extracts Nunjucks variables and their types from Query strings",
+      "Description": "Writes descriptions for a saved query's output fields and parameters whose description is still empty. Runs after the query is saved; it never sets names, types or sources, which come from the database server and MJ's template parser.",
       "TemplateText": "@file:templates/system/sql-query-param-extraction.template.md",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "Status": "Active",
@@ -1212,7 +1212,7 @@
       "FailoverMaxAttempts": 3,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "OutputExample": "@file:output/system/template-param-extraction.example.json",
+      "OutputExample": "@file:output/system/sql-query-descriptions.example.json",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "EffortLevel": 1
     },
@@ -1348,8 +1348,8 @@
       "ID": "8BF32885-8504-4DAF-87AE-695E09F1BC3A"
     },
     "sync": {
-      "lastModified": "2026-05-29T19:49:18.901Z",
-      "checksum": "0803b0d11741a3bf759ef35834ee283d3a4ab6d19753bbf2beaeca563d8c1482"
+      "lastModified": "2026-10-28T22:13:55.596Z",
+      "checksum": "18c266c3b12ea37f75a80ed745eb0db4a7093fccd164db9606167e72fe20aa9e"
     }
   },
   {
@@ -1413,12 +1413,8 @@
             "ID": "608B38EC-1C18-4858-9BE9-472FDED52C7A"
           },
           "sync": {
-            "lastModified": "2026-04-06T11:01:32.387Z",
+            "lastModified": "2026-11-10T23:41:43.505Z",
             "checksum": "f5ed20b3feebae35f0c06a6fafa3f7506f6e4728dbd0c55082ef1ba8d5d85b1b"
-          },
-          "deleteRecord": {
-            "delete": true,
-            "deletedAt": "2026-05-29T19:49:52.653Z"
           }
         },
         {
@@ -1463,12 +1459,8 @@
             "ID": "14AD0B61-10CC-4AC0-AEA9-0CE4A6B43172"
           },
           "sync": {
-            "lastModified": "2026-04-06T11:01:32.488Z",
+            "lastModified": "2026-11-10T23:41:43.546Z",
             "checksum": "440a9b9207020b03f6e5590cf611cf143571031671816dec0de846602a7a91bd"
-          },
-          "deleteRecord": {
-            "delete": true,
-            "deletedAt": "2026-05-29T19:49:52.667Z"
           }
         },
         {
@@ -1508,8 +1500,8 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:19:21.669Z",
-      "checksum": "632d1ab0cd18f3f1eba131190e4dba41fc0e8e691aa3aa144aed67c5992b90c2"
+      "lastModified": "2026-11-03T23:46:12.316Z",
+      "checksum": "ca2a0440e97ad13e223698577f46189d6336431f3105231e2734b5eeecf2b495"
     }
   },
   {
@@ -1812,6 +1804,35 @@
     "sync": {
       "lastModified": "2026-08-07T23:58:25.816Z",
       "checksum": "05e7c1f89fec03dbd13514f5e06d769ba71dedaec03bd87869825f4384bfaed6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anchored Comment Restricted Field Classifier",
+      "Description": "Classifies whether an anchored record comment semantically references any Field-Level Security (FLS) restricted fields on the linked entity so restrictedFields can be stamped into AnchorMetadata.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/anchored-comment-restricted-field-classifier.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/anchored-comment-restricted-field-classifier.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "9B96AFAE-6C09-4C78-9C60-690BC5807A76"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:20.231Z",
+      "checksum": "cc141dacc62ac27a33ca582dfaa5a4adda1c856c2f914e852d725c7f60829e0c"
     }
   }
 ]

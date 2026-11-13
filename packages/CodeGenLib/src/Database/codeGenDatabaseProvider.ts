@@ -709,11 +709,46 @@ export abstract class CodeGenDatabaseProvider {
      */
     GenerateForeignKeyIndexes(entity: EntityInfo): string[] {
         const verified = this.verifiedJoinColumnNames(entity);
-        const indexes = entity.Fields
-            .filter((f) => this.isIndexableForeignKey(f, verified))
-            .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+        const indexes: string[] = [];
+        const skipped: string[] = [];
+        for (const f of entity.Fields.filter((f) => this.isIndexableForeignKey(f, verified))) {
+            const reason = this.ForeignKeyIndexSkipReason(f);
+            if (reason) {
+                skipped.push(`--   ${f.Name} (${f.Type}): ${reason}`);
+            } else {
+                indexes.push(this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+            }
+        }
+        if (skipped.length > 0) {
+            indexes.push(this.skippedForeignKeyIndexDisclosure(entity, skipped));
+        }
         const declined = this.unindexableOrganicKeyDisclosure(entity);
         return declined ? [...indexes, declined] : indexes;
+    }
+
+    /**
+     * Why this dialect will not put an automatic foreign-key index on `f`, or `null` to index it.
+     *
+     * The base answer is always `null`: PostgreSQL keeps its btree index on an unbounded `text` FK,
+     * as it always has. SQL Server overrides this because it rejects some columns as index keys
+     * outright, and a `CREATE INDEX` that fails on every run is worse than a comment saying why the
+     * index is absent (#5985).
+     */
+    protected ForeignKeyIndexSkipReason(_f: EntityFieldInfo): string | null {
+        return null;
+    }
+
+    /**
+     * The generated-SQL note for foreign-key columns {@link ForeignKeyIndexSkipReason} declined,
+     * in the style of {@link GenerateSoftPrimaryKeyIndex}'s skip notice.
+     */
+    protected skippedForeignKeyIndexDisclosure(entity: EntityInfo, lines: string[]): string {
+        return [
+            `-- FK INDEX SKIPPED for ${entity.SchemaName}.${entity.BaseTable}`,
+            ...lines,
+            `-- Joins and related-record lookups on these columns run without an index. Give the`,
+            `-- column(s) a narrower explicit length in the source schema definition so they can be indexed.`,
+        ].join('\n');
     }
 
     /** @deprecated Use {@link GenerateForeignKeyIndexes}. */
@@ -775,7 +810,7 @@ export abstract class CodeGenDatabaseProvider {
      * metadata and getting the indexes you need were mutually exclusive, and the more correct the
      * metadata became the worse the query plans got.
      *
-     * TWO SOURCES, both of which are MJ's own verified join declarations rather than inferences:
+     * THREE SOURCES, all of which are MJ's own verified join declarations rather than inferences:
      *
      *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
      *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
@@ -785,6 +820,11 @@ export abstract class CodeGenDatabaseProvider {
      *
      *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
      *    key is a human-verified join over columns that carry no constraint at all.
+     *
+     *  - Polymorphic foreign-key column pairs declared via `EntityField.EntityIDFieldName` (such as
+     *    `RecordID` paired with `EntityIDFieldName: 'EntityID'`). Both the record pointer and its
+     *    companion entity type field are indexed so polymorphic join and lookup queries resolve via
+     *    index seeks rather than table scans.
      *
      * ONLY `ExactMatch`, DELIBERATELY. Every other normalization strategy wraps the column in a
      * function — `LOWER(LTRIM(RTRIM(col)))` for the default `LowerCaseTrim` — and a plain B-tree
@@ -810,6 +850,16 @@ export abstract class CodeGenDatabaseProvider {
                 if (trimmed) {
                     out.add(trimmed.toLowerCase());
                 }
+            }
+        }
+        for (const f of entity.Fields ?? []) {
+            const entityIdFieldName = f.EntityIDFieldName?.trim();
+            if (entityIdFieldName) {
+                const fieldName = f.Name?.trim();
+                if (fieldName) {
+                    out.add(fieldName.toLowerCase());
+                }
+                out.add(entityIdFieldName.toLowerCase());
             }
         }
         return out;
@@ -1320,6 +1370,27 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Returns true when the field's database default must be resolved into its
+     * parameter BEFORE the INSERT rather than inlined into the value list's
+     * null-coalescing wrap. The base implementation inlines every default; a
+     * dialect whose null-coalescing call rejects some default expressions
+     * (SQL Server: `NEXT VALUE FOR` inside `ISNULL`/`CASE`) overrides this and
+     * emits the assignments through {@link GeneratePreInsertDefaultAssignments}.
+     */
+    protected isPreInsertDefault(_ef: EntityFieldInfo): boolean {
+        return false;
+    }
+
+    /**
+     * Returns the statements that assign expression defaults (see
+     * {@link isPreInsertDefault}) to their parameters before the INSERT of a
+     * create routine. Empty when the dialect inlines every default.
+     */
+    GeneratePreInsertDefaultAssignments(_entity: EntityInfo): string {
+        return '';
+    }
+
+    /**
      * Generates the parameter list string for a CRUD routine with tolerant
      * SP signatures (Pillar 1 of the cross-app migration architecture).
      *
@@ -1435,7 +1506,17 @@ export abstract class CodeGenDatabaseProvider {
 
             const paramRef = dialect.ParameterRef(ef.CodeName);
 
-            if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
+            if (ef.HasDefaultValue && this.isPreInsertDefault(ef)) {
+                // The default is an expression that cannot sit inside ISNULL/CASE (e.g. NEXT VALUE
+                // FOR). GeneratePreInsertDefaultAssignments already resolved it into the parameter
+                // before the INSERT, so the value list only reads the parameter back.
+                if (ef.AllowsNull && !ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
+                    const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
+                    parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${paramRef} END`);
+                } else {
+                    parts.push(paramRef);
+                }
+            } else if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
                 // GUID-PK insert: detect empty-sentinel and fall back to DB default
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 parts.push(`CASE WHEN ${paramRef} = ${dialect.EmptyUUIDLiteral()} THEN ${formattedDefault} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
@@ -1502,6 +1583,14 @@ export abstract class CodeGenDatabaseProvider {
                 parts.push(`${colRef} = CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
             } else {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
+            }
+        }
+        if (parts.length > 0) {
+            const updatedAtField = entityFields.find(
+                f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.toLowerCase().trim()
+            );
+            if (updatedAtField) {
+                parts.push(`${dialect.QuoteIdentifier(updatedAtField.Name)} = ${dialect.CurrentTimestampUTC()}`);
             }
         }
         return parts.join(',\n        ');
@@ -1928,6 +2017,20 @@ export abstract class CodeGenDatabaseProvider {
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
+     * Reduces a CRUD routine definition — a generated script or the live catalog text — to a
+     * canonical form, so CodeGen can tell when the live routine no longer matches what it would
+     * generate now (a column default or type changed before CodeGen ran, or a cascade target
+     * dropped a column). Two definitions that normalize to the same string are treated as equal.
+     *
+     * Returns `null` when the platform does not support the comparison or the text holds no
+     * routine; callers then fall back to their other regeneration triggers. The base returns
+     * `null`; SQL Server implements it against `OBJECT_DEFINITION`.
+     */
+    NormalizeRoutineDefinitionForComparison(_definition: string): string | null {
+        return null;
+    }
+
+    /**
      * Optional — dialect-specific fast path for regenerating a single entity's
      * base view with recovery logic.
      *
@@ -1999,6 +2102,7 @@ export abstract class CodeGenDatabaseProvider {
         ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
+        OnDependentViewUnrestored?: (schema: string, viewName: string) => void;
     }): Promise<PhasedExecutionResult>;
 
     // ─── POST-RUN VALIDATION ─────────────────────────────────────────────

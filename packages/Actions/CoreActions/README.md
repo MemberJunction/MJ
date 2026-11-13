@@ -81,6 +81,9 @@ Several abstract base classes reduce duplication across related actions:
 | `BaseRecordMutationAction` | `crud/base-record-mutation.action.ts` | Shared parameter extraction, entity loading, error analysis for Create/Update/Delete |
 | `BaseFileStorageAction` | `files/base-file-storage.action.ts` | Common storage-provider resolution for all `File Storage: *` actions |
 | `BaseFileHandlerAction` | `utilities/base-file-handler.ts` | Multi-source file loading (Storage, URL, direct data) |
+| `BaseUserScopedCommunicationAction` | `ai/user-scoped-communication.action.ts` | Mailbox security gate and provider resolution for the Chief of Staff `* My *` email/calendar actions; pins every mailbox operation to `ContextUser.Email` |
+| `BaseFindSkillsAction` | `ai/base-find-skills.action.ts` | Shared hybrid vector + lexical search over `MJ: AI Skills` with agent permission filtering (`GetSkillsForAgent`) and auto-activation gating |
+| `BaseGitHubAction` | `github/base-github.action.ts` | Shared credential resolution (`GitHubCredentialResolver`), repository allowlist enforcement, protected-branch guardrails, and resilient Octokit client access for all `GitHub: *` actions |
 
 ### Generated Actions
 
@@ -134,9 +137,9 @@ no MJ action for it. Deployments that already have Custom Search access can keep
 
 All 100+ actions organized by category. Each action is registered with `@RegisterClass(BaseAction, "<name>")`.
 
-### AI (8 actions)
+### AI & Skill Discovery (11 actions)
 
-Actions for prompt execution, agent discovery, image generation, and content summarization.
+Actions for prompt execution, agent discovery, action discovery, skill discovery, image generation, and content summarization.
 
 | Registration Name | Class | Description |
 |---|---|---|
@@ -144,10 +147,51 @@ Actions for prompt execution, agent discovery, image generation, and content sum
 | `SummarizeContentAction` | `SummarizeContentAction` | Summarize text content using AI |
 | `Find Candidate Agents` | `FindCandidateAgentsAction` | Discover AI agents suitable for a task |
 | `Find Candidate Actions` | `FindCandidateActionsAction` | Discover actions suitable for a task |
+| `Find Candidate Skills` | `FindCandidateSkillsAction` | Hybrid vector + lexical search over `MJ: AI Skills` for large skill catalogs, with agent permission and auto-activation filtering |
 | `Find Best Agent` | `FindBestAgentAction` | Select the single best agent for a task |
 | `Find Best Action` | `FindBestActionAction` | Select the single best action for a task |
+| `Find Best Skill` | `FindBestSkillAction` | Select the single best AI Skill for a task |
+| `Get Skill Details` | `GetSkillDetailsAction` | Progressive-disclosure inspector returning full `Instructions`, bundled `Actions`, bundled `SubAgents`, and portable `SKILL.md` for a skill |
 | `Load Agent Spec` | `LoadAgentSpecAction` | Load full specification for an AI agent |
 | `Generate Image` | `GenerateImageAction` | Generate images using AI models |
+
+### GitHub (14 actions)
+
+Compound, LLM-ergonomic actions for repository discovery, code search, issue/PR triage, atomic multi-file Git Data API commits, PR creation/review/merge, and GitHub Actions CI/CD diagnostics. All extend `BaseGitHubAction` and resolve credentials through `GitHubCredentialResolver` (supporting **GitHub App** short-lived repo-scoped installation tokens, **GitHub PAT**, **3LO per-user OAuth** `UserOAuth3LO:GitHub:<userId>` when `UseUserDelegatedAuth = true`, and environment variable fallback).
+
+| Registration Name | Class | Description |
+|---|---|---|
+| `GitHub: Get Repository Context` | `GitHubGetRepositoryContextAction` | Read-only preflight: default branch, recent commits, open PRs, latest workflow status, and recursive file tree |
+| `GitHub: Search Code` | `GitHubSearchCodeAction` | Search code, filenames, or symbols across a repository or organization with path/extension filters |
+| `GitHub: Read File Content` | `GitHubReadFileContentAction` | Read one or more files at a branch/tag/commit ref with optional line-range slicing (`StartLine`/`EndLine`) |
+| `GitHub: List Issues and PRs` | `GitHubListIssuesAndPRsAction` | Search and filter issues and pull requests by state, labels, author, assignee, or query string |
+| `GitHub: Get Issue or PR Details` | `GitHubGetIssueOrPRDetailsAction` | Retrieve full metadata, conversation comments, review threads, changed files, and check-run status for an issue or PR |
+| `GitHub: Create or Update Issue` | `GitHubCreateOrUpdateIssueAction` | Create a new GitHub issue or update an existing issue's title, body, state, labels, and assignees |
+| `GitHub: Add Issue or PR Comment` | `GitHubAddIssueOrPRCommentAction` | Post a Markdown comment on an issue or pull request |
+| `GitHub: Commit Files and Create PR` | `GitHubCommitFilesAndCreatePRAction` | **Compound atomic workflow**: create/reset branch from base, commit multiple file additions/modifications/deletions via Git Data API (with automatic `createBlob` fallback for files > 1MB), and open or update a Pull Request (defaults to Draft per credential policy) |
+| `GitHub: Commit Files to Branch` | `GitHubCommitFilesToBranchAction` | Atomically commit multiple file additions, modifications, or deletions to an existing non-protected branch |
+| `GitHub: Submit PR Review` | `GitHubSubmitPRReviewAction` | Submit a structured pull request review (`COMMENT`, `APPROVE`, or `REQUEST_CHANGES`) with inline file/line review comments |
+| `GitHub: Merge Pull Request` | `GitHubMergePullRequestAction` | Merge a pull request (`squash`, `merge`, or `rebase`). Enforces the **App-Token-Never-Merges** guardrail (`APP_TOKEN_MERGE_FORBIDDEN`) unless a human PAT or 3LO user token is used |
+| `GitHub: Get Workflow Runs and Logs` | `GitHubGetWorkflowRunsAndLogsAction` | List recent GitHub Actions workflow runs and extract failed job steps and error log tails for CI debugging |
+| `GitHub: Trigger Workflow Dispatch` | `GitHubTriggerWorkflowDispatchAction` | Trigger a `workflow_dispatch` event on a GitHub Actions workflow with typed inputs |
+| `GitHub: Re-run Failed Workflow` | `GitHubRerunFailedWorkflowAction` | Re-run failed jobs (or all jobs) for a GitHub Actions workflow run |
+
+### Chief of Staff / agent governance (8 actions)
+
+Actions used by the Chief of Staff agent (and other autonomous agents) to manage their own policy, schedule, coordination and user-scoped communication. All of them bind to `ContextUser` -- an agent can only act on, and read for, the calling user. The four `* My *` actions extend `BaseUserScopedCommunicationAction` and are also registered under a `__`-prefixed alias (for example `__ManageMyEmailInbox`).
+
+| Registration Name | Class | Description |
+|---|---|---|
+| `Configure Agent User Policy` | `ConfigureAgentUserPolicyAction` | Create or update the caller's `MJ: AI Agent User Policies` row for an agent (channel modes, coordination mode, action and entity rules); always bound to `ContextUser.ID` |
+| `Schedule Next Agent Wake` | `ScheduleNextAgentWakeAction` | Upsert the agent's next `AgentWake` row in `MJ: User Routines`, keyed by `(UserID, TargetID, WorkstreamKey)`; one-shot or cron schedule |
+| `Send Inter-Agent Request` | `SendInterAgentRequestAction` | Send a structured follow-up to another user, or that user's Chief of Staff, as an `MJ: AI Agent Requests` row; checks both users' coordination policy |
+| `Prepare Outbound Call Brief` | `PrepareOutboundCallBriefAction` | Validate `PhoneChannelMode` and approval rules, then build a locked outbound-call brief with mandatory upfront AI disclosure |
+| `Verify My Communication Capabilities` | `VerifyMyCommunicationCapabilitiesAction` | Preflight: reports the enterprise communication posture, active providers, the caller's channel permissions, utility mailboxes and external scheduling connectors |
+| `Get My Calendar Events and Availability` | `GetMyCalendarAndAvailabilityAction` | Read the caller's events, free/busy, meeting-time suggestions, or HubSpot/Calendly availability |
+| `Manage My Calendar Event` | `ManageMyCalendarEventAction` | Create, update, respond to or cancel an event on the caller's calendar, or create a Calendly single-use link; enforces `CalendarChannelMode` |
+| `Manage My Email Inbox and Drafts` | `ManageMyEmailInboxAction` | Read, search and draft/reply/forward in the caller's own mailbox or dedicated utility mailbox; enforces `EmailChannelMode`; never accepts a `From` or `Mailbox` parameter |
+
+The mailbox actions run through the enterprise provider's app-level credential (Microsoft Graph or Gmail) and the gate in `BaseUserScopedCommunicationAction`: the caller's email domain must match the provider's `AllowedEmailDomains`, the provider's `EnterpriseScopeMode` must allow personal mailboxes (otherwise the action falls back to the user's `MJ: AI Bridge Agent Identities` utility inbox), and the provider's mailbox-access preflight must succeed. The per-user OAuth service described below is a separate, not-yet-wired path to the same mailboxes.
 
 ### Communication (3 actions)
 
@@ -373,6 +417,64 @@ AI-generated entity-specific child actions. These are maintained by CodeGen and 
 |---|---|---|
 | `Create Conversation Record` | `Create_Conversation_Record_Action` | Create a Conversations entity record (child of Create Record) |
 | `Get AI Model Cost` | `Get_AI_Model_Cost_Action` | Look up cost information for an AI model (child of Get Record) |
+
+## Per-user OAuth 2.0 (3LO) service -- prototype
+
+`CommunicationUserOAuthService` (`src/custom/ai/communication-oauth-service.ts`) is a `BaseSingleton` that lets an individual user connect their own Microsoft Graph or Google Workspace mailbox to MJ through three-legged OAuth, instead of the app-level credential the mailbox actions above use today. It is not an action; it is a service a host (MJServer route, test harness) drives directly.
+
+**Status: prototype, off by default.** Gates 1 to 3 are administrator settings on `MJ: Communication Providers`: `AllowUserDelegatedOAuth` (bit, default 0), `AllowedEmailDomains` and `AllowedOAuthTenantIDs` (both comma-separated, optional). `ReadProviderUserOAuthGates(providerEntity)` lifts them into the gate fields of a `ProviderUserOAuthPolicyConfig`; the caller adds the OAuth client settings (endpoints, client id, redirect URI, scopes), which are not yet stored anywhere. Unless an administrator sets `AllowUserDelegatedOAuth = 1` on a provider, no user can initiate a personal OAuth flow. See "Current limitations" below before relying on it.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Host as Host (route / caller)
+    participant Svc as CommunicationUserOAuthService
+    participant IdP as Microsoft / Google
+    participant Store as IUserDelegatedCredentialStore
+
+    Host->>Svc: InitiateAuthorizationFlow(policy, contextUser)
+    Svc->>Svc: Gate 1, Gate 2 (contextUser.Email)
+    Svc-->>Host: AuthorizationUrl + State (PKCE S256, 10-minute session)
+    Host->>IdP: redirect user, user consents
+    IdP-->>Host: code + state
+    Host->>Svc: HandleOAuthCallback({ state, code, policy, contextUser, transport })
+    Svc->>Svc: state valid, same user, Gate 1 again
+    Svc->>IdP: transport.ExchangeAuthorizationCode (code + code_verifier)
+    Svc->>Svc: Gate 2 (token email), Gate 3, Gate 4
+    Svc->>Store: StoreUserDelegatedCredential(...)
+    Svc-->>Host: OAuthCallbackResult (CredentialID, PrincipalEmail)
+```
+
+1. **Initiate** -- `InitiateAuthorizationFlow(policy, contextUser)` checks Gates 1 and 2, generates a PKCE `S256` verifier/challenge pair (`GeneratePkcePair`) and a random `state`, keeps them in an in-memory session for 10 minutes, and returns an `OAuthInitiateResult` whose `AuthorizationUrl` includes `code_challenge`, `code_challenge_method=S256` and `login_hint`.
+2. **Consent** -- the host redirects the browser to `AuthorizationUrl`; the identity provider redirects back with `code` and `state`.
+3. **Callback** -- `HandleOAuthCallback(params)` consumes the session (one use), rejects an expired or unknown `state` (`INVALID_OR_EXPIRED_STATE`) or a different calling user (`STATE_USER_MISMATCH`), exchanges the code through the injected `IOAuthTokenTransport`, runs Gates 2 through 4 against the verified token identity, and stores the result.
+4. **Store** -- the credential is written through `IUserDelegatedCredentialStore.StoreUserDelegatedCredential` under the name `UserOAuth3LO:<provider>:<ownerUserId>` with `ownerUserId` inside the encrypted values. See `@memberjunction/credentials` for the owner-binding rules.
+5. **Disconnect** -- `DisconnectAndRevokeUserOAuth(params)` revokes the refresh (or access) token at the provider when the transport implements `RevokeToken`, then deactivates the stored credential and wipes its token values. Revocation failure at the provider is reported in `RevokedAtProvider` but does not stop the local deactivation.
+
+### The four gates
+
+| Gate | Checked at | Rule | Result code on failure |
+|---|---|---|---|
+| 1 | initiate and callback | `policy.AllowUserDelegatedOAuth === true` | `GATE_1_USER_OAUTH_DISABLED` |
+| 2 | initiate (on `contextUser.Email`) and callback (on the token's verified email) | domain is in `policy.AllowedEmailDomains` (comma-separated; empty means any) | `GATE_2_DOMAIN_MISMATCH` |
+| 3 | callback | token's tenant (`tid` for Azure AD, `hd` for Google Workspace) is in `policy.AllowedOAuthTenantIDs` (empty means any) | `GATE_3_TENANT_MISMATCH` |
+| 4 | callback | the authenticated principal's email equals `contextUser.Email`, case-insensitive -- a user cannot link a personal or someone else's mailbox to their MJ identity | `GATE_4_PRINCIPAL_EMAIL_MISMATCH` |
+
+Gates 2 and 3 are opt-in narrowing; Gates 1 and 4 always apply. All result codes are the `CommunicationOAuthResultCode` union.
+
+### Injection points
+
+- **`ProviderUserOAuthPolicyConfig`** -- the caller builds this: `ProviderName`, the four gate fields, `ClientId`/`ClientSecret`, `AuthorizationEndpoint`, `TokenEndpoint`, optional `RevocationEndpoint`, `RedirectUri`, `Scopes`.
+- **`IOAuthTokenTransport`** (required on callback) -- `ExchangeAuthorizationCode` must return a `VerifiedOAuthTokenExchangeResult` whose `PrincipalEmail` and `TenantID` come from a verified source (`id_token` claims or the provider's userinfo endpoint), because Gates 2 to 4 trust them. `RevokeToken` is optional.
+- **`IUserDelegatedCredentialStore`** (optional) -- defaults to `CredentialEngine.Instance` from `@memberjunction/credentials`, which owns credential naming (`UserOAuth3LO:<provider>:<ownerUserId>`), owner binding, the required credential type, encryption and audit logging. Inject another store only for tests.
+
+### Current limitations
+
+- **No stored OAuth client settings and no admin UI beyond the generated form.** The gate fields live on `MJ: Communication Providers` (editable through its generated Explorer form), but `ClientId`, `ClientSecret`, endpoints, `RedirectUri` and `Scopes` still come from the caller.
+- **No built-in transport and no routes.** `IOAuthTokenTransport` has no shipped implementation. The file header mentions `/api/v1/communication-oauth/initiate` and `/callback`, but no MJServer routes exist yet; a host must build them with `ApiRoute()` and call the service.
+- **No consumer of the stored token.** The Microsoft Graph and Gmail communication providers still authenticate with app-level credentials; a connected 3LO credential is stored but not yet used by any mailbox action.
+- **Pending sessions are process-local.** The initiate/callback session map lives in memory, so both calls must reach the same process, and a restart drops in-flight authorizations.
 
 ## Usage Examples
 

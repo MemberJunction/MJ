@@ -1,13 +1,29 @@
 import {
+    ClampSessionSecondsValue,
     ClientRealtimeSessionConfig,
+    DEFAULT_CREDENTIAL_REFRESH_LEAD_MS,
     DEFAULT_REALTIME_AUDIO_TRACKS,
+    DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS,
+    DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+    ExtractRealtimeTimingConfig,
     JSONObject,
+    RealtimeContextNoteOptions,
+    RealtimeConversationMemory,
+    RealtimeDiagLog,
+    RealtimeMemorySeed,
+    RealtimeReconnectContext,
+    RealtimeReconnectController,
+    RealtimeReconnectFailureCode,
+    RealtimeReconnectReason,
+    REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS,
+    REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS,
     RealtimeTrack,
     RealtimeTrackDescriptor,
     RealtimeTrackDirection,
     RealtimeTrackKey,
     ResolveRequestedTracks,
     RealtimeUsageModalityDetail,
+    ScrubRealtimeTimingConfigKeys,
 } from '@memberjunction/ai';
 import { IRealtimeAudioMeter, REALTIME_AUDIO_BIN_COUNT } from '../audio/audioMeter';
 import type { MediaVideoSource } from '../media/model';
@@ -19,6 +35,63 @@ import type { MediaVideoSource } from '../media/model';
  */
 export const REQUESTED_TRACKS_SESSION_KEY = 'requestedTracks';
 
+/** Minimum microphone RMS level treated as active user speech when holding soft-window reconnects. */
+export const DEFAULT_USER_SPEECH_ACTIVE_LEVEL_THRESHOLD = 0.02;
+
+/**
+ * How old a reconnect's credential refresh may be for a later attempt to join it instead of sending a new one: the
+ * preparation limit of the attempt that started it, plus the longest wait before the next attempt. See
+ * `joinOrStartReconnectRefresh`.
+ */
+const SHARED_REFRESH_MAX_JOIN_AGE_MS = REALTIME_RESUMPTION_PREPARE_TIMEOUT_MS + REALTIME_RESUMPTION_MAX_RETRY_DELAY_MS;
+
+/** Options passed to `RealtimeClientTokenRefreshCallback`. */
+export interface RealtimeClientTokenRefreshOptions {
+    /**
+     * When `true` on a relay session, requests that `ExtendRelaySession` re-arm a single handle-less
+     * reopen window so a seed-fallback reconnect can open a fresh upstream connection.
+     */
+    readonly AllowFreshReopen?: boolean;
+}
+
+/** The catalog timing and resumption settings the server stamps on a minted or refreshed session. */
+export type RealtimeClientTimingFields = Pick<
+    ClientRealtimeSessionConfig,
+    'ConnectionMaxSeconds' | 'SessionMaxSeconds' | 'ReconnectBufferSeconds' | 'TrustNativeResumption'
+>;
+
+/**
+ * Fresh credential + session config returned by `RefreshRealtimeClientSessionToken`
+ * when a browser client performs a mid-call credential refresh or reconnect. The timing fields
+ * are the server's re-stamped catalog timing; absent ones leave the client's current values as they are.
+ */
+export interface RefreshedRealtimeClientCredential extends RealtimeClientTimingFields {
+    readonly Kind?: 'token' | 'relay';
+    readonly EphemeralToken: string;
+    readonly ExpiresAt: string;
+    readonly RelayUrl?: string;
+    readonly SessionConfig?: JSONObject;
+    readonly RemainingSessionSeconds?: number;
+}
+
+/**
+ * Callback registered by `RealtimeSessionRuntime` so `BaseRealtimeClient` drivers
+ * can mint a fresh single-use credential or extend a relay grant before expiry or reconnect.
+ */
+export type RealtimeClientTokenRefreshCallback = (
+    options?: RealtimeClientTokenRefreshOptions
+) => Promise<RefreshedRealtimeClientCredential>;
+
+/**
+ * Context passed to `BaseRealtimeClient.Reconnect(context)` on a scheduled or error-recovery
+ * mid-call reconnect.
+ */
+export interface RealtimeClientReconnectContext extends RealtimeReconnectContext {
+    readonly RefreshCredential: (options?: RealtimeClientTokenRefreshOptions) => Promise<RefreshedRealtimeClientCredential>;
+    readonly Credential: RefreshedRealtimeClientCredential;
+    readonly Seed: RealtimeMemorySeed;
+}
+
 /**
  * The session config as the PROVIDER must receive it: the server-built config minus the
  * client-only hints the runtime adds. Drivers that send the config on the wire go through this —
@@ -27,8 +100,7 @@ export const REQUESTED_TRACKS_SESSION_KEY = 'requestedTracks';
  * instructions and every tool.
  */
 export function ToProviderSessionConfig(sessionConfig: JSONObject): JSONObject {
-    const { [REQUESTED_TRACKS_SESSION_KEY]: _clientOnly, ...providerConfig } = sessionConfig;
-    return providerConfig;
+    return ScrubRealtimeTimingConfigKeys(sessionConfig, [REQUESTED_TRACKS_SESSION_KEY]);
 }
 
 /**
@@ -668,8 +740,9 @@ export abstract class BaseRealtimeClient {
      * e.g. delegated-run progress the model can draw on the next time it speaks.
      *
      * @param text The context note text (the host owns any prefixing/formatting policy).
+     * @param options Optional reconnect-memory persistence options (`StateKey`, `Ephemeral`, `MemoryText`).
      */
-    public abstract SendContextNote(text: string): void;
+    public abstract SendContextNote(text: string, options?: RealtimeContextNoteOptions): void;
 
     /**
      * Asks the model for ONE brief interim utterance (e.g. a spoken progress update while
@@ -690,15 +763,48 @@ export abstract class BaseRealtimeClient {
     public abstract RequestSpokenUpdate(instructions: string): void;
 
     /**
+     * Asks the model to speak ONE turn that is part of the conversation — captioned, transcribed and
+     * persisted like any turn the model takes on its own (an interviewer's greeting, a guide's opening).
+     *
+     * The deliberate contrast with {@link RequestSpokenUpdate}: an update is disposable narration a
+     * container throws away; a turn is the record (MJ#4591). Drivers implement it with the same wire
+     * mechanics and collision rule as their spoken update, tagging the reply `Kind: 'normal'`.
+     * Optional: a driver from before this capability existed omits it, and a container falls back to
+     * the spoken update rather than going silent.
+     *
+     * @param instructions What to say, in the host's words; the model speaks in its own persona.
+     */
+    public RequestSpokenTurn?(instructions: string): void;
+
+    /**
      * Feeds an executed tool's result back to the model, correlated by `callID`, and ensures
      * the model SPEAKS the result as soon as possible: immediately when idle, otherwise
      * queued behind the in-flight response (e.g. a progress narration) so the trigger is
      * never dropped by the provider.
      *
+     * Template method: dispatches to {@link doSendToolResult} first (so the wire send happens
+     * before soft-window reconnect evaluation and rejected/unknown call IDs can return `false`),
+     * then records the result into {@link conversationMemory} via {@link recordToolResult}.
+     *
      * @param callID The `CallID` from the originating {@link RealtimeClientToolCall}.
      * @param outputJson The tool's result as a JSON-stringified string.
      */
-    public abstract SendToolResult(callID: string, outputJson: string): void;
+    public SendToolResult(callID: string, outputJson: string): void {
+        const accepted = this.doSendToolResult(callID, outputJson);
+        if (accepted === false) {
+            return;
+        }
+        this.recordToolResult(callID, outputJson);
+    }
+
+    /**
+     * Concrete driver implementation for sending a tool result on the wire.
+     * Return `false` if the `callID` was rejected/ignored (e.g. unknown or duplicate call ID)
+     * so {@link SendToolResult} skips recording it into conversation memory.
+     */
+    protected doSendToolResult(_callID: string, _outputJson: string): boolean | void {
+        throw new Error(`${this.constructor.name} must implement doSendToolResult(callID, outputJson)`);
+    }
 
     /**
      * Mutes / unmutes the microphone (implementations toggle the mic tracks' `enabled` flag —
@@ -871,6 +977,717 @@ export abstract class BaseRealtimeClient {
      */
     public SendVideoFrame?(base64Image: string, mimeType?: string, sourceId?: string): boolean;
 
+    // ── Conversation memory, resumption, and unified reconnect controller ────
+
+    /** Rolling conversation memory used to re-seed provider context on reconnect. */
+    protected readonly conversationMemory = new RealtimeConversationMemory({ Log: RealtimeDiagLog });
+    /** Duration of a single provider connection in seconds from `ClientRealtimeSessionConfig.ConnectionMaxSeconds`. */
+    protected configuredCallDurationSeconds: number | undefined;
+    /** Credential/session token lifetime in seconds from `ClientRealtimeSessionConfig.SessionMaxSeconds` (or `MaxSessionSeconds`). */
+    protected configuredSessionMaxSeconds: number | undefined;
+    /** Buffer in seconds before `CallDurationSeconds` expiry at which `Reconnect` is triggered. */
+    protected configuredReconnectBufferSeconds: number = DEFAULT_REALTIME_RECONNECT_BUFFER_SECONDS;
+    /** Optional metadata override for whether native resumption is trusted on this endpoint. */
+    protected configuredTrustNativeResumption: boolean | undefined;
+    /** Optional callback installed by `RealtimeSessionRuntime` to refresh the provider token mid-call. */
+    protected tokenRefreshCallback: RealtimeClientTokenRefreshCallback | null = null;
+    /** Tool call IDs that were in flight when a non-native seed reconnect occurred. */
+    protected callsFromBeforeReseed = new Set<string>();
+
+    private readonly toolCallNamesById = new Map<string, string>();
+    private readonly inFlightToolCallIds = new Set<string>();
+    private readonly recordedToolCallIds = new Set<string>();
+    private currentCredential: RefreshedRealtimeClientCredential = {
+        Kind: 'token',
+        EphemeralToken: '',
+        ExpiresAt: '',
+        SessionConfig: {},
+    };
+    /**
+     * Whether the running reconnect cycle has refreshed its credential. Reset when a cycle ends, not when one starts: a
+     * planned move's cycle reports `OnReconnecting` again each time it leaves its old connection, and must not mint
+     * again each time.
+     */
+    private refreshedInActiveCycle = false;
+    /**
+     * The pre-reconnect credential refresh still in flight, if any, and when it started. A later attempt joins it
+     * instead of minting a second credential (the refresh outlives the attempt that started it when that attempt's
+     * preparation timed out), but only while it is younger than {@link SHARED_REFRESH_MAX_JOIN_AGE_MS}.
+     */
+    private reconnectCredentialRefresh: { readonly Promise: Promise<void>; readonly StartedAtMs: number } | null = null;
+    /** Connections opened on {@link currentCredential}, counted against {@link CredentialConnectionLimit}. */
+    private connectionsOnCredential = 0;
+    /**
+     * The credential the live connection opened on. It differs from {@link currentCredential} once a refresh mints a new
+     * one; on a driver whose connections close when their credential expires, that expiry ends the live connection.
+     */
+    private connectionCredential: RefreshedRealtimeClientCredential = this.currentCredential;
+
+    /** Unified I/O-free reconnect controller shared with server-side `BaseRealtimeSession`. */
+    protected readonly reconnectController: RealtimeReconnectController = new RealtimeReconnectController({
+        PrepareAttempt: (context) => this.prepareClientReconnectAttempt(context.Attempt),
+        Reconnect: (context) => this.executeClientReconnectAttempt(context),
+        // The network watch and the cycle's bookkeeping are handled here, not in the hooks, so a driver override cannot
+        // skip them.
+        OnReconnectFailed: (error, code) => {
+            this.endReconnectCycle();
+            this.onReconnectFailed(error, code);
+        },
+        OnReconnecting: (reason) => {
+            this.startWatchingNetworkOnline();
+            this.onReconnecting(reason);
+        },
+        OnReconnected: (usedNativeResumption) => {
+            this.endReconnectCycle();
+            this.onReconnected(usedNativeResumption);
+        },
+        ReturnToOldConnection: () => this.ResumeOnOldConnection(),
+        BuildSeed: () => {
+            const seed = this.conversationMemory.Seed();
+            return seed.Entries.length > 0 ? seed : null;
+        },
+        IsIdle: () => !this.isTurnActiveForReconnect(),
+        HoldsHardMove: () => this.holdsHardReconnectPoint(),
+        TrustsNativeResumption: () => this.TrustsNativeResumption,
+        RequiresPostTurnHandle: () => this.RequiresPostTurnResumptionHandle,
+        IsNetworkOnline: () => this.isHostNetworkOnline(),
+        Log: (msg) => RealtimeDiagLog(msg),
+    });
+
+    /**
+     * Reads catalog-stamped timing and resumption settings from the typed fields of `config`, falling
+     * back to `config.SessionConfig` (`connectionMaxSeconds`, `sessionMaxSeconds`, `reconnectBufferSeconds`,
+     * `trustNativeResumption`), records the initial credential snapshot, and schedules proactive
+     * credential/relay refresh.
+     */
+    public ApplySessionConfigTiming(config: ClientRealtimeSessionConfig): void {
+        // Not `IsReconnecting`: that reads false while a failed planned move waits on its old connection, and a reset
+        // then would cut the running cycle out from under its own loop.
+        if (!this.IsReconnectCycleActive) {
+            this.reconnectController.Reset();
+            this.endReconnectCycle();
+        }
+        this.currentCredential = {
+            Kind: config.Transport === 'relay' ? 'relay' : 'token',
+            EphemeralToken: config.EphemeralToken,
+            ExpiresAt: config.ExpiresAt,
+            ...(config.RelayUrl ? { RelayUrl: config.RelayUrl } : {}),
+            SessionConfig: config.SessionConfig,
+        };
+        // The Connect that applies this credential opens the first connection on it.
+        this.connectionsOnCredential = 1;
+        this.connectionCredential = this.currentCredential;
+        const fromSessionConfig = ExtractRealtimeTimingConfig(config.SessionConfig);
+        this.applyTimingFields({
+            ConnectionMaxSeconds: config.ConnectionMaxSeconds ?? fromSessionConfig.ConnectionMaxSeconds,
+            SessionMaxSeconds: config.SessionMaxSeconds ?? config.MaxSessionSeconds ?? fromSessionConfig.SessionMaxSeconds,
+            ReconnectBufferSeconds: config.ReconnectBufferSeconds ?? fromSessionConfig.ReconnectBufferSeconds,
+            TrustNativeResumption: config.TrustNativeResumption ?? fromSessionConfig.TrustNativeResumption,
+        });
+        this.scheduleCredentialRefresh();
+    }
+
+    /** Records each timing setting that is present; an absent one keeps the client's current value. */
+    private applyTimingFields(timing: RealtimeClientTimingFields): void {
+        if (timing.ConnectionMaxSeconds !== undefined) {
+            this.configuredCallDurationSeconds = timing.ConnectionMaxSeconds;
+        }
+        if (timing.SessionMaxSeconds !== undefined) {
+            this.configuredSessionMaxSeconds = timing.SessionMaxSeconds;
+        }
+        if (timing.ReconnectBufferSeconds !== undefined) {
+            this.configuredReconnectBufferSeconds = timing.ReconnectBufferSeconds;
+        }
+        if (timing.TrustNativeResumption !== undefined) {
+            this.configuredTrustNativeResumption = timing.TrustNativeResumption;
+        }
+    }
+
+    /**
+     * Optional runtime ceiling override (e.g. Gemini's 120s ceiling when uncompressed video is active).
+     * Narrowed against `DefaultCallDurationSeconds` and `configuredCallDurationSeconds` via `ClampSessionSecondsValue`.
+     */
+    protected get RuntimeCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    /** Driver fallback connection ceiling in seconds when model metadata omits `connectionMaxSeconds`. */
+    protected get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    /**
+     * Effective connection ceiling in seconds. Metadata and runtime caps narrow the driver's
+     * provider ceiling (`ClampSessionSecondsValue(DefaultCallDurationSeconds, RuntimeCallDurationSeconds, configuredCallDurationSeconds)`),
+     * never widen it.
+     */
+    public get CallDurationSeconds(): number | undefined {
+        return ClampSessionSecondsValue(
+            this.DefaultCallDurationSeconds,
+            this.RuntimeCallDurationSeconds,
+            this.configuredCallDurationSeconds
+        );
+    }
+
+    /** Seconds before {@link CallDurationSeconds} when the reconnect buffer window opens. */
+    public get ReconnectBufferSeconds(): number {
+        return this.configuredReconnectBufferSeconds;
+    }
+
+    /** Whether native provider resumption is trusted on the first reconnect attempt. */
+    public get TrustsNativeResumption(): boolean {
+        return this.configuredTrustNativeResumption ?? this.DefaultTrustsNativeResumption;
+    }
+
+    protected get DefaultTrustsNativeResumption(): boolean {
+        return false;
+    }
+
+    /**
+     * Whether this driver's provider emits a fresh resumable handle shortly after each `turnComplete`
+     * (Gemini / Vertex AI Live), so planned moves wait for that post-turn handle.
+     */
+    protected get RequiresPostTurnResumptionHandle(): boolean {
+        return false;
+    }
+
+    /** Whether this driver requires a freshly minted single-use credential on each reconnect. */
+    protected get RequiresFreshTokenPerReconnect(): boolean {
+        return true;
+    }
+
+    /**
+     * How many connections `credential` may open, or `undefined` for no limit (the default). A driver whose provider
+     * counts uses on a credential overrides it, so the client re-mints before it would open a connection the
+     * credential has no use left for, instead of spending a failed attempt finding out.
+     */
+    protected CredentialConnectionLimit(_credential: RefreshedRealtimeClientCredential): number | undefined {
+        return undefined;
+    }
+
+    /**
+     * Whether the provider closes a connection when the credential it opened on expires, even after the client holds a
+     * newer one. `false` (the default) for a credential that only gates opening the connection, as OpenAI's
+     * `client_secret` does. A driver returning `true` gets a planned move onto the refreshed credential before the old
+     * one expires (see {@link connectionDeadlineAtMs}), instead of a drop at the expiry.
+     */
+    protected ConnectionClosesAtCredentialExpiry(_credential: RefreshedRealtimeClientCredential): boolean {
+        return false;
+    }
+
+    /**
+     * When the provider will close the live connection before its duration limit: the expiry of the credential it
+     * opened on, for a driver whose connections die with their credential. Only once a refresh has minted a credential
+     * that outlives it: with nothing newer to move onto (the refresh failed, or the session cap bounds the new one too),
+     * an early move would open on the same expiring credential, and moves would follow each other ever faster up to it.
+     */
+    private connectionDeadlineAtMs(): number | undefined {
+        if (!this.ConnectionClosesAtCredentialExpiry(this.connectionCredential)) {
+            return undefined;
+        }
+        const expiresAtMs = Date.parse(this.connectionCredential.ExpiresAt);
+        const currentExpiresAtMs = Date.parse(this.currentCredential.ExpiresAt);
+        if (!Number.isFinite(expiresAtMs) || !Number.isFinite(currentExpiresAtMs) || currentExpiresAtMs <= expiresAtMs) {
+            return undefined;
+        }
+        return expiresAtMs;
+    }
+
+    /** True when the current credential has opened every connection it allows. */
+    private isCredentialSpent(): boolean {
+        const limit = this.CredentialConnectionLimit(this.currentCredential);
+        return limit !== undefined && this.connectionsOnCredential >= limit;
+    }
+
+    /** Whether this concrete client subclass implements mid-call `Reconnect`. */
+    protected get SupportsMidCallReconnect(): boolean {
+        return this.Reconnect !== BaseRealtimeClient.prototype.Reconnect;
+    }
+
+    /** Accessor for the client's rolling conversation memory ledger. */
+    public get ConversationMemory(): RealtimeConversationMemory {
+        return this.conversationMemory;
+    }
+
+    /** True while a mid-call reconnect is actively in flight. */
+    protected get IsReconnecting(): boolean {
+        return this.reconnectController.IsReconnecting;
+    }
+
+    /**
+     * True from the start of a reconnect cycle until it succeeds or fails. Unlike {@link IsReconnecting}, it stays true
+     * while a planned move waits between attempts with the call live again on its old connection. A driver that would
+     * otherwise end the call on a loss of that connection checks this and hands the loss to the running cycle
+     * (`TriggerReconnect('connection-lost')`) instead.
+     */
+    protected get IsReconnectCycleActive(): boolean {
+        return this.reconnectController.IsReconnectCycleActive;
+    }
+
+    /** Latest recorded provider resumption handle or conversation ID. */
+    public get ResumptionHandle(): string | null {
+        return this.reconnectController.Handle;
+    }
+
+    /** Records a provider resumption handle or conversation ID, along with whether it is resumable now. */
+    public RecordResumptionHandle(handle: string | null | undefined, resumable = true): void {
+        this.reconnectController.RecordHandle(handle, resumable);
+    }
+
+    /** Registers the host callback used to mint a fresh credential before expiry or reconnect. */
+    public SetTokenRefreshCallback(callback: RealtimeClientTokenRefreshCallback | null): void {
+        this.tokenRefreshCallback = callback;
+        this.scheduleCredentialRefresh();
+    }
+
+    /** Mints a fresh credential via the registered host callback, updates `currentCredential`, and re-arms the refresh timer. */
+    protected async refreshCredentialForReconnect(
+        options?: RealtimeClientTokenRefreshOptions
+    ): Promise<RefreshedRealtimeClientCredential> {
+        if (!this.tokenRefreshCallback) {
+            return this.currentCredential;
+        }
+        const refreshed = await this.tokenRefreshCallback(options);
+        this.applyTimingFields(refreshed);
+        // A new token starts with all its uses; a relay grant extended in place (no token) keeps the count.
+        if (refreshed.EphemeralToken && refreshed.EphemeralToken !== this.currentCredential.EphemeralToken) {
+            this.connectionsOnCredential = 0;
+        }
+        this.currentCredential = {
+            ...refreshed,
+            EphemeralToken: refreshed.EphemeralToken || this.currentCredential.EphemeralToken,
+            ...(refreshed.RelayUrl || this.currentCredential.RelayUrl
+                ? { RelayUrl: refreshed.RelayUrl || this.currentCredential.RelayUrl }
+                : {}),
+        };
+        this.scheduleCredentialRefresh();
+        return this.currentCredential;
+    }
+
+    private scheduleCredentialRefresh(): void {
+        if (!this.SupportsMidCallReconnect || !this.tokenRefreshCallback || this.reconnectController.IsDisposed) {
+            return;
+        }
+        this.reconnectController.ScheduleCredentialRefresh(
+            this.currentCredential.ExpiresAt,
+            () => {
+                void this.refreshCredentialProactively();
+            },
+            DEFAULT_CREDENTIAL_REFRESH_LEAD_MS,
+            this.configuredSessionMaxSeconds
+        );
+    }
+
+    private async refreshCredentialProactively(): Promise<void> {
+        if (this.reconnectController.IsDisposed || !this.tokenRefreshCallback) {
+            return;
+        }
+        try {
+            await this.refreshCredentialForReconnect();
+        } catch (err) {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] proactive credential refresh failed: ${err instanceof Error ? err.message : String(err)}`
+            );
+            return;
+        }
+        this.armMoveBeforeConnectionCredentialExpires();
+    }
+
+    /**
+     * After a refresh lands: the live connection may close when the credential it opened on expires, so with a newer
+     * one in hand the timers are re-armed and the planned move happens before that expiry. A reconnect in flight arms
+     * them once its connection opens.
+     */
+    private armMoveBeforeConnectionCredentialExpires(): void {
+        if (!this.IsReconnecting && this.reconnectController.HasDurationTimersArmed && this.connectionDeadlineAtMs() !== undefined) {
+            this.ArmConnectionDurationTimer();
+        }
+    }
+
+    /** Returns true when the current credential is expired or within `marginSeconds` of expiry. */
+    protected isCredentialNearExpiry(marginSeconds = 60): boolean {
+        if (!this.currentCredential.ExpiresAt) {
+            return false;
+        }
+        const expiresAtMs = Date.parse(this.currentCredential.ExpiresAt);
+        if (!Number.isFinite(expiresAtMs)) {
+            return false;
+        }
+        return expiresAtMs - Date.now() <= marginSeconds * 1000;
+    }
+
+    /**
+     * Arms (or re-arms) the soft and hard connection-ceiling timers for the current transport socket.
+     * - Soft timer opens the turn-boundary window before `CallDurationSeconds`.
+     * - Hard timer fires at `CallDurationSeconds - ReconnectBufferSeconds` and forces a reconnect; while the model is
+     *   answering it waits for the turn to end, up to shortly before `CallDurationSeconds`.
+     * Both measure from the connection deadline instead when it comes before `CallDurationSeconds`
+     * ({@link connectionDeadlineAtMs}: the expiry of the credential the connection opened on, on a driver whose
+     * connections close with it).
+     */
+    public ArmConnectionDurationTimer(): void {
+        if (!this.SupportsMidCallReconnect || this.reconnectController.IsDisposed) {
+            return;
+        }
+        this.reconnectController.ArmDurationTimers(
+            this.CallDurationSeconds,
+            this.ReconnectBufferSeconds,
+            DEFAULT_REALTIME_SOFT_RECONNECT_WINDOW_SECONDS,
+            this.connectionDeadlineAtMs()
+        );
+    }
+
+    /** Cancels all reconnect and duration timers when the session is disconnected. */
+    protected DisposeReconnectTimers(): void {
+        this.endReconnectCycle();
+        this.reconnectController.InvalidateHandle();
+        this.reconnectController.Dispose();
+    }
+
+    /** A reconnect cycle ended (it succeeded or failed, or the session closed): the next one starts afresh. */
+    private endReconnectCycle(): void {
+        this.stopWatchingNetworkOnline();
+        this.refreshedInActiveCycle = false;
+    }
+
+    /** Lets a reconnect waiting out a retry delay try again as soon as the browser says the network is back. */
+    private readonly onNetworkOnline = (): void => {
+        this.reconnectController.NotifyNetworkOnline();
+    };
+    private watchingNetworkOnline = false;
+
+    /**
+     * Returns whether the host environment reports a live network interface (`navigator.onLine !== false`).
+     * Overridable by subclasses and tests so offline retry attempts do not invalidate a resumable provider handle.
+     */
+    protected isHostNetworkOnline(): boolean {
+        const nav = (globalThis as { navigator?: { onLine?: boolean } }).navigator;
+        return nav?.onLine !== false;
+    }
+
+    /**
+     * Listens for the browser's `online` event while a reconnect runs. Outside a browser (a Node host or test) there is
+     * no `window`, and the retry schedule alone drives the attempts. `online` only says a network interface is up, not
+     * that the provider is reachable, so it starts one attempt early and never replaces the schedule.
+     */
+    private startWatchingNetworkOnline(): void {
+        if (this.watchingNetworkOnline || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+            return;
+        }
+        window.addEventListener('online', this.onNetworkOnline);
+        this.watchingNetworkOnline = true;
+    }
+
+    private stopWatchingNetworkOnline(): void {
+        if (!this.watchingNetworkOnline) {
+            return;
+        }
+        window.removeEventListener('online', this.onNetworkOnline);
+        this.watchingNetworkOnline = false;
+    }
+
+    /**
+     * Schedules a turn-boundary reconnect (e.g. on a provider `GoAway` frame).
+     * Runs immediately if the session is idle at a turn boundary, or defers until the active turn ends.
+     */
+    public NotifyConnectionEnding(timeLeftMs?: number): void {
+        this.reconnectController.ConnectionEnding(timeLeftMs);
+    }
+
+    protected isTurnActiveForReconnect(): boolean {
+        return (
+            this.reconnectController.IsTurnOpen ||
+            this.IsBusy ||
+            this.IsAudioPlaying ||
+            this.isUserSpeaking() ||
+            this.inFlightToolCallIds.size > 0
+        );
+    }
+
+    /** Whether the mic meter hears the user right now (always `false` when the driver attached no input meter). */
+    protected isUserSpeaking(): boolean {
+        return (
+            this.inputAudioMeter !== null &&
+            (this.inputAudioMeter.Level() ?? 0) >= DEFAULT_USER_SPEECH_ACTIVE_LEVEL_THRESHOLD
+        );
+    }
+
+    /**
+     * Whether the user said something the current connection has not answered yet, with no turn open for it. The
+     * hard-point move then waits as it does for an open turn, until shortly before the provider limit. `false` here: a
+     * driver whose provider opens the turn only once the answer starts overrides it, and calls
+     * `reconnectController.NotifyIdleStateChanged()` when the hold ends without a turn.
+     */
+    protected holdsHardReconnectPoint(): boolean {
+        return false;
+    }
+
+    private wasSpeaking = false;
+    private toolResultSentWhileSpeaking = false;
+    /** The last state emitted to the host; see {@link StateToRestoreOnOldConnection}. */
+    private lastEmittedState: RealtimeClientState | null = null;
+
+    /**
+     * Initiates an in-place reconnect that retries through its recovery window (`REALTIME_RESUMPTION_RECOVERY_WINDOW_MS`,
+     * counted from the old connection's end for a planned move), with the rapid-reconnect circuit breaker and Attempt-2
+     * fallback from native handle to history seeding.
+     */
+    public TriggerReconnect(reason: RealtimeReconnectReason): Promise<boolean> {
+        return this.reconnectController.TriggerReconnect(reason);
+    }
+
+    /**
+     * The attempt's preparation step, timed by the controller apart from the transport attempt: refreshes the
+     * credential when this cycle has not refreshed yet and the reconnect needs it. The first attempt of a cycle
+     * refreshes only when the token is single-use, near expiry or spent; a retry always refreshes once. A spent or
+     * nearly expired credential is re-minted even after this cycle's refresh: a cycle can retry through an outage for
+     * tens of seconds (a planned move's, back on its old connection between attempts, for that connection's remaining
+     * life), and its failed attempts spend uses too.
+     *
+     * The attempt waits for the refresh only when it cannot connect without one ({@link reconnectWaitsForCredential}).
+     * A retry's refresh on a still-valid, reusable credential runs in the background and serves the attempts after it:
+     * a refresh request that never returns (sent into a dead HTTP/2 connection during the outage) must not hold every
+     * attempt of the cycle at its preparation timeout while the credential in hand still works.
+     */
+    private prepareClientReconnectAttempt(attempt: number): Promise<void> {
+        if (!this.tokenRefreshCallback) {
+            return Promise.resolve();
+        }
+        const alreadyRefreshed = this.refreshedInActiveCycle && !this.isCredentialSpent() && !this.isCredentialNearExpiry();
+        if (alreadyRefreshed || !this.reconnectNeedsCredentialRefresh(attempt)) {
+            return Promise.resolve();
+        }
+        const refresh = this.joinOrStartReconnectRefresh();
+        if (this.reconnectWaitsForCredential()) {
+            return refresh;
+        }
+        refresh.catch((err: unknown) => {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] background credential refresh for attempt ${attempt} failed: ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+        });
+        return Promise.resolve();
+    }
+
+    /**
+     * The refresh in flight when it is young enough to join, else a new one. The attempt that started a refresh times
+     * out at its preparation limit, and the next attempt starts within a retry delay of that, so it still joins: a slow
+     * server gets about two preparation limits to answer, and is not asked twice (F5). Any later attempt sends a new
+     * request, so one that never returns costs the cycle two attempts, not all of them.
+     */
+    private joinOrStartReconnectRefresh(): Promise<void> {
+        const inFlight = this.reconnectCredentialRefresh;
+        if (inFlight && Date.now() - inFlight.StartedAtMs < SHARED_REFRESH_MAX_JOIN_AGE_MS) {
+            return inFlight.Promise;
+        }
+        if (inFlight) {
+            RealtimeDiagLog(
+                `[${this.constructor.name}] the credential refresh in flight for ${Date.now() - inFlight.StartedAtMs} ms has not returned; sending a new one`
+            );
+        }
+        const entry = {
+            Promise: this.refreshCredentialBeforeReconnect().finally(() => {
+                if (this.reconnectCredentialRefresh === entry) {
+                    this.reconnectCredentialRefresh = null;
+                }
+            }),
+            StartedAtMs: Date.now(),
+        };
+        this.reconnectCredentialRefresh = entry;
+        return entry.Promise;
+    }
+
+    /**
+     * Whether an attempt cannot connect without a fresh credential: the token is single-use, spent, or within a minute
+     * of expiry. Otherwise the credential in hand still opens a connection, and a refresh is only an improvement.
+     */
+    private reconnectWaitsForCredential(): boolean {
+        return this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry() || this.isCredentialSpent();
+    }
+
+    private reconnectNeedsCredentialRefresh(attempt: number): boolean {
+        return (
+            this.RequiresFreshTokenPerReconnect ||
+            this.isCredentialNearExpiry() ||
+            this.isCredentialSpent() ||
+            attempt > 1
+        );
+    }
+
+    private async refreshCredentialBeforeReconnect(): Promise<void> {
+        try {
+            await this.refreshCredentialForReconnect();
+        } catch (refreshErr) {
+            if (this.RequiresFreshTokenPerReconnect || this.isCredentialNearExpiry(0) || this.isCredentialSpent()) {
+                throw refreshErr instanceof Error ? refreshErr : new Error(String(refreshErr));
+            }
+            RealtimeDiagLog(
+                `[${this.constructor.name}] credential refresh failed during reconnect, continuing with unexpired credential: ${
+                    refreshErr instanceof Error ? refreshErr.message : String(refreshErr)
+                }`
+            );
+            this.recordReconnectRefresh();
+            return;
+        }
+        this.recordReconnectRefresh();
+        // A refresh running in the background can land after its attempt connected on the credential it replaces.
+        this.armMoveBeforeConnectionCredentialExpires();
+    }
+
+    /**
+     * Counts a reconnect's refresh for the cycle running when it lands. One that lands after its cycle ended (a retry's
+     * background refresh, outrun by the retry) counts for no cycle: the next cycle's retry still refreshes.
+     */
+    private recordReconnectRefresh(): void {
+        if (this.IsReconnectCycleActive) {
+            this.refreshedInActiveCycle = true;
+        }
+    }
+
+    private async executeClientReconnectAttempt(context: RealtimeReconnectContext): Promise<void> {
+        const seed = context.ConversationSeed ?? this.conversationMemory.Seed();
+        /** The credential this attempt opens on: the current one, or the one the driver re-mints inside `Reconnect`. */
+        let openedOn = this.currentCredential;
+        const clientContext: RealtimeClientReconnectContext = {
+            Reason: context.Reason,
+            Attempt: context.Attempt,
+            MaxAttempts: context.MaxAttempts,
+            ElapsedConnectionSeconds: context.ElapsedConnectionSeconds,
+            ResumptionHandle: context.ResumptionHandle,
+            UseNativeResumption: context.UseNativeResumption,
+            ConversationSeed: context.ConversationSeed,
+            get Abandoned(): boolean {
+                return context.Abandoned;
+            },
+            Signal: context.Signal,
+            Seed: seed,
+            RefreshCredential: async (options?: RealtimeClientTokenRefreshOptions) => {
+                openedOn = await this.refreshCredentialForReconnect(options);
+                return openedOn;
+            },
+            Credential: openedOn,
+        };
+
+        try {
+            await this.Reconnect(clientContext);
+            // Not `currentCredential`: a scheduled refresh can land while the connection opens on the old token. The
+            // connection then dies with the old token (F14), so it must be tracked against it.
+            this.connectionCredential = openedOn;
+        } finally {
+            // A failed attempt counts too: the provider may have spent the use before it failed. Only a use of the
+            // current credential counts against it; one of a credential a refresh has since replaced does not.
+            if (openedOn === this.currentCredential) {
+                this.connectionsOnCredential++;
+            }
+        }
+    }
+
+    protected onReconnecting(_reason: RealtimeReconnectReason): void {
+        this.emitStateChange('connecting');
+    }
+
+    /**
+     * A planned move's attempt failed while the old connection still carries the call: go back to live on it (state,
+     * held input) until the next attempt, which waits for the next idle boundary or the hard point, and return `true`.
+     * Return `false` when the old connection cannot carry the call any more; the cycle then retries on its schedule.
+     * `IsReconnecting` is already `false` when this runs, so sends go to the old connection. `false` here: a driver
+     * opts in by overriding it. See `RealtimeReconnectControllerOptions.ReturnToOldConnection`.
+     */
+    protected ResumeOnOldConnection(): boolean {
+        return false;
+    }
+
+    /**
+     * The state to report again when {@link ResumeOnOldConnection} goes back to the old connection, or `null` when the
+     * old connection has reported a state of its own since the move started (it keeps delivering events during the
+     * attempt), which is current. `'speaking'` while the turn is open, else `'listening'`: the turn, not the state the
+     * move replaced, says whether the agent is answering, since a driver can leave `'speaking'` without reporting it
+     * (a tool call) and the old connection can start an answer during the attempt. A `'speaking'` report opens a turn,
+     * and one with no answer behind it would hold the next attempt until the last call. `'connected'` is never
+     * reported: a host keeps showing the move for it.
+     */
+    protected get StateToRestoreOnOldConnection(): RealtimeClientState | null {
+        if (this.lastEmittedState !== 'connecting') {
+            return null;
+        }
+        return this.reconnectController.IsTurnOpen ? 'speaking' : 'listening';
+    }
+
+    protected onReconnected(usedNativeResumption: boolean): void {
+        if (!usedNativeResumption && this.inFlightToolCallIds.size > 0) {
+            for (const callID of this.inFlightToolCallIds) {
+                this.callsFromBeforeReseed.add(callID);
+            }
+        }
+        this.ArmConnectionDurationTimer();
+    }
+
+    protected onReconnectFailed(error: Error, code: RealtimeReconnectFailureCode): void {
+        this.emitError({ Message: error.message, Code: code, Fatal: true });
+        this.emitStateChange('error');
+    }
+
+    /**
+     * Re-establishes the underlying provider connection mid-call, either via native session
+     * resumption or by re-seeding from `context.ConversationSeed`. Concrete drivers MUST override this method.
+     */
+    protected Reconnect(_context: RealtimeClientReconnectContext): Promise<void> {
+        return Promise.reject(new Error(`${this.constructor.name} does not implement mid-call Reconnect()`));
+    }
+
+    /** Resolves the tool name recorded when `callID` was emitted, or `fallbackName ?? callID`. */
+    protected resolveToolName(callID: string, fallbackName?: string): string {
+        return fallbackName || this.toolCallNamesById.get(callID) || callID;
+    }
+
+    /**
+     * Whether a tool result's payload requests `SILENT` scheduling (meaning no post-tool model reply is expected).
+     * Subclasses that gate scheduling on model capability (e.g. `GeminiRealtimeClient.supportsScheduling`) can override.
+     */
+    protected isToolResultSilent(outputJson: string): boolean {
+        try {
+            const parsed: unknown = JSON.parse(outputJson);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return false;
+            }
+            const record = parsed as Record<string, unknown>;
+            const raw = record['__mj_scheduling'] ?? record['scheduling'];
+            return typeof raw === 'string' && raw.trim().toUpperCase() === 'SILENT';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Records a completed tool result into {@link conversationMemory} and clears its in-flight guard.
+     * Invoked automatically by the {@link SendToolResult} template method after {@link doSendToolResult} succeeds.
+     */
+    protected recordToolResult(callID: string, outputJson: string, toolName?: string): string {
+        this.inFlightToolCallIds.delete(callID);
+        const resolvedName = toolName ?? this.toolCallNamesById.get(callID) ?? callID;
+        this.toolCallNamesById.delete(callID);
+        if (!this.recordedToolCallIds.has(callID)) {
+            this.recordedToolCallIds.add(callID);
+            this.conversationMemory.Record({
+                Kind: 'toolResult',
+                Name: resolvedName,
+                OutputJson: outputJson,
+            });
+        }
+        if (this.inFlightToolCallIds.size === 0) {
+            const expectsReply = !this.isToolResultSilent(outputJson);
+            if (this.wasSpeaking) {
+                this.toolResultSentWhileSpeaking = expectsReply;
+            }
+            this.reconnectController.ToolResultSent(expectsReply);
+        } else {
+            this.reconnectController.NotifyIdleStateChanged();
+        }
+        return resolvedName;
+    }
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
     /** Emits a track state change to the registered handler (if any). */
@@ -878,19 +1695,70 @@ export abstract class BaseRealtimeClient {
         this.trackHandler?.(track);
     }
 
-    /** Emits a transcript event to the registered handler (if any). */
+    /** Emits a transcript event to the registered handler (if any) and records final normal turns in memory. */
     protected emitTranscript(transcript: RealtimeClientTranscript): void {
+        // Blank text is recorded too: memory ignores it, except that a blank user transcript releases the place
+        // reserved for its item (see RealtimeConversationMemory.ReserveUserTurn), so no empty turn waits in the seed.
+        if (transcript.IsFinal && transcript.Kind === 'normal' && !transcript.IsThought) {
+            if (transcript.Role === 'User') {
+                this.conversationMemory.Record({
+                    Kind: 'user',
+                    Text: transcript.Text,
+                    ReplacesPrevious: transcript.ReplacesPrevious,
+                    ...(transcript.ItemId !== undefined ? { ItemId: transcript.ItemId } : {}),
+                });
+            } else {
+                this.conversationMemory.Record({ Kind: 'assistant', Text: transcript.Text, ReplacesPrevious: transcript.ReplacesPrevious });
+            }
+        }
         this.transcriptHandler?.(transcript);
     }
 
-    /** Emits a tool-call request to the registered handler (if any). */
+    /** Emits a tool-call request to the registered handler (if any) and records it in memory. */
     protected emitToolCall(call: RealtimeClientToolCall): void {
+        this.inFlightToolCallIds.add(call.CallID);
+        this.recordedToolCallIds.delete(call.CallID);
+        this.toolCallNamesById.set(call.CallID, call.ToolName);
+        this.conversationMemory.Record({
+            Kind: 'toolCall',
+            Name: call.ToolName,
+            ArgumentsJson: call.ArgumentsJson,
+        });
         this.toolCallHandler?.(call);
     }
 
-    /** Emits a state change to the registered handler (if any). */
+    /** Emits a state change to the registered handler (if any) and flushes any deferred turn-boundary reconnect. */
     protected emitStateChange(state: RealtimeClientState): void {
+        this.lastEmittedState = state;
+        if (state === 'closed' || state === 'error') {
+            this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
+            this.DisposeReconnectTimers();
+            this.inFlightToolCallIds.clear();
+            this.recordedToolCallIds.clear();
+            this.toolCallNamesById.clear();
+        } else if (state === 'connecting') {
+            this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
+        } else if (state === 'speaking') {
+            this.wasSpeaking = true;
+            this.toolResultSentWhileSpeaking = false;
+            this.reconnectController.TurnStarted();
+        } else if (
+            state === 'listening' &&
+            !this.reconnectController.HasDurationTimersArmed &&
+            !this.reconnectController.IsReconnecting &&
+            !this.reconnectController.IsInSoftWindow
+        ) {
+            this.ArmConnectionDurationTimer();
+        }
         this.stateChangeHandler?.(state);
+        if (state === 'listening') {
+            const keepPostToolTurnWait = this.wasSpeaking && this.toolResultSentWhileSpeaking;
+            this.wasSpeaking = false;
+            this.toolResultSentWhileSpeaking = false;
+            this.reconnectController.TurnEnded(keepPostToolTurnWait);
+        }
     }
 
     /** Emits an error to the registered handler (if any). */

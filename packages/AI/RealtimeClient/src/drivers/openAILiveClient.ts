@@ -1,9 +1,10 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolBatchBarrier } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, MapRealtimeUsageModalityDetail, RealtimeContextNoteOptions, RealtimeToolBatchBarrier, RenderLateToolResultNote, RenderRealtimeMemorySeedAsContextNote } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
     RealtimeClientError,
+    RealtimeClientReconnectContext,
     RealtimeClientState,
     RealtimeClientToolCall,
     RealtimeClientTranscript,
@@ -58,6 +59,11 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     /** The senders carrying the mic tracks, kept so {@link ReplaceMicrophone} can move them to a new track. */
     private micSenders: IRealtimeRtpSender[] = [];
     protected sessionConfig: JSONObject | null = null;
+    private activeConfig: ClientRealtimeSessionConfig | null = null;
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return 3600;
+    }
 
     // ── State Machine ──────────────────────────────────────────────────────────
     private currentState: RealtimeClientState = 'closed';
@@ -114,6 +120,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         _cameraStream?: MediaStream
     ): Promise<void> {
         this.AssertTransportSupported(config);
+        this.ApplySessionConfigTiming(config);
+        this.activeConfig = config;
         this.sessionConfig = config.SessionConfig;
         this.micStream = micStream;
         this.setState('connecting');
@@ -141,6 +149,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         const answerSdp = await this.postSdpOffer(offer.sdp ?? '', config);
         await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
 
+        this.ArmConnectionDurationTimer();
         this.setState('connected');
 
         // Mechanics rule 7: account for 15s session pre-bill
@@ -156,6 +165,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Tears down the connection, data channel, audio tracks, and audio sink.
      */
     public async Disconnect(): Promise<void> {
+        this.DisposeReconnectTimers();
         this.finalizeUserTranscript();
         this.finalizeAssistantTranscript();
 
@@ -190,6 +200,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
         this.clearRemoteMediaStream();
         this.sessionConfig = null;
+        this.activeConfig = null;
         this.responseActive = false;
         this.audioPlaying = false;
         this.pendingNarration = false;
@@ -204,6 +215,152 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         if (this.currentState !== 'error') {
             this.setState('closed');
         }
+    }
+
+    protected override async Reconnect(context: RealtimeClientReconnectContext): Promise<void> {
+        if (!this.activeConfig || !this.micStream) {
+            throw new Error('OpenAILiveClient: cannot reconnect before Connect');
+        }
+        if (context.Abandoned) {
+            throw new Error('OpenAILiveClient: reconnect attempt abandoned');
+        }
+        const refreshedConfig: ClientRealtimeSessionConfig = {
+            ...this.activeConfig,
+            EphemeralToken: context.Credential.EphemeralToken || this.activeConfig.EphemeralToken,
+            ExpiresAt: context.Credential.ExpiresAt || this.activeConfig.ExpiresAt,
+            ...(context.Credential.RelayUrl !== undefined ? { RelayUrl: context.Credential.RelayUrl } : {}),
+            ...(context.Credential.SessionConfig !== undefined ? { SessionConfig: context.Credential.SessionConfig } : {}),
+        };
+        this.activeConfig = refreshedConfig;
+        this.sessionConfig = refreshedConfig.SessionConfig;
+
+        const prevPc = this.peerConnection;
+        const prevDc = this.dataChannel;
+
+        const nextPc = this.createPeerConnection();
+        const nextSenders = this.micStream.getAudioTracks().map((track) => nextPc.addTrack(track, this.micStream!));
+        if (!this.remoteAudioEl) {
+            this.remoteAudioEl = this.createAudioSink();
+        }
+        let pendingRemoteStream: MediaStream | null = null;
+        nextPc.ontrack = (e: RTCTrackEvent) => {
+            if (context.Abandoned || !e.streams[0]) {
+                return;
+            }
+            if (this.peerConnection === nextPc && this.remoteAudioEl) {
+                this.remoteAudioEl.srcObject = e.streams[0];
+                this.publishRemoteMediaStream(e.streams[0]);
+                this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
+            } else {
+                pendingRemoteStream = e.streams[0];
+            }
+        };
+
+        const nextDc = nextPc.createDataChannel('oai-events');
+        let openDc: (() => void) | null = null;
+        let failDc: ((error: Error) => void) | null = null;
+        const dcOpened = new Promise<void>((resolve, reject) => {
+            openDc = resolve;
+            failDc = reject;
+        });
+        dcOpened.catch(() => undefined);
+
+        const onAbort = () => {
+            failDc?.(new Error('OpenAILiveClient: reconnect attempt aborted'));
+            try { nextDc.close(); } catch { /* ignore */ }
+            try { nextPc.close(); } catch { /* ignore */ }
+        };
+        if (context.Signal.aborted) {
+            onAbort();
+            throw new Error('OpenAILiveClient: reconnect attempt aborted');
+        }
+        context.Signal.addEventListener('abort', onAbort, { once: true });
+
+        nextDc.onopen = () => {
+            openDc?.();
+            if (this.dataChannel === nextDc) {
+                this.flushOutboundQueue();
+            }
+        };
+        nextDc.onmessage = (e: MessageEvent) => {
+            if (this.dataChannel === nextDc) {
+                this.handleDataChannelMessage(String(e.data));
+            }
+        };
+        nextDc.onerror = (e: Event) => {
+            failDc?.(new Error(`OpenAI Live data channel error: ${String(e)}`));
+            this.handleChannelError(nextDc, e);
+        };
+        nextDc.onclose = () => {
+            failDc?.(new Error('OpenAI Live data channel closed during reconnect'));
+            this.handleChannelClose(nextDc);
+        };
+
+        try {
+            const offer = await nextPc.createOffer();
+            await nextPc.setLocalDescription(offer);
+            await this.waitForIceGatheringComplete(nextPc);
+            if (context.Abandoned) {
+                throw new Error('OpenAILiveClient: reconnect attempt abandoned before SDP exchange');
+            }
+            const answerSdp = await this.postSdpOffer(offer.sdp ?? '', refreshedConfig);
+            await nextPc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+            if (nextDc.readyState !== 'open') {
+                await dcOpened;
+            }
+            if (context.Abandoned) {
+                throw new Error('OpenAILiveClient: reconnect attempt abandoned after open');
+            }
+        } catch (err) {
+            nextDc.onopen = null;
+            nextDc.onmessage = null;
+            nextDc.onerror = null;
+            nextDc.onclose = null;
+            nextPc.ontrack = null;
+            try { nextDc.close(); } catch { /* ignore */ }
+            try { nextPc.close(); } catch { /* ignore */ }
+            throw err;
+        } finally {
+            context.Signal.removeEventListener('abort', onAbort);
+        }
+
+        if (prevDc) {
+            prevDc.onopen = null;
+            prevDc.onmessage = null;
+            prevDc.onerror = null;
+            prevDc.onclose = null;
+        }
+        if (prevPc) {
+            prevPc.ontrack = null;
+        }
+
+        this.peerConnection = nextPc;
+        this.dataChannel = nextDc;
+        this.micSenders = nextSenders;
+        if (pendingRemoteStream && this.remoteAudioEl) {
+            this.remoteAudioEl.srcObject = pendingRemoteStream;
+            this.publishRemoteMediaStream(pendingRemoteStream);
+            this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(pendingRemoteStream));
+            pendingRemoteStream = null;
+        }
+        this.responseActive = false;
+        this.audioPlaying = false;
+
+        try { prevDc?.close(); } catch { /* already closed */ }
+        try { prevPc?.close(); } catch { /* already closed */ }
+
+        if (context.ConversationSeed && context.ConversationSeed.Entries.length > 0) {
+            const note = RenderRealtimeMemorySeedAsContextNote(context.ConversationSeed);
+            if (note) {
+                this.sendDataChannelFrame({
+                    type: 'session.thinking.append',
+                    content: note,
+                    delegation_id: null,
+                });
+            }
+        }
+        this.flushOutboundQueue();
+        this.reportListeningAfterMove();
     }
 
     /**
@@ -257,7 +414,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Injects background context without triggering model speech.
      * Uses `session.thinking.append` with `content` parameter and `delegation_id: null`.
      */
-    public SendContextNote(text: string): void {
+    public SendContextNote(text: string, options?: RealtimeContextNoteOptions): void {
+        this.ConversationMemory.Record({ Kind: 'note', Text: text, ...options });
         this.sendDataChannelFrame({
             type: 'session.thinking.append',
             content: text,
@@ -269,11 +427,24 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Requests a brief interim narration utterance during delegated background work.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same commentary trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: the instructions ride a
+     * commentary frame and a `response.create` follows unless a tool batch holds it. Skipped while a
+     * response is in flight (the collision rule); `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (this.responseActive || this.audioPlaying) {
-            // Collision rule: narration is disposable; skip when response is in flight
             return;
         }
-        this.pendingNarration = true;
+        this.pendingNarration = kind === 'narration';
         this.sendDataChannelFrame({
             type: 'session.commentary.append',
             content: instructions,
@@ -291,7 +462,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * OpenAI Live remote reasoning plane requires response.item.create followed by response.create.
      * Client delegation plane uses session.commentary.append with the delegation_id.
      */
-    public SendToolResult(callID: string, outputJson: string): void {
+    protected override doSendToolResult(callID: string, outputJson: string): boolean | void {
+        const name = this.resolveToolName(callID);
         if (this.clientDelegationCallIds.has(callID)) {
             this.clientDelegationCallIds.delete(callID);
             this.sendDataChannelFrame({
@@ -299,6 +471,19 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 content: outputJson,
                 delegation_id: callID,
             });
+            return;
+        }
+
+        if (this.callsFromBeforeReseed.delete(callID)) {
+            this.sendDataChannelFrame({
+                type: 'session.commentary.append',
+                content: RenderLateToolResultNote(name, outputJson),
+                delegation_id: null,
+            });
+            if (this.toolBatchBarrier.RecordResult(callID)) {
+                this.emittedToolCallIds.clear();
+                this.sendDataChannelFrame({ type: 'response.create' });
+            }
             return;
         }
 
@@ -431,6 +616,16 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
     }
 
+    /**
+     * Reports the call live on the new connection. The host was told `'connecting'` when the move started, but this
+     * driver's own state was left as it was (an `error` frame during the move must not read the call as inactive), so
+     * {@link setState} would skip `'listening'` when the move started from it.
+     */
+    private reportListeningAfterMove(): void {
+        this.currentState = 'listening';
+        this.emitStateChange('listening');
+    }
+
     private attachMicrophone(pc: IRealtimePeerConnection, micStream: MediaStream): void {
         this.micSenders = micStream.getAudioTracks().map((track) => pc.addTrack(track, micStream));
     }
@@ -478,16 +673,34 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.handleDataChannelMessage(String(e.data));
         };
 
-        channel.onerror = (e: Event) => {
-            this.emitError({ Message: `Data channel error: ${String(e)}`, Fatal: true });
-            this.setState('error');
-        };
+        channel.onerror = (e: Event) => this.handleChannelError(channel, e);
+        channel.onclose = () => this.handleChannelClose(channel);
+    }
 
-        channel.onclose = () => {
-            if (this.currentState !== 'error') {
-                this.setState('closed');
-            }
-        };
+    /**
+     * A data-channel error, shared by the first connection's channel and each reconnect's. Ignored for a channel that
+     * is no longer current, and while a move is in flight: the move owns the outcome then (it either swaps to the new
+     * channel or fails through the base reconnect path), so the old channel dying must not end the call. Otherwise
+     * it is fatal.
+     */
+    private handleChannelError(channel: IRealtimeDataChannel, e: Event): void {
+        if (this.dataChannel !== channel || this.IsReconnecting) {
+            return;
+        }
+        this.emitError({ Message: `OpenAI Live data channel error: ${String(e)}`, Fatal: true });
+        this.setState('error');
+    }
+
+    /**
+     * A data-channel close the consumer did not ask for. Disconnect and the swap drop the channel before closing it,
+     * so the identity check filters both; a close during a move is the move's to handle (see
+     * {@link handleChannelError}). Otherwise the session ends as `'closed'`.
+     */
+    private handleChannelClose(channel: IRealtimeDataChannel): void {
+        if (this.dataChannel !== channel || this.IsReconnecting || this.currentState === 'error') {
+            return;
+        }
+        this.setState('closed');
     }
 
     private finalizeAssistantTranscript(): void {
@@ -628,10 +841,15 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         const duration = seconds !== undefined ? Math.max(OpenAILiveClient.PREBILL_DURATION_SECONDS, seconds) : this.totalDurationSeconds;
         this.totalDurationSeconds = duration;
 
+        // The per-modality split is per response, like the token totals; only the completed response carries it.
+        const inputDetails = MapRealtimeUsageModalityDetail(usage?.['input_token_details']);
+        const outputDetails = MapRealtimeUsageModalityDetail(usage?.['output_token_details']);
         this.emitUsage({
             InputTokens: typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0,
             OutputTokens: typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0,
             DurationSeconds: duration,
+            ...(inputDetails ? { InputTokenDetails: inputDetails } : {}),
+            ...(outputDetails ? { OutputTokenDetails: outputDetails } : {}),
             Raw: usage,
         });
     }

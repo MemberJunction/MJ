@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
+import { Component } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import { MarkdownComponent } from './markdown.component';
+import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
+import { MarkdownModule } from '../markdown.module';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -146,6 +148,229 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('image clicks', () => {
+    const SRC = 'https://api.example.test/media/F1?token=t';
+
+    async function renderImages(markdown: string, listen: boolean) {
+      const f = render({ data: '' });
+      const events = listen ? capture<ImageClickedEventArgs>(f.componentInstance.ImageClicked) : [];
+      f.componentRef.setInput('data', markdown);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      return { img: container(f).querySelector('img') as HTMLImageElement, events };
+    }
+
+    it('reports a clicked image to a host that listens, and marks it zoomable and focusable', async () => {
+      const { img, events } = await renderImages(`![Pattern 5](${SRC})`, true);
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(true);
+      expect(img.tabIndex).toBe(0);
+      expect(img.getAttribute('role')).toBe('button');
+      img.click();
+      expect(events).toEqual([{ Src: SRC, Alt: 'Pattern 5' }]);
+    });
+
+    it('leaves a decorative image alone (a mention badge avatar) and still wires a real one beside it', async () => {
+      const { img: avatar, events } = await renderImages(
+        `<span class="mention-badge"><img src="${SRC}a" alt="" role="presentation" />Sage</span> drew ![Chart](${SRC})`, true);
+      const chart = avatar.closest('.mj-markdown-container')!.querySelectorAll('img')[1] as HTMLImageElement;
+      expect(avatar.getAttribute('role')).toBe('presentation');
+      expect(avatar.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      expect(avatar.hasAttribute('tabindex')).toBe(false);
+      avatar.click();
+      expect(events).toEqual([]);
+      chart.click();
+      expect(events).toEqual([{ Src: SRC, Alt: 'Chart' }]);
+    });
+
+    it('reports Enter and Space on a focused image, and no other key', async () => {
+      const { img, events } = await renderImages(`![Pattern 5](${SRC})`, true);
+      for (const key of ['Enter', ' ', 'a', 'Tab']) img.dispatchEvent(new KeyboardEvent('keydown', { key, cancelable: true }));
+      expect(events).toHaveLength(2);
+    });
+
+    it('leaves images inert when no host listens', async () => {
+      const { img } = await renderImages(`![Pattern 5](${SRC})`, false);
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      expect(img.hasAttribute('tabindex')).toBe(false);
+    });
+
+    it('reports each click once when a template binds the output and the data is there from the start', async () => {
+      // The real wiring (message-item): post-render runs from ngAfterViewInit AND the render microtask.
+      @Component({
+        // Standalone, importing the module: the package build (ngc) compiles this file too, and a
+        // module-declared host would be unknown to it outside TestBed.
+        standalone: true,
+        imports: [MarkdownModule],
+        template: `<mj-markdown [data]="Md" (ImageClicked)="Events.push($event)"></mj-markdown>`,
+      })
+      class HostComponent {
+        Md = `![Pattern 5](${SRC})`;
+        Events: ImageClickedEventArgs[] = [];
+      }
+      TestBed.configureTestingModule({ imports: [HostComponent] });
+      const f = TestBed.createComponent(HostComponent);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      (f.nativeElement.querySelector('img') as HTMLImageElement).click();
+      expect(f.componentInstance.Events).toEqual([{ Src: SRC, Alt: 'Pattern 5' }]);
+
+      // New data, new images: they are wired too.
+      f.componentInstance.Md = `Then ![Pattern 6](${SRC}6)`;
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      f.componentInstance.Events.length = 0;
+      (f.nativeElement.querySelector('img') as HTMLImageElement).click();
+      expect(f.componentInstance.Events).toEqual([{ Src: `${SRC}6`, Alt: 'Pattern 6' }]);
+    });
+
+    it('leaves an image inside a link to that link', async () => {
+      const { img, events } = await renderImages(`[![Pattern 5](${SRC})](https://example.test/page)`, true);
+      expect(img.closest('a')).not.toBeNull();
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      img.click();
+      expect(events).toEqual([]);
+    });
+  });
+
+  describe('OpenLinksInNewTab', () => {
+    const SAMPLE_MARKDOWN =
+      'You can access the invoices site directly at https://invoices.example.com/.\n' +
+      'Most of your billing and invoice needs can be managed through your online account via the [Member Portal](https://portal.example.com/account).';
+
+    it('leaves links in the current tab by default (OpenLinksInNewTab=false)', () => {
+      const f = render({ data: SAMPLE_MARKDOWN });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.hasAttribute('target')).toBe(false);
+      }
+    });
+
+    it('stamps target="_blank" and rel="noopener noreferrer" on both bare autolinks and markdown links when OpenLinksInNewTab=true', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('href')).toBe('https://invoices.example.com/');
+      expect(links[0].getAttribute('target')).toBe('_blank');
+      expect(links[0].getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[1].textContent).toBe('Member Portal');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('leaves in-page fragment links (#section) and mailto:/tel:/sms: links in the current tab even when OpenLinksInNewTab=true', () => {
+      const f = render({
+        data:
+          'Jump to [Overview](#overview), email billing@example.com or [Support](mailto:support@example.com), ' +
+          'call [Help Desk](tel:+15550100), or visit [Portal](https://portal.example.com/account).',
+        OpenLinksInNewTab: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(5);
+      expect(links[0].getAttribute('href')).toBe('#overview');
+      expect(links[0].hasAttribute('target')).toBe(false);
+      expect(links[1].getAttribute('href')).toBe('mailto:billing@example.com');
+      expect(links[1].hasAttribute('target')).toBe(false);
+      expect(links[2].getAttribute('href')).toBe('mailto:support@example.com');
+      expect(links[2].hasAttribute('target')).toBe(false);
+      expect(links[3].getAttribute('href')).toBe('tel:+15550100');
+      expect(links[3].hasAttribute('target')).toBe(false);
+      expect(links[4].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[4].getAttribute('target')).toBe('_blank');
+      expect(links[4].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('preserves an explicit target on raw HTML links and merges noopener noreferrer into existing rel attributes', () => {
+      const f = render({
+        data:
+          '<a href="https://example.com/same" target="_self">Same</a> ' +
+          '<a href="https://example.com/ext" rel="nofollow">Ext</a>',
+        OpenLinksInNewTab: true,
+        enableHtml: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('target')).toBe('_self');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('nofollow noopener noreferrer');
+    });
+
+    it('works when enableSvgRenderer is false (Angular sanitizer path)', () => {
+      const f = render({
+        data: SAMPLE_MARKDOWN,
+        OpenLinksInNewTab: true,
+        enableSvgRenderer: false,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      }
+    });
+
+    it('updates rendered links when OpenLinksInNewTab changes dynamically', async () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: false });
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+
+      f.componentRef.setInput('OpenLinksInNewTab', true);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.getAttribute('target')).toBe('_blank');
+      expect(container(f).querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+
+      f.componentRef.setInput('OpenLinksInNewTab', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+    });
+
+    it('dispatches click events with target="_blank" and rel="noopener noreferrer" when clicking rendered links', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const root = container(f);
+      const clickedLinks: Array<{ href: string | null; target: string; rel: string; defaultPrevented: boolean }> = [];
+
+      root.addEventListener('click', (event: MouseEvent) => {
+        const anchor = (event.target as HTMLElement | null)?.closest('a');
+        if (anchor) {
+          event.preventDefault();
+          clickedLinks.push({
+            href: anchor.getAttribute('href'),
+            target: anchor.target,
+            rel: anchor.rel,
+            defaultPrevented: event.defaultPrevented,
+          });
+        }
+      });
+
+      const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      links[0].click();
+      links[1].click();
+
+      expect(clickedLinks).toEqual([
+        {
+          href: 'https://invoices.example.com/',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+        {
+          href: 'https://portal.example.com/account',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+      ]);
+    });
+  });
+
   /**
    * Sanitization, as seen through the component. With `enableHtml` or the default
    * `enableSvgRenderer`, Angular's sanitizer is bypassed and the HTML the service returns
@@ -282,5 +507,283 @@ describe('MarkdownComponent (DOM)', () => {
       const c = container(render({ data: 'text <img src="x" onerror="alert(1)">', enableSvgRenderer: false }));
       expect(attributeNamesIn(c).some((n) => n.startsWith('on'))).toBe(false);
     });
+
+    it('upgrades an embedded svg[data-mj-diagram="1"] in the middle of a conversation message into an interactive diagram viewer', async () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" data-mj-diagram="1" data-diagram-kind="workflow">' +
+        '<desc id="mj-diagram-meta">{"version":"1","kind":"workflow","title":"Renewal Flow","lanes":{"member":"Member"}}</desc>' +
+        '<defs><marker id="m1-mk-line"><path d="M0 0L8 4L0 8Z"/></marker></defs>' +
+        '<g class="lanes"><g class="lane" data-lane-id="member"><rect x="20" y="20" width="700" height="120"/></g></g>' +
+        '<g class="edges"><g class="edge" data-edge-id="e1" data-edge-from="n1" data-edge-to="n2" data-main-path="true"><path d="M200 80H400" marker-end="url(#m1-mk-line)"/></g></g>' +
+        '<g class="nodes">' +
+        '<g class="node" data-node-id="n1" data-node-kind="start" data-lane="member" data-label="Start"><rect x="60" y="54" width="140" height="52"/><text class="lbl">Start</text></g>' +
+        '<g class="node" data-node-id="n2" data-node-kind="end" data-lane="member" data-label="Finish"><rect x="400" y="54" width="140" height="52"/><text class="lbl">Finish</text></g>' +
+        '</g></svg>';
+      const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
+      const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      expect(c.querySelector('.mjd-toolbar')).toBeNull();
+      expect(c.querySelector('.mjd-stage')).not.toBeNull();
+      expect(c.querySelector('.mjd-panel')).not.toBeNull();
+      expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
+
+    it('renders a ```mj-diagram JSON fence into an interactive diagram viewer with intact CSS custom properties', async () => {
+      const spec = JSON.stringify({
+        kind: 'lifecycle',
+        title: 'Invoice Lifecycle',
+        lanes: [{ id: 'billing', label: 'Billing' }],
+        nodes: [
+          { id: 'draft', lane: 'billing', kind: 'start', label: 'Draft' },
+          { id: 'paid', lane: 'billing', kind: 'success', label: 'Paid' },
+        ],
+        edges: [{ from: 'draft', to: 'paid', label: 'Pay', role: 'emphasis' }],
+      });
+      const markdownMessage = `Here is the lifecycle:\n\n\`\`\`mj-diagram\n${spec}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true, enableSmartypants: true });
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      const c = container(f);
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      const svg = c.querySelector('svg[data-mj-diagram="1"]');
+      expect(svg).not.toBeNull();
+      const styleText = svg?.querySelector('style')?.textContent ?? '';
+      expect(styleText).toContain('--bg:var(--mj-bg-surface,#fff)');
+      expect(styleText).not.toContain('\u2013');
+    });
+
+    it('cancels pending diagram viewer upgrades when destroyed before async post-render processing settles', async () => {
+      const spec = JSON.stringify({
+        kind: 'workflow',
+        title: 'Quick Flow',
+        lanes: [{ id: 'l', label: 'L' }],
+        nodes: [
+          { id: 'a', lane: 'l', label: 'A' },
+          { id: 'b', lane: 'l', label: 'B' },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+      });
+      const comp = render({ data: `\`\`\`mj-diagram\n${spec}\n\`\`\``, enableSvgRenderer: true });
+      const c = container(comp);
+      comp.destroy();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).toBeNull();
+    });
+
+    it('continues post-render processing and mounts inline SVGs when the diagram renderer chunk fails to load', async () => {
+      const inlineSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" data-mj-diagram="1">' +
+        '<g class="nodes"><g class="node" data-node-id="n1" data-label="Step 1"><rect x="10" y="10" width="80" height="40"/></g></g>' +
+        '</svg>';
+      const markdownMessage = `\`\`\`mj-diagram\n{"kind":"workflow"}\n\`\`\`\n\n\`\`\`svg\n${inlineSvg}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(f.componentInstance, 'LoadDiagramRenderer').mockRejectedValueOnce(new Error('ChunkLoadError'));
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      warnSpy.mockRestore();
+
+      const c = container(f);
+      expect(c.querySelector('code.language-mj-diagram')).not.toBeNull();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+    });
+
+    it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
+      const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
+      expect(c.querySelector('[style]')).toBeNull();
+    });
+  });
+
+  describe('incremental block-tail streaming rendering', () => {
+    it('monotonic streaming append reuses cached prefix DOM nodes without tearing down completed elements', () => {
+      const f = render({ data: '# Title\n\nParagraph 1' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+      expect(h1Ref).not.toBeNull();
+      expect(h1Ref?.textContent).toContain('Title');
+
+      // Append Paragraph 2: Paragraph 1 graduates into the stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical across chunks
+      const p1Ref = c.querySelectorAll('p')[0];
+      expect(p1Ref).not.toBeNull();
+      expect(p1Ref.textContent).toContain('Paragraph 1');
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2');
+
+      // Append more text to Paragraph 2 (updating active mutable tail)
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 still strictly === identical
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Paragraph 2 is still streaming');
+
+      // Append code block: Paragraph 2 graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Still strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Still strictly === identical
+      const p2Ref = c.querySelectorAll('p')[1];
+      expect(c.querySelector('pre code')?.textContent).toContain('const x = 1;');
+
+      // Append trailing conclusion: Code block graduates into stable prefix
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      const preRef = c.querySelector('pre');
+      expect(preRef).not.toBeNull();
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion');
+
+      // Stream more tokens into conclusion: Pre/code block stays strictly === identical
+      f.componentRef.setInput('data', '# Title\n\nParagraph 1\n\nParagraph 2 is still streaming...\n\n```ts\nconst x = 1;\n```\n\nConclusion is continuing to stream.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref); // Title h1 strictly === identical
+      expect(c.querySelectorAll('p')[0]).toBe(p1Ref); // Paragraph 1 strictly === identical
+      expect(c.querySelectorAll('p')[1]).toBe(p2Ref); // Paragraph 2 strictly === identical
+      expect(c.querySelector('pre')).toBe(preRef); // Pre/code block strictly === identical
+      expect(c.querySelectorAll('p')[2]?.textContent).toContain('Conclusion is continuing to stream');
+    });
+
+    it('open fenced code blocks across multiple chunks render accurately without premature splitting on blank lines inside the fence', () => {
+      const f = render({ data: '# Section\n\nIntroduction text.' });
+      const c = container(f);
+
+      const h1Ref = c.querySelector('h1');
+
+      // Chunk 1: Open fence with initial line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      const pIntroRef = c.querySelector('p');
+      expect(pIntroRef).not.toBeNull();
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;');
+
+      // Chunk 2: Blank line inside the open code block followed by another line
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Intro paragraph stays strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+
+      // Chunk 3: Closing the fence and appending trailing prose
+      f.componentRef.setInput('data', '# Section\n\nIntroduction text.\n\n```ts\nconst a = 1;\n\nconst b = 2;\n```\n\nTrailing paragraph.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')).toBe(h1Ref);
+      expect(c.querySelector('p')).toBe(pIntroRef); // Still strictly === identical
+      expect(c.querySelectorAll('pre code').length).toBe(1);
+      expect(c.querySelector('pre code')?.textContent?.trim()).toBe('const a = 1;\n\nconst b = 2;');
+      expect(c.querySelectorAll('p').length).toBe(2);
+      expect(c.querySelectorAll('p')[1]?.textContent).toContain('Trailing paragraph.');
+    });
+
+    it('reference-style links arriving in a later chunk seamlessly fall back to full render so links resolve correctly', () => {
+      const f = render({ data: 'Read the [documentation][docs] for setup.\n\nMore info here.' });
+      const c = container(f);
+
+      // Initially, [docs] is undefined, so marked leaves it as literal text
+      expect(c.querySelector('a')).toBeNull();
+      expect(c.textContent).toContain('[documentation][docs]');
+
+      // Later chunk introduces the reference link definition
+      f.componentRef.setInput(
+        'data',
+        'Read the [documentation][docs] for setup.\n\nMore info here.\n\n[docs]: https://example.com/docs'
+      );
+      f.detectChanges();
+
+      // Full render fallback resolves the link
+      const link = c.querySelector('a');
+      expect(link).not.toBeNull();
+      expect(link?.getAttribute('href')).toBe('https://example.com/docs');
+      expect(link?.textContent).toBe('documentation');
+    });
+
+    it('non-monotonic text replacement seamlessly falls back to full render', () => {
+      const f = render({ data: '# Original Document\n\nFirst paragraph here.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.textContent).toContain('Original Document');
+
+      // Completely replaced content (not monotonic prefix extension)
+      f.componentRef.setInput('data', '# Replaced Document\n\nCompletely different content.');
+      f.detectChanges();
+
+      expect(c.querySelector('h1')?.textContent).toContain('Replaced Document');
+      expect(c.querySelector('p')?.textContent).toContain('Completely different content.');
+      expect(c.textContent).not.toContain('Original Document');
+    });
+
+    it('duplicate headings seamlessly fall back to full render to preserve unique ID slug suffixes', () => {
+      const f = render({ data: '# Overview\n\nInitial overview.' });
+      const c = container(f);
+      expect(c.querySelector('h1')?.id).toBe('overview');
+
+      // Appending a second heading with the exact same name
+      f.componentRef.setInput('data', '# Overview\n\nInitial overview.\n\n# Overview\n\nSecond overview.');
+      f.detectChanges();
+
+      const headings = c.querySelectorAll('h1');
+      expect(headings.length).toBe(2);
+      expect(headings[0].id).toBe('overview');
+      expect(headings[1].id).toBe('overview-1');
+    });
+
+    it('produces 100% identical HTML output to full render across multi-element streamed documents', async () => {
+      const chunks = [
+        '# Main Title\n\nFirst paragraph introduces the topic.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```',
+        '# Main Title\n\nFirst paragraph introduces the topic.\n\n## Subheading\n\n- item 1\n- item 2\n\n> A thoughtful quote.\n>\n> Second line of quote.\n\n```javascript\nfunction test() {\n  return 42;\n}\n```\n\nFinal conclusion paragraph.',
+      ];
+
+      // Stream sequentially through chunks
+      const streamFixture = render({ data: chunks[0] });
+      for (let i = 1; i < chunks.length; i++) {
+        streamFixture.componentRef.setInput('data', chunks[i]);
+        streamFixture.detectChanges();
+      }
+      // Flush microtasks for postRenderProcessing
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // One-shot full render of the final text using a second component instance
+      const fullFixture = TestBed.createComponent(MarkdownComponent);
+      fullFixture.componentRef.setInput('data', chunks[chunks.length - 1]);
+      fullFixture.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(container(streamFixture).innerHTML.trim()).toBe(container(fullFixture).innerHTML.trim());
+    });
   });
 });
+
+

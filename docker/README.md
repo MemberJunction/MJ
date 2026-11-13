@@ -117,6 +117,8 @@ All variables go in `docker/regression/.env.test` (gitignored). See `.env.test.e
 |----------|----------|---------|
 | `TEST_SA_PASSWORD` | Yes | SQL Server SA password (min 8 chars, requires complexity) |
 | `MJ_BASE_ENCRYPTION_KEY` | Yes | Base64 encryption key (`openssl rand -base64 32`) |
+| `MJ_ARTIFACT_COLLAB_HMAC_SECRET` | Recommended | `>= 32`-char HMAC secret for Yjs collaboration WebSocket tickets (`openssl rand -hex 32`) |
+| `MJ_FROZEN_BLOCK_HMAC_SECRET` | Recommended | `>= 32`-char HMAC secret for frozen live-block snapshots (`openssl rand -hex 32`) |
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
@@ -299,7 +301,7 @@ Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 work
 ### Regression Troubleshooting
 
 **"Loading workspace..." hangs after login**
-1. Check MJAPI healthcheck: `curl http://localhost:14000/healthcheck`
+1. Check MJAPI healthcheck: `curl http://localhost:14000/healthcheck` (a `503` with a `phase` means it is still starting; `/healthcheck/live` answers `200` as soon as the port is bound)
 2. Check nginx proxy: `curl -X POST http://localhost:4200/api/ -H 'Content-Type: application/json' -d '{"query":"{ __schema { queryType { name } } }"}'` (should return 401)
 3. Verify `GRAPHQL_URI` is absolute (`http://localhost:4200/api/`, not `/api/`)
 4. Check nginx config: `docker exec <explorer> cat /etc/nginx/conf.d/default.conf`

@@ -50,6 +50,12 @@ type LabelledVector = { row: StoredVectorRow; labels: Record<string, string> };
 /** Most Entity Record Document IDs named in one `ID IN (...)` filter when fetching VectorJSON. */
 const VECTOR_FETCH_CHUNK_SIZE = 1000;
 
+/** Most record keys named in one view when checking which matched records the caller may read. */
+const READABLE_KEY_CHECK_CHUNK_SIZE = 1000;
+
+/** A match returned by an external vector index's `QueryIndex`. */
+type IndexMatch = { id: string; values?: number[]; metadata?: Record<string, unknown>; score?: number };
+
 /* ───── Resolver ───── */
 
 @Resolver()
@@ -70,15 +76,18 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             }
 
             const limit = maxRecords ?? 1000;
+            // Every read runs on this request's provider.
+            const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? Metadata.Provider;
+            const rv = RunView.FromMetadataProvider(md);
 
             // Step 1: Load the EntityDocument
-            const entityDoc = await this.loadEntityDocument(entityDocumentID, currentUser);
+            const entityDoc = await this.loadEntityDocument(entityDocumentID, currentUser, rv);
             if (!entityDoc) {
                 return this.errorResult(`EntityDocument not found: ${entityDocumentID}`, startTime);
             }
 
             // Step 2: Resolve the VectorIndex
-            const vectorIndex = await this.resolveVectorIndex(entityDoc, currentUser);
+            const vectorIndex = await this.resolveVectorIndex(entityDoc, currentUser, rv);
             if (!vectorIndex) {
                 return this.errorResult(
                     `Could not resolve VectorIndex for EntityDocument "${entityDoc.Name}"`,
@@ -87,7 +96,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             }
 
             // Step 3: Create VectorDB provider instance
-            const vectorDBInstance = await this.createVectorDBInstance(vectorIndex, currentUser);
+            const vectorDBInstance = await this.createVectorDBInstance(vectorIndex, currentUser, rv);
             if (!vectorDBInstance) {
                 return this.errorResult(
                     `Could not create VectorDB provider for index "${vectorIndex.Name}"`,
@@ -100,10 +109,19 @@ export class FetchEntityVectorsResolver extends ResolverBase {
             // document ID rather than the index name, and return matches without vector values.
             // Read the stored Entity Record Document rows instead.
             if (vectorDBInstance.QueryKeyIsEntityDocumentID) {
-                const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? Metadata.Provider;
-                const results = await this.fetchStoredVectors(entityDoc, limit, filter, currentUser, md);
+                const results = await this.fetchStoredVectors(entityDoc, limit, filter, currentUser, md, rv);
                 LogStatus(`FetchEntityVectors: Loaded ${results.length} stored vectors for entity "${entityDoc.Entity}" in ${Date.now() - startTime}ms`);
                 return { Success: true, Results: results, TotalCount: results.length, ElapsedMs: Date.now() - startTime };
+            }
+
+            // The external index was built under whoever ran the sync and is not filtered for this
+            // caller, so check here that they may read the source entity at all.
+            const entityInfo = this.readableEntity(entityDoc.Entity, currentUser, md);
+            if (!entityInfo) {
+                return this.errorResult(
+                    `Entity "${entityDoc.Entity}" does not exist or you do not have permission to read it`,
+                    startTime
+                );
             }
 
             // Step 4: Query with zero vector + Entity metadata filter.
@@ -136,12 +154,15 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 );
             }
 
-            // Step 5: Convert query matches to result format
-            const matches = (queryResponse.data as { matches?: Array<{ id: string; values?: number[]; metadata?: Record<string, unknown>; score?: number }> }).matches ?? [];
+            // Step 5: Keep only matches for records this caller may read (the index is not filtered
+            // by row-level security), then convert them without the fields this caller may not read
+            const allMatches = (queryResponse.data as { matches?: IndexMatch[] }).matches ?? [];
+            const matches = await this.readableMatches(entityInfo, allMatches, currentUser, rv);
+            const denied = entityInfo.GetDeniedReadFields(currentUser);
             const results: EntityVectorItem[] = matches.map(match => ({
                 ID: match.id,
                 Values: match.values ?? [],
-                Metadata: JSON.stringify(match.metadata ?? {}),
+                Metadata: JSON.stringify(this.withoutDeniedFields(match.metadata ?? {}, denied)),
             }));
             LogStatus(`FetchEntityVectors: Queried ${results.length} vectors for entity "${entityName}" in ${Date.now() - startTime}ms`);
 
@@ -158,12 +179,100 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         }
     }
 
+    /**
+     * The entity's metadata when `contextUser` may read it, else null — whether it is missing or
+     * unreadable is deliberately not distinguished.
+     */
+    private readableEntity(entityName: string, contextUser: UserInfo, md: IMetadataProvider): EntityInfo | null {
+        const entityInfo = md.EntityByName(entityName);
+        if (!entityInfo) return null;
+        return entityInfo.GetUserPermisions(contextUser)?.CanRead ? entityInfo : null;
+    }
+
+    /**
+     * The matches whose record `contextUser` may read, in their original order. A match is kept only
+     * when its `RecordID` metadata names a key of the entity and a view run as `contextUser` returns
+     * that record; a match without a usable record ID cannot be checked, so it is dropped.
+     */
+    private async readableMatches(entityInfo: EntityInfo, matches: IndexMatch[], contextUser: UserInfo, rv: RunView): Promise<IndexMatch[]> {
+        const keyed = matches
+            .map(match => ({ match, key: this.matchRecordKey(entityInfo, match) }))
+            .filter((m): m is { match: IndexMatch; key: CompositeKey } => m.key !== null);
+        if (keyed.length === 0) return [];
+        const readable = await this.loadReadableKeys(entityInfo, keyed.map(k => k.key), contextUser, rv);
+        return keyed.filter(k => readable.has(this.canonicalKey(k.key))).map(k => k.match);
+    }
+
+    /** The record key a match's `RecordID` metadata names, or null when it names no key of the entity. */
+    private matchRecordKey(entityInfo: EntityInfo, match: IndexMatch): CompositeKey | null {
+        const recordID = match.metadata?.RecordID;
+        if (typeof recordID !== 'string' || recordID.length === 0) return null;
+        try {
+            return CompositeKey.FromRecordID(entityInfo, recordID);
+        } catch {
+            return null; // field names that are not the entity's primary key: never put into SQL
+        }
+    }
+
+    /**
+     * The canonical forms of the keys among `keys` whose record a view run as `contextUser` returns.
+     * The keys are checked in lists of at most {@link READABLE_KEY_CHECK_CHUNK_SIZE}, all sent in one
+     * `RunViews` batch.
+     */
+    private async loadReadableKeys(entityInfo: EntityInfo, keys: CompositeKey[], contextUser: UserInfo, rv: RunView): Promise<Set<string>> {
+        const views: RunViewParams[] = [];
+        for (let i = 0; i < keys.length; i += READABLE_KEY_CHECK_CHUNK_SIZE) {
+            views.push({
+                EntityName: entityInfo.Name,
+                ExtraFilter: this.keyFilter(entityInfo, keys.slice(i, i + READABLE_KEY_CHECK_CHUNK_SIZE)),
+                Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
+                IgnoreMaxRows: true,
+                BypassCache: true, // one-off key lists: a cache slot per call would only hold memory
+                ResultType: 'simple',
+            });
+        }
+        const readable = new Set<string>();
+        const results = await rv.RunViews<Record<string, unknown>>(views, contextUser);
+        for (const result of results) {
+            if (!result.Success) {
+                throw new Error(`Failed to check access to "${entityInfo.Name}" records: ${result.ErrorMessage}`);
+            }
+            for (const row of result.Results) {
+                readable.add(this.canonicalKey(CompositeKey.FromEntityRecord(entityInfo, row)));
+            }
+        }
+        return readable;
+    }
+
+    /** A filter matching exactly `keys`: `PK IN (...)` for a single-column key, one clause per key otherwise. */
+    private keyFilter(entityInfo: EntityInfo, keys: CompositeKey[]): string {
+        if (entityInfo.PrimaryKeys.length === 1) {
+            const values = keys.map(k => `'${EscapeSQLString(String(k.KeyValuePairs[0].Value))}'`).join(',');
+            return `${entityInfo.FirstPrimaryKey.Name} IN (${values})`; // first-pk-ok: single-column key, checked above
+        }
+        return keys.map(k => `(${k.ToWhereClause()})`).join(' OR ');
+    }
+
+    /** A key's field names and values, lower-cased, so keys from the index and from a view compare equal. */
+    private canonicalKey(key: CompositeKey): string {
+        return key.KeyValuePairs.map(kv => `${kv.FieldName.toLowerCase()}|${String(kv.Value).toLowerCase()}`).join('||');
+    }
+
+    /**
+     * A copy of a vector's metadata without the keys naming fields in `denied` (lowercased field
+     * names, as `EntityInfo.GetDeniedReadFields` returns them), compared case-insensitively.
+     */
+    private withoutDeniedFields(metadata: Record<string, unknown>, denied: Set<string>): Record<string, unknown> {
+        if (denied.size === 0) return metadata;
+        return Object.fromEntries(Object.entries(metadata).filter(([key]) => !denied.has(key.toLowerCase())));
+    }
+
     /** Load EntityDocument by ID */
     private async loadEntityDocument(
         entityDocumentID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        rv: RunView
     ): Promise<MJEntityDocumentEntity | null> {
-        const rv = new RunView();
         const result = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
             ExtraFilter: `ID='${EscapeSQLString(entityDocumentID)}'`,
@@ -183,9 +292,9 @@ export class FetchEntityVectorsResolver extends ResolverBase {
      */
     private async resolveVectorIndex(
         entityDoc: MJEntityDocumentEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        rv: RunView
     ): Promise<MJVectorIndexEntity | null> {
-        const rv = new RunView();
 
         // If the EntityDocument has an explicit VectorIndexID, use it directly
         if (entityDoc.VectorIndexID) {
@@ -222,9 +331,9 @@ export class FetchEntityVectorsResolver extends ResolverBase {
     /** Create a VectorDBBase provider instance for a given VectorIndex */
     private async createVectorDBInstance(
         vectorIndex: MJVectorIndexEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        rv: RunView
     ): Promise<VectorDBBase | null> {
-        const rv = new RunView();
         const dbResult = await rv.RunView<MJVectorDatabaseEntity>({
             EntityName: 'MJ: Vector Databases',
             ExtraFilter: `ID='${vectorIndex.VectorDatabaseID}'`,
@@ -258,19 +367,20 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         limit: number,
         filter: string | undefined,
         contextUser: UserInfo,
-        md: IMetadataProvider
+        md: IMetadataProvider,
+        rv: RunView
     ): Promise<EntityVectorItem[]> {
         const entityInfo = md.EntityByName(entityDoc.Entity);
         if (!entityInfo) {
             throw new Error(`Entity "${entityDoc.Entity}" not found in metadata`);
         }
         const nameFields = this.labelFieldNames(entityInfo);
-        const { records, vectors } = await this.loadRecordsAndStoredVectors(entityInfo, entityDoc, nameFields, filter, contextUser);
+        const { records, vectors } = await this.loadRecordsAndStoredVectors(entityInfo, entityDoc, nameFields, filter, contextUser, rv);
         const labelsByRecordID = this.mapRecordLabels(entityInfo, nameFields, records);
 
         // VectorJSON is the heavy column: list without it, then fetch it only for the items returned.
         const chosen = this.selectLabelledVectors(vectors, labelsByRecordID, limit);
-        const valuesByID = await this.loadVectorValues(chosen.map(c => c.row.ID), contextUser);
+        const valuesByID = await this.loadVectorValues(chosen.map(c => c.row.ID), contextUser, rv);
 
         const results: EntityVectorItem[] = [];
         for (const { row, labels } of chosen) {
@@ -305,7 +415,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
      * Fetch `VectorJSON` for the given Entity Record Document IDs, keyed by ID. The ID lists are
      * capped at {@link VECTOR_FETCH_CHUNK_SIZE} per view and all sent in one `RunViews` batch.
      */
-    private async loadVectorValues(ids: string[], contextUser: UserInfo): Promise<Map<string, string>> {
+    private async loadVectorValues(ids: string[], contextUser: UserInfo, rv: RunView): Promise<Map<string, string>> {
         const valuesByID = new Map<string, string>();
         if (ids.length === 0) return valuesByID;
 
@@ -321,7 +431,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
                 ResultType: 'simple',
             });
         }
-        const results = await new RunView().RunViews<{ ID: string; VectorJSON: string | null }>(views, contextUser);
+        const results = await rv.RunViews<{ ID: string; VectorJSON: string | null }>(views, contextUser);
         for (const result of results) {
             if (!result.Success) {
                 throw new Error(`Failed to load vector values: ${result.ErrorMessage}`);
@@ -352,10 +462,11 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         entityDoc: MJEntityDocumentEntity,
         nameFields: string[],
         filter: string | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        rv: RunView
     ): Promise<{ records: Record<string, unknown>[]; vectors: StoredVectorRow[] }> {
         const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
-        const [recordResult, docResult] = await new RunView().RunViews<Record<string, unknown>>([
+        const [recordResult, docResult] = await rv.RunViews<Record<string, unknown>>([
             {
                 EntityName: entityInfo.Name,
                 ExtraFilter: filter || undefined,

@@ -86,6 +86,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         };
         const collectedResults: RecordResult[] | undefined =
             typeof processor.BuildRunSummary === 'function' ? [] : undefined;
+        const logRowsInFlight = new Set<Promise<void>>();
         let cursor = shouldResume ? await tracker.LoadResumeCursor(handle, contextUser, provider) : undefined;
         let total: number | null = null;
         let status: ProcessRunStatusValue = 'Running';
@@ -112,6 +113,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 counts,
                 tally,
                 collectedResults,
+                logRowsInFlight,
                 getCursor: () => cursor,
                 setCursor: (c) => { cursor = c; },
                 getTotal: () => total,
@@ -153,6 +155,10 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             ...(processorSummary?.ResultSummary !== undefined ? { ResultSummary: processorSummary.ResultSummary } : {}),
             ...(processorSummary?.WouldRefuse !== undefined ? { WouldRefuse: processorSummary.WouldRefuse } : {}),
         };
+        // The loop never waits for a record's Action log row (#6045); the run does, once, here. A tracker that
+        // writes a detail per record already waits on it, but one that writes none (NoOpTracker) would otherwise
+        // let Process() return with log writes still queued, and a caller closing its pool would lose them.
+        await Promise.all(logRowsInFlight);
         await tracker.CompleteRun(handle, summary, contextUser, provider);
         return { ...summary, ProcessRunID: handle.ProcessRunID };
     }
@@ -350,6 +356,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                 }
                 this.tallyRecord(result, ctx.tally);
                 ctx.collectedResults?.push(result);
+                this.holdRunForLogRow(result, ctx.logRowsInFlight);
                 await ctx.tracker.RecordResult(ctx.handle, record, result, options.ContextUser, ctx.provider);
             }
             return;
@@ -393,6 +400,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             }
             this.tallyRecord(result, ctx.tally);
             ctx.collectedResults?.push(result);
+            this.holdRunForLogRow(result, ctx.logRowsInFlight);
             await ctx.tracker.RecordResult(ctx.handle, record, result, options.ContextUser, ctx.provider);
         };
 
@@ -413,6 +421,20 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     /** Records the processor was handed: every processed record except those skipped on their watermark. */
     private attemptedOf(counts: RunCounts, tally: RunTally): number {
         return counts.Processed - tally.WatermarkSkipped;
+    }
+
+    /**
+     * Keeps a result's pending Action log row in the run's in-flight set until it settles, so Process() can await
+     * it before CompleteRun without the per-record loop ever waiting. Each entry removes itself, so the set holds
+     * only rows still in flight.
+     */
+    private holdRunForLogRow(result: RecordResult, inFlight: Set<Promise<void>>): void {
+        const persisted = result.ActionExecutionLogPersisted;
+        if (!persisted) {
+            return;
+        }
+        const held: Promise<void> = persisted.then(() => { inFlight.delete(held); }, () => { inFlight.delete(held); });
+        inFlight.add(held);
     }
 
     /** Adds one record's outcome to the run's tally. */
@@ -477,6 +499,8 @@ interface BatchLoopContext {
     counts: RunCounts;
     tally: RunTally;
     collectedResults?: RecordResult[];
+    /** Action log rows the run's results named that have not landed yet; awaited before CompleteRun. */
+    logRowsInFlight: Set<Promise<void>>;
     getCursor: () => ProcessCursor | undefined;
     setCursor: (c: ProcessCursor) => void;
     getTotal: () => number | null;

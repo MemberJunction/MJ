@@ -1,6 +1,6 @@
-import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
 import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
-import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
+import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import type { MJAIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
@@ -107,6 +107,13 @@ export interface GetExamplesParams {
     /** Inject only shared examples (no `UserID`). See {@link GetNotesParams.SharedOnly}. */
     SharedOnly?: boolean;
 }
+
+/** The note fields the injected prompt text is built from; a field the reader may not read is absent. */
+type NoteView = Partial<Pick<MJAIAgentNoteEntity,
+    'Status' | 'Type' | 'Note' | '__mj_CreatedAt' | 'AgentID' | 'UserID' | 'CompanyID' | 'PrimaryScopeRecordID' | 'SecondaryScopes'>>;
+
+/** The example fields the injected prompt text is built from; a field the reader may not read is absent. */
+type ExampleView = Partial<Pick<MJAIAgentExampleEntity, 'ExampleInput' | 'ExampleOutput' | 'SuccessScore'>>;
 
 /** The fields of a note or example the vector pre-filter reads: its user and its multi-tenant scope. */
 type ScopedMemoryFields = Pick<MJAIAgentNoteEntity, 'UserID' | 'PrimaryScopeEntityID' | 'PrimaryScopeRecordID' | 'SecondaryScopes'>;
@@ -373,8 +380,8 @@ export class AgentContextInjector {
     }
 
     /**
-     * In-memory equivalent of the (removed) SQL `buildNotesScopingFilter`: filters the cached AgentNotes to
-     * those matching this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
+     * Filters the cached AgentNotes to the injectable statuses (Active, Provisional) and to those matching
+     * this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
      * dimension (Agent/User/Company) matches the param value OR null when the param is provided, and MUST be
      * null when the param is absent — exactly the union of the 8 priority levels the old SQL filter built.
      * Multi-tenant secondary scoping reuses {@link matchesSecondaryScope} (the same matcher the examples path
@@ -382,7 +389,8 @@ export class AgentContextInjector {
      */
     private filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
         return notes.filter(note => {
-            if (note.Status !== 'Active') {
+            // Same injectable set (Active + Provisional) the semantic path uses, so the two paths agree.
+            if (!IsInjectableNoteStatus(note.Status)) {
                 return false;
             }
             const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
@@ -414,183 +422,6 @@ export class AgentContextInjector {
 
         // Return top N results
         return sorted.slice(0, params.maxExamples);
-    }
-
-    /**
-     * Build filter with 8-level scoping priority for notes.
-     * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
-     * multi-tenant scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
-     */
-    private buildNotesScopingFilter(params: GetNotesParams): string {
-        const filters: string[] = [`Status IN (${InjectableNoteStatusSQLList()})`];
-
-        // Build MJ-internal scoping filter using OR conditions with priority
-        const scopeConditions: string[] = [];
-
-        // Priority 1: AgentID + UserID + CompanyID
-        if (params.agentId && params.userId && params.companyId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 2: AgentID + UserID
-        if (params.agentId && params.userId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID IS NULL)`);
-        }
-
-        // Priority 3: AgentID + CompanyID
-        if (params.agentId && params.companyId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 4: UserID + CompanyID
-        if (params.userId && params.companyId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 5: AgentID only
-        if (params.agentId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID IS NULL)`);
-        }
-
-        // Priority 6: UserID only
-        if (params.userId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID IS NULL)`);
-        }
-
-        // Priority 7: CompanyID only
-        if (params.companyId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 8: Global (all NULL)
-        scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID IS NULL)`);
-
-        if (scopeConditions.length > 0) {
-            filters.push(`(${scopeConditions.join(' OR ')})`);
-        }
-
-        // Add multi-tenant secondary scoping if primary or secondary scopes are provided
-        if (params.primaryScopeRecordId || params.secondaryScopes) {
-            const scopeFilter = this.buildSecondaryScopeFilter(params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
-            filters.push(`(${scopeFilter})`);
-        }
-
-        return filters.join(' AND ');
-    }
-
-    /**
-     * Build filter for multi-tenant secondary scoping with per-dimension inheritance.
-     * Returns notes at all applicable scope levels (global -> primary -> full).
-     *
-     * Inheritance modes per dimension:
-     * - 'cascading': Notes without this dimension match queries with it (broader retrieval)
-     * - 'strict': Notes must exactly match the dimension value
-     */
-    private buildSecondaryScopeFilter(
-        primaryScopeEntityId: string | undefined,
-        primaryScopeRecordId: string | undefined,
-        secondaryScopes: Record<string, SecondaryScopeValue> | undefined,
-        scopeConfig?: SecondaryScopeConfig | null
-    ): string {
-        const conditions: string[] = [];
-
-        // Always include global notes (no scope set at all)
-        conditions.push('(PrimaryScopeRecordID IS NULL AND (SecondaryScopes IS NULL OR SecondaryScopes = \'{}\'))');
-
-        const hasSecondary = secondaryScopes && Object.keys(secondaryScopes).length > 0;
-        const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
-
-        // Build primary scope match clause: both entity ID and record ID must match
-        const primaryMatchClause = primaryScopeEntityId
-            ? `PrimaryScopeEntityID = '${primaryScopeEntityId}' AND PrimaryScopeRecordID = '${primaryScopeRecordId}'`
-            : `PrimaryScopeRecordID = '${primaryScopeRecordId}'`;
-
-        if (primaryScopeRecordId) {
-            // Include primary-scope-only notes (matches org, no secondary scopes)
-            conditions.push(`(
-                ${primaryMatchClause}
-                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
-            )`);
-
-            // Include fully-scoped notes if secondary scopes are provided
-            if (hasSecondary) {
-                const secondaryCondition = this.buildPerDimensionFilter(
-                    secondaryScopes!,
-                    scopeConfig
-                );
-
-                conditions.push(`(
-                    ${primaryMatchClause}
-                    AND ${secondaryCondition}
-                )`);
-            }
-        } else if (allowSecondaryOnly && hasSecondary) {
-            // Secondary-only scoping: no primary required
-            const secondaryCondition = this.buildPerDimensionFilter(
-                secondaryScopes!,
-                scopeConfig
-            );
-
-            conditions.push(`(
-                PrimaryScopeRecordID IS NULL
-                AND SecondaryScopes IS NOT NULL
-                AND SecondaryScopes != '{}'
-                AND ${secondaryCondition}
-            )`);
-        }
-
-        return conditions.join(' OR ');
-    }
-
-    /**
-     * Build SQL filter conditions for secondary dimensions with per-dimension inheritance.
-     *
-     * For each dimension in the runtime scope:
-     * - 'cascading' mode: Match if dimension value matches OR dimension is absent in note
-     * - 'strict' mode: Match only if dimension value matches exactly
-     */
-    private buildPerDimensionFilter(
-        secondary: Record<string, SecondaryScopeValue>,
-        scopeConfig?: SecondaryScopeConfig | null
-    ): string {
-        const dimensionConditions: string[] = [];
-        const defaultMode = scopeConfig?.defaultInheritanceMode ?? 'cascading';
-
-        // Build a map of dimension configs for quick lookup
-        const dimConfigMap = new Map<string, SecondaryDimension>();
-        if (scopeConfig?.dimensions) {
-            for (const dim of scopeConfig.dimensions) {
-                dimConfigMap.set(dim.name, dim);
-            }
-        }
-
-        for (const [key, rawValue] of Object.entries(secondary)) {
-            const dimConfig = dimConfigMap.get(key);
-            const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
-            // Stringify all values (numbers, booleans) for SQL comparison via JSON_VALUE
-            const values = Array.isArray(rawValue) ? rawValue.map(String) : [String(rawValue)];
-
-            // Escape single quotes in values to prevent SQL injection
-            const escapedValues = values.map(v => v.replace(/'/g, "''"));
-
-            if (inheritanceMode === 'strict') {
-                const matchClause = escapedValues.length === 1
-                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
-                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
-                dimensionConditions.push(matchClause);
-            } else {
-                const matchClause = escapedValues.length === 1
-                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
-                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
-                dimensionConditions.push(
-                    `(JSON_VALUE(SecondaryScopes, '$.${key}') IS NULL OR ${matchClause})`
-                );
-            }
-        }
-
-        return dimensionConditions.length > 0
-            ? `(${dimensionConditions.join(' AND ')})`
-            : '1=1';
     }
 
     /**
@@ -870,11 +701,18 @@ export class AgentContextInjector {
      * contained upstream by the write-path guards (descriptive types only,
      * scope clamp, per-run cap, TTL).
      *
+     * The notes come from the AI engine's cache, which holds every field whoever the run is for.
+     * Pass the run's user as `contextUser` and the text carries only the fields that user may read:
+     * a note whose body they may not read is left out, and an unreadable scope field reads as unset.
+     * Without a user the notes render in full, which is right only for server-internal callers.
+     *
      * @param notes - Array of notes to format
      * @param includeMemoryPolicy - Whether to include the memory policy preamble (default: true)
+     * @param contextUser - The user the run is for; the text is limited to the fields they may read
      */
-    FormatNotesForInjection(notes: MJAIAgentNoteEntity[], includeMemoryPolicy: boolean = true): string {
-        if (notes.length === 0) return '';
+    FormatNotesForInjection(notes: MJAIAgentNoteEntity[], includeMemoryPolicy: boolean = true, contextUser?: UserInfo): string {
+        const views = this.noteViewsForReader(notes, contextUser).filter(n => 'Note' in n);
+        if (views.length === 0) return '';
 
         const lines: string[] = [];
 
@@ -897,8 +735,8 @@ export class AgentContextInjector {
             lines.push('');
         }
 
-        const provisional = notes.filter(n => n.Status === 'Provisional');
-        const established = notes.filter(n => n.Status !== 'Provisional');
+        const provisional = views.filter(n => n.Status === 'Provisional');
+        const established = views.filter(n => n.Status !== 'Provisional');
 
         if (provisional.length > 0) {
             lines.push(`📝 RECENT NOTES (${provisional.length} provisional — newest signal)`);
@@ -920,8 +758,34 @@ export class AgentContextInjector {
         return lines.join('\n');
     }
 
+    /** The fields each note renders from, without those `contextUser` may not read. */
+    private noteViewsForReader(notes: MJAIAgentNoteEntity[], contextUser: UserInfo | undefined): NoteView[] {
+        const views: NoteView[] = notes.map(n => ({
+            Status: n.Status, Type: n.Type, Note: n.Note, __mj_CreatedAt: n.__mj_CreatedAt, AgentID: n.AgentID,
+            UserID: n.UserID, CompanyID: n.CompanyID, PrimaryScopeRecordID: n.PrimaryScopeRecordID, SecondaryScopes: n.SecondaryScopes,
+        }));
+        return this.projectForReader(notes[0]?.EntityInfo, views, contextUser);
+    }
+
+    /** The fields each example renders from, without those `contextUser` may not read. */
+    private exampleViewsForReader(examples: MJAIAgentExampleEntity[], contextUser: UserInfo | undefined): ExampleView[] {
+        const views: ExampleView[] = examples.map(e => ({
+            ExampleInput: e.ExampleInput, ExampleOutput: e.ExampleOutput, SuccessScore: e.SuccessScore,
+        }));
+        return this.projectForReader(examples[0]?.EntityInfo, views, contextUser);
+    }
+
+    /** Field values keyed by field name, projected to what `contextUser` may read; unchanged without a user. */
+    private projectForReader<T extends object>(entityInfo: EntityInfo | undefined, rows: T[], contextUser: UserInfo | undefined): T[] {
+        if (!contextUser || rows.length === 0) {
+            return rows;
+        }
+        // The notes and examples are the AI engine's cached rows, so its provider resolves their metadata.
+        return ProjectEntityValueRowsForUser(AIEngine.Instance.Provider, entityInfo, rows, contextUser) ?? rows;
+    }
+
     /** Render one note (and its scope line) into the injection output. */
-    private appendNoteLines(lines: string[], note: MJAIAgentNoteEntity, provisional: boolean): void {
+    private appendNoteLines(lines: string[], note: NoteView, provisional: boolean): void {
         const date = this.formatNoteDate(note);
         lines.push(`[${note.Type}${date ? `, ${date}` : ''}]${provisional ? ' (provisional)' : ''} ${note.Note}`);
 
@@ -947,14 +811,14 @@ export class AgentContextInjector {
      * model what it needs for recency arithmetic. Kept private to this single
      * consumer — promote to @memberjunction/global if a second consumer appears.
      */
-    private formatNoteDate(note: MJAIAgentNoteEntity): string {
+    private formatNoteDate(note: NoteView): string {
         return note.__mj_CreatedAt ? new Date(note.__mj_CreatedAt).toISOString().slice(0, 10) : '';
     }
 
     /**
      * Determine multi-tenant secondary scope description for a note
      */
-    private determineSecondaryScope(note: MJAIAgentNoteEntity): string | null {
+    private determineSecondaryScope(note: NoteView): string | null {
         // Check for secondary scoping (takes precedence over MJ scoping)
         if (!note.PrimaryScopeRecordID) {
             return null; // No secondary scope, fall back to MJ scope
@@ -970,21 +834,27 @@ export class AgentContextInjector {
     }
 
     /**
-     * Format examples for injection into agent prompt
+     * Format examples for injection into agent prompt. As for {@link FormatNotesForInjection}, pass
+     * the run's user as `contextUser` and the text carries only the fields that user may read; an
+     * example with neither input nor output readable is left out.
+     *
+     * @param examples - Array of examples to format
+     * @param contextUser - The user the run is for; the text is limited to the fields they may read
      */
-    FormatExamplesForInjection(examples: MJAIAgentExampleEntity[]): string {
-        if (examples.length === 0) return '';
+    FormatExamplesForInjection(examples: MJAIAgentExampleEntity[], contextUser?: UserInfo): string {
+        const views = this.exampleViewsForReader(examples, contextUser).filter(e => 'ExampleInput' in e || 'ExampleOutput' in e);
+        if (views.length === 0) return '';
 
         const lines: string[] = [
-            `💡 RELEVANT EXAMPLES (${examples.length})`,
+            `💡 RELEVANT EXAMPLES (${views.length})`,
             ''
         ];
 
-        for (let i = 0; i < examples.length; i++) {
-            const example = examples[i];
+        for (let i = 0; i < views.length; i++) {
+            const example = views[i];
             lines.push(`Example ${i + 1}:`);
-            lines.push(`Q: ${example.ExampleInput}`);
-            lines.push(`A: ${example.ExampleOutput}`);
+            lines.push(`Q: ${example.ExampleInput ?? ''}`);
+            lines.push(`A: ${example.ExampleOutput ?? ''}`);
 
             if (example.SuccessScore) {
                 lines.push(`  (Success Score: ${example.SuccessScore}/100)`);
@@ -1000,7 +870,7 @@ export class AgentContextInjector {
     /**
      * Determine human-readable scope description for a note
      */
-    private determineNoteScope(note: MJAIAgentNoteEntity): string {
+    private determineNoteScope(note: NoteView): string {
         if (note.AgentID && note.UserID && note.CompanyID) {
             return 'Agent + User + Company specific';
         }

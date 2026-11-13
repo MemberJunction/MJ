@@ -1,4 +1,4 @@
-import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo, ViewPropertyValues } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, RunViewParameters, UserInfo, ViewPropertyValues } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -34,6 +34,12 @@ export type UserPayload = {
    */
   emailVerified?: boolean;
   /**
+   * Set only on a payload elevated by `ElevateUserPayload`: the principal the elevated user stands in for (a public
+   * widget guest). The run's own records are written as `userRecord`, but the guest's conversation is written as
+   * this user, because only a conversation's owner (or a grantee) may write its messages (MJ#4791).
+   */
+  ElevatedFrom?: UserInfo;
+  /**
    * The caller's IANA time zone, from the request's `x-mj-timezone` header, when it names a zone
    * this runtime knows. Undefined when the header is absent or invalid; callers then use UTC. The
    * view and query resolvers pass it on as `RunViewParams.TimeZone` / `RunQueryParams.TimeZone`.
@@ -67,6 +73,19 @@ export type AppContext = {
    * Used only to key abuse limits (e.g. realtime verification sends) — never as an identity.
    */
   ClientIp?: string;
+
+  /**
+   * The request's `Origin` header as a normalized origin — scheme, host and port, lowercased, no
+   * trailing slash (e.g. `https://app.example.com:8443`). Normalized by `NormalizeOrigin`, the same
+   * helper the realtime widget allowlist uses, so it compares to allowlist entries normalized the
+   * same way with plain string equality. Ports are kept as sent; browsers omit default ports.
+   *
+   * Undefined when the request sent no `Origin` (server-to-server calls, many same-origin GETs),
+   * sent the opaque `null` origin, or sent a value that is not an http(s) origin. Always absent on
+   * WebSocket (subscription) contexts. Treat undefined as "origin unknown": an allowlist check
+   * must fail closed on it.
+   */
+  RequestOrigin?: string;
 };
 
 export class ProviderInfo {
@@ -140,6 +159,11 @@ export type RunViewGenericParams = {
    */
   includeBinaryFields?: boolean;
   /**
+   * When true, no count runs to populate `TotalRowCount`, which comes back undefined.
+   * Propagated to `RunViewParams.SkipTotalRowCount`.
+   */
+  skipTotalRowCount?: boolean;
+  /**
    * Optional registered Alternate Base View logical Name (from `EntityAlternateBaseView.Name`)
    * for this entity. Propagated to `RunViewParams.AlternateBaseView`.
    */
@@ -149,6 +173,16 @@ export type RunViewGenericParams = {
    * There is deliberately no server-properties field: those are set only by server code.
    */
   properties?: ViewPropertyValues;
+  /**
+   * Named parameter values referenced as `@paramName` in `ExtraFilter`.
+   * Propagated to `RunViewParams.Parameters`.
+   */
+  parameters?: RunViewParameters;
+  /**
+   * Optional JSON-encoded `CompositeFilterDescriptor` for structured filtering.
+   * Parsed into `RunViewParams.Filter`.
+   */
+  filter?: string;
 };
 
 

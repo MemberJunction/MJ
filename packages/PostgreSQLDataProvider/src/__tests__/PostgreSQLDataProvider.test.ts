@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
-import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
+import {
+    BaseEntity,
+    BaseEntityResult,
+    CompositeKey,
+    EntityInfo,
+    EntityFieldTSType,
+    EntitySaveOptions,
+    UserInfo,
+    type RunViewParameters,
+} from '@memberjunction/core';
+import { DoomedTransactionError, NamedQueryParameter } from '@memberjunction/generic-database-provider';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -30,6 +39,12 @@ type ProviderWithQuoting = {
     quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string;
     coerceBooleanLiteralsInSQL(sql: string, entityInfo: EntityInfo): string;
     TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string;
+    PrepareExtraFilterSQL(
+        extraFilter: string,
+        entityInfo: EntityInfo,
+        parameters?: RunViewParameters,
+        queryParameters?: NamedQueryParameter[],
+    ): string;
 };
 
 // Mock pg module
@@ -582,6 +597,12 @@ describe('PostgreSQLDataProvider', () => {
             const fields = new Set(['Amount(USD)']);
             expect(quoter.quoteFieldNamesInToken('Amount(USD)', fields)).toBe('Amount(USD)');
         });
+
+        it('does not quote $1 bound parameter tokens and still quotes @FieldName (PG unary abs operator)', () => {
+            const fields = new Set(['Status', 'UserID']);
+            expect(quoter.quoteFieldNamesInToken('UserID=$1', fields)).toBe('"UserID"=$1');
+            expect(quoter.quoteFieldNamesInToken('@Status', fields)).toBe('@"Status"');
+        });
     });
 
     /**
@@ -670,6 +691,36 @@ describe('PostgreSQLDataProvider', () => {
             expect(out).toContain('"IsActive"');
             expect(out).toContain('TRUE');
             expect(out).not.toMatch(/=\s*1\b/); // no bare bit literal remains
+        });
+
+        it('PrepareExtraFilterSQL binds scalar and array parameters to $1..$N, transforms identifiers/booleans, and passes balance checks', () => {
+            const ei = mockEntityInfoTyped([
+                { name: 'Name', tsType: EntityFieldTSType.String },
+                { name: 'IsActive', tsType: EntityFieldTSType.Boolean },
+            ]);
+            const transformer = provider as unknown as ProviderWithQuoting;
+
+            const scalarParams: NamedQueryParameter[] = [];
+            const scalarOut = transformer.PrepareExtraFilterSQL('Name = @Name', ei, { Name: 'Alice' }, scalarParams);
+            expect(scalarOut).toBe('"Name" = $1');
+            expect(scalarParams).toEqual([new NamedQueryParameter('$1', 'Alice')]);
+
+            const listParams: NamedQueryParameter[] = [];
+            const listOut = transformer.PrepareExtraFilterSQL(
+                'Name IN (@names) AND IsActive = 1',
+                ei,
+                { names: ['Alice', 'Bob'] },
+                listParams,
+            );
+            expect(listOut).toBe('("Name" IN ($1, $2)) AND ("IsActive" = TRUE)');
+            expect(listParams).toEqual([
+                new NamedQueryParameter('$1', 'Alice'),
+                new NamedQueryParameter('$2', 'Bob'),
+            ]);
+
+            // Caller-supplied $1 or dollar-quoted strings are still refused before binding
+            expect(() => transformer.PrepareExtraFilterSQL('Name = $1', ei, { Name: 'Alice' }, [])).toThrow(/dollar/);
+            expect(() => transformer.PrepareExtraFilterSQL('Name = $$Alice$$', ei, undefined, [])).toThrow(/dollar/);
         });
     });
 
@@ -886,6 +937,191 @@ describe('PostgreSQLDataProvider', () => {
             } finally {
                 hook.UseJsonArgShape = originalUseJsonArg;
             }
+        });
+    });
+
+    describe('RenderLockedRowReadSQL & CheckUpdateConcurrency', () => {
+        interface ProviderWithConcurrencyHooks {
+            RenderLockedRowReadSQL(
+                entityInfo: EntityInfo,
+                pkWhereClause: string,
+                columns: string[],
+            ): string | null;
+            CheckUpdateConcurrency(
+                entity: BaseEntity,
+                user: UserInfo,
+                options: EntitySaveOptions,
+                entityResult: BaseEntityResult,
+            ): Promise<boolean>;
+            PrepareQueuedUpdateConcurrencyCheck(
+                entity: BaseEntity,
+                user: UserInfo,
+                options: EntitySaveOptions,
+                entityResult: BaseEntityResult,
+            ): (() => Promise<boolean>) | null;
+            ExecuteSQL: PostgreSQLDataProvider['ExecuteSQL'];
+            PostProcessRows: (
+                rows: Record<string, unknown>[],
+                entityInfo: EntityInfo,
+                user: UserInfo,
+            ) => Promise<Record<string, unknown>[]>;
+        }
+
+        it('emits SELECT ... FROM "schema"."BaseTable" WHERE ... FOR UPDATE', () => {
+            const hooks = provider as unknown as ProviderWithConcurrencyHooks;
+            const info = {
+                SchemaName: '__mj',
+                BaseTable: 'EntityField',
+                BaseView: 'vwEntityFields',
+            } as unknown as EntityInfo;
+
+            const sql = hooks.RenderLockedRowReadSQL(info, '"ID"=\'f-001\'', ['Name', 'DisplayName']);
+            expect(sql).toBe(
+                'SELECT "Name", "DisplayName" FROM "__mj"."EntityField" WHERE "ID"=\'f-001\' FOR UPDATE',
+            );
+            expect(hooks.RenderLockedRowReadSQL(info, '', ['Name'])).toBeNull();
+            expect(hooks.RenderLockedRowReadSQL(info, '"ID"=\'f-001\'', [])).toBeNull();
+        });
+
+        it('checks concurrency under FOR UPDATE lock and rejects conflicting edits in enforce mode', async () => {
+            const hooks = provider as unknown as ProviderWithConcurrencyHooks;
+            const entityInfo = new EntityInfo({
+                ID: 'E0000000-0000-0000-0000-000000000001',
+                Name: 'Widgets',
+                Status: 'Active',
+                SchemaName: 'public',
+                BaseTable: 'Widget',
+                BaseTableCodeName: 'Widget',
+                BaseView: 'vwWidgets',
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                AllowDeleteAPI: true,
+                spCreateGenerated: true,
+                spUpdateGenerated: true,
+                TrackRecordChanges: false,
+                CascadeDeletes: false,
+                VirtualEntity: false,
+                AllowMultipleSubtypes: false,
+                EntityFields: [
+                    {
+                        ID: 'F1',
+                        EntityID: 'E0000000-0000-0000-0000-000000000001',
+                        Sequence: 1,
+                        Name: 'ID',
+                        Type: 'uuid',
+                        Length: 16,
+                        Precision: 0,
+                        Scale: 0,
+                        AllowsNull: false,
+                        DefaultValue: null,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        IsPrimaryKey: true,
+                        IsUnique: true,
+                        AllowUpdateAPI: false,
+                        IsComputed: false,
+                        Status: 'Active',
+                    },
+                    {
+                        ID: 'F2',
+                        EntityID: 'E0000000-0000-0000-0000-000000000001',
+                        Sequence: 2,
+                        Name: 'Name',
+                        Type: 'varchar',
+                        Length: 200,
+                        Precision: 0,
+                        Scale: 0,
+                        AllowsNull: false,
+                        DefaultValue: null,
+                        AutoIncrement: false,
+                        IsVirtual: false,
+                        IsPrimaryKey: false,
+                        IsUnique: false,
+                        AllowUpdateAPI: true,
+                        IsComputed: false,
+                        Status: 'Active',
+                    },
+                ],
+                EntityPermissions: [],
+            });
+
+            class PgTestEntity extends BaseEntity {}
+            const entity = new PgTestEntity(entityInfo);
+            const testUser = { ID: 'u-1', Name: 'Tester', Email: 't@example.com' } as unknown as UserInfo;
+            entity.ContextCurrentUser = testUser;
+            entity.SetMany({ ID: 'w-1', Name: 'Initial Name' }, false, true, true);
+            entity.Set('Name', 'Caller New Name');
+
+            const executedSQL: string[] = [];
+            vi.spyOn(hooks, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+                executedSQL.push(sql);
+                return [{ Name: 'Concurrent DB Name' }] as never;
+            });
+            vi.spyOn(hooks, 'PostProcessRows').mockImplementation(async (rows) => rows);
+
+            const opts = new EntitySaveOptions();
+            opts.ConcurrencyCheck = 'enforce';
+            const result = new BaseEntityResult();
+            const ok = await hooks.CheckUpdateConcurrency(entity, testUser, opts, result);
+
+            expect(ok).toBe(false);
+            expect(result.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+            expect(executedSQL).toEqual([
+                `SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`,
+            ]);
+        });
+
+        it('prepares a queued-update check only when checking is on, capturing the values at queue time', async () => {
+            const hooks = provider as unknown as ProviderWithConcurrencyHooks;
+            const entityInfo = new EntityInfo({
+                ID: 'E0000000-0000-0000-0000-000000000002',
+                Name: 'Widgets',
+                Status: 'Active',
+                SchemaName: 'public',
+                BaseTable: 'Widget',
+                BaseTableCodeName: 'Widget',
+                BaseView: 'vwWidgets',
+                AllowUpdateAPI: true,
+                EntityFields: [
+                    { ID: 'F1', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 1, Name: 'ID', Type: 'uuid', Length: 16, AllowsNull: false, IsPrimaryKey: true, IsUnique: true, AllowUpdateAPI: false, Status: 'Active' },
+                    { ID: 'F2', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 2, Name: 'Name', Type: 'varchar', Length: 200, AllowsNull: false, IsPrimaryKey: false, AllowUpdateAPI: true, Status: 'Active' },
+                    { ID: 'F3', EntityID: 'E0000000-0000-0000-0000-000000000002', Sequence: 3, Name: 'Notes', Type: 'varchar', Length: 200, AllowsNull: true, IsPrimaryKey: false, AllowUpdateAPI: true, Status: 'Active' },
+                ],
+                EntityPermissions: [],
+            });
+            class PgQueuedEntity extends BaseEntity {}
+            const entity = new PgQueuedEntity(entityInfo);
+            const testUser = { ID: 'u-1', Name: 'Tester', Email: 't@example.com' } as unknown as UserInfo;
+            entity.ContextCurrentUser = testUser;
+            entity.SetMany({ ID: 'w-1', Name: 'Initial Name', Notes: null }, false, true, true);
+            entity.Set('Name', 'Caller New Name');
+
+            const executedSQL: string[] = [];
+            vi.spyOn(hooks, 'ExecuteSQL').mockImplementation(async (sql: string) => {
+                executedSQL.push(sql);
+                return [{ Name: 'Concurrent DB Name' }] as never;
+            });
+            vi.spyOn(hooks, 'PostProcessRows').mockImplementation(async (rows) => rows);
+
+            expect(hooks.PrepareQueuedUpdateConcurrencyCheck(entity, testUser, new EntitySaveOptions(), new BaseEntityResult())).toBeNull();
+
+            const opts = new EntitySaveOptions();
+            opts.ConcurrencyCheck = 'enforce';
+            const result = new BaseEntityResult();
+            const check = hooks.PrepareQueuedUpdateConcurrencyCheck(entity, testUser, opts, result);
+            expect(check).not.toBeNull();
+            expect(executedSQL).toEqual([]);
+
+            entity.Set('Notes', 'edited after queueing');
+            expect(await check!()).toBe(false);
+            expect(result.ConcurrencyConflict).toEqual({ ConflictingFields: ['Name'] });
+            expect(executedSQL).toEqual([`SELECT "Name" FROM "public"."Widget" WHERE "ID"='w-1' FOR UPDATE`]);
+        });
+
+        it('defaults ConcurrencyCheck to "off" and DeltaUpdates to true on a fresh PostgreSQLDataProvider instance', () => {
+            const freshPg = new PostgreSQLDataProvider();
+            expect(freshPg.ConcurrencyCheck).toBe('off');
+            expect(freshPg.DeltaUpdates).toBe(true);
         });
     });
 });

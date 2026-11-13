@@ -33,6 +33,7 @@ export * from './custom/demo/unit-converter.action';
 
 // Utility Actions
 export * from './custom/utilities/vectorize-entity.action';
+export * from './custom/utilities/reembed-local-vectors.action';
 export * from './custom/utilities/business-days-calculator.action';
 export * from './custom/utilities/ip-geolocation.action';
 export * from './custom/utilities/census-data-lookup.action';
@@ -68,6 +69,7 @@ export * from './custom/data/explore-database-schema.action';
 export * from './custom/data/run-adhoc-query.action';
 export * from './custom/data/get-entity-details.action';
 export * from './custom/data/get-entity-list.action';
+export * from './custom/data/get-graph-context.action';
 export * from './custom/data/run-stored-query.action';
 export * from './custom/data/search-query-catalog.action';
 export * from './custom/data/search-entity.action';
@@ -129,15 +131,22 @@ export * from './custom/ai/find-candidate-actions.action';
 // tree-shaking — and a shaken-out registration silently resolves to BaseAction.
 export * from './custom/ai/find-best-action.action';
 export * from './custom/ai/find-best-agent.action';
+export * from './custom/ai/base-find-skills.action';
+export * from './custom/ai/find-candidate-skills.action';
+export * from './custom/ai/find-best-skill.action';
+export * from './custom/ai/get-skill-details.action';
 export * from './custom/ai/load-agent-spec.action';
 export * from './custom/ai/generate-image.action';
+export * from './custom/ai/generate-video.action';
 export * from './custom/ai/run-cluster-analysis.action';
 export * from './custom/ai/actionsmith-agent';
 export * from './custom/ai/schedule-next-agent-wake.action';
 export * from './custom/ai/configure-agent-user-policy.action';
-export * from './custom/ai/chief-of-staff-inter-agent-request.action';
-export * from './custom/ai/prepare-chief-of-staff-outbound-call.action';
-export * from './custom/ai/chief-of-staff-calendar-email.action';
+export * from './custom/ai/send-inter-agent-request.action';
+export * from './custom/ai/trigger-agent-wake.action';
+export * from './custom/ai/prepare-outbound-call-brief.action';
+export * from './custom/ai/user-scoped-communication.action';
+export * from './custom/ai/communication-oauth-service';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -157,6 +166,8 @@ export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
 export * from './custom/visualization/create-svg-sketch-diagram.action';
 export * from './custom/visualization/create-mermaid-diagram.action';
+export * from './custom/visualization/render-architecture-diagram.action';
+export * from './custom/visualization/get-architecture-diagram-reference.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
@@ -165,7 +176,11 @@ export * from './custom/visualization/shared/mermaid-types';
 // MCP Actions
 export * from './custom/mcp';
 
+// GitHub Actions & Core Client
+export * from './custom/github';
+
 export * from './custom/search/search.action';
 export * from './custom/search/scoped-search.action';
+
 
 

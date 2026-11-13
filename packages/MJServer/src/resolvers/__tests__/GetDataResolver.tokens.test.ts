@@ -15,7 +15,9 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('../../index.js', () => ({ GetDbType: vi.fn(),
     get getDbType() { return this.GetDbType; } }));
 vi.mock('@memberjunction/generic-database-provider', () => ({
-  QueryCompositionEngine: vi.fn(() => ({ HasCompositionTokens: vi.fn(() => false) })),
+  QueryCompositionEngine: vi.fn(function (this: { HasCompositionTokens: () => boolean }) {
+    this.HasCompositionTokens = vi.fn(() => false);
+  }),
 }));
 vi.mock('../../util.js', () => ({ GetReadOnlyDataSource: vi.fn(), GetReadOnlyProvider: vi.fn() }));
 vi.mock('../../auth/index.js', () => ({ GetSystemUser: vi.fn(),
@@ -23,6 +25,8 @@ vi.mock('../../auth/index.js', () => ({ GetSystemUser: vi.fn(),
 vi.mock('mssql', () => ({ default: { Request: vi.fn() } }));
 
 import {
+  GetDataResolver,
+  GetDataInputType,
   RegisterAccessToken,
   DeleteAccessToken,
   TokenExists,
@@ -30,7 +34,12 @@ import {
   RecordTokenUse,
   PruneExpiredTokens,
   GetAccessTokenCount,
+  MAX_TOKEN_USES_PER_TOKEN,
+  GetTokenUsesForTest,
 } from '../GetDataResolver.js';
+import { GetReadOnlyDataSource } from '../../util.js';
+import sql from 'mssql';
+import type { AppContext } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Regression coverage for a memory leak (Memory Leak Audit Round 7, Critical):
@@ -136,5 +145,115 @@ describe('GetDataResolver access-token lifecycle', () => {
     // than accumulating every registration for the life of the process.
     expect(GetAccessTokenCount()).toBeLessThan(before + 51);
     expect(TokenExists(survivorToken)).toBe(true);
+  });
+
+  it('never leaks raw secret token values in thrown or returned error messages', async () => {
+    const duplicateSecret = `secret-dup-${uniqueToken()}`;
+    RegisterAccessToken(duplicateSecret, 60_000);
+
+    try {
+      RegisterAccessToken(duplicateSecret, 60_000);
+      expect.unreachable('Expected duplicate registration to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(duplicateSecret);
+    }
+
+    const missingSecret = `secret-missing-${uniqueToken()}`;
+    try {
+      DeleteAccessToken(missingSecret);
+      expect.unreachable('Expected deleting unknown token to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(missingSecret);
+    }
+
+    try {
+      RecordTokenUse(missingSecret, {});
+      expect.unreachable('Expected recording unknown token use to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(missingSecret);
+    }
+
+    const resolver = new GetDataResolver();
+    const input = new GetDataInputType();
+    input.Token = missingSecret;
+    input.Queries = ['SELECT 1'];
+    const output = await resolver.GetData(input, { dataSources: [] } as Partial<AppContext> as AppContext);
+    expect(output.Success).toBe(false);
+    expect(JSON.stringify(output.ErrorMessages)).not.toContain(missingSecret);
+  });
+
+  it('rejects empty tokens and near-miss prefix tokens across multiple active slots', () => {
+    const first = `slot-a-${uniqueToken()}`;
+    const second = `slot-b-${uniqueToken()}`;
+    RegisterAccessToken(first, 60_000);
+    RegisterAccessToken(second, 60_000);
+
+    expect(IsTokenValid('')).toBe(false);
+    expect(TokenExists('')).toBe(false);
+    expect(IsTokenValid(first.slice(0, -1))).toBe(false);
+    expect(IsTokenValid(`${second}-extra`)).toBe(false);
+    expect(IsTokenValid(first)).toBe(true);
+    expect(IsTokenValid(second)).toBe(true);
+  });
+
+  it('GetData records only lightweight summary stats in TokenUses and does not retain multi-MB result rows', async () => {
+    const token = uniqueToken();
+    RegisterAccessToken(token, 60_000);
+
+    const fakeDataSource = {};
+    const mockGetReadOnlyDataSource = vi.mocked(GetReadOnlyDataSource);
+    mockGetReadOnlyDataSource.mockReturnValue(fakeDataSource as never);
+
+    const mockQuery = vi.fn().mockResolvedValue({
+      recordset: [{ ID: '1', Payload: 'x'.repeat(100_000) }],
+    });
+    const mockRequest = vi.mocked(sql.Request);
+    mockRequest.mockImplementation(function (this: { query: typeof mockQuery }) {
+      this.query = mockQuery;
+    } as never);
+
+    const resolver = new GetDataResolver();
+    const input = new GetDataInputType();
+    input.Token = token;
+    input.Queries = ['SELECT ID, Payload FROM SomeTable'];
+
+    const output = await resolver.GetData(input, { dataSources: [fakeDataSource] } as Partial<AppContext> as AppContext);
+    expect(output.Success).toBe(true);
+    expect(output.Results).toHaveLength(1);
+
+    const uses = GetTokenUsesForTest(token);
+    expect(uses).toBeDefined();
+    expect(uses).toHaveLength(1);
+
+    const recordedPayload = uses![0].UsePayload;
+    expect(recordedPayload).toEqual({
+      QueryCount: 1,
+      Success: true,
+      ErrorCount: 0,
+    });
+    // Explicitly verify results and queries data are NOT retained in the payload
+    expect(recordedPayload).not.toHaveProperty('request');
+    expect(recordedPayload).not.toHaveProperty('results');
+    expect(JSON.stringify(recordedPayload)).not.toContain('Payload');
+    expect(JSON.stringify(recordedPayload)).not.toContain('x'.repeat(1000));
+  });
+
+  it('RecordTokenUse caps TokenUses length to MAX_TOKEN_USES_PER_TOKEN (100) to prevent unbounded memory growth', () => {
+    expect(MAX_TOKEN_USES_PER_TOKEN).toBe(100);
+
+    const token = uniqueToken();
+    RegisterAccessToken(token, 60_000);
+
+    for (let i = 0; i < 150; i++) {
+      RecordTokenUse(token, { useIndex: i });
+    }
+
+    const uses = GetTokenUsesForTest(token);
+    expect(uses).toBeDefined();
+    expect(uses).toHaveLength(MAX_TOKEN_USES_PER_TOKEN);
+
+    // Oldest 50 entries were shifted out, so uses[0] is index 50, and last is index 149
+    expect(uses![0].UsePayload).toEqual({ useIndex: 50 });
+    expect(uses![MAX_TOKEN_USES_PER_TOKEN - 1].UsePayload).toEqual({ useIndex: 149 });
   });
 });

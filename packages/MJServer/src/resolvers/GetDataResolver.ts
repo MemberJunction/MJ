@@ -6,6 +6,7 @@ import { QueryCompositionEngine } from '@memberjunction/generic-database-provide
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { GetDbType } from '../index.js';
 import { GetSystemUser } from '../auth/index.js';
@@ -125,9 +126,9 @@ export class GetDataResolver {
             });
             LogStatus(`GetData invoked: ${input.Queries.length} queries`);
 
-            // validate the token
+            // validate the token (never echo the raw token into error messages or logs — Token is @NoLog)
             if (!IsTokenValid(input.Token)) {
-                throw new Error(`Token ${input.Token} is not valid or has expired`);
+                throw new Error('Access token is not valid or has expired');
             }
 
             // Use the read-only connection for executing queries
@@ -176,8 +177,12 @@ export class GetDataResolver {
 
                         // SQL Server errors often have additional context in properties
                         // Try to get more context from the error object
+                        interface SqlServerErrorContext {
+                            precedingErrors?: Array<{ message?: string }>;
+                            lineNumber?: number;
+                        }
                         if (err && typeof err === 'object') {
-                            const sqlError = err as any;
+                            const sqlError = err as SqlServerErrorContext;
 
                             // SQL Server error objects may have a 'procName' with the problematic token
                             // or 'lineNumber' and other useful properties
@@ -217,14 +222,19 @@ export class GetDataResolver {
                                 Queries: input.Queries, 
                                 ErrorMessages: errorMessages }
 
-            RecordTokenUse(input.Token, {request: input, results: returnVal});
+            RecordTokenUse(input.Token, {
+                QueryCount: input.Queries.length,
+                Success: returnVal.Success,
+                ErrorCount: errorMessages.filter((e) => e !== null).length,
+            });
 
             // Success below is derived from having no errorMessages, check that array
             return returnVal;
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessages: [typeof err === 'string' ? err : (err as any).message], Results: [], Queries: input.Queries };
+            const msg = err instanceof Error ? err.message : String(err);
+            return { Success: false, ErrorMessages: [msg], Results: [], Queries: input.Queries };
         }
     }
 
@@ -265,7 +275,8 @@ export class GetDataResolver {
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessage: typeof err === 'string' ? err : (err as any).message, Results: [] };
+            const msg = err instanceof Error ? err.message : String(err);
+            return { Success: false, ErrorMessage: msg, Results: [] };
         }
     }
 
@@ -273,10 +284,12 @@ export class GetDataResolver {
 }
  
 
+export type TokenUsePayload = Record<string, string | number | boolean | null | undefined | object>;
+
 export class TokenUseLog {
     Token: string;
     UsedAt: Date;
-    UsePayload: any;
+    UsePayload: TokenUsePayload;
 }
 /**
  * Used to track all active access tokens that are requested by anyone within the server to be able to send to external services that can
@@ -290,11 +303,31 @@ export class GetDataAccessToken {
     /**
      * Can be used to store any payload to identify who requested the creation of the token, for example Skip might use this to put in a conversation ID to know which conversation a request is coming back for.
      */
-    RequestorPayload: any;
+    RequestorPayload?: TokenUsePayload;
     TokenUses: TokenUseLog[];
 }
 const __accessTokens: GetDataAccessToken[] = [];
 const __defaultTokenLifeSpan = 1000 * 60 * 5; // 5 minutes
+
+/**
+ * Non-short-circuiting constant-time scan over active access tokens: hashes the presented token
+ * once and compares against every stored token digest with `timingSafeEqual` without breaking early,
+ * so neither prefix similarity, token length, nor array index leaks through timing.
+ */
+function findMatchingAccessTokenIndex(token: string): number {
+    if (typeof token !== 'string' || token.length === 0) {
+        return -1;
+    }
+    const targetDigest = createHash('sha256').update(token).digest();
+    let matchedIndex = -1;
+    for (let i = 0; i < __accessTokens.length; i++) {
+        const candidateDigest = createHash('sha256').update(__accessTokens[i].Token).digest();
+        if (timingSafeEqual(candidateDigest, targetDigest)) {
+            matchedIndex = i;
+        }
+    }
+    return matchedIndex;
+}
 
 /**
  * Removes every token whose `ExpiresAt` has already passed (and its `TokenUses`
@@ -332,14 +365,14 @@ export function getAccessTokenCount(): number {
     return GetAccessTokenCount();
 }
 
-export function RegisterAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+export function RegisterAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: TokenUsePayload): GetDataAccessToken {
     PruneExpiredTokens();
 
     const tokenToUse = token || uuidv4();
 
     if (TokenExists(tokenToUse)) {
         // should never happen if we used the uuidv4() function but could happen if someone tries to use a custom token
-        throw new Error(`Token ${tokenToUse} already exists`);
+        throw new Error('Access token already exists');
     }
 
     const newToken = new GetDataAccessToken();
@@ -352,16 +385,16 @@ export function RegisterAccessToken(token?: string, lifeSpan: number = __default
 }
 
 /** @deprecated Use {@link RegisterAccessToken}. */
-export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: any): GetDataAccessToken {
+export function registerAccessToken(token?: string, lifeSpan: number = __defaultTokenLifeSpan, requestorPayload?: TokenUsePayload): GetDataAccessToken {
     return RegisterAccessToken(token, lifeSpan, requestorPayload);
 }
 export function DeleteAccessToken(token: string) {
-    const index = __accessTokens.findIndex((t) => t.Token === token);
+    const index = findMatchingAccessTokenIndex(token);
     if (index >= 0) {
         __accessTokens.splice(index, 1);
     }
     else {
-        throw new Error(`Token ${token} does not exist`);
+        throw new Error('Access token does not exist');
     }
 }
 
@@ -370,7 +403,7 @@ export function deleteAccessToken(token: string) {
     return DeleteAccessToken(token);
 }
 export function TokenExists(token: string) {
-    return __accessTokens.find((t) => t.Token === token) !== undefined;
+    return findMatchingAccessTokenIndex(token) >= 0;
 }
 
 /** @deprecated Use {@link TokenExists}. */
@@ -378,9 +411,9 @@ export function tokenExists(token: string) {
     return TokenExists(token);
 }
 export function IsTokenValid(token: string) {
-    const t = __accessTokens.find((t) => t.Token === token);
-    if (t) {
-        return t.ExpiresAt > new Date();
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        return __accessTokens[index].ExpiresAt > new Date();
     }
     return false;
 }
@@ -389,20 +422,37 @@ export function IsTokenValid(token: string) {
 export function isTokenValid(token: string) {
     return IsTokenValid(token);
 } 
-export function RecordTokenUse(token: string, usePayload: any) {
-    const t = __accessTokens.find((t) => t.Token === token);
-    if (t) {
+
+/** Maximum number of use logs kept per token to prevent unbounded memory growth. */
+export const MAX_TOKEN_USES_PER_TOKEN = 100;
+
+export function RecordTokenUse(token: string, usePayload: TokenUsePayload) {
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        const t = __accessTokens[index];
         if (!t.TokenUses) {
             t.TokenUses = [];
         }
-        t.TokenUses.push({ Token: token, UsedAt: new Date(), UsePayload: usePayload });
+        if (t.TokenUses.length >= MAX_TOKEN_USES_PER_TOKEN) {
+            t.TokenUses.shift();
+        }
+        t.TokenUses.push({ Token: t.Token, UsedAt: new Date(), UsePayload: usePayload });
     }
     else {
-        throw new Error(`Token ${token} does not exist`);
+        throw new Error('Access token does not exist');
     }
 }
 
 /** @deprecated Use {@link RecordTokenUse}. */
-export function recordTokenUse(token: string, usePayload: any) {
+export function recordTokenUse(token: string, usePayload: TokenUsePayload) {
     return RecordTokenUse(token, usePayload);
+}
+
+/** Helper exposed for tests to inspect token uses without exposing internal array. */
+export function GetTokenUsesForTest(token: string): ReadonlyArray<{ UsedAt: Date; UsePayload: TokenUsePayload }> | undefined {
+    const index = findMatchingAccessTokenIndex(token);
+    if (index >= 0) {
+        return __accessTokens[index].TokenUses;
+    }
+    return undefined;
 }

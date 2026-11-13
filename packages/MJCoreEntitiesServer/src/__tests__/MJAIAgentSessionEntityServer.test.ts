@@ -32,6 +32,7 @@ vi.mock('@memberjunction/core-entities', () => {
     /** Minimal stand-in for the generated MJAIAgentSessionEntity. */
     class StubSessionEntity {
         public IsSaved = true;
+        public ContextCurrentUser: unknown = null;
         public Config_: string | null = null;
         public ConfigField: StubConfigField | null = { Dirty: true, OldValue: null };
 
@@ -39,8 +40,11 @@ vi.mock('@memberjunction/core-entities', () => {
             return { Success: true, Errors: [] };
         }
 
+        /** Fields other than Config, by name; a test fills it. */
+        public Fields = new Map<string, { Dirty: boolean }>();
+
         public GetFieldByName(name: string): unknown {
-            return name === 'Config' ? this.ConfigField : null;
+            return name === 'Config' ? this.ConfigField : (this.Fields.get(name) ?? null);
         }
     }
     return { MJAIAgentSessionEntity: StubSessionEntity };
@@ -81,8 +85,13 @@ describe('channel scope protection', () => {
 });
 
 describe('PROTECTED_SESSION_CONFIG_KEYS', () => {
-    it('protects the janitor deadline and the verification state', () => {
-        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual(['maxSessionDeadlineIso', 'identityVerification', 'channels']);
+    it('protects the janitor deadline, verification state, channel scope, and mint snapshot', () => {
+        expect(PROTECTED_SESSION_CONFIG_KEYS).toEqual([
+            'maxSessionDeadlineIso',
+            'identityVerification',
+            'channels',
+            'realtimeMintSnapshot',
+        ]);
     });
 });
 
@@ -235,5 +244,114 @@ describe('MJAIAgentSessionEntityServer.Validate', () => {
         } finally {
             base.Validate = original;
         }
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — ConversationID is not rewritable by an anonymous caller (#4931)', () => {
+    /** A session whose Config is untouched, so only the ConversationID rule can refuse. */
+    function sessionWithConversationEdit(opts: { saved: boolean; conversationIdDirty: boolean; anonymous: boolean }): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: opts.saved, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; Fields: Map<string, { Dirty: boolean }> };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: opts.anonymous };
+        stub.Fields.set('ConversationID', { Dirty: opts.conversationIdDirty });
+        return entity;
+    }
+
+    it('refuses an anonymous caller re-pointing an existing session at another conversation', () => {
+        const result = sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: true }).Validate();
+        expect(result.Success).toBe(false);
+        expect(JSON.stringify(result.Errors)).toContain('ConversationID');
+    });
+
+    it('allows an anonymous caller to set ConversationID when it creates the session (SessionManager.persistNewSession)', () => {
+        expect(sessionWithConversationEdit({ saved: false, conversationIdDirty: true, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows an anonymous caller saving other fields (heartbeat, close)', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: false, anonymous: true }).Validate().Success).toBe(true);
+    });
+
+    it('allows a named caller changing ConversationID', () => {
+        expect(sessionWithConversationEdit({ saved: true, conversationIdDirty: true, anonymous: false }).Validate().Success).toBe(true);
+    });
+});
+
+describe('MJAIAgentSessionEntityServer.Validate — a transaction variable cannot set a guarded field after the check (#4931)', () => {
+    type GroupVar = { EntityObject: unknown; Type: 'Define' | 'Use'; FieldName: string };
+    /** A saved session with untouched fields, enrolled in a group with these variables. */
+    function inGroup(anonymous: boolean, variables: (self: unknown) => GroupVar[]): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: null, next: null, dirty: false });
+        const stub = entity as unknown as { ContextCurrentUser: unknown; TransactionGroup?: unknown };
+        stub.ContextCurrentUser = { ID: 'anon-user', IsMagicLinkAnonymous: anonymous };
+        stub.TransactionGroup = { Variables: variables(entity) };
+        return entity;
+    }
+
+    it("refuses an anonymous caller whose 'Use' variable will set ConversationID or ID at submit", () => {
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(false);
+        expect(inGroup(true, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'id' }]).Validate().Success).toBe(false);
+    });
+
+    it("refuses an untrusted 'Use' variable on Config, whose protected keys are compared only at Validate", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(false);
+    });
+
+    it("refuses an untrusted 'Use' variable on ID, which re-points the update (and its Config) at another user's session", () => {
+        expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'ID' }]).Validate().Success).toBe(false);
+    });
+
+    it("allows a 'Use' variable on Config inside a trusted scope, and a 'Use' variable on another row", async () => {
+        await RunWithTrustedSessionConfigWrites(async () => {
+            expect(inGroup(false, (self) => [{ EntityObject: self, Type: 'Use', FieldName: 'Config' }]).Validate().Success).toBe(true);
+        });
+        expect(inGroup(true, () => [{ EntityObject: {}, Type: 'Use', FieldName: 'ConversationID' }]).Validate().Success).toBe(true);
+    });
+});
+
+/*
+ * CloseReason is server-managed too: the owner may close their own row as 'Explicit' or 'Error' (what the
+ * CloseAgentSession mutation lets a client claim), but 'TimeLimit' is verified against the stored deadline inside
+ * SessionManager.CloseSession, and 'Idle' / 'Janitor' / 'Shutdown' are the janitor's and the host's own. Without this
+ * guard the generic UpdateMJAIAgentSession mutation would let an owner stamp any of them and skip the verification.
+ */
+describe('MJAIAgentSessionEntityServer.Validate — CloseReason', () => {
+    function closing(reason: string, dirty = true, previous: string | null = null): MJAIAgentSessionEntityServer {
+        const entity = session({ saved: true, previous: '{}', next: '{}', dirty: false });
+        const stub = entity as unknown as { CloseReason: string; Fields: Map<string, { Dirty: boolean; OldValue: string | null }> };
+        stub.CloseReason = reason;
+        stub.Fields.set('CloseReason', { Dirty: dirty, OldValue: previous });
+        return entity;
+    }
+
+    // A reason the server stamped is the audit record of how the session ended; the owner may not rewrite it either.
+    it.each(['TimeLimit', 'Idle', 'Janitor', 'Shutdown'])('refuses an untrusted save that replaces a stamped %s with Explicit', (stamped) => {
+        const result = closing('Explicit', true, stamped).Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Source).toBe('CloseReason');
+        expect(result.Errors[0].Message).toContain(stamped);
+    });
+
+    it('allows the owner to change their own Explicit close to Error', () => {
+        expect(closing('Error', true, 'Explicit').Validate().Success).toBe(true);
+    });
+
+    it.each(['TimeLimit', 'Idle', 'Janitor', 'Shutdown'])('refuses an untrusted save that sets CloseReason %s', (reason) => {
+        const result = closing(reason).Validate();
+        expect(result.Success).toBe(false);
+        expect(result.Errors[0].Source).toBe('CloseReason');
+        expect(result.Errors[0].Message).toContain(reason);
+    });
+
+    it.each(['Explicit', 'Error'])('allows an untrusted save that sets CloseReason %s', (reason) => {
+        expect(closing(reason).Validate().Success).toBe(true);
+    });
+
+    it('does not inspect CloseReason when it was not edited', () => {
+        expect(closing('Janitor', false).Validate().Success).toBe(true);
+    });
+
+    it('allows a server-only reason inside the trusted scope', async () => {
+        const entity = closing('TimeLimit');
+        await expect(RunWithTrustedSessionConfigWrites(async () => entity.Validate().Success)).resolves.toBe(true);
     });
 });

@@ -99,6 +99,8 @@ describe('RealtimeProxyRegistry relay sessions', () => {
         expect(expiresAfter({ MaxSessionSeconds: 7200 })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: 120, MaxSessionSeconds: 600 })).toBe(120);
         expect(expiresAfter({ MaxSessionSeconds: 0 })).toBe(1800); // no cap
+        expect(expiresAfter({ MaxSessionSeconds: 900.5 })).toBe(1800); // a fractional cap is invalid, so unset (same rule as ClampSessionSeconds)
+        expect(expiresAfter({ MaxSessionSeconds: Number.NaN })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: Number.NaN })).toBe(1800);
         expect(expiresAfter({ LifetimeSeconds: 0 })).toBe(1); // at least a second, never the default
     });
@@ -258,6 +260,55 @@ describe('RealtimeProxyRegistry relay sessions', () => {
         expect(registry().FindRelaySession(proxy.ID)).toBeNull();
         expect(registry().Consume(proxy.ID)?.UpstreamUrl).toBe('ws://hf.internal/v1/realtime');
         expect(registry().FindRelaySession(relayId)).not.toBeNull();
+    });
+
+    it('ExtendRelaySession extends expiry, increments MaxConnections, preserves handles, keeps session alive past the 5-minute open window, and notifies listeners', () => {
+        const id = issue({ LifetimeSeconds: 600, MaxConnections: 2 });
+        const grant1 = granted(registry().OpenRelaySession(id, FRESH));
+        registry().RecordRelayHandle(id, 'h-preserved');
+
+        const notified: number[] = [];
+        const unsub = grant1.OnExpiresAtExtended?.((newExpiresAtMs) => notified.push(newExpiresAtMs));
+
+        // Second connection consumes the cap of 2
+        expect(granted(registry().OpenRelaySession(id, resume('h-preserved'))).ConnectionNumber).toBe(2);
+        expect(refusal(registry().OpenRelaySession(id, resume('h-preserved')))).toBe('connection-cap');
+
+        advance(500);
+        const extended = registry().ExtendRelaySession(id, 1800, 10);
+        expect(extended).not.toBeNull();
+        expect(notified).toEqual([Date.now() + 1800 * 1000]);
+
+        // Without AllowFreshReopen, a handle-less open is still refused as 'fresh-used'
+        expect(refusal(registry().OpenRelaySession(id, FRESH))).toBe('fresh-used');
+
+        // 10 s after extending, a resume is granted
+        advance(10);
+        const grant3 = granted(registry().OpenRelaySession(id, resume('h-preserved')));
+        expect(grant3.ConnectionNumber).toBe(3);
+        expect(grant3.MaxConnections).toBe(12);
+
+        // 6 minutes later (past the 300s open window), the session is NOT pruned and can still resume (#1b repro)
+        const countBeforeAdvance = registry().RelaySessionCount;
+        advance(360);
+        expect(registry().RelaySessionCount).toBe(countBeforeAdvance);
+        expect(registry().FindRelaySession(id)).not.toBeNull();
+        const grant4 = granted(registry().OpenRelaySession(id, resume('h-preserved')));
+        expect(grant4.ConnectionNumber).toBe(4);
+
+        // While a tunnel listener is still attached, AllowFreshReopen does NOT re-arm a fresh open
+        registry().ExtendRelaySession(id, 1800, 2, { AllowFreshReopen: true });
+        expect(refusal(registry().OpenRelaySession(id, FRESH))).toBe('fresh-used');
+
+        // Once the tunnel closes (unsubscribes), AllowFreshReopen re-arms exactly one handle-less reopen
+        unsub?.();
+        registry().ExtendRelaySession(id, 2400, 5, { AllowFreshReopen: true });
+        expect(notified).toHaveLength(2);
+        expect(registry().FindRelaySession(id)).not.toBeNull();
+        const grant5 = granted(registry().OpenRelaySession(id, FRESH));
+        expect(grant5.Resumed).toBe(false);
+        expect(grant5.ConnectionNumber).toBe(5);
+        expect(refusal(registry().OpenRelaySession(id, FRESH))).toBe('fresh-used');
     });
 });
 

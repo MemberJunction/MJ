@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 
 import { PredictiveStudioScheduleModelScoringAction } from '../schedule-model-scoring.action';
@@ -7,6 +8,7 @@ import type {
   ScheduleModelScoringOptions,
   ScheduledModelScoringResult,
 } from '../../scheduling/scheduled-model-scoring';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the Schedule Model Scoring action. NO live DB — the scheduling
@@ -68,14 +70,17 @@ function validParams(extra: ActionParam[] = []): ActionParam[] {
   ];
 }
 
+/** Each required param, paired with a param list that omits it. */
+const MISSING_PARAM_CASES: Array<[string, ActionParam[]]> = [
+  ['ModelID', [{ Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
+  ['TargetEntityName', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
+  ['ScopeFilter', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }]],
+];
+
 describe('PredictiveStudioScheduleModelScoringAction — validation', () => {
-  it.each([
-    ['ModelID', [{ Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
-    ['TargetEntityName', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
-    ['ScopeFilter', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }]],
-  ] as const)('fails when %s is missing', async (_missing, list) => {
+  it.each(MISSING_PARAM_CASES)('fails when %s is missing', async (_missing, list) => {
     const scheduler = new MockScheduler(STUB_RESULT);
-    const result = await new TestableAction(scheduler.fn).run(params(list as ActionParam[]));
+    const result = await new TestableAction(scheduler.fn).run(params(list));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('VALIDATION_ERROR');
     expect(scheduler.CallCount).toBe(0);
@@ -91,6 +96,19 @@ describe('PredictiveStudioScheduleModelScoringAction — validation', () => {
 });
 
 describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', () => {
+  it("passes the caller's provider through, and the global provider when the caller supplied none", async () => {
+    const callerProvider = { tag: 'caller' } as unknown as IMetadataProvider;
+    const withProvider = new MockScheduler(STUB_RESULT);
+    await new TestableAction(withProvider.fn).run({ ...params(validParams()), Provider: callerProvider } as RunActionParams);
+    expect(withProvider.LastOpts?.provider).toBe(callerProvider);
+    const global = { tag: 'global' } as unknown as IMetadataProvider;
+    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(global);
+    const withoutProvider = new MockScheduler(STUB_RESULT);
+    await new TestableAction(withoutProvider.fn).run(params(validParams()));
+    expect(withoutProvider.LastOpts?.provider).toBe(global);
+    vi.restoreAllMocks();
+  });
+
   it('maps the conversational params onto the helper options and returns the RP id + cron', async () => {
     const scheduler = new MockScheduler(STUB_RESULT);
     const p = params(validParams());
@@ -157,10 +175,12 @@ describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', 
   });
 
   it('maps a thrown helper error onto SCHEDULE_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
     const scheduler = { fn: async (): Promise<ScheduledModelScoringResult> => { throw new Error('save blew up'); } };
     const result = await new TestableAction(scheduler.fn).run(params(validParams()));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('SCHEDULE_FAILED');
     expect(result.Message).toContain('save blew up');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("save blew up")]);
   });
 });

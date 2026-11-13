@@ -372,23 +372,23 @@
 
     <!-- Conversations Section -->
     <mj-collapsible-panel
-        SectionKey="mJConversations"
+        SectionKey="mJConversationsUserID"
         SectionName="Conversations"
         Icon="fa-regular fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversations')"
+        [BadgeCount]="GetSectionRowCount('mJConversationsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversations','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJConversations')"
+                [AllowLoad]="IsSectionExpanded('mJConversationsUserID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -3345,6 +3345,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Conversations (Resolved By User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationsResolvedByUserID"
+        SectionName="Conversations (Resolved By User)"
+        Icon="fa-regular fa-comments"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationsResolvedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','ResolvedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversations','ResolvedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJConversationsResolvedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationsResolvedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agent User Policies Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgentUserPolicies"
@@ -3364,6 +3389,106 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentUserPolicies', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Diagnostic Sessions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticSessions"
+        SectionName="Diagnostic Sessions"
+        Icon="fa fa-stethoscope"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticSessions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Sessions','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Sessions','CreatedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticSessions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Diagnostic Bundles (Created By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticBundlesCreatedByUserID"
+        SectionName="Diagnostic Bundles (Created By User ID)"
+        Icon="fa fa-box-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticBundlesCreatedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Bundles','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Bundles','CreatedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticBundlesCreatedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticBundlesCreatedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Diagnostic Bundles (Approved By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticBundlesApprovedByUserID"
+        SectionName="Diagnostic Bundles (Approved By User ID)"
+        Icon="fa fa-box-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticBundlesApprovedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Bundles','ApprovedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Bundles','ApprovedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticBundlesApprovedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticBundlesApprovedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Artifact Working States Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifactWorkingStates"
+        SectionName="Artifact Working States"
+        Icon="fa fa-file-code"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifactWorkingStates')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Working States','LastModifiedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Working States','LastModifiedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactWorkingStates')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactWorkingStates', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

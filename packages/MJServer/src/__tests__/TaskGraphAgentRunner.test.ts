@@ -1,18 +1,53 @@
 /**
- * Tests for `TaskGraphAgentRunner`.
- *
- * Verifies that when a task node in a durable task graph executes a specialist agent
- * (such as Query Builder or Research Report Writer) and finishes with a payload,
- * the runner resolves the originating `ConversationDetailID` and persists artifacts
- * via `AgentRunner.ProcessAgentArtifacts`.
+ * Tests for `TaskGraphAgentRunner`:
+ * - VS-CON-7 preset resolution (`ConfigurationPresetName`)
+ * - VS-INV-2b / VS-QA-3 #9 `parentAgentHierarchy` from submitted task
+ * - Specialist agent artifact persistence (`ProcessAgentArtifacts`), `CanUserRunAgent` permission check,
+ *   task Name/Description prompt formatting, and output normalization.
  */
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { TaskAgentRunParams } from '@memberjunction/task-graph';
 
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
+const {
+    runAgent,
+    processAgentArtifacts,
+    canUserRunAgent,
+    mockEngineAgents,
+    mockGetAgentConfigurationPresets,
+    mockEngineConfig,
+    mockRunView,
+    mockLogError,
+} = vi.hoisted(() => ({
+    runAgent: vi.fn(),
+    processAgentArtifacts: vi.fn(),
+    canUserRunAgent: vi.fn().mockResolvedValue(true),
+    mockEngineAgents: [
+        { ID: 'agent-1', Name: 'Storyboard Artist' },
+        { ID: 'qb-agent' },
+        { ID: 'writer-agent' },
+    ] as Array<{ ID: string; Name?: string }>,
+    mockGetAgentConfigurationPresets: vi.fn(),
+    mockEngineConfig: vi.fn(),
+    mockRunView: vi.fn(),
+    mockLogError: vi.fn(),
 }));
+
+const mockRunAgent = runAgent;
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: (...args: unknown[]) => mockLogError(...args),
+        LogStatus: vi.fn(),
+        RunView: class {
+            static FromMetadataProvider = () => ({ RunView: mockRunView });
+            RunView = mockRunView;
+        },
+    };
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
@@ -28,34 +63,300 @@ vi.mock('@memberjunction/core-entities', () => ({
 vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIAgentEntityExtended: class {},
     MJAIAgentRunEntityExtended: class {},
+    TASK_SECURITY_ENVELOPE_VERSION: 1,
 }));
 vi.mock('@memberjunction/ai', () => ({ ChatMessageRole: { user: 'user' } }));
 
-const { runAgent, processAgentArtifacts, canUserRunAgent, mockEngineAgents } = vi.hoisted(() => ({
-    runAgent: vi.fn(),
-    processAgentArtifacts: vi.fn(),
-    canUserRunAgent: vi.fn().mockResolvedValue(true),
-    mockEngineAgents: [{ ID: 'qb-agent' }, { ID: 'writer-agent' }] as Array<{ ID: string }>,
+const { mockActions } = vi.hoisted(() => ({
+    mockActions: [] as Array<{ ID: string; Config_Object: { disallowWhenTainted?: boolean } | null }>,
 }));
+vi.mock('@memberjunction/actions', () => ({
+    ActionEngineServer: { Instance: { Config: vi.fn(), get Actions() { return mockActions; } } },
+}));
+
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: class {
         RunAgent = runAgent;
         ProcessAgentArtifacts = processAgentArtifacts;
     },
 }));
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
             return {
+                Config: mockEngineConfig,
                 Agents: mockEngineAgents,
                 CanUserRunAgent: canUserRunAgent,
+                GetAgentConfigurationPresets: mockGetAgentConfigurationPresets,
+                FindActiveAgentConfigurationPreset: (agentId: string, presetName: string) => {
+                    const target = presetName.trim().toLowerCase();
+                    if (!target) return undefined;
+                    const presets = (mockGetAgentConfigurationPresets(agentId, true) ?? []) as Array<{
+                        Name?: string;
+                        DisplayName?: string;
+                    }>;
+                    return presets.find((p) => p.Name?.trim().toLowerCase() === target)
+                        ?? presets.find((p) => p.DisplayName?.trim().toLowerCase() === target);
+                },
             };
         },
     },
 }));
 
-import { TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { TaintedActionRemovals, TaskGraphAgentRunner } from '../services/TaskGraphAgentRunner';
+
+interface SubmittingRunOverrides {
+    ID?: string;
+    ConfigurationID?: string | null;
+    Agent?: string | null;
+    AgentID?: string | null;
+    ParentRunID?: string | null;
+    UserID?: string | null;
+    LoadSuccess?: boolean;
+}
+
+function makeParams(
+    overrides: Partial<TaskAgentRunParams> = {},
+    parentConfigurationID: string | null = 'parent-cfg-1',
+    submittingRunOverrides: SubmittingRunOverrides = {},
+): TaskAgentRunParams {
+    const loadSuccess = submittingRunOverrides.LoadSuccess ?? true;
+    const provider = {
+        GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+            if (entityName === 'MJ: AI Agents') {
+                return {
+                    Load: vi.fn().mockResolvedValue(true),
+                    ID: overrides.AgentID ?? 'agent-1',
+                    Name: 'Storyboard Artist',
+                };
+            }
+            if (entityName === 'MJ: Tasks') {
+                return {
+                    Load: vi.fn().mockResolvedValue(false),
+                };
+            }
+            return {
+                Load: vi.fn().mockResolvedValue(loadSuccess),
+                ID: submittingRunOverrides.ID ?? 'submitting-run-1',
+                ConfigurationID:
+                    'ConfigurationID' in submittingRunOverrides
+                        ? submittingRunOverrides.ConfigurationID
+                        : parentConfigurationID,
+                Agent: submittingRunOverrides.Agent ?? null,
+                AgentID: submittingRunOverrides.AgentID ?? null,
+                ParentRunID: submittingRunOverrides.ParentRunID ?? null,
+                UserID: submittingRunOverrides.UserID ?? null,
+            };
+        }),
+    } as unknown as IMetadataProvider;
+
+    return {
+        TaskID: 'task-1',
+        AgentID: 'agent-1',
+        InputPayload: 'Draw the opening shot',
+        DependencyOutputs: new Map(),
+        SubmittingAgentRunID: 'submitting-run-1',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as unknown as UserInfo,
+        ...overrides,
+    };
+}
+
+describe('VS-CON-7: TaskGraphAgentRunner preset resolution', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('resolves ConfigurationPresetName to the matching preset AIConfigurationID', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-draft',
+                Name: 'Draft',
+                DisplayName: 'Draft Mode',
+                AIConfigurationID: 'cfg-draft-1',
+                Status: 'Active',
+            },
+            {
+                ID: 'preset-high',
+                Name: 'High',
+                DisplayName: 'High Fidelity',
+                AIConfigurationID: 'cfg-high-1',
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'high fidelity' })
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBe('cfg-high-1');
+    });
+
+    it('passes configurationId: undefined when the matched preset has NULL AIConfigurationID, even if the submitting run has a ConfigurationID', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-default',
+                Name: 'SystemDefault',
+                DisplayName: 'System Default',
+                AIConfigurationID: null,
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'SystemDefault' }, 'parent-cfg-1')
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBeUndefined();
+    });
+
+    it('falls back to the submitting run ConfigurationID when ConfigurationPresetName is not specified', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(makeParams({}, 'parent-cfg-99'));
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].configurationId).toBe('parent-cfg-99');
+    });
+
+    it('fails the task with a clear message when ConfigurationPresetName does not match any active preset at run time', async () => {
+        mockGetAgentConfigurationPresets.mockReturnValue([
+            {
+                ID: 'preset-draft',
+                Name: 'Draft',
+                DisplayName: 'Draft Mode',
+                AIConfigurationID: 'cfg-draft-1',
+                Status: 'Active',
+            },
+        ]);
+
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ ConfigurationPresetName: 'DeletedPreset' })
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe(
+            "Agent 'Storyboard Artist' has no active preset 'DeletedPreset'. Available: Draft."
+        );
+        expect(mockRunAgent).not.toHaveBeenCalled();
+    });
+});
+
+describe('VS-INV-2b / VS-QA-3 #9: TaskGraphAgentRunner parentAgentHierarchy from submitted task', () => {
+    const RUN_B_ID = '22222222-2222-4222-8222-222222222222';
+    const RUN_C_ID = '33333333-3333-4333-8333-333333333333';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('reads root-first ParentAgentHierarchy carried from the submitted task without running RunView in a loop (VS-QA-3 #9)', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams(
+            {
+                SubmittingAgentRunID: RUN_C_ID,
+                ParentAgentHierarchy: ['A', 'B', 'C'],
+            },
+            'parent-cfg-1',
+            { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
+        );
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['A', 'B', 'C']);
+    });
+
+    it('falls back to the loaded parentRun agent name when ParentAgentHierarchy is omitted, with zero RunView calls', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams(
+            { SubmittingAgentRunID: RUN_C_ID },
+            'parent-cfg-1',
+            { ID: RUN_C_ID, Agent: 'C', ParentRunID: RUN_B_ID },
+        );
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toEqual(['C']);
+    });
+
+    it('passes undefined parentAgentHierarchy and performs no RunView reads when there is no parentRun and no ParentAgentHierarchy', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const result = await runner.RunAgentForTask(
+            makeParams({ SubmittingAgentRunID: undefined }),
+        );
+
+        expect(result.Success).toBe(true);
+        expect(mockRunView).not.toHaveBeenCalled();
+        expect(mockRunAgent).toHaveBeenCalledTimes(1);
+        expect(mockRunAgent.mock.calls[0][0].parentAgentHierarchy).toBeUndefined();
+    });
+});
+
+describe('TaskGraphAgentRunner submitting run that does not resolve (#4623)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        processAgentArtifacts.mockResolvedValue(undefined);
+        mockEngineConfig.mockResolvedValue(undefined);
+        mockRunAgent.mockResolvedValue({
+            success: true,
+            agentRun: { ID: 'child-run-1', Message: 'Done' },
+            payload: { result: 'ok' },
+        });
+    });
+
+    it('logs when the submitting run is not found, and runs the agent with no parentRun', async () => {
+        const runner = new TaskGraphAgentRunner();
+        const params = makeParams({ SubmittingAgentRunID: 'missing-run-1' }, 'parent-cfg-1', { LoadSuccess: false });
+
+        const result = await runner.RunAgentForTask(params);
+
+        expect(result.Success).toBe(true);
+        expect(mockRunAgent.mock.calls[0][0].parentRun).toBeUndefined();
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('missing-run-1') && m.includes('was not found'))).toBe(true);
+    });
+
+    it('does not log when there is no submitting run to load', async () => {
+        const runner = new TaskGraphAgentRunner();
+
+        await runner.RunAgentForTask(makeParams({ SubmittingAgentRunID: undefined }));
+
+        const messages = mockLogError.mock.calls.map((c) => String(c[0]));
+        expect(messages.some((m) => m.includes('was not found'))).toBe(false);
+    });
+});
 
 describe('TaskGraphAgentRunner', () => {
     beforeEach(() => {
@@ -264,3 +565,76 @@ describe('TaskGraphAgentRunner', () => {
     });
 });
 
+describe('TaskGraphAgentRunner security envelope (S1, S2, S7)', () => {
+    const EGRESS_ACTION = 'e0000000-0000-4000-8000-000000000001';
+    const SAFE_ACTION = 'e0000000-0000-4000-8000-000000000002';
+    const SEARCH_SCOPE = 'e0000000-0000-4000-8000-000000000003';
+    const READER = 'e0000000-0000-4000-8000-000000000004';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        canUserRunAgent.mockResolvedValue(true);
+        mockRunAgent.mockResolvedValue({ success: true, agentRun: { ID: 'child-run-1' }, payload: {} });
+        mockActions.length = 0;
+        mockActions.push(
+            { ID: EGRESS_ACTION, Config_Object: { disallowWhenTainted: true } },
+            { ID: SAFE_ACTION, Config_Object: null },
+        );
+    });
+
+    it('starts the run with the same scope, search scopes, audience, bindings and envelope', async () => {
+        const env = {
+            Version: 1 as const,
+            IsRunTainted: false,
+            BoundActionParams: { [SAFE_ACTION]: { OrganizationID: 'org-A' } },
+            Audience: { ReaderUserIDs: [READER] },
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'org-A', SecondaryScopes: { Region: 'eu' }, SearchScopeIDs: [SEARCH_SCOPE] },
+        };
+        await new TaskGraphAgentRunner().RunAgentForTask(makeParams({ SecurityEnvelope: env }));
+        const runParams = mockRunAgent.mock.calls[0][0];
+        expect(runParams.SecurityEnvelope).toEqual(env);
+        expect(runParams.PrimaryScopeEntityName).toBe('Organizations');
+        expect(runParams.PrimaryScopeRecordID).toBe('org-A');
+        expect(runParams.SecondaryScopes).toEqual({ Region: 'eu' });
+        expect(runParams.SearchScopeIDs).toEqual([SEARCH_SCOPE]);
+        expect(runParams.Audience).toEqual({ Mode: 'Intersection', UserIDs: [READER] });
+        expect(runParams.boundActionParams).toEqual({ [SAFE_ACTION]: { OrganizationID: 'org-A' } });
+        expect(runParams.actionChanges).toBeUndefined();
+    });
+
+    it('takes the actions a tainted run may not call away from a tainted node, and reports its output tainted', async () => {
+        const result = await new TaskGraphAgentRunner().RunAgentForTask(makeParams({ SecurityEnvelope: { Version: 1, IsRunTainted: true } }));
+        expect(mockRunAgent.mock.calls[0][0].actionChanges).toEqual([{ scope: 'global', mode: 'remove', actionIds: [EGRESS_ACTION] }]);
+        expect(result.IsOutputTainted).toBe(true);
+    });
+
+    it('runs as the per-task clone the dispatcher handed it, not the shared cached user', async () => {
+        const shared = { ID: 'user-1' } as unknown as UserInfo;
+        const cached = UserCache.Instance.Users as UserInfo[];
+        cached.push(shared);
+        try {
+            const clone = { ID: 'user-1', TenantContext: { TenantID: 'org-A', Source: 'header' } } as unknown as UserInfo;
+            const params = makeParams(
+                { ContextUser: clone, SecurityEnvelope: { Version: 1, IsRunTainted: false, CallerTenantContext: { TenantID: 'org-A', Source: 'header' } } },
+                'parent-cfg-1',
+                { UserID: 'USER-1' },
+            );
+            await new TaskGraphAgentRunner().RunAgentForTask(params);
+            expect(mockRunAgent.mock.calls[0][0].contextUser).toBe(clone);
+        } finally {
+            cached.length = 0;
+        }
+    });
+
+    it('runs a step of an unconstrained graph under a clean envelope, so taint gained mid-run still gates egress (M1)', async () => {
+        await new TaskGraphAgentRunner().RunAgentForTask(makeParams());
+        const runParams = mockRunAgent.mock.calls[0][0];
+        expect(runParams.SecurityEnvelope).toEqual({ Version: 1, IsRunTainted: false });
+        expect(runParams.actionChanges).toBeUndefined();
+        expect(runParams.Audience).toBeUndefined();
+    });
+
+    it('lists no change when no action is gated', () => {
+        expect(TaintedActionRemovals([{ ID: SAFE_ACTION, Config_Object: null }])).toEqual([]);
+    });
+});

@@ -212,6 +212,14 @@ describe('HuggingFaceRealtime', () => {
             expect(pact['sampleRate']).toBe(HUGGINGFACE_DEFAULT_PCM_SAMPLE_RATE);
         });
 
+        it('carries the host cap as MaxSessionSeconds, and leaves it unset when the host sets none (no provider cap is known)', async () => {
+            const driver = new TestHuggingFaceRealtime('secret-key');
+            process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
+            expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+            const unset = await driver.CreateClientSession(makeParams());
+            expect(unset.MaxSessionSeconds).toBeUndefined();
+        });
+
         it('takes the proxy origin from Config.proxyBaseUrl before MJAPI_PUBLIC_URL', async () => {
             const driver = new TestHuggingFaceRealtime('secret-key');
             process.env['MJAPI_PUBLIC_URL'] = 'https://mjapi.example.com';
@@ -628,3 +636,33 @@ describe('QA hardening regressions (plan A-items, HF-specific)', () => {
         expect(seen).toHaveLength(0);
     });
 });
+
+describe('HuggingFaceRealtime DriverFacts', () => {
+    it('declares its own DriverFacts, with the provider ceiling unknown', () => {
+        expect(Object.prototype.hasOwnProperty.call(HuggingFaceRealtime, 'DriverFacts')).toBe(true);
+        expect(HuggingFaceRealtime.DriverFacts.ProviderMaxSessionSeconds).toBeUndefined();
+    });
+
+    it('declares no SupportedTurnSettings: its profile maps no normalized turn field', () => {
+        expect(HuggingFaceRealtime.DriverFacts.SupportedTurnSettings).toBeUndefined();
+    });
+
+    it('reconnects in place by delegating to OpenAIRealtimeSession.Reconnect with a fresh raw connection (#21)', async () => {
+        const driver = new TestHuggingFaceRealtime('secret');
+        const session = await startSession(driver, makeParams({ SystemPrompt: 'HF base prompt.' }));
+        const conn1 = driver.Fake;
+        driver.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'HF user turn' });
+
+        const conn2 = new FakeConnection();
+        driver.Fake = conn2;
+        const reconnectPromise = session.TriggerReconnect('duration-expiry');
+        await new Promise((r) => setTimeout(r, 0));
+        conn2.Fire({ type: 'session.created' } as unknown as RealtimeServerEvent);
+        expect(await reconnectPromise).toBe(true);
+
+        expect(conn1.Closed).toBe(true);
+        const update = conn2.Sent.find((e) => e.type === 'session.update');
+        expect(update).toBeDefined();
+    });
+});
+

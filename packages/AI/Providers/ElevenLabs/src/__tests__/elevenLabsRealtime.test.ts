@@ -17,6 +17,7 @@ import {
     ElevenLabsServerEvent,
     ELEVENLABS_SUPPORTED_TURN_SETTINGS,
     MapTurnEagerness,
+    ElevenLabsManagedAgentCache,
 } from '../elevenLabsRealtime';
 
 /* ------------------------------------------------------------------ */
@@ -289,6 +290,11 @@ function collect(session: IRealtimeSession): {
 /*  Managed-agent ensure flow                                          */
 /* ------------------------------------------------------------------ */
 
+// The ensure cache is process-wide (MJ#4803): every test in this file starts from an empty one.
+beforeEach(() => {
+    ElevenLabsManagedAgentCache.Instance.Clear();
+});
+
 describe('ElevenLabsRealtime managed-agent ensure flow', () => {
     let driver: TestElevenLabsRealtime;
 
@@ -457,6 +463,8 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(paths.length).toBeGreaterThan(1); // prompt + voice at minimum
 
         for (const path of paths) {
+            // A fresh PROCESS, not just a fresh driver: the ensure cache is shared across instances.
+            ElevenLabsManagedAgentCache.Instance.Clear();
             const fresh = new TestElevenLabsRealtime('fake-api-key');
             const stale = makeAgentDetail({ agentId: 'agent_x', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
             stale.platformSettings = {
@@ -538,6 +546,26 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         expect(driver.CreateBodies[0].conversationConfig?.turn?.turnEagerness).toBe('patient');
     });
 
+    /**
+     * turnTimeout is the wait before re-engaging a SILENT user and silenceEndCallTimeout ends the
+     * call; neither is an end-of-speech silence duration, so no normalized turn field may move them.
+     */
+    it('leaves turnTimeout and silenceEndCallTimeout unset whatever the normalized turn fields say', async () => {
+        await driver.CreateClientSession(makeParams({
+            Tools: [WEATHER_TOOL],
+            Config: {
+                turnDetection: {
+                    Mode: 'serverVad', Eagerness: 'high', Threshold: 0.2, SilenceDurationMs: 900,
+                    Coverage: 'audioActivityOnly',
+                },
+            },
+        }));
+        const turn = driver.CreateBodies[0].conversationConfig?.turn;
+        expect(turn).toEqual({ turnEagerness: 'eager' });
+        expect(turn?.turnTimeout).toBeUndefined();
+        expect(turn?.silenceEndCallTimeout).toBeUndefined();
+    });
+
     it('omits the turn block entirely when no eagerness is configured', async () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
         expect(driver.CreateBodies[0].conversationConfig?.turn).toBeUndefined();
@@ -582,6 +610,100 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
         await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
 
         expect(driver.UpdateCalls).toEqual([]);
+    });
+
+    /* ------------- #6182: native max duration is the clamped session cap ------------- */
+
+    // The cap is a conversation setting; it must not leak into the turn settings (turnTimeout re-engages a silent user).
+    it('a capped agent keeps the cap off the turn settings', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900, Config: { turnDetection: { Eagerness: 'high' } } }));
+        const body = driver.CreateBodies[0].conversationConfig;
+        expect(body?.conversation?.maxDurationSeconds).toBe(900);
+        expect(body?.turn).toEqual({ turnEagerness: 'eager' });
+    });
+
+    it('MaxSessionSeconds 900 lands on conversationConfig.conversation.maxDurationSeconds', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+    });
+
+    it('clamps MaxSessionSeconds to the 7200s provider ceiling', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 9000 }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(7200);
+    });
+
+    // With no host cap the driver sends no max duration, so the agent keeps its own setting (ElevenLabs creates agents
+    // with 600 s, not the 7200 s ceiling); the driver does not know that value, so it reports none rather than 7200.
+    it('ClientConfig carries the cap put on the agent: the clamped host cap, or none when the host sets none', async () => {
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 9000 }))).MaxSessionSeconds).toBe(7200);
+        expect((await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }))).MaxSessionSeconds).toBeUndefined();
+    });
+
+    it('a verbatim agent id reports no cap: MJ writes nothing onto an agent it does not manage', async () => {
+        const config = await driver.CreateClientSession(makeParams({ Model: 'agent_hand_tuned', Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(config.MaxSessionSeconds).toBeUndefined();
+    });
+
+    it('absent MaxSessionSeconds leaves conversation unset', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation).toBeUndefined();
+    });
+
+    /*
+     * The cap is agent-BODY state, so it is part of the managed agent's identity (its name):
+     * a capped session never writes its cap onto the agent an uncapped session uses, and two
+     * sessions with different caps never PATCH one shared agent back and forth.
+     */
+    it('a capped session gets its own agent; a later uncapped session keeps the shared one untouched', async () => {
+        const shared = makeAgentDetail({ agentId: 'agent_shared', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] });
+        driver.Agents = [shared];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.CreateBodies[0].name).toBe(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900));
+        expect(driver.CreateBodies[0].conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies).toHaveLength(1);
+        expect(driver.SignedUrlMints.at(-1)).toBe('agent_shared');
+        expect(shared.conversationConfig?.conversation).toBeUndefined();
+    });
+
+    it('two different caps resolve to two different agents', async () => {
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 1800 }));
+        expect(driver.UpdateCalls).toEqual([]);
+        expect(driver.CreateBodies.map((b) => b.name)).toEqual([
+            ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900),
+            ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 1800),
+        ]);
+        expect(driver.CreateBodies.map((b) => b.conversationConfig?.conversation?.maxDurationSeconds)).toEqual([900, 1800]);
+    });
+
+    it('ManagedAgentName keeps the uncapped name exactly and suffixes a cap', () => {
+        expect(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', undefined)).toBe('MJ Realtime Co-Agent');
+        expect(ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900)).toBe('MJ Realtime Co-Agent (max 900s)');
+    });
+
+    it('maxDurationSeconds joins the drift check (a capped agent re-PATCHes when its stored cap drifted)', async () => {
+        const stored = makeAgentDetail({
+            agentId: 'agent_cap', name: ElevenLabsRealtime.ManagedAgentName('MJ Realtime Co-Agent', 900), tools: [WEATHER_TOOL],
+        });
+        stored.conversationConfig!.conversation = { maxDurationSeconds: 600 };
+        driver.Agents = [stored];
+
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        expect(driver.UpdateCalls).toHaveLength(1);
+        expect(driver.UpdateCalls[0].body.conversationConfig?.conversation?.maxDurationSeconds).toBe(900);
+
+        // And a matching stored cap is left alone; so is a hand-tuned cap when the host sets none.
+        stored.conversationConfig!.conversation = { maxDurationSeconds: 900 };
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL], MaxSessionSeconds: 900 }));
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.UpdateCalls).toHaveLength(1);
     });
 
     it('an eagerness change inside ONE process is not served from the ensure cache', async () => {
@@ -683,6 +805,67 @@ describe('ElevenLabsRealtime managed-agent ensure flow', () => {
 
         expect(cfg.SessionConfig['agentId']).toBe('agent_older');
         expect(driver.CreateBodies).toEqual([]);
+    });
+
+    it('serves a later session on a NEW driver instance from the cache: only the signed URL is fetched (MJ#4803)', async () => {
+        // The session service builds a fresh driver per session, so a per-instance cache never hit and every
+        // voice session start paid list → get (→ PATCH) → signed URL, about 3.8 s, before it could connect.
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(driver.ListCalls).toHaveLength(1);
+
+        const nextSession = new TestElevenLabsRealtime('fake-api-key');
+        nextSession.Agents = driver.Agents;
+        await nextSession.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(nextSession.ListCalls).toEqual([]);
+        expect(nextSession.GetCalls).toEqual([]);
+        expect(nextSession.UpdateCalls).toEqual([]);
+        expect(nextSession.SignedUrlMints).toEqual(['agent_existing_7']);
+    });
+
+    it('re-runs the ensure once a cache entry is older than the TTL, so drift made elsewhere is repaired', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+            driver.Agents = [
+                makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+            ];
+            await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(driver.ListCalls).toHaveLength(1);
+
+            // Inside the TTL a new driver instance is still served from the cache.
+            vi.setSystemTime(new Date('2026-01-01T00:09:59Z'));
+            const withinTtl = new TestElevenLabsRealtime('fake-api-key');
+            withinTtl.Agents = driver.Agents;
+            await withinTtl.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(withinTtl.ListCalls).toEqual([]);
+
+            // Past the TTL the next start re-verifies the agent.
+            vi.setSystemTime(new Date('2026-01-01T00:10:01Z'));
+            const afterTtl = new TestElevenLabsRealtime('fake-api-key');
+            afterTtl.Agents = driver.Agents;
+            await afterTtl.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+            expect(afterTtl.ListCalls).toHaveLength(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps the cache per API key: another account runs its own ensure (MJ#4803)', async () => {
+        driver.Agents = [
+            makeAgentDetail({ agentId: 'agent_existing_7', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await driver.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+
+        const otherAccount = new TestElevenLabsRealtime('another-api-key');
+        otherAccount.Agents = [
+            makeAgentDetail({ agentId: 'agent_other_1', name: 'MJ Realtime Co-Agent', tools: [WEATHER_TOOL] }),
+        ];
+        await otherAccount.CreateClientSession(makeParams({ Tools: [WEATHER_TOOL] }));
+        expect(otherAccount.ListCalls).toHaveLength(1);
+        expect(otherAccount.SignedUrlMints).toEqual(['agent_other_1']);
     });
 
     it('caches the ensure result per name + tool fingerprint (no repeat REST round-trips)', async () => {
@@ -1144,7 +1327,7 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
             }
         });
 
-        it('completes the tool round-trip: client_tool_call → client_tool_result with parsed JSON', async () => {
+        it('completes the tool round-trip: client_tool_call → client_tool_result carrying the JSON string unchanged (MJ#4806)', async () => {
             driver.Emit({
                 type: 'client_tool_call',
                 client_tool_call: { tool_name: 'get_weather', tool_call_id: 'call-1', parameters: { city: 'NYC' } },
@@ -1155,7 +1338,8 @@ describe('ElevenLabsRealtime server-bridged session (StartSession)', () => {
             expect(driver.Socket.SentFrames().at(-1)).toEqual({
                 type: 'client_tool_result',
                 tool_call_id: 'call-1',
-                result: { tempF: 72 },
+                // A string, not an object: ElevenLabs closes the conversation on an object result (MJ#4806).
+                result: '{"tempF":72}',
                 is_error: false,
             });
         });
@@ -1429,5 +1613,115 @@ describe('SanitizeToolParametersForElevenLabs — leaf descriptions', () => {
         const props = out['properties'] as Record<string, Record<string, unknown>>;
         expect(props['a']['description']).toBe('has one');
         expect(props['b']['description']).toBeUndefined();
+    });
+});
+
+describe('ElevenLabsRealtimeSession — long-call duration reconnect and history seeding', () => {
+    it('reconnects before ConnectionDurationSeconds expires and seeds prior turns via contextual_update', async () => {
+        vi.useFakeTimers();
+        try {
+            class MultiSocketElevenLabsRealtime extends TestElevenLabsRealtime {
+                public Sockets: FakeSocket[] = [];
+                protected override async connectConversation(args: ElevenLabsConnectArgs): Promise<ElevenLabsRealtimeSocket> {
+                    this.LastConnectArgs = args;
+                    const s = new FakeSocket();
+                    this.Socket = s;
+                    this.Sockets.push(s);
+                    queueMicrotask(() => {
+                        args.OnMessage({
+                            type: 'conversation_initiation_metadata',
+                            conversation_initiation_metadata_event: {
+                                conversation_id: `conv_${this.Sockets.length}`,
+                                agent_output_audio_format: 'pcm_16000',
+                                user_input_audio_format: 'pcm_16000',
+                            },
+                        });
+                    });
+                    return s;
+                }
+            }
+
+            const driver = new MultiSocketElevenLabsRealtime('fake-api-key');
+            const session = await driver.StartSession(
+                makeParams({
+                    Config: {
+                        connectionMaxSeconds: 120,
+                        reconnectBufferSeconds: 10,
+                    },
+                })
+            );
+            expect(driver.Sockets).toHaveLength(1);
+
+            // Emit user and agent transcripts on the first socket
+            driver.Emit({
+                type: 'user_transcript',
+                user_transcription_event: { user_transcript: 'Please remember ticket 9988.' },
+            });
+            driver.Emit({
+                type: 'agent_response',
+                agent_response_event: { agent_response: 'I have noted ticket 9988.' },
+            });
+            driver.Emit({
+                type: 'agent_response_complete',
+            });
+
+            // Advance into the soft reconnect window
+            await vi.advanceTimersByTimeAsync(95_000);
+
+            expect(driver.Sockets).toHaveLength(2);
+            expect(driver.Sockets[0].Closed).toBe(true);
+
+            const secondFrames = driver.Sockets[1].SentFrames();
+            expect(secondFrames[0]?.type).toBe('conversation_initiation_client_data');
+            const contextualUpdates = secondFrames.filter((f) => f.type === 'contextual_update');
+            expect(contextualUpdates.length).toBeGreaterThanOrEqual(1);
+            expect(contextualUpdates[0]?.text).toContain('Please remember ticket 9988.');
+            expect(contextualUpdates[0]?.text).toContain('I have noted ticket 9988.');
+
+            await session.Close();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe('ElevenLabsRealtimeSession — tool result during a reconnect', () => {
+    /** The first socket answers its initiation at once; the second only when the test sends its metadata. */
+    class ManualSecondSocketElevenLabsRealtime extends TestElevenLabsRealtime {
+        public readonly Sockets: FakeSocket[] = [];
+        public SecondArgs: ElevenLabsConnectArgs | null = null;
+        protected override async connectConversation(args: ElevenLabsConnectArgs): Promise<ElevenLabsRealtimeSocket> {
+            const socket = new FakeSocket();
+            this.Sockets.push(socket);
+            if (this.Sockets.length === 1) {
+                this.LastConnectArgs = args;
+                queueMicrotask(() => args.OnMessage(metadataEvent()));
+            } else {
+                this.SecondArgs = args;
+            }
+            return socket;
+        }
+    }
+
+    it('sends a result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+        const driver = new ManualSecondSocketElevenLabsRealtime('fake-api-key');
+        const session = await driver.StartSession(makeParams());
+        driver.Emit({
+            type: 'client_tool_call',
+            client_tool_call: { tool_name: 'get_weather', tool_call_id: 'call-1', parameters: { city: 'NYC' } },
+        });
+
+        const reconnect = session.TriggerReconnect('duration-expiry');
+        await flushAsync();
+        expect(driver.Sockets).toHaveLength(2);
+        await session.SendToolResult('call-1', '{"status":"shipped"}');
+        driver.SecondArgs?.OnMessage(metadataEvent());
+        expect(await reconnect).toBe(true);
+
+        const carrying = (socket: FakeSocket) => socket.SentFrames().filter((f) => JSON.stringify(f).includes('shipped'));
+        expect(carrying(driver.Sockets[0])).toEqual([]);
+        expect(carrying(driver.Sockets[1])).toHaveLength(1);
+        expect(carrying(driver.Sockets[1])[0].type).toBe('contextual_update');
+        await session.Close();
     });
 });

@@ -12,9 +12,12 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATION_TYPE_CODES,
+    ConversationEngine,
     MJConversationEntity,
     MJEnvironmentEntityExtended,
     MJScheduledJobEntity,
@@ -45,10 +48,21 @@ import {
     RunWithBoundedConcurrency,
 } from '../UserRoutineProcessor';
 import { WakeGateEvaluator, WakeGateEvaluationResult } from '../WakeGateEvaluator';
+import { UserRoutineScheduleIndex } from '../UserRoutineScheduleIndex';
+import type { Observable } from 'rxjs';
 
 interface GlobalUserCacheLookup {
     Users: UserInfo[];
     FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
+
+export class RoutineOwnerResolutionError extends Error {
+    public readonly Kind: 'permanent' | 'transient';
+    public constructor(message: string, kind: 'permanent' | 'transient') {
+        super(message);
+        this.name = 'RoutineOwnerResolutionError';
+        this.Kind = kind;
+    }
 }
 
 /**
@@ -116,8 +130,14 @@ const RESULT_SUMMARY_MAX_LENGTH = 4000;
 /** Normalized outcome of executing a routine's target, independent of target type. */
 interface RoutineTargetOutcome {
     Success: boolean;
-    /** Raw result content — summarized (capped) into ResultSummary and hashed for OnChange detection. */
+    /** Raw result content — hashed for OnChange detection, and the ResultSummary when there is no {@link Summary}. */
     ResultContent: string;
+    /**
+     * Human-readable result, preferred over ResultContent for the run's ResultSummary (and so the
+     * notification body). For an Agent target it is the agent's final message: the payload is
+     * often just the wake state the agent was handed.
+     */
+    Summary?: string | null;
     ErrorMessage: string | null;
     AgentRunID: string | null;
     PromptRunID: string | null;
@@ -125,10 +145,23 @@ interface RoutineTargetOutcome {
 }
 
 /** Per-routine bookkeeping returned from an isolated routine execution. */
-interface RoutineExecutionSummary {
+export interface RoutineExecutionSummary {
     RoutineID: string;
     RunStatus: MJUserRoutineRunEntity['Status'];
     Notified: boolean;
+}
+
+/**
+ * What one routine's execution needs from its caller. The sweep passes its full
+ * {@link ScheduledJobExecutionContext}; a manual run ({@link UserRoutineDispatcherDriver.RunRoutineNow})
+ * passes only these.
+ */
+export interface RoutineRunContext {
+    /** The bookkeeping user: run rows and routine roll-up are saved as this user (the scheduler's system user). */
+    ContextUser: UserInfo;
+    heartbeat?: ScheduledJobExecutionContext['heartbeat'];
+    /** True for a run the user asked for by hand: the wake gate is not consulted. */
+    BypassWakeGate?: boolean;
 }
 
 /**
@@ -143,11 +176,42 @@ interface RoutineExecutionSummary {
 @RegisterClass(BaseScheduledJob, 'UserRoutineDispatcherDriver')
 export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
+     * Maximum consecutive sweep failures resolving a routine's owner user before the
+     * routine is disabled (`Status = 'Disabled'`, `LastRunStatus = 'Failed'`) so a
+     * deleted or permanently inactive owner does not retry on every 1-minute sweep forever.
+     */
+    public static readonly MAX_OWNER_RESOLVE_RETRIES = 3;
+
+    private static readonly _ownerResolveFailures = new Map<string, number>();
+
+    public static ClearOwnerResolveFailures(): void {
+        UserRoutineDispatcherDriver._ownerResolveFailures.clear();
+    }
+
+    /**
      * The dispatcher is a by-design 1-minute sweeper: each pass claims due routines and
      * does bounded work, so the engine's high-frequency cron warning doesn't apply.
      */
     public override get IsHighFrequencyByDesign(): boolean {
         return true;
+    }
+
+    /**
+     * Work gate (#6217): the dispatcher has work only when a routine is due or needs seeding, so
+     * the engine runs it (and wakes the database for it) only then. Answered from the in-memory
+     * {@link UserRoutineScheduleIndex}; until that is loaded the dispatcher keeps its cron.
+     */
+    public override NextWorkDueAt(_job: MJScheduledJobEntity, now: Date): Date | null | undefined {
+        const index = UserRoutineScheduleIndex.Instance;
+        return index.IsLoaded ? index.NextDueAt(now) : undefined;
+    }
+
+    public override async PrepareWorkGate(contextUser: UserInfo, provider: IMetadataProvider, maxAgeMs: number): Promise<void> {
+        await UserRoutineScheduleIndex.Instance.EnsureFresh(contextUser, provider, maxAgeMs);
+    }
+
+    public override get WorkGateChanged$(): Observable<void> | null {
+        return UserRoutineScheduleIndex.Instance.Changed$;
     }
 
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
@@ -165,19 +229,56 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             void context.heartbeat?.();
         }
 
-        // Claim + run the due routines with bounded concurrency and per-routine isolation.
+        // Resolve each due routine's owner user BEFORE claiming NextRunAt so a transient UserCache
+        // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
+        // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
+        // retry on every sweep forever.
         const due = candidates.filter(r => IsRoutineDue(r, now));
-        const claimed: MJUserRoutineEntity[] = [];
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo }> = [];
         for (const routine of due) {
+            const routineKey = NormalizeUUID(routine.ID);
+            let ownerUser: UserInfo;
+            try {
+                ownerUser = await this.resolveRoutineOwnerUser(routine, context.ContextUser);
+                UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
+            } catch (error) {
+                const isPermanent =
+                    error instanceof RoutineOwnerResolutionError && error.Kind === 'permanent';
+                if (!isPermanent) {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) due to transient owner lookup failure — backing off and preserving NextRunAt for retry`,
+                        error
+                    );
+                    continue;
+                }
+                const failures = (UserRoutineDispatcherDriver._ownerResolveFailures.get(routineKey) ?? 0) + 1;
+                UserRoutineDispatcherDriver._ownerResolveFailures.set(routineKey, failures);
+                if (failures >= UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES) {
+                    UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
+                    this.logError(
+                        `Disabling routine "${routine.Name}" (${routine.ID}) because owner user is missing or inactive after ${failures} consecutive attempts`,
+                        error
+                    );
+                    routine.Status = 'Disabled';
+                    routine.LastRunStatus = 'Failed';
+                    await this.claimRoutine(routine, now);
+                } else {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved (attempt ${failures}/${UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES}) — NextRunAt preserved for retry`,
+                        error
+                    );
+                }
+                continue;
+            }
             if (await this.claimRoutine(routine, now)) {
-                claimed.push(routine);
+                claimed.push({ routine, ownerUser });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async (routine) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(routine, context);
+                return await this.executeRoutine(routine, context, ownerUser);
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
@@ -259,6 +360,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             EntityName: 'MJ: User Routines',
             ExtraFilter: BuildDueRoutineFilter(now.toISOString()),
             ResultType: 'entity_object',
+            // Due-ness is live state and must come from the database. The per-tick timestamp in
+            // the filter would also mint a new, never-read cache key on every tick.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success) {
@@ -328,31 +432,117 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
      * Resolve the routine owner's `UserInfo` from `UserCache` so target execution runs under
      * the routine owner's RBAC/RLS/FLS identity rather than the scheduler's system user.
-     * Fails closed when `UserCache` is populated and the owner is missing or inactive.
+     * Always fails closed when the owner ID is missing, `UserCache` is unavailable or empty,
+     * or the owning user is missing or inactive.
      */
     protected async resolveRoutineOwnerUser(
         routine: MJUserRoutineEntity,
         fallbackContextUser: UserInfo
     ): Promise<UserInfo> {
-        const ownerUserId = routine.UserID;
-        if (!ownerUserId || (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID))) {
+        const ownerUserId = routine.UserID?.trim();
+        if (!ownerUserId) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" has no UserID — refusing to execute without a resolved owner.`,
+                'permanent'
+            );
+        }
+        if (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                    'permanent'
+                );
+            }
             return fallbackContextUser;
         }
         const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
         if (!userCache || typeof userCache.FindUser !== 'function') {
-            return fallbackContextUser;
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) cannot be resolved because UserCache is unavailable — refusing to execute.`,
+                'transient'
+            );
         }
-        const found = await userCache.FindUser({ ID: ownerUserId });
-        if (found) {
-            if (found.IsActive === false) {
-                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+        let found: UserInfo | undefined;
+        try {
+            found = await userCache.FindUser({ ID: ownerUserId });
+        } catch (err) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) lookup failed transiently: ${err instanceof Error ? err.message : String(err)}`,
+                'transient'
+            );
+        }
+        if (!found) {
+            const cachePopulated = Array.isArray(userCache.Users) && userCache.Users.length > 0;
+            if (!cachePopulated) {
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
+                    'transient'
+                );
             }
-            return found;
+            // UserCache.FindUser catches and swallows DB errors during its refresh query, returning undefined.
+            // Probe MJ: Users via RunView so a transient DB error is distinguished from a deleted owner row.
+            let verifyKind: 'permanent' | 'transient' = 'transient';
+            try {
+                const rv = new RunView();
+                const verifyRes = await rv.RunView<{ ID: string; IsActive?: boolean }>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `ID = '${EscapeSQLString(ownerUserId)}'`,
+                        Fields: ['ID', 'IsActive'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple',
+                    },
+                    fallbackContextUser
+                );
+                if (verifyRes?.Success) {
+                    const row = verifyRes.Results?.[0];
+                    if (!row || row.IsActive === false) {
+                        verifyKind = 'permanent';
+                    }
+                }
+            } catch (probeErr) {
+                LogError(
+                    `UserRoutineDispatcherDriver: MJ: Users probe failed for routine "${routine.Name}" (${ownerUserId}): ${
+                        probeErr instanceof Error ? probeErr.message : String(probeErr)
+                    }`
+                );
+                verifyKind = 'transient';
+            }
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
+                verifyKind
+            );
         }
-        if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
-            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`);
+        if (found.IsActive === false) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                'permanent'
+            );
         }
-        return fallbackContextUser;
+        return found;
+    }
+
+    // ========================================================================
+    // Manual run
+    // ========================================================================
+
+    /**
+     * Run one routine now, on request, without touching its schedule.
+     *
+     * The sweep claims a routine before running it, which advances `NextRunAt` or, for a one-shot,
+     * clears it, and a cleared one-shot is Disabled after the run. A "Wake Now" implemented as
+     * "set NextRunAt to now" therefore SPENDS a one-shot: the reminder wanted tomorrow fires today
+     * and never fires again. This path skips the claim, so after the run `NextRunAt` still holds
+     * the scheduled time and the roll-up leaves the routine Active. It also skips the wake gate:
+     * the person asked for the run, so "nothing changed since last time" is not a reason to skip.
+     *
+     * `contextUser` is the bookkeeping identity (run row, routine roll-up), normally the scheduler's
+     * system user; the target still executes as the routine's owner, exactly as on the sweep.
+     * Ownership of the routine is the caller's check (see the `Run User Routine Now` action).
+     */
+    public async RunRoutineNow(routine: MJUserRoutineEntity, contextUser: UserInfo): Promise<RoutineExecutionSummary> {
+        return this.executeRoutine(routine, { ContextUser: contextUser, BypassWakeGate: true });
     }
 
     // ========================================================================
@@ -374,13 +564,14 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     private async executeRoutine(
         routine: MJUserRoutineEntity,
-        context: ScheduledJobExecutionContext
+        context: RoutineRunContext,
+        preResolvedOwnerUser?: UserInfo
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
-        const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
+        const ownerUser = preResolvedOwnerUser ?? (await this.resolveRoutineOwnerUser(routine, contextUser));
 
         let gateResult: WakeGateEvaluationResult | undefined;
-        if (routine.WakeConfiguration || routine.WakeConfigurationObject) {
+        if (!context.BypassWakeGate && (routine.WakeConfiguration || routine.WakeConfigurationObject)) {
             gateResult = await this.wakeGateEvaluator.Evaluate(routine, ownerUser, new Date());
             routine.LastCheckedAt = new Date();
             if (!gateResult.shouldWake) {
@@ -440,7 +631,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async runAndRecord(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
-        context: ScheduledJobExecutionContext,
+        context: RoutineRunContext,
         ownerUser?: UserInfo,
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineExecutionSummary> {
@@ -605,8 +796,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Compact, capped text describing the outcome — the run row's human-readable summary. */
     private buildResultSummary(outcome: RoutineTargetOutcome): string {
+        const text = outcome.Summary?.trim() || outcome.ResultContent.trim();
         const base = outcome.Success
-            ? (outcome.ResultContent.trim().length > 0 ? outcome.ResultContent.trim() : 'Completed successfully.')
+            ? (text.length > 0 ? text : 'Completed successfully.')
             : `Failed: ${outcome.ErrorMessage ?? 'unknown error'}`;
         return base.length > RESULT_SUMMARY_MAX_LENGTH ? `${base.substring(0, RESULT_SUMMARY_MAX_LENGTH - 1)}…` : base;
     }
@@ -694,13 +886,20 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         };
 
         const conversationId = await this.EnsureRoutineConversation(routine, contextUser);
+        // A wake's payload is the wake state it was handed (workstream, reason, resume state), not
+        // something the user asked for, so it is not turned into a "<Agent> Payload" artifact.
+        // Files and media the run generates are still saved.
+        const conversationOptions = routine.RoutineType === 'AgentWake'
+            ? { conversationId, userMessage, createArtifacts: false }
+            : { conversationId, userMessage };
         const result = conversationId
-            ? (await runner.RunAgentInConversation(baseParams, { conversationId, userMessage })).agentResult
+            ? (await runner.RunAgentInConversation(baseParams, conversationOptions)).agentResult
             : await runner.RunAgent(baseParams);
 
         return {
             Success: result.success,
             ResultContent: result.payload != null ? JSON.stringify(result.payload) : '',
+            Summary: result.agentRun?.Message ?? null,
             ErrorMessage: result.agentRun?.ErrorMessage ?? null,
             AgentRunID: result.agentRun?.ID ?? null,
             PromptRunID: null,
@@ -736,7 +935,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', owner);
             conversation.NewRecord();
             conversation.Name = routine.Name;
-            conversation.Type = 'Routine';
+            conversation.TypeID =
+                ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.ROUTINE) ??
+                BUILT_IN_CONVERSATION_TYPE_IDS.ROUTINE;
             conversation.UserID = owner.ID;
             conversation.EnvironmentID = routine.EnvironmentID ?? MJEnvironmentEntityExtended.DefaultEnvironmentID;
             conversation.ApplicationScope = 'Application';
@@ -972,7 +1173,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 resultSummary: run.ResultSummary ?? '',
                 status: run.Status,
             };
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true, undefined, { ContextUser: contextUser });
             if (rendered.Success && rendered.Output) {
                 return rendered.Output;
             }
@@ -1023,7 +1224,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         run: MJUserRoutineRunEntity,
         contextUser: UserInfo
     ): Promise<boolean> {
-        const resourceConfiguration = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        // The run's reply lives in the routine's own conversation, which the main chat list hides;
+        // the notification carries it so a click can open the reply rather than the routine row.
+        const resourceConfiguration: Record<string, string> = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        if (routine.ConversationID) {
+            resourceConfiguration['conversationId'] = routine.ConversationID;
+        }
         try {
             await NotificationEngine.Instance.Config(false, contextUser);
             const result = await NotificationEngine.Instance.SendNotification({

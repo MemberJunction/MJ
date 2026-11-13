@@ -61,6 +61,20 @@ vi.mock('@memberjunction/integration-engine', () => ({
   },
 }));
 
+// Credential reads go through CredentialEngine (#4928); `mockEntityLoads` below drives it.
+const { getCredentialMock, credentialConfigMock } = vi.hoisted(() => ({
+  getCredentialMock: vi.fn(),
+  credentialConfigMock: vi.fn(),
+}));
+vi.mock('@memberjunction/credentials', () => ({
+  CredentialEngine: {
+    Instance: {
+      Config: (...args: unknown[]) => credentialConfigMock(...args),
+      GetCredential: (...args: unknown[]) => getCredentialMock(...args),
+    },
+  },
+}));
+
 vi.mock('@memberjunction/actions-base', () => ({
   ActionParam: class ActionParam {},
 }));
@@ -136,6 +150,16 @@ function mockRunViewResults(results: Row[]) {
  */
 function mockEntityLoads(rows: Record<string, Row | null>) {
   const loads: Array<{ entity: string; id: string }> = [];
+  getCredentialMock.mockReset();
+  credentialConfigMock.mockReset();
+  getCredentialMock.mockImplementation(async (_name: string, options: { credentialId: string }) => {
+    loads.push({ entity: 'MJ: Credentials', id: options.credentialId });
+    const row = rows['MJ: Credentials'];
+    if (!row) {
+      throw new Error(`Credential not found: ${options.credentialId}`);
+    }
+    return { credential: row, values: {}, source: 'database' };
+  });
   vi.mocked(Metadata).mockImplementation(function (this: unknown) {
     return {
       GetEntityObject: vi.fn(async (entityName: string) => ({
@@ -423,6 +447,24 @@ describe('GetQuickBooksTransactionsAction', () => {
     expect(result.Message).toBe('Context user is required for QuickBooks API calls');
   });
 
+  // #5823
+  it('should filter by DocumentNumber, escaping quotes', async () => {
+    const spy = vi.spyOn(action as never, 'queryQBO').mockResolvedValue({ QueryResponse: {} } as never);
+
+    await run(action, inputs({ CompanyID: 'comp-1', TransactionType: 'JournalEntry', DocumentNumber: "JE-1'0" }));
+
+    const query = String(spy.mock.calls[0][0]);
+    expect(query).toContain("DocNumber = 'JE-1\\'0'");
+  });
+
+  it('should not add a DocNumber condition when DocumentNumber is not given', async () => {
+    const spy = vi.spyOn(action as never, 'queryQBO').mockResolvedValue({ QueryResponse: {} } as never);
+
+    await run(action, inputs({ CompanyID: 'comp-1', TransactionType: 'JournalEntry' }));
+
+    expect(String(spy.mock.calls[0][0])).not.toContain('DocNumber');
+  });
+
   it('should query transactions and report the retrieved count', async () => {
     vi.spyOn(action as never, 'queryQBO').mockResolvedValue({ QueryResponse: {} } as never);
 
@@ -491,6 +533,14 @@ describe('GetBusinessCentralGeneralLedgerEntriesAction', () => {
     expect(result.Message).toBe('Context user is required for Business Central API calls');
   });
 
+  it('should filter documentNumber with an escaped OData literal', async () => {
+    const spy = vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({ value: [] } as never);
+
+    await run(action, inputs({ CompanyID: 'comp-1', DocumentNumber: "GJ'01" }));
+
+    expect(decodeURIComponent(String(spy.mock.calls[0][0]))).toContain("documentNumber eq 'GJ''01'");
+  });
+
   it('should GET the generalLedgerEntries resource', async () => {
     const spy = vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({ value: [] } as never);
 
@@ -499,6 +549,76 @@ describe('GetBusinessCentralGeneralLedgerEntriesAction', () => {
     expect(String(spy.mock.calls[0][0])).toContain('generalLedgerEntries');
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 0 general ledger entries from Business Central');
+  });
+
+  // Business Central API v2.0 generalLedgerEntry has debitAmount / creditAmount but no amount.
+  const bcEntry = (id: string, debitAmount: number, creditAmount: number) => ({
+    id,
+    entryNumber: 1,
+    postingDate: '2026-01-15',
+    documentNumber: 'DOC-1',
+    documentType: 'Payment',
+    accountId: '',
+    accountNumber: '1000',
+    description: '',
+    debitAmount,
+    creditAmount,
+    lastModifiedDateTime: '2026-01-15T00:00:00Z',
+  });
+
+  it('should not select or filter on amount, which Business Central does not have', async () => {
+    const spy = vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({ value: [] } as never);
+
+    await run(action, inputs({ CompanyID: 'comp-1', MinAmount: 10, MaxAmount: 500 }));
+
+    const endpoint = String(spy.mock.calls[0][0]);
+    const select = endpoint.match(/\$select=([^&]*)/)?.[1].split(',') ?? [];
+    expect(select).toContain('debitAmount');
+    expect(select).toContain('creditAmount');
+    expect(select).not.toContain('amount');
+    expect(endpoint).not.toMatch(/\bamount (ge|le)\b/);
+  });
+
+  it('should compute amount as debitAmount - creditAmount', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('e1', 250, 0), bcEntry('e2', 0, 75.5)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1' });
+
+    const result = await run(action, params);
+
+    expect(result.Success).toBe(true);
+    const entries = params.find((p) => p.Name === 'GLEntries')?.Value as { id: string; amount: number }[];
+    expect(entries.map((e) => [e.id, e.amount])).toEqual([
+      ['e1', 250],
+      ['e2', -75.5],
+    ]);
+    const summary = params.find((p) => p.Name === 'Summary')?.Value as { netAmount: number };
+    expect(summary.netAmount).toBeCloseTo(174.5);
+  });
+
+  it('should apply MinAmount and MaxAmount to the computed amount, inclusive', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('debit-600', 600, 0), bcEntry('debit-100', 100, 0), bcEntry('debit-50', 50, 0), bcEntry('credit-100', 0, 100)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1', MinAmount: '50', MaxAmount: 100 });
+
+    await run(action, params);
+
+    const entries = params.find((p) => p.Name === 'GLEntries')?.Value as { id: string }[];
+    expect(entries.map((e) => e.id)).toEqual(['debit-100', 'debit-50']);
+    expect(params.find((p) => p.Name === 'TotalCount')?.Value).toBe(2);
+  });
+
+  it('should ignore blank or non-numeric MinAmount / MaxAmount', async () => {
+    vi.spyOn(action as never, 'makeBCRequest').mockResolvedValue({
+      value: [bcEntry('e1', 10, 0), bcEntry('e2', 0, 10)],
+    } as never);
+    const params = inputs({ CompanyID: 'comp-1', MinAmount: '', MaxAmount: 'abc' });
+
+    await run(action, params);
+
+    expect(params.find((p) => p.Name === 'TotalCount')?.Value).toBe(2);
   });
 });
 
@@ -1078,7 +1198,7 @@ describe('ResolveBusinessCentralConnectorConfig', () => {
   it('should let the Credential override the Configuration, and the Configuration override the columns', () => {
     const config = ResolveBusinessCentralConnectorConfig(
       CONNECTOR_COLUMNS,
-      { TenantId: 'cfg-tenant', Environment: 'cfg-env', CompanyId: 'cfg-company', ClientId: 'cfg-client' },
+      { TenantId: 'cfg-tenant', Environment: 'cfg-env', ClientId: 'cfg-client' },
       { TenantId: 'cred-tenant', ClientSecret: 'cred-secret' },
     );
 
@@ -1086,7 +1206,7 @@ describe('ResolveBusinessCentralConnectorConfig', () => {
       ClientId: 'cfg-client',
       ClientSecret: 'cred-secret',
       TenantId: 'cred-tenant',
-      CompanyId: 'cfg-company',
+      CompanyId: 'col-company',
       Environment: 'cfg-env',
       AuthorityHost: BC_DEFAULT_AUTHORITY_HOST,
       Scope: BC_DEFAULT_SCOPE,
@@ -1105,9 +1225,9 @@ describe('ResolveBusinessCentralConnectorConfig', () => {
 
   it('should read the connector key spellings', () => {
     const config = ResolveBusinessCentralConnectorConfig(
-      { ID: CI_UAT, ClientID: null, ClientSecret: null, APIKey: null, ExternalSystemID: null },
-      { tenant_id: 'tenant', EnvironmentName: 'env', BusinessCentralCompanyId: 'company' },
-      { azureClientId: 'client', azureClientSecret: 'secret', AuthorityHost: 'https://login.example.com/', Scope: 'custom/.default' },
+      { ID: CI_UAT, ClientID: null, ClientSecret: null, APIKey: null, ExternalSystemID: 'company' },
+      { tenant_id: 'tenant', EnvironmentName: 'env' },
+      { azureClientId: 'client', azureClientSecret: 'secret', AuthorityHost: 'https://login.microsoftonline.us/', Scope: 'custom/.default' },
     );
 
     expect(config).toEqual({
@@ -1116,9 +1236,48 @@ describe('ResolveBusinessCentralConnectorConfig', () => {
       TenantId: 'tenant',
       CompanyId: 'company',
       Environment: 'env',
-      AuthorityHost: 'https://login.example.com',
+      AuthorityHost: 'https://login.microsoftonline.us',
       Scope: 'custom/.default',
     });
+  });
+
+  // #5824: connections sharing one Credential each post to their own company.
+  it('should take the company from ExternalSystemID, never from a shared Credential or the Configuration', () => {
+    const sharedCredential = { ClientId: 'client', ClientSecret: 'secret', TenantId: 'tenant', CompanyId: 'credential-company' };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const prod = ResolveBusinessCentralConnectorConfig(
+      { ...CONNECTOR_COLUMNS, ID: CI_PROD, ExternalSystemID: 'prod-company' },
+      { environmentName: 'production', companyId: 'cfg-company' },
+      sharedCredential,
+    );
+    const uat = ResolveBusinessCentralConnectorConfig(
+      { ...CONNECTOR_COLUMNS, ID: CI_UAT, ExternalSystemID: 'uat-company' },
+      { environmentName: 'uat' },
+      sharedCredential,
+    );
+
+    expect(prod.CompanyId).toBe('prod-company');
+    expect(uat.CompanyId).toBe('uat-company');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('credential-company'));
+    warn.mockRestore();
+  });
+
+  // #4928: the client secret is posted to the authority host.
+  it('should ignore an AuthorityHost in the Configuration', () => {
+    const config = ResolveBusinessCentralConnectorConfig(
+      CONNECTOR_COLUMNS,
+      { environmentName: 'production', AuthorityHost: 'https://attacker.example.com' },
+      {},
+    );
+    expect(config.AuthorityHost).toBe(BC_DEFAULT_AUTHORITY_HOST);
+  });
+
+  it('should refuse a Credential AuthorityHost outside the Entra ID allow list', () => {
+    for (const host of ['https://login.example.com', 'http://login.microsoftonline.com', 'https://login.microsoftonline.com.evil.test', 'https://login.microsoftonline.com/x']) {
+      expect(() => ResolveBusinessCentralConnectorConfig(CONNECTOR_COLUMNS, { environmentName: 'production' }, { AuthorityHost: host }))
+        .toThrow(/not an allowed Microsoft Entra ID host/);
+    }
   });
 
   it('should error when the environment is missing, never defaulting it', () => {
@@ -1131,7 +1290,7 @@ describe('ResolveBusinessCentralConnectorConfig', () => {
       { ...CONNECTOR_COLUMNS, ExternalSystemID: null },
       { environmentName: 'production' },
       {},
-    )).toThrow(/company ID is not configured/);
+    )).toThrow(`CompanyIntegration ${CI_UAT} has no Business Central company. Set the connection's ExternalSystemID`);
   });
 });
 
@@ -1149,7 +1308,8 @@ describe('BusinessCentralBaseAction connection resolution', () => {
   function connectorRow(overrides: Row = {}): Row {
     return connectionRow(CI_UAT, 'BC UAT', 'business-central', {
       CredentialID: CREDENTIAL_ID,
-      Configuration: JSON.stringify({ tenantId: 'cfg-tenant', environmentName: 'AIDP_Next_UAT', companyId: 'bc-company' }),
+      ExternalSystemID: 'bc-company',
+      Configuration: JSON.stringify({ tenantId: 'cfg-tenant', environmentName: 'AIDP_Next_UAT' }),
       ...overrides,
     });
   }
@@ -1212,7 +1372,7 @@ describe('BusinessCentralBaseAction connection resolution', () => {
 
   it('should error clearly when a connector connection has no environment', async () => {
     mockEntityLoads({ 'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }) });
-    const row = connectorRow({ Configuration: JSON.stringify({ tenantId: 'cfg-tenant', companyId: 'bc-company' }) });
+    const row = connectorRow({ Configuration: JSON.stringify({ tenantId: 'cfg-tenant' }) });
 
     await expect(action['resolveBCConnection'](row as never, COMPANY_ID, contextUser))
       .rejects.toThrow(/Business Central environment is not configured/);
@@ -1246,28 +1406,28 @@ describe('BusinessCentralBaseAction connection resolution', () => {
     expect((error as Error).message).not.toContain('s3cr3t');
   });
 
-  it('should load the Credential through the provider the request was run with', async () => {
-    mockEntityLoads({});
-    vi.mocked(Metadata).mockClear();
-    const credential = credentialRow({ ClientId: 'client', ClientSecret: 'secret' });
-    const providerGetEntityObject = vi.fn(async () => ({
-      async Load(this: Row) {
-        Object.assign(this, credential);
-        return true;
-      },
-    }));
+  // #4928: through CredentialEngine, so the read is audited and stamps LastUsedAt.
+  it('should read the Credential through CredentialEngine on the provider the request was run with', async () => {
+    mockEntityLoads({ 'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }) });
+    const provider = { GetEntityObject: vi.fn() };
 
-    await action.Run({ Params: [], ContextUser: contextUser, Provider: { GetEntityObject: providerGetEntityObject } } as never);
+    await action.Run({ Params: [], ContextUser: contextUser, Provider: provider } as never);
     await action['resolveBCConnection'](connectorRow() as never, COMPANY_ID, contextUser);
 
-    expect(providerGetEntityObject).toHaveBeenCalledWith('MJ: Credentials', contextUser);
-    expect(Metadata).not.toHaveBeenCalled();
+    expect(credentialConfigMock).toHaveBeenCalledWith(false, contextUser, provider);
+    expect(getCredentialMock).toHaveBeenCalledWith('', {
+      credentialId: CREDENTIAL_ID,
+      contextUser,
+      subsystem: 'Accounting: Business Central',
+    });
+    expect(provider.GetEntityObject).not.toHaveBeenCalled();
   });
 
   it('should encode the tenant, environment and company in the token and API URLs', async () => {
     mockEntityLoads({
       'MJ: Company Integrations': connectorRow({
-        Configuration: JSON.stringify({ tenantId: 'ten/ant', environmentName: 'env name', companyId: 'co?1' }),
+        ExternalSystemID: 'co?1',
+        Configuration: JSON.stringify({ tenantId: 'ten/ant', environmentName: 'env name' }),
       }),
       'MJ: Credentials': credentialRow({ ClientId: 'client', ClientSecret: 'secret' }),
     });

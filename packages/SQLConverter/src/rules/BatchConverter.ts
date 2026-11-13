@@ -11,7 +11,10 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ClassifyBatch } from './StatementClassifier.js';
 import { SubSplitCompoundBatch } from './SubSplitter.js';
+import { InlineScalarSelectVariables } from './ScalarVariableInliner.js';
+import { StripComments } from './ExpressionHelpers.js';
 import { PostProcess } from './PostProcessor.js';
+import { FindBracketIdentifiersInDollarBlocks } from './ExpressionHelpers.js';
 import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
@@ -99,7 +102,9 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // Sub-split compound batches
   const batches: string[] = [];
   for (const batch of rawBatches) {
-    batches.push(...SubSplitCompoundBatch(batch));
+    // Inline mid-batch `DECLARE @X = (SELECT ...)` variables first: sub-splitting separates the
+    // declaration from the statements that read it (issue #5364 item 4).
+    batches.push(...SubSplitCompoundBatch(InlineScalarSelectVariables(batch)));
   }
   stats.TotalBatches = batches.length;
   log(`  Found ${stats.TotalBatches.toLocaleString()} batches`);
@@ -247,7 +252,16 @@ function recordOutputGaps(output: string, stats: ConversionStats): void {
     stats.Gaps++;
     stats.GapBatches.push(line.trim().slice(0, 200));
   }
+  // A T-SQL bracket identifier left inside a dollar-quoted block carries no marker, but the
+  // line cannot run on PostgreSQL either (#6074)
+  for (const line of FindBracketIdentifiersInDollarBlocks(output)) {
+    stats.Gaps++;
+    stats.GapBatches.push(`${GAP_BRACKET_IN_DOLLAR_BLOCK} ${line}`.slice(0, 200));
+  }
 }
+
+/** The `GapBatches` prefix of a line that kept a T-SQL bracket identifier inside a dollar-quoted block. */
+const GAP_BRACKET_IN_DOLLAR_BLOCK = 'T-SQL bracket identifier left in a dollar-quoted block:';
 
 /** Replace Flyway placeholders with target schema */
 function preprocess(sql: string, schema: string): string {
@@ -362,8 +376,10 @@ function trackCreatedObject(
 
 /** Route converted batch to the appropriate output group */
 function routeToGroup(result: string, batchType: StatementType, groups: OutputGroups, originalBatch?: string): void {
-  // CONDITIONAL_DDL containing INSERT INTO should go to Data (not Tables) for correct FK ordering
-  if (batchType === 'CONDITIONAL_DDL' && originalBatch && /\bINSERT\s+INTO\b/i.test(originalBatch) && !/\bALTER\s+TABLE\b/i.test(originalBatch)) {
+  // A guarded block that only touches data (INSERT/UPDATE/DELETE, or a RAISERROR assertion about
+  // data) goes to Data, not Tables, so it runs after the DDL and in order with the other data
+  // statements — an assertion that a seeded row exists must not run before the seed (issue #5364).
+  if (batchType === 'CONDITIONAL_DDL' && originalBatch && isDataOnlyGuard(originalBatch)) {
     groups.Data.push(result);
     return;
   }
@@ -402,6 +418,14 @@ function routeToGroup(result: string, batchType: StatementType, groups: OutputGr
   } else {
     groups.Other.push(result);
   }
+}
+
+/** True when a conditional batch's statements are data changes or data assertions, with no DDL. */
+function isDataOnlyGuard(batch: string): boolean {
+  const code = StripComments(batch);
+  if (/\bALTER\s+TABLE\b/i.test(code)) return false;
+  if (/\bINSERT\s+INTO\b/i.test(code)) return true;
+  return /\b(?:UPDATE|DELETE\s+FROM|RAISERROR)\b/i.test(code) && !/\b(?:CREATE|DROP|ALTER)\s+\w/i.test(code);
 }
 
 /** Handle UNKNOWN batch types with basic conversion */

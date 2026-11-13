@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive, NgModule } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive, NgModule, ChangeDetectorRef, ElementRef, OnInit, OnDestroy, inject } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 
 /** Process-wide counter for generating unique, stable accordion element ids
@@ -82,7 +82,7 @@ export class MJAccordionBodyDirective {
 }
 
 /**
- * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
+ * mj-accordion-panel — Collapsible panel.
  *
  * Supports two title modes:
  * - Simple string: `[Title]="'Details'"` — plain text title
@@ -109,7 +109,9 @@ export class MJAccordionBodyDirective {
   standalone: true,
   imports: [NgTemplateOutlet],
   template: `
-    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled"
+    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded || IsOpenFlat" [class.mj-accordion-panel--disabled]="Disabled"
+      [class.mj-accordion-panel--flat-section]="FlatMode === 'section'"
+      [class.mj-accordion-panel--flat-block]="FlatMode === 'block'"
       [class.mj-accordion-panel--muted-icon]="TitleIconMuted"
       [class.mj-accordion-panel--sm]="Size === 'sm'"
       [class.mj-accordion-panel--bare]="Bare"
@@ -117,8 +119,16 @@ export class MJAccordionBodyDirective {
       [class.mj-accordion-panel--fill]="Fill"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <div class="mj-accordion-header-row">
-        <!-- With HeadingLevel set, a heading wraps the toggle; without it, the toggle is a direct child of the row. -->
-        @if (HeadingLevel) {
+        @if (FlatMode === 'block') {
+          <!-- Flat block: the title is a plain heading over always-open content, no toggle. -->
+          <div class="mj-accordion-flat-heading" role="heading" [attr.aria-level]="HeadingLevel ?? 3" [id]="HeaderId">
+            <span class="mj-accordion-title"><ng-container [ngTemplateOutlet]="titleContent"></ng-container></span>
+          </div>
+        } @else if (FlatMode === 'section') {
+          <!-- Flat section: the section picker names it on screen; keep the name for the region. -->
+          <span class="mj-accordion-section-label" [id]="HeaderId"><ng-container [ngTemplateOutlet]="titleContent"></ng-container></span>
+        } @else if (HeadingLevel) {
+          <!-- With HeadingLevel set, a heading wraps the toggle; without it, the toggle is a direct child of the row. -->
           <div class="mj-accordion-heading" role="heading" [attr.aria-level]="HeadingLevel">
             <ng-container [ngTemplateOutlet]="toggleButton"></ng-container>
           </div>
@@ -133,19 +143,21 @@ export class MJAccordionBodyDirective {
         <!-- The chevron is ALWAYS the rightmost element of the header row (after any
              actions). It's a secondary, a11y-hidden toggle affordance — the primary
              disclosure control is the title button above (which owns aria-expanded). -->
-        <button class="mj-accordion-chevron" type="button" tabindex="-1" aria-hidden="true"
-          [disabled]="Disabled" (click)="Toggle()">
-          <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
-        </button>
+        @if (FlatMode === null) {
+          <button class="mj-accordion-chevron" type="button" tabindex="-1" aria-hidden="true"
+            [disabled]="Disabled" (click)="Toggle()">
+            <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+          </button>
+        }
       </div>
-      <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
+      <div class="mj-accordion-body-outer" [attr.inert]="Expanded || IsOpenFlat ? null : ''">
         <div class="mj-accordion-body-clip">
           <div class="mj-accordion-body" role="region" [id]="BodyId" [attr.aria-labelledby]="HeaderId">
             <!-- Legacy: content placed directly in the panel (eager). -->
             <ng-content></ng-content>
             <!-- Preferred: [mjAccordionBody] template — instantiated lazily on first
                  expand, then kept alive so later toggles still animate. -->
-            @if (bodyTemplate && (Expanded || hasBeenExpanded)) {
+            @if (bodyTemplate && (Expanded || hasBeenExpanded || IsOpenFlat)) {
               <ng-container [ngTemplateOutlet]="bodyTemplate.templateRef"></ng-container>
             }
           </div>
@@ -160,18 +172,25 @@ export class MJAccordionBodyDirective {
         [attr.aria-controls]="BodyId"
         [disabled]="Disabled"
         (click)="Toggle()">
-        <span class="mj-accordion-title">
-          @if (TitleTemplate) {
-            <ng-container [ngTemplateOutlet]="TitleTemplate.templateRef"></ng-container>
-          } @else {
-            {{ Title }}
-          }
-        </span>
+        <span class="mj-accordion-title"><ng-container [ngTemplateOutlet]="titleContent"></ng-container></span>
       </button>
+    </ng-template>
+    <ng-template #titleContent>
+      @if (TitleTemplate) {
+        <ng-container [ngTemplateOutlet]="TitleTemplate.templateRef"></ng-container>
+      } @else {
+        {{ Title }}
+      }
     </ng-template>
   `
 })
-export class MJAccordionPanelComponent {
+export class MJAccordionPanelComponent implements OnInit, OnDestroy {
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** The panel this one is nested in, if any; a panel inside a flat panel renders flat too. */
+  private readonly parentPanel = inject(MJAccordionPanelComponent, { optional: true, skipSelf: true });
+  private readonly childPanels = new Set<MJAccordionPanelComponent>();
+
   @Input() Title = '';
   private _expanded = false;
   /** Latches true the first time the panel is expanded; never resets. Lets a
@@ -241,6 +260,20 @@ export class MJAccordionPanelComponent {
    * fills rather than animating to content height).
    */
   @Input() Fill = false;
+  /**
+   * Flat — render as a plain headed block: the title is a heading, the body is always open,
+   * and there is no toggle, border or body padding. Panels nested inside a flat panel, or
+   * inside the active section of an `mj-accordion-sections`, render this way automatically.
+   */
+  @Input() Flat = false;
+  /** Stable key for this panel in an `mj-accordion-sections`; falls back to its position. */
+  @Input() SectionKey: string | null = null;
+  /** The name the section picker shows; falls back to `Title`, then the rendered title text. */
+  @Input() SectionTitle: string | null = null;
+  /** Font Awesome class string for the section picker row. */
+  @Input() SectionIcon: string | null = null;
+  /** Count shown on the section picker row. */
+  @Input() SectionCount: number | null = null;
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) TitleTemplate: MJAccordionTitleDirective | null = null;
 
@@ -291,6 +324,92 @@ export class MJAccordionPanelComponent {
     if (this.Disabled) return;
     this.Expanded = !this.Expanded;
     this.ExpandedChange.emit(this.Expanded);
+  }
+
+  // ---------------------------------------------------------------- flat / sections
+
+  private sectionMode = false;
+  private sectionHidden = false;
+  private parentFlat = false;
+  private parentShown = true;
+
+  /** `section`: the active top level of an mj-accordion-sections; `block`: a flat nested panel. */
+  get FlatMode(): 'section' | 'block' | null {
+    if (this.sectionMode) return 'section';
+    if (this.Flat || this.parentFlat) return 'block';
+    return null;
+  }
+
+  /** Hidden because another section of an `mj-accordion-sections` is active. */
+  @HostBinding('class.mj-accordion-section-hidden') get IsSectionHidden(): boolean {
+    return this.sectionMode && this.sectionHidden;
+  }
+
+  /** On screen in a flat presentation: an active section, or a block whose parent is on screen. */
+  get IsShownFlat(): boolean {
+    if (this.sectionMode) return !this.sectionHidden;
+    return this.parentFlat ? this.parentShown : true;
+  }
+
+  /**
+   * Open because it is flat and on screen. A hidden section (or a block inside one) is not, so its
+   * lazy body is not built until that section is picked; once picked it stays built (it was
+   * expanded then), so switching away and back keeps its state.
+   */
+  get IsOpenFlat(): boolean {
+    return this.FlatMode !== null && this.IsShownFlat;
+  }
+
+  /** The name the section picker shows for this panel. */
+  ResolvedSectionTitle(): string {
+    if (this.SectionTitle) return this.SectionTitle;
+    if (this.Title) return this.Title;
+    const t = this.el.nativeElement.querySelector(':scope > .mj-accordion-panel > .mj-accordion-header-row .mj-accordion-title, :scope > .mj-accordion-panel > .mj-accordion-header-row .mj-accordion-section-label');
+    return (t?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Called by `mj-accordion-sections`. Enabled, this panel becomes a section: shown and flat
+   * when active, hidden otherwise. Opening it emits ExpandedChange(true) once, like a click,
+   * so a body that loads on first expand still loads.
+   */
+  SetSectionState(enabled: boolean, active: boolean): void {
+    this.sectionMode = enabled;
+    this.sectionHidden = enabled && !active;
+    this.syncFlatState();
+  }
+
+  ngOnInit(): void {
+    if (!this.parentPanel) return;
+    this.parentPanel.childPanels.add(this);
+    this.setParentFlat(this.parentPanel.FlatMode !== null, this.parentPanel.IsShownFlat);
+  }
+
+  ngOnDestroy(): void {
+    this.parentPanel?.childPanels.delete(this);
+  }
+
+  private setParentFlat(flat: boolean, shown: boolean): void {
+    this.parentFlat = flat;
+    this.parentShown = shown;
+    this.syncFlatState();
+  }
+
+  private syncFlatState(): void {
+    if (this.FlatMode !== null && this.IsShownFlat) this.openForFlat();
+    const flat = this.FlatMode !== null;
+    const shown = this.IsShownFlat;
+    for (const child of this.childPanels) child.setParentFlat(flat, shown);
+    this.cdr.markForCheck();
+  }
+
+  /** Opens the panel for a flat presentation and reports it the way a click would. */
+  private openForFlat(): void {
+    if (this._expanded) return;
+    this.Expanded = true;
+    // After the current change-detection pass, so a listener that updates bound state does not
+    // change it mid-check.
+    queueMicrotask(() => this.ExpandedChange.emit(true));
   }
 }
 

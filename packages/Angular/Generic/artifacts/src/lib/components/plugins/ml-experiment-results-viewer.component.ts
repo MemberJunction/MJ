@@ -3,6 +3,7 @@ import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
+import { LeaderboardRows, type LeaderboardEntryInput, type NormalizedLeaderboardRow } from './ml-leaderboard-rows';
 
 /**
  * A single feature-importance entry for the winning model.
@@ -15,41 +16,6 @@ interface MLFeatureImportance {
   importance?: number;
   weight?: number;
   value?: number;
-}
-
-/**
- * A single leaderboard iteration row.
- *
- * Accepts both the **canonical** Core `ModelingPlanSpec.Leaderboard` shape
- * (PascalCase: `Metric`/`ModelID`/`IterationID`, produced by the deterministic
- * `ExperimentOrchestrator`) and the older / LLM-authored lowercase shape. All
- * fields are optional so partial artifacts degrade gracefully.
- */
-interface MLLeaderboardEntry {
-  // ── Canonical (Core ModelingPlanSpec.Leaderboard entry) ──
-  /** The iteration this entry scores (`MJ: Experiment Session Iterations` id). */
-  IterationID?: string;
-  /** The normalized leaderboard metric value (the Experiment's TargetMetric). */
-  Metric?: number;
-  /** The trained ML Model record ID for drill-through. */
-  ModelID?: string;
-
-  // ── Lowercase / LLM-authored fallbacks + display-only fields ──
-  /** Rank (1 = best). If absent, derived from array order. */
-  rank?: number;
-  /** Algorithm name, e.g. "XGBoost" */
-  algorithm?: string;
-  algorithmName?: string;
-  /** Feature set label, e.g. "engagement", "full", "interpretable" */
-  featureSet?: string;
-  /** Primary normalized leaderboard score (the Experiment's TargetMetric) */
-  score?: number;
-  /** Optional secondary metric (e.g. cross-validation score) */
-  cvScore?: number;
-  /** The trained ML Model record ID for drill-through (lowercase fallback) */
-  modelId?: string;
-  /** Named metric label for the primary score column header */
-  metricName?: string;
 }
 
 /**
@@ -105,7 +71,7 @@ interface MLExperimentResultsSpec {
   /** The full results narrative in markdown (PascalCase). */
   Markdown?: string;
   /** Ranked leaderboard of experiment iterations (PascalCase Core shape). */
-  Leaderboard?: MLLeaderboardEntry[];
+  Leaderboard?: LeaderboardEntryInput[];
   /** Feature importance for the winning model (PascalCase). */
   FeatureImportance?: MLFeatureImportance[];
   /** The winning model pointer (PascalCase). */
@@ -114,6 +80,13 @@ interface MLExperimentResultsSpec {
   BestModelID?: string;
   /** The normalized target metric name (PascalCase). */
   TargetMetric?: string;
+  /**
+   * The training run's stored gate outcome: `model` ships the trained finalist, `keep-simple-baseline` ships a simple
+   * baseline, `no-signal` ships nothing. Absent or null when the run was never evaluated under an Evaluation Protocol.
+   */
+  GateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal' | null;
+  /** The stored gate decision's reason, in words. */
+  GateReason?: string;
 
   // ── Lowercase / LLM-authored fallbacks ──
   /** The modeling goal, plain language */
@@ -129,7 +102,7 @@ interface MLExperimentResultsSpec {
   /** The normalized target metric name (column header / headline label) */
   targetMetric?: string;
   /** Ranked leaderboard of experiment iterations */
-  leaderboard?: MLLeaderboardEntry[];
+  leaderboard?: LeaderboardEntryInput[];
   /** Feature importance for the winning model */
   featureImportance?: MLFeatureImportance[];
   /** Convenience pointer to the winning model ID (also resolvable via report/leaderboard) */
@@ -138,19 +111,6 @@ interface MLExperimentResultsSpec {
   winningMetrics?: MLWinningMetric[];
   /** The reporting-phase block (markdown, summary, best model) */
   report?: MLExperimentReport;
-}
-
-/**
- * Normalized leaderboard row for the template (resolves alias fields + derived rank).
- */
-interface NormalizedLeaderboardRow {
-  rank: number;
-  algorithm: string;
-  featureSet: string;
-  score: number | null;
-  cvScore: number | null;
-  modelId: string | null;
-  isWinner: boolean;
 }
 
 /**
@@ -195,7 +155,13 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   public ErrorMessage = '';
 
   /** Normalized, ranked leaderboard rows for rendering. */
-  public LeaderboardRows: NormalizedLeaderboardRow[] = [];
+  public LeaderboardRows: readonly NormalizedLeaderboardRow[] = [];
+
+  /** The score column's label, from the rows' own metric (see {@link LeaderboardRows.ScoreColumnLabel}). */
+  public ScoreColumnLabel = 'Score';
+
+  /** The rows state different metrics, so each score cell names its own. */
+  public ShowRowMetric = false;
 
   /** Normalized feature-importance bars for rendering. */
   public FeatureBars: NormalizedFeatureBar[] = [];
@@ -211,7 +177,9 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
         return;
       }
 
-      this.LeaderboardRows = this.buildLeaderboardRows(this.Spec.Leaderboard ?? this.Spec.leaderboard ?? []);
+      this.LeaderboardRows = LeaderboardRows.NormalizeLeaderboardRows(this.Spec.Leaderboard || this.Spec.leaderboard || []);
+      this.ScoreColumnLabel = LeaderboardRows.ScoreColumnLabel(this.LeaderboardRows, this.TargetMetricLabel);
+      this.ShowRowMetric = LeaderboardRows.RowsDisagreeOnMetric(this.LeaderboardRows);
       this.FeatureBars = this.buildFeatureBars(this.Spec.FeatureImportance ?? this.Spec.featureImportance ?? []);
     } catch (error) {
       this.HasError = true;
@@ -225,7 +193,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   // ─── Base-class contract ─────────────────────────────────────────
 
   public override get hasDisplayContent(): boolean {
-    return this.Spec != null;
+    return (this.Spec !== null && this.Spec !== undefined);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -262,35 +230,100 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return this.Spec?.Summary ?? this.Spec?.report?.summary ?? '';
   }
 
+  /** The hero's label: the winning row's own metric (a search's inner-fold metric), else the artifact's target metric. */
+  public get HeadlineMetricLabel(): string {
+    return this.WinningRow?.MetricName || this.TargetMetricLabel;
+  }
+
   public get TargetMetricLabel(): string {
     return this.Spec?.TargetMetric ?? this.Spec?.targetMetric ?? this.firstMetricName() ?? 'Score';
   }
 
-  /** The winning row (rank 1) if any. */
+  /**
+   * Whether the leaderboard's marked row shipped: only when the stored outcome is `model`. A finalist the gate did not
+   * ship, or one with no stored outcome, is never crowned the winner.
+   */
+  public get FinalistShipped(): boolean {
+    return this.Spec?.GateOutcome === 'model';
+  }
+
+  /** The side card's title: the winning model, or what the gate decided instead. */
+  public get OutcomeCardTitle(): 'Winning Model' | 'Kept a simple baseline' | 'No model shipped' | 'Not evaluated' {
+    switch (this.Spec?.GateOutcome) {
+      case 'no-signal': return 'No model shipped';
+      case 'keep-simple-baseline': return 'Kept a simple baseline';
+      case 'model': return 'Winning Model';
+      default: return 'Not evaluated';
+    }
+  }
+
+  /**
+   * Which model the feature-importance bars describe, by the stored gate outcome: the winning model only when the gate
+   * shipped it, the shipped model for a kept simple baseline, else the trained model (no outcome stored: not evaluated).
+   */
+  public get FeatureImportanceModelLabel(): 'winning' | 'shipped' | 'trained' {
+    switch (this.Spec?.GateOutcome) {
+      case 'model': return 'winning';
+      case 'keep-simple-baseline': return 'shipped';
+      default: return 'trained';
+    }
+  }
+
+  /** The stored gate decision's reason; empty when the artifact carries none. */
+  public get GateReason(): string {
+    return this.Spec?.GateReason || '';
+  }
+
+  /**
+   * The "optimistic" tag's tooltip. "Best of several tries" only when the search had more than one candidate and the
+   * gate shipped the finalist; a lone candidate was never selected, and a finalist the gate did not ship is not the winner.
+   */
+  public get OptimisticNote(): string {
+    const candidates = this.LeaderboardRows.length;
+    if (candidates < 2) return "The only candidate's inner-CV score on the development rows.";
+    if (this.FinalistShipped) return "The winner's inner-CV score is optimistic: it was the best of several tries.";
+    return `The finalist's inner-CV score, chosen among ${candidates} candidates; the gate did not ship it.`;
+  }
+
+  /** Whether a row is shown as the winner: the row the artifact marks, and only when it shipped. */
+  public IsCrowned(row: NormalizedLeaderboardRow): boolean {
+    return row.IsWinner && this.FinalistShipped;
+  }
+
+  /** The winning row (the one the artifact marks, which need not be rank 1), else the top row. */
   public get WinningRow(): NormalizedLeaderboardRow | null {
-    return this.LeaderboardRows.find(r => r.isWinner) ?? this.LeaderboardRows[0] ?? null;
+    return this.LeaderboardRows.find(r => r.IsWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
   }
 
   /** Headline best score (the winning row's primary score), formatted. */
   public get HeadlineScore(): string | null {
-    const score = this.WinningRow?.score;
-    return score != null ? this.FormatScore(score) : null;
+    const score = this.WinningRow?.Score;
+    return (score !== null && score !== undefined) ? this.FormatScore(score) : null;
   }
 
+  /** The shipped model's name; for a finalist that did not ship, only a named model record (none for no-signal). */
   public get WinningAlgorithm(): string {
-    return this.Spec?.BestModel?.Name ?? this.Spec?.report?.bestModelName ?? this.WinningRow?.algorithm ?? 'Winning model';
+    const named = this.Spec?.BestModel?.Name || this.Spec?.report?.bestModelName;
+    if (!this.FinalistShipped) return named || '';
+    return named || this.WinningRow?.Algorithm || 'Winning model';
   }
 
+  /**
+   * The outcome card's subtitle, following the stored outcome: the shipped finalist's feature set and version; for a kept
+   * baseline, that the shipped model is not the leaderboard's finalist (whose feature set it does not use); nothing when
+   * the gate shipped nothing.
+   */
   public get WinningModelSubtitle(): string {
-    const parts: string[] = [];
-    if (this.WinningRow?.featureSet) {
-      parts.push(this.WinningRow.featureSet);
+    switch (this.Spec?.GateOutcome) {
+      case 'keep-simple-baseline': return "A simple baseline, not the search's finalist";
+      case 'model': return this.shippedFinalistSubtitle();
+      default: return '';
     }
-    const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
-    if (version != null && `${version}`.trim()) {
-      parts.push(`${version}`);
-    }
-    return parts.join(' · ');
+  }
+
+  /** The "optimistic" tag's text: only a finalist chosen among several candidates is optimistic by selection. */
+  public get OptimisticTagText(): string {
+    return this.LeaderboardRows.length < 2 ? 'only candidate' : 'optimistic';
   }
 
   /** Extra headline metrics for the winning-model card. */
@@ -299,10 +332,13 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     if (provided.length > 0) {
       return provided;
     }
-    // Synthesize a single metric from the headline score when nothing explicit was provided.
+    // Synthesize a single metric from the headline score when nothing explicit was provided, only for a shipped finalist.
+    if (!this.FinalistShipped) {
+      return [];
+    }
     const row = this.WinningRow;
-    if (row?.score != null) {
-      return [{ label: this.firstMetricName() ?? 'Score', value: this.FormatScore(row.score) }];
+    if (row?.Score !== null && row?.Score !== undefined) {
+      return [{ label: row.MetricName || this.firstMetricName() || 'Score', value: this.FormatScore(row.Score) }];
     }
     return [];
   }
@@ -313,7 +349,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** Whether we have a resolvable model ID to drill through to. */
   public get HasDrillThroughTarget(): boolean {
-    return this.resolveBestModelId() != null;
+    return this.resolveBestModelId() !== null;
   }
 
   public get LeaderboardSize(): number {
@@ -342,17 +378,30 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
    * Drill through to a specific leaderboard row's model, when that row carries a modelId.
    */
   public OnOpenRowModel(row: NormalizedLeaderboardRow): void {
-    if (!row.modelId) {
+    if (!row.ModelID) {
       return;
     }
     this.navigationRequest.emit({
       appName: 'Predictive Studio',
       navItemName: 'Models',
-      queryParams: { modelId: row.modelId }
+      queryParams: { modelId: row.ModelID }
     });
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────
+
+  /** A shipped finalist's subtitle: its leaderboard feature set and the model's version, whichever are known. */
+  private shippedFinalistSubtitle(): string {
+    const parts: string[] = [];
+    if (this.WinningRow?.FeatureSet) {
+      parts.push(this.WinningRow.FeatureSet);
+    }
+    const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
+    if ((version !== null && version !== undefined) && `${version}`.trim()) {
+      parts.push(`${version}`);
+    }
+    return parts.join(' · ');
+  }
 
   /**
    * Resolve the winning model ID. Priority (canonical PascalCase first):
@@ -363,35 +412,8 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       ?? this.Spec?.BestModelID
       ?? this.Spec?.report?.bestModelId
       ?? this.Spec?.bestModelId
-      ?? this.WinningRow?.modelId
+      ?? this.WinningRow?.ModelID
       ?? null;
-  }
-
-  /** Build normalized, ranked leaderboard rows from raw entries. */
-  private buildLeaderboardRows(entries: MLLeaderboardEntry[]): NormalizedLeaderboardRow[] {
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return [];
-    }
-
-    const rows = entries.map((e, index) => ({
-      // Canonical `Leaderboard` is already best-first; derive rank from order.
-      rank: e.rank ?? index + 1,
-      algorithm: e.algorithm ?? e.algorithmName ?? 'Unknown',
-      featureSet: e.featureSet ?? '',
-      // Canonical: `Metric`; fallback: lowercase `score`.
-      score: this.firstDefined(e.Metric ?? e.score),
-      cvScore: this.firstDefined(e.cvScore),
-      // Canonical: `ModelID`; fallback: lowercase `modelId`.
-      modelId: e.ModelID ?? e.modelId ?? null,
-      isWinner: false
-    }));
-
-    // Sort by explicit rank ascending (rank 1 is best).
-    rows.sort((a, b) => a.rank - b.rank);
-    if (rows.length > 0) {
-      rows[0].isWinner = true;
-    }
-    return rows;
   }
 
   /** Build normalized feature-importance bars (widths relative to the max). */
@@ -429,17 +451,12 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** Format a numeric score for display (3 decimals, trimmed). */
   public FormatScore(value: number | null): string {
-    if (value == null) {
+    if ((value === null || value === undefined)) {
       return '—';
     }
     // Scores in [0,1] (AUC/F1) look best at 3 decimals; larger metrics (RMSE) at 2.
     const decimals = Math.abs(value) < 1 ? 3 : 2;
     return value.toFixed(decimals);
-  }
-
-  /** @deprecated Use {@link FormatScore}. */
-  public formatScore(value: number | null): string {
-    return this.FormatScore(value);
   }
 
   /** Format an importance weight for the small bar label. */
@@ -449,10 +466,5 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     }
     // Show .31 style for sub-1 weights, otherwise 2 decimals.
     return Math.abs(value) < 1 ? value.toFixed(2).replace(/^0/, '') : value.toFixed(2);
-  }
-
-  /** @deprecated Use {@link FormatImportance}. */
-  public formatImportance(value: number): string {
-    return this.FormatImportance(value);
   }
 }

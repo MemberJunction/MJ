@@ -128,6 +128,7 @@ export class ListOperations {
         warnings: this.buildWarnings(sourceSet, null, 0),
         tokenMode: mode,
         signatureRecordIds: sourceSet.RecordIds,
+        targetTotal: 0,
       });
     }
 
@@ -156,6 +157,7 @@ export class ListOperations {
       warnings: this.buildWarnings(sourceSet, targetSet, toRemoveIds.length),
       tokenMode: mode,
       signatureRecordIds: sourceSet.RecordIds,
+      targetTotal: targetIds.size,
     });
   }
 
@@ -193,6 +195,7 @@ export class ListOperations {
         warnings: entityWarnings,
         tokenMode: 'SetOp',
         signatureRecordIds: resultIds,
+        targetTotal: 0,
       });
     }
 
@@ -227,6 +230,7 @@ export class ListOperations {
       ],
       tokenMode: 'SetOp',
       signatureRecordIds: resultIds,
+      targetTotal: targetIds.size,
     });
   }
 
@@ -428,7 +432,8 @@ export class ListOperations {
     runtimeParams: Record<string, unknown> | undefined,
   ): Promise<ResolvedRecordSet> {
     const rv = this.runView();
-    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null);
+    // As the acting user: the server-side User Views lookup fails unscoped.
+    const entityName = await RunView.GetEntityNameFromRunViewParams({ ViewID: viewId }, this.provider ?? null, this.contextUser);
     if (!entityName) {
       throw new Error(`Could not determine entity for view '${viewId}'`);
     }
@@ -448,6 +453,8 @@ export class ListOperations {
       ViewID: viewId,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
     }, this.contextUser);
 
     if (!result.Success) {
@@ -479,6 +486,8 @@ export class ListOperations {
       ExtraFilter: extraFilter,
       Fields: pkFields,
       ResultType: 'simple',
+      // A list source is every match, not the entity's UserViewMaxRows page.
+      IgnoreMaxRows: true,
       ...(alternateBaseView ? { AlternateBaseView: alternateBaseView } : {}),
     }, this.contextUser);
 
@@ -543,13 +552,16 @@ export class ListOperations {
     warnings: ListDeltaWarning[];
     tokenMode: DeltaTokenMode;
     signatureRecordIds: string[];
+    /** Size of the target as previewed (0 for a new list). */
+    targetTotal: number;
   }): Promise<ListDelta> {
     const counts: ListDeltaCounts = {
       Add: args.toAddIds.length,
       Remove: args.toRemoveIds.length,
       Unchanged: args.unchangedIds.length,
       SourceTotal: args.toAddIds.length + args.unchangedIds.length,
-      TargetTotal: args.unchangedIds.length + args.toRemoveIds.length,
+      // Not Unchanged + Remove: Additive mode keeps target-only records without listing them.
+      TargetTotal: args.targetTotal,
     };
     // ComputeSourceSignature and SignDeltaToken are async because Web
     // Crypto's SubtleCrypto is async. Build them in sequence — the
@@ -706,7 +718,10 @@ export class ListOperations {
     const expected = new Set<string>([...delta.Unchanged, ...delta.ToRemove]);
     const actual = new Set<string>(current.RecordIds);
 
-    if (expected.size !== actual.size) {
+    // Compare the size against the target as previewed, not against `expected`: Additive mode
+    // keeps target-only records without listing them, so `expected` is smaller than an
+    // unchanged target whenever the source has dropped a member.
+    if (actual.size !== delta.Counts.TargetTotal) {
       return { ok: false, failure: this.failure('STALE_DELTA', 'Target list has been modified since preview was generated.') };
     }
     for (const id of expected) {

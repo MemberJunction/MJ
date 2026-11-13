@@ -12,23 +12,47 @@
       </div>
       <div class="panel-header-right">
         <div class="version-selector"
-             [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
-             (click)="viewContext !== 'collection' && toggleVersionDropdown()">
-          <i class="fas fa-history"></i>
-          <span class="version-label">v{{ selectedVersionNumber }}</span>
-          @if (allVersions.length > 1 && viewContext !== 'collection') {
+             [class.clickable]="allVersions.length > 1"
+             [class.comparing]="IsCompareMode"
+             (click)="toggleVersionDropdown(); $event.stopPropagation()">
+          <i class="fas" [ngClass]="IsCompareMode ? 'fa-code-compare' : 'fa-history'"></i>
+          <span class="version-label">{{ IsCompareMode ? ('v' + CompareBaseVersionNumber + ' → v' + CompareTargetVersionNumber) : ('v' + selectedVersionNumber) }}</span>
+          @if (allVersions.length > 1) {
             <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
           }
           @if (showVersionDropdown) {
             <div class="version-dropdown" (click)="$event.stopPropagation()">
-              @for (version of allVersions; track version.ID) {
-                <div class="version-option"
-                     [class.selected]="version.VersionNumber === selectedVersionNumber"
-                     (click)="selectVersion(version); $event.stopPropagation()">
-                  <span class="version-number">{{ GetVersionLabel(version.VersionNumber) }}</span>
-                  <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
-                  @if (version.VersionNumber === selectedVersionNumber) {
-                    <i class="fas fa-check"></i>
+              <div class="version-dropdown-list">
+                @for (version of allVersions; track version.ID) {
+                  <div class="version-option"
+                       [class.selected]="!IsCompareMode && version.VersionNumber === selectedVersionNumber"
+                       (click)="selectVersion(version); $event.stopPropagation()">
+                    <span class="version-number">{{ GetVersionLabel(version.VersionNumber) }}</span>
+                    <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+                    @if (!IsCompareMode && version.VersionNumber === selectedVersionNumber) {
+                      <i class="fas fa-check"></i>
+                    }
+                  </div>
+                }
+              </div>
+              @if (allVersions.length > 1) {
+                <div class="version-dropdown-footer">
+                  @if (!IsCompareMode) {
+                    <button type="button"
+                            class="version-compare-trigger"
+                            data-testid="open-version-compare-option"
+                            (click)="OpenVersionCompare(); $event.stopPropagation()">
+                      <i class="fas fa-code-compare"></i>
+                      <span>Compare Versions…</span>
+                    </button>
+                  } @else {
+                    <button type="button"
+                            class="version-compare-trigger active"
+                            data-testid="exit-version-compare-option"
+                            (click)="ExitVersionCompare(); $event.stopPropagation()">
+                      <i class="fas fa-arrow-left"></i>
+                      <span>Exit Version Compare</span>
+                    </button>
                   }
                 </div>
               }
@@ -41,6 +65,28 @@
                   title="Inspect & rate components">
             <i class="fas fa-star-half-stroke"></i>
           </button>
+        }
+        @if (pluginViewer?.SupportsPDFExport) {
+          <div class="export-pdf-menu" (click)="$event.stopPropagation()">
+            <button class="export-pdf-btn"
+                    (click)="TogglePDFMenu()"
+                    [disabled]="IsExportingPDF"
+                    aria-haspopup="menu"
+                    [attr.aria-expanded]="ShowPDFMenu"
+                    [title]="IsExportingPDF ? 'Preparing PDF…' : 'Export as PDF'">
+              <i class="fas" [ngClass]="IsExportingPDF ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+            </button>
+            @if (ShowPDFMenu) {
+              <div class="export-pdf-dropdown" role="menu">
+                <button type="button" role="menuitem" (click)="OnExportPDF('portrait')">
+                  <i class="fas fa-file"></i> PDF – Portrait
+                </button>
+                <button type="button" role="menuitem" (click)="OnExportPDF('landscape')">
+                  <i class="fas fa-file fa-rotate-90"></i> PDF – Landscape
+                </button>
+              </div>
+            }
+          </div>
         }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"
@@ -103,9 +149,9 @@
     }
 
     @if (!isLoading && !error && artifact) {
-      <div class="artifact-content-wrapper" [class.no-tabs]="!showTabs">
-        <!-- Tab Navigation (Dynamic) - Hidden when showTabs is false -->
-        @if (showTabs) {
+      <div class="artifact-content-wrapper" [class.no-tabs]="!showTabs || IsCompareMode">
+        <!-- Tab Navigation (Dynamic) - Hidden when showTabs is false or in Version Compare mode -->
+        @if (showTabs && !IsCompareMode) {
           <div class="tab-navigation">
             @for (tab of allTabs; track tab) {
               <button class="tab-btn"
@@ -121,27 +167,47 @@
         }
 
         <!-- Tab Content (Dynamic) -->
-        <div class="tab-content">
+        <div class="tab-content" [class.tab-content--compare]="IsCompareMode">
+          @if (IsCompareMode) {
+            <mj-artifact-version-compare
+              [Versions]="AllVersions"
+              [BaseVersion]="CompareBaseVersion"
+              [TargetVersion]="CompareTargetVersion"
+              [BaseVersionNumber]="CompareBaseVersionNumber"
+              [TargetVersionNumber]="CompareTargetVersionNumber"
+              [VisualDiffComponentType]="ActiveVisualDiffComponentType"
+              [MessageLinkedVersionIds]="MessageLinkedVersionIds"
+              [IsLoadingVersions]="IsLoadingCompareVersions"
+              [CanEdit]="canEdit === true"
+              [IsRestoring]="IsRestoringVersion"
+              (ExitRequested)="ExitVersionCompare()"
+              (ComparePairChanged)="OnComparePairChanged($event)"
+              (RestoreVersionRequested)="OnRestoreComparedVersion($event)">
+            </mj-artifact-version-compare>
+          }
+
           <!-- Plugin Viewer - Created once, kept alive, shown/hidden with CSS -->
           @if (hasPlugin && artifactVersion && artifactTypeName) {
-            <div class="plugin-container" [class.plugin-hidden]="activeTab !== 'display'">
+            <div class="plugin-container" [class.plugin-hidden]="IsCompareMode || activeTab !== 'display'">
               <mj-artifact-type-plugin-viewer
+                [Provider]="Provider"
                 [artifactVersion]="artifactVersion"
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
-                [readonly]="true"
+                [readonly]="!canEdit"
                 [VisibleVersionNumbers]="PluginVisibleVersionNumbers"
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
                 (tabsChanged)="onTabsChanged()"
-                (applyFormRequested)="applyFormRequested.emit($event)">
+                (applyFormRequested)="applyFormRequested.emit($event)"
+                (ContentCommitted)="OnPluginContentCommitted($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }
 
           <!-- Display Tab - Fallback content when no plugin -->
-          @if (activeTab === 'display' && (!hasPlugin || !artifactVersion)) {
+          @if (!IsCompareMode && activeTab === 'display' && (!hasPlugin || !artifactVersion)) {
             <div class="display-content">
               @if (displayMarkdown || displayHtml) {
                 <!-- Fallback to extracted markdown/HTML attributes -->
@@ -189,7 +255,7 @@
           }
 
           <!-- Details Tab - Artifact metadata (always in DOM, hidden with CSS) -->
-          <div class="details-content" [class.tab-hidden]="activeTab !== 'details'">
+          <div class="details-content" [class.tab-hidden]="IsCompareMode || activeTab !== 'details'">
               <div class="artifact-meta">
                 <div class="meta-item">
                   <label>Type</label>
@@ -242,7 +308,7 @@
             </div>
 
           <!-- Links Tab - Conversations and Collections (always in DOM, hidden with CSS) -->
-          <div class="links-container" [class.tab-hidden]="activeTab !== 'links'">
+          <div class="links-container" [class.tab-hidden]="IsCompareMode || activeTab !== 'links'">
             @if (linksToShow.length > 0) {
               <div class="links-section">
                 @for (link of linksToShow; track link.id) {
@@ -277,7 +343,7 @@
           </div>
 
           <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
-          @if (activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
+          @if (!IsCompareMode && activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
             <!-- Check if this is a component tab -->
             @if (GetComponentTabType(activeTab); as componentType) {
               <div class="component-tab-content">

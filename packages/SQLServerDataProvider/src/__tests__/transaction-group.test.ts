@@ -24,7 +24,7 @@ import {
   IMetadataProvider,
 } from '@memberjunction/core';
 import { SQLServerTransactionGroup } from '../SQLServerTransactionGroup';
-import { mssqlState, MockConnectionPool } from './helpers/mock-mssql';
+import { mssqlState, MockConnectionPool, MockTransaction } from './helpers/mock-mssql';
 import { TEST_USER, makeWidgetEntityInfo, makeSavedWidgetEntity } from './helpers/entity-fixtures';
 
 /**
@@ -163,7 +163,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
     }
   });
 
-  it('treats an empty recordset as a failed item but still commits (no-exception path) and Submit returns false', async () => {
+  it('treats an empty recordset as a failed item, rolls back the atomic group, and passes success=false to all callbacks', async () => {
     const entityInfo = makeWidgetEntityInfo();
     const group = new SQLServerTransactionGroup();
     const a = makeItem(makeSavedWidgetEntity(entityInfo, TEST_USER), 'Update', 'STATEMENT 1', pool);
@@ -177,12 +177,10 @@ describe('SQLServerTransactionGroup.Submit', () => {
 
     expect(success).toBe(false);
     expect(group.Status).toBe('Failed');
-    // No exception was thrown, so the transaction still commits — only the group
-    // RESULT reflects the failed item. This is load-bearing current behavior.
-    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'commit']);
-    expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, true);
-    // The empty-recordset item reports a falsy success flag to its callback
-    expect(b.callback.mock.calls[0][1]).toBeFalsy();
+    // Partial failure without an exception still rolls back the atomic group so Item 0 is never committed.
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'query', 'query', 'rollback']);
+    expect(a.callback).toHaveBeenCalledWith({ ID: 'w-1' }, false);
+    expect(b.callback.mock.calls[0][1]).toBe(false);
   });
 
   it('variables: a Define result flows into a later Use item and its instruction is regenerated through the provider', async () => {
@@ -208,7 +206,9 @@ describe('SQLServerTransactionGroup.Submit', () => {
     // Because a variable was set, the consumer's instruction was REGENERATED via the provider
     expect(providerStub.GetCreateUpdateSPName).toHaveBeenCalledWith(consumer, true);
     expect(providerStub.GetSaveSQL).toHaveBeenCalledTimes(1);
-    expect(providerStub.GetSaveSQL).toHaveBeenCalledWith(consumer, true, 'spCreateWidget', TEST_USER);
+    // ...on the group's own open transaction, so a Record Change snapshot read joins it rather
+    // than waiting on the locks the group's earlier items hold.
+    expect(providerStub.GetSaveSQL).toHaveBeenCalledWith(consumer, true, 'spCreateWidget', TEST_USER, expect.any(MockTransaction));
     expect(mssqlState.Queries.map((q) => q.sql)).toEqual([
       'EXEC [dbo].spCreateWidget -- definer',
       '-- REGENERATED -- EXEC [dbo].spCreateWidget',
@@ -326,6 +326,15 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
     expect(out).toContain('@Name=@Name_h_mjb3'); // argument VALUE renamed …
     expect(out).not.toMatch(/@Name_mjb3\s*=/); // … argument NAME untouched
     expect(out).not.toMatch(/@(ID|Name|Amount)_h(?!_mjb3)/); // no bare reference survives
+  });
+
+  it('continues a declaration list past a long indent in linear time', () => {
+    const sql = `DECLARE @a_h INT,\n${' \t'.repeat(50_000)}@b_h INT\nSET @b_h = 1`;
+    const started = performance.now();
+    const out = SQLServerTransactionGroup.scopeItemVariables(sql, 0);
+    expect(performance.now() - started).toBeLessThan(2500);
+    expect(out).toContain('DECLARE @a_h_mjb0 INT,');
+    expect(out).toContain('SET @b_h_mjb0 = 1');
   });
 
   it('ends a declaration list at the next statement and leaves table-variable column lists alone', () => {

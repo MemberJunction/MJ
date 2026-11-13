@@ -1,5 +1,5 @@
 import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { UserInfo, LogError, LogStatus, Metadata, SharedLoad } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
 import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
@@ -117,8 +117,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     private _tagEmbeddingModel: EmbeddingModelInfo | null = null;
     private _loaded = false;
-    private _loading = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     /**
@@ -188,6 +188,26 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         return this.Base.GetTaxonomyTree(rootID, ctx);
     }
 
+    /**
+     * The taxonomy as markdown headings (`#` root, `##` child, ...), the shape the autotagging prompt
+     * expects so the model can answer with paths like "Root / Child". Empty when there are no tags.
+     */
+    public GetTaxonomyMarkdown(): string {
+        const lines: string[] = [];
+        const render = (node: TagTreeNode, depth: number): void => {
+            lines.push(`${'#'.repeat(Math.min(depth, 6))} ${node.Name}`);
+            for (const child of node.Children ?? []) {
+                render(child, depth + 1);
+            }
+        };
+        if (this.Tags.length > 0) {
+            for (const root of this.GetTaxonomyTree()) {
+                render(root, 1);
+            }
+        }
+        return lines.join('\n');
+    }
+
     /** Create a new Tag entity, save it, and add to local cache */
     public async CreateTag(
         name: string,
@@ -223,16 +243,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
         if (this._loaded && !forceRefresh) return;
-        if (this._loading && this._loadingPromise) return this._loadingPromise;
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser);
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser));
     }
 
     /**
@@ -446,6 +457,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     public AddOrUpdateSingleTagEmbeddingFromPersisted(tag: MJTagEntity): void {
         if (!this._tagVectorService) return;
         const key = NormalizeUUID(tag.ID);
+        if (!this._tagEmbeddingModel || !UUIDsEqual(tag.EmbeddingModelID, this._tagEmbeddingModel.ModelID)) {
+            // Embedded by another model: it can't share this index (mixed dimensions throw). The
+            // tag rejoins once it is re-embedded with the index's model.
+            this._tagVectorService.RemoveVector(key);
+            return;
+        }
         const vector = ReadStoredVector(tag.EmbeddingVectorBinary, tag.EmbeddingVector);
         if (!vector) {
             if (tag.EmbeddingVector || tag.EmbeddingVectorBinary) {
@@ -961,6 +978,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
                 Texts: [text],
                 PromptID: promptID,
                 ModelID: modelInfo.ModelID,
+                InputType: 'query',
                 ContextUser: this._contextUser,
                 Description: `Tag resolution query: "${text}"`
             });
@@ -1172,6 +1190,59 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
+     * The model tag embeddings use, resolved the same way the index resolves it (see
+     * {@link resolveTagEmbeddingModel}): the index's model once it is built, else the platform's
+     * default local embedding model, the "Tag Semantic Matching" prompt's model, or the smallest
+     * embedding model. Null when none exists. `MJTagEntityServer` compares a saved tag's
+     * `EmbeddingModelID` with it, so a tag is only re-embedded when its vector came from another model.
+     */
+    public async ResolveTagEmbeddingModelID(contextUser: UserInfo): Promise<string | null> {
+        return (await this.tagEmbeddingModelFor(contextUser))?.ModelID ?? null;
+    }
+
+    /**
+     * Embeds one tag's text with the model the tag index uses, under the "Tag Semantic Matching"
+     * prompt, so a tag saved through the entity lands in the same vector space as the tags TagEngine
+     * embedded (#4922). Returns null when no embedding model resolves or the call fails.
+     *
+     * @param text The text to embed, as {@link buildTagEmbeddingText} builds it (`Name: Description`)
+     * @param contextUser The user the embedding run is recorded for
+     */
+    public async EmbedTagText(text: string, contextUser: UserInfo): Promise<{ Vector: number[]; ModelID: string } | null> {
+        const modelInfo = await this.tagEmbeddingModelFor(contextUser);
+        if (!modelInfo) {
+            return null;
+        }
+        try {
+            const result = await new AIEmbeddingRunner().RunEmbedding({
+                Texts: [text],
+                PromptID: this.resolveTagSemanticPromptID(),
+                ModelID: modelInfo.ModelID,
+                ContextUser: contextUser,
+                Description: 'Tag embedding for a saved tag'
+            });
+            const vector = result.Success ? result.Vectors[0] : undefined;
+            if (!vector || vector.length === 0) {
+                LogError(`TagEngine.EmbedTagText: no vector returned: ${result.ErrorMessage ?? 'unknown error'}`);
+                return null;
+            }
+            return { Vector: vector, ModelID: modelInfo.ModelID };
+        } catch (error) {
+            LogError(`TagEngine.EmbedTagText failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /** The index's model when it is built, else the model it would resolve now. */
+    private async tagEmbeddingModelFor(contextUser: UserInfo): Promise<EmbeddingModelInfo | null> {
+        if (this._tagEmbeddingModel) {
+            return this._tagEmbeddingModel;
+        }
+        await AIEngine.Instance.Config(false, contextUser);
+        return this.resolveTagEmbeddingModel();
+    }
+
+    /**
      * Remove a tag's embedding from the vector service (e.g., after deletion).
      * No-op if the vector service is not initialized.
      */
@@ -1185,12 +1256,16 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     // ========================================================================
 
     /**
-     * The one model tag embeddings use: the "Tag Semantic Matching" prompt's model, else the
-     * smallest embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it,
-     * and its ID is what gets persisted as `Tag.EmbeddingModelID`.
+     * The one model tag embeddings use: the platform's default local embedding model
+     * (`AIEngine.DefaultLocalEmbeddingModel`). `MJTagEntityServer` embeds a saved tag through
+     * {@link EmbedTagText}, so the persisted vector and this index always agree. When no local embedding model
+     * exists it falls back to the "Tag Semantic Matching" prompt's model, then the smallest
+     * embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it, and its
+     * ID is what gets persisted as `Tag.EmbeddingModelID`.
      */
     private resolveTagEmbeddingModel(): EmbeddingModelInfo | null {
-        return this.getTagPromptModel() ?? this.getSmallestEmbeddingModel();
+        const local = AIEngine.Instance.DefaultLocalEmbeddingModel;
+        return (local ? this.toEmbeddingModelInfo(local) : null) ?? this.getTagPromptModel() ?? this.getSmallestEmbeddingModel();
     }
 
     /**
@@ -1232,8 +1307,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return null;
         }
 
-        // Filter to embedding models only
-        const embeddingModels = aiEngine.Models.filter(m => this.isEmbeddingModel(m));
+        // Filter to active embedding models only
+        const embeddingModels = aiEngine.Models.filter(m => m.IsActive && this.isEmbeddingModel(m));
 
         if (embeddingModels.length === 0) {
             return null;

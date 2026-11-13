@@ -216,7 +216,11 @@ describe('MediaWorkerSession — the avatar', () => {
     it("builds its room client with the avatar status the connect carried, so a rejoin after a take-down stays audio only", async () => {
         const fake = makeFakeRtc();
         const client = CreateMediaWorkerRoomClient({ ...OPTIONS, avatarStatus: TAKEN_DOWN }, async () => fake.module);
+        const statuses: unknown[] = [];
+        client.onAvatarStatus?.((status) => statuses.push(status));
         await client.connect(ARGS);
-        expect(fake.cap.attributeSets).toEqual([{ 'mj.agentAvatar': 'audio-only:decoder-failed' }]);
+        // The take-down is reported again so the server re-applies the attribute; the bot sets none itself.
+        expect(statuses).toEqual([TAKEN_DOWN]);
+        expect(fake.cap.attributeSets).toEqual([]);
     });
 });

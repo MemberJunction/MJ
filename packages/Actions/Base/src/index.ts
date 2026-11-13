@@ -1,8 +1,10 @@
 export * from './ActionEngine-Base';
 export * from './ActionAudience';
+export * from './CompanyIntegrationResolver';
 export * from './DurableEntityActionSubmitter';
 export * from './EntityChangeContext';
 export * from './ParamRedaction';
+export * from './ActionParamFieldSecurity';
 export * from './EntityActionScopeResolver';
 export * from './MJActionEntityExtended';
 

@@ -658,6 +658,7 @@ export class MemoryManagerAgent extends BaseAgent {
             ExtraFilter: `AgentID='${agentId}' AND Status='Completed'`,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['StartedAt'],
             ResultType: 'simple'
         }, contextUser);
@@ -688,6 +689,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: `ID='${sourceAgentRunId}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 Fields: [...SOURCE_RUN_SCOPE_FIELDS],
                 ResultType: 'simple'
             }, contextUser);
@@ -1844,7 +1846,12 @@ export class MemoryManagerAgent extends BaseAgent {
                     note.SourceConversationDetailID = MemoryManagerAgent.isValidUUID(extracted.sourceConversationDetailId) ? extracted.sourceConversationDetailId! : null;
                     note.SourceAIAgentRunID = extracted.sourceAgentRunId || null;
 
-                    // Apply scope: Lean towards user-specific memories by default
+                    // Apply scope: Lean towards user-specific memories by default.
+                    // A company or global note is read by every user in that scope, yet its content
+                    // was extracted from ONE user's conversation, which may hold values field-level
+                    // or row-level security keeps from the others. Nothing here re-checks the content
+                    // against the other readers' permissions, so promoting a note past user scope
+                    // shares what its source user could see.
                     const scopeLevel = extracted.scopeLevel || 'user';
 
                     if (scopeLevel === 'global') {

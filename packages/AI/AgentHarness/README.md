@@ -109,7 +109,21 @@ container, no network.
 ### `WorkspacePath` means "as the harness sees it"
 
 A host path under the local provider; a **container-internal** path under Docker. Pass it to harness
-processes — do **not** open it with `fs` unless you know you are on the local provider.
+processes — do **not** open it with `fs` unless you know you are on the local provider. When host-side
+code needs to stage request files or read output artifacts from the bind mount, use
+`SandboxHandle.HostWorkspacePath`.
+
+### Container limits and hardening (`SandboxConfig`)
+
+`DockerSandboxProvider` maps optional `SandboxConfig` fields onto `docker run` flags before the image (`LocalDirectorySandboxProvider` ignores them):
+
+- `Cpus`: CPU quota in cores (`--cpus <n>`).
+- `MemoryMb`: hard memory limit in megabytes (`--memory <n>m`).
+- `PidsLimit`: maximum process/thread count inside the container (`--pids-limit <n>`).
+- `ShmSizeMb`: `/dev/shm` size in megabytes (`--shm-size <n>m`).
+- `ReadOnlyRoot`: read-only root filesystem with writable `/tmp` (`--read-only --tmpfs /tmp:rw,size=256m`).
+- `User`: container process UID/GID (`--user <uid:gid>`) for bind-mount ownership parity.
+- `DropCapabilities`: drop all Linux capabilities and block privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`).
 
 ---
 
@@ -155,14 +169,22 @@ how a cost ceiling stops protecting anything.
 
 ---
 
-## Credentials
+## Credentials & GitHub Sandbox Auth (`HarnessCredentialResolver`)
 
 `MJ: AI Agent Credentials` records the **grant edge** — which credentials an agent carries into its
 sandbox. Custody stays in `MJ: Credentials` / `CredentialEngine`.
 
 Environment injection is the **only** channel by which a secret reaches the harness, and it carries
 exactly what was granted — never the MJAPI process environment, never DB credentials, never a user
-token.
+token from another user.
+
+All credential resolution flows through [`HarnessCredentialResolver`](./src/HarnessCredentialResolver.ts), which routes every lookup through `CredentialEngine.Instance.getCredential()` (preserving `MJ: Audit Logs` decryption audit entries, `LastUsedAt` updates, `IsActive` filtering, and expiration policy checks):
+
+| Credential Type / Mode | Sandbox Environment Behavior |
+|---|---|
+| **`GitHub App`** (`appId`, `installationId`, `privateKey`) | **Never injects the RSA private key PEM into the container.** Instead, signs a short-lived RS256 JWT on the host and exchanges it with GitHub for a 1-hour installation access token (`contents: write`, `pull_requests: write`, `issues: write`, `actions: read`, `checks: read`, `metadata: read`) scoped to the credential's `allowedRepositories`. Injects the short-lived token into both `GH_TOKEN` and `GITHUB_TOKEN`. |
+| **`GitHub Personal Access Token`** / API Key | Extracts the scalar token (`token` / `apiKey` / `accessToken`) from the encrypted JSON `Values` payload and mirrors `GH_TOKEN` ↔ `GITHUB_TOKEN` so both `gh` CLI and `git` credential helpers work out of the box. |
+| **Per-User 3LO OAuth** (`EnvVarName = 'GH_TOKEN_USER_3LO'` or `CredentialID = null` on a GitHub env var) | Resolves `UserOAuth3LO:GitHub:<contextUser.ID>` strictly for the calling `contextUser` via `CredentialEngine` (which enforces `ownerUserId === contextUser.ID` and throws `CredentialOwnerMismatchError` on any cross-user mismatch). Also injects `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`, `GIT_AUTHOR_EMAIL`, and `GIT_COMMITTER_EMAIL` from `contextUser` so commits and PRs inside the CLI session are attributed to the signed-in user. |
 
 Distinct from `MJ: AI Credential Bindings`, which is inference-selection plumbing for
 `AIPromptRunner` failover when *MJ itself* executes a prompt.

@@ -49,7 +49,7 @@ export interface PredictiveStudioModelingPlanSpec {
         Priority: number;
     }>;
     /** Validation strategy for the search. */
-    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction?: number };
     /** Proposed resource budget for the experiment session. */
     ProposedBudget: PredictiveStudioBudget;
     /** User approval gate — execution does not begin until this is true. */

@@ -13,7 +13,7 @@ import { EntityInfo, LogError, LogStatus, Metadata, RunView, UserInfo, Composite
 import { MJVectorIndexEntity, MJVectorDatabaseEntity, MJContentSourceEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { GetAIAPIKey } from '@memberjunction/ai';
-import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts } from '@memberjunction/ai-prompts';
 import { VectorDBBase, BaseResponse, QueryByVectorValues } from '@memberjunction/ai-vectordb';
 import { MJGlobal, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
@@ -77,6 +77,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 EntityName: 'MJ: Vector Indexes',
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, contextUser);
             this.available = result.Success && result.Results.length > 0;
@@ -265,8 +266,10 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 const embeddingRunner = new AIEmbeddingRunner();
                 const embedResult = await embeddingRunner.RunEmbedding({
                     Texts: [query],
+                    PromptName: EmbeddingCarrierPrompts.VectorSearch,
                     ModelID: model.ID,
                     Dimensions: dimensions,
+                    InputType: 'query',
                     ContextUser: contextUser,
                     Description: `Vector search query embedding for model ${model.Name}`,
                 });

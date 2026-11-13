@@ -100,10 +100,10 @@ export default function VoiceModeScreen() {
                     }
                     // A call that reached its time limit says so on the error screen.
                     setErrorMessage(DescribeCallEnd(service.LastSessionError)?.Message ?? null);
-                    // No recorded start failure means the PROVIDER failed mid-call. The runtime
-                    // does not tear down on a provider error — it surfaces the state and leaves the
-                    // call open — so showing the fallback without ending the session would leave a
-                    // hot microphone and a billing connection behind this screen.
+                    // No recorded start failure means the PROVIDER failed mid-call. The runtime ends
+                    // that call itself (row closed as Error, microphone released) and has already
+                    // claimed the teardown when it reports 'error', so this End only joins it. Kept so
+                    // this screen never shows the fallback over a call it did not see end.
                     void service.EndRealtimeSession();
                 }
                 setState(s);
@@ -122,8 +122,10 @@ export default function VoiceModeScreen() {
                 setAgentName(agent.name ?? null);
                 // The runtime mints, checks this host's provider capability, and connects — or
                 // closes the minted session and reports 'error' when we cannot carry that provider.
-                // It does not throw: a failed start is reported through ConnectionState$ with the
-                // cause on LastStartError, which the ConnectionState$ subscription reads.
+                // A failed start does not throw: it is reported through ConnectionState$ with the
+                // cause on LastStartError, which the ConnectionState$ subscription reads. The start
+                // throws only RealtimeSessionAlreadyActiveError, when a call is live on this runtime,
+                // which a session built fresh for this effect run never has.
                 await service.StartRealtimeSession(
                     agent.id,
                     conversationId ?? null,
@@ -131,9 +133,9 @@ export default function VoiceModeScreen() {
                     agent.name ?? null,
                 );
             } catch (e) {
-                // Only the agent lookup can land here; the session start reports through the
-                // runtime. Kept so a resolver failure still produces a screen rather than an
-                // unhandled rejection.
+                // The agent lookup lands here, and so would the start's already-active refusal
+                // (see above). Kept so either still produces a screen rather than an unhandled
+                // rejection.
                 const message = e instanceof Error ? e.message : String(e);
                 setErrorMessage(message);
                 setReason('backend');

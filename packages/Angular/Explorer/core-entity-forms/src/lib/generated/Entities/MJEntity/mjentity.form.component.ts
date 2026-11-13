@@ -23,6 +23,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'proceduresDeletion', sectionName: 'Procedures & Deletion', isExpanded: true },
             { sectionKey: 'rowStatistics', sectionName: 'Row Statistics', isExpanded: true },
             { sectionKey: 'externalIntegration', sectionName: 'External Integration', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Application Entities', isExpanded: false },
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
@@ -112,6 +113,11 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJInteractionLinks', sectionName: 'Interaction Links', isExpanded: false },
             { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
             { sectionKey: 'mJEntityAlternateBaseViews', sectionName: 'Entity Alternate Base Views', isExpanded: false },
+            { sectionKey: 'mJEntityUniqueKeys', sectionName: 'Entity Unique Keys', isExpanded: false },
+            { sectionKey: 'mJGraphEdgeTypeEndpoints', sectionName: 'Graph Edge Type Endpoints', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesSourceEntityID', sectionName: 'Graph Edges (Source Entity ID)', isExpanded: false },
+            { sectionKey: 'mJGraphEdgesTargetEntityID', sectionName: 'Graph Edges (Target Entity ID)', isExpanded: false },
+            { sectionKey: 'mJArtifacts', sectionName: 'Artifacts', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }

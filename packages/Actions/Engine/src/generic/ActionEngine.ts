@@ -13,6 +13,7 @@ import {
     RuntimeActionConfigurationSchema,
     RuntimeActionBridgeBuilder,
     RedactParamsToJSON,
+    ProjectActionParamValuesForUser,
     EntityChangeContext,
     DidFieldChange,
     DidFieldChangeToValue,
@@ -33,6 +34,22 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  */
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/**
+ * Result codes for outcomes the engine decides itself, before or around the action's own code (#4690). They are
+ * plain text on `ActionExecutionLog.ResultCode`, not `MJ: Action Result Codes` rows: no action declares them, and a
+ * NULL code would hide why an action did not run.
+ */
+export const ENGINE_RESULT_CODES = {
+   /** `ValidateInputs` refused the parameters; the action did not run. */
+   InputValidationFailed: 'INPUT_VALIDATION_FAILED',
+   /** A filter returned false; the action did not run (a success condition). */
+   PreventedByFilter: 'PREVENTED_BY_FILTER',
+   /** The action exceeded its wall-clock limit (`MaxExecutionTimeMS` or the engine default). */
+   Timeout: 'TIMEOUT',
+   /** The caller's signal aborted the run. */
+   Aborted: 'ABORTED',
+} as const;
 
 /** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
 const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
@@ -254,8 +271,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
+    *
+    * `detachFromTransaction`: nothing awaits these saves inside a transaction today, so a log row written
+    * from inside a save's transaction (a durable submission) would otherwise reach SQL behind its COMMIT
+    * and be lost (#6251 EA6). Detaching is safe here because every FK on the row points at metadata
+    * (Action, User, Entity Action, Entity Action Invocation Type, Entity), never at a row the open
+    * transaction created.
+    *
+    * The one way to wait on these saves is `result.LogEntryPersisted`, which RecordSetProcessor awaits
+    * outside any transaction. Awaiting it inside a transaction that changed one of those metadata rows
+    * would wait on itself: the detached INSERT blocks on that row's lock until the COMMIT, and the COMMIT
+    * waits for the INSERT.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only', detachFromTransaction: true });
    /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
    private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
@@ -287,6 +315,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: false,
                Message: "Input validation failed. This is a failure condition.",
+               ResultCode: ENGINE_RESULT_CODES.InputValidationFailed,
                LogEntry: null,
                Params: params.Params,
                RunParams: params
@@ -305,6 +334,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: true,
                Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               ResultCode: ENGINE_RESULT_CODES.PreventedByFilter,
                LogEntry: null, // initially null
                Params: params.Params,
                RunParams: params
@@ -359,9 +389,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          }
       }
 
-      // Wall-clock timeout.
+      // Wall-clock timeout. Remembered so the result can say TIMEOUT rather than ABORTED.
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
          if (!controller.signal.aborted) {
+            timedOut = true;
             controller.abort(`Action '${params.Action.Name}' exceeded MaxExecutionTimeMS (${actionTimeoutMS}ms)`);
          }
       }, actionTimeoutMS);
@@ -384,10 +416,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          try {
             return await Promise.race([this.InternalRunAction(params, inputSnapshot), timeoutPromise]);
          } catch (err) {
-            // Timeout or upstream abort — return a standard TIMEOUT result.
-            // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
-            // exists on every action; the Success flag + Message are the canonical
-            // failure signal for timeouts).
+            // Timeout or upstream abort. `Result` is left undefined (no action declares these codes as
+            // metadata rows); `ResultCode` carries TIMEOUT or ABORTED as text so the log row says why (#4690).
             if (controller.signal.aborted) {
                const message =
                   typeof controller.signal.reason === 'string'
@@ -396,6 +426,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                const timeoutResult: ActionResult = {
                   Success: false,
                   Message: message,
+                  ResultCode: timedOut ? ENGINE_RESULT_CODES.Timeout : ENGINE_RESULT_CODES.Aborted,
                   LogEntry: null,
                   Params: params.Params,
                   RunParams: params,
@@ -592,6 +623,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             ResultCode: simpleResult.ResultCode,
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
+            ErrorRecovery: simpleResult.ErrorRecovery,
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params,
             Result: resultCodeEntity
@@ -844,13 +876,31 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * of a mutated array masquerading as "what it was called with".
     *
     * Every value passes through {@link RedactParamsToJSON} first: this method is the only producer of
-    * the `Params` column, so redaction here is what makes the column safe by construction.
+    * the `Params` column, so redaction here is what makes the column safe by construction. The values
+    * are projected for the run's user before that (see {@link ProjectParamsForLog}).
     */
    protected SnapshotInputParams(params: RunActionParams): string {
       if (params.SkipActionLog || this.ResolveLoggingMode(params) === 'None' || !params.Params || params.Params.length === 0) {
          return '[]';
       }
-      return RedactParamsToJSON(params.Params, this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+      return RedactParamsToJSON(this.ProjectParamsForLog(params.Params, params), this.ParamDefinitionsFor(params), params.Provenance?.EntityActionParams);
+   }
+
+   /**
+    * Parameter values as the execution log may store them: projected for the user the action RAN
+    * FOR, with {@link ProjectActionParamValuesForUser}. An entity object becomes its field values
+    * projected against its own entity (or `null` when that user cannot read the entity at all, rather
+    * than its serialized internal state), and a plain object shaped like a row of a field-secured
+    * entity loses the keys that user is denied.
+    *
+    * The log's later readers are not known when it is written, so the projection uses the one
+    * principal the run belongs to: the log then holds no more than that user could read themselves,
+    * however the action loaded its data (an engine cache or a system-user load returns full-width
+    * rows). Without it a row's denied values would be persisted and reach anyone who can read the
+    * log, a reach the field rules on the source entity never granted.
+    */
+   protected ProjectParamsForLog(values: ActionParam[] | null | undefined, params: RunActionParams): ActionParam[] | null | undefined {
+      return ProjectActionParamValuesForUser(values, params.ContextUser ?? this.ContextUser, params.Provider);
    }
 
    /**
@@ -897,7 +947,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
       logEntity.StartedAt = new Date();
-      logEntity.UserID = this.ContextUser.ID;
+      // The user the action ran for, the same principal ProjectParamsForLog projects the values for.
+      logEntity.UserID = (params.ContextUser ?? this.ContextUser).ID;
       // The as-called inputs. Written once and never overwritten — EndActionLog writes the final
       // merged set to ResultParams instead. `inputSnapshot` is supplied by RunAction; the fallback
       // covers callers that reach StartActionLog directly.
@@ -934,12 +985,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // This goes to ResultParams, NOT Params: Params holds the as-called inputs captured at the top of
       // RunAction and is deliberately never overwritten, so a run's inputs stay recoverable even though
       // the action mutated the array they arrived in.
+      // Projected for the run's user first, so a full-width row an action returned is never persisted.
       const finalParams = RedactParamsToJSON(
-         result.Params ?? params.Params,
+         this.ProjectParamsForLog(result.Params ?? params.Params, params),
          this.ParamDefinitionsFor(params),
          params.Provenance?.EntityActionParams
       );
-      const resultCode = result.Result?.ResultCode;
+      // The action's own code when it matches none of its metadata result codes (`Result` is then undefined),
+      // so the execution log keeps a custom code instead of recording none.
+      const resultCode = result.Result?.ResultCode ?? result.ResultCode;
       const message = result.Message;
       // Fire-and-forget — the action's caller never blocks on the 'ended' UPDATE. The mutation runs
       // INSIDE the post-INSERT task (after the 'started' INSERT lands), so it can never be reverted by

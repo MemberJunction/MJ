@@ -14,6 +14,7 @@ import {
 import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
@@ -181,6 +182,12 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
    */
   @Output() applyFormRequested = this.ApplyFormRequested;
 
+  /**
+   * Bubbled up from inline-editable viewer plugins (`SupportsInlineEdit === true`) when
+   * the user commits changes on an inline OLE canvas or editor (§ 3.4.1).
+   */
+  @Output() ContentCommitted = new EventEmitter<string>();
+
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   ViewerContainer!: ViewContainerRef;
 
@@ -247,14 +254,42 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
     this.PluginInstance?.AskUserForFeedback();
   }
 
+  /**
+   * Whether the loaded plugin can export what it shows as a PDF.
+   * Pass-through to the plugin instance for use by the parent panel wrapper.
+   */
+  public get SupportsPDFExport(): boolean {
+    return this.PluginInstance?.SupportsPDFExport ?? false;
+  }
+
+  /**
+   * Whether the loaded plugin supports inline OLE editing (`[readonly]="false"`).
+   */
+  public get SupportsInlineEdit(): boolean {
+    return this.PluginInstance?.SupportsInlineEdit ?? false;
+  }
+
+  /**
+   * Ask the loaded plugin to download what it shows as a PDF.
+   * Pass-through to the plugin instance, called from the parent panel header.
+   */
+  public async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+    await this.PluginInstance?.ExportPDF(orientation);
+  }
+
   async ngOnInit(): Promise<void> {
     await this.loadViewer();
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if ((changes['artifactVersion'] || changes['artifactTypeName']) &&
+    if ((changes['artifactVersion'] || changes['artifactTypeName'] || changes['ArtifactTypeName']) &&
         !changes['artifactVersion']?.firstChange) {
       await this.loadViewer();
+      return;
+    }
+    if (changes['readonly'] && this.componentRef) {
+      this.componentRef.setInput('readonly', this.readonly);
+      this.componentRef.changeDetectorRef.detectChanges();
     }
   }
 
@@ -294,18 +329,23 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
 
       // Get the artifact type entity to find the DriverClass
       const artifactType = await this.getArtifactType();
-      if (!artifactType) {
-        this.setError(
-          'Unknown Artifact Type',
-          `The artifact type "${this.ArtifactTypeName}" is not recognized. This might be a custom type that hasn't been properly configured.`,
-          `Artifact type "${this.ArtifactTypeName}" not found in metadata`
-        );
-        this.isLoading = false;
-        return;
+      let driverClass: string | null = null;
+      if (artifactType) {
+        // Resolve DriverClass by traversing parent hierarchy if needed
+        driverClass = await this.resolveDriverClass(artifactType);
+      } else {
+        driverClass = this.resolveBuiltinFallbackDriverClass(this.ArtifactTypeName);
+        if (!driverClass) {
+          this.setError(
+            'Unknown Artifact Type',
+            `The artifact type "${this.ArtifactTypeName}" is not recognized. This might be a custom type that hasn't been properly configured.`,
+            `Artifact type "${this.ArtifactTypeName}" not found in metadata`
+          );
+          this.isLoading = false;
+          return;
+        }
       }
 
-      // Resolve DriverClass by traversing parent hierarchy if needed
-      const driverClass = await this.resolveDriverClass(artifactType);
       if (!driverClass) {
         this.setError(
           'No Viewer Available',
@@ -403,6 +443,14 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         );
       }
 
+      if (componentInstance.ContentCommitted) {
+        this.pluginSubscriptions.push(
+          componentInstance.ContentCommitted.subscribe((serializedContent: string) => {
+            this.ContentCommitted.emit(serializedContent);
+          })
+        );
+      }
+
       // Trigger change detection
       this.componentRef.changeDetectorRef.detectChanges();
 
@@ -445,6 +493,20 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
       console.error('Error loading artifact type:', err);
       return null;
     }
+  }
+
+  /**
+   * Fallback mapping for canonical built-in artifact types when `ArtifactMetadataEngine` has not
+   * yet been populated (e.g., in standalone OLE embeds or isolated component tests).
+   */
+  private resolveBuiltinFallbackDriverClass(typeName: string): string | null {
+    const builtinMap: Record<string, string> = {
+      'Markdown Document': 'MarkdownArtifactViewerPlugin',
+      'Whiteboard': 'WhiteboardArtifactViewerPlugin',
+      'Presentation': 'SlideDeckArtifactViewerPlugin',
+      'Excel Spreadsheet': 'SpreadsheetArtifactViewerPlugin',
+    };
+    return builtinMap[typeName] ?? null;
   }
 
   /**

@@ -1,6 +1,17 @@
-import { EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
-import { FindForbiddenFunctionCalls, IsKeyword, LexSQL, SignificantTokens, SQLParser } from '@memberjunction/sql-parser';
-import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { CurrentFieldSecurityGeneration, EntityPermissionType, IsPlatformSQL, type EntityInfo, type PlatformSQL, type UserInfo } from '@memberjunction/core';
+import {
+    FindForbiddenFunctionCalls,
+    IsKeyword,
+    LexSQL,
+    SignificantTokens,
+    SqlDocument,
+    SQLParser,
+    StrictFragmentValidator,
+    type SQLLexToken,
+    type StrictValidationResult,
+} from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type ParserDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
+import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
 
 /** A client-supplied SQL fragment: plain text, or a set of per-platform variants. */
 export type ClientClauseText = string | PlatformSQL | null | undefined;
@@ -72,36 +83,14 @@ export interface StatementReads {
     SelectCount: number;
 }
 
-/**
- * How a dialect matches a FROM item to a CTE. Each function returns the name as the dialect
- * compares it, or null when the screen cannot tell.
- */
-interface CTENameRules {
-    /** The name a CTE declares, from its name node in the parse tree. */
-    DeclaredName(node: unknown): string | null;
-    /** The name an unqualified FROM item reads, from its text in the parse tree. */
-    ReferenceName(text: string): string | null;
-    /** Whether a CTE body sees its own CTE without RECURSIVE (SQL Server). */
-    BodySeesItself: boolean;
-}
-
-/** The state of one walk of a parse tree. */
-interface StatementWalk {
-    Reads: StatementReads;
-    Visited: WeakSet<object>;
-    Aliases: ReadonlyMap<string, string> | null;
-    Names: CTENameRules;
-    /** A FROM item node to leave out (the clause screen's parse wrapper). */
-    Skip: object | undefined;
-    /** Each CTE name the walk has met, with the number of CTEs of that name in scope at the current node. */
-    InScope: Map<string, number>;
-}
-
 /** One variant of a clause, with the dialect it would run under. */
 interface ClauseVariant {
     Text: string;
     Dialect: SQLParserDialect;
 }
+
+/** Allow-lists already built, per entity array (see {@link ClientClauseScreen.BuildEntityBaseViewAllowList}). */
+const allowListCache = new WeakMap<readonly EntityInfo[], { Length: number; Generation: number; List: EntityBaseViewAllowList }>();
 
 /**
  * SECURITY — screens for SQL text that a client (or a client-saved record) supplies to RunView.
@@ -130,11 +119,6 @@ export class ClientClauseScreen {
         'string_split', 'openjson', 'generate_series', 'unnest', 'regexp_split_to_table', 'string_to_table',
         'json_array_elements', 'json_array_elements_text', 'jsonb_array_elements', 'jsonb_array_elements_text',
         'json_each', 'json_each_text', 'jsonb_each', 'jsonb_each_text',
-    ]);
-
-    private static readonly WRITE_NODE_TYPES = new Set<string>([
-        'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
-        'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
     ]);
 
     /**
@@ -180,21 +164,13 @@ export class ClientClauseScreen {
         const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
         ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
         ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
-        const wrapped =
+        const result =
             label === 'OrderBy'
-                ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${fragment}`
-                : `SELECT 1 FROM __mj_clause_screen WHERE (${fragment})`;
-        const parser = new SQLParser(wrapped, dialect);
-        if (!parser.IsValid && options?.LeaveUnparseableToProvider) return;
-        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-            throw new Error(`Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`);
-        }
-        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
-            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-        }
-
-        const reads = ClientClauseScreen.CollectStatementReads(parser, ClientClauseScreen.wrapperFromItem(parser.AST));
-        ClientClauseScreen.AssertEverySelectAccountedFor(wrapped, dialect, reads, label);
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        if (result.Refusal === 'Unparseable' && options?.LeaveUnparseableToProvider) return;
+        const reads = ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
         const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
         for (const relation of reads.Relations) {
             const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
@@ -219,14 +195,7 @@ export class ClientClauseScreen {
         }
         ClientClauseScreen.AssertNoIdentifierAliasNames(sqlText, dialect, label);
         ClientClauseScreen.AssertNoForbiddenFunctionCalls(sqlText, dialect, label);
-        const parser = new SQLParser(sqlText, dialect);
-        if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
-            throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
-        }
-        if (ClientClauseScreen.AstContainsWriteNode(parser.AST)) {
-            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
-        }
-        const reads = ClientClauseScreen.CollectStatementReads(parser);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sqlText, dialect, label);
         ClientClauseScreen.AssertEverySelectAccountedFor(sqlText, dialect, reads, label);
         const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
         for (const relation of reads.Relations) {
@@ -303,16 +272,14 @@ export class ClientClauseScreen {
         }
     }
 
-    /** True when a parsed AST contains a write or DDL node at any depth. */
+    /**
+     * True when a parsed AST contains a write or DDL node at any depth.
+     *
+     * @deprecated Use {@link StrictFragmentValidator.ValidateReadOnlyStatement} from
+     * `@memberjunction/sql-parser`, whose result reports `ContainsNestedWrite`.
+     */
     public static AstContainsWriteNode(node: unknown): boolean {
-        if (!node || typeof node !== 'object') return false;
-        if (Array.isArray(node)) return node.some((n) => ClientClauseScreen.AstContainsWriteNode(n));
-        const obj = node as Record<string, unknown>;
-        const type = obj.type;
-        if (typeof type === 'string' && ClientClauseScreen.WRITE_NODE_TYPES.has(type.toLowerCase())) {
-            return true;
-        }
-        return Object.values(obj).some((v) => ClientClauseScreen.AstContainsWriteNode(v));
+        return StrictFragmentValidator.ContainsWriteNode(node);
     }
 
     /** Removes the bracket, double-quote or backtick quoting around one identifier. */
@@ -331,9 +298,24 @@ export class ClientClauseScreen {
      * canonical `BaseView` and any registered, usable `AlternateBaseViews` (D13).
      * Disabled alternate base views (`!abv.IsUsable`) are excluded. Canonical `BaseView`
      * entries are registered first and never overwritten by alternate base views; cross-entity
-     * collisions on `(schema, viewName)` map to `null` (fail-closed).
+     * collisions on `(schema, viewName)` map to `null` (fail-closed). Memoized per entity array:
+     * reused while the array keeps its length and no `EntityInfo` has been built since (the
+     * field-security generation, which moves on every build, so a refreshed or replaced entity
+     * is noticed).
      */
     public static BuildEntityBaseViewAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const generation = CurrentFieldSecurityGeneration();
+        const memo = allowListCache.get(entities);
+        if (memo && memo.Length === entities.length && memo.Generation === generation) {
+            return memo.List;
+        }
+        const list = ClientClauseScreen.buildAllowList(entities);
+        allowListCache.set(entities, { Length: entities.length, Generation: generation, List: list });
+        return list;
+    }
+
+    /** The uncached build behind {@link BuildEntityBaseViewAllowList}. */
+    private static buildAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
         const qualified = new Map<string, EntityInfo | null>();
         const bare = new Map<string, EntityInfo | null>();
         const canonicalQualifiedKeys = new Set<string>();
@@ -426,33 +408,945 @@ export class ClientClauseScreen {
     }
 
     /**
-     * Every FROM item in a parsed statement, and the number of SELECT nodes. The walk visits every
-     * property of every node, so it finds a FROM list wherever the grammar puts one: a subquery in a
-     * CASE branch, HAVING, a window's ORDER BY or PARTITION BY, a function argument, IN, EXISTS, a
-     * set operation or a CTE body. Every FROM item is kept, even when its alias repeats. Names the
-     * fallback parse renamed are read back through {@link SQLParser.IdentifierAliases}, which holds
-     * only names the parser put in the tree. `skip` is a FROM item node to leave out (the screen's
-     * parse wrapper).
-     *
-     * Each FROM item records whether it reads a CTE in scope there
-     * ({@link StatementRelation.IsCTEReference}). A WITH covers its own SELECT, everything below it,
-     * and the following set-operation branches unless its SELECT is a parenthesized branch. A CTE
-     * body sees the CTEs before it, itself on SQL Server, and every CTE of a PostgreSQL WITH
-     * RECURSIVE list. Names match by the dialect's identifier rules ({@link cteNameRules}). The walk
-     * keeps a count of the CTEs of each name in scope as it goes, so its time is linear in the tree.
+     * The full screen for a whole caller-written statement (ad-hoc SQL), run on the SQL as it will
+     * execute: one read statement, no write or DDL at any depth, no name reserved for the parser,
+     * every SELECT accounted for, and every FROM item that is not a CTE in scope an entity base view
+     * `user` can read unscoped ({@link AssertUnscopedRead}). Base tables, system catalogs and table
+     * functions are refused. Throws on the first refusal.
+     */
+    public static AssertStatementReadsUnscopedEntityViews(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user: UserInfo,
+        label: string,
+    ): void {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+        }
+    }
+
+    /**
+     * Parses a read-only SQL statement and resolves every non-CTE FROM/JOIN relation to its
+     * corresponding {@link EntityInfo} (matching entity base views, usable alternate base views,
+     * or entity base tables). Throws if the statement is not a single read-only SELECT, if any
+     * subquery cannot be accounted for, or if any relation does not resolve unambiguously to an
+     * entity in `entities`.
+     */
+    public static ResolveStatementEntities(
+        sql: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): EntityInfo[] {
+        ClientClauseScreen.AssertNoIdentifierAliasNames(sql, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(sql, dialect, label);
+        const reads = ClientClauseScreen.readOnlyStatementReads(sql, dialect, label);
+        ClientClauseScreen.AssertEverySelectAccountedFor(sql, dialect, reads, label);
+        const viewAllowList = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const tableAllowList = ClientClauseScreen.buildBaseTableAllowList(entities);
+        const resolved = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            if (relation.IsCTEReference) continue;
+            if (!relation.TableName) {
+                const fnName = relation.FunctionName;
+                if (fnName && !relation.SchemaName && ClientClauseScreen.ARGUMENT_ONLY_TABLE_FUNCTIONS.has(fnName.toLowerCase())) {
+                    continue;
+                }
+                const source = fnName ? `the table function '${[relation.SchemaName, fnName].filter(Boolean).join('.')}'` : 'a row source it cannot identify';
+                throw new Error(`Invalid ${label}: query may read only registered entities, not ${source}`);
+            }
+            const entity = ClientClauseScreen.resolveEntityRelation(viewAllowList, tableAllowList, relation.SchemaName, relation.TableName, label);
+            resolved.set(entity.ID || entity.Name, entity);
+        }
+        return Array.from(resolved.values());
+    }
+
+    /**
+     * Returns all bare/unquoted word and quoted-identifier tokens appearing in `sql` (quotes stripped),
+     * excluding string literals and comments. Used by agent data-policy guards to refuse ad-hoc SQL
+     * that references denied field names via column aliases or WHERE predicates.
+     */
+    public static ExtractStatementIdentifierTokens(sql: string, dialect: SQLParserDialect): string[] {
+        const tokens = LexSQL(sql, dialect);
+        const names = new Set<string>();
+        for (const token of tokens) {
+            if (token.Kind === 'word' || token.Kind === 'identifier') {
+                const stripped = ClientClauseScreen.StripIdentifierQuotes(token.Text).trim();
+                if (stripped.length > 0) {
+                    names.add(stripped);
+                }
+            }
+        }
+        return Array.from(names);
+    }
+
+    /**
+     * Refuses statement separators, comments, or unbalanced parentheses outside string literals
+     * and quoted identifiers. Prevents `(${agentFilter}) AND (${policy})` breakout payloads such
+     * as `1=1) OR (1=1` where parenthesis depth drops below zero mid-fragment.
+     */
+    public static AssertBalancedSingleFragment(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (clause == null || clause === '') return;
+        ClientClauseScreen.AssertSingleStatementFragment(clause, label, dialect);
+        let depth = 0;
+        for (const token of LexSQL(clause, dialect)) {
+            if (token.Kind === 'open') {
+                depth++;
+            } else if (token.Kind === 'close') {
+                depth--;
+                if (depth < 0) {
+                    throw new Error(`Invalid ${label}: unbalanced closing parenthesis in SQL fragment`);
+                }
+            }
+        }
+        if (depth !== 0) {
+            throw new Error(`Invalid ${label}: unbalanced opening parenthesis in SQL fragment`);
+        }
+    }
+
+    /**
+     * Screens an agent-supplied `Filter` or `OrderBy` fragment (requiring balanced parentheses,
+     * a single read-only fragment, no forbidden functions, and only readable entity base views in
+     * any subqueries) and returns every subquery {@link EntityInfo} referenced so callers can
+     * additionally enforce agent-level entity policies on subquery targets.
+     */
+    public static ScreenAgentClause(
+        clause: string | null | undefined,
+        label: string,
+        entities: readonly EntityInfo[],
+        dialect: SQLParserDialect,
+        user?: UserInfo,
+    ): EntityInfo[] {
+        if (!clause?.trim()) return [];
+        ClientClauseScreen.AssertBalancedSingleFragment(clause, label, dialect);
+        if (SQLParser.HasStackedStatements(clause, dialect)) {
+            throw new Error(`Invalid ${label}: multiple statements are not permitted in filters or sort clauses`);
+        }
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        ClientClauseScreen.AssertNoIdentifierAliasNames(fragment, dialect, label);
+        ClientClauseScreen.AssertNoForbiddenFunctionCalls(fragment, dialect, label);
+        const result =
+            label === 'OrderBy'
+                ? StrictFragmentValidator.ValidateOrderBy(fragment, dialect, { CollectReads: true })
+                : StrictFragmentValidator.ValidateFilter(fragment, dialect, { CollectReads: true });
+        const reads = ClientClauseScreen.safeReadsOf(
+            result,
+            `Invalid ${label}: not a safe read-only ${label === 'OrderBy' ? 'sort' : 'filter'} fragment — refusing under uncertainty`,
+            label,
+        );
+        ClientClauseScreen.AssertEverySelectAccountedFor(result.ParsedSQL, dialect, reads, label);
+        if (reads.Relations.length === 0) {
+            return [];
+        }
+        const allowed = ClientClauseScreen.BuildEntityBaseViewAllowList(entities);
+        const referenced = new Map<string, EntityInfo>();
+        for (const relation of reads.Relations) {
+            const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
+            if (entity) {
+                if (user) {
+                    ClientClauseScreen.AssertUnscopedRead(entity, user, label);
+                }
+                referenced.set(entity.ID || entity.Name, entity);
+            }
+        }
+        return Array.from(referenced.values());
+    }
+
+    private static readonly WHOLE_ROW_SERIALIZATION_FUNCTIONS = new Set<string>([
+        'to_json',
+        'to_jsonb',
+        'row_to_json',
+        'json_agg',
+        'jsonb_agg',
+        'record_to_json',
+        'checksum',
+        'binary_checksum',
+    ]);
+
+    /**
+     * Refuses SQL constructs that rename, serialize, or sort by columns without naming the underlying
+     * source column when field-level masking is active:
+     * 1. CTE explicit column-alias lists (`WITH c(a, b) AS (SELECT * FROM ...)` at any depth)
+     * 2. Derived-table column-alias lists (`FROM (SELECT * FROM ...) AS t(a, b)`)
+     * 3. Set operations (`UNION` / `INTERSECT` / `EXCEPT`) combined with wildcard (`*`) projections
+     * 4. Whole-row constructs (`FOR JSON`, `FOR XML`, `NATURAL JOIN`, `to_jsonb(e)` / `row_to_json(e)`,
+     *    bare whole-row relation references, non-projection `*` / `alias.*` wildcards inside subqueries
+     *    or expressions, and ordinal `ORDER BY` / `GROUP BY`).
+     */
+    public static AssertNoPositionalColumnRenames(
+        sql: string,
+        dialect: SQLParserDialect,
+        label = 'SQL',
+    ): void {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return;
+
+        const keywordAllowedBeforeOpenAfterClose = new Set([
+            'and', 'or', 'in', 'not', 'over', 'filter', 'within', 'values',
+            'where', 'on', 'having', 'when', 'then', 'else', 'between',
+            'union', 'intersect', 'except', 'select', 'from', 'join',
+        ]);
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        // 1. Check CTE header column lists at ANY nesting depth: `<cte_name> ( ... ) AS [ [NOT] MATERIALIZED ] (`
+        for (let i = 0; i < tokens.length; i++) {
+            if ((tokens[i].Kind === 'word' || tokens[i].Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const isCteHeaderKeyword =
+                    IsKeyword(tokens[i], 'AS') ||
+                    IsKeyword(tokens[i], 'WITH') ||
+                    IsKeyword(tokens[i], 'SELECT') ||
+                    IsKeyword(tokens[i], 'MATERIALIZED') ||
+                    IsKeyword(tokens[i], 'NOT');
+                if (!isCteHeaderKeyword) {
+                    const targetDepth = depths[i];
+                    let closeIdx = -1;
+                    for (let j = i + 2; j < tokens.length; j++) {
+                        if (tokens[j].Kind === 'close' && depths[j] === targetDepth) {
+                            closeIdx = j;
+                            break;
+                        }
+                    }
+                    if (closeIdx > i + 1 && closeIdx + 1 < tokens.length && IsKeyword(tokens[closeIdx + 1], 'AS')) {
+                        let afterAs = closeIdx + 2;
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'NOT')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && IsKeyword(tokens[afterAs], 'MATERIALIZED')) {
+                            afterAs++;
+                        }
+                        if (afterAs < tokens.length && tokens[afterAs].Kind === 'open') {
+                            throw new Error(
+                                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check derived-table column lists, set operations + *, FOR JSON/XML, whole-row functions, and ordinal ORDER/GROUP BY
+        let hasSetOp = false;
+        let hasWildcardStar = false;
+        for (let i = 0; i < tokens.length; i++) {
+            const tok = tokens[i];
+            if (IsKeyword(tok, 'UNION') || IsKeyword(tok, 'INTERSECT') || IsKeyword(tok, 'EXCEPT')) {
+                hasSetOp = true;
+            }
+            if (IsKeyword(tok, 'FOR') && tokens[i + 1] && (IsKeyword(tokens[i + 1], 'JSON') || IsKeyword(tokens[i + 1], 'XML'))) {
+                throw new Error(
+                    `Invalid ${label}: FOR ${tokens[i + 1].Text.toUpperCase()} is not permitted when field-level masking is active`,
+                );
+            }
+            if (IsKeyword(tok, 'NATURAL') && tokens[i + 1] && IsKeyword(tokens[i + 1], 'JOIN')) {
+                throw new Error(
+                    `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                );
+            }
+            if ((tok.Kind === 'word' || tok.Kind === 'identifier') && tokens[i + 1]?.Kind === 'open') {
+                const fnLower = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim().toLowerCase();
+                if (ClientClauseScreen.WHOLE_ROW_SERIALIZATION_FUNCTIONS.has(fnLower)) {
+                    throw new Error(
+                        `Invalid ${label}: whole-row function ${tok.Text}() is not permitted when field-level masking is active`,
+                    );
+                }
+            }
+            if ((IsKeyword(tok, 'ORDER') || IsKeyword(tok, 'GROUP')) && tokens[i + 1] && IsKeyword(tokens[i + 1], 'BY')) {
+                const clauseDepth = depths[i];
+                let itemStart = true;
+                for (let j = i + 2; j < tokens.length; j++) {
+                    if (depths[j] < clauseDepth && tokens[j].Kind === 'close') {
+                        break;
+                    }
+                    if (depths[j] === clauseDepth) {
+                        if (
+                            IsKeyword(tokens[j], 'OFFSET') ||
+                            IsKeyword(tokens[j], 'FETCH') ||
+                            IsKeyword(tokens[j], 'LIMIT') ||
+                            IsKeyword(tokens[j], 'FOR') ||
+                            IsKeyword(tokens[j], 'HAVING') ||
+                            IsKeyword(tokens[j], 'ORDER') ||
+                            IsKeyword(tokens[j], 'UNION') ||
+                            IsKeyword(tokens[j], 'INTERSECT') ||
+                            IsKeyword(tokens[j], 'EXCEPT')
+                        ) {
+                            break;
+                        }
+                        if (itemStart) {
+                            const isSignedNum =
+                                tokens[j].Kind === 'operator' &&
+                                (tokens[j].Text === '+' || tokens[j].Text === '-') &&
+                                tokens[j + 1]?.Kind === 'number';
+                            if (tokens[j].Kind === 'number' || isSignedNum) {
+                                throw new Error(
+                                    `Invalid ${label}: ordinal ${tok.Text.toUpperCase()} BY is not permitted when field-level masking is active`,
+                                );
+                            }
+                        }
+                        itemStart = tokens[j].Kind === 'comma';
+                    } else {
+                        itemStart = false;
+                    }
+                }
+            }
+            if (tok.Text === '*' || (tok.Kind === 'operator' && tok.Text.includes('*'))) {
+                const prev = i > 0 ? tokens[i - 1] : undefined;
+                if (
+                    !prev ||
+                    prev.Kind === 'comma' ||
+                    prev.Kind === 'dot' ||
+                    IsKeyword(prev, 'SELECT') ||
+                    IsKeyword(prev, 'DISTINCT') ||
+                    IsKeyword(prev, 'ALL')
+                ) {
+                    hasWildcardStar = true;
+                }
+            }
+            if (tok.Kind === 'close') {
+                const next1 = tokens[i + 1];
+                const next2 = tokens[i + 2];
+                const next3 = tokens[i + 3];
+                if (
+                    next1 &&
+                    IsKeyword(next1, 'AS') &&
+                    next2 &&
+                    (next2.Kind === 'word' || next2.Kind === 'identifier') &&
+                    next3?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+                if (
+                    next1 &&
+                    (next1.Kind === 'word' || next1.Kind === 'identifier') &&
+                    !keywordAllowedBeforeOpenAfterClose.has(
+                        ClientClauseScreen.StripIdentifierQuotes(next1.Text).trim().toLowerCase(),
+                    ) &&
+                    next2?.Kind === 'open'
+                ) {
+                    throw new Error(
+                        `Invalid ${label}: derived-table column-alias lists are not permitted when field-level masking is active`,
+                    );
+                }
+            }
+        }
+
+        // 3. Check set operations with wildcard projections
+        if (hasSetOp && hasWildcardStar) {
+            throw new Error(
+                `Invalid ${label}: set operations (UNION/INTERSECT/EXCEPT) with wildcard (*) projections are not permitted when field-level masking is active`,
+            );
+        }
+
+        // 4. Parse with SqlDocument and check CTEs() + WholeRowConstructs() + FindProjectionStars()
+        const parserDialect: ParserDialect =
+            'Key' in dialect && 'Lexical' in dialect && 'Grammar' in dialect
+                ? (dialect as ParserDialect)
+                : dialect.QuoteIdentifier('x').startsWith('[')
+                  ? new SQLServerDialect()
+                  : new PostgreSQLDialect();
+        const doc = SqlDocument.Parse(sql, parserDialect);
+        const ctes = doc.CTEs();
+        if (ctes.Complete && ctes.Value.some((c) => c.ColumnList !== null && c.ColumnList.length > 0)) {
+            throw new Error(
+                `Invalid ${label}: CTE column-alias lists are not permitted when field-level masking is active`,
+            );
+        }
+
+        const wholeRow = doc.WholeRowConstructs();
+        if (!wholeRow.Complete) {
+            throw new Error(
+                `Invalid ${label}: whole-row construct analysis could not complete safely when field-level masking is active`,
+            );
+        }
+        if (wholeRow.Value.length > 0) {
+            const projectionStars = FindProjectionStars(sql, parserDialect);
+            for (const construct of wholeRow.Value) {
+                switch (construct.Kind) {
+                    case 'ForDocument':
+                        throw new Error(
+                            `Invalid ${label}: ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'RowFunction':
+                    case 'RowReference':
+                        throw new Error(
+                            `Invalid ${label}: whole-row construct (${construct.Detail}) is not permitted when field-level masking is active`,
+                        );
+                    case 'NaturalJoin':
+                        throw new Error(
+                            `Invalid ${label}: NATURAL JOIN is not permitted when field-level masking is active`,
+                        );
+                    case 'OrdinalOrderBy':
+                        throw new Error(
+                            `Invalid ${label}: ordinal ${construct.Detail} is not permitted when field-level masking is active`,
+                        );
+                    case 'Star':
+                    case 'QualifiedStar': {
+                        const starOffset = sql.lastIndexOf('*', construct.Span.End - 1);
+                        const isExistsSelectStar =
+                            construct.Kind === 'Star' &&
+                            /\bEXISTS\s*\(\s*SELECT\s*$/i.test(sql.slice(0, construct.Span.Start));
+                        if (!isExistsSelectStar && (starOffset < construct.Span.Start || !projectionStars.has(starOffset))) {
+                            throw new Error(
+                                `Invalid ${label}: non-projection wildcard (${construct.Detail}) is not permitted when field-level masking is active`,
+                            );
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Refuses whole-row constructs (`FOR JSON`/`FOR XML`, `to_jsonb(e)` / `row_to_json(e)`,
+     * subquery `*`/`alias.*`, CTE/derived-table column lists) and ordinal `ORDER BY` inside a
+     * `Filter` or `OrderBy` fragment when the target entity or any subquery entity has denied fields.
+     */
+    public static AssertNoWholeRowOrOrdinalInClause(
+        clause: string | null | undefined,
+        label: string,
+        dialect: SQLParserDialect,
+    ): void {
+        if (!clause?.trim()) return;
+        const fragment = ClientClauseScreen.toDialectQuoting(clause, dialect);
+        const quotedSchema = dialect.QuoteIdentifier('__mj');
+        const quotedView = dialect.QuoteIdentifier('vw_clause_check');
+        const wrappedSql =
+            label === 'OrderBy'
+                ? `SELECT 1 FROM ${quotedSchema}.${quotedView} ORDER BY ${fragment}`
+                : `SELECT 1 FROM ${quotedSchema}.${quotedView} WHERE ${fragment}`;
+        ClientClauseScreen.AssertNoPositionalColumnRenames(wrappedSql, dialect, label);
+    }
+
+    /**
+     * Inspects a stored query's rendered SQL and returns any denied field identifiers that appear
+     * anywhere OTHER than a pure, unaliased top-level `SELECT` projection column (`Col`, `t.Col`,
+     * or `s.t.Col`). Pure unaliased top-level columns preserve their field name in the result set
+     * and are stripped by `AgentDataPolicyGuard.MaskRows`; aliases (`Salary AS Contact`),
+     * expressions/aggregates (`MAX(Salary)`), predicates (`WHERE Salary > ...`), and sorts
+     * (`ORDER BY Salary`) cannot be stripped safely by output column name and are therefore refused.
+     */
+    public static FindUnmaskableStoredQueryDeniedFields(
+        sql: string,
+        dialect: SQLParserDialect,
+        isFieldDenied: (identifier: string) => boolean,
+    ): string[] {
+        const tokens = SignificantTokens(LexSQL(sql, dialect));
+        if (tokens.length === 0) return [];
+
+        let depth = 0;
+        const depths: number[] = [];
+        for (const tok of tokens) {
+            if (tok.Kind === 'close') {
+                depth = Math.max(0, depth - 1);
+            }
+            depths.push(depth);
+            if (tok.Kind === 'open') {
+                depth++;
+            }
+        }
+
+        const topSelectIdx = tokens.findIndex((t, i) => depths[i] === 0 && IsKeyword(t, 'SELECT'));
+        if (topSelectIdx < 0) {
+            return ClientClauseScreen.ExtractStatementIdentifierTokens(sql, dialect).filter(isFieldDenied);
+        }
+
+        let projStart = topSelectIdx + 1;
+        if (
+            projStart < tokens.length &&
+            depths[projStart] === 0 &&
+            (IsKeyword(tokens[projStart], 'DISTINCT') || IsKeyword(tokens[projStart], 'ALL'))
+        ) {
+            projStart++;
+        }
+        if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'TOP')) {
+            projStart++;
+            if (projStart < tokens.length && tokens[projStart].Kind === 'open') {
+                projStart++;
+                while (projStart < tokens.length && !(tokens[projStart].Kind === 'close' && depths[projStart] === 0)) {
+                    projStart++;
+                }
+                if (projStart < tokens.length) projStart++;
+            } else if (projStart < tokens.length && tokens[projStart].Kind === 'number') {
+                projStart++;
+            }
+            if (projStart < tokens.length && depths[projStart] === 0 && IsKeyword(tokens[projStart], 'PERCENT')) {
+                projStart++;
+            }
+        }
+
+        let projEnd = tokens.length;
+        for (let i = projStart; i < tokens.length; i++) {
+            if (
+                depths[i] === 0 &&
+                (IsKeyword(tokens[i], 'FROM') ||
+                    IsKeyword(tokens[i], 'INTO') ||
+                    IsKeyword(tokens[i], 'WHERE') ||
+                    IsKeyword(tokens[i], 'GROUP') ||
+                    IsKeyword(tokens[i], 'HAVING') ||
+                    IsKeyword(tokens[i], 'ORDER') ||
+                    IsKeyword(tokens[i], 'UNION') ||
+                    IsKeyword(tokens[i], 'INTERSECT') ||
+                    IsKeyword(tokens[i], 'EXCEPT'))
+            ) {
+                projEnd = i;
+                break;
+            }
+        }
+
+        const unmaskable = new Set<string>();
+        const checkToken = (tok: SQLLexToken): void => {
+            if (tok.Kind === 'word' || tok.Kind === 'identifier') {
+                const name = ClientClauseScreen.StripIdentifierQuotes(tok.Text).trim();
+                if (name.length > 0 && isFieldDenied(name)) {
+                    unmaskable.add(name);
+                }
+            }
+        };
+
+        // Any denied field before projStart (e.g., inside WITH CTEs or TOP expression) is unmaskable
+        for (let i = 0; i < projStart; i++) {
+            checkToken(tokens[i]);
+        }
+
+        // Split top-level projection items by comma at depth 0
+        const items: SQLLexToken[][] = [];
+        let current: SQLLexToken[] = [];
+        for (let i = projStart; i < projEnd; i++) {
+            if (depths[i] === 0 && tokens[i].Kind === 'comma') {
+                items.push(current);
+                current = [];
+            } else {
+                current.push(tokens[i]);
+            }
+        }
+        if (current.length > 0) {
+            items.push(current);
+        }
+
+        const isPlainColumnIdent = (tok: SQLLexToken): boolean =>
+            (tok.Kind === 'word' || tok.Kind === 'identifier') &&
+            !IsKeyword(tok, 'AS') &&
+            !IsKeyword(tok, 'NULL') &&
+            !IsKeyword(tok, 'TRUE') &&
+            !IsKeyword(tok, 'FALSE') &&
+            !IsKeyword(tok, 'CASE') &&
+            !IsKeyword(tok, 'DISTINCT');
+
+        for (const item of items) {
+            const isPureUnaliasedColumn =
+                (item.length === 1 && isPlainColumnIdent(item[0])) ||
+                (item.length === 3 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2])) ||
+                (item.length === 5 &&
+                    isPlainColumnIdent(item[0]) &&
+                    item[1].Kind === 'dot' &&
+                    isPlainColumnIdent(item[2]) &&
+                    item[3].Kind === 'dot' &&
+                    isPlainColumnIdent(item[4]));
+            if (!isPureUnaliasedColumn) {
+                for (const tok of item) {
+                    checkToken(tok);
+                }
+            }
+        }
+
+        // Any denied field at or after projEnd (FROM/JOIN/WHERE/GROUP/HAVING/ORDER/UNION) is unmaskable
+        // (skipping the immediate relation name right after FROM or JOIN so view names don't false-positive)
+        for (let i = projEnd; i < tokens.length; i++) {
+            if (IsKeyword(tokens[i], 'FROM') || IsKeyword(tokens[i], 'JOIN')) {
+                let relIdx = i + 1;
+                while (
+                    relIdx + 1 < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier') &&
+                    tokens[relIdx + 1].Kind === 'dot'
+                ) {
+                    relIdx += 2;
+                }
+                if (
+                    relIdx < tokens.length &&
+                    (tokens[relIdx].Kind === 'word' || tokens[relIdx].Kind === 'identifier')
+                ) {
+                    i = relIdx;
+                    continue;
+                }
+            }
+            checkToken(tokens[i]);
+        }
+
+        return Array.from(unmaskable);
+    }
+
+    /**
+     * Evaluates a simple SQL `WHERE` predicate against an in-memory record map for lightweight
+     * providers that do not expose a live SQL execution engine (e.g. unit-test metadata mocks).
+     * Fails closed (`false`) on any subquery, function call, or unrecognized SQL construct.
+     */
+    public static EvaluateSimpleSqlWherePredicate(
+        whereClause: string,
+        record: Record<string, unknown>,
+        dialect: SQLParserDialect,
+    ): boolean {
+        const trimmed = whereClause.trim();
+        if (trimmed.length === 0) return true;
+        try {
+            ClientClauseScreen.AssertBalancedSingleFragment(trimmed, 'PolicyWhereClause', dialect);
+        } catch {
+            return false;
+        }
+        const tokens = SignificantTokens(LexSQL(trimmed, dialect));
+        if (tokens.length === 0) return true;
+
+        const recordByLowerKey = new Map<string, unknown>();
+        for (const [k, v] of Object.entries(record)) {
+            recordByLowerKey.set(k.trim().toLowerCase(), v);
+        }
+
+        let pos = 0;
+        const peek = (): SQLLexToken | undefined => tokens[pos];
+        const consume = (): SQLLexToken | undefined => tokens[pos++];
+
+        const readLiteral = (): { ok: true; value: string | number | boolean | null } | { ok: false } => {
+            const tok = peek();
+            if (!tok) return { ok: false };
+            if (tok.Kind === 'string') {
+                consume();
+                const raw = tok.Text.replace(/^[NnEe]'/, "'");
+                if (raw.startsWith("'") && raw.endsWith("'")) {
+                    return { ok: true, value: raw.slice(1, -1).replace(/''/g, "'") };
+                }
+                return { ok: false };
+            }
+            if (tok.Kind === 'operator' && (tok.Text === '-' || tok.Text === '+')) {
+                const sign = tok.Text === '-' ? -1 : 1;
+                consume();
+                const numTok = peek();
+                if (!numTok || numTok.Kind !== 'number') return { ok: false };
+                consume();
+                const parsed = Number(numTok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: sign * parsed } : { ok: false };
+            }
+            if (tok.Kind === 'number') {
+                consume();
+                const parsed = Number(tok.Text);
+                return Number.isFinite(parsed) ? { ok: true, value: parsed } : { ok: false };
+            }
+            if (tok.Kind === 'word') {
+                if (IsKeyword(tok, 'NULL')) {
+                    consume();
+                    return { ok: true, value: null };
+                }
+                if (IsKeyword(tok, 'TRUE')) {
+                    consume();
+                    return { ok: true, value: true };
+                }
+                if (IsKeyword(tok, 'FALSE')) {
+                    consume();
+                    return { ok: true, value: false };
+                }
+            }
+            return { ok: false };
+        };
+
+        const compareValues = (
+            actual: unknown,
+            op: string,
+            expected: string | number | boolean | null,
+        ): boolean => {
+            if (actual === null || actual === undefined || expected === null) {
+                return false;
+            }
+            if (typeof expected === 'number' || typeof actual === 'number') {
+                const leftNum =
+                    typeof actual === 'boolean' ? (actual ? 1 : 0) : Number(actual);
+                const rightNum =
+                    typeof expected === 'boolean' ? (expected ? 1 : 0) : Number(expected);
+                if (!Number.isFinite(leftNum) || !Number.isFinite(rightNum)) return false;
+                switch (op) {
+                    case '=': return leftNum === rightNum;
+                    case '!=':
+                    case '<>': return leftNum !== rightNum;
+                    case '<': return leftNum < rightNum;
+                    case '<=': return leftNum <= rightNum;
+                    case '>': return leftNum > rightNum;
+                    case '>=': return leftNum >= rightNum;
+                    default: return false;
+                }
+            }
+            if (typeof expected === 'boolean' || typeof actual === 'boolean') {
+                const leftBool = typeof actual === 'boolean' ? actual : String(actual).toLowerCase() === 'true' || actual === '1';
+                const rightBool = typeof expected === 'boolean' ? expected : String(expected).toLowerCase() === 'true' || expected === '1';
+                if (op === '=') return leftBool === rightBool;
+                if (op === '!=' || op === '<>') return leftBool !== rightBool;
+                return false;
+            }
+            const leftStr = actual instanceof Date ? actual.toISOString() : String(actual);
+            const rightStr = String(expected);
+            const leftLower = leftStr.toLowerCase();
+            const rightLower = rightStr.toLowerCase();
+            switch (op) {
+                case '=': return leftLower === rightLower;
+                case '!=':
+                case '<>': return leftLower !== rightLower;
+                case '<': return leftLower < rightLower;
+                case '<=': return leftLower <= rightLower;
+                case '>': return leftLower > rightLower;
+                case '>=': return leftLower >= rightLower;
+                default: return false;
+            }
+        };
+
+        const parseOr = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseAnd();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'OR')) {
+                consume();
+                const right = parseAnd();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value || right.value };
+            }
+            return left;
+        };
+
+        const parseAnd = (): { ok: true; value: boolean } | { ok: false } => {
+            let left = parseNot();
+            if (!left.ok) return left;
+            while (peek() && IsKeyword(peek()!, 'AND')) {
+                consume();
+                const right = parseNot();
+                if (!right.ok) return right;
+                left = { ok: true, value: left.value && right.value };
+            }
+            return left;
+        };
+
+        const parseNot = (): { ok: true; value: boolean } | { ok: false } => {
+            if (peek() && IsKeyword(peek()!, 'NOT')) {
+                consume();
+                const inner = parseNot();
+                return inner.ok ? { ok: true, value: !inner.value } : inner;
+            }
+            return parsePrimary();
+        };
+
+        const parsePrimary = (): { ok: true; value: boolean } | { ok: false } => {
+            const first = peek();
+            if (!first) return { ok: false };
+            if (first.Kind === 'open') {
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) {
+                    return { ok: false };
+                }
+                const inner = parseOr();
+                if (!inner.ok) return inner;
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                return inner;
+            }
+
+            // Support literal 1=1 / 1=0 guards
+            if (first.Kind === 'number') {
+                const leftLit = readLiteral();
+                if (!leftLit.ok) return { ok: false };
+                const opTok = consume();
+                if (!opTok || opTok.Kind !== 'operator') return { ok: false };
+                const rightLit = readLiteral();
+                if (!rightLit.ok) return { ok: false };
+                return { ok: true, value: compareValues(leftLit.value, opTok.Text, rightLit.value) };
+            }
+
+            if (first.Kind !== 'word' && first.Kind !== 'identifier') {
+                return { ok: false };
+            }
+            let colTok = consume()!;
+            if (peek()?.Kind === 'dot') {
+                consume();
+                const nextIdent = consume();
+                if (!nextIdent || (nextIdent.Kind !== 'word' && nextIdent.Kind !== 'identifier')) {
+                    return { ok: false };
+                }
+                colTok = nextIdent;
+            }
+            // Reject function calls `fn(...)`
+            if (peek()?.Kind === 'open') {
+                return { ok: false };
+            }
+            const colName = ClientClauseScreen.StripIdentifierQuotes(colTok.Text).trim().toLowerCase();
+            const actualVal = recordByLowerKey.get(colName);
+
+            const next = peek();
+            if (!next) return { ok: false };
+
+            if (IsKeyword(next, 'IS')) {
+                consume();
+                let negated = false;
+                if (peek() && IsKeyword(peek()!, 'NOT')) {
+                    negated = true;
+                    consume();
+                }
+                if (!peek() || !IsKeyword(peek()!, 'NULL')) return { ok: false };
+                consume();
+                const isNull = actualVal === null || actualVal === undefined;
+                return { ok: true, value: negated ? !isNull : isNull };
+            }
+
+            let negatedOp = false;
+            if (IsKeyword(next, 'NOT')) {
+                negatedOp = true;
+                consume();
+            }
+
+            const afterNot = peek();
+            if (!afterNot) return { ok: false };
+
+            if (IsKeyword(afterNot, 'IN')) {
+                consume();
+                if (peek()?.Kind !== 'open') return { ok: false };
+                consume();
+                if (peek() && IsKeyword(peek()!, 'SELECT')) return { ok: false };
+                const items: Array<string | number | boolean | null> = [];
+                while (peek() && peek()!.Kind !== 'close') {
+                    const lit = readLiteral();
+                    if (!lit.ok) return { ok: false };
+                    items.push(lit.value);
+                    if (peek()?.Kind === 'comma') {
+                        consume();
+                    } else if (peek()?.Kind !== 'close') {
+                        return { ok: false };
+                    }
+                }
+                if (peek()?.Kind !== 'close') return { ok: false };
+                consume();
+                const matched = items.some((item) => compareValues(actualVal, '=', item));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (IsKeyword(afterNot, 'LIKE')) {
+                consume();
+                const patLit = readLiteral();
+                if (!patLit.ok || typeof patLit.value !== 'string') return { ok: false };
+                if (actualVal === null || actualVal === undefined) return { ok: true, value: false };
+                const regexSrc =
+                    '^' +
+                    patLit.value
+                        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+                        .replace(/%/g, '.*')
+                        .replace(/_/g, '.') +
+                    '$';
+                const matched = new RegExp(regexSrc, 'is').test(String(actualVal));
+                return { ok: true, value: negatedOp ? !matched : matched };
+            }
+
+            if (negatedOp) return { ok: false };
+
+            if (afterNot.Kind === 'operator') {
+                // Compound operators like `<>`, `!=`, `<=`, `>=` may lex as 1 or 2 operator tokens
+                let opText = consume()!.Text;
+                if (
+                    (opText === '<' && (peek()?.Text === '>' || peek()?.Text === '=')) ||
+                    (opText === '>' && peek()?.Text === '=') ||
+                    (opText === '!' && peek()?.Text === '=')
+                ) {
+                    opText += consume()!.Text;
+                }
+                if (!['=', '!=', '<>', '<', '<=', '>', '>='].includes(opText)) {
+                    return { ok: false };
+                }
+                const right = readLiteral();
+                if (!right.ok) return { ok: false };
+                return { ok: true, value: compareValues(actualVal, opText, right.value) };
+            }
+
+            return { ok: false };
+        };
+
+        const parsed = parseOr();
+        if (!parsed.ok || pos !== tokens.length) {
+            return false;
+        }
+        return parsed.value;
+    }
+
+    private static buildBaseTableAllowList(entities: readonly EntityInfo[]): EntityBaseViewAllowList {
+        const qualified = new Map<string, EntityInfo | null>();
+        const bare = new Map<string, EntityInfo | null>();
+        for (const e of entities) {
+            const table = ClientClauseScreen.StripIdentifierQuotes(e.BaseTable);
+            if (!table) continue;
+            const schema = ClientClauseScreen.StripIdentifierQuotes(e.SchemaName);
+            const bareKey = table.toLowerCase();
+            bare.set(bareKey, bare.has(bareKey) ? (bare.get(bareKey) === e ? e : null) : e);
+            if (schema) {
+                const qualKey = `${schema}.${table}`.toLowerCase();
+                const existing = qualified.get(qualKey);
+                qualified.set(qualKey, existing === undefined || existing === e ? e : null);
+            }
+        }
+        return { Qualified: qualified, Bare: bare };
+    }
+
+    private static resolveEntityRelation(
+        viewAllowList: EntityBaseViewAllowList,
+        tableAllowList: EntityBaseViewAllowList,
+        schema: string,
+        table: string,
+        label: string,
+    ): EntityInfo {
+        const unqualified = ClientClauseScreen.IsUnqualifiedSchema(schema);
+        const key = unqualified ? table.toLowerCase() : `${schema}.${table}`.toLowerCase();
+        const fromView = unqualified ? viewAllowList.Bare.get(key) : viewAllowList.Qualified.get(key);
+        const reference = `${schema ? schema + '.' : ''}${table}`;
+        if (fromView === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entities — qualify it unambiguously`);
+        }
+        if (fromView) {
+            return fromView;
+        }
+        const fromTable = unqualified ? tableAllowList.Bare.get(key) : tableAllowList.Qualified.get(key);
+        if (fromTable === null) {
+            throw new Error(`Invalid ${label}: '${reference}' matches multiple entity base tables — qualify it unambiguously`);
+        }
+        if (fromTable) {
+            return fromTable;
+        }
+        throw new Error(`Invalid ${label}: '${reference}' does not resolve to a registered MemberJunction entity`);
+    }
+
+    /**
+     * Every FROM item in a parsed statement, and the number of SELECT nodes, from a walk of the
+     * whole parse tree with CTE scope ({@link StatementRelation.IsCTEReference}); see
+     * {@link StrictFragmentValidator.CollectStatementReads} in `@memberjunction/sql-parser`. `skip`
+     * is a FROM item node of `parser`'s own tree to leave out.
      */
     public static CollectStatementReads(parser: SQLParser, skip?: object): StatementReads {
-        const aliases = parser.IdentifierAliases;
-        const walk: StatementWalk = {
-            Reads: { Relations: [], SelectCount: 0 },
-            Visited: new WeakSet<object>(),
-            Aliases: aliases,
-            Names: ClientClauseScreen.cteNameRules(parser, aliases),
-            Skip: skip,
-            InScope: new Map<string, number>(),
-        };
-        ClientClauseScreen.visitNode(walk, parser.AST);
-        return walk.Reads;
+        return StrictFragmentValidator.CollectStatementReads(parser, skip);
     }
 
     /**
@@ -489,210 +1383,25 @@ export class ClientClauseScreen {
         throw new Error(`Invalid ${label}: a subquery may read only entity base views, not ${source}`);
     }
 
-    /** Visits one node of the parse tree. */
-    private static visitNode(walk: StatementWalk, node: unknown): void {
-        if (!node || typeof node !== 'object' || walk.Visited.has(node)) return;
-        walk.Visited.add(node);
-        if (Array.isArray(node)) {
-            node.forEach((child) => ClientClauseScreen.visitNode(walk, child));
-            return;
-        }
-        const record = node as Record<string, unknown>;
-        if (record.type === 'select') {
-            ClientClauseScreen.visitSelect(walk, record);
-            return;
-        }
-        Object.values(record).forEach((child) => ClientClauseScreen.visitNode(walk, child));
+    /**
+     * Parses a whole statement strictly and returns what it reads; throws unless it is one plain
+     * read-only SELECT with no write or DDL at any depth.
+     */
+    private static readOnlyStatementReads(sql: string, dialect: SQLParserDialect, label: string): StatementReads {
+        const result = StrictFragmentValidator.ValidateReadOnlyStatement(sql, dialect, { CollectReads: true });
+        return ClientClauseScreen.safeReadsOf(result, `Invalid ${label}: not a safe read-only statement — refusing under uncertainty`, label);
     }
 
     /**
-     * Visits a SELECT node: counts it, adds its FROM items, and visits its CTE bodies and every
-     * other property with the CTE names each one can see. The CTEs of its WITH are in scope from
-     * their place in the list until the walk leaves the SELECT.
+     * The reads of a strict parse; throws `unsafe` unless it parsed as one plain read-only SELECT,
+     * and the nested-write refusal when a write or DDL sits inside it.
      */
-    private static visitSelect(walk: StatementWalk, select: Record<string, unknown>): void {
-        walk.Reads.SelectCount++;
-        const ctes: unknown[] = Array.isArray(select.with) ? select.with : [];
-        const declared = ctes.map((cte) => walk.Names.DeclaredName(ClientClauseScreen.cteNameNode(cte)));
-        ClientClauseScreen.enterScope(walk, declared);
-        ClientClauseScreen.addFromItems(walk, select.from);
-        ClientClauseScreen.leaveScope(walk, declared);
-        ClientClauseScreen.visitCTEBodies(walk, ctes, declared);
-        const ownBranchOnly = ctes.length > 0 && select.parentheses_symbol === true;
-        for (const [key, child] of Object.entries(select)) {
-            if (key === 'with') continue;
-            const outsideWith = key === '_next' && ownBranchOnly;
-            if (outsideWith) ClientClauseScreen.leaveScope(walk, declared);
-            ClientClauseScreen.visitNode(walk, child);
-            if (outsideWith) ClientClauseScreen.enterScope(walk, declared);
+    private static safeReadsOf(result: StrictValidationResult, unsafe: string, label: string): StatementReads {
+        if (result.Refusal === 'NestedWrite') {
+            throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
         }
-        ClientClauseScreen.leaveScope(walk, declared);
-    }
-
-    /**
-     * Visits the bodies of one WITH list, whose CTE names are `declared`. Body `i` sees the CTEs
-     * before it, itself too on SQL Server, and every CTE of a RECURSIVE list. Each CTE comes into
-     * scope once, at its place in the list, and all of them are in scope afterwards.
-     */
-    private static visitCTEBodies(walk: StatementWalk, ctes: readonly unknown[], declared: readonly (string | null)[]): void {
-        const recursive = ctes.some((cte) => ClientClauseScreen.isRecursiveCTE(cte));
-        let entered = 0;
-        ctes.forEach((cte, i) => {
-            const visible = recursive ? ctes.length : walk.Names.BodySeesItself ? i + 1 : i;
-            for (; entered < visible; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
-            ClientClauseScreen.visitNode(walk, cte);
-        });
-        for (; entered < ctes.length; entered++) ClientClauseScreen.countName(walk, declared[entered], 1);
-    }
-
-    /** Adds the relation each FROM item names, marking an unqualified reference to a CTE in scope. */
-    private static addFromItems(walk: StatementWalk, from: unknown): void {
-        const items: unknown[] = Array.isArray(from) ? from : from ? [from] : [];
-        for (const item of items) {
-            if (!item || typeof item !== 'object' || item === walk.Skip) continue;
-            const relation = ClientClauseScreen.relationOf(item as Record<string, unknown>, walk.Aliases);
-            if (!relation) continue;
-            const name = relation.TableName && !relation.SchemaName ? walk.Names.ReferenceName(relation.TableName) : null;
-            relation.IsCTEReference = name !== null && (walk.InScope.get(name) ?? 0) > 0;
-            walk.Reads.Relations.push(relation);
-        }
-    }
-
-    /** Brings each readable name among `names` into scope once more. */
-    private static enterScope(walk: StatementWalk, names: readonly (string | null)[]): void {
-        for (const name of names) ClientClauseScreen.countName(walk, name, 1);
-    }
-
-    /** Takes each readable name among `names` out of scope once. */
-    private static leaveScope(walk: StatementWalk, names: readonly (string | null)[]): void {
-        for (const name of names) ClientClauseScreen.countName(walk, name, -1);
-    }
-
-    /**
-     * Adds `delta` to the in-scope count of `name` when it is readable. A count that drops to zero
-     * stays in the map: in V8, each delete of a key leaves an entry that later lookups of that key
-     * step over until the map is rebuilt.
-     */
-    private static countName(walk: StatementWalk, name: string | null, delta: 1 | -1): void {
-        if (name) walk.InScope.set(name, (walk.InScope.get(name) ?? 0) + delta);
-    }
-
-    /** The name node of one item of a `with` list. */
-    private static cteNameNode(cte: unknown): unknown {
-        return cte && typeof cte === 'object' ? (cte as { name?: unknown }).name : undefined;
-    }
-
-    /** True for the item of a `with` list that carries RECURSIVE (the parser marks the first). */
-    private static isRecursiveCTE(cte: unknown): boolean {
-        return !!cte && typeof cte === 'object' && (cte as { recursive?: unknown }).recursive === true;
-    }
-
-    /**
-     * How the parser's dialect matches a FROM item to a CTE. SQL Server ignores case, and a CTE
-     * body reads its own CTE. PostgreSQL folds an unquoted name to lower case and matches a quoted
-     * one exactly ({@link postgresNameRules}). A dialect that quotes identifiers any other way
-     * matches no CTE.
-     */
-    private static cteNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
-        const quote = parser.Dialect.QuoteIdentifier('x');
-        if (quote.startsWith('[')) {
-            return {
-                DeclaredName: (node) => ClientClauseScreen.asciiLower(ClientClauseScreen.identifierText(node, aliases)) || null,
-                ReferenceName: (text) => ClientClauseScreen.asciiLower(text) || null,
-                BodySeesItself: true,
-            };
-        }
-        if (quote.startsWith('"')) return ClientClauseScreen.postgresNameRules(parser, aliases);
-        return { DeclaredName: () => null, ReferenceName: () => null, BodySeesItself: false };
-    }
-
-    /**
-     * PostgreSQL's CTE name rules. A CTE name node says whether it was quoted. A FROM item's name
-     * does not, so its quoting comes from the SQL's tokens: a name with upper-case letters that the
-     * SQL writes only quoted is exact, one it writes only unquoted folds to lower case, and one it
-     * writes both ways, or not as a token at all, matches no CTE.
-     */
-    private static postgresNameRules(parser: SQLParser, aliases: ReadonlyMap<string, string> | null): CTENameRules {
-        const quoted = new Set<string>();
-        const bare = new Set<string>();
-        for (const token of LexSQL(parser.SQL, parser.Dialect)) {
-            if (token.Kind === 'word') bare.add(token.Text);
-            else if (token.Kind === 'identifier' && token.Text.startsWith('"')) quoted.add(token.Text.slice(1, -1).split('""').join('"'));
-        }
-        const referenceName = (text: string): string | null => {
-            const folded = ClientClauseScreen.asciiLower(text);
-            if (folded === text) return text || null;
-            if (quoted.has(text) && !bare.has(text)) return text;
-            if (bare.has(text) && !quoted.has(text)) return folded;
-            return null;
-        };
-        const declaredName = (node: unknown): string | null => {
-            const name = node && typeof node === 'object' ? (node as { type?: unknown; value?: unknown }) : null;
-            if (typeof name?.value === 'string' && name.type === 'double_quote_string') return name.value || null;
-            if (typeof name?.value === 'string' && name.type === 'default') return ClientClauseScreen.asciiLower(name.value) || null;
-            return referenceName(ClientClauseScreen.identifierText(node, aliases));
-        };
-        return { DeclaredName: declaredName, ReferenceName: referenceName, BodySeesItself: false };
-    }
-
-    /** `text` with ASCII upper-case letters in lower case: PostgreSQL's folding of an unquoted name. */
-    private static asciiLower(text: string): string {
-        return text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-    }
-
-    /**
-     * The relation one FROM item names. A derived table and a VALUES list name none; the walk
-     * reaches any subquery inside them.
-     */
-    private static relationOf(item: Record<string, unknown>, aliases: ReadonlyMap<string, string> | null): StatementRelation | null {
-        const table = ClientClauseScreen.identifierText(item.table, aliases);
-        if (table) {
-            const database = ClientClauseScreen.identifierText(item.db, aliases);
-            const schema = ClientClauseScreen.identifierText(item.schema, aliases);
-            return { SchemaName: schema ? `${database}.${schema}` : database, TableName: table, FunctionName: '', IsCTEReference: false };
-        }
-        const expr = item.expr && typeof item.expr === 'object' ? (item.expr as { type?: unknown; ast?: unknown; name?: unknown }) : null;
-        if (expr?.ast || expr?.type === 'values') return null;
-        if (expr?.type === 'function') return ClientClauseScreen.functionRelation(expr.name, aliases);
-        return { SchemaName: '', TableName: '', FunctionName: '', IsCTEReference: false };
-    }
-
-    /** The relation a table function names. Leading name parts join the schema, so a qualified name never matches a built-in. */
-    private static functionRelation(name: unknown, aliases: ReadonlyMap<string, string> | null): StatementRelation {
-        if (typeof name === 'string') return { SchemaName: '', TableName: '', FunctionName: name, IsCTEReference: false };
-        const record = name && typeof name === 'object' ? (name as { name?: unknown; schema?: unknown }) : {};
-        const parts = Array.isArray(record.name) ? record.name.map((part) => ClientClauseScreen.identifierText(part, aliases)) : [];
-        const qualifiers = [ClientClauseScreen.identifierText(record.schema, aliases), ...parts.slice(0, -1)].filter(Boolean);
-        return { SchemaName: qualifiers.join('.'), TableName: '', FunctionName: parts[parts.length - 1] ?? '', IsCTEReference: false };
-    }
-
-    /**
-     * The text of an identifier node (a string, or the PostgreSQL grammar's `{ value }` node), with
-     * a name the fallback parse renamed read back from `aliases`; empty when unreadable.
-     */
-    private static identifierText(value: unknown, aliases: ReadonlyMap<string, string> | null): string {
-        let text = '';
-        if (typeof value === 'string') {
-            text = value;
-        } else if (value && typeof value === 'object') {
-            const node = value as { value?: unknown; expr?: unknown };
-            if (typeof node.value === 'string') text = node.value;
-            else if (node.expr) return ClientClauseScreen.identifierText(node.expr, aliases);
-        }
-        return ClientClauseScreen.StripIdentifierQuotes(aliases?.get(text) ?? text);
-    }
-
-    /** The FROM item of the screen's parse wrapper: the root statement's only FROM item, when it is `__mj_clause_screen`. */
-    private static wrapperFromItem(ast: unknown): object | undefined {
-        const root = Array.isArray(ast) ? ast[0] : ast;
-        const from = root && typeof root === 'object' ? (root as Record<string, unknown>).from : undefined;
-        if (!Array.isArray(from) || from.length !== 1 || !from[0] || typeof from[0] !== 'object') return undefined;
-        const item = from[0] as Record<string, unknown>;
-        const isWrapper =
-            ClientClauseScreen.identifierText(item.table, null).toLowerCase() === '__mj_clause_screen' &&
-            !ClientClauseScreen.identifierText(item.db, null) &&
-            !ClientClauseScreen.identifierText(item.schema, null);
-        return isWrapper ? item : undefined;
+        if (!result.IsValid || !result.Reads) throw new Error(unsafe);
+        return result.Reads;
     }
 
     /** The text variants of one clause; a platform-specific clause yields each of its variants. */

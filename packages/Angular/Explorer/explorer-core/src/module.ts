@@ -15,7 +15,6 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 // MJ
 import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
-import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
@@ -60,11 +59,13 @@ import {SingleListDetailComponent} from './lib/single-list-detail/single-list-de
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { ChatConversationsResource } from './lib/resource-wrappers/chat-conversations-resource.component';
 import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collections-resource.component';
+import { LibraryResource, LibraryDriveResource } from './lib/resource-wrappers/library-resource.component';
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { OfficeConnectComponent } from './lib/office/office-connect.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
@@ -84,6 +85,7 @@ import {
   declarations: [
     OAuthCallbackComponent,
     ClaimRedeemComponent,
+    OfficeConnectComponent,
     ResourceContainerComponent,
     DashboardResource,
     DashboardAddToMenuComponent,
@@ -104,6 +106,8 @@ import {
     ListDetailResource,
     ChatConversationsResource,
     ChatCollectionsResource,
+    LibraryResource,
+    LibraryDriveResource,
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
@@ -131,7 +135,6 @@ import {
     DashboardViewerModule,
     AngularSplitModule,
     ExplorerSettingsModule,
-    FileStorageModule,
     EntityFormDialogModule,
     RecordSelectorModule,
     ResourcePermissionsModule,
@@ -179,7 +182,10 @@ import {
     ListDetailResource,
     DashboardPreferencesDialogComponent,
     ConversationFeedbackResource,
-    MeetingsResource
+    MeetingsResource,
+    LibraryResource,
+    LibraryDriveResource,
+    ChatCollectionsResource
   ],
   providers: [
     { provide: RouteReuseStrategy, useClass: CustomReuseStrategy },

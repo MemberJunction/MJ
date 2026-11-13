@@ -47,6 +47,7 @@ export * from './task-graph/task-graph-spec';
 export * from './task-graph/task-graph-validator';
 export * from './task-graph/flow-decision-step';
 export * from './task-graph/flow-graph-compiler';
+export * from './task-graph/task-security-envelope';
 export * from './task-graph/task-graph-submitter';
 export * from './task-graph/graph-traversal-engine';
 export * from './task-graph/payload-mapping';
@@ -58,6 +59,8 @@ export * from './task-graph/task-rows-to-spec';
 export * from './task-graph/task-graph-to-agent-spec';
 export * from './task-graph/workflow-spec';
 export * from './task-graph/workflow-spec-validator';
+export * from './task-graph/dag-similarity';
+export * from './task-graph/workflow-telemetry';
 
 // The conversation-attachment blob seam. Lives here rather than in `@memberjunction/aiengine`
 // because browser and React Native hosts implement it, and a package they can reach must not
@@ -67,4 +70,5 @@ export * from './attachment-blob-store';
 // MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
 export * from './realtime-recording-shard-format';
 export * from './AgentUserPolicyEngine';
+
 

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { NamedQueryParameter, TypedQueryParameter } from '../typedQueryParameter';
 
 /**
  * The `spec` shape `buildMaterializedReadQuery` declares, derived from the real signature so it cannot drift.
@@ -370,5 +372,117 @@ describe('GenericDatabaseProvider.queryHasTopLevelOrderBy (ordering-fidelity gat
         const sql = 'SELECT t.ID FROM (SELECT ID FROM foo ORDER BY x) AS t WHERE t.ID = @id';
         // Whatever the parser resolves, the result must be a boolean and must NOT throw.
         expect(typeof hasOrderBy(sql, 'sqlserver')).toBe('boolean');
+    });
+});
+
+/**
+ * Typed binding (#3794 follow-up): with the snapshot's column types, every value binds as a parameter of
+ * the filtered column's own type — named and declared on SQL Server, cast on PostgreSQL — so a varchar
+ * column is never compared with an nvarchar value (CONVERT_IMPLICIT turns its index seek into a scan).
+ */
+describe('GenericDatabaseProvider.buildMaterializedReadQuery (typed by the snapshot columns)', () => {
+    const build = GenericDatabaseProvider.buildMaterializedReadQuery;
+    const base = { outputColumns: ['ID', 'Status'], schemaName: '__mj', viewName: 'materialized_vwT' };
+    const columnTypes = { id: 'uniqueidentifier', STATUS: 'varchar(20)', Amount: 'decimal(18,2)', Since: 'datetime2(7)', Active: 'bit' };
+
+    it('SQL Server: named @mj_pN parameters declared with each column\'s type, no positional `?`', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('sqlserver'), columnTypes,
+            spec: [
+                { column: 'Status', operator: 'IN', paramName: 's', kind: 'list' },
+                { column: 'Amount', operator: '>=', paramName: 'a', kind: 'scalar' },
+                { column: 'Since', operator: '>', paramName: 'd', kind: 'scalar' },
+                { column: 'Active', operator: '=', paramName: 'b', kind: 'scalar' },
+            ],
+            paramValues: { s: ['Open', 'Held'], a: '10', d: '2026-01-02T03:04:05Z', b: 'true' },
+            paramTypes: { s: 'array', a: 'number', d: 'date', b: 'boolean' },
+        });
+        expect(plan!.sql).toBe('SELECT [ID], [Status] FROM [__mj].[materialized_vwT] WHERE [Status] IN (@mj_p0, @mj_p1) AND [Amount] >= @mj_p2 AND [Since] > @mj_p3 AND [Active] = @mj_p4 ORDER BY [__mj_MaterializedRowID]');
+        expect(plan!.parameters).toEqual([
+            new TypedQueryParameter('mj_p0', 'varchar(20)', 'Open'),
+            new TypedQueryParameter('mj_p1', 'varchar(20)', 'Held'),
+            new TypedQueryParameter('mj_p2', 'decimal(18,2)', 10),
+            new TypedQueryParameter('mj_p3', 'datetime2(7)', new Date('2026-01-02T03:04:05Z')),
+            new TypedQueryParameter('mj_p4', 'bit', true),
+        ]);
+    });
+
+    it('PostgreSQL: `$n::type` placeholders', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('postgresql'), columnTypes: { Status: 'character varying(20)' },
+            spec: [{ column: 'Status', operator: '=', paramName: 's', kind: 'scalar' }],
+            paramValues: { s: 'Open' }, paramTypes: { s: 'string' },
+        });
+        expect(plan!.sql).toBe('SELECT "ID", "Status" FROM "__mj"."materialized_vwT" WHERE "Status" = $1::character varying(20) ORDER BY "__mj_MaterializedRowID"');
+        expect(plan!.parameters).toEqual([new TypedQueryParameter('$1', 'character varying(20)', 'Open')]);
+    });
+
+    it('returns null (→ live) for a filtered column with no known type, or a value its type cannot hold', () => {
+        const spec = [{ column: 'Missing', operator: '=', paramName: 's', kind: 'scalar' as const }];
+        expect(build({ ...base, dialect: GetDialect('sqlserver'), columnTypes, spec, paramValues: { s: 'x' } })).toBeNull();
+        const amount = [{ column: 'Amount', operator: '=', paramName: 'a', kind: 'scalar' as const }];
+        expect(build({ ...base, dialect: GetDialect('sqlserver'), columnTypes, spec: amount, paramValues: { a: 'ten' } })).toBeNull();
+        const list = [{ column: 'Amount', operator: 'IN', paramName: 'a', kind: 'list' as const }];
+        expect(build({ ...base, dialect: GetDialect('sqlserver'), columnTypes, spec: list, paramValues: { a: [1, 'two'] } })).toBeNull();
+    });
+});
+
+/**
+ * Without the snapshot's column types but with a dialect, values bind as named parameters, so a SQL Server
+ * provider does not rewrite a `?` in the statement text (the legacy positional array form rewrites every one).
+ */
+describe('GenericDatabaseProvider.buildMaterializedReadQuery (untyped, with a dialect: named parameters)', () => {
+    const build = GenericDatabaseProvider.buildMaterializedReadQuery;
+    const base = { outputColumns: ['ID', 'Ready?'], schemaName: '__mj', viewName: 'materialized_vwT' };
+
+    it('SQL Server: `@pN` placeholders bound by name as `pN`; BIT values stay 1 / 0', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('sqlserver'),
+            spec: [
+                { column: 'Status', operator: 'IN', paramName: 's', kind: 'list' },
+                { column: 'Active', operator: '=', paramName: 'b', kind: 'scalar' },
+            ],
+            paramValues: { s: ['Open', 'Held'], b: 'true' },
+            paramTypes: { s: 'array', b: 'boolean' },
+        });
+        expect(plan!.sql).toBe('SELECT [ID], [Ready?] FROM [__mj].[materialized_vwT] WHERE [Status] IN (@p0, @p1) AND [Active] = @p2 ORDER BY [__mj_MaterializedRowID]');
+        expect(plan!.parameters).toEqual([new NamedQueryParameter('p0', 'Open'), new NamedQueryParameter('p1', 'Held'), new NamedQueryParameter('p2', 1)]);
+    });
+
+    it('PostgreSQL: `$n` placeholders named by position; booleans stay native', () => {
+        const plan = build({
+            ...base, dialect: GetDialect('postgresql'),
+            spec: [{ column: 'Active', operator: '=', paramName: 'b', kind: 'scalar' }],
+            paramValues: { b: true }, paramTypes: { b: 'boolean' },
+        });
+        expect(plan!.sql).toBe('SELECT "ID", "Ready?" FROM "__mj"."materialized_vwT" WHERE "Active" = $1 ORDER BY "__mj_MaterializedRowID"');
+        expect(plan!.parameters).toEqual([new NamedQueryParameter('$1', true)]);
+    });
+
+    it('returns null (→ live) for a list element no parameter can carry', () => {
+        const spec = [{ column: 'Status', operator: 'IN', paramName: 's', kind: 'list' as const }];
+        expect(build({ ...base, dialect: GetDialect('sqlserver'), spec, paramValues: { s: ['Open', { nested: true }] } })).toBeNull();
+    });
+});
+
+describe('GenericDatabaseProvider.queryHasTopLevelOrderBy (SqlDocument)', () => {
+    const hasOrderBy = GenericDatabaseProvider.queryHasTopLevelOrderBy;
+
+    it('reads the ORDER BY of a CTE-headed query and of a set operation', () => {
+        expect(hasOrderBy('WITH x AS (SELECT ID FROM t) SELECT ID FROM x ORDER BY ID', 'sqlserver')).toBe(true);
+        expect(hasOrderBy('WITH x AS (SELECT TOP 5 ID FROM t ORDER BY ID) SELECT ID FROM x', 'sqlserver')).toBe(false);
+        expect(hasOrderBy('SELECT ID FROM a UNION SELECT ID FROM b ORDER BY ID', 'postgresql')).toBe(true);
+        expect(hasOrderBy('SELECT t.ID FROM (SELECT TOP 3 ID FROM foo ORDER BY x) AS t', 'sqlserver')).toBe(false);
+    });
+
+    it('treats stacked statements and text that is not one query as ordered (→ live)', () => {
+        expect(hasOrderBy('SELECT 1; SELECT 2', 'sqlserver')).toBe(true);
+        expect(hasOrderBy('EXEC dbo.spReport', 'sqlserver')).toBe(true);
+        expect(hasOrderBy("SELECT ID FROM t WHERE s = 'a','b'", 'sqlserver')).toBe(true);
+    });
+
+    it('answers the same text the same way in each dialect, and per dialect', () => {
+        const sql = 'SELECT ID FROM t ORDER BY ID';
+        expect([hasOrderBy(sql, 'sqlserver'), hasOrderBy(sql, 'sqlserver'), hasOrderBy(sql, 'postgresql')]).toEqual([true, true, true]);
     });
 });

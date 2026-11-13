@@ -147,9 +147,10 @@ export class RunComputerUseParams {
      * tier: MJ Credentials are not consulted here. A resolver rather than a key list, so the engine
      * can ask for the class it needs without holding the caller's credentials.
      *
-     * **Not wired in MJ yet.** `ComputerUseAction` does not set it, and `MJComputerUseEngine`'s
-     * default path runs the controller and judge through stored prompts via `AIPromptRunner`, which
-     * does not consult it. Absent ⇒ platform keys, which is every run today that does not set it.
+     * In MJ, `ComputerUseAction` sets it from the agent run's `RuntimeAPIKeyResolver`, and
+     * `MJComputerUseEngine` also hands it to the stored controller, judge and heal prompts it runs
+     * through `AIPromptRunner` (`AIPromptParams.APIKeyResolver`, the legacy key tier). Absent ⇒
+     * platform keys.
      */
     public APIKeyResolver?: AIAPIKeyResolver;
 

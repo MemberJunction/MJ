@@ -394,3 +394,63 @@ describe('RecordSetProcessor.Process', () => {
         });
     });
 });
+
+describe('RecordSetProcessor.Process — waits for the Action log rows its results carry (#6045)', () => {
+    /** A processor whose every result names a log row that lands only when `release` is called. */
+    function gatedLogProcessor() {
+        let release!: () => void;
+        const landed = new Promise<void>((r) => { release = r; });
+        const calls: string[] = [];
+        const processor = {
+            ProcessRecord: async (r: RecordRef): Promise<RecordResult> => {
+                calls.push(r.RecordID);
+                return { Status: 'Succeeded', ActionExecutionLogID: `log-${r.RecordID}`, ActionExecutionLogPersisted: landed };
+            },
+        };
+        return { processor, calls, release };
+    }
+
+    it('does not resolve while a log row is pending, even when the tracker ignores it, and the loop never waits', async () => {
+        const { processor, calls, release } = gatedLogProcessor();
+        let done = false;
+        const run = engine.Process({ Source: new ArraySource(recs(3), 'E'), Processor: processor, Tracker: new NoOpTracker(), ContextUser: USER, Provider: PROVIDER })
+            .then((r) => { done = true; return r; });
+        await new Promise((r) => setTimeout(r, 20));
+        expect(calls).toEqual(['r0', 'r1', 'r2']); // every record ran: the loop did not wait on the log rows
+        expect(done).toBe(false);
+
+        release();
+        expect((await run).Status).toBe('Completed');
+    });
+
+    it('calls CompleteRun only after the log rows have settled', async () => {
+        const { processor, release } = gatedLogProcessor();
+        const tracker = new SpyTracker();
+        const run = engine.Process({ Source: new ArraySource(recs(2), 'E'), Processor: processor, Tracker: tracker, ContextUser: USER, Provider: PROVIDER });
+        await new Promise((r) => setTimeout(r, 20));
+        expect(tracker.details).toHaveLength(2);
+        expect(tracker.completed).toBeUndefined();
+
+        release();
+        await run;
+        expect(tracker.completed?.Status).toBe('Completed');
+    });
+
+    it('waits for log rows carried by a batch processor\'s results too', async () => {
+        let release!: () => void;
+        const landed = new Promise<void>((r) => { release = r; });
+        const processor = {
+            ProcessRecord: async (): Promise<RecordResult> => ok(),
+            ProcessBatch: async (rs: RecordRef[]) => new Map(rs.map((r): [string, RecordResult] => [r.RecordID, { Status: 'Succeeded', ActionExecutionLogID: `log-${r.RecordID}`, ActionExecutionLogPersisted: landed }])),
+        };
+        let done = false;
+        const run = engine.Process({ Source: new ArraySource(recs(2), 'E'), Processor: processor, Tracker: new NoOpTracker(), ContextUser: USER, Provider: PROVIDER })
+            .then(() => { done = true; });
+        await new Promise((r) => setTimeout(r, 20));
+        expect(done).toBe(false);
+
+        release();
+        await run;
+        expect(done).toBe(true);
+    });
+});

@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "Bylaws",
+      "Description": "Highest governing charter, articles of incorporation, or organizational bylaws. Supersedes all lower-tier policies and manuals.",
+      "Rank": 100,
+      "IconClass": "fa-solid fa-landmark-dome",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "631B9519-0A5E-45CA-8810-D638D1F91E79"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.267Z",
+      "checksum": "9f23ccbc1a10cd7b6238bb7fba2e4f38c833cc8b8c25403b98a19a6875f1e385"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Board Policy",
+      "Description": "Board-approved governance resolution or enterprise-wide policy mandate.",
+      "Rank": 80,
+      "IconClass": "fa-solid fa-scale-balanced",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A9127DAB-7D11-4256-9E9F-AAB32E01A17C"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.282Z",
+      "checksum": "dfaba9314e9d68b00581469a4844f0950e1dcfba508d3dae5d24edc7f1211ab4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Executive SOP",
+      "Description": "Executive standard operating procedure or official cross-department operational manual.",
+      "Rank": 60,
+      "IconClass": "fa-solid fa-file-shield",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DC982FCF-3BED-4B25-96C1-832E88C2F5EA"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.291Z",
+      "checksum": "a98c67db6671897307a761528fd2be23e7a7366841167cad527eae4732e45a4a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Department Practice",
+      "Description": "Department-scoped playbook, desk manual, or team operating convention.",
+      "Rank": 40,
+      "IconClass": "fa-solid fa-clipboard-list",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E42C6FAA-5808-49D9-AE67-A0D7B9B5929D"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.301Z",
+      "checksum": "acd2733b2ead021a50dc2b9e90951080a5e2dc552d9ae765a37eed19b9ad0408"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reference",
+      "Description": "General reference documentation, knowledge base article, or training guide.",
+      "Rank": 20,
+      "IconClass": "fa-solid fa-book",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A3DD0B43-75E5-48B3-BE53-CC777729BAA7"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.309Z",
+      "checksum": "8117669eaf5bb23890f438d8863feedef29ccba00876919e051278d600876001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inferred",
+      "Description": "Unverified or machine-inferred observation extracted from unstructured content awaiting human review.",
+      "Rank": 10,
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5E996D6A-25C3-4952-AFAE-396433E55692"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.321Z",
+      "checksum": "ae8f769515a70cee3e776004bd33fafec68f9d6b0f90a61953fd794649efcd9c"
+    }
+  }
+]

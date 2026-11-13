@@ -4,7 +4,7 @@
 import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL, NormalizeFinishReason } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
@@ -49,7 +49,15 @@ const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
 const GEMINI_REASONING_PROVIDER = 'gemini';
 
 /**
- * The user turn Gemini is given when a conversation would otherwise open with a model turn.
+ * The user turn every Gemini conversation opens with.
+ *
+ * It is the prompt-cache anchor. Gemini's implicit cache reuses a previous request only when the new
+ * request repeats it past the system instruction into the first `contents` turn; a match on the system
+ * instruction alone is not reused (measured on Gemini 3.8 Flash: 0 of 8 such requests hit, against 7 of
+ * 8 with this fixed opening turn, each caching all but the last ~2,050 tokens of the previous request).
+ * An agent loop changes its first turn between its first and second call (the first call's only turn is
+ * per-turn state that the second call replaces), so without a fixed opening its second call never hits.
+ * A conversation whose first turn already is this text is left as it is.
  *
  * Gemini requires `contents` to begin with a user turn, and enforces it hard for tool calls: a
  * `functionCall` turn is valid only "immediately after a user turn or after a function response
@@ -60,6 +68,30 @@ const GEMINI_REASONING_PROVIDER = 'gemini';
  * so the model reads it as the opening request rather than as noise.
  */
 export const GEMINI_LEADING_USER_TURN_TEXT = 'Proceed with the task described in the system instructions.';
+
+/**
+ * The user turn Gemini is given when a conversation would otherwise end with a model turn.
+ *
+ * Gemini answers a request whose last turn is the user's; one ending with a model turn is a 400
+ * ("Requests ending with a model turn are not supported"). The driver sends the last turn as the
+ * new message, and the SDK always sends that message as a user turn, so a trailing model turn would
+ * otherwise go out with its own parts relabelled as the user's. It stays a model turn in the
+ * history instead, and this turn asks the model to go on. Gemini models here take no assistant
+ * prefill, so no caller means a trailing model turn as one.
+ */
+export const GEMINI_TRAILING_USER_TURN_TEXT = 'Continue with the task.';
+
+/**
+ * The model turn placed between two consecutive user text turns, which Gemini would otherwise read as
+ * one turn. Gemini's implicit cache reuses a previous request only up to a turn boundary that the new
+ * request repeats, and a user turn that grows from one request to the next is never reused (measured
+ * on Gemini 3.8 Flash: a growing single user turn caches nothing; the same text split by a model turn
+ * caches everything before the last boundary). An agent's history is often all user messages — the
+ * envelope path keeps action results, retries and runtime state as user messages — so without a
+ * separator every request is the system prompt plus one changing turn, and nothing is cached.
+ * The Anthropic driver uses the same filler to keep roles alternating around its cache breakpoint.
+ */
+export const GEMINI_USER_TURN_SEPARATOR_TEXT = 'OK';
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
@@ -160,43 +192,115 @@ export class GeminiLLM extends BaseLLM {
         return true;
     }
 
+    /**
+     * Shapes converted messages into the alternating `contents` Gemini accepts: consecutive turns of
+     * one role are combined, and the conversation opens with a user turn (see
+     * {@link GEMINI_LEADING_USER_TURN_TEXT}).
+     *
+     * Exceptions to combining:
+     * - A model turn with nothing in it (an assistant message with no text, no calls and no
+     *   reasoning) is dropped. It carries nothing, and Gemini rejects an empty turn. So is a user turn of only empty text.
+     * - Two user turns with no function responses are kept apart by a
+     *   {@link GEMINI_USER_TURN_SEPARATOR_TEXT} model turn, so each message is a cache boundary that
+     *   the next request repeats. Function-response turns are never separated this way: a function
+     *   response must follow the model turn that made the call.
+     * - A user turn that follows a function-response turn is kept as a turn of its own. Vertex AI
+     *   rejects a turn whose function responses are followed by text with "Requests ending with a
+     *   model turn are not supported", although the turn is the user's. Google AI Studio accepts both
+     *   shapes. The agent loop sends exactly this: a tool turn, then its per-turn runtime-state message.
+     */
     protected geminiMessageSpacing(messages: Content[]): Content[] {
-        // This method ensures messages alternate between user and model roles
-        // by combining consecutive messages with the same role
-        if (messages.length === 0) {
-            return [];
-        }
-
         const result: Content[] = [];
-        let currentMessage: Content | null = null;
-
         for (const message of messages) {
-            if (currentMessage === null) {
-                // First message - start accumulating
-                currentMessage = { role: message.role, parts: [...message.parts] };
-            } else if (currentMessage.role === message.role) {
-                // Same role as current - combine the parts
-                currentMessage.parts.push(...message.parts);
+            if (GeminiLLM.isEmptyModelTurn(message) || GeminiLLM.isEmptyUserTextTurn(message)) {
+                continue;
+            }
+            const current = result[result.length - 1];
+            if (current && GeminiLLM.areSeparateUserTextTurns(current, message)) {
+                result.push({ role: 'model', parts: [{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }] });
+                result.push({ role: message.role, parts: [...(message.parts ?? [])] });
+            } else if (current && current.role === message.role && !GeminiLLM.endsFunctionResponseTurn(current, message)) {
+                current.parts = [...(current.parts ?? []), ...(message.parts ?? [])];
             } else {
-                // Different role - push current and start new
-                result.push(currentMessage);
-                currentMessage = { role: message.role, parts: [...message.parts] };
+                result.push({ role: message.role, parts: [...(message.parts ?? [])] });
             }
         }
-
-        // Push the last accumulated message
-        if (currentMessage !== null) {
-            result.push(currentMessage);
-        }
-        // The conversation must open with a user turn — see GEMINI_LEADING_USER_TURN_TEXT for why a
-        // model turn here (an agent with no user message replaying its own tool calls) is rejected.
         if (result.length > 0 && result[0].role === 'model') {
             result.unshift({ role: 'user', parts: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] });
         }
-
         return result;
     }
-    
+
+    /**
+     * Opens shaped `contents` with the fixed {@link GEMINI_LEADING_USER_TURN_TEXT} turn and a
+     * {@link GEMINI_USER_TURN_SEPARATOR_TEXT} model turn — the prompt-cache anchor every request of a
+     * conversation shares past the system instruction. Contents that already open with that turn
+     * (`geminiMessageSpacing` adds it before a leading model turn) and empty contents are returned as they are.
+     */
+    protected withCacheAnchor(contents: Content[]): Content[] {
+        if (contents.length === 0 || GeminiLLM.isLeadingUserTurn(contents[0])) {
+            return contents;
+        }
+        return [
+            { role: 'user', parts: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] },
+            { role: 'model', parts: [{ text: GEMINI_USER_TURN_SEPARATOR_TEXT }] },
+            ...contents
+        ];
+    }
+
+    /**
+     * Whether a turn is a user turn whose only content is empty text. Gemini treats empty text as absent, so after the
+     * cache-anchor turns such a request would end with the anchor's model turn and be rejected ("Requests ending with a
+     * model turn are not supported"). Dropped like an empty model turn; a request left with no turns sends
+     * {@link GEMINI_LEADING_USER_TURN_TEXT} as its message.
+     */
+    private static isEmptyUserTextTurn(content: Content): boolean {
+        const parts = content.parts ?? [];
+        return content.role === 'user' && parts.every((p) => p.text === '' && Object.keys(p).length === 1);
+    }
+
+    /** Whether a turn already is the fixed opening user turn. */
+    private static isLeadingUserTurn(content: Content): boolean {
+        const parts = content.parts ?? [];
+        return content.role === 'user' && parts.length === 1 && parts[0].text === GEMINI_LEADING_USER_TURN_TEXT;
+    }
+
+    /** Whether a turn is a model turn with nothing in it: no parts, or only empty text with no signature. */
+    private static isEmptyModelTurn(content: Content): boolean {
+        return content.role === 'model'
+            && (content.parts ?? []).every((p) => p.text === '' && !p.thoughtSignature && !p.thought && Object.keys(p).length === 1);
+    }
+
+    /** Whether two adjacent turns are both user turns without function responses, to be kept apart by a separator. */
+    private static areSeparateUserTextTurns(current: Content, next: Content): boolean {
+        const hasResponses = (c: Content) => (c.parts ?? []).some((p) => !!p.functionResponse);
+        return current.role === 'user' && next.role === 'user' && !hasResponses(current) && !hasResponses(next);
+    }
+
+    /** Whether `next` is a user turn of other parts after a function-response turn, and so must stay separate. */
+    private static endsFunctionResponseTurn(current: Content, next: Content): boolean {
+        const hasResponses = (c: Content) => (c.parts ?? []).some((p) => !!p.functionResponse);
+        return current.role === 'user' && hasResponses(current) && !(next.parts ?? []).every((p) => !!p.functionResponse);
+    }
+
+    /**
+     * Splits shaped `contents` into the chat history and the message to send. The SDK sends the
+     * message as a user turn, so only a user turn is taken off the end. A conversation that ends
+     * with a model turn keeps it in the history and sends {@link GEMINI_TRAILING_USER_TURN_TEXT};
+     * one with no turns at all sends {@link GEMINI_LEADING_USER_TURN_TEXT}, since Vertex AI rejects
+     * an empty message ("Model input cannot be empty").
+     */
+    protected SplitForSend(contents: Content[]): { history: Content[]; message: Part[] } {
+        const last = contents[contents.length - 1];
+        if (!last) {
+            return { history: [], message: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] };
+        }
+        if (last.role === 'model') {
+            return { history: contents, message: [{ text: GEMINI_TRAILING_USER_TURN_TEXT }] };
+        }
+        return { history: contents.slice(0, -1), message: last.parts?.length ? last.parts : [{ text: GEMINI_LEADING_USER_TURN_TEXT }] };
+    }
+
     /**
      * Implementation of non-streaming chat completion for Gemini
      */
@@ -216,23 +320,13 @@ export class GeminiLLM extends BaseLLM {
             // Convert all non-system messages and apply role alternation
             const signatureOrigin = this.thoughtSignatureOrigin(modelName);
             const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
-            const tempMessages = this.geminiMessageSpacing(convertedMessages);
+            const tempMessages = this.withCacheAnchor(this.geminiMessageSpacing(convertedMessages));
 
-            // Split: all but last message go in history, last message gets system instructions prepended
-            const history = tempMessages.slice(0, -1);
-            const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
-
-            // The system prompt is passed via systemInstruction (below), NOT bundled into the user
-            // message — bundling put the stable prompt AFTER the variable history, defeating Gemini's
-            // implicit prompt caching. The final message is just the latest user turn's parts.
-            let finalMessageParts: Part[] = [];
-            if (lastMessage) {
-                finalMessageParts.push(...lastMessage.parts);
-            }
-            // If no messages at all, send empty
-            if (finalMessageParts.length === 0) {
-                finalMessageParts = [{ text: '' }];
-            }
+            // All but the last user turn go in the history; that turn is the message sent. The system
+            // prompt is passed via systemInstruction (below), NOT bundled into the user message —
+            // bundling put the stable prompt AFTER the variable history, defeating Gemini's implicit
+            // prompt caching.
+            const { history, message: finalMessageParts } = this.SplitForSend(tempMessages);
 
             // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
             const modelOptions = this.buildGenerationOptions(params, modelName);
@@ -365,9 +459,9 @@ export class GeminiLLM extends BaseLLM {
                             toolCalls: toolCalls,
                             ...(reasoning ? { reasoning } : {})
                         },
-                        // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
-                        // unreadable" case; every other reason keeps Gemini's own value.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? (finishReason || "completed")),
+                        // Tool calls and Gemini's "tried to call a tool but the call was unreadable" cases
+                        // have their own markers; every other reason goes through NormalizeFinishReason.
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? NormalizeFinishReason(finishReason)),
                         index: 0,
                         ...(rejectedCall && candidate.finishMessage ? { finishMessage: candidate.finishMessage } : {})
                     }],
@@ -563,15 +657,12 @@ export class GeminiLLM extends BaseLLM {
             this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
+        // Provider options (e.g. a thinkingConfig) ride along with JSON too, not only ModelSpecific.
+        if (params.modelSpecificResponseFormat && (params.responseFormat === 'ModelSpecific' || params.responseFormat === 'JSON')) {
+            Object.assign(modelOptions, params.modelSpecificResponseFormat);
+        }
+        if (params.responseFormat === 'JSON') {
+            modelOptions.responseMimeType = 'application/json';
         }
 
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -617,27 +708,36 @@ export class GeminiLLM extends BaseLLM {
     private static readonly _warnedThinking = new Set<string>();
 
     private thinkingReplacementKey(modelName: string, config: ThinkingConfig): string {
-        return `${this.constructor.name}|${modelName}|${JSON.stringify(config)}`;
+        // Sorted keys, so the same setting with its keys in another order hits the same memo.
+        return `${this.constructor.name}|${modelName}|${JSON.stringify(config, Object.keys(config).sort())}`;
     }
 
     /**
      * Puts the `thinkingConfig` for `effortLevel` on the request (see {@link ResolveGeminiThinkingConfig}),
-     * or what replaced it after the model rejected it earlier in this process. Nothing is added when
-     * no effort is set; an effort that cannot be used is reported once.
+     * or what replaced it after the model rejected it earlier in this process. With no usable effort, a
+     * `thinkingConfig` already on the request (from `modelSpecificResponseFormat`) gets the same
+     * replacement, so a rejected setting is not re-sent on every call. An effort that cannot be used is
+     * reported once.
      */
     private applyThinkingConfig(requestConfig: Record<string, unknown>, modelName: string, effortLevel: string | undefined): void {
         const resolution = ResolveGeminiThinkingConfig(modelName, effortLevel);
         if (resolution.Ignored) {
             this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        if (!resolution.Config) {
+        const supplied = requestConfig.thinkingConfig as ThinkingConfig | undefined;
+        const wanted = resolution.Config ?? supplied;
+        if (!wanted) {
             return;
         }
-        const key = this.thinkingReplacementKey(modelName, resolution.Config);
-        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : resolution.Config;
+        const key = this.thinkingReplacementKey(modelName, wanted);
+        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : wanted;
         if (config) {
             requestConfig.thinkingConfig = config;
+        } else if (!supplied || wanted === supplied) {
+            delete requestConfig.thinkingConfig;
         }
+        // Otherwise the effort's own setting was rejected with nothing to fall back to, and the caller's
+        // `thinkingConfig` stays, as it would have with no effort level.
     }
 
     /**
@@ -733,11 +833,10 @@ export class GeminiLLM extends BaseLLM {
         // Convert all non-system messages and apply role alternation
         const signatureOrigin = this.thoughtSignatureOrigin(modelName);
         const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
-        const tempMessages = this.geminiMessageSpacing(convertedMessages);
+        const tempMessages = this.withCacheAnchor(this.geminiMessageSpacing(convertedMessages));
 
-        // Split: all but last message go in history, last message gets system instructions prepended
-        const history = tempMessages.slice(0, -1);
-        const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
+        // All but the last user turn go in the history; that turn is the message sent (see SplitForSend).
+        const { history, message: finalMessageParts } = this.SplitForSend(tempMessages);
 
         // Capture the request's cacheable-prefix info so the final streamed chunk's usage can be
         // logged next to it (GEMINI_CACHE_DEBUG only; processStreamingChunk reads this).
@@ -747,15 +846,7 @@ export class GeminiLLM extends BaseLLM {
 
         // System prompt is passed via systemInstruction (below), NOT bundled into the user message
         // — bundling defeats Gemini's implicit prompt caching (stable prompt ends up after the
-        // variable history). The final message is just the latest user turn's parts.
-        let finalMessageParts: Part[] = [];
-        if (lastMessage) {
-            finalMessageParts.push(...lastMessage.parts);
-        }
-        // If no messages at all, send empty
-        if (finalMessageParts.length === 0) {
-            finalMessageParts = [{ text: '' }];
-        }
+        // variable history).
 
         // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
         const modelOptions = this.buildGenerationOptions(params, modelName);
@@ -1056,7 +1147,7 @@ export class GeminiLLM extends BaseLLM {
                     content: accumulatedContent ? accumulatedContent : '',
                     thinking: thinkingContent || undefined
                 },
-                finish_reason: finishReason,
+                finish_reason: NormalizeFinishReason(finishReason),
                 index: 0
             }],
             usage: usage || new ModelUsage(0, 0)

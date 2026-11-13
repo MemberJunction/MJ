@@ -10,11 +10,11 @@
  * Per CLAUDE.md "transport-layer architecture", the operation is a THIN adapter — it
  * carries no promotion logic. The leakage detection + state-machine transition live
  * in {@link ProductionModelPromotionGate}, shared with the Promote action via
- * {@link promoteModelViaGate}. The gate touches ONLY the `Status` (the model is
+ * {@link PromoteModelViaGate}. The gate touches ONLY the `Status` (the model is
  * immutable, §6.4).
  *
- * Non-promoted outcomes (leakage refusal, missing reason, invalid transition, not
- * found, save failure) are surfaced as a thrown error so the framework wraps them as
+ * Non-promoted outcomes (leakage refusal, missing reason, calibration hold, a model
+ * `/predict` does not serve, invalid transition, not found, save failure) are surfaced as a thrown error so the framework wraps them as
  * a clean `EXECUTION_ERROR` result; the message preserves the plain-language detail
  * the Action also surfaces.
  */
@@ -88,6 +88,10 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
         throw new Error(this.leakageRefusalMessage(input.modelId, outcome));
       case 'signoff-reason-required':
         throw new Error(this.signOffReasonRequiredMessage(input.modelId, outcome));
+      case 'refused-calibration':
+        throw new Error(ProductionModelPromotionGate.CalibrationRefusalMessage(input.modelId, outcome.slope));
+      case 'not-servable':
+        throw new Error(outcome.message);
       case 'invalid-transition':
         throw new Error(
           `Model ${input.modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +

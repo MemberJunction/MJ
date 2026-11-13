@@ -31,13 +31,15 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
-import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
+import { MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
+import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
+import { ActionParam, MJActionEntityExtended, RunActionParams, type ActionRunScope } from '@memberjunction/actions-base';
 import {
     BaseRealtimeModel,
+    BuildRealtimeRelayUrl,
     ChatMessage,
+    ClientRealtimeCredentialRefreshResult,
     ClientRealtimeSessionConfig,
     GetAIAPIKey,
     AIAPIKey,
@@ -47,18 +49,26 @@ import {
     IRealtimeSession,
     IsZeroDataRetention,
     JSONObject,
+    REALTIME_RELAY_MAX_CONNECTIONS,
+    REALTIME_RELAY_PATH,
+    REALTIME_RELAY_SESSION_LIFETIME_SECONDS,
     RealtimeAvatarStatus,
+    RealtimeProxyRegistry,
     RealtimeSessionParams,
     RealtimeToolCall,
-    RealtimeToolDefinition
+    RealtimeToolDefinition,
+    ResolveRealtimeProxyBaseWsUrl,
+    ResolveRealtimeTiming
 } from '@memberjunction/ai';
 import {
+    AgentUserPolicyEngine,
     MJAIAgentEntityExtended,
     MJAIModelEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIPromptRunEntityExtended,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
+    type ExecuteAgentParams,
     AppContextSnapshot,
     FormatAppContextNote,
     ResolvePromptRunUserID,
@@ -126,7 +136,8 @@ import {
     GetDirectActionsConfig,
     IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
-import { ListRealtimeVendorsForModel, SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, SelectRealtimeVendorForModel, RealtimeVendorSelection, RealtimeKeyFixHint } from './realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime-platform-credentials';
 import { AIEngineBase, MergeRealtimeUsageRecord, type RealtimeUsageMergeResult, type RealtimeUsageRecord } from '@memberjunction/ai-engine-base';
 import { BuildSessionChannelPolicy, type RealtimeChannelRegistryRow } from './realtime-channel-policy';
 
@@ -186,21 +197,33 @@ export interface PrepareClientSessionInput {
     /**
      * The run's runtime API keys, when the session is prepared from an agent run that carries them
      * (`ExecuteAgentParams.apiKeys`, set by `BaseAgent.StartBridgeRealtimeSession`). Vendor selection
-     * and the minted session try these first, per driver class; for a class they do not key, this
-     * service's {@link RealtimeClientSessionService.getAPIKeyForDriver} seam answers (by default the
-     * `AI_VENDOR_API_KEY__<driver>` environment key). That is the same order as `GetAIAPIKey` — the
-     * legacy tier of prompt key resolution. MJ Credentials / `AICredentialBinding`s, which a prompt
-     * consults first, are not consulted by realtime. Absent ⇒ the seam alone, which is every
-     * client-initiated session today.
+     * and the minted session resolve a key per vendor in the order a prompt does: the platform's MJ
+     * Credentials first (`AICredentialBinding`s on the model-vendor row, then the vendor, then the
+     * vendor's default credential), then these keys, per driver class, then this service's
+     * {@link RealtimeClientSessionService.getAPIKeyForDriver} seam (by default the
+     * `AI_VENDOR_API_KEY__<driver>` environment key). A caller whose own keys must win sets
+     * {@link PrepareClientSessionInput.CredentialScope} to `'RuntimeOnly'`. Absent ⇒ platform
+     * credentials, then the seam.
      */
     APIKeys?: AIAPIKey[];
     /**
      * The run's credential scope (`ExecuteAgentParams.CredentialScope`). `'RuntimeOnly'` makes
      * {@link PrepareClientSessionInput.APIKeys} the whole key chain: a vendor they do not key is not
-     * selected, and the {@link RealtimeClientSessionService.getAPIKeyForDriver} seam (by default the
-     * platform's environment key) is never consulted. Absent ⇒ `'Any'`.
+     * selected, and neither the platform's MJ Credentials nor the
+     * {@link RealtimeClientSessionService.getAPIKeyForDriver} seam (by default the platform's
+     * environment key) is consulted. Absent ⇒ `'Any'`.
      */
     CredentialScope?: AICredentialScope;
+    /**
+     * The scope of the agent run that prepares the session (`BaseAgent.StartBridgeRealtimeSession` passes the run's
+     * validated scope, as every action call in that run is handed it). Direct tool calls and delegated target-agent
+     * runs carry it (#5624). Set only by server code from a run's validated scope, never from the session's
+     * owner-editable `Config`. Absent ⇒ the session is an unscoped run: direct tool calls still carry a `RunScope`,
+     * with every field null, so an action that scopes by tenant refuses one the model names.
+     */
+    RunScope?: ActionRunScope;
+    /** The skills active in the run that prepares the session, carried with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -357,7 +380,11 @@ export interface PrepareClientSessionInput {
 export interface RealtimeClientSessionPrepResult {
     /** Whether the client session config was minted successfully. */
     Success: boolean;
-    /** The minted client-direct session config (token + provider session config). Present on success. */
+    /**
+     * The minted client-direct session config (token + provider session config). Present on success.
+     * Returned whole, exactly as the driver minted it: `ClientConfig.MaxSessionSeconds` (the effective, clamped
+     * session cap) is passed through unchanged and stays `undefined` when the driver did not set it.
+     */
     ClientConfig?: ClientRealtimeSessionConfig;
     /** The session params the server built (system prompt, model, tools). Present on success. */
     SessionParams?: RealtimeSessionParams;
@@ -439,6 +466,13 @@ export interface RealtimeClientSessionPrepResult {
      * off). The transport layer returns it in the mint result, so the call can say why it shows no avatar.
      */
     AvatarStatus?: RealtimeAvatarStatus;
+    /**
+     * The mint snapshot to persist for a credential refresh on another instance (`RefreshRealtimeClientSessionToken`).
+     * The transport layer persists this under the server-protected `realtimeMintSnapshot` key on
+     * `MJ: AI Agent Sessions.Config_` inside `RunWithTrustedSessionConfigWrites`. The session owner can read that row,
+     * so this is the owner-safe copy ({@link PersistedRealtimeMintSnapshot}), not the full one this instance keeps.
+     */
+    MintSnapshot?: PersistedRealtimeMintSnapshot;
 }
 
 /**
@@ -450,6 +484,182 @@ export interface CoAgentSystemPromptResolution {
     Text: string;
     /** The `MJ: AI Prompts` row id, or `null` when the co-agent has no active prompt. */
     PromptID: string | null;
+}
+
+/**
+ * The mint snapshot as persisted under the server-protected `realtimeMintSnapshot` key in
+ * `MJ: AI Agent Sessions.Config_` (written inside `RunWithTrustedSessionConfigWrites`), for a credential refresh that
+ * lands on another instance (`RefreshRealtimeClientSessionToken`). The session owner cannot write that key but can READ
+ * the row (`UI` and `Widget Guest` hold `CanRead` on their own sessions, `Config` included), and every save of the row
+ * is copied into Record Changes. So it holds only what such a refresh needs and the browser was already given (see
+ * {@link toPersistedMintSnapshot}), and never `relayTicketId`, a live credential in `RealtimeProxyRegistry`.
+ */
+export interface PersistedRealtimeMintSnapshot {
+    coAgentID?: string;
+    /** The agent the session was minted to voice. A refresh re-checks `CanRun` on it, never on the owner-editable `targetAgentID`. */
+    targetAgentID?: string;
+    modelID: string;
+    vendorID?: string;
+    modelVendorID?: string;
+    driverClass: string;
+    credentialScope: AICredentialScope;
+    connectionMaxSeconds?: number;
+    /** `'relay'` for a relay session: its session params stay on the instance that minted it. */
+    transport?: 'relay';
+    /** The params a re-mint needs. Absent from a relay session's persisted copy. */
+    sessionParams?: RealtimeSessionParams;
+    /** The minted provider config. Persisted only for a driver whose refresh reads it. */
+    existingSessionConfig?: JSONObject;
+}
+
+/**
+ * The full mint snapshot, stored in {@link RealtimeMintSnapshotRegistry} on the instance that minted the session (or
+ * re-minted it from the persisted copy), including `relayTicketId` for in-place relay lifetime extension.
+ */
+export interface InMemoryRealtimeMintSnapshot extends PersistedRealtimeMintSnapshot {
+    sessionParams: RealtimeSessionParams;
+    relayTicketId?: string;
+    relayUrl?: string;
+}
+
+/**
+ * Input for {@link RealtimeClientSessionService.RefreshClientSessionCredential}.
+ */
+export interface RefreshClientSessionCredentialInput {
+    AgentSessionID: string;
+    CoAgent?: MJAIAgentEntityExtended;
+    CoAgentID?: string;
+    PersistedMintSnapshot?: PersistedRealtimeMintSnapshot;
+    RemainingSessionSeconds?: number;
+    AllowFreshReopen?: boolean;
+    APIKeys?: AIAPIKey[];
+}
+
+/**
+ * Result of {@link RealtimeClientSessionService.RefreshClientSessionCredential}.
+ */
+export interface RefreshClientSessionCredentialResult {
+    Success: boolean;
+    /** Discriminator for the refreshed credential: `'token'` or `'relay'`. */
+    Kind?: 'token' | 'relay';
+    /** Typed discriminated-union refresh payload (`Kind: 'token' | 'relay'`). */
+    Credential?: ClientRealtimeCredentialRefreshResult;
+    EphemeralToken?: string;
+    ExpiresAt?: string;
+    RelayUrl?: string;
+    SessionConfigJson?: string;
+    /**
+     * The catalog timing re-stamped on a re-minted credential (the same rules as at mint). Absent when the relay
+     * grant was extended in place: the session's timing is unchanged, so the client keeps what it has.
+     */
+    ConnectionMaxSeconds?: number;
+    SessionMaxSeconds?: number;
+    ReconnectBufferSeconds?: number;
+    TrustNativeResumption?: boolean;
+    ErrorMessage?: string;
+}
+
+const MINT_SNAPSHOT_MAX_ENTRIES = 2000;
+const MINT_SNAPSHOT_TTL_MS = 4 * 60 * 60 * 1000;
+
+/**
+ * Process-wide singleton registry of mint snapshots for active client-direct realtime sessions,
+ * backed by `BaseSingleton` (`GetGlobalObjectStore()`) with bounded LRU/TTL eviction.
+ */
+export class RealtimeMintSnapshotRegistry extends BaseSingleton<RealtimeMintSnapshotRegistry> {
+    private readonly _snapshots = new MJLruCache<string, InMemoryRealtimeMintSnapshot>({
+        maxSize: MINT_SNAPSHOT_MAX_ENTRIES,
+        ttlMs: MINT_SNAPSHOT_TTL_MS,
+    });
+
+    protected constructor() {
+        super();
+    }
+
+    public static get Instance(): RealtimeMintSnapshotRegistry {
+        return super.getInstance<RealtimeMintSnapshotRegistry>();
+    }
+
+    public Set(agentSessionID: string, snapshot: InMemoryRealtimeMintSnapshot): void {
+        const key = NormalizeUUID(agentSessionID);
+        if (!key) {
+            return;
+        }
+        this._snapshots.Set(key, snapshot);
+    }
+
+    public Get(agentSessionID: string): InMemoryRealtimeMintSnapshot | undefined {
+        const key = NormalizeUUID(agentSessionID);
+        return key ? this._snapshots.Get(key) : undefined;
+    }
+
+    public Delete(agentSessionID: string): void {
+        const key = NormalizeUUID(agentSessionID);
+        if (key) {
+            this._snapshots.Delete(key);
+        }
+    }
+
+    public Clear(): void {
+        this._snapshots.Clear();
+    }
+}
+
+/**
+ * The copy of a mint snapshot the transport layer persists on the owner-readable session row
+ * ({@link PersistedRealtimeMintSnapshot}):
+ * - A relay session keeps its session params on this instance only. Its browser is deliberately given no system
+ *   prompt, tools or upstream configuration, so the owner must not read them from the row either. Its relay lives in
+ *   this process: another instance could only open a new relay and re-seed the call, from exactly those params, so a
+ *   refresh there fails and says why.
+ * - A direct session keeps its params: its browser was handed the prompt and tools in the provider config it applies,
+ *   and another instance needs them to mint an equivalent credential. The minted provider config is kept only when the
+ *   driver's refresh reads it (ElevenLabs reuses its managed agent); the base refresh ignores it.
+ */
+function toPersistedMintSnapshot(snapshot: InMemoryRealtimeMintSnapshot, model: BaseRealtimeModel): PersistedRealtimeMintSnapshot {
+    const routing: PersistedRealtimeMintSnapshot = {
+        coAgentID: snapshot.coAgentID,
+        targetAgentID: snapshot.targetAgentID,
+        modelID: snapshot.modelID,
+        vendorID: snapshot.vendorID,
+        modelVendorID: snapshot.modelVendorID,
+        driverClass: snapshot.driverClass,
+        credentialScope: snapshot.credentialScope,
+        connectionMaxSeconds: snapshot.connectionMaxSeconds,
+    };
+    if (snapshot.transport === 'relay') {
+        return { ...routing, transport: 'relay' };
+    }
+    const refreshReadsSessionConfig = model.RefreshClientSessionCredential !== BaseRealtimeModel.prototype.RefreshClientSessionCredential;
+    return {
+        ...routing,
+        sessionParams: snapshot.sessionParams,
+        ...(refreshReadsSessionConfig && snapshot.existingSessionConfig ? { existingSessionConfig: snapshot.existingSessionConfig } : {}),
+    };
+}
+
+/** Whether a persisted mint snapshot is a relay session's, whose session params only its minting instance holds. */
+function isRelayMintSnapshot(candidate: unknown): boolean {
+    return typeof candidate === 'object' && candidate !== null && (candidate as Partial<PersistedRealtimeMintSnapshot>).transport === 'relay';
+}
+
+function extractRelayTicketId(relayUrl: string | undefined): string | undefined {
+    if (!relayUrl) {
+        return undefined;
+    }
+    const marker = `${REALTIME_RELAY_PATH}/`;
+    const idx = relayUrl.indexOf(marker);
+    if (idx < 0) {
+        return undefined;
+    }
+    const tail = relayUrl.slice(idx + marker.length);
+    const slash = tail.indexOf('/');
+    const raw = slash >= 0 ? tail.slice(0, slash) : tail;
+    try {
+        return decodeURIComponent(raw) || undefined;
+    } catch {
+        return raw || undefined;
+    }
 }
 
 /**
@@ -485,6 +695,15 @@ export interface ExecuteRelayedToolInput {
      * from server-side state, never from a client-writable source such as a session's `Config`.
      */
     DirectActions?: RealtimeDirectActionsConfig;
+    /**
+     * The session's run scope ({@link PrepareClientSessionInput.RunScope}), passed to direct tool calls as
+     * `RunActionParams.RunScope` and to delegated target-agent runs as their scope (#5624). Pass it only from
+     * server-side state, never from a client-writable source such as a session's `Config`. Absent ⇒ an unscoped
+     * run: direct tool calls carry a `RunScope` with every field null.
+     */
+    RunScope?: ActionRunScope;
+    /** The session's active skills, passed with {@link RunScope}. Absent ⇒ none. */
+    ActiveSkillIDs?: string[];
     /** The tool call the browser relayed from the provider. */
     Call: RealtimeToolCall;
     /**
@@ -972,7 +1191,13 @@ export class RealtimeClientSessionService {
             const message = error instanceof Error ? error.message : String(error);
             return { Success: false, ErrorMessage: `Failed to mint client realtime session: ${message}` };
         }
+        this.stampClientConfigTiming(clientConfig, sessionParams, resolution.Model);
         const avatarStatus = this.resolveMintedAvatarStatus(prep, clientConfig);
+
+        const mintSnapshot = this.buildMintSnapshot(input, coAgent.ID, resolution, sessionParams, clientConfig);
+        if (input.AgentSessionID?.trim()) {
+            RealtimeMintSnapshotRegistry.Instance.Set(input.AgentSessionID, mintSnapshot);
+        }
 
         // Best-effort observability: create a server-side co-agent run (+ prompt run) so the voice
         // session is visible in the agent-run timeline and delegated runs can nest under it. A
@@ -983,6 +1208,7 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        this.logMissingCoAgentObservability(coAgent, promptID, obs, input.AgentSessionID, 'PrepareClientSession');
 
         return {
             Success: true,
@@ -999,7 +1225,382 @@ export class RealtimeClientSessionService {
             ClientPolicy: clientPolicy,
             NarrationPaceMs: GetNarrationPaceMs(effectiveConfig) ?? undefined,
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
+            MintSnapshot: toPersistedMintSnapshot(mintSnapshot, resolution.Model),
         };
+    }
+
+    /** The full mint snapshot this instance keeps for a session: what a refresh needs to re-mint it or extend its relay. */
+    private buildMintSnapshot(
+        input: PrepareClientSessionInput,
+        coAgentID: string,
+        resolution: RealtimeModelResolution,
+        sessionParams: RealtimeSessionParams,
+        clientConfig: ClientRealtimeSessionConfig,
+    ): InMemoryRealtimeMintSnapshot {
+        const sessionConfig = clientConfig.SessionConfig;
+        const relayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+        return {
+            coAgentID,
+            targetAgentID: input.TargetAgentID,
+            modelID: resolution.ModelID,
+            vendorID: resolution.VendorID,
+            modelVendorID: resolution.ModelVendorID,
+            driverClass: resolution.DriverClass ?? resolution.Model.constructor.name,
+            credentialScope: input.CredentialScope ?? 'Any',
+            ...(clientConfig.ConnectionMaxSeconds !== undefined ? { connectionMaxSeconds: clientConfig.ConnectionMaxSeconds } : {}),
+            ...(clientConfig.Transport === 'relay' ? { transport: 'relay' as const } : {}),
+            sessionParams,
+            ...(sessionConfig && typeof sessionConfig === 'object' && !Array.isArray(sessionConfig)
+                ? { existingSessionConfig: { ...sessionConfig } }
+                : {}),
+            ...(relayTicketId ? { relayTicketId } : {}),
+            ...(clientConfig.RelayUrl ? { relayUrl: clientConfig.RelayUrl } : {}),
+        };
+    }
+
+    /**
+     * Stamps `ConnectionMaxSeconds`, `SessionMaxSeconds`, `ReconnectBufferSeconds`, and
+     * `TrustNativeResumption` onto the typed `ClientRealtimeSessionConfig` fields using
+     * {@link ResolveRealtimeTiming} and {@link BaseRealtimeModel.ClientSessionTrustsNativeResumption}.
+     * Never writes framework keys into `clientConfig.SessionConfig`, so provider payloads remain clean.
+     */
+    private stampClientConfigTiming(
+        clientConfig: ClientRealtimeSessionConfig,
+        sessionParams: RealtimeSessionParams,
+        model: BaseRealtimeModel,
+    ): void {
+        const timing = ResolveRealtimeTiming({
+            Config: sessionParams.Config,
+            DriverDefaultConnectionSeconds: clientConfig.ConnectionMaxSeconds ?? model.DefaultCallDurationSeconds,
+            DefaultTrustNativeResumption:
+                clientConfig.TrustNativeResumption ??
+                model.ClientSessionTrustsNativeResumption(clientConfig.Transport ?? 'direct'),
+        });
+
+        if (timing.ConnectionMaxSeconds !== undefined) {
+            clientConfig.ConnectionMaxSeconds =
+                clientConfig.ConnectionMaxSeconds !== undefined
+                    ? Math.min(clientConfig.ConnectionMaxSeconds, timing.ConnectionMaxSeconds)
+                    : timing.ConnectionMaxSeconds;
+        }
+        if (timing.SessionMaxSeconds !== undefined && clientConfig.SessionMaxSeconds === undefined) {
+            clientConfig.SessionMaxSeconds = timing.SessionMaxSeconds;
+        }
+        if (clientConfig.ReconnectBufferSeconds === undefined) {
+            clientConfig.ReconnectBufferSeconds = timing.ReconnectBufferSeconds;
+        }
+        if (sessionParams.ZeroDataRetention === true) {
+            clientConfig.TrustNativeResumption = false;
+        } else if (clientConfig.TrustNativeResumption === undefined) {
+            clientConfig.TrustNativeResumption = timing.TrustNativeResumption;
+        }
+    }
+
+    /**
+     * Refreshes the browser-facing credential for an active client-direct realtime session without
+     * re-running the companion prompt / memory / tool cascade.
+     *
+     * - If the session is a relay session whose ticket is still live in `RealtimeProxyRegistry`,
+     *   extends the relay session in place (`ExtendRelaySession`) so existing forwarded resumption
+     *   handles remain valid, and returns `Kind: 'relay'`.
+     * - Otherwise re-mints via `Model.RefreshClientSessionCredential(clampedParams, snapshot.existingSessionConfig)`
+     *   using the mint snapshot from `RealtimeMintSnapshotRegistry` (falling back to the server-protected
+     *   `realtimeMintSnapshot` on `MJ: AI Agent Sessions.Config_` for cross-instance failover of a direct session).
+     */
+    public async RefreshClientSessionCredential(
+        input: RefreshClientSessionCredentialInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<RefreshClientSessionCredentialResult> {
+        await this.configureEngine(contextUser, provider);
+        const sessionID = input.AgentSessionID?.trim();
+        if (!sessionID) {
+            return { Success: false, ErrorMessage: 'AgentSessionID is required to refresh a client realtime session credential.' };
+        }
+
+        const found = await this.findMintSnapshot(sessionID, input, contextUser, provider);
+        if (!found.Snapshot) {
+            return { Success: false, ErrorMessage: found.ErrorMessage };
+        }
+        const snapshot = found.Snapshot;
+
+        const clampedParams: RealtimeSessionParams = {
+            ...snapshot.sessionParams,
+            ...(input.RemainingSessionSeconds !== undefined
+                ? {
+                      MaxSessionSeconds:
+                          snapshot.sessionParams.MaxSessionSeconds !== undefined
+                              ? Math.min(snapshot.sessionParams.MaxSessionSeconds, input.RemainingSessionSeconds)
+                              : input.RemainingSessionSeconds,
+                  }
+                : {}),
+        };
+
+        if (snapshot.relayTicketId) {
+            const additionalSeconds = clampedParams.MaxSessionSeconds ?? REALTIME_RELAY_SESSION_LIFETIME_SECONDS;
+            const extended = RealtimeProxyRegistry.Instance.ExtendRelaySession(
+                snapshot.relayTicketId,
+                additionalSeconds,
+                REALTIME_RELAY_MAX_CONNECTIONS,
+                { AllowFreshReopen: input.AllowFreshReopen === true },
+            );
+            if (extended) {
+                // Stored again so the registry's TTL counts from this refresh: a relay session lives only here.
+                RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+                const baseWs = ResolveRealtimeProxyBaseWsUrl(clampedParams);
+                const relayUrl = snapshot.relayUrl ?? BuildRealtimeRelayUrl(baseWs, snapshot.relayTicketId);
+                return {
+                    Success: true,
+                    Kind: 'relay',
+                    Credential: {
+                        Kind: 'relay',
+                        ExpiresAt: extended.ExpiresAt,
+                        RelayUrl: relayUrl,
+                    },
+                    ExpiresAt: extended.ExpiresAt,
+                    RelayUrl: relayUrl,
+                };
+            }
+        }
+
+        const coAgent = this.resolveCoAgent({
+            CoAgent: input.CoAgent,
+            CoAgentID: input.CoAgentID ?? snapshot.coAgentID,
+            TargetAgentID: '',
+            AgentSessionID: sessionID,
+        });
+        if (!coAgent) {
+            return {
+                Success: false,
+                ErrorMessage: `Co-agent '${input.CoAgentID ?? snapshot.coAgentID ?? 'unknown'}' could not be resolved for credential refresh.`,
+            };
+        }
+
+        const resolution = await this.resolveModelFromSnapshot(snapshot, coAgent, input.APIKeys, contextUser);
+        if (!resolution) {
+            return {
+                Success: false,
+                ErrorMessage: `Could not resolve realtime model '${snapshot.modelID}' (${snapshot.driverClass}) for credential refresh.`,
+            };
+        }
+
+        try {
+            const clientConfig = await resolution.Model.RefreshClientSessionCredential(
+                clampedParams,
+                snapshot.existingSessionConfig,
+            );
+            this.stampClientConfigTiming(clientConfig, clampedParams, resolution.Model);
+            const newRelayTicketId = extractRelayTicketId(clientConfig.RelayUrl);
+            if (newRelayTicketId) {
+                snapshot.relayTicketId = newRelayTicketId;
+                snapshot.relayUrl = clientConfig.RelayUrl;
+            }
+            RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+            const isRelay = clientConfig.Transport === 'relay' || Boolean(clientConfig.RelayUrl && !clientConfig.EphemeralToken);
+            const credential: ClientRealtimeCredentialRefreshResult = isRelay
+                ? {
+                      Kind: 'relay',
+                      ExpiresAt: clientConfig.ExpiresAt,
+                      RelayUrl: clientConfig.RelayUrl,
+                  }
+                : {
+                      Kind: 'token',
+                      EphemeralToken: clientConfig.EphemeralToken,
+                      ExpiresAt: clientConfig.ExpiresAt,
+                  };
+            return {
+                Success: true,
+                Kind: credential.Kind,
+                Credential: credential,
+                EphemeralToken: clientConfig.EphemeralToken,
+                ExpiresAt: clientConfig.ExpiresAt,
+                RelayUrl: clientConfig.RelayUrl,
+                SessionConfigJson: JSON.stringify(clientConfig.SessionConfig),
+                ConnectionMaxSeconds: clientConfig.ConnectionMaxSeconds,
+                SessionMaxSeconds: clientConfig.SessionMaxSeconds,
+                ReconnectBufferSeconds: clientConfig.ReconnectBufferSeconds,
+                TrustNativeResumption: clientConfig.TrustNativeResumption,
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { Success: false, ErrorMessage: `Failed to refresh client realtime session credential: ${message}` };
+        }
+    }
+
+    private async resolveModelFromSnapshot(
+        snapshot: InMemoryRealtimeMintSnapshot,
+        coAgent: MJAIAgentEntityExtended,
+        apiKeys: AIAPIKey[] | undefined,
+        contextUser: UserInfo,
+    ): Promise<RealtimeModelResolution | null> {
+        if (snapshot.credentialScope !== 'Any' && snapshot.credentialScope !== 'RuntimeOnly') {
+            LogError(`RealtimeClientSessionService.resolveModelFromSnapshot refused invalid credentialScope '${String(snapshot.credentialScope)}'.`);
+            return null;
+        }
+        const scope: AICredentialScope = snapshot.credentialScope;
+        const resolveRunKey = this.buildRunKeyResolver(apiKeys);
+        const platform = await this.resolvePlatformCredentials(scope, coAgent, snapshot.modelID, contextUser);
+        const resolveKey = this.buildKeyChain(resolveRunKey, scope, platform, snapshot.modelID);
+
+        const cachedModels = AIEngine.Instance.Models ?? [];
+        if (cachedModels.length > 0) {
+            const model = this.findModelByID(snapshot.modelID);
+            if (!model || !model.IsActive || !this.isRealtimeModel(model)) {
+                LogError(`RealtimeClientSessionService.resolveModelFromSnapshot refused inactive or non-realtime model '${snapshot.modelID}'.`);
+                return null;
+            }
+            const vendors = ListRealtimeVendorsForModel(model.ID);
+            if (vendors.length > 0) {
+                const matchedVendor = vendors.find(
+                    (v) =>
+                        v.DriverClass === snapshot.driverClass &&
+                        (!snapshot.modelVendorID || UUIDsEqual(v.ModelVendorID, snapshot.modelVendorID)),
+                );
+                if (!matchedVendor) {
+                    LogError(
+                        `RealtimeClientSessionService.resolveModelFromSnapshot refused driver '${snapshot.driverClass}' not bound to model '${model.Name}'.`,
+                    );
+                    return null;
+                }
+                return this.instantiateRealtimeVendor(model, matchedVendor, resolveKey);
+            }
+            const apiKey = resolveKey(snapshot.driverClass);
+            if (apiKey) {
+                const instance = this.createModelInstance(snapshot.driverClass, apiKey);
+                if (instance) {
+                    return {
+                        Model: instance,
+                        ModelID: model.ID,
+                        VendorID: snapshot.vendorID ?? '',
+                        ModelVendorID: snapshot.modelVendorID,
+                        APIName: snapshot.sessionParams.Model,
+                        ModelName: model.Name,
+                        DriverClass: snapshot.driverClass,
+                    };
+                }
+            }
+            return null;
+        }
+
+        const apiKey = resolveKey(snapshot.driverClass);
+        if (apiKey) {
+            const instance = this.createModelInstance(snapshot.driverClass, apiKey);
+            if (instance) {
+                return {
+                    Model: instance,
+                    ModelID: snapshot.modelID,
+                    VendorID: snapshot.vendorID ?? '',
+                    ModelVendorID: snapshot.modelVendorID,
+                    APIName: snapshot.sessionParams.Model,
+                    DriverClass: snapshot.driverClass,
+                };
+            }
+        }
+        const fallback = await this.resolveRealtimeModel(coAgent, resolveRunKey, scope, false, platform);
+        if (fallback && (UUIDsEqual(fallback.ModelID, snapshot.modelID) || !fallback.DriverClass || fallback.DriverClass === snapshot.driverClass)) {
+            return fallback;
+        }
+        return null;
+    }
+
+    private validatePersistedMintSnapshot(
+        candidate: unknown,
+        expectedCoAgentID?: string,
+    ): InMemoryRealtimeMintSnapshot | null {
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+            return null;
+        }
+        const parsed = candidate as Partial<PersistedRealtimeMintSnapshot>;
+        if (
+            typeof parsed.modelID !== 'string' ||
+            parsed.modelID.trim().length === 0 ||
+            typeof parsed.driverClass !== 'string' ||
+            parsed.driverClass.trim().length === 0 ||
+            (parsed.credentialScope !== 'Any' && parsed.credentialScope !== 'RuntimeOnly') ||
+            !parsed.sessionParams ||
+            typeof parsed.sessionParams !== 'object' ||
+            Array.isArray(parsed.sessionParams) ||
+            typeof parsed.sessionParams.Model !== 'string'
+        ) {
+            return null;
+        }
+        if (
+            expectedCoAgentID &&
+            typeof parsed.coAgentID === 'string' &&
+            parsed.coAgentID.trim().length > 0 &&
+            !UUIDsEqual(parsed.coAgentID, expectedCoAgentID)
+        ) {
+            LogError(
+                `RealtimeClientSessionService.validatePersistedMintSnapshot refused snapshot whose coAgentID '${parsed.coAgentID}' does not match session coAgentID '${expectedCoAgentID}'.`,
+            );
+            return null;
+        }
+        return {
+            coAgentID: typeof parsed.coAgentID === 'string' ? parsed.coAgentID : expectedCoAgentID,
+            ...(typeof parsed.targetAgentID === 'string' ? { targetAgentID: parsed.targetAgentID } : {}),
+            modelID: parsed.modelID,
+            vendorID: typeof parsed.vendorID === 'string' ? parsed.vendorID : undefined,
+            modelVendorID: typeof parsed.modelVendorID === 'string' ? parsed.modelVendorID : undefined,
+            driverClass: parsed.driverClass,
+            credentialScope: parsed.credentialScope,
+            ...(typeof parsed.connectionMaxSeconds === 'number' ? { connectionMaxSeconds: parsed.connectionMaxSeconds } : {}),
+            sessionParams: parsed.sessionParams,
+            ...(parsed.existingSessionConfig && typeof parsed.existingSessionConfig === 'object' && !Array.isArray(parsed.existingSessionConfig)
+                ? { existingSessionConfig: parsed.existingSessionConfig }
+                : {}),
+        };
+    }
+
+    /**
+     * The session's mint snapshot: this instance's copy, else the persisted copy (the one the caller passed, else the one
+     * read from the session row), validated and then kept here. A relay session's persisted copy holds no session params,
+     * so on any instance but the one that minted it the lookup fails with a reason the caller can show.
+     */
+    private async findMintSnapshot(
+        sessionID: string,
+        input: RefreshClientSessionCredentialInput,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<{ Snapshot?: InMemoryRealtimeMintSnapshot; ErrorMessage?: string }> {
+        const cached = RealtimeMintSnapshotRegistry.Instance.Get(sessionID);
+        if (cached) {
+            return { Snapshot: cached };
+        }
+        let snapshot = this.validatePersistedMintSnapshot(input.PersistedMintSnapshot, input.CoAgentID);
+        let relayCopy = isRelayMintSnapshot(input.PersistedMintSnapshot);
+        if (!snapshot && !relayCopy) {
+            const stored = await this.loadPersistedMintSnapshot(sessionID, contextUser, provider);
+            relayCopy = isRelayMintSnapshot(stored?.Snapshot);
+            snapshot = stored ? this.validatePersistedMintSnapshot(stored.Snapshot, input.CoAgentID ?? stored.AgentID) : null;
+        }
+        if (!snapshot) {
+            return {
+                ErrorMessage: relayCopy
+                    ? `Realtime session '${sessionID}' is a relay session: only the MJAPI instance that minted it can refresh its credential.`
+                    : `No valid mint snapshot found for realtime session '${sessionID}'.`,
+            };
+        }
+        RealtimeMintSnapshotRegistry.Instance.Set(sessionID, snapshot);
+        return { Snapshot: snapshot };
+    }
+
+    /** The `realtimeMintSnapshot` stored on the session row, not yet validated, with the row's co-agent; null when absent. */
+    private async loadPersistedMintSnapshot(
+        agentSessionID: string,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<{ Snapshot: unknown; AgentID: string } | null> {
+        try {
+            const session = await provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', contextUser);
+            if (!(await session.Load(agentSessionID)) || !session.Config_) {
+                return null;
+            }
+            const configObj = JSON.parse(session.Config_) as Record<string, unknown>;
+            return { Snapshot: configObj['realtimeMintSnapshot'], AgentID: session.AgentID };
+        } catch (error) {
+            LogError(`RealtimeClientSessionService.loadPersistedMintSnapshot failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
     }
 
     /**
@@ -1088,6 +1689,7 @@ export class RealtimeClientSessionService {
             input.UserID || contextUser?.ID, input.AgentSessionID,
             contextUser, provider, input.ConversationID,
         );
+        this.logMissingCoAgentObservability(coAgent, promptID, obs, input.AgentSessionID, 'WireBridgeRealtimeSession');
         const usage = this.wireBridgeUsage(session, obs?.PromptRunID, contextUser, provider);
         const finalize = this.createBridgeFinalizer(obs, usage, contextUser, provider);
 
@@ -1208,6 +1810,9 @@ export class RealtimeClientSessionService {
                             TargetAgentID: wiring.Input.TargetAgentID,
                             AllowedAgents: wiring.AllowedAgents,
                             DirectActions: wiring.Prep.EffectiveConfig?.realtime?.directActions,
+                            // The preparing run's scope and skills, from the server-built prep input.
+                            RunScope: wiring.Input.RunScope,
+                            ActiveSkillIDs: wiring.Input.ActiveSkillIDs,
                             OnProgress: (progress) => wiring.Narrator.HandleProgress(progress),
                             Call: call,
                         },
@@ -1318,9 +1923,9 @@ export class RealtimeClientSessionService {
         const effectiveConfig = this.resolveEffectiveConfig(coAgent, input.ConfigOverridesJson, targetAgent, appSettingsJson);
         this.logDeprecatedVideoKeys(effectiveConfig, coAgent, targetAgent);
 
-        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig);
+        const outcome = await this.resolveModelForSession(input, coAgent, effectiveConfig, contextUser);
         if (!outcome.Resolution) {
-            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage() };
+            return { Success: false, ErrorMessage: outcome.ErrorMessage ?? this.noModelMessage(input.CredentialScope) };
         }
         const resolution = outcome.Resolution;
 
@@ -1603,6 +2208,7 @@ export class RealtimeClientSessionService {
                 EntityName: 'MJ: Applications',
                 ExtraFilter: `ID='${EscapeSQLString(appId)}'`,
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object',
             }, contextUser);
             if (!result.Success || !result.Results || result.Results.length === 0) {
@@ -1671,6 +2277,41 @@ export class RealtimeClientSessionService {
         const promptRunID = await this.createCoAgentPromptRun(coAgent, promptID, modelID, vendorID, coAgentRunID, contextUser, provider);
         const runStepID = await this.createCoAgentRunStep(coAgentRunID, promptID, promptRunID, contextUser, provider);
         return { CoAgentRunID: coAgentRunID, PromptRunID: promptRunID ?? undefined, CoAgentRunStepID: runStepID ?? undefined };
+    }
+
+    /**
+     * Logs once, when a session is prepared, why it has no co-agent prompt run: without one, the session's usage
+     * and cost are not recorded. Two causes: the co-agent has no Active `MJ: AI Agent Prompts` row (so no prompt run
+     * is created), or a run save failed (its own error was logged just before this line). Silent when both ids exist.
+     *
+     * @param coAgent The resolved co-agent.
+     * @param promptID The co-agent's system prompt id, or `null` when it has none.
+     * @param obs The observability ids, or `null` when the co-agent run save failed.
+     * @param agentSessionID The session the ids belong to.
+     * @param caller The prepare path, for the log prefix.
+     */
+    private logMissingCoAgentObservability(
+        coAgent: MJAIAgentEntityExtended,
+        promptID: string | null,
+        obs: { CoAgentRunID: string; PromptRunID?: string } | null,
+        agentSessionID: string,
+        caller: 'PrepareClientSession' | 'WireBridgeRealtimeSession',
+    ): void {
+        if (obs?.PromptRunID) {
+            return;
+        }
+        const agent = `co-agent '${coAgent.Name}' (${coAgent.ID})`;
+        const consequence = `session ${agentSessionID || '(none)'} has no co-agent prompt run, so its usage and cost are not recorded`;
+        if (!obs) {
+            LogError(`${caller}: the co-agent run for ${agent} could not be saved (see the error above) — ${consequence}.`);
+        } else if (!promptID) {
+            LogError(
+                `${caller}: ${agent} has no Active 'MJ: AI Agent Prompts' row, so no prompt run was created — ${consequence}. ` +
+                    'Give the co-agent an active system prompt to record usage.',
+            );
+        } else {
+            LogError(`${caller}: the prompt run for ${agent} (prompt ${promptID}) could not be saved (see the error above) — ${consequence}.`);
+        }
     }
 
     /**
@@ -2417,31 +3058,64 @@ export class RealtimeClientSessionService {
      * @param input The prepare-session input (carries the optional preferred model id).
      * @param coAgent The resolved co-agent (threaded to the default-resolution seam).
      * @param effectiveConfig The resolved effective configuration (carries `modelPreference` and the video setting).
+     * @param contextUser The calling user, as whom the platform's MJ Credentials are read.
      * @returns The resolution outcome (resolution or failure reason).
      */
     protected async resolveModelForSession(
         input: PrepareClientSessionInput,
         coAgent: MJAIAgentEntityExtended,
-        effectiveConfig?: RealtimeCoAgentConfig
+        effectiveConfig?: RealtimeCoAgentConfig,
+        contextUser?: UserInfo,
     ): Promise<RealtimeModelResolutionOutcome> {
         // One resolver for every branch below, built here rather than per branch so the requested-model,
         // configured-preference and default paths cannot disagree about which credentials the session
-        // may use. It answers with the session's RUN keys only: resolveVendorAndInstantiate layers this
-        // service's getAPIKeyForDriver seam under it, giving run key → seam → (the seam's default) env.
-        // A resolver that fell back to the environment itself would answer before the seam, so a
-        // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
+        // may use. It answers with the session's RUN keys only: resolveVendorAndInstantiate layers the
+        // platform's MJ Credentials over it and this service's getAPIKeyForDriver seam under it, giving
+        // platform credential → run key → seam → (the seam's default) env. A resolver that fell back to
+        // the environment itself would answer before the seam, so a subclass that overrides the seam
+        // would lose to AI_VENDOR_API_KEY__<driver>.
         const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
         const scope = input.CredentialScope ?? 'Any';
+        // MJ Credential resolution is async and vendor selection is not, so every candidate vendor's
+        // credential is resolved here, once, before any branch selects.
+        const platform = await this.resolvePlatformCredentials(input.CredentialScope, coAgent, input.PreferredModelID, contextUser);
         const preferAvatar = effectiveConfig?.realtime?.video?.enabled === true && RealtimeSessionCanShowAvatar(input);
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope, preferAvatar);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey, scope, preferAvatar, platform);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope, preferAvatar);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey, scope, preferAvatar, platform);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope);
-        return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+        const resolution = await this.resolveDefaultRealtimeModel(coAgent, preferAvatar, resolveRunKey, scope, platform);
+        return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage(scope) };
+    }
+
+    /**
+     * The platform MJ Credentials of every vendor this session might select: the Active Realtime
+     * models' vendors, plus an explicitly requested model's. **Overridable seam** (tests substitute
+     * credentials without a credential store). `'RuntimeOnly'` resolves none.
+     *
+     * @param credentialScope The session's credential scope.
+     * @param coAgent The co-agent (its candidate models are the default walk's).
+     * @param preferredModelID An explicitly requested model, which may sit outside the default walk.
+     * @param contextUser The user the credentials are read as.
+     * @returns The resolved credentials.
+     */
+    protected async resolvePlatformCredentials(
+        credentialScope: AICredentialScope | undefined,
+        coAgent: MJAIAgentEntityExtended,
+        preferredModelID?: string,
+        contextUser?: UserInfo,
+    ): Promise<RealtimePlatformCredentials> {
+        if (!CredentialScopeAllows(credentialScope, 'PlatformCredential')) {
+            return RealtimePlatformCredentials.None;
+        }
+        const modelIDs = this.selectRealtimeModelCandidates(coAgent).map(m => m.ID);
+        if (preferredModelID && !modelIDs.some(id => UUIDsEqual(id, preferredModelID))) {
+            modelIDs.unshift(preferredModelID);
+        }
+        return ResolveRealtimePlatformCredentials(modelIDs, contextUser, credentialScope);
     }
 
     /**
@@ -2454,12 +3128,13 @@ export class RealtimeClientSessionService {
         preferAvatar: boolean,
         resolve: AIAPIKeyResolver,
         credentialScope: AICredentialScope,
+        platform: RealtimePlatformCredentials,
     ): Promise<RealtimeModelResolution | null> {
-        const withAvatar = preferAvatar ? this.ResolveAvatarRealtimeModel(coAgent, resolve, credentialScope) : null;
+        const withAvatar = preferAvatar ? this.ResolveAvatarRealtimeModel(coAgent, resolve, credentialScope, platform) : null;
         if (withAvatar) {
             return withAvatar;
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope, preferAvatar);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolve, credentialScope, preferAvatar, platform);
         if (preferAvatar && resolution) {
             LogStatus(
                 '[RealtimeCoAgent] Video is on, but no realtime model with a usable key shows an avatar (its Video/Output row ' +
@@ -2479,14 +3154,20 @@ export class RealtimeClientSessionService {
      * @param coAgent The co-agent (reserved for future per-agent model preference).
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
+     * @param platform The platform MJ Credentials resolved for the session; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution, or `null` when no candidate shows an avatar.
      */
-    protected ResolveAvatarRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver, credentialScope: AICredentialScope = 'Any'): RealtimeModelResolution | null {
-        const resolveKey = this.buildKeyChain(resolve, credentialScope);
+    protected ResolveAvatarRealtimeModel(
+        coAgent: MJAIAgentEntityExtended,
+        resolve?: AIAPIKeyResolver,
+        credentialScope: AICredentialScope = 'Any',
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
+    ): RealtimeModelResolution | null {
         for (const model of this.selectRealtimeModelCandidates(coAgent)) {
             if (ReadRealtimeVideoOutputRow(model.ID, AIEngine.Instance) === 'unsupported') {
                 continue;
             }
+            const resolveKey = this.buildKeyChain(resolve, credentialScope, platform, model.ID);
             for (const vendor of ListRealtimeVendorsForModel(model.ID)) {
                 const resolution = this.instantiateRealtimeVendor(model, vendor, resolveKey);
                 if (resolution?.Model.SupportsClientDirect && RealtimeModelShowsAvatar(resolution, AIEngine.Instance)) {
@@ -2521,6 +3202,7 @@ export class RealtimeClientSessionService {
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
+     * @param platform The platform MJ Credentials resolved for the session; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
     protected resolveConfiguredModelPreference(
@@ -2528,6 +3210,7 @@ export class RealtimeClientSessionService {
         resolve?: AIAPIKeyResolver,
         credentialScope: AICredentialScope = 'Any',
         showsAvatar = false,
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
     ): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
@@ -2548,7 +3231,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar, platform);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -2588,6 +3271,7 @@ export class RealtimeClientSessionService {
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
+     * @param platform The platform MJ Credentials resolved for the session; see {@link resolveVendorAndInstantiate}.
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
     protected resolvePreferredRealtimeModel(
@@ -2595,6 +3279,7 @@ export class RealtimeClientSessionService {
         resolve?: AIAPIKeyResolver,
         credentialScope: AICredentialScope = 'Any',
         showsAvatar = false,
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
     ): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
@@ -2606,12 +3291,12 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar, platform);
         if (!resolution) {
             return {
                 ErrorMessage:
-                    `The requested model '${model.Name}' has no active vendor with a usable DriverClass/API key ` +
-                    '(e.g. AI_VENDOR_API_KEY__<driver>), so the voice session could not be started with it.'
+                    `The requested model '${model.Name}' has no active vendor with a usable DriverClass/API key, so the ` +
+                    `voice session could not be started with it. ${RealtimeKeyFixHint(credentialScope)}`
             };
         }
         return { Resolution: resolution };
@@ -2645,6 +3330,7 @@ export class RealtimeClientSessionService {
      * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @param credentialScope The session's credential scope; see {@link resolveVendorAndInstantiate}.
      * @param showsAvatar Whether the session will show an avatar; see {@link resolveVendorAndInstantiate}.
+     * @param platform The platform MJ Credentials resolved for the session; see {@link resolveVendorAndInstantiate}.
      * @returns The resolved model + identifiers, or `null`.
      */
     protected async resolveRealtimeModel(
@@ -2652,6 +3338,7 @@ export class RealtimeClientSessionService {
         resolve?: AIAPIKeyResolver,
         credentialScope: AICredentialScope = 'Any',
         showsAvatar = false,
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
     ): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
@@ -2660,7 +3347,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve, credentialScope, showsAvatar, platform);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -2672,9 +3359,11 @@ export class RealtimeClientSessionService {
      * Shared tail of model resolution: picks the vendor (with a usable API key) for an
      * already-chosen model entity and instantiates its realtime driver.
      *
-     * Key precedence, per driver class: `resolve` (the session's run keys), then this service's
-     * {@link getAPIKeyForDriver} seam, whose default is the environment key. Vendor selection and the
-     * mint use that one chain, so a session is never routed to a vendor it cannot then be minted on.
+     * Key precedence, per driver class: the platform's MJ Credential for the model's vendor
+     * (`platform`), then `resolve` (the session's run keys), then this service's
+     * {@link getAPIKeyForDriver} seam, whose default is the environment key — the order a prompt
+     * resolves its key in. Vendor selection and the mint use that one chain, so a session is never
+     * routed to a vendor it cannot then be minted on, nor minted on a different key than selection saw.
      *
      * @param model The chosen model entity.
      * @param resolve The session's run-scoped key resolver. Expected to answer with run keys only:
@@ -2688,6 +3377,8 @@ export class RealtimeClientSessionService {
      *   other keyed vendor that does is taken, when there is one. So a vendor that renders avatars (Vertex AI for Gemini
      *   3.8 Live, with its own billing and limits) takes a session only when it will show an avatar, or when it is the
      *   only keyed vendor; and a session that will show one goes to such a vendor whatever the Priority order.
+     * @param platform The platform MJ Credentials resolved for the session before selection
+     *   ({@link resolvePlatformCredentials}); `None` leaves the run keys and the seam.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
     protected resolveVendorAndInstantiate(
@@ -2695,9 +3386,10 @@ export class RealtimeClientSessionService {
         resolve?: AIAPIKeyResolver,
         credentialScope: AICredentialScope = 'Any',
         showsAvatar = false,
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
     ): RealtimeModelResolution | null {
-        const resolveKey = this.buildKeyChain(resolve, credentialScope);
-        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
+        const resolveKey = this.buildKeyChain(resolve, credentialScope, platform, model.ID);
+        const vendor = this.selectRealtimeVendor(model.ID, resolveKey, credentialScope);
         const first = vendor ? this.instantiateRealtimeVendor(model, vendor, resolveKey) : null;
         if (!vendor || !first) {
             return first;
@@ -2711,15 +3403,23 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * The session's complete key chain for vendor selection and the mint (see {@link resolveVendorAndInstantiate}): the
-     * run's keys first, then this service's own seam (which subclasses and tests override), so a run-scoped credential
-     * wins without taking that seam away from anyone who replaced it. A scope that rules out the environment has no second
-     * step: the seam's default is the platform key.
+     * The session's complete key chain for one model's vendor selection and mint (see
+     * {@link resolveVendorAndInstantiate}): the platform's MJ Credential for the model's vendor, then the run's keys, then
+     * this service's own seam (which subclasses and tests override). A scope that rules out the platform's credentials
+     * has no first step, and one that rules out the environment has no last: the seam's default is the platform key.
      */
-    private buildKeyChain(resolve: AIAPIKeyResolver | undefined, credentialScope: AICredentialScope): AIAPIKeyResolver {
-        return CredentialScopeAllows(credentialScope, 'Environment')
+    private buildKeyChain(
+        resolve: AIAPIKeyResolver | undefined,
+        credentialScope: AICredentialScope,
+        platform: RealtimePlatformCredentials = RealtimePlatformCredentials.None,
+        modelID?: string,
+    ): AIAPIKeyResolver {
+        const runThenSeam: AIAPIKeyResolver = CredentialScopeAllows(credentialScope, 'Environment')
             ? (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass)
             : (driverClass) => resolve?.(driverClass);
+        return modelID && CredentialScopeAllows(credentialScope, 'PlatformCredential')
+            ? platform.ResolverFor(modelID, runThenSeam)
+            : runThenSeam;
     }
 
     /** Instantiates a vendor's realtime driver with its key from the chain; `null` when the key or the driver is missing. */
@@ -2795,10 +3495,11 @@ export class RealtimeClientSessionService {
      *
      * @param modelID The chosen model's id.
      * @param resolve The complete key chain to select against; defaults to {@link getAPIKeyForDriver}.
+     * @param credentialScope The session's credential scope (words the log line when no vendor qualifies).
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    protected selectRealtimeVendor(modelID: string, resolve?: AIAPIKeyResolver): RealtimeVendorSelection | null {
-        return SelectRealtimeVendorForModel(modelID, resolve ?? ((driverClass) => this.getAPIKeyForDriver(driverClass)));
+    protected selectRealtimeVendor(modelID: string, resolve?: AIAPIKeyResolver, credentialScope?: AICredentialScope): RealtimeVendorSelection | null {
+        return SelectRealtimeVendorForModel(modelID, resolve ?? ((driverClass) => this.getAPIKeyForDriver(driverClass)), credentialScope);
     }
 
     /**
@@ -2846,8 +3547,8 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const directTools = this.projectDirectActions(input, effectiveConfig, driverClass);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools, memoryContext);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -3013,6 +3714,10 @@ export class RealtimeClientSessionService {
      * @param contextUser The calling user.
      * @param provider The request-scoped metadata provider.
      * @param effectiveConfig The resolved effective configuration (voice persona source).
+     * @param hasDirectTools Whether direct action/channel tools are projected onto the session.
+     * @param memoryContext The memory/context block when the caller already assembled it (as
+     *   {@link buildSessionParams} does); omitted, it is assembled here. Last and optional so overrides
+     *   written against the earlier signature (bizapps-caliber's persona seam) keep working.
      * @returns The concatenated system prompt (never empty — the framing is always present).
      */
     protected async buildCompanionSystemPrompt(
@@ -3021,7 +3726,8 @@ export class RealtimeClientSessionService {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         effectiveConfig?: RealtimeCoAgentConfig,
-        hasDirectTools = false
+        hasDirectTools = false,
+        memoryContext?: string
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -3041,9 +3747,9 @@ export class RealtimeClientSessionService {
         const appContextSection = this.buildAppContextSection(input.AppContext);
         const priorTranscript = this.formatPriorTranscript(input.PriorTranscript);
         const history = this.formatConversationHistory(input.ConversationMessages);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
+        const memory = memoryContext ?? await this.assembleMemoryContext(input, coAgent, contextUser, provider);
 
-        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memoryContext]
+        return [framing, meetingFraming, hostFraming, coAgentPrompt, voiceManner, targetIdentity, appContextSection, priorTranscript, history, memory]
             .filter(part => part && part.trim().length > 0)
             .join('\n\n');
     }
@@ -3698,11 +4404,32 @@ export class RealtimeClientSessionService {
                 data: input.AppContext ? { appContext: input.AppContext } : undefined,
                 onProgress: input.OnProgress,
                 lastRunId: input.ResumeRunID,
-                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined
+                autoPopulateLastRunPayload: input.ResumeRunID ? true : undefined,
+                // The session's run scope and active skills (#5624), as BaseAgent hands a sub-agent its own.
+                ...this.delegatedRunScope(input)
             });
         } finally {
             combined.Dispose();
         }
+    }
+
+    /**
+     * The scope a delegated target-agent run starts with: the session's ({@link ExecuteRelayedToolInput.RunScope}) and
+     * its active skills, in the `ExecuteAgentParams` fields BaseAgent propagates to a sub-agent. Nothing for a session
+     * with no scope, so the delegated run is unscoped, as before.
+     */
+    private delegatedRunScope(input: ExecuteRelayedToolInput): Pick<
+        ExecuteAgentParams,
+        'PrimaryScopeEntityName' | 'PrimaryScopeRecordID' | 'SecondaryScopes' | 'SearchScopeIDs' | 'parentActivatedSkillIDs'
+    > {
+        const scope = input.RunScope;
+        return {
+            ...(scope?.PrimaryScopeEntityName ? { PrimaryScopeEntityName: scope.PrimaryScopeEntityName } : {}),
+            ...(scope?.PrimaryScopeRecordID ? { PrimaryScopeRecordID: scope.PrimaryScopeRecordID } : {}),
+            ...(scope?.SecondaryScopes ? { SecondaryScopes: { ...scope.SecondaryScopes } } : {}),
+            ...(scope?.SearchScopeIDs?.length ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}),
+            ...(input.ActiveSkillIDs?.length ? { parentActivatedSkillIDs: [...input.ActiveSkillIDs] } : {}),
+        };
     }
 
     /**
@@ -3789,11 +4516,17 @@ export class RealtimeClientSessionService {
      * @returns The active action entities assigned to the agent.
      */
     protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
-        const agentActions = (AIEngine.Instance.AgentActions ?? []).filter(
-            aa => UUIDsEqual(aa.AgentID, targetAgentID) && aa.Status === 'Active'
-        );
-        return (ActionEngineServer.Instance.Actions ?? []).filter(a =>
-            agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
+        const activeActionIds = new Set<string>();
+        for (const aa of AIEngine.Instance.AgentActions ?? []) {
+            if (aa.Status === 'Active' && UUIDsEqual(aa.AgentID, targetAgentID) && aa.ActionID) {
+                activeActionIds.add(NormalizeUUID(aa.ActionID));
+            }
+        }
+        if (activeActionIds.size === 0) {
+            return [];
+        }
+        return (ActionEngineServer.Instance.Actions ?? []).filter(
+            a => a.Status === 'Active' && activeActionIds.has(NormalizeUUID(a.ID))
         );
     }
 
@@ -3972,8 +4705,8 @@ export class RealtimeClientSessionService {
         }
 
         const projection = input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID) : undefined;
-        const candidateWireMap = this.BuildWireActionMap(this.getTargetAgentActions(target.ID));
-        const action = this.findWireAction(projection, call.ToolName) ?? this.findWireAction(candidateWireMap, call.ToolName);
+        const action = this.findWireAction(projection, call.ToolName)
+            ?? this.findWireAction(this.BuildWireActionMap(this.getTargetAgentActions(target.ID)), call.ToolName);
 
         if (!action) {
             return {
@@ -4019,6 +4752,11 @@ export class RealtimeClientSessionService {
             runParams.ContextUser = executingUser;
             runParams.Params = actionParams;
             runParams.Filters = [];
+            // The session's run scope and active skills, as BaseAgent stamps them on every action call in a run
+            // (#5624). The arguments are model-written, so without them a Scoped Search here runs as a direct call
+            // and searches whatever tenant and skill the model names.
+            runParams.RunScope = this.directToolRunScope(input);
+            runParams.Context = { AgentID: target.ID, ActiveSkillIDs: [...(input.ActiveSkillIDs ?? [])] };
 
             let timerHandle: ReturnType<typeof setTimeout> | undefined;
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -4031,7 +4769,9 @@ export class RealtimeClientSessionService {
             });
 
             const result = await Promise.race([
-                ActionEngineServer.Instance.RunAction(runParams),
+                AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(target.ID, () =>
+                    ActionEngineServer.Instance.RunAction(runParams)
+                ),
                 timeoutPromise
             ]).finally(() => {
                 if (timerHandle) {
@@ -4057,6 +4797,22 @@ export class RealtimeClientSessionService {
     }
 
     /**
+     * The `RunScope` a direct tool call carries: the session's ({@link ExecuteRelayedToolInput.RunScope}), copied so
+     * an action cannot change what the next call sees, or an unscoped run's (every field null) when the session has
+     * none. Never absent: an absent `RunScope` tells an action it is called outside any run.
+     */
+    private directToolRunScope(input: ExecuteRelayedToolInput): ActionRunScope {
+        const scope = input.RunScope;
+        if (!scope) {
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+        }
+        const secondary = scope.SecondaryScopes
+            ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
+            : null;
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
+    }
+
+    /**
      * Finds the action a relayed tool name refers to: the exact wire name first, then a
      * case-insensitive match.
      */
@@ -4067,8 +4823,17 @@ export class RealtimeClientSessionService {
         if (!wireMap) {
             return undefined;
         }
+        const exact = wireMap.get(toolName);
+        if (exact) {
+            return exact;
+        }
         const wanted = toolName.trim().toLowerCase();
-        return wireMap.get(toolName) ?? Array.from(wireMap.entries()).find(([wireName]) => wireName.toLowerCase() === wanted)?.[1];
+        for (const [wireName, action] of wireMap.entries()) {
+            if (wireName.toLowerCase() === wanted) {
+                return action;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -4079,7 +4844,15 @@ export class RealtimeClientSessionService {
         projection: Map<string, MJActionEntityExtended> | undefined,
         action: MJActionEntityExtended
     ): boolean {
-        return !projection || Array.from(projection.values()).some(projected => UUIDsEqual(projected.ID, action.ID));
+        if (!projection) {
+            return true;
+        }
+        for (const projected of projection.values()) {
+            if (UUIDsEqual(projected.ID, action.ID)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -4159,15 +4932,16 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * The clear, actionable message returned when no usable Realtime model can be resolved.
+     * The message returned when no usable Realtime model can be resolved: what is missing and how to
+     * supply it. The server log carries a line per skipped model naming each vendor and what it needed.
      *
+     * @param credentialScope The session's credential scope (which key sources could have answered).
      * @returns The failure message.
      */
-    private noModelMessage(): string {
+    private noModelMessage(credentialScope?: AICredentialScope): string {
         return (
-            'No usable Realtime model could be resolved for the Realtime Co-Agent. Configure a model of ' +
-            "AIModelType 'Realtime' with an active vendor DriverClass and a valid API key " +
-            '(e.g. AI_VENDOR_API_KEY__<driver>).'
+            'No usable Realtime model could be resolved for the Realtime Co-Agent: no active vendor of an active ' +
+            `model of AIModelType 'Realtime' has a usable key. ${RealtimeKeyFixHint(credentialScope)}`
         );
     }
 }

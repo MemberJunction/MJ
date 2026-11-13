@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJListEntity, MJListDetailEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
+import { MJLruCache } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
   ListItemViewModel,
@@ -30,7 +31,8 @@ export class ListManagementService {
   // Cache storage
   private listCache = new Map<string, CacheEntry<MJListEntity[]>>();
   private categoryCache: CacheEntry<MJListCategoryEntity[]> | null = null;
-  private membershipCache = new Map<string, CacheEntry<Map<string, string[]>>>();
+  /** Bounded: keyed by entity + record-ID set, so unbounded browsing would otherwise grow it all session. */
+  private membershipCache = new MJLruCache<string, CacheEntry<Map<string, string[]>>>({ maxSize: 50, ttlMs: this.CACHE_TTL_MS });
 
   // Loading state subjects
   private loadingSubject = new BehaviorSubject<boolean>(false);
@@ -162,7 +164,7 @@ export class ListManagementService {
     const cacheKey = `${entityId}_${recordIds.sort().join(',')}`;
 
     // Check cache
-    const cached = this.membershipCache.get(cacheKey);
+    const cached = this.membershipCache.Get(cacheKey);
     if (cached && this.isCacheValid(cached)) {
       return cached.data;
     }
@@ -194,7 +196,7 @@ export class ListManagementService {
         }
       }
 
-      this.membershipCache.set(cacheKey, {
+      this.membershipCache.Set(cacheKey, {
         data: membership,
         timestamp: new Date()
       });
@@ -266,7 +268,7 @@ export class ListManagementService {
       ResultType: 'count_only'
     });
 
-    return result.Success ? result.TotalRowCount : 0;
+    return result.Success ? result.TotalRowCount ?? 0 : 0;
   }
 
   /** @deprecated Use {@link GetListItemCount}. */
@@ -296,7 +298,7 @@ export class ListManagementService {
         ResultType: 'count_only' as const
       })));
       countResults.forEach((res, idx) => {
-        countMap.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        countMap.set(lists[idx].ID, res.Success ? res.TotalRowCount ?? 0 : 0);
       });
     }
 
@@ -423,7 +425,7 @@ export class ListManagementService {
     }
 
     // Invalidate membership cache
-    this.membershipCache.clear();
+    this.membershipCache.Clear();
 
     return result;
   }
@@ -509,7 +511,7 @@ export class ListManagementService {
     }
 
     // Invalidate caches
-    this.membershipCache.clear();
+    this.membershipCache.Clear();
 
     return result;
   }
@@ -577,7 +579,7 @@ export class ListManagementService {
     } else {
       this.listCache.clear();
       this.categoryCache = null;
-      this.membershipCache.clear();
+      this.membershipCache.Clear();
     }
   }
 

@@ -63,7 +63,7 @@ interface CompositeKeyLike {
  * The mapper leaves them out, so a clone never copies a value its user couldn't see or set.
  */
 function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFields: string[]; DeniedCreateFields: string[] } | undefined {
-    if (!entity.EnableFieldLevelSecurity) return undefined;
+    if (!entity.FieldLevelSecurityApplies) return undefined;
     const deniedRead = entity.GetDeniedReadFields(user);
     const deniedCreate = entity.GetDeniedCreateFields(user);
     const names = (denied: Set<string>) => entity.Fields.filter((f) => denied.has(f.Name.toLowerCase())).map((f) => f.Name);
@@ -386,7 +386,8 @@ export class ClonePlanner {
                             RelationshipID: o.RelationshipID,
                             Policy: o.Policy,
                         })),
-                        IsUniqueFK: joinFieldInfo?.IsUnique,
+                        // The join column alone is a key: each child row belongs to one parent.
+                        IsUniqueFK: targetEntity ? EntityInfo.IsUniqueFieldSetOf(targetEntity, [candidate.JoinField]) : false,
                         CurrentDepth: candidate.Depth,
                         MaxDepth: maxDepth,
                     });
@@ -844,11 +845,14 @@ export class ClonePlanner {
                 if (depNode.EntityInfo.CloneConfig?.Fields?.UniqueKeys && depNode.EntityInfo.CloneConfig.Fields.UniqueKeys.length > 0) {
                     uqs.push(...depNode.EntityInfo.CloneConfig.Fields.UniqueKeys);
                 } else {
-                    // Metadata flags every column of a composite unique constraint IsUnique (Action
-                    // Params: Name and ActionID, unique together), so the flagged columns form one key.
-                    // A copy whose FK column is remapped then never collides with its source.
-                    const flagged = depNode.EntityInfo.Fields.filter((f) => f.IsUnique && !f.IsPrimaryKey).map((f) => f.Name);
-                    if (flagged.length > 0) uqs.push({ Fields: flagged, Scope: 'Global' });
+                    // Each unique index or constraint is its own key (Action Params: ActionID and
+                    // Name, unique together), so a copy whose FK column is remapped never collides
+                    // with its source. Filtered keys are left to the database: rows outside the
+                    // filter (often the NULLs) may repeat, which this check cannot tell apart.
+                    for (const uk of depNode.EntityInfo.UniqueKeySets ?? []) {
+                        const fields = uk.FieldNamesArray;
+                        if (!uk.IsFiltered && fields.length > 0) uqs.push({ Fields: fields, Scope: 'Global' });
+                    }
                 }
                 uniqueKeysByEntity[depNode.EntityName] = uqs;
             }
@@ -917,7 +921,7 @@ export class ClonePlanner {
      */
     private async isTemplateSource(entityName: string, key: CompositeKey, field: string, contextUser: UserInfo): Promise<boolean> {
         const res = await RunView.FromMetadataProvider(this.Provider).RunView<Record<string, unknown>>(
-            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1 },
+            { EntityName: entityName, Fields: [field], ExtraFilter: key.ToWhereClause(), ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         const value = res?.Success ? res.Results?.[0]?.[field] : undefined;

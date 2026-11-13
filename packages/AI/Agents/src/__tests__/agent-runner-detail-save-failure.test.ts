@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import type { ExecuteAgentParams, ExecuteAgentResult, MediaOutput } from '@memberjunction/ai-core-plus';
 
 const loggedErrors: string[] = [];
 
@@ -140,7 +140,7 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
         expect(persistLine).toContain(REFUSAL);
     });
 
-    it('a refused final-status save logs the gate reason', async () => {
+    it('a refused final-status save logs the gate reason and fails the run, so the caller does not wait for a reply that never lands', async () => {
         // Agent-response detail: create OK, then the final-status save (step 5) is refused.
         const agentDetail = makeDetail('agent-detail', [true, false]);
         const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), agentDetail]));
@@ -151,10 +151,90 @@ describe('AgentRunner.RunAgentInConversation — refused conversation-detail sav
             agentRun: { ID: 'run-1', Status: 'Completed', FinalStep: 'Success' },
         } as unknown as ExecuteAgentResult);
 
-        await runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' });
+        await expect(
+            runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+        ).rejects.toThrow(REFUSAL);
 
         const finalLine = loggedErrors.find((line) => line.includes('final status'));
         expect(finalLine).toBeDefined();
         expect(finalLine).toContain(REFUSAL);
+    });
+
+    describe('a refused final-status save still keeps the run\'s artifacts and media', () => {
+        // WHY: step 5 (the reply save) runs before steps 6, 6b and 7. AgentRunner is the only writer of
+        // AIAgentRunMedia and nothing retries, so if a refused reply save skipped those steps the run's
+        // artifacts would be unlinked and its media bytes lost for good. The run must still fail with the
+        // reply-save reason, after the later steps ran.
+        const MEDIA: MediaOutput = { modality: 'Image', mimeType: 'image/png', data: 'bm90LWluLXRoZS1wYXlsb2Fk' };
+
+        function stubSuccessfulRunWithOutputs(runner: AgentRunner): void {
+            vi.spyOn(runner as unknown as RunAgentStub, 'RunAgent').mockResolvedValue({
+                success: true,
+                payload: { report: 'done' },
+                fileOutputs: [{ fileName: 'report.pdf' }],
+                mediaOutputs: [MEDIA],
+                agentRun: { ID: 'run-1', Status: 'Completed', FinalStep: 'Success' },
+            } as unknown as ExecuteAgentResult);
+        }
+
+        function spyPostRunSteps(runner: AgentRunner) {
+            return {
+                processArtifacts: vi.spyOn(runner, 'ProcessAgentArtifacts').mockResolvedValue(undefined),
+                processFileArtifacts: vi.spyOn(runner, 'ProcessFileArtifacts').mockResolvedValue([]),
+                saveMedia: vi.spyOn(runner, 'SaveAgentRunMedia').mockResolvedValue(['media-1']),
+                createMediaArtifacts: vi.spyOn(runner, 'CreateMediaArtifacts').mockResolvedValue(undefined),
+            };
+        }
+
+        it('runs every artifact and media step, then rejects with the reply-save reason', async () => {
+            const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), makeDetail('agent-detail', [true, false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.processArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.processFileArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.createMediaArtifacts).toHaveBeenCalledTimes(1);
+        });
+
+        it('still saves the media when the payload artifact step also rejects, and the thrown error stays the reply-save one', async () => {
+            const runner = new AgentRunner(makeProvider([makeDetail('user-detail', [true]), makeDetail('agent-detail', [true, false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+            steps.processArtifacts.mockRejectedValue(new Error('artifact link failed'));
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', userMessage: 'hi' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.processFileArtifacts).toHaveBeenCalledTimes(1);
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.createMediaArtifacts).toHaveBeenCalledTimes(1);
+            // The swallowed-for-now step failure is logged with what failed, not dropped.
+            expect(loggedErrors.some((line) => line.includes('artifact link failed'))).toBe(true);
+        });
+
+        it('links nothing to a caller-supplied detail it could not write, and keeps only the media audit rows', async () => {
+            // WHY: a caller-supplied detail ID (legacy RunAIAgent(conversationDetailId=...)) was not created for this run,
+            // and the gate refused writing the reply into it. Linking artifacts to that row would still write into a
+            // conversation the gate kept this run out of, as the run user (the system user for a widget guest). The
+            // media bytes are recorded on the run itself (AIAgentRunMedia), so those are still kept.
+            const runner = new AgentRunner(makeProvider([makeDetail('caller-detail', [false])]));
+            stubSuccessfulRunWithOutputs(runner);
+            const steps = spyPostRunSteps(runner);
+
+            await expect(
+                runner.RunAgentInConversation(makeParams(), { conversationId: 'conv-1', conversationDetailId: 'caller-detail' }),
+            ).rejects.toThrow(`The agent's reply could not be saved: ${REFUSAL}`);
+
+            expect(steps.saveMedia).toHaveBeenCalledTimes(1);
+            expect(steps.processArtifacts).not.toHaveBeenCalled();
+            expect(steps.processFileArtifacts).not.toHaveBeenCalled();
+            expect(steps.createMediaArtifacts).not.toHaveBeenCalled();
+        });
     });
 });

@@ -44,7 +44,7 @@ export class ComputerUseAction extends BaseAction {
         params: RunActionParams
     ): Promise<ActionResultSimple> {
         try {
-            const runParams = this.buildRunParams(params);
+            const runParams = this.BuildRunParams(params);
             const engine = new MJComputerUseEngine();
             const result = await engine.Run(runParams);
             return this.mapToActionResult(result, params);
@@ -63,7 +63,7 @@ export class ComputerUseAction extends BaseAction {
      * Extract flat ActionParam[] into typed MJRunComputerUseParams.
      * All action params are string-typed; we coerce as needed.
      */
-    private buildRunParams(params: RunActionParams): MJRunComputerUseParams {
+    protected BuildRunParams(params: RunActionParams): MJRunComputerUseParams {
         const runParams = new MJRunComputerUseParams();
 
         // Required
@@ -100,6 +100,13 @@ export class ComputerUseAction extends BaseAction {
         // MJ-specific
         runParams.ContextUser = params.ContextUser;
         runParams.AgentRunId = this.getStringParam(params, 'AgentRunId');
+
+        // The agent run's credentials (#4807): the resolver answers for one driver class at a time and
+        // is absent when the run carries no keys (or the agent refused this action), leaving the
+        // controller, judge and heal prompts on the platform's keys exactly as before. The scope must
+        // travel with it, or a 'RuntimeOnly' run would fall back to the platform's keys here.
+        runParams.APIKeyResolver = params.RuntimeAPIKeyResolver;
+        runParams.CredentialScope = params.CredentialScope;
 
         return runParams;
     }

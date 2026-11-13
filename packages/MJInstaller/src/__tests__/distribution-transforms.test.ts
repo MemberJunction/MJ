@@ -10,6 +10,7 @@ import {
   FlattenTsconfig,
   TransformServerTsconfig,
   TransformAngularTsconfig,
+  TransformExplorerAngularJson,
   StripTscAliasFromPackageJson,
   RemovePortFlagsFromPackageJson,
 } from '../distribution/transforms.js';
@@ -115,5 +116,27 @@ describe('removePortFlagsFromPackageJson', () => {
     const out = JSON.parse(RemovePortFlagsFromPackageJson(input)) as { scripts: Record<string, string> };
     expect(out.scripts.start).toBe('ng serve --open');
     expect(out.scripts.alt).toBe('ng serve');
+  });
+});
+
+describe('TransformExplorerAngularJson', () => {
+  const withExclude = (exclude: string[]) =>
+    JSON.stringify({ version: 1, projects: { MJExplorer: { architect: { serve: { options: { hmr: true, prebundle: { exclude } } } } } } }, null, 2);
+  const excludeOf = (text: string) =>
+    (JSON.parse(text) as { projects: { MJExplorer: { architect: { serve: { options: { prebundle: { exclude: string[] } } } } } } })
+      .projects.MJExplorer.architect.serve.options.prebundle.exclude;
+
+  it('drops the monorepo @memberjunction/* exclude and keeps an empty list for mj dev workspace', () => {
+    expect(excludeOf(TransformExplorerAngularJson(withExclude(['@memberjunction/*'])))).toEqual([]);
+  });
+
+  it('keeps every other exclude entry', () => {
+    expect(excludeOf(TransformExplorerAngularJson(withExclude(['@memberjunction/*', '@acme/*'])))).toEqual(['@acme/*']);
+  });
+
+  it('returns the input unchanged when there is nothing to drop', () => {
+    const text = withExclude(['@acme/*']);
+    expect(TransformExplorerAngularJson(text)).toBe(text);
+    expect(TransformExplorerAngularJson('{ "version": 1 }')).toBe('{ "version": 1 }');
   });
 });

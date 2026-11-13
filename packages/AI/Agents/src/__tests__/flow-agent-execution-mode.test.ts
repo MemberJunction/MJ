@@ -100,7 +100,7 @@ interface StepRow {
     AgentID: string;
     Name: string;
     Description: string | null;
-    StepType: 'Sub-Agent' | 'Prompt';
+    StepType: 'Sub-Agent' | 'Prompt' | 'Human';
     StartingStep: boolean;
     Status: 'Active';
     SubAgentID: string | null;
@@ -250,6 +250,8 @@ class FlowHarness {
     public submissions: TaskGraphSubmitRequest[] = [];
     public customSteps?: StepRow[];
     public customPaths?: PathRow[];
+    /** Agents in the engine that are neither children of the flow nor related to it. */
+    public unrelatedAgents: Array<{ id: string; name: string }> = [];
     public readonly agent = makeFlowAgentRow();
     private stepSeq = 0;
 
@@ -258,11 +260,15 @@ class FlowHarness {
             ID: s.id, Name: s.name, ParentID: FLOW_ID, Status: 'Active', Description: s.name,
             ExposeAsAction: false, PayloadDownstreamPaths: '["*"]', PayloadUpstreamPaths: '["*"]',
         }));
+        const unrelatedRows = this.unrelatedAgents.map((s) => ({
+            ID: s.id, Name: s.name, ParentID: null, Status: 'Active', Description: s.name,
+            ExposeAsAction: false, PayloadDownstreamPaths: '["*"]', PayloadUpstreamPaths: '["*"]',
+        }));
         const activeSteps = this.customSteps ?? STEPS;
         const activePaths = this.customPaths ?? PATHS;
         return {
             Config: async (): Promise<void> => undefined,
-            Agents: subAgentRows,
+            Agents: [...subAgentRows, ...unrelatedRows],
             AgentRelationships: [],
             AgentCategories: [],
             ResolveAgentStorageAccountID: () => null,
@@ -282,6 +288,7 @@ class FlowHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (): unknown => undefined,
             SetAgentBaseCatalog: (): void => undefined,
             GetAgentSteps: (agentId: string, status?: string): StepRow[] =>
@@ -506,7 +513,8 @@ describe('Top-level Flow agent', () => {
 
         const routing = harness.routingStep;
         expect(routing.name).toBe('Workflow runs on the task-graph dispatcher');
-        expect(routing.output).toMatchObject({ executionMode: 'dispatch', reason: 'default for a top-level run' });
+        expect(routing.output).toMatchObject({ executionMode: 'dispatch' });
+        expect(routing.output.reason).toContain('default for a run with no parent run');
     });
 
     it("runs in-process and returns the payload with executionMode 'inRun'", async () => {
@@ -671,5 +679,171 @@ describe('FlowAgentType payload injection, output mapping, and prompt synthesis'
         expect(next.step).toBe('Success');
         expect(next.message).toBe('# Executive Summary\n\nAcme is the top account.');
         expect(next.newPayload).toEqual(payload);
+    });
+});
+
+// ============================================================================
+// In-run gaps (#4621, #4622, #4624, #4625, #1415)
+// ============================================================================
+
+const HUMAN_STEP_ID = 'bbbbbbbb-2000-4000-8000-000000000006';
+
+function humanStep(id: string, name: string): StepRow {
+    return { ...subAgentStep(id, name, '', false), StepType: 'Human', SubAgentID: null };
+}
+
+/** The Decision step BaseAgent writes for the routing, if any. */
+function routingSteps(): FakeStep[] {
+    return harness.steps.filter((s) => s.StepType === 'Decision' && s.StepName.startsWith('Workflow runs'));
+}
+
+describe('Human step on the in-run walker (#4621)', () => {
+    it('ends the run Failed, naming the step, when the walker reaches it', async () => {
+        harness.customSteps = [
+            subAgentStep(STEP_IDS.requirements, 'Requirements', SUB_AGENTS.requirements.id, true),
+            humanStep(HUMAN_STEP_ID, 'Manager Approval'),
+        ];
+        harness.customPaths = [
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000301', OriginStepID: STEP_IDS.requirements, DestinationStepID: HUMAN_STEP_ID, Condition: null, Priority: 0, Description: null },
+        ];
+        const { agent } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ parentRun: PARENT_RUN }));
+
+        expect(result.success).toBe(false);
+        expect(agent.SubAgentCalls).toEqual(['Requirements Expert']);
+        expect(harness.run.ErrorMessage).toContain("Human step 'Manager Approval'");
+        expect(harness.run.ErrorMessage).toContain('task-graph dispatcher');
+        expect(harness.run.ErrorMessage).not.toContain('Unknown step type');
+    });
+
+    it('completes when the Human step is on a branch the run does not take', async () => {
+        harness.customSteps = [
+            subAgentStep(STEP_IDS.requirements, 'Requirements', SUB_AGENTS.requirements.id, true),
+            promptStep(STEP_IDS.successFinal, 'Success Finalization', SUCCESS_PROMPT_ID),
+            humanStep(HUMAN_STEP_ID, 'Manager Approval'),
+        ];
+        harness.customPaths = [
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000311', OriginStepID: STEP_IDS.requirements, DestinationStepID: STEP_IDS.successFinal, Condition: 'stepResult.success', Priority: 0, Description: null },
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000312', OriginStepID: STEP_IDS.requirements, DestinationStepID: HUMAN_STEP_ID, Condition: '!stepResult.success', Priority: 0, Description: null },
+        ];
+        const { agent, prompts } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ parentRun: PARENT_RUN }));
+
+        expect(result.success).toBe(true);
+        expect(prompts.PromptIDs).toEqual([SUCCESS_PROMPT_ID]);
+        expect(harness.run.Status).toBe('Completed');
+    });
+});
+
+describe('Refused in-run startAtStep (#4624)', () => {
+    it("ends the run on the refusal, keeping its message, when the step is another agent's", async () => {
+        const { agent } = makeAgent();
+        const foreign = {
+            ...STEPS[1], ID: 'bbbbbbbb-2000-4000-8000-0000000000ff', AgentID: 'bbbbbbbb-0000-4000-8000-0000000000ff', Name: 'Foreign Step',
+        } as unknown as MJAIAgentStepEntity;
+
+        const result = await agent.Execute(makeParams({ parentRun: PARENT_RUN, agentTypeParams: { startAtStep: foreign } }));
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain("startAtStep 'Foreign Step'");
+        expect(harness.run.ErrorMessage).toContain('does not belong');
+        expect(harness.run.ErrorMessage).not.toContain('No current step');
+        expect(harness.run.ErrorMessage).not.toContain('consecutive failed steps');
+        expect(agent.SubAgentCalls).toHaveLength(0);
+    });
+});
+
+describe('skipSteps under dispatch (#4625)', () => {
+    it("is refused, with the 'inRun' guidance, rather than ignored", async () => {
+        const { agent } = makeAgent();
+        const agentTypeParams: FlowAgentExecuteParams = { skipSteps: [stepAt('Data Expert')] };
+
+        const result = await agent.Execute(makeParams({ agentTypeParams }));
+
+        expect(result.success).toBe(false);
+        expect(harness.run.ErrorMessage).toContain("Skipping steps ('Data Expert')");
+        expect(harness.run.ErrorMessage).toContain("executionMode to 'inRun'");
+        expect(harness.submissions).toHaveLength(0);
+    });
+
+    it('an empty list is not a request, and dispatches as usual', async () => {
+        const { agent } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ agentTypeParams: { skipSteps: [] } }));
+
+        expect(result.success).toBe(true);
+        expect(harness.submissions).toHaveLength(1);
+    });
+});
+
+describe('Routing record (#4622)', () => {
+    it('is not written when the dispatched run is refused before submission', async () => {
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams({ agentTypeParams: { startAtStep: stepAt('Data Expert') } }));
+
+        expect(routingSteps()).toHaveLength(0);
+    });
+
+    it('is not written when the flow does not compile', async () => {
+        // A path back to the start is a loop the compiler refuses.
+        harness.customPaths = [
+            ...PATHS,
+            { ID: 'bbbbbbbb-3000-4000-8000-000000000321', OriginStepID: STEP_IDS.successFinal, DestinationStepID: STEP_IDS.requirements, Condition: null, Priority: 0, Description: null },
+        ];
+        const { agent } = makeAgent();
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(false);
+        expect(harness.submissions).toHaveLength(0);
+        expect(routingSteps()).toHaveLength(0);
+    });
+
+    it('is still written for a dispatched run that was submitted', async () => {
+        const { agent } = makeAgent();
+
+        await agent.Execute(makeParams());
+
+        expect(routingSteps()).toHaveLength(1);
+        expect(harness.submissions).toHaveLength(1);
+    });
+});
+
+describe('Sub-agent named on a Flow step (#1415)', () => {
+    const OUTSIDER = { id: 'bbbbbbbb-1000-4000-8000-0000000000aa', name: 'Outside Reviewer' };
+
+    /** Exposes the resolver the walker uses, for the Loop-agent check. */
+    class ResolverProbe extends FlowTestAgent {
+        public Resolve(params: ExecuteAgentParams, name: string): string | undefined {
+            return this.resolveSubAgentByName(params, name)?.subAgentEntity.Name;
+        }
+    }
+
+    it('an in-run Flow reaches an agent its step names, with no ParentID or relationship row', async () => {
+        harness.unrelatedAgents = [OUTSIDER];
+        harness.customSteps = [subAgentStep(STEP_IDS.requirements, 'Review', OUTSIDER.id, true)];
+        harness.customPaths = [];
+        const { agent } = makeAgent();
+
+        const result = await agent.Execute(makeParams({ parentRun: PARENT_RUN }));
+
+        expect(agent.SubAgentCalls).toEqual(['Outside Reviewer']);
+        expect(result.success).toBe(true);
+    });
+
+    it('a Loop agent, which has no steps, still cannot reach an unrelated agent by name', () => {
+        harness.unrelatedAgents = [OUTSIDER];
+        const loopAgent = { ...makeFlowAgentRow(), ID: 'bbbbbbbb-0000-4000-8000-0000000000bb', Name: 'Loop Agent' };
+        const probe = new ResolverProbe();
+
+        const params = makeParams({ agent: loopAgent as unknown as MJAIAgentEntityExtended });
+
+        expect(probe.Resolve(params, 'Outside Reviewer')).toBeUndefined();
+        expect(probe.Resolve(makeParams(), 'Outside Reviewer')).toBeUndefined();
+        harness.customSteps = [subAgentStep(STEP_IDS.requirements, 'Review', OUTSIDER.id, true)];
+        expect(probe.Resolve(makeParams(), 'Outside Reviewer')).toBe('Outside Reviewer');
     });
 });

@@ -1,12 +1,16 @@
-/** Both of the runner's template renders honour AIPromptParams.templateAutoescape: raw when false, the engine default otherwise. */
+/**
+ * Both of the runner's template renders honour AIPromptParams.templateAutoescape (raw when false, the
+ * engine default otherwise) and render as the prompt's caller, never the engine's last-configured user.
+ */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended, SystemPlaceholderManager, AIPromptParams } from '@memberjunction/ai-core-plus';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { AIPromptRunner } from '../AIPromptRunner';
 
 const RENDERED: TemplateRenderResult = { Success: true, Output: 'x', Message: undefined };
+const CALLER = new UserInfo(null, { ID: 'caller-1', Name: 'Caller', Email: 'caller@test.com', IsActive: true });
 
 /** A real entity object of the given class, whose metadata holds only the named fields, hydrated with `values`. */
 function entity<T extends BaseEntity>(ctor: new (info: EntityInfo) => T, name: string, values: Record<string, string>): T {
@@ -43,6 +47,7 @@ function makeRunner(template: MJTemplateEntityExtended) {
     vi.spyOn(engine, 'FindTemplateByID').mockImplementation((id) => (id === template.ID ? template : undefined));
     const params = new AIPromptParams();
     params.data = { a: 'Affineur & Owner' };
+    params.contextUser = CALLER;
     return { runner, render, params };
 }
 
@@ -58,7 +63,7 @@ describe('AIPromptRunner template rendering and templateAutoescape', () => {
         await runner['renderPromptTemplate'](template, params);
 
         expect(render).toHaveBeenCalledTimes(1);
-        expect(render.mock.calls[0][5]).toBeUndefined();
+        expect(render.mock.calls[0][5]).toEqual({ ContextUser: CALLER });
     });
 
     it('renders raw when templateAutoescape is false', async () => {
@@ -68,7 +73,7 @@ describe('AIPromptRunner template rendering and templateAutoescape', () => {
 
         await runner['renderPromptTemplate'](template, params);
 
-        expect(render.mock.calls[0][5]).toEqual({ autoescape: false });
+        expect(render.mock.calls[0][5]).toEqual({ autoescape: false, ContextUser: CALLER });
     });
 
     it('renders a parent prompt with its child templates using the engine default when templateAutoescape is unset', async () => {
@@ -79,7 +84,7 @@ describe('AIPromptRunner template rendering and templateAutoescape', () => {
         await runner['renderPromptWithChildTemplates'](prompt, params, { child: 'Affineur & Owner' });
 
         expect(render).toHaveBeenCalledTimes(1);
-        expect(render.mock.calls[0][5]).toBeUndefined();
+        expect(render.mock.calls[0][5]).toEqual({ ContextUser: CALLER });
     });
 
     it('renders a parent prompt with its child templates raw when templateAutoescape is false', async () => {
@@ -90,6 +95,6 @@ describe('AIPromptRunner template rendering and templateAutoescape', () => {
 
         await runner['renderPromptWithChildTemplates'](prompt, params, { child: 'Affineur & Owner' });
 
-        expect(render.mock.calls[0][5]).toEqual({ autoescape: false });
+        expect(render.mock.calls[0][5]).toEqual({ autoescape: false, ContextUser: CALLER });
     });
 });

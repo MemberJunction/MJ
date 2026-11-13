@@ -1,6 +1,8 @@
 # MemberJunction LTS Release Process
 
-> **Status: CANON** — v1.3.7, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> **Status: CANON** — v1.3.9, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> v1.3.9 corrects when a line patch takes its labels (§6, §9.4, §10 scenario 3). The text said gates 1–3 pass first, but `publish.yml` moves `lts-x.y`, and `latest` for the newest certified line, when it publishes; 6.1.7 (2026-11-10) did exactly that. The mini-cert runs on the published build.
+> v1.3.8 adds §9.4, when a line patch ships. §5.3 says what may go on a line, but nothing said when to release it, so fixes could wait on a line indefinitely: by 2026-11-09 `lts/6.1` was 39 commits past 6.1.6 (released 2026-10-16), including a fix a production deployment was working around by hand.
 > v1.3.7 adds §5.3, the backport eligibility bar. v1.3.6 established that backporting is opt-in and defaults to no (§10 edge case 9), but never said what clears the bar, so the phrase "fixes that *should* have been labeled" carried the whole decision undefined and every case relitigated from first principles (#3425's cache freeze being the first). §5.3 names what qualifies, what queues, and why the line is not simply "the last release with every bug fixed." It also puts the `backport-declined` decision on the record, which was named in v1.3 but never created as a label.
 > v1.3.6 amends §5.2 rule 2 after the first real backport (#3525, 2026-08-06): the label mechanism silently failed on a branch containing merge-of-`next` commits — the action refused the backport yet exited 0, leaving a green run. The invariant is now **assert-the-backport** — `merge_commits: skip` (payload must live in non-merge commits) plus a workflow step that fails red when any labeled target does not land.
 > v1.3.5 amends §4.2 after the first Edge publish (6.1.0-edge.0, 2026-08-05): changesets pre mode *forbids* an explicit `--tag`, so "no publish omits its explicit `--tag`" was unimplementable as written on the routine path. The invariant is now **assert-the-tag** — `pre.json` cross-checked before publishing, registry-truth verification after — matching what `publish.yml` actually enforces.
@@ -35,7 +37,7 @@ Two commitments live under the one label:
 |---|---|
 | **Edge channel** | The fast lane — today's cadence, unchanged: many releases per week from `next` → `main` → npm. Where all features land first. From the 6.x era on, Edge versions are **semver prereleases of the next line**: `6.2.0-edge.0`, `6.2.0-edge.1`, … (§3.1). |
 | **Line** | A certified minor: line **6.1** = `6.1.x`, all of it, forever — normal (unsuffixed) versions belong to lines and nothing else. Lines take **patches only**; maintained on branch `lts/6.1`. Under this grammar, lines land at **consecutive minors** (6.1 → 6.2 → 6.3 …). |
-| **Candidate** | The build that opens a line: publishing the unsuffixed tuple the Edge stream was building toward (`6.2.0` after `6.2.0-edge.N`). Same commit as the tip of Edge — the suffix strip *is* the candidacy. |
+| **Candidate** | The build that opens a line: publishing the unsuffixed tuple the Edge stream was building toward (`6.2.0` after `6.2.0-edge.N`). Same commit as the newest Edge tag (not the tip of `next`) — the suffix strip *is* the candidacy. |
 | **Certification** | The gate process (§6). Completes when the gates genuinely pass — however long that takes. The calendar schedules candidate *cuts*; it never forces certification *completion*. |
 | **LTS build** | A specific build (e.g. `6.1.1`) that passed certification and carries the label. |
 | **Era** | A major version (5.x, 6.x, …). **Majors are for eras, not cycles** — a major signals a genuine architectural epoch **and pins the infrastructure contract** (§3.2). Never a routine certification. |
@@ -175,7 +177,7 @@ The bootstrap cert **completes on the line branch**, not on `next`. Sequence: (1
 
 ### 5.2 Regular cycles (cycle #2 onward — `next` never stops)
 
-1. **Candidate cut = the pre-exit dance** (scripted: `publish.yml` invocation 4, the `cut-candidate` job over `ci/candidate-cut.mjs`, dispatched from `next` with `cut_line`/`confirm_branch`): `changeset pre exit` → version → build → publish **`6.2.0`** under `lts-6.2` (normal, `make_latest: false` until certified) → tag → branch **`lts/6.2`** from the tag → `changeset pre enter edge` plus a seed `minor` changeset (Edge resumes at `6.3.0-edge.0`; without the seed a patch-only merge would give `6.2.1-edge.0`) → ledger append. Preconditions the job refuses without: the line's `release-lines.json` entry already merged as a `candidate` by reviewed PR (§8), and no branch, tag or npm version of that name yet. `next` flows at full speed throughout; nothing is pushed until the packages are on npm. Runbook operation 2 has the button and the failure posture.
+1. **Candidate cut = the pre-exit dance** (scripted: `publish.yml` invocation 4, the `cut-candidate` job over `ci/candidate-cut.mjs`, dispatched from `next` with `cut_line`/`confirm_branch`), built from the newest `v6.2.0-edge.N` tag rather than the tip of `next`: `changeset pre exit` → version → build → publish **`6.2.0`** under `lts-6.2` (normal, `make_latest: false` until certified) → tag → branch **`lts/6.2`** from the tag (pushed before `next` is touched) → merge the tag into `next` (changesets the candidate consumed leave, those merged after the Edge tag stay for the next stream; `next`'s versions and internal pins move to `6.2.0`) → `changeset pre enter edge` plus a seed `minor` changeset (Edge resumes at `6.3.0-edge.0`; without the seed a patch-only merge would give `6.2.1-edge.0`) → ledger append. Preconditions the job refuses without: the line's `release-lines.json` entry already merged as a `candidate` by reviewed PR (§8), no branch, tag or npm version of that name yet, a published Edge tag for the line that npm's `edge` dist-tag points at, `main` still at that tag and the tag already back-merged into `next`. `next` flows at full speed throughout; nothing is pushed until the packages are on npm. Runbook operation 2 has the button and the failure posture.
 2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.2` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage). **No backport completes without being asserted**: the action only cherry-picks *non-merge* commits (`merge_commits: skip` — merging `next` into a feature branch is routine and must not poison the label; the cost is that payload living solely in a merge commit's conflict resolution never reaches the line, so keep real changes in ordinary commits), and the workflow fails red when any labeled target does not land — the action's own exit code stays 0 on failure, which left #3525's failed backport behind a green run (2026-08-06) until a human noticed the PR comment.
 3. **Line releases** ship from `publish.yml`'s parameterized LTS path, dispatched **from `next`** with `line_branch`/`confirm_branch`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`. The path lives inside `publish.yml` rather than its own file because npm trusted publishing (OIDC) is scoped per package to the workflow **filename** — a second publishing file means a second trusted publisher entered by hand on ~300 packages. Dispatching from `next` (rather than from the line ref) means the release always runs the maintained copy of the workflow, never stale workflow code that was never backported to the line.
 4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `codegen-repair` label (generated-object repair only, §12) or the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch. The scanner is a **tripwire, not the gate** — dynamic SQL (`EXEC`, `sp_rename`, string-built DDL) can evade a regex; the human review behind each DDL label is the real control.
@@ -226,7 +228,7 @@ None of this makes the line frozen. It takes fixes it has a reason to take, and 
 | 7 | **Zero open `cert-blocker`s** | Process | Label query returns empty |
 | 8 | **Certification sign-off** | Authority | Craig approves the `release-lines.json` PR — the only way the label applies |
 
-**Mini-certification for line releases:** every post-certification line patch — code-only, `metadata-migration`, or `security-exception` — re-runs the automated gates (1–3) before the new build inherits the LTS label. No human cert week — but never a silent inherit.
+**Mini-certification for line releases:** every post-certification line patch — code-only, `metadata-migration`, or `security-exception` — re-runs the automated gates (1–3) on the published build. The build takes the line's labels when it publishes (`lts-x.y`, and `latest` if the line is the newest certified), so the gates run right after, and the result goes in `certifications/x.y.z.md`. No human cert week, but never an unrecorded patch. If a gate finds a regression, the certification owner moves the labels back to the previous patch and the fix ships as the next one.
 
 ## 7. RACI
 
@@ -299,6 +301,23 @@ The argument for monthly: more practice cycles to harden the gates fast. If chos
 - **Slip-tolerant:** all dates measure from *actual certification*. A slipped certification shifts windows; it never disqualifies a candidate or shortens anyone's support. If certification is still running when the next cut would be due, the next cut waits (one certification in flight at a time); the December review reconciles the calendar.
 - **Extend-only:** if capacity tightens we slow the cadence — we never shrink an announced window. There is no "anchor" tier; longer windows come from slowing cadence for everyone.
 
+### 9.4 Line patch threshold: when a line patch ships
+
+§5.3 decides what goes on a line; this decides when it ships. Each fix is aged from when it merged to the line branch. A line patch is **due** when any of these holds:
+
+| Waiting on the line | Due within |
+|---|---|
+| A security fix (§5.3 item 1) or a data-loss fix (§5.3 item 2) | 2 business days of the fix landing on `next` |
+| A fix a named production deployment is waiting on, working around it by hand meanwhile (§5.3 item 3) | 1 week |
+| Anything else that cleared §5.3 | the monthly sweep, in the first week of the month; skipped when nothing is waiting |
+| Backstop | no qualifying fix waits unreleased more than 2 weeks |
+
+1. **A due patch does not wait for a fix that isn't on the line yet.** It ships with what is merged; the late fix takes the next patch.
+2. **Security fixes stay terse in public.** Release notes and PR titles say "security fix" and the affected surface, not the hole, until every supported line has the patch. Reports that arrive privately stay private until then.
+3. **The threshold applies to every supported line**, including one in grace (§9.3), where only security and critical fixes qualify anyway.
+4. **Each patch runs the mini-cert** (§6): gates 1–3 on the published build. When a patch lands during a certification window, its gate 3 run competes with the cycle's gates for the same crew (§16 risk 5); the patch still ships on time, and the certification owner reschedules.
+5. **The certification owner dispatches.** The maintenance loop flags a due line on the LTS hub and to the certification owner; it never dispatches.
+
 ## 10. Worked Examples
 
 The core walkthrough (this is the scenario from the PR discussion, and the grammar it settled on). Assume line **6.1** is the newest certified line (certified build `6.1.1`) and Edge is streaming toward line 6.2.
@@ -307,7 +326,7 @@ The core walkthrough (this is the scenario from the PR discussion, and the gramm
 |---|---|---|---|
 | 1 | First 6-era certification | **6.1.1** | Candidate 6.1.0 was cut (pre-exit dance); cert fixes produced 6.1.1; gates passed on it. `latest` → 6.1.1; line branch `lts/6.1` live |
 | 2 | Dev ships a feature with a migration | **6.2.0-edge.0** | Edge (pre-mode) targets the next line's tuple; migration satisfies the minor-tuple rule by construction |
-| 3 | Non-migration bug found in 6.1.1 | **6.1.2** | Fix on `next` first → `backport lts/6.1` → line patch; mini-cert (gates 1–3); label inherits; `latest` → 6.1.2. `dbImpact: none` |
+| 3 | Non-migration bug found in 6.1.1 | **6.1.2** | Fix on `next` first → `backport lts/6.1` → line patch; label and `latest` → 6.1.2 at publish; mini-cert (gates 1–3) recorded. `dbImpact: none` |
 | 4 | More Edge work, then a bug fix to it | **6.2.0-edge.1**, **6.2.0-edge.2** | Counter increments per publish; tuple holds at 6.2.0 |
 | 5 | **Security hole requiring a migration on the LTS line** | **6.1.3** + twin on Edge (**6.2.0-edge.3**) | Fix + migration land on `next` first (rides the Edge stream); backported **byte-identical** (same Flyway version string + content) with `security-exception` → ships as a **patch** carrying a migration. `dbImpact: schema`; mini-cert; `latest` → 6.1.3. A 6.1.3 DB later upgrading to line 6.2+ skips the migration (same Flyway version) |
 | 6 | Cycle #2 candidate cut | **6.2.0** | Pre-exit dance: suffix comes off the stream's tuple; branch `lts/6.2`; Edge resumes at **6.3.0-edge.0** |

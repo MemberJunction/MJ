@@ -58,7 +58,7 @@ function buildRoutine(overrides: Partial<MockRoutineShape> = {}): MJUserRoutineE
 
 function buildWatermark(overrides: Partial<EntityWatermarkSnapshot> = {}): EntityWatermarkSnapshot {
     return {
-        entityName: 'MJ_BizApps_Tasks: Tasks',
+        entityName: 'MJ: AI Agent Requests',
         changedCount: 0,
         totalMatchingCount: 5,
         maxUpdatedAt: '2026-10-17T10:30:00Z',
@@ -88,7 +88,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         });
         const routine = buildRoutine({
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 wakeGate: { skipIfUnchanged: true },
             },
         });
@@ -101,7 +101,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
 
     it('Tier 0 skips wake when watermarkHash matches routine.LastResultHash', async () => {
         const snapshot = buildWatermark({ changedCount: 2, recordChangeCount: 1 });
-        const expectedWatermarks = { tasks: snapshot };
+        const expectedWatermarks = { requests: snapshot };
         const hash = ComputeResultHash(JSON.stringify(expectedWatermarks));
 
         const evaluator = new WakeGateEvaluator({
@@ -110,7 +110,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         const routine = buildRoutine({
             LastResultHash: hash,
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 wakeGate: { skipIfUnchanged: true },
             },
         });
@@ -128,7 +128,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         const routine = buildRoutine({
             LastRunAt: new Date('2026-10-17T03:00:00Z'), // 9 hours ago (540 min)
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 wakeGate: {
                     skipIfUnchanged: true,
                     forceWakeAfterMinutes: 480,
@@ -147,11 +147,11 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         });
         const routine = buildRoutine({
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 resumeState: { minChangesRequired: 3 },
                 wakeGate: {
                     skipIfUnchanged: true,
-                    tier1Expression: 'deltas.tasks.changedCount >= resumeState.minChangesRequired',
+                    tier1Expression: 'deltas.requests.changedCount >= resumeState.minChangesRequired',
                 },
             },
         });
@@ -168,11 +168,11 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         });
         const routine = buildRoutine({
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 resumeState: { minChangesRequired: 3 },
                 wakeGate: {
                     skipIfUnchanged: true,
-                    tier1Expression: 'deltas.tasks.changedCount >= resumeState.minChangesRequired',
+                    tier1Expression: 'deltas.requests.changedCount >= resumeState.minChangesRequired',
                 },
             },
         });
@@ -193,7 +193,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         });
         const routine = buildRoutine({
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 wakeGate: {
                     tier1Expression: 'totalChangedCount > 0',
                     tier2Decision: {
@@ -228,7 +228,7 @@ describe('WakeGateEvaluator — 3-Tier Wake Gate', () => {
         });
         const routine = buildRoutine({
             WakeConfigurationObject: {
-                watchedEntities: [{ entityName: 'MJ_BizApps_Tasks: Tasks', alias: 'tasks' }],
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'requests' }],
                 wakeGate: {
                     tier1Expression: 'totalChangedCount > 0',
                     tier2Decision: {
@@ -329,5 +329,67 @@ describe('Owner User Resolution in UserRoutineDispatcherDriver & AgentScheduledJ
                 daemonUser
             )
         ).rejects.toThrow(/inactive/i);
+    });
+
+    it('fails closed when UserCache is missing or empty rather than falling back to the scheduler system user', async () => {
+        const daemonUser = { ID: 'system-daemon', Name: 'System', IsActive: true } as UserInfo;
+        const routineDriver = new UserRoutineDispatcherDriver() as unknown as {
+            resolveRoutineOwnerUser(routine: MJUserRoutineEntity, fallback: UserInfo): Promise<UserInfo>;
+        };
+        const jobDriver = new AgentScheduledJobDriver() as unknown as {
+            resolveScheduleOwnerUser(
+                schedule: { ID?: string; Name?: string; OwnerUserID?: string | null },
+                fallback: UserInfo
+            ): Promise<UserInfo>;
+        };
+
+        // 1. UserCache completely missing
+        globalRef.___SINGLETON__UserCache = undefined;
+        await expect(
+            routineDriver.resolveRoutineOwnerUser(buildRoutine({ UserID: 'user-owner-1' }), daemonUser)
+        ).rejects.toThrow(/UserCache is unavailable/i);
+        await expect(
+            jobDriver.resolveScheduleOwnerUser({ ID: 'sched-1', Name: 'Brief', OwnerUserID: 'user-owner-1' }, daemonUser)
+        ).rejects.toThrow(/UserCache is unavailable/i);
+
+        // 2. UserCache exists with empty Users array and FindUser misses
+        globalRef.___SINGLETON__UserCache = {
+            Users: [],
+            FindUser: async () => undefined,
+        };
+        await expect(
+            routineDriver.resolveRoutineOwnerUser(buildRoutine({ UserID: 'user-owner-1' }), daemonUser)
+        ).rejects.toThrow(/not found in UserCache/i);
+        await expect(
+            jobDriver.resolveScheduleOwnerUser({ ID: 'sched-1', Name: 'Brief', OwnerUserID: 'user-owner-1' }, daemonUser)
+        ).rejects.toThrow(/not found in UserCache/i);
+
+        // 3. Missing UserID on routine fails closed immediately
+        await expect(
+            routineDriver.resolveRoutineOwnerUser(buildRoutine({ UserID: '' }), daemonUser)
+        ).rejects.toThrow(/no UserID/i);
+    });
+
+    it('exposes TotalChangedRecords alias alongside totalChangedCount in Tier 1 expressions', async () => {
+        const evaluator = new WakeGateEvaluator({
+            collectWatermark: async (rule) => ({
+                entityName: rule.entityName,
+                changedCount: 3,
+                recordChangeCount: 1,
+                maxUpdatedAt: now.toISOString(),
+                sampleRecords: [],
+            }),
+        });
+        const routine = buildRoutine({
+            WakeConfigurationObject: {
+                watchedEntities: [{ entityName: 'MJ: AI Agent Requests', alias: 'reqs' }],
+                wakeGate: {
+                    tier1Expression: 'TotalChangedRecords > 0',
+                },
+            },
+        });
+        const res = await evaluator.Evaluate(routine, { ID: 'u-1' } as UserInfo, now);
+        expect(res.shouldWake).toBe(true);
+        expect(res.decidedByTier).toBe('Tier1');
     });
 });

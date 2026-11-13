@@ -58,7 +58,7 @@ async function startApp(extensions: ServerExtensionConfig[]): Promise<string> {
     app.use(CreateGlobalCorsMiddleware({ allowedOrigins: ['*'] }, GetCorsOwningServerExtensionRoots(extensions)));
     mountBallotExtension(app);
     app.get('/core', (_req, res) => { res.json({ ok: true }); });
-    server = app.listen(0);
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
     return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
@@ -138,7 +138,7 @@ describe('CreateGlobalCorsMiddleware', () => {
         const app = express();
         app.use(CreateGlobalCorsMiddleware({ allowedOrigins: ['*'], allowCredentials: true }));
         app.get('/core', (_req, res) => { res.json({ ok: true }); });
-        server = app.listen(0);
+        server = app.listen(0, '127.0.0.1');
         await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         const res = await fetch(`${base}/core`, { headers: { Origin: OTHER_ORIGIN } });
@@ -164,7 +164,7 @@ async function startAppWithGraphQLMount(withFallback: boolean): Promise<string> 
         app.use(CreateExtensionOwnedPreflightFallback(ownedRoots));
     }
     app.use('/', cors(), (_req, res) => { res.json({ graphql: true }); });
-    server = app.listen(0);
+    server = app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve) => server!.once('listening', () => resolve()));
     return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
@@ -213,5 +213,17 @@ describe('X-Powered-By', () => {
         const src = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
         // Both the default app factory and Serve() (for host-supplied apps) disable the header.
         expect(src.match(/app\.disable\('x-powered-by'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    });
+});
+
+describe('X-MJ-Diagnostic-Trigger', () => {
+    it('is exposed to the browser by the global CORS and by the GraphQL CORS', async () => {
+        const base = await startApp([]);
+        const res = await fetch(`${base}/core`, { headers: { Origin: OTHER_ORIGIN } });
+        expect(res.headers.get('access-control-expose-headers')).toContain('X-MJ-Diagnostic-Trigger');
+
+        const src = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+        const graphqlCors = src.match(/app\.use\(\s*graphqlRootPath,\s*cors<cors\.CorsRequest>\(\{\s*exposedHeaders: \[([^\]]*)\]/);
+        expect(graphqlCors?.[1]).toContain('X-MJ-Diagnostic-Trigger');
     });
 });

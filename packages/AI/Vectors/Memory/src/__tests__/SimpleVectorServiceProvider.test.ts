@@ -12,8 +12,27 @@ const eventBus = vi.hoisted(() => ({
 // The provider uses RunView for loading EntityRecordDocument rows and subscribes
 // to BaseEntity events for cache invalidation — both have to be present.
 const runViewMock = vi.fn();
+// Each user's access to `MJ: Entity Record Documents`, by user ID: the effective row filter and the
+// denied read fields. Users not listed read every row; users in `noRead` cannot read the entity.
+const erdAccess = vi.hoisted(() => ({
+    rowFilters: new Map<string, string>(),
+    deniedFields: new Map<string, string[]>(),
+    noRead: new Set<string>(),
+    metadataAvailable: true,
+}));
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
+    EntityPermissionType: { Read: 'Read' },
+    Metadata: class {
+        public EntityByName(name: string): object | null {
+            if (!erdAccess.metadataAvailable || name !== 'MJ: Entity Record Documents') return null;
+            return {
+                GetUserPermisions: (user: { ID: string }) => ({ CanRead: !erdAccess.noRead.has(user.ID) }),
+                GetEffectiveRowFilterWhereClause: (user: { ID: string }) => erdAccess.rowFilters.get(user.ID) ?? '',
+                GetDeniedReadFields: (user: { ID: string }) => new Set(erdAccess.deniedFields.get(user.ID) ?? []),
+            };
+        }
+    },
     // RunView must be `new`-able — declare as a class so `new RunView()` works.
     // `vi.fn().mockImplementation(() => ...)` is not reliably constructable in
     // Vitest 4.x.
@@ -129,14 +148,21 @@ function recordlessEvent(type: BaseEntityEvent['type'], entityName: string = ERD
     return { type, payload: null, baseEntity: null, entityName };
 }
 
-function queryDoc(entityDocumentId: string, vector: number[], topK = 5, user?: UserInfo): Promise<BaseResponse> {
+/**
+ * The user test queries run as. Indexes are cached per (EntityDocument, user) and not at all without a
+ * user, so every caching test needs one.
+ */
+const TEST_USER = Object.assign(new UserInfo(), { ID: 'test-user' });
+
+/** `user` defaults to {@link TEST_USER}; pass `null` to query with no user. */
+function queryDoc(entityDocumentId: string, vector: number[], topK = 5, user: UserInfo | null = TEST_USER): Promise<BaseResponse> {
     const params: QueryOptions = { id: entityDocumentId, vector, topK };
-    return new SimpleVectorServiceProvider().QueryIndex(params, user);
+    return new SimpleVectorServiceProvider().QueryIndex(params, user ?? undefined);
 }
 function looseQuery(params: LooseQuery): Promise<BaseResponse> {
-    return new SimpleVectorServiceProvider().QueryIndex(params as QueryOptions);
+    return new SimpleVectorServiceProvider().QueryIndex(params as QueryOptions, TEST_USER);
 }
-async function loadDoc(entityDocumentId: string, rows: LoadRow[], user?: UserInfo): Promise<void> {
+async function loadDoc(entityDocumentId: string, rows: LoadRow[], user: UserInfo | null = TEST_USER): Promise<void> {
     runViewMock.mockResolvedValueOnce(viewResult(rows));
     await queryDoc(entityDocumentId, [1, 0, 0], 1, user);
 }
@@ -150,6 +176,11 @@ async function flush(): Promise<void> {
 describe('SimpleVectorServiceProvider', () => {
     beforeEach(() => {
         runViewMock.mockReset();
+        erdAccess.rowFilters.clear();
+        erdAccess.deniedFields.clear();
+        erdAccess.noRead.clear();
+        erdAccess.metadataAvailable = true;
+        SimpleVectorIndexCache.Instance.MaxIndexes = 64;
         SimpleVectorServiceProvider.InvalidateAll();
         SimpleVectorServiceProvider.TtlMs = 15 * 60 * 1000; // reset to default
     });
@@ -222,14 +253,14 @@ describe('SimpleVectorServiceProvider', () => {
 
         it('rejects calls without an EntityDocumentID', async () => {
             const provider = new SimpleVectorServiceProvider();
-            const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never);
+            const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never, TEST_USER);
             expect(result.success).toBe(false);
             expect(result.message).toMatch(/EntityDocumentID/);
         });
 
         it('rejects calls without a query vector', async () => {
             const provider = new SimpleVectorServiceProvider();
-            const result = await provider.QueryIndex({ id: 'doc-1', topK: 5 } as never);
+            const result = await provider.QueryIndex({ id: 'doc-1', topK: 5 } as never, TEST_USER);
             expect(result.success).toBe(false);
             expect(result.message).toMatch(/vector/);
         });
@@ -266,6 +297,39 @@ describe('SimpleVectorServiceProvider', () => {
     });
 
     describe('caching', () => {
+        // An index is loaded with a RunView as the asking user, so it holds only what that user may read.
+        it('never serves one user\'s loaded index to another user', async () => {
+            const alice = Object.assign(new UserInfo(), { ID: 'alice' });
+            const bob = Object.assign(new UserInfo(), { ID: 'bob' });
+            // Different row filters put them in different permission classes.
+            erdAccess.rowFilters.set('alice', "OwnerID='alice'");
+            erdAccess.rowFilters.set('bob', "OwnerID='bob'");
+            runViewMock.mockImplementation((_params: RunViewParams, user: UserInfo | undefined) =>
+                Promise.resolve(viewResult<LoadRow>(user === alice
+                    ? [{ ID: 'erd-a', RecordID: 'ALICE-ONLY', VectorJSON: vec(1, 0, 0) }]
+                    : [{ ID: 'erd-b', RecordID: 'BOB-VISIBLE', VectorJSON: vec(1, 0, 0) }])));
+
+            const forAlice = await queryDoc('doc-1', [1, 0, 0], 5, alice);
+            const forBob = await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            const forAliceAgain = await queryDoc('doc-1', [1, 0, 0], 5, alice);
+
+            expect(recordIdsOf(forAlice)).toEqual(['ALICE-ONLY']);
+            expect(recordIdsOf(forBob)).toEqual(['BOB-VISIBLE']);
+            expect(recordIdsOf(forAliceAgain)).toEqual(['ALICE-ONLY']);
+            expect(runViewMock).toHaveBeenCalledTimes(2); // each user's index is still cached for that user
+            expect(runViewCall(1).User).toBe(bob);
+        });
+
+        it('does not cache an index loaded with no user', async () => {
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 1, null);
+            await queryDoc('doc-1', [1, 0, 0], 1, null);
+
+            expect(runViewMock).toHaveBeenCalledTimes(2);
+            expect(SimpleVectorIndexCache.Instance.Size).toBe(0);
+        });
+
         it('reuses a loaded index across calls within the TTL window', async () => {
             runViewMock.mockResolvedValue({
                 Success: true,
@@ -275,9 +339,9 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
 
             // RunView only called once — second and third hits the cache
             expect(runViewMock).toHaveBeenCalledTimes(1);
@@ -294,8 +358,8 @@ describe('SimpleVectorServiceProvider', () => {
             const provider = new SimpleVectorServiceProvider();
             SimpleVectorServiceProvider.TtlMs = 0; // immediate expiry
 
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
 
             expect(runViewMock).toHaveBeenCalledTimes(2);
         });
@@ -309,11 +373,11 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(runViewMock).toHaveBeenCalledTimes(1);
 
             SimpleVectorServiceProvider.InvalidateIndex('doc-1');
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(runViewMock).toHaveBeenCalledTimes(2);
         });
 
@@ -326,9 +390,9 @@ describe('SimpleVectorServiceProvider', () => {
 
             const provider = new SimpleVectorServiceProvider();
             // Fire three callers concurrently before any of them complete.
-            const a = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            const b = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            const c = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            const a = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            const b = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            const c = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             await loaderStarted();
 
             // Release the in-flight RunView with a single payload.
@@ -353,8 +417,8 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             const provider = new SimpleVectorServiceProvider();
-            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
-            await provider.QueryIndex({ id: 'doc-2', vector: [1, 0, 0], topK: 1 } as never);
+            await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
+            await provider.QueryIndex({ id: 'doc-2', vector: [1, 0, 0], topK: 1 } as never, TEST_USER);
             expect(SimpleVectorServiceProvider.CacheSize).toBe(2);
 
             SimpleVectorServiceProvider.InvalidateAll();
@@ -744,13 +808,13 @@ describe('SimpleVectorServiceProvider', () => {
 
             it('recovers from a loader that throws synchronously instead of wedging the EntityDocument', async () => {
                 const cache = SimpleVectorIndexCache.Instance;
-                await expect(cache.GetOrLoad('doc-sync-throw', undefined, () => {
+                await expect(cache.GetOrLoad('doc-sync-throw', TEST_USER, () => {
                     throw new Error('loader blew up');
                 })).rejects.toThrow('loader blew up');
                 expect(LogError).toHaveBeenCalledWith(expect.stringContaining('load failed for EntityDocumentID="doc-sync-throw": loader blew up'));
 
                 const retry = vi.fn(async () => null);
-                await expect(cache.GetOrLoad('doc-sync-throw', undefined, retry)).resolves.toBeNull();
+                await expect(cache.GetOrLoad('doc-sync-throw', TEST_USER, retry)).resolves.toBeNull();
                 expect(retry).toHaveBeenCalledTimes(1);
             });
 
@@ -806,6 +870,8 @@ describe('SimpleVectorServiceProvider', () => {
             it('re-reads remote changes once per loading user and applies each read only to that user\'s indexes', async () => {
                 const alice = Object.assign(new UserInfo(), { ID: 'alice' });
                 const bob = Object.assign(new UserInfo(), { ID: 'bob' });
+                erdAccess.rowFilters.set('alice', "OwnerID='alice'");
+                erdAccess.rowFilters.set('bob', "OwnerID='bob'");
                 await loadDoc('doc-1', [
                     { ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) },
                     { ID: 'erd-2', RecordID: 'B', VectorJSON: vec(0, 1, 0) },
@@ -833,6 +899,8 @@ describe('SimpleVectorServiceProvider', () => {
             it('replays a user\'s re-read onto that user\'s load still in flight, and only that user\'s', async () => {
                 const alice = Object.assign(new UserInfo(), { ID: 'alice' });
                 const bob = Object.assign(new UserInfo(), { ID: 'bob' });
+                erdAccess.rowFilters.set('alice', "OwnerID='alice'");
+                erdAccess.rowFilters.set('bob', "OwnerID='bob'");
                 await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], alice);
                 const releaseBob = deferRunView<LoadRow>();
                 const bobPending = queryDoc('doc-2', [0, 0, 1], 5, bob);
@@ -1032,7 +1100,7 @@ describe('SimpleVectorServiceProvider', () => {
                 send(keyOnlySave('erd-5'));
                 await vi.advanceTimersByTimeAsync(REMOTE_REFRESH_DEBOUNCE_MS);
                 expect(runViewMock).toHaveBeenCalledTimes(2);
-                expect(runViewCall(1).User).toBeUndefined(); // no loaded index yet to borrow a user from
+                expect(runViewCall(1).User).toBe(TEST_USER); // the user the load still in flight reads as
 
                 release(viewResult([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
                 expect(recordIds(await pending)).toEqual(['E']);
@@ -1110,8 +1178,8 @@ describe('SimpleVectorServiceProvider', () => {
             });
 
             it('re-reads changed rows as the user a loaded index was loaded as', async () => {
-                const loader = new UserInfo();
-                await loadDoc('doc-0', [{ ID: 'erd-0', RecordID: 'O', VectorJSON: vec(1, 0, 0) }]); // no user
+                const loader = Object.assign(new UserInfo(), { ID: 'loader' });
+                await loadDoc('doc-0', [{ ID: 'erd-0', RecordID: 'O', VectorJSON: vec(1, 0, 0) }], null); // no user: not cached
                 await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], loader);
                 expect(runViewCall(1).User).toBe(loader);
 
@@ -1204,7 +1272,7 @@ describe('SimpleVectorServiceProvider', () => {
         });
 
         it('escapes the EntityDocumentID into the load filter and loads as the calling user', async () => {
-            const caller = new UserInfo();
+            const caller = Object.assign(new UserInfo(), { ID: 'caller' });
             runViewMock.mockResolvedValueOnce(viewResult<LoadRow>([]));
 
             await queryDoc(`doc'1`, [1, 0, 0], 1, caller);
@@ -1378,6 +1446,97 @@ describe('SimpleVectorServiceProvider', () => {
         });
         it('requires no API key (in-process provider) — so the vector-sync / dupe key guard is skipped', () => {
             expect(new SimpleVectorServiceProvider().RequiresAPIKey).toBe(false);
+        });
+    });
+
+    describe('permission classes', () => {
+        const alice = Object.assign(new UserInfo(), { ID: 'alice' });
+        const bob = Object.assign(new UserInfo(), { ID: 'bob' });
+        const carol = Object.assign(new UserInfo(), { ID: 'carol' });
+        const send = (ev: BaseEntityEvent) => SimpleVectorIndexCache.Instance.HandleEntityEvent(ev);
+        function localSave(row: ReReadRow): BaseEntityEvent {
+            return { type: 'save', payload: null, baseEntity: { EntityInfo: { Name: ERD_ENTITY }, ...row } } as unknown as BaseEntityEvent;
+        }
+
+        it('serves one index to every user of the same permission class', async () => {
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            const forCarol = await queryDoc('doc-1', [1, 0, 0], 5, carol);
+
+            expect(recordIdsOf(forCarol)).toEqual(['A']);
+            expect(runViewMock).toHaveBeenCalledTimes(1);
+            expect(SimpleVectorIndexCache.Instance.Size).toBe(1);
+        });
+
+        it('keeps users apart whose denied vector columns differ', async () => {
+            erdAccess.deniedFields.set('carol', ['VectorJSON']);
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            await queryDoc('doc-1', [1, 0, 0], 5, carol);
+
+            expect(runViewMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('keeps every user apart when the entity metadata is unavailable', async () => {
+            erdAccess.metadataAvailable = false;
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            await queryDoc('doc-1', [1, 0, 0], 5, carol);
+
+            expect(runViewMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('holds at most MaxIndexes indexes, dropping the least recently queried', async () => {
+            SimpleVectorIndexCache.Instance.MaxIndexes = 2;
+            runViewMock.mockResolvedValue(viewResult<LoadRow>([{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }]));
+
+            await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            await queryDoc('doc-2', [1, 0, 0], 5, bob);
+            await queryDoc('doc-1', [1, 0, 0], 5, bob); // doc-1 is now the most recent
+            await queryDoc('doc-3', [1, 0, 0], 5, bob); // evicts doc-2
+            expect(SimpleVectorIndexCache.Instance.Size).toBe(2);
+            expect(runViewMock).toHaveBeenCalledTimes(3);
+
+            await queryDoc('doc-1', [1, 0, 0], 5, bob);
+            expect(runViewMock).toHaveBeenCalledTimes(3);
+            await queryDoc('doc-2', [1, 0, 0], 5, bob);
+            expect(runViewMock).toHaveBeenCalledTimes(4);
+        });
+
+        it('never writes a saved row into a row-filtered class\'s index unless that class\'s own re-read returns it', async () => {
+            erdAccess.rowFilters.set('alice', "OwnerID='alice'");
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], alice);
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], bob);
+            vi.useFakeTimers();
+            // Alice's row filter hides erd-2.
+            runViewMock.mockResolvedValue(viewResult<ReReadRow>([]));
+
+            send(localSave({ ID: 'erd-2', EntityDocumentID: 'doc-1', RecordID: 'SECRET', VectorJSON: vec(0, 1, 0) }));
+            const aliceBeforeReRead = await queryDoc('doc-1', [0, 1, 0], 5, alice);
+            await vi.advanceTimersByTimeAsync(REMOTE_REFRESH_DEBOUNCE_MS);
+            vi.useRealTimers();
+
+            expect(recordIdsOf(aliceBeforeReRead)).toEqual(['A']);
+            expect(recordIdsOf(await queryDoc('doc-1', [0, 1, 0], 5, alice))).toEqual(['A']);
+            expect(recordIdsOf(await queryDoc('doc-1', [0, 1, 0], 5, bob))).toEqual(['SECRET', 'A']);
+            // Only the row-filtered class re-read the row, and as its own user.
+            expect(runViewMock.mock.calls.slice(2).map(call => call[1])).toEqual([alice]);
+        });
+
+        it('adds a saved row to a row-filtered class\'s index once its re-read returns it', async () => {
+            erdAccess.rowFilters.set('alice', "OwnerID='alice'");
+            await loadDoc('doc-1', [{ ID: 'erd-1', RecordID: 'A', VectorJSON: vec(1, 0, 0) }], alice);
+            vi.useFakeTimers();
+            runViewMock.mockResolvedValue(viewResult<ReReadRow>([{ ID: 'erd-2', EntityDocumentID: 'doc-1', RecordID: 'MINE', VectorJSON: vec(0, 1, 0) }]));
+
+            send(localSave({ ID: 'erd-2', EntityDocumentID: 'doc-1', RecordID: 'MINE', VectorJSON: vec(0, 1, 0) }));
+            await vi.advanceTimersByTimeAsync(REMOTE_REFRESH_DEBOUNCE_MS);
+            vi.useRealTimers();
+
+            expect(recordIdsOf(await queryDoc('doc-1', [0, 1, 0], 5, alice))).toEqual(['MINE', 'A']);
         });
     });
 });

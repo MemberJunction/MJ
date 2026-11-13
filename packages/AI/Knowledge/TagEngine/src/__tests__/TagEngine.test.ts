@@ -39,9 +39,13 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     // @RequiresSubclass(); this mock replaces the module wholesale, so an unlisted symbol
     // anywhere in the dependency chain stops the suite collecting.
     RequiresSubclass: () => (target: unknown) => target,
+    IsBrowser: () => false,
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     UserInfo: class {},
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -180,7 +184,7 @@ vi.mock('@memberjunction/aiengine', () => ({
             Loaded: true,
             Prompts: [],
             Models: [
-                { ID: 'model-1', Name: 'text-embedding-3-small', AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
+                { ID: 'model-1', Name: 'text-embedding-3-small', IsActive: true, AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],
             ModelVendors: [
                 { ModelID: 'model-1', Status: 'Active', DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small', Priority: 1 },
@@ -199,7 +203,6 @@ describe('TagEngine', () => {
         engine = TagEngine.Instance;
         // Reset internal state for each test
         (engine as unknown as { _loaded: boolean })._loaded = false;
-        (engine as unknown as { _loading: boolean })._loading = false;
         (engine as unknown as { _tagVectorService: null })._tagVectorService = null;
 
         // Set up embedding instance creation

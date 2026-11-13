@@ -1,12 +1,16 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, EntityPermissionType, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
+    MJCommentEntity,
+    MJCommentTypeEntity,
     MJConversationEntity,
+    MJConversationTypeEntity,
     MJConversationBranchEntity,
     MJConversationDetailEntity,
     MJConversationDetailEntityType,
+    MJFieldSuggestionEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunEntityType,
     MJConversationDetailRatingEntityType,
@@ -19,6 +23,13 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import {
+    ConversationAnchorMetadata,
+    ConversationAnchorType,
+    FilterAnchoredConversationsForUser,
+    IsConversationHiddenByFieldSecurity,
+    ParseConversationAnchorMetadata
+} from "../custom/AnchoredConversationSecurity";
 
 /**
  * `MJ: Resource Types.ID` for Conversations. Conversations that the current
@@ -26,6 +37,208 @@ import { ResourcePermissionEngine } from "../custom/ResourcePermissions/Resource
  * are folded into the list by `LoadConversations` using this ID.
  */
 const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+/**
+ * `MJ: Resource Types.ID` for Projects (Conversation Folders). Used for Google Drive-style
+ * folder ACL sharing (`MJ: Resource Permissions`) where users/roles granted access to a
+ * folder inherit access to conversations inside it.
+ */
+export const PROJECTS_RESOURCE_TYPE_ID = '88D0DF27-AF8F-43AC-9EC4-2AC314F49355';
+
+/**
+ * Canonical built-in `MJ: Conversation Types.Code` constants.
+ * Custom Open Apps may seed additional `ConversationType` rows and look them up via
+ * {@link ConversationEngine.TypeByCode} or {@link ConversationEngine.ResolveConversationTypeID}.
+ */
+export const CONVERSATION_TYPE_CODES = {
+    CHAT: 'CHAT',
+    SKIP: 'SKIP',
+    ROUTINE: 'ROUTINE',
+    MEETING_ROOM: 'MEETING_ROOM',
+    COMMENT: 'COMMENT',
+} as const;
+
+export type BuiltInConversationTypeCode =
+    (typeof CONVERSATION_TYPE_CODES)[keyof typeof CONVERSATION_TYPE_CODES];
+
+/**
+ * Seeded primary-key UUIDs for built-in `MJ: Conversation Types` rows, used as deterministic
+ * fallbacks when {@link ConversationEngine.Config} has not yet run (for example in unit tests).
+ */
+export const BUILT_IN_CONVERSATION_TYPE_IDS: Readonly<Record<BuiltInConversationTypeCode, string>> = {
+    CHAT: '7F81FF57-C5A8-464D-B3B4-35A4FCF10717',
+    SKIP: 'FDAE66B9-CF87-48EA-8A12-8E521740A66A',
+    ROUTINE: '18D12ABA-BE8C-4087-B440-835B6D077DD7',
+    MEETING_ROOM: '2E9EF85D-D18A-4B8E-B6AB-F65C7F91A926',
+    COMMENT: '17E6A105-AE51-43A2-9D56-290BC8D1D6BB',
+};
+
+const BUILT_IN_CONVERSATION_TYPE_NAMES: Readonly<Record<string, BuiltInConversationTypeCode>> = {
+    chat: 'CHAT',
+    skip: 'SKIP',
+    routine: 'ROUTINE',
+    'meeting room': 'MEETING_ROOM',
+    meeting_room: 'MEETING_ROOM',
+    comment: 'COMMENT',
+};
+
+/**
+ * Canonical built-in `MJ: Comment Types.Code` constants.
+ */
+export const COMMENT_TYPE_CODES = {
+    COMMENT: 'COMMENT',
+    FIELD_SUGGESTION: 'FIELD_SUGGESTION',
+} as const;
+
+export type BuiltInCommentTypeCode =
+    (typeof COMMENT_TYPE_CODES)[keyof typeof COMMENT_TYPE_CODES];
+
+/**
+ * Seeded primary-key UUIDs for built-in `MJ: Comment Types` rows.
+ */
+export const BUILT_IN_COMMENT_TYPE_IDS: Readonly<Record<BuiltInCommentTypeCode, string>> = {
+    COMMENT: '4B3A3797-EFA5-419F-80FF-F9515E5F4AA8',
+    FIELD_SUGGESTION: '8918DBA5-EDDD-4AF4-A518-FEB387ED02F9',
+};
+
+const BUILT_IN_COMMENT_TYPE_NAMES: Readonly<Record<string, BuiltInCommentTypeCode>> = {
+    comment: 'COMMENT',
+    'field suggestion': 'FIELD_SUGGESTION',
+    field_suggestion: 'FIELD_SUGGESTION',
+};
+
+/**
+ * Three-tier folder visibility model:
+ * - `'Private'`: Owned by a user (`OwnerUserID != null`) with no active folder shares.
+ * - `'Shared'`: Owned by a user (`OwnerUserID != null`) and shared with specific Users/Roles via `MJ: Resource Permissions`.
+ * - `'Public'`: Environment-wide folder (`OwnerUserID == null`) visible to everyone in the environment.
+ */
+export type ProjectVisibilityTier = 'Private' | 'Shared' | 'Public';
+
+/**
+ * The spellings of `"inheritFolderAccess": true` the SQL filter recognises: the compact one every MJ writer
+ * produces (`JSON.stringify` and the server's save, which rewrites `AdditionalData` compactly) and the
+ * one-space one. {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} and {@link IsInheritingFolderAccessInSQL} are both
+ * built from this list, so they cannot drift apart.
+ */
+export const INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS: readonly string[] = ['"inheritFolderAccess":true', '"inheritFolderAccess": true'];
+
+/**
+ * SQL predicate matching conversations that inherit access from their folder. Inheritance is opt-in: turning
+ * it on writes `"inheritFolderAccess":true` into `Conversation.AdditionalData`.
+ *
+ * `LIKE`, not `JSON_VALUE`: this filter runs on PostgreSQL too, which translates no SQL Server JSON
+ * functions in a runtime filter. A `LIKE` also matches the key nested inside another object, which the parser
+ * does not count; `MJConversationEntityServer` refuses to save a value the two read differently, so they agree on
+ * every row the entity layer writes.
+ */
+export const INHERIT_FOLDER_ACCESS_SQL_CLAUSE =
+    `(${INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.map((s) => `AdditionalData LIKE '%${s}%'`).join(' OR ')})`;
+
+/**
+ * What {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} decides for this `AdditionalData`: true when the SQL filter
+ * treats the conversation as inheriting its folder's access. Case-insensitive, like SQL Server's default
+ * collation. The server compares this as well as {@link IsInheritingFolderAccess}, so a rewrite that one of
+ * them reads differently is caught.
+ */
+export function IsInheritingFolderAccessInSQL(additionalData: string | null | undefined): boolean {
+    if (!additionalData) {
+        return false;
+    }
+    const lower = additionalData.toLowerCase();
+    return INHERIT_FOLDER_ACCESS_TRUE_SPELLINGS.some((s) => lower.includes(s.toLowerCase()));
+}
+
+/**
+ * `AdditionalData` rewritten as compact JSON when it holds a JSON object, so the stored text always uses the
+ * spelling {@link INHERIT_FOLDER_ACCESS_SQL_CLAUSE} matches. Anything else (null, an array, text that is not
+ * JSON) comes back unchanged. The round trip through `JSON.parse` rounds an integer beyond 2^53, so such a
+ * number in the object is stored rounded.
+ */
+export function CanonicalizeConversationAdditionalData(additionalData: string | null | undefined): string | null | undefined {
+    if (!additionalData) {
+        return additionalData;
+    }
+    try {
+        const parsed: unknown = JSON.parse(additionalData);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return JSON.stringify(parsed);
+        }
+    } catch {
+        // Not JSON: leave it as written.
+    }
+    return additionalData;
+}
+
+/** Spots `"inheritFolderAccess": true` in AdditionalData that is not valid JSON. */
+const INHERIT_TRUE_PATTERN = /"inheritFolderAccess"\s*:\s*true/;
+
+/**
+ * Returns true when `conversation` inherits permissions from its parent folder (`ProjectID`).
+ * Inheritance is opt-in: it is on only when `conversation.AdditionalData` stores
+ * `"inheritFolderAccess": true`.
+ */
+export function IsInheritingFolderAccess(
+    conversation: { AdditionalData?: string | null } | null | undefined
+): boolean {
+    const raw = conversation?.AdditionalData;
+    if (!raw || raw.trim().length === 0) {
+        return false;
+    }
+    try {
+        const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+        return !!parsed && typeof parsed === 'object' && parsed['inheritFolderAccess'] === true;
+    } catch {
+        return INHERIT_TRUE_PATTERN.test(raw);
+    }
+}
+
+/**
+ * Returns the updated `AdditionalData` JSON string after setting or clearing `inheritFolderAccess`.
+ * Preserves any other keys already present in `existingAdditionalData`. When `inheritFolderAccess`
+ * is `false` (the default) and no other keys exist, returns `null`.
+ */
+export function BuildUpdatedAdditionalDataForFolderInheritance(
+    existingAdditionalData: string | null | undefined,
+    inheritFolderAccess: boolean
+): string | null {
+    let dataObj: Record<string, unknown> = {};
+    if (existingAdditionalData && existingAdditionalData.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(existingAdditionalData);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                dataObj = { ...(parsed as Record<string, unknown>) };
+            }
+        } catch {
+            // If existing AdditionalData is non-JSON, replace with clean object
+        }
+    }
+    if (inheritFolderAccess) {
+        dataObj['inheritFolderAccess'] = true;
+    } else {
+        delete dataObj['inheritFolderAccess'];
+    }
+    return Object.keys(dataObj).length === 0 ? null : JSON.stringify(dataObj);
+}
+
+/**
+ * Returns the higher of two `MJ: Resource Permissions` levels (`'Owner' > 'Edit' > 'View' > null`).
+ */
+export function ComparePermissionLevels(
+    a: 'View' | 'Edit' | 'Owner' | null | undefined,
+    b: 'View' | 'Edit' | 'Owner' | null | undefined
+): 'View' | 'Edit' | 'Owner' | null {
+    const rank = (lvl: 'View' | 'Edit' | 'Owner' | null | undefined): number => {
+        if (lvl === 'Owner') return 3;
+        if (lvl === 'Edit') return 2;
+        if (lvl === 'View') return 1;
+        return 0;
+    };
+    const rA = rank(a);
+    const rB = rank(b);
+    if (rA === 0 && rB === 0) return null;
+    return rA >= rB ? (a ?? null) : (b ?? null);
+}
 
 /**
  * Display info about the user who shared a conversation with the current user,
@@ -71,6 +284,278 @@ export interface CreateConversationOptions {
      * (UUID, int, composite).
      */
     linkedRecordId?: string | null;
+    /**
+     * Structural anchor category when this conversation represents an anchored
+     * comment thread on a record or sub-target (`Record`, `Field`, `Section`,
+     * `Group`, `Contribution`, `DocBlock`, `SlideRegion`, `SheetRange`).
+     */
+    anchorType?: ConversationAnchorType;
+    /**
+     * Sub-target key within the linked record (field name, section key, group key, etc.).
+     */
+    anchorKey?: string | null;
+    /**
+     * Structured anchor metadata snapshot (`IConversationAnchorMetadata`).
+     */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /**
+     * Optional `MJ: Conversation Types.Code` (or `Name`) classifying this conversation.
+     * Defaults to `'COMMENT'` when `anchorType` is set, otherwise `'CHAT'`.
+     */
+    typeCode?: string;
+    /**
+     * Optional explicit `MJ: Conversation Types.ID` (takes precedence over {@link typeCode}).
+     */
+    typeId?: string;
+}
+
+/**
+ * Filter options for {@link ConversationEngine.LoadAnchoredConversations}.
+ */
+export interface LoadAnchoredConversationsOptions {
+    /** Whether to include resolved threads (`IsResolved = 1`). Defaults to `true`. */
+    includeResolved?: boolean;
+    /** Optional filter by a specific `AnchorType`. */
+    anchorType?: ConversationAnchorType;
+    /** Optional filter by a specific `AnchorKey`. */
+    anchorKey?: string;
+    /** Optional explicit metadata provider (falls back to `ConversationEngine.ProviderToUse`). */
+    provider?: IMetadataProvider;
+    /** Force bypassing RunView cache. */
+    bypassCache?: boolean;
+}
+
+/**
+ * Parameters for creating a new anchored comment thread on a record or sub-target
+ * via {@link ConversationEngine.CreateAnchoredConversation}.
+ */
+export interface CreateAnchoredConversationParams {
+    /** Display name for the thread (defaults to anchor display label or record comment title). */
+    name?: string;
+    /** Optional environment ID. */
+    environmentId?: string;
+    /** Target entity ID (`MJ: Entities.ID`). */
+    linkedEntityId: string;
+    /** Target record serialized primary key. */
+    linkedRecordId: string;
+    /** Structural anchor category (`Record`, `Field`, `Section`, `Group`, `Contribution`, etc.). */
+    anchorType: NonNullable<ConversationAnchorType>;
+    /** Target key within the record (`FieldName`, `SectionKey`, `GroupKey`, etc.). Null for `Record`. */
+    anchorKey?: string | null;
+    /** Anchor snapshot metadata (`quotedValue`, `fieldName`, `sectionKey`, `groupKey`, etc.). */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /** Optional first message to post immediately in the newly created thread. */
+    initialMessage?: string;
+    /** Optional AI agent to associate with the conversation (`DefaultAgentID`). */
+    defaultAgentId?: string | null;
+    /** Optional `MJ: Comment Types.Code` (or `Name`). Defaults to `'COMMENT'`. */
+    commentTypeCode?: string;
+    /** Optional explicit `MJ: Comment Types.ID`. */
+    commentTypeId?: string;
+    /** Optional explicit metadata provider. */
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Parameters for creating a new `MJ: Field Suggestions` comment thread on a record field
+ * via {@link ConversationEngine.CreateFieldSuggestion}.
+ */
+export interface CreateFieldSuggestionParams {
+    /** Target entity ID (`MJ: Entities.ID`). */
+    linkedEntityId: string;
+    /** Target record serialized primary key. */
+    linkedRecordId: string;
+    /** Exact `EntityField.Name` on the target entity (`AnchorKey`). */
+    fieldName: string;
+    /** Proposed value serialized as text (or `null` to suggest clearing the field). */
+    suggestedValue: string | null;
+    /** Source category (`'Agent' | 'Integration' | 'LLM' | 'Person'`). Defaults to `'Agent'`. */
+    source?: MJFieldSuggestionEntity['Source'];
+    /** Optional confidence score in `[0, 1]`. */
+    confidence?: number | null;
+    /** Optional `MJ: AI Prompt Runs.ID` provenance link. */
+    aiPromptRunId?: string | null;
+    /** Optional thread title. */
+    name?: string;
+    /** Optional environment ID. */
+    environmentId?: string;
+    /** Optional anchor metadata snapshot (`sectionKey`, `groupKey`, `anchorDisplayName`, etc.). */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /** Optional rationale / explanation posted as the opening `MJ: Conversation Details` message. */
+    initialMessage?: string;
+    /** Optional explicit metadata provider. */
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Batch-loaded `MJ: Comments` and `MJ: Field Suggestions` keyed by normalized `Conversation.ID`.
+ */
+export interface AnchoredCommentsAndSuggestionsBundle {
+    CommentsByConversationId: Map<string, MJCommentEntity>;
+    SuggestionsByConversationId: Map<string, MJFieldSuggestionEntity>;
+    CommentTypeCodeByConversationId: Map<string, string>;
+}
+
+/**
+ * Aggregated open and resolved comment counts across a record's fields, sections,
+ * left-nav rail groups, and contributions.
+ */
+export interface AnchoredCommentRollup {
+    /** Total unresolved anchored threads visible to the user on this record. */
+    TotalOpenCount: number;
+    /** Total resolved anchored threads visible to the user on this record. */
+    TotalResolvedCount: number;
+    /** Open threads anchored directly at the whole-record level (`AnchorType === 'Record'`). */
+    RecordLevelOpenCount: number;
+    /** Open thread counts keyed by normalized (lowercase) field name (`AnchorType === 'Field'`). */
+    ByField: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by section key (`AnchorType === 'Section'` PLUS any open
+     * field threads whose `AnchorMetadataObject.sectionKey` belongs to that section).
+     */
+    BySection: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by left-nav rail group key (`AnchorType === 'Group'` PLUS
+     * any open section/field threads whose `AnchorMetadataObject.groupKey` belongs to that group).
+     */
+    ByGroup: ReadonlyMap<string, number>;
+    /** Open thread counts keyed by contribution key (`AnchorType === 'Contribution'`). */
+    ByContribution: ReadonlyMap<string, number>;
+    /** Open plain/non-suggestion comment count across the record. */
+    OpenNoteCount?: number;
+    /** Open `FIELD_SUGGESTION` count across the record. */
+    OpenSuggestionCount?: number;
+    /** Open `FIELD_SUGGESTION` counts keyed by normalized (lowercase) field name. */
+    ByFieldSuggestions?: ReadonlyMap<string, number>;
+    /** Open counts per field further broken down by uppercase `CommentType.Code`. */
+    ByFieldByType?: ReadonlyMap<string, ReadonlyMap<string, number>>;
+}
+
+/**
+ * Pure rollup helper that computes open and resolved anchored comment counts across
+ * fields, sections, groups, and contributions, while enforcing FLS visibility when
+ * `entityInfo` and `currentUser` are provided.
+ */
+export function ComputeAnchoredCommentCounts(
+    conversations: ReadonlyArray<
+        Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'> & {
+            ID?: string;
+        }
+    >,
+    currentUser?: UserInfo | null,
+    entityInfo?: EntityInfo | null,
+    commentTypeCodeByConversationId?: ReadonlyMap<string, string> | null
+): AnchoredCommentRollup {
+    let totalOpenCount = 0;
+    let totalResolvedCount = 0;
+    let recordLevelOpenCount = 0;
+    let openNoteCount = 0;
+    let openSuggestionCount = 0;
+    const byField = new Map<string, number>();
+    const bySection = new Map<string, number>();
+    const byGroup = new Map<string, number>();
+    const byContribution = new Map<string, number>();
+    const byFieldSuggestions = new Map<string, number>();
+    const byFieldByType = new Map<string, Map<string, number>>();
+
+    for (const conv of conversations) {
+        if (!conv.AnchorType) {
+            continue;
+        }
+        if (
+            currentUser &&
+            entityInfo &&
+            IsConversationHiddenByFieldSecurity(
+                entityInfo,
+                currentUser,
+                conv.AnchorType,
+                conv.AnchorKey,
+                conv.AnchorMetadataObject ?? conv.AnchorMetadata
+            )
+        ) {
+            continue;
+        }
+        if (conv.IsResolved) {
+            totalResolvedCount++;
+            continue;
+        }
+
+        totalOpenCount++;
+        const normId = conv.ID ? NormalizeUUID(conv.ID) : '';
+        const rawTypeCode = normId && commentTypeCodeByConversationId
+            ? commentTypeCodeByConversationId.get(normId)
+            : undefined;
+        const typeCode = (rawTypeCode?.trim().toUpperCase()) || COMMENT_TYPE_CODES.COMMENT;
+        const isSuggestion = typeCode === COMMENT_TYPE_CODES.FIELD_SUGGESTION;
+        if (isSuggestion) {
+            openSuggestionCount++;
+        } else {
+            openNoteCount++;
+        }
+
+        const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
+        const rawKey = conv.AnchorKey?.trim() ?? '';
+
+        if (conv.AnchorType === 'Record') {
+            recordLevelOpenCount++;
+        } else if (conv.AnchorType === 'Field') {
+            const fieldKey = (rawKey || meta?.fieldName?.trim() || '').toLowerCase();
+            if (fieldKey) {
+                byField.set(fieldKey, (byField.get(fieldKey) ?? 0) + 1);
+                if (isSuggestion) {
+                    byFieldSuggestions.set(fieldKey, (byFieldSuggestions.get(fieldKey) ?? 0) + 1);
+                }
+                let typeMap = byFieldByType.get(fieldKey);
+                if (!typeMap) {
+                    typeMap = new Map<string, number>();
+                    byFieldByType.set(fieldKey, typeMap);
+                }
+                typeMap.set(typeCode, (typeMap.get(typeCode) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Section') {
+            const sectionKey = rawKey || meta?.sectionKey?.trim() || '';
+            if (sectionKey) {
+                bySection.set(sectionKey, (bySection.get(sectionKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Group') {
+            const groupKey = rawKey || meta?.groupKey?.trim() || '';
+            if (groupKey) {
+                byGroup.set(groupKey, (byGroup.get(groupKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Contribution') {
+            if (rawKey) {
+                byContribution.set(rawKey, (byContribution.get(rawKey) ?? 0) + 1);
+            }
+        }
+
+        // Roll up Field threads into their parent Section and Group when metadata provides them
+        if (conv.AnchorType !== 'Section' && meta?.sectionKey) {
+            const secKey = meta.sectionKey.trim();
+            if (secKey) {
+                bySection.set(secKey, (bySection.get(secKey) ?? 0) + 1);
+            }
+        }
+        if (conv.AnchorType !== 'Group' && meta?.groupKey) {
+            const grpKey = meta.groupKey.trim();
+            if (grpKey) {
+                byGroup.set(grpKey, (byGroup.get(grpKey) ?? 0) + 1);
+            }
+        }
+    }
+
+    return {
+        TotalOpenCount: totalOpenCount,
+        TotalResolvedCount: totalResolvedCount,
+        RecordLevelOpenCount: recordLevelOpenCount,
+        ByField: byField,
+        BySection: bySection,
+        ByGroup: byGroup,
+        ByContribution: byContribution,
+        OpenNoteCount: openNoteCount,
+        OpenSuggestionCount: openSuggestionCount,
+        ByFieldSuggestions: byFieldSuggestions,
+        ByFieldByType: byFieldByType,
+    };
 }
 
 /**
@@ -96,6 +581,25 @@ export type ConversationContextMetadata = {
      * included raw in the window.
      */
     summaryBoundarySequence?: number;
+    /** ID of the user who wrote this message, when populated on `ConversationDetail` */
+    userId?: string | null;
+    /** Display name of the user who wrote this message, when available */
+    userName?: string | null;
+    /** ID of the AI agent that wrote this message, when populated on `ConversationDetail` */
+    agentId?: string | null;
+    /** Display name of the AI agent that wrote this message, when available */
+    agentName?: string | null;
+    /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
+    parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
+};
+
+type SpeakerAttributionState = {
+    attributeUsers: boolean;
+    attributeAgents: boolean;
+    labelsById: UUIDMap<string>;
+    rowsById: UUIDMap<ConversationWindowSourceRow>;
 };
 
 /**
@@ -129,6 +633,16 @@ export interface ConversationWindowSourceRow {
      * row is kept for audit but left out of every window; optional so hand-built rows may omit it.
      */
     ReplacedAt?: Date | string | null;
+    /** Authoring user ID on multi-user conversations; optional for hand-built rows. */
+    UserID?: string | null;
+    /** Authoring user display name from `vwConversationDetails`; optional for hand-built rows. */
+    User?: string | null;
+    /** Answering agent ID on AI rows; optional for hand-built rows. */
+    AgentID?: string | null;
+    /** Answering agent display name from `vwConversationDetails`; optional for hand-built rows. */
+    Agent?: string | null;
+    /** Parent detail ID when this row replies to an earlier message; optional for hand-built rows. */
+    ParentID?: string | null;
 }
 
 /**
@@ -137,7 +651,7 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt', 'ReplacedAt'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt', 'ReplacedAt', 'UserID', 'User', 'AgentID', 'Agent', 'ParentID'];
 
 /** How a fork started. The values come from the CHECK constraint on ConversationBranch.Kind. */
 export type ForkKind = MJConversationBranchEntity['Kind'];
@@ -740,10 +1254,23 @@ function mergeArtifactJSON(
  * without an identity there is nobody to be the owner of, and widening on absent input
  * is how a personal folder reaches a stranger's list.
  */
-export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+export function BuildProjectVisibilityFilter(
+    userId: string | null | undefined,
+    sharedProjectIds: string[] = []
+): string {
     const id = String(userId ?? '').trim();
-    return id.length > 0
-        ? `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}')`
+    const cleanedSharedIds = sharedProjectIds
+        .map((pid) => String(pid ?? '').trim())
+        .filter((pid) => pid.length > 0);
+    const sharedClause =
+        cleanedSharedIds.length > 0
+            ? ` OR ID IN (${cleanedSharedIds.map((pid) => `'${EscapeSQLString(pid)}'`).join(',')})`
+            : '';
+    if (id.length > 0) {
+        return `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}'${sharedClause})`;
+    }
+    return cleanedSharedIds.length > 0
+        ? `(OwnerUserID IS NULL${sharedClause})`
         : `OwnerUserID IS NULL`;
 }
 
@@ -865,6 +1392,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
 
+    /** Track the user ID used for the last conversations load */
+    private _lastConversationsUserId: string | null = null;
+
+    /** Conversation IDs shared with the current user via explicit MJ: Resource Permissions grants */
+    private _explicitSharedConversationIds = new Set<string>();
+
     /** Track the environment ID used for the last projects (folders) load */
     private _lastProjectsEnvironmentId: string | null = null;
     /**
@@ -875,6 +1408,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * from cache and never issue a read of their own.
      */
     private _lastProjectsUserId: string | null = null;
+
+    /**
+     * The user the last folder or conversation load ran for. Kept whole, not just the ID, so event handlers can
+     * match that user's Role grants as well as their User grants (see {@link getUserSharedProjectPermissions}).
+     */
+    private _lastViewer: UserInfo | null = null;
 
     /**
      * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
@@ -892,7 +1431,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * For conversations the current user *received* via sharing, this map goes
      * from `conversationId` to the grantor's display info. Populated by
      * {@link LoadConversations} using the `SharedByUserID` column on the
-     * `MJ: Resource Permissions` row. Used by the chat UI to render
+     * `MJ: Resource Permissions` row or the conversation owner for conversations
+     * inside a shared folder. Used by the chat UI to render
      * "Shared by {email}" next to the title and a share icon in the sidebar.
      */
     private _sharedByByConversationId = new Map<string, SharedByInfo>();
@@ -919,8 +1459,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * True when the user may change the conversation's folder and pin: they own
-     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     * True when the user may move the conversation to another folder or change whether it inherits its
+     * folder's access: only its owner. Both decide who else sees it, so an Edit or Owner grant is not
+     * enough. Mirrors the server's rule in `MJConversationEntityServer`.
+     */
+    public CanMoveConversation(conversation: MJConversationEntity, userId: string): boolean {
+        return !!conversation.UserID && UUIDsEqual(conversation.UserID, userId);
+    }
+
+    /**
+     * True when the user may pin the conversation: they own it, or hold an Edit or Owner grant on it.
+     * A View grant is read-only. Moving it is owner-only: see {@link CanMoveConversation}.
      */
     public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
         if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
@@ -936,30 +1485,153 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * which would cause redundant cache updates or infinite loops.
      */
     private _selfMutating = false;
+    private _conversationTypes: MJConversationTypeEntity[] = [];
+    private _commentTypes: MJCommentTypeEntity[] = [];
+
+    // ========================================================================
+    // CONVERSATION & COMMENT TYPE LOOKUPS
+    // ========================================================================
+
+    /** Cached `MJ: Conversation Types` rows loaded during {@link Config}. */
+    public get ConversationTypes(): readonly MJConversationTypeEntity[] {
+        return this._conversationTypes;
+    }
+
+    /** Cached `MJ: Comment Types` rows loaded during {@link Config}. */
+    public get CommentTypes(): readonly MJCommentTypeEntity[] {
+        return this._commentTypes;
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by its case-insensitive `Code`. */
+    public TypeByCode(code: string | null | undefined): MJConversationTypeEntity | undefined {
+        const normalized = code?.trim().toUpperCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => t.Code?.trim().toUpperCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by its case-insensitive `Name`. */
+    public TypeByName(name: string | null | undefined): MJConversationTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => t.Name?.trim().toLowerCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Conversation Types` row by `ID`. */
+    public TypeByID(id: string | null | undefined): MJConversationTypeEntity | undefined {
+        if (!id) {
+            return undefined;
+        }
+        return this._conversationTypes.find((t) => UUIDsEqual(t.ID, id));
+    }
+
+    /**
+     * Resolves a `ConversationType.ID` by `Code` or `Name`, consulting cached `ConversationTypes`
+     * first and falling back to built-in seeded UUIDs when {@link Config} has not yet populated cache.
+     */
+    public ResolveConversationTypeID(codeOrName: string | null | undefined): string | null {
+        const trimmed = codeOrName?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const fromCache = this.TypeByCode(trimmed) ?? this.TypeByName(trimmed);
+        if (fromCache?.ID) {
+            return fromCache.ID;
+        }
+        const upper = trimmed.toUpperCase() as BuiltInConversationTypeCode;
+        if (upper in BUILT_IN_CONVERSATION_TYPE_IDS) {
+            return BUILT_IN_CONVERSATION_TYPE_IDS[upper];
+        }
+        const mappedCode = BUILT_IN_CONVERSATION_TYPE_NAMES[trimmed.toLowerCase()];
+        return mappedCode ? BUILT_IN_CONVERSATION_TYPE_IDS[mappedCode] : null;
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by its case-insensitive `Code`. */
+    public CommentTypeByCode(code: string | null | undefined): MJCommentTypeEntity | undefined {
+        const normalized = code?.trim().toUpperCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => t.Code?.trim().toUpperCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by its case-insensitive `Name`. */
+    public CommentTypeByName(name: string | null | undefined): MJCommentTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => t.Name?.trim().toLowerCase() === normalized);
+    }
+
+    /** Looks up a cached `MJ: Comment Types` row by `ID`. */
+    public CommentTypeByID(id: string | null | undefined): MJCommentTypeEntity | undefined {
+        if (!id) {
+            return undefined;
+        }
+        return this._commentTypes.find((t) => UUIDsEqual(t.ID, id));
+    }
+
+    /**
+     * Resolves a `CommentType.ID` by `Code` or `Name`, consulting cached `CommentTypes`
+     * first and falling back to built-in seeded UUIDs when {@link Config} has not yet populated cache.
+     */
+    public ResolveCommentTypeID(codeOrName: string | null | undefined): string | null {
+        const trimmed = codeOrName?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const fromCache = this.CommentTypeByCode(trimmed) ?? this.CommentTypeByName(trimmed);
+        if (fromCache?.ID) {
+            return fromCache.ID;
+        }
+        const upper = trimmed.toUpperCase() as BuiltInCommentTypeCode;
+        if (upper in BUILT_IN_COMMENT_TYPE_IDS) {
+            return BUILT_IN_COMMENT_TYPE_IDS[upper];
+        }
+        const mappedCode = BUILT_IN_COMMENT_TYPE_NAMES[trimmed.toLowerCase()];
+        return mappedCode ? BUILT_IN_COMMENT_TYPE_IDS[mappedCode] : null;
+    }
 
     // ========================================================================
     // ENGINE CONFIG (BaseEngine pattern)
     // ========================================================================
 
     /**
-     * Configures the engine. Unlike other engines that bulk-load entity tables via BaseEngine.Load(),
-     * ConversationEngine manages its own caching because conversations are user-scoped and filtered
-     * by environment, which doesn't fit the standard "load all rows" pattern.
-     *
-     * Call this once at startup to initialize the engine. Conversation data is loaded
-     * separately via LoadConversations().
+     * Configures the engine, bulk-loading small lookup tables (`MJ: Conversation Types`
+     * and `MJ: Comment Types`) while keeping user-scoped conversation data lazy via
+     * {@link LoadConversations}.
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        // Ensure ArtifactMetadataEngine is loaded — conversation details reference artifacts
-        // and we need artifact types available before processing. Passing false means
-        // this is a no-op if it's already loaded.
         await ArtifactMetadataEngine.Instance.Config(forceRefresh, contextUser, provider);
 
-        // We don't use BaseEngine.Load() because conversations are user-scoped.
-        // Mark the engine as "configured" so consumers can check .Loaded.
-        // We call Load with an empty config array just to set the Loaded flag and wire up
-        // the BaseEngine infrastructure (entity event listeners, etc.)
-        const configs: Partial<BaseEnginePropertyConfig>[] = [];
+        const activeProvider = provider ?? this.ProviderToUse;
+        const entities = activeProvider?.Entities;
+        const hasTypeEntities =
+            !Array.isArray(entities) ||
+            entities.length === 0 ||
+            (entities.some((e) => e.Name === 'MJ: Conversation Types') &&
+                entities.some((e) => e.Name === 'MJ: Comment Types'));
+
+        const configs: Partial<BaseEnginePropertyConfig>[] = hasTypeEntities
+            ? [
+                  {
+                      Type: 'entity',
+                      EntityName: 'MJ: Conversation Types',
+                      PropertyName: '_conversationTypes',
+                      CacheLocal: true,
+                  },
+                  {
+                      Type: 'entity',
+                      EntityName: 'MJ: Comment Types',
+                      PropertyName: '_commentTypes',
+                      CacheLocal: true,
+                  },
+              ]
+            : [];
         await this.Load(configs, provider, forceRefresh, contextUser);
     }
 
@@ -979,7 +1651,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -987,21 +1659,25 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         this._lastEnvironmentId = environmentId;
+        this._lastConversationsUserId = contextUser?.ID ?? null;
+        this._lastViewer = contextUser ?? null;
 
         // Claim a ticket for this load. Anything published below is gated on still holding
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const initialSharedProjectIds = this.getSharedProjectIds(environmentId);
         const filter = this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            initialSharedProjectIds
         );
 
         const rv = new RunView();
-        const result = await rv.RunView<MJConversationEntity>(
+        let result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
                 ExtraFilter: filter,
@@ -1033,34 +1709,178 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             this._conversations$.next([]);
         }
 
-        // Build the "shared by" map AFTER fetching conversations so we can
-        // exclude permissions on conversations the user owns. A role-inherited
-        // grant on the user's own conversation (e.g. they're in a role that
-        // got View access via a feedback workflow) must NOT appear as
-        // "shared with me at View level" — otherwise the chat UI would treat
-        // their own conversation as read-only. See isReadOnlyView in
-        // conversation-chat-area.component.
-        const ownedConversationIds = new Set(
-            (result.Results ?? [])
-                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
-                .map((c) => NormalizeUUID(c.ID))
+        await this.applyConversationSharingMetadata(
+            rv,
+            result.Results ?? [],
+            sharedPermissions,
+            initialSharedProjectIds,
+            contextUser
         );
-        const trulySharedPermissions = sharedPermissions.filter(
-            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
-        );
-        await this.rebuildSharedByMap(rv, trulySharedPermissions, contextUser);
 
         // Load the folder (project) list so the sidebar can group conversations
         // under their folder. Done after the conversation query (so it isn't
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+
+        if (generation !== this._conversationsLoadGeneration) {
+            return;
+        }
+
+        // If LoadProjects discovered shared folders that were not yet in _projects$ when
+        // the initial conversation query ran, re-query MJ: Conversations so conversations
+        // inside those shared folders are automatically included and marked View-only.
+        const currentSharedProjectIds = this.getSharedProjectIds(environmentId);
+        if (!this.sameIdSet(initialSharedProjectIds, currentSharedProjectIds)) {
+            const updatedFilter = this.buildVisibleConversationsFilter(
+                environmentId,
+                contextUser.ID,
+                sharedPermissions.map((p) => p.ResourceRecordID),
+                options,
+                currentSharedProjectIds
+            );
+            result = await rv.RunView<MJConversationEntity>(
+                {
+                    EntityName: 'MJ: Conversations',
+                    ExtraFilter: updatedFilter,
+                    OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
+                    MaxRows: 1000,
+                    ResultType: 'entity_object',
+                    BypassCache: forceRefresh
+                },
+                contextUser
+            );
+
+            if (generation !== this._conversationsLoadGeneration) {
+                return;
+            }
+
+            if (result.Success) {
+                this._conversations$.next(result.Results || []);
+            } else {
+                console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
+                this._conversations$.next([]);
+            }
+
+            await this.applyConversationSharingMetadata(
+                rv,
+                result.Results ?? [],
+                sharedPermissions,
+                currentSharedProjectIds,
+                contextUser
+            );
+        }
+    }
+
+    /**
+     * Populates {@link _explicitSharedConversationIds} and {@link _sharedByByConversationId}
+     * from both explicit `MJ: Resource Permissions` grants and folder-inherited permissions
+     * on conversations inside Shared or Public folders (when {@link IsInheritingFolderAccess}
+     * is true).
+     *
+     * Explicit grants and folder-inherited grants combine via {@link ComparePermissionLevels}
+     * (`Owner > Edit > View`), while conversations whose owner has not turned on `inheritFolderAccess`
+     * do not inherit folder access and are only visible to their owner or explicit conversation grantees.
+     *
+     * Side effect: when any loaded conversation turns out not to be visible to the user, it is
+     * dropped and the remaining list is re-emitted on {@link _conversations$}.
+     */
+    private async applyConversationSharingMetadata(
+        rv: RunView,
+        conversations: MJConversationEntity[],
+        sharedPermissions: MJResourcePermissionEntity[],
+        sharedProjectIds: string[],
+        contextUser: UserInfo
+    ): Promise<void> {
+        // Exclude permissions on conversations the user owns. A role-inherited
+        // grant on the user's own conversation (e.g. they're in a role that
+        // got View access via a feedback workflow) must NOT appear as
+        // "shared with me at View level" — otherwise the chat UI would treat
+        // their own conversation as read-only. See isReadOnlyView in
+        // conversation-chat-area.component.
+        const ownedConversationIds = new Set(
+            conversations
+                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
+                .map((c) => NormalizeUUID(c.ID))
+        );
+        const trulySharedPermissions = sharedPermissions.filter(
+            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
+        );
+        this._explicitSharedConversationIds = new Set(
+            trulySharedPermissions.map((p) => NormalizeUUID(p.ResourceRecordID))
+        );
+
+        const sharedProjectIdSet = new Set(sharedProjectIds.map((id) => NormalizeUUID(id)));
+        const convById = new Map<string, MJConversationEntity>(
+            conversations.map((c) => [NormalizeUUID(c.ID), c])
+        );
+
+        const effectiveExplicitPermissions = trulySharedPermissions.map((p) => {
+            const conv = convById.get(NormalizeUUID(p.ResourceRecordID));
+            const inherited =
+                conv && conv.ProjectID && IsInheritingFolderAccess(conv) && sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+                    ? this.GetEffectiveProjectPermission(conv.ProjectID, contextUser)
+                    : null;
+            return {
+                ResourceRecordID: p.ResourceRecordID,
+                SharedByUserID: p.SharedByUserID ?? null,
+                SharedByUser: p.SharedByUser ?? null,
+                PermissionLevel: ComparePermissionLevels(p.PermissionLevel ?? 'View', inherited?.Level) ?? 'View'
+            };
+        });
+
+        const folderSharedPermissions: Array<{
+            ResourceRecordID: string;
+            SharedByUserID: string | null;
+            SharedByUser: string | null;
+            PermissionLevel: 'View' | 'Edit' | 'Owner' | null;
+        }> = [];
+
+        const visibleConversations: MJConversationEntity[] = [];
+        let filteredAny = false;
+
+        for (const conv of conversations) {
+            const normId = NormalizeUUID(conv.ID);
+            const isOwned = !conv.UserID || ownedConversationIds.has(normId);
+            if (isOwned || this._explicitSharedConversationIds.has(normId)) {
+                visibleConversations.push(conv);
+                continue;
+            }
+            if (
+                conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID))
+            ) {
+                visibleConversations.push(conv);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, contextUser);
+                const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                folderSharedPermissions.push({
+                    ResourceRecordID: conv.ID,
+                    SharedByUserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                    SharedByUser: convWithUser.User ?? inherited?.SharedByUser ?? null,
+                    PermissionLevel: inherited?.Level ?? 'View'
+                });
+            } else {
+                filteredAny = true;
+            }
+        }
+
+        if (filteredAny) {
+            this._conversations$.next(visibleConversations);
+        }
+
+        await this.rebuildSharedByMap(
+            rv,
+            [...effectiveExplicitPermissions, ...folderSharedPermissions],
+            contextUser
+        );
     }
 
     /**
      * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
-     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
-     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     * {@link LoadConversations} shows the user: owned by the user, explicitly shared with them,
+     * or inside a visible Shared/Public folder (with folder inheritance enabled), not archived,
+     * and (unless `includeApplicationScoped`) Global or Both scope.
      *
      * Use it anywhere that reads conversations for display (search, pickers) so those reads
      * cannot show more than the conversation list does. It is not capped, unlike the list load.
@@ -1072,15 +1892,226 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const sharedProjectIds = this.getSharedProjectIds(environmentId);
         return this.buildVisibleConversationsFilter(
             environmentId,
             contextUser.ID,
             sharedPermissions.map((p) => p.ResourceRecordID),
-            options
+            options,
+            sharedProjectIds
         );
+    }
+
+    /**
+     * Approved `MJ: Resource Permissions` rows targeting `MJ: Projects` (`PROJECTS_RESOURCE_TYPE_ID`).
+     */
+    private getApprovedProjectPermissions(): MJResourcePermissionEntity[] {
+        const allPerms = ResourcePermissionEngine.Instance.Permissions ?? [];
+        return allPerms.filter(
+            (p) =>
+                p.Status === 'Approved' &&
+                UUIDsEqual(p.ResourceTypeID, PROJECTS_RESOURCE_TYPE_ID)
+        );
+    }
+
+    /**
+     * Approved `MJ: Projects` permission grants that apply to `user` (direct User grant or Role grant),
+     * reduced to the highest `PermissionLevel` per project ID.
+     */
+    private getUserSharedProjectPermissions(user: UserInfo | null | undefined): MJResourcePermissionEntity[] {
+        if (!user?.ID) return [];
+        const approved = this.getApprovedProjectPermissions();
+        const roleIdSet = new Set(
+            (user.UserRoles ?? [])
+                .map((ur) => ur.RoleID)
+                .filter((id): id is string => !!id)
+                .map((id) => NormalizeUUID(id))
+        );
+        const matching = approved.filter(
+            (p) =>
+                (p.Type === 'User' && !!p.UserID && UUIDsEqual(p.UserID, user.ID)) ||
+                (p.Type === 'Role' && !!p.RoleID && roleIdSet.has(NormalizeUUID(p.RoleID)))
+        );
+
+        const byProjectId = new Map<string, MJResourcePermissionEntity>();
+        for (const perm of matching) {
+            const key = NormalizeUUID(perm.ResourceRecordID);
+            const existing = byProjectId.get(key);
+            if (!existing) {
+                byProjectId.set(key, perm);
+            } else {
+                const winner = ComparePermissionLevels(existing.PermissionLevel ?? 'View', perm.PermissionLevel ?? 'View');
+                if (winner !== (existing.PermissionLevel ?? 'View')) {
+                    byProjectId.set(key, perm);
+                }
+            }
+        }
+        return [...byProjectId.values()];
+    }
+
+    /**
+     * True when one of the user's roles grants this kind of write on folders (`MJ: Projects`) with no row-level
+     * filter. A user whose folder writes are all filtered (the UI role: own folders only) writes only folders they
+     * own: they cannot make a folder Public (no owner) or rename, move or delete a Public folder or someone else's.
+     * Answers false when the folder entity's metadata is not loaded.
+     *
+     * @param provider the metadata provider the caller works against; defaults to the engine's.
+     */
+    public CanWriteAnyProject(
+        user: UserInfo | null | undefined,
+        type: Exclude<EntityPermissionType, 'Read'>,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!user) {
+            return false;
+        }
+        const entity = (provider ?? this.ProviderToUse)?.EntityByName('MJ: Projects');
+        return !!entity && entity.UserExemptFromRowLevelSecurity(user, type);
+    }
+
+    /**
+     * True when the user may rename or delete this folder from the sidebar: they own it, or their folder writes
+     * are not row-filtered (see {@link CanWriteAnyProject}).
+     */
+    public CanManageProject(
+        project: MJProjectEntity | null | undefined,
+        user: UserInfo | null | undefined,
+        provider?: IMetadataProvider | null
+    ): boolean {
+        if (!project || !user) {
+            return false;
+        }
+        if (project.OwnerUserID && UUIDsEqual(project.OwnerUserID, user.ID)) {
+            return true;
+        }
+        return this.CanWriteAnyProject(user, EntityPermissionType.Update, provider);
+    }
+
+    /**
+     * Returns the three-tier visibility mode (`'Private' | 'Shared' | 'Public'`) for a folder:
+     * - `'Public'`: `OwnerUserID == null` (environment-wide)
+     * - `'Shared'`: `OwnerUserID != null` and the folder itself has approved `MJ: Resource Permissions` grants
+     * - `'Private'`: `OwnerUserID != null` with no active folder shares
+     *
+     * A subfolder is shared on its own: the server's read filter and write check look at a folder's own
+     * grants only, so this does too, and the tier shown is the access the server enforces.
+     */
+    public GetProjectVisibilityTier(projectOrId: MJProjectEntity | string | null | undefined): ProjectVisibilityTier {
+        const project =
+            typeof projectOrId === 'string'
+                ? this._projects$.value.find((p) => !!p.ID && UUIDsEqual(p.ID, projectOrId))
+                : projectOrId;
+        if (!project) {
+            return 'Private';
+        }
+        if (!project.OwnerUserID) {
+            return 'Public';
+        }
+        const shared = !!project.ID && this.getApprovedProjectPermissions().some((p) => UUIDsEqual(p.ResourceRecordID, project.ID));
+        return shared ? 'Shared' : 'Private';
+    }
+
+    /**
+     * Resolves the effective permission level (`'View' | 'Edit' | 'Owner'`) a user inherits from a folder.
+     * The folder's own grants only, not its ancestors', matching the server (see {@link GetProjectVisibilityTier}):
+     * - Public folders (`OwnerUserID == null`) grant at least `'View'` to everyone in the environment.
+     * - Shared folders grant the user's highest direct/role `MJ: Resource Permissions` level (`View`/`Edit`/`Owner`).
+     * - Folder owners also receive at least `'View'` on other users' inherited conversations placed in their Shared folder.
+     *
+     * Without a `contextUser`, it answers for the user the last folder or conversation load ran for, Role grants included.
+     */
+    public GetEffectiveProjectPermission(
+        projectId: string | null | undefined,
+        contextUser?: UserInfo | null
+    ): { Level: 'View' | 'Edit' | 'Owner'; SharedByUserID: string | null; SharedByUser: string | null } | null {
+        if (!projectId) return null;
+        const viewer = contextUser ?? this._lastViewer;
+        const userId = viewer?.ID ?? this._lastConversationsUserId ?? this._lastProjectsUserId;
+        const normUserId = userId ? NormalizeUUID(userId) : null;
+        const userProjectPerms = this.getUserSharedProjectPermissions(viewer);
+        const userPermByProjectId = new Map<string, MJResourcePermissionEntity>(
+            userProjectPerms.map((p) => [NormalizeUUID(p.ResourceRecordID), p])
+        );
+        if (normUserId) {
+            for (const p of this.getApprovedProjectPermissions()) {
+                if (p.Type === 'User' && p.UserID && NormalizeUUID(p.UserID) === normUserId) {
+                    const key = NormalizeUUID(p.ResourceRecordID);
+                    const existing = userPermByProjectId.get(key);
+                    if (
+                        !existing ||
+                        ComparePermissionLevels(existing.PermissionLevel ?? 'View', p.PermissionLevel ?? 'View') !==
+                            (existing.PermissionLevel ?? 'View')
+                    ) {
+                        userPermByProjectId.set(key, p);
+                    }
+                }
+            }
+        }
+        const normProjectId = NormalizeUUID(projectId);
+        const proj = this._projects$.value.find((p) => !!p.ID && NormalizeUUID(p.ID) === normProjectId);
+        const directGrant = userPermByProjectId.get(normProjectId);
+
+        let bestLevel: 'View' | 'Edit' | 'Owner' | null = null;
+        let sharedByUserId: string | null = null;
+        let sharedByUser: string | null = null;
+
+        if (directGrant) {
+            bestLevel = directGrant.PermissionLevel ?? 'View';
+            sharedByUserId = directGrant.SharedByUserID ?? proj?.OwnerUserID ?? null;
+            sharedByUser = directGrant.SharedByUser ?? proj?.OwnerUser ?? null;
+        }
+
+        if (proj) {
+            if (!proj.OwnerUserID) {
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+            } else if (userId && !UUIDsEqual(proj.OwnerUserID, userId)) {
+                // Folder owned by another user that is in our visible project list (shared with us)
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+                sharedByUserId = sharedByUserId ?? proj.OwnerUserID;
+                sharedByUser = sharedByUser ?? proj.OwnerUser ?? null;
+            } else if (userId && this.GetProjectVisibilityTier(proj) !== 'Private') {
+                // Folder owner viewing collaborators' conversations inside their Shared folder
+                bestLevel = ComparePermissionLevels(bestLevel, 'View');
+            }
+        }
+
+        if (!bestLevel) {
+            return null;
+        }
+        return {
+            Level: bestLevel,
+            SharedByUserID: sharedByUserId,
+            SharedByUser: sharedByUser
+        };
+    }
+
+    /**
+     * IDs of loaded folders in `environmentId` that share their conversations with participants:
+     * - `'Public'` folders (`OwnerUserID IS NULL`)
+     * - `'Shared'` folders (have approved `MJ: Resource Permissions` grants on the folder itself,
+     *   or are owned by another user and visible to the current viewer).
+     */
+    private getSharedProjectIds(environmentId: string): string[] {
+        const viewerId = this._lastConversationsUserId ?? this._lastProjectsUserId;
+        return this._projects$.value
+            .filter((p) => {
+                if (p.IsArchived) return false;
+                if (p.EnvironmentID && !UUIDsEqual(p.EnvironmentID, environmentId)) return false;
+                if (!p.OwnerUserID) return true; // Public tier
+                if (viewerId && !UUIDsEqual(p.OwnerUserID, viewerId)) return true; // Shared with viewer by another owner
+                return this.GetProjectVisibilityTier(p) !== 'Private';
+            })
+            .map((p) => p.ID)
+            .filter((id): id is string => !!id);
+    }
+
+    private sameIdSet(a: string[], b: string[]): boolean {
+        if (a.length !== b.length) return false;
+        const setA = new Set(a.map((id) => NormalizeUUID(id)));
+        return b.every((id) => setA.has(NormalizeUUID(id)));
     }
 
     /**
@@ -1096,19 +2127,34 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
+        sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
         const sharedClause =
             sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`
+                : '';
+        const sharedFolderClause =
+            sharedProjectIds.length > 0
+                ? ` OR (ProjectID IN (${sharedProjectIds.map((id) => `'${EscapeSQLString(id)}'`).join(',')}) AND ${INHERIT_FOLDER_ACCESS_SQL_CLAUSE})`
                 : '';
         // The main chat view shows Global and Both. App-scoped conversations live inside
         // their owning Application's embedded surface.
         const scopeClause = options?.includeApplicationScoped
             ? ''
             : ` AND ApplicationScope IN ('Global', 'Both')`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
+        // Anchored record/document comment threads live inside the target record's
+        // comment drawer/popover and should not clutter the main Chat sidebar list.
+        const anchorClause = options?.includeAnchored
+            ? ''
+            : ` AND AnchorType IS NULL`;
+        // Record-bound AI conversations (e.g. "Ask AI" on an entity record form) stay
+        // attached to their owning record and do not pollute the general-purpose Chat sidebar.
+        const recordLinkedClause = options?.includeRecordLinked
+            ? ''
+            : ` AND LinkedEntityID IS NULL`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
     }
 
     /**
@@ -1173,14 +2219,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Loads the projects (conversation folders) visible to a user in an environment and
      * emits via Projects$.
      *
-     * Visible means SHARED (OwnerUserID IS NULL — every folder that existed before
-     * ownership was expressible) plus the user's OWN personal folders. A personal folder
-     * never reaches anyone else's sidebar. The set is small, so it is cached whole;
-     * reloading is skipped only when both the environment AND the user match, because the
-     * read now depends on both.
+     * Visible means:
+     * - PUBLIC (`OwnerUserID IS NULL`),
+     * - SHARED with the user or their roles via `MJ: Resource Permissions` (`PROJECTS_RESOURCE_TYPE_ID`), or
+     * - PRIVATE/OWNED by the user (`OwnerUserID = contextUser.ID`).
      *
      * @param environmentId - The environment to filter projects by
-     * @param contextUser - The current user context; also decides which personal folders load
+     * @param contextUser - The current user context; also decides which personal/shared folders load
      * @param forceRefresh - If true, reloads even if already cached for this environment/user
      */
     public async LoadProjects(
@@ -1195,9 +2240,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return;
         }
 
-        // Shared folders, plus this user's own. One definition, shared with every other
-        // list read of this entity — see BuildProjectVisibilityFilter.
-        const ownership = BuildProjectVisibilityFilter(userId);
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        const sharedProjectIds = this.getUserSharedProjectPermissions(contextUser).map(
+            (p) => p.ResourceRecordID
+        );
+
+        // Public folders, folders shared with this user/role, plus this user's own.
+        const ownership = BuildProjectVisibilityFilter(userId, sharedProjectIds);
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
@@ -1221,6 +2270,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (result.Success) {
             this._lastProjectsEnvironmentId = environmentId;
             this._lastProjectsUserId = userId;
+            this._lastViewer = contextUser ?? null;
             this._projects$.next(result.Results || []);
         } else {
             console.error('[ConversationEngine] Failed to load projects:', result.ErrorMessage);
@@ -1244,6 +2294,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         contextUser: UserInfo
     ): Promise<boolean> {
         return this.SaveConversation(conversationId, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Enables or disables folder permission inheritance for a conversation (`inheritFolderAccess`
+     * in `Conversation.AdditionalData`). It is off by default; while off, the conversation is restricted
+     * to its owner and explicit conversation-level `MJ: Resource Permissions` grantees even when
+     * placed inside a Shared or Public folder.
+     */
+    public async SetConversationFolderInheritance(
+        conversationId: string,
+        inheritFolderAccess: boolean,
+        contextUser?: UserInfo
+    ): Promise<boolean> {
+        const existing = this.GetConversation(conversationId);
+        const updatedAdditionalData = BuildUpdatedAdditionalDataForFolderInheritance(
+            existing?.AdditionalData,
+            inheritFolderAccess
+        );
+        const saved = await this.SaveConversation(
+            conversationId,
+            { AdditionalData: updatedAdditionalData },
+            contextUser
+        );
+        if (saved) {
+            this.reconcileFolderSharedConversations();
+        }
+        return saved;
     }
 
     /**
@@ -1320,6 +2397,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   2. Reparents direct child folders to this folder's parent (one level up).
      *   3. Deletes the now-unreferenced folder.
      * Conversations and subfolders are preserved — only the folder itself is removed.
+     * Steps 1 and 2 cover the rows the caller can change; the server's folder delete
+     * (`MJProjectEntityServer.Delete`) moves the rest in the delete's transaction.
      *
      * Note: this does NOT reassign Tasks that reference the project; if a Task still
      * references it, the final delete will fail and this throws with the DB message.
@@ -1344,12 +2423,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
         const newParentId = project.ParentID ?? null;
 
-        // 1. Unassign conversations directly in this folder
+        // 1. Unassign conversations directly in this folder that the caller can edit.
+        // Conversations owned by other users in a shared folder cannot be edited by this
+        // caller; the server's folder delete takes them out of the folder in the delete's
+        // transaction (on a server without that, the delete below surfaces
+        // FK_Conversation_Project via ExplainProjectDeleteFailure).
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
         );
         for (const conv of directConversations) {
-            await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            if (!contextUser?.ID || !conv.UserID || this.CanEditConversation(conv, contextUser.ID)) {
+                await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
+            }
         }
 
         // 2. Reparent direct child folders one level up.
@@ -1362,21 +2447,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
         // with a raw constraint message, about a row the user is not allowed to know exists.
         //
-        // The read carries NO ownership clause, deliberately. Deleting a folder needs
-        // CanDelete on the entity, which the UI role does not hold; the roles that do also
-        // hold unfiltered read, which makes them exempt from the row-level filter — so this
-        // read returns the complete child set for every principal that can actually reach
-        // here. Should a deployment grant delete to a filtered role anyway, the server still
-        // narrows the read, and step 3's guard turns the resulting FK failure into something
-        // legible rather than "Failed to save project".
+        // The read carries no ownership clause; the server narrows it to what the caller
+        // may read. A subfolder another user owns may refuse the move (only its owner moves
+        // it, and a row-filtered caller writes only their own folders): that one is left in
+        // place, and the server's folder delete moves it, as the system user and in the
+        // delete's transaction, once the caller's Delete permission and row filter pass. On a
+        // server without that, the delete below fails on the foreign key and step 3's guard
+        // explains it.
         const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
                 for (const child of childFolders) {
+                    const previousParentId = child.ParentID;
                     child.ParentID = newParentId;
                     const saved = await child.Save();
                     if (!saved) {
+                        const ownedByOther = !!child.OwnerUserID && !!contextUser?.ID && !UUIDsEqual(child.OwnerUserID, contextUser.ID);
+                        if (ownedByOther) {
+                            child.ParentID = previousParentId;   // left for the server's folder delete
+                            continue;
+                        }
                         throw new Error(child.LatestResult?.CompleteMessage || 'Failed to reparent subfolder');
                     }
                 }
@@ -1413,6 +2504,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             throw new Error(ExplainProjectDeleteFailure(project.LatestResult?.CompleteMessage));
         }
 
+        this.reconcileFolderSharedConversations();
         return true;
     }
 
@@ -1481,6 +2573,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         conversation.Name = name;
         conversation.EnvironmentID = environmentId;
         conversation.UserID = contextUser.ID;
+        const resolvedTypeId =
+            options?.typeId ??
+            this.ResolveConversationTypeID(
+                options?.typeCode ??
+                    (options?.anchorType ? CONVERSATION_TYPE_CODES.COMMENT : CONVERSATION_TYPE_CODES.CHAT)
+            ) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.CHAT;
+        conversation.TypeID = resolvedTypeId;
         if (description) conversation.Description = description;
         if (projectId) conversation.ProjectID = projectId;
 
@@ -1511,6 +2611,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (options?.linkedRecordId !== undefined) {
             conversation.LinkedRecordID = options.linkedRecordId;
         }
+        if (options?.anchorType !== undefined) {
+            conversation.AnchorType = options.anchorType;
+        }
+        if (options?.anchorKey !== undefined) {
+            conversation.AnchorKey = options.anchorKey;
+        }
+        if (options?.anchorMetadata !== undefined) {
+            conversation.AnchorMetadataObject = options.anchorMetadata;
+        }
 
         // Guard our own save event: the engine's BaseEntity event handler
         // (handleConversationEntityEvent) ALSO prepends a conversation it doesn't yet
@@ -1539,11 +2648,548 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // out on next refresh.
         // The GetConversation() check is belt-and-suspenders against a save event that
         // slips past _selfMutating (e.g. async dispatch) — never add the same ID twice.
-        if (conversation.ApplicationScope !== 'Application' && !this.GetConversation(conversation.ID)) {
+        if (
+            conversation.ApplicationScope !== 'Application' &&
+            conversation.AnchorType == null &&
+            conversation.LinkedEntityID == null &&
+            !this.GetConversation(conversation.ID)
+        ) {
             const updated = [conversation, ...this._conversations$.value];
             this._conversations$.next(updated);
         }
         return conversation;
+    }
+
+    /**
+     * Loads non-anchored AI conversations (`AnchorType IS NULL`) bound to a specific
+     * `(linkedEntityId, linkedRecordId)` for `contextUser`, ordered by most-recently updated.
+     * Used by `<mj-chat-agents-overlay>` ("Ask AI") when a user opens an entity record form.
+     */
+    public async LoadRecordConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        environmentId?: string,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity[]> {
+        const cleanEntityId = linkedEntityId?.trim();
+        const cleanRecordId = linkedRecordId?.trim();
+        if (!cleanEntityId || !cleanRecordId || !contextUser?.ID) {
+            return [];
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const safeEntityId = EscapeSQLString(cleanEntityId);
+        const safeRecordId = EscapeSQLString(cleanRecordId);
+        const safeUserId = EscapeSQLString(contextUser.ID);
+        const envClause = environmentId?.trim()
+            ? ` AND EnvironmentID='${EscapeSQLString(environmentId.trim())}'`
+            : '';
+
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter:
+                    `LinkedEntityID='${safeEntityId}'` +
+                    ` AND (LinkedRecordID='${safeRecordId}' OR LinkedRecordID='ID|${safeRecordId}')` +
+                    ` AND AnchorType IS NULL` +
+                    ` AND UserID='${safeUserId}'` +
+                    ` AND (IsArchived IS NULL OR IsArchived=0)` +
+                    envClause,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+
+        return result.Success && result.Results ? result.Results : [];
+    }
+
+    // ========================================================================
+    // ANCHORED RECORD CONVERSATIONS & COMMENT THREADS
+    // ========================================================================
+
+    /**
+     * Loads all anchored conversations (`AnchorType IS NOT NULL`) attached to a specific
+     * `(linkedEntityId, linkedRecordId)` that `contextUser` is authorized to see under both
+     * row-level security (RLS on the linked record) and field-level security (FLS on the
+     * anchored field or any `restrictedFields` stamped in `AnchorMetadataObject`).
+     */
+    public async LoadAnchoredConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        options?: LoadAnchoredConversationsOptions
+    ): Promise<MJConversationEntity[]> {
+        const provider = options?.provider ?? this.ProviderToUse;
+        const clauses: string[] = [
+            `LinkedEntityID='${EscapeSQLString(linkedEntityId)}'`,
+            `LinkedRecordID='${EscapeSQLString(linkedRecordId)}'`,
+            `AnchorType IS NOT NULL`,
+            `(IsArchived IS NULL OR IsArchived=0)`
+        ];
+        if (options?.includeResolved === false) {
+            clauses.push(`IsResolved=0`);
+        }
+        if (options?.anchorType) {
+            clauses.push(`AnchorType='${EscapeSQLString(options.anchorType)}'`);
+        }
+        if (options?.anchorKey !== undefined) {
+            clauses.push(`AnchorKey='${EscapeSQLString(options.anchorKey)}'`);
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: clauses.join(' AND '),
+                OrderBy: 'IsResolved ASC, __mj_UpdatedAt DESC',
+                ResultType: 'entity_object',
+                BypassCache: options?.bypassCache ?? false
+            },
+            contextUser
+        );
+        if (!result.Success || !result.Results) {
+            return [];
+        }
+
+        return FilterAnchoredConversationsForUser(provider, contextUser, result.Results);
+    }
+
+    /**
+     * Loads all `MJ: Conversation Details` rows for the given anchored conversation IDs,
+     * grouped by normalized `ConversationID` in chronological `Sequence ASC, __mj_CreatedAt ASC` order.
+     */
+    public async LoadAnchoredConversationDetails(
+        conversationIds: ReadonlyArray<string>,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        bypassCache: boolean = false
+    ): Promise<Map<string, MJConversationDetailEntity[]>> {
+        const byConversationId = new Map<string, MJConversationDetailEntity[]>();
+        const cleanIds = conversationIds.map(id => id?.trim()).filter((id): id is string => !!id);
+        if (cleanIds.length === 0) {
+            return byConversationId;
+        }
+        for (const id of cleanIds) {
+            byConversationId.set(NormalizeUUID(id), []);
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const inList = cleanIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+        const result = await rv.RunView<MJConversationDetailEntity>(
+            {
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID IN (${inList}) AND (HiddenToUser IS NULL OR HiddenToUser=0) AND ReplacedAt IS NULL`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                ResultType: 'entity_object',
+                BypassCache: bypassCache
+            },
+            contextUser
+        );
+
+        if (result.Success && result.Results) {
+            for (const detail of result.Results) {
+                const key = NormalizeUUID(detail.ConversationID);
+                const list = byConversationId.get(key) ?? [];
+                list.push(detail);
+                byConversationId.set(key, list);
+            }
+        }
+        return byConversationId;
+    }
+
+    /**
+     * Creates a new anchored comment thread (`MJ: Conversations` with `AnchorType`, `AnchorKey`,
+     * and `AnchorMetadataObject`) bound to `(linkedEntityId, linkedRecordId)`, and optionally
+     * posts the opening `MJ: Conversation Details` message.
+     */
+    public async CreateAnchoredConversation(
+        params: CreateAnchoredConversationParams,
+        contextUser: UserInfo
+    ): Promise<{ Conversation: MJConversationEntity; InitialDetail: MJConversationDetailEntity | null }> {
+        const md = params.provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        conversation.NewRecord();
+
+        const fallbackName = params.anchorMetadata?.anchorDisplayName
+            || params.anchorMetadata?.sectionDisplayName
+            || params.anchorMetadata?.groupDisplayName
+            || params.anchorKey
+            || `${params.anchorType} Comment`;
+        conversation.Name = (params.name?.trim() || fallbackName).slice(0, 255);
+        if (params.environmentId) {
+            conversation.EnvironmentID = params.environmentId;
+        } else if (this._lastEnvironmentId) {
+            conversation.EnvironmentID = this._lastEnvironmentId;
+        }
+        conversation.UserID = contextUser.ID;
+        conversation.TypeID =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;
+        conversation.ApplicationScope = 'Global';
+        conversation.LinkedEntityID = params.linkedEntityId;
+        conversation.LinkedRecordID = params.linkedRecordId;
+        conversation.AnchorType = params.anchorType;
+        conversation.AnchorKey = params.anchorKey ?? null;
+        conversation.AnchorMetadataObject = params.anchorMetadata ?? null;
+        if (params.defaultAgentId !== undefined) {
+            conversation.DefaultAgentID = params.defaultAgentId;
+        }
+
+        const requestedCommentTypeId =
+            params.commentTypeId ??
+            (params.commentTypeCode ? this.ResolveCommentTypeID(params.commentTypeCode) : null);
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to create anchored conversation');
+            }
+            if (
+                requestedCommentTypeId &&
+                !UUIDsEqual(requestedCommentTypeId, BUILT_IN_COMMENT_TYPE_IDS.COMMENT)
+            ) {
+                const isaComment = conversation.ISAChild as MJCommentEntity | null;
+                if (isaComment) {
+                    isaComment.CommentTypeID = requestedCommentTypeId;
+                    const commentSaved = await isaComment.Save();
+                    if (!commentSaved) {
+                        throw new Error(
+                            isaComment.LatestResult?.CompleteMessage ||
+                                isaComment.LatestResult?.Message ||
+                                'Failed to update comment type on anchored conversation'
+                        );
+                    }
+                } else {
+                    const commentObj = await md.GetEntityObject<MJCommentEntity>('MJ: Comments', contextUser);
+                    const loadedComment = await commentObj.Load(conversation.ID);
+                    if (loadedComment) {
+                        commentObj.CommentTypeID = requestedCommentTypeId;
+                        const commentSaved = await commentObj.Save();
+                        if (!commentSaved) {
+                            throw new Error(
+                                commentObj.LatestResult?.CompleteMessage ||
+                                    commentObj.LatestResult?.Message ||
+                                    'Failed to update comment type on anchored conversation'
+                            );
+                        }
+                    }
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        let initialDetail: MJConversationDetailEntity | null = null;
+        const messageText = params.initialMessage?.trim();
+        if (messageText) {
+            initialDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            initialDetail.NewRecord();
+            initialDetail.ConversationID = conversation.ID;
+            initialDetail.UserID = contextUser.ID;
+            initialDetail.Role = 'User';
+            initialDetail.Message = messageText;
+            const detailSaved = await initialDetail.Save();
+            if (!detailSaved) {
+                throw new Error(initialDetail.LatestResult?.CompleteMessage || initialDetail.LatestResult?.Message || 'Failed to save initial comment message');
+            }
+        }
+
+        return { Conversation: conversation, InitialDetail: initialDetail };
+    }
+
+    /**
+     * Marks an anchored conversation thread as resolved or re-opened (`IsResolved`,
+     * `ResolvedByUserID`, `ResolvedAt`).
+     */
+    public async SetConversationResolved(
+        conversationId: string,
+        isResolved: boolean,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity> {
+        const md = provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(conversationId);
+        if (!loaded) {
+            throw new Error(`Conversation ${conversationId} not found`);
+        }
+
+        conversation.IsResolved = isResolved;
+        conversation.ResolvedByUserID = isResolved ? contextUser.ID : null;
+        conversation.ResolvedAt = isResolved ? new Date() : null;
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to update conversation resolution status');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        return conversation;
+    }
+
+    /**
+     * Batch-loads `MJ: Comments` and `MJ: Field Suggestions` for the specified anchored
+     * `conversationIds` in a single batched `RunViews` round trip, avoiding N+1 queries
+     * when rendering forms with multiple comments and field suggestions.
+     */
+    public async LoadAnchoredCommentsAndSuggestions(
+        conversationIds: ReadonlyArray<string>,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        bypassCache: boolean = false
+    ): Promise<AnchoredCommentsAndSuggestionsBundle> {
+        const commentsByConversationId = new Map<string, MJCommentEntity>();
+        const suggestionsByConversationId = new Map<string, MJFieldSuggestionEntity>();
+        const commentTypeCodeByConversationId = new Map<string, string>();
+
+        const cleanIds = conversationIds.map((id) => id?.trim()).filter((id): id is string => !!id);
+        if (cleanIds.length === 0) {
+            return {
+                CommentsByConversationId: commentsByConversationId,
+                SuggestionsByConversationId: suggestionsByConversationId,
+                CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+            };
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const entities = md?.Entities;
+        const hasCommentEntities =
+            !Array.isArray(entities) ||
+            entities.length === 0 ||
+            (entities.some((e) => e.Name === 'MJ: Comments') &&
+                entities.some((e) => e.Name === 'MJ: Field Suggestions'));
+        if (!hasCommentEntities) {
+            return {
+                CommentsByConversationId: commentsByConversationId,
+                SuggestionsByConversationId: suggestionsByConversationId,
+                CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+            };
+        }
+
+        const rv = RunView.FromMetadataProvider(md);
+        const inList = cleanIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+        const [commentsResult, suggestionsResult] = await rv.RunViews(
+            [
+                {
+                    EntityName: 'MJ: Comments',
+                    ExtraFilter: `ID IN (${inList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: bypassCache,
+                },
+                {
+                    EntityName: 'MJ: Field Suggestions',
+                    ExtraFilter: `ID IN (${inList})`,
+                    ResultType: 'entity_object',
+                    BypassCache: bypassCache,
+                },
+            ],
+            contextUser
+        );
+
+        if (commentsResult && !commentsResult.Success) {
+            throw new Error(
+                commentsResult.ErrorMessage || 'Failed to load anchored MJ: Comments records'
+            );
+        }
+        if (suggestionsResult && !suggestionsResult.Success) {
+            throw new Error(
+                suggestionsResult.ErrorMessage || 'Failed to load anchored MJ: Field Suggestions records'
+            );
+        }
+
+        if (commentsResult?.Success && Array.isArray(commentsResult.Results)) {
+            for (const rawComment of commentsResult.Results as MJCommentEntity[]) {
+                const normId = NormalizeUUID(rawComment.ID);
+                commentsByConversationId.set(normId, rawComment);
+                const ct = this.CommentTypeByID(rawComment.CommentTypeID);
+                if (ct?.Code) {
+                    commentTypeCodeByConversationId.set(normId, ct.Code.trim().toUpperCase());
+                } else if (UUIDsEqual(rawComment.CommentTypeID, BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION)) {
+                    commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+                } else {
+                    commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.COMMENT);
+                }
+            }
+        }
+
+        if (suggestionsResult?.Success && Array.isArray(suggestionsResult.Results)) {
+            for (const rawSuggestion of suggestionsResult.Results as MJFieldSuggestionEntity[]) {
+                const normId = NormalizeUUID(rawSuggestion.ID);
+                suggestionsByConversationId.set(normId, rawSuggestion);
+                commentTypeCodeByConversationId.set(normId, COMMENT_TYPE_CODES.FIELD_SUGGESTION);
+            }
+        }
+
+        return {
+            CommentsByConversationId: commentsByConversationId,
+            SuggestionsByConversationId: suggestionsByConversationId,
+            CommentTypeCodeByConversationId: commentTypeCodeByConversationId,
+        };
+    }
+
+    /**
+     * Creates a new `MJ: Field Suggestions` comment thread (saving `Conversation`, `Comment`,
+     * and `FieldSuggestion` in a single IS-A chain transaction) and optionally posts the opening
+     * rationale message into `MJ: Conversation Details`.
+     */
+    public async CreateFieldSuggestion(
+        params: CreateFieldSuggestionParams,
+        contextUser: UserInfo
+    ): Promise<{ Suggestion: MJFieldSuggestionEntity; InitialDetail: MJConversationDetailEntity | null }> {
+        const md = params.provider ?? this.ProviderToUse;
+        const suggestion = await md.GetEntityObject<MJFieldSuggestionEntity>('MJ: Field Suggestions', contextUser);
+        suggestion.NewRecord();
+
+        const cleanFieldName = params.fieldName.trim();
+        const fallbackTitle = `${params.anchorMetadata?.anchorDisplayName || cleanFieldName} Suggestion`;
+        suggestion.Name = (params.name?.trim() || fallbackTitle).slice(0, 255);
+        if (params.environmentId) {
+            suggestion.EnvironmentID = params.environmentId;
+        } else if (this._lastEnvironmentId) {
+            suggestion.EnvironmentID = this._lastEnvironmentId;
+        }
+        suggestion.UserID = contextUser.ID;
+        suggestion.TypeID =
+            this.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.COMMENT) ??
+            BUILT_IN_CONVERSATION_TYPE_IDS.COMMENT;
+        suggestion.CommentTypeID =
+            this.ResolveCommentTypeID(COMMENT_TYPE_CODES.FIELD_SUGGESTION) ??
+            BUILT_IN_COMMENT_TYPE_IDS.FIELD_SUGGESTION;
+        suggestion.ApplicationScope = 'Global';
+        suggestion.LinkedEntityID = params.linkedEntityId;
+        suggestion.LinkedRecordID = params.linkedRecordId;
+        suggestion.AnchorType = 'Field';
+        suggestion.AnchorKey = cleanFieldName;
+        suggestion.AnchorMetadata = JSON.stringify({
+            ...(params.anchorMetadata ?? {}),
+            fieldName: cleanFieldName,
+        });
+        suggestion.SuggestedValue = params.suggestedValue;
+        suggestion.Source = params.source ?? 'Agent';
+        suggestion.Confidence = params.confidence ?? null;
+        suggestion.AIPromptRunID = params.aiPromptRunId ?? null;
+        suggestion.Outcome = null;
+
+        this._selfMutating = true;
+        try {
+            const saved = await suggestion.Save();
+            if (!saved) {
+                throw new Error(
+                    suggestion.LatestResult?.CompleteMessage ||
+                        suggestion.LatestResult?.Message ||
+                        'Failed to create field suggestion'
+                );
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        let initialDetail: MJConversationDetailEntity | null = null;
+        const messageText = params.initialMessage?.trim();
+        if (messageText) {
+            initialDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            initialDetail.NewRecord();
+            initialDetail.ConversationID = suggestion.ID;
+            initialDetail.UserID = contextUser.ID;
+            initialDetail.Role = 'User';
+            initialDetail.Message = messageText;
+            const detailSaved = await initialDetail.Save();
+            if (!detailSaved) {
+                throw new Error(
+                    initialDetail.LatestResult?.CompleteMessage ||
+                        initialDetail.LatestResult?.Message ||
+                        'Failed to save initial field suggestion message'
+                );
+            }
+        }
+
+        return { Suggestion: suggestion, InitialDetail: initialDetail };
+    }
+
+    /**
+     * Accepts a pending `MJ: Field Suggestions` row as `contextUser`. Server-side
+     * `FieldSuggestionCommentDriver.OnAccept` writes `SuggestedValue` onto the target record
+     * through a normal `Save()` as `contextUser` (enforcing RLS, FLS, and `Update` permission,
+     * and recording `Record Changes`), then stamps `Outcome = 'Accepted'`, `IsResolved = true`,
+     * `ResolvedByUserID`, and `ResolvedAt`.
+     */
+    public async AcceptFieldSuggestion(
+        suggestionId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        return this.transitionFieldSuggestionOutcome(suggestionId, 'Accepted', contextUser, provider);
+    }
+
+    /**
+     * Rejects a pending `MJ: Field Suggestions` row as `contextUser`. Server-side
+     * `FieldSuggestionCommentDriver.OnReject` verifies `contextUser` holds update rights on the
+     * target record and field, then stamps `Outcome = 'Rejected'`, `IsResolved = true`,
+     * `ResolvedByUserID`, and `ResolvedAt`.
+     */
+    public async RejectFieldSuggestion(
+        suggestionId: string,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        return this.transitionFieldSuggestionOutcome(suggestionId, 'Rejected', contextUser, provider);
+    }
+
+    private async transitionFieldSuggestionOutcome(
+        suggestionId: string,
+        outcome: 'Accepted' | 'Rejected',
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJFieldSuggestionEntity> {
+        const md = provider ?? this.ProviderToUse;
+        const suggestion = await md.GetEntityObject<MJFieldSuggestionEntity>('MJ: Field Suggestions', contextUser);
+        const loaded = await suggestion.Load(suggestionId);
+        if (!loaded) {
+            throw new Error(`Field suggestion ${suggestionId} not found`);
+        }
+
+        suggestion.Outcome = outcome;
+        this._selfMutating = true;
+        try {
+            const saved = await suggestion.Save();
+            if (!saved) {
+                throw new Error(
+                    suggestion.LatestResult?.CompleteMessage ||
+                        suggestion.LatestResult?.Message ||
+                        `Failed to mark field suggestion as ${outcome}`
+                );
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+        return suggestion;
+    }
+
+    /**
+     * Computes open and resolved anchored comment counts across fields, sections, groups,
+     * and contributions for a record, respecting FLS for `currentUser`.
+     */
+    public ComputeAnchoredCommentCounts(
+        conversations: ReadonlyArray<
+            Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'> & {
+                ID?: string;
+            }
+        >,
+        currentUser?: UserInfo | null,
+        entityInfo?: EntityInfo | null,
+        commentTypeCodeByConversationId?: ReadonlyMap<string, string> | null
+    ): AnchoredCommentRollup {
+        return ComputeAnchoredCommentCounts(conversations, currentUser, entityInfo, commentTypeCodeByConversationId);
     }
 
     /**
@@ -1580,9 +3226,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return null;
         }
 
-        // App-scoped conversations live inside their owning Application's embedded surface,
-        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
-        if (conversation.ApplicationScope === 'Application') {
+        // App-scoped, anchored, and record-bound conversations live inside their owning
+        // surface, not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (
+            conversation.ApplicationScope === 'Application' ||
+            conversation.AnchorType != null ||
+            conversation.LinkedEntityID != null
+        ) {
             return conversation;
         }
 
@@ -2277,6 +3927,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ExtraFilter: `${pathFilter} AND Sequence < ${oldestSequence}`,
             OrderBy: 'Sequence DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple'
         }, contextUser);
@@ -2731,6 +4382,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
             historyFrom?: Date | null;
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
         },
         scope?: ConversationScope
     ): Promise<ConversationContextMessage[]> {
@@ -2853,6 +4506,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
             historyFrom?: Date | null;
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
         }
     ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
@@ -2861,14 +4516,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             .filter(d => !excluded.has(NormalizeUUID(d.ID)) && !ConversationEngine.IsReplacedRow(d))
             .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
+        const attribution = ConversationEngine.buildSpeakerAttribution(ordered, options);
 
         const boundary = floor ? undefined : ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
-            return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
+            return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d, attribution))];
         }
 
-        const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
+        const all = ordered.map(d => ConversationEngine.detailToContextMessage(d, attribution));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
     }
@@ -3392,16 +5048,101 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         };
     }
 
-    /** Converts a raw ConversationDetail row into a context message with sequence metadata. */
-    private static detailToContextMessage(detail: ConversationWindowSourceRow): ConversationContextMessage {
-        return {
-            role: ConversationEngine.mapDetailRoleToChatRole(detail.Role),
-            content: detail.Message || '',
-            metadata: {
-                sequence: detail.Sequence,
-                conversationDetailId: detail.ID
-            }
+    /** Converts a raw ConversationDetail row into a context message with sequence and speaker metadata. */
+    private static detailToContextMessage(
+        detail: ConversationWindowSourceRow,
+        attribution?: SpeakerAttributionState
+    ): ConversationContextMessage {
+        const role = ConversationEngine.mapDetailRoleToChatRole(detail.Role);
+        const raw = detail.Message || '';
+        const content = ConversationEngine.formatAttributedMessageContent(detail, role, attribution);
+        const metadata: ConversationContextMetadata = {
+            sequence: detail.Sequence,
+            conversationDetailId: detail.ID,
+            ...(content !== raw ? { rawContent: raw } : {}),
+            ...(detail.UserID !== undefined ? { userId: detail.UserID } : {}),
+            ...(detail.User !== undefined ? { userName: detail.User } : {}),
+            ...(detail.AgentID !== undefined ? { agentId: detail.AgentID } : {}),
+            ...(detail.Agent !== undefined ? { agentName: detail.Agent } : {}),
+            ...(detail.ParentID !== undefined ? { parentId: detail.ParentID } : {}),
         };
+        return { role, content, metadata };
+    }
+
+    /** Builds speaker attribution state for a context window assembly pass. */
+    private static buildSpeakerAttribution(
+        ordered: ReadonlyArray<ConversationWindowSourceRow>,
+        options?: {
+            speakerAttribution?: 'off' | 'auto' | 'always';
+            speakerLabels?: ReadonlyMap<string, string>;
+        }
+    ): SpeakerAttributionState {
+        const mode = options?.speakerAttribution ?? 'auto';
+        const labelsById = new UUIDMap<string>();
+        for (const [key, value] of options?.speakerLabels ?? []) {
+            if (key && value?.trim()) {
+                labelsById.Set(key, value.trim());
+            }
+        }
+        const distinctUsers = new UUIDSet();
+        const distinctAgents = new UUIDSet();
+        for (const d of ordered) {
+            const role = ConversationEngine.mapDetailRoleToChatRole(d.Role);
+            if (role === 'user' && d.UserID) {
+                distinctUsers.Add(d.UserID);
+            } else if (role === 'assistant' && d.AgentID) {
+                distinctAgents.Add(d.AgentID);
+            }
+        }
+        const rowsById = IndexByUUID(ordered);
+        const hasMultipleHumans = distinctUsers.Size > 1 || labelsById.Size > 0;
+        return {
+            attributeUsers: mode === 'always' || (mode === 'auto' && hasMultipleHumans),
+            attributeAgents: mode === 'always' || (mode === 'auto' && hasMultipleHumans && distinctAgents.Size > 1),
+            labelsById,
+            rowsById,
+        };
+    }
+
+    /** Formats message content with `[Speaker]: ` or `[Speaker -> replying to Target]: ` when speaker attribution applies. */
+    private static formatAttributedMessageContent(
+        detail: ConversationWindowSourceRow,
+        role: 'user' | 'assistant' | 'system',
+        attribution?: SpeakerAttributionState
+    ): string {
+        const raw = detail.Message || '';
+        if (!attribution) {
+            return raw;
+        }
+        const speaker = role === 'user' && attribution.attributeUsers
+            ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
+            : role === 'assistant' && attribution.attributeAgents
+                ? ConversationEngine.speakerLabelForRow(detail, attribution.labelsById)
+                : null;
+        if (!speaker) {
+            return raw;
+        }
+        const parentRow = detail.ParentID ? attribution.rowsById.Get(detail.ParentID) : undefined;
+        const parentSpeaker = parentRow ? ConversationEngine.speakerLabelForRow(parentRow, attribution.labelsById) : null;
+        const header = parentSpeaker ? `[${speaker} -> replying to ${parentSpeaker}]` : `[${speaker}]`;
+        return `${header}: ${raw}`;
+    }
+
+    /** Resolves a display name for a row's author (human or agent). */
+    private static speakerLabelForRow(
+        row: ConversationWindowSourceRow,
+        labelsById: UUIDMap<string>
+    ): string | null {
+        const role = ConversationEngine.mapDetailRoleToChatRole(row.Role);
+        if (role === 'assistant') {
+            const custom = row.AgentID ? labelsById.Get(row.AgentID) : undefined;
+            return custom || row.Agent?.trim() || null;
+        }
+        if (role === 'user') {
+            const custom = row.UserID ? labelsById.Get(row.UserID) : undefined;
+            return custom || row.User?.trim() || null;
+        }
+        return null;
     }
 
     /**
@@ -3542,9 +5283,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._conversations$.next([]);
         this._projects$.next([]);
         this._detailCache.clear();
+        this._sharedByByConversationId.clear();
+        this._explicitSharedConversationIds.clear();
         this._lastEnvironmentId = null;
+        this._lastConversationsUserId = null;
         this._lastProjectsEnvironmentId = null;
         this._lastProjectsUserId = null;
+        this._lastViewer = null;
     }
 
     // ========================================================================
@@ -3864,6 +5609,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
+                this.reconcileFolderSharedConversations();
             } else if (event.baseEntity) {
                 // A conversation created OUTSIDE this engine (local save event) that we don't
                 // yet hold — append it so the list updates reactively. Only fold in the
@@ -3871,18 +5617,28 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 // app-scoped rows live in their owning surface (see CreateConversation), and
                 // archived rows don't belong in the active list.
                 const scope = data['ApplicationScope'] as string | undefined;
+                const anchorType = data['AnchorType'] as string | null | undefined;
+                const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
                     !this._lastEnvironmentId ||
                     (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
-                if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
+                if (
+                    scope !== 'Application' &&
+                    anchorType == null &&
+                    linkedEntityId == null &&
+                    !isArchived &&
+                    inLoadedEnvironment
+                ) {
                     this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
+                    this.reconcileFolderSharedConversations();
                 }
             }
         } else if (action === 'delete') {
             const existing = this.GetConversation(id);
             if (existing) {
+                this._sharedByByConversationId.delete(NormalizeUUID(id));
                 this.removeFromList(id);
                 this.removeDetailCache(id);
             }
@@ -3948,6 +5704,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (action === 'delete') {
             if (existingIdx >= 0) {
                 this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
+                this.reconcileFolderSharedConversations();
             }
             return true;
         }
@@ -3994,10 +5751,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // folder in the environment — widening on absent input is the failure mode worth
         // avoiding, and it is the same rule the read path applies.
         const ownerUserId = data['OwnerUserID'] as string | null | undefined;
+        const viewerId = this._lastProjectsUserId ?? this._lastConversationsUserId;
+        const hasProjectGrant = this.getUserSharedProjectPermissions(this._lastViewer).some((p) =>
+            UUIDsEqual(p.ResourceRecordID, id)
+        );
         const isVisibleToViewer =
             ownerUserId == null || ownerUserId === ''
                 ? true
-                : !!this._lastProjectsUserId && UUIDsEqual(ownerUserId, this._lastProjectsUserId);
+                : (!!viewerId && UUIDsEqual(ownerUserId, viewerId)) || hasProjectGrant;
 
         const belongsInList = !isArchived && inLoadedEnvironment && isVisibleToViewer;
 
@@ -4008,12 +5769,81 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 this.mergeDataOntoRecord(current[existingIdx], data);
                 this._projects$.next([...current]);
             }
+            this.reconcileFolderSharedConversations();
         } else if (event.baseEntity && belongsInList) {
             // New folder from a local event — append the entity object
             this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
+            this.reconcileFolderSharedConversations();
         }
 
         return true;
+    }
+
+    /**
+     * Keeps folder-shared conversations in `_conversations$` and `_sharedByByConversationId`
+     * aligned with the currently loaded Shared/Public folders and each conversation's
+     * {@link IsInheritingFolderAccess} setting:
+     * - Non-owned conversations without an explicit `MJ: Resource Permissions` grant that sit
+     *   inside a visible Shared/Public folder (and have folder inheritance enabled) get a
+     *   `SharedByInfo` entry with the viewer's inherited folder permission level.
+     * - Non-owned conversations without an explicit grant whose folder is no longer a visible
+     *   Shared/Public folder or whose `inheritFolderAccess` was turned off are dropped from
+     *   `_conversations$` and `_sharedByByConversationId`.
+     */
+    private reconcileFolderSharedConversations(): void {
+        const viewerUserId = this._lastConversationsUserId ?? this._lastProjectsUserId;
+        if (!viewerUserId) {
+            return;
+        }
+
+        const envId = this._lastEnvironmentId ?? this._lastProjectsEnvironmentId ?? '';
+        const sharedProjectIdSet = new Set(
+            this.getSharedProjectIds(envId).map((id) => NormalizeUUID(id))
+        );
+
+        const currentConversations = this._conversations$.value;
+        const keptConversations: MJConversationEntity[] = [];
+        let listChanged = false;
+
+        for (const conv of currentConversations) {
+            const normId = NormalizeUUID(conv.ID);
+            const isOwned = !conv.UserID || UUIDsEqual(conv.UserID, viewerUserId);
+            const isExplicitlyShared = this._explicitSharedConversationIds.has(normId);
+
+            if (isOwned || isExplicitlyShared) {
+                keptConversations.push(conv);
+                continue;
+            }
+
+            const inSharedFolder =
+                !!conv.ProjectID &&
+                IsInheritingFolderAccess(conv) &&
+                sharedProjectIdSet.has(NormalizeUUID(conv.ProjectID));
+            if (inSharedFolder) {
+                keptConversations.push(conv);
+                const inherited = this.GetEffectiveProjectPermission(conv.ProjectID, this._lastViewer);
+                const existingShare = this._sharedByByConversationId.get(normId);
+                if (!existingShare) {
+                    const convWithUser = conv as MJConversationEntity & { User?: string | null };
+                    this._sharedByByConversationId.set(normId, {
+                        UserID: conv.UserID ?? inherited?.SharedByUserID ?? null,
+                        Name: convWithUser.User ?? inherited?.SharedByUser ?? null,
+                        Email: null,
+                        Level: inherited?.Level ?? 'View'
+                    });
+                } else if (inherited?.Level) {
+                    existingShare.Level = ComparePermissionLevels(existingShare.Level, inherited.Level) ?? 'View';
+                }
+            } else {
+                listChanged = true;
+                this._sharedByByConversationId.delete(normId);
+                this.removeDetailCache(conv.ID);
+            }
+        }
+
+        if (listChanged) {
+            this._conversations$.next(keptConversations);
+        }
     }
 
     /**

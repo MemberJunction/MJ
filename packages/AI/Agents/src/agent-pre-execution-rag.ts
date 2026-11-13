@@ -16,6 +16,11 @@
  *   4. Call `SearchEngine.Search()` with `ScopeIDs: [scopeId]`, honoring per-agent overrides
  *      (MaxResults, MinScore, FusionWeightsOverride), the agent's multi-tenant context
  *      (PrimaryScopeRecordID, SecondaryScopes) and the run's audience (`SearchParams.Audience`).
+ *      The engine fuses every lane the scope runs — vector, full-text, entity and the Semantic Graph
+ *      lane (`GraphSearchProvider`, available once MJAPI registers the graph expansion service; a global
+ *      scope runs it, a bounded scope runs it when it lists that provider). The audience reaches the graph
+ *      lane as `ScopeConstraints.AudienceReaders`, so its traversal never passes through a node a reader
+ *      cannot see; with no active graph the lane returns nothing.
  *   5. Cross-scope RRF when multiple scopes produced results.
  *   6. Format results as a `<retrieved_context>` system message and return.
  *
@@ -637,7 +642,7 @@ export class AgentPreExecutionRAG {
                 scopeDescription: scope.Description ?? ''
             };
 
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data);
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(tmpl.template, content, data, undefined, undefined, { ContextUser: params.contextUser });
             if (rendered?.Success && rendered.Output) {
                 return rendered.Output.trim();
             }
@@ -684,6 +689,7 @@ export class AgentPreExecutionRAG {
             ExtraFilter: `TemplateID='${templateID}'`,
             OrderBy: 'Priority DESC, __mj_CreatedAt ASC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, contextUser);
         const content = cResult.Success && cResult.Results.length > 0 ? cResult.Results[0] : null;

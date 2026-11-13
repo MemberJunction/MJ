@@ -29,6 +29,8 @@
  *          Asserting the DIFFERENCE across two evaluators over the identical key + cache is non-vacuous,
  *          and pins that `GetAPIKeyEngine()` defaults to `'deny'` (the safe default) even though the
  *          bare `ScopeEvaluator` constructor defaults to `'allow'`.
+ *   SE6 ★ OUT-OF-PROCESS REVOCATION: a key-scope row deleted with direct SQL (no entity event, so no
+ *          in-process cache refresh) stops granting once the base engine's timed refresh runs.
  *   SE5 ★ full_access IS AN ORDINARY SCOPE AT THE ENGINE: a key granted `full_access` is allowed for
  *          `full_access` but the engine does NOT implicitly grant an unrelated scope it has no rule
  *          for. The god-mode bypass is a RESOLVER concern (ResolverBase full_access fast-path), not an
@@ -72,25 +74,19 @@ import {
 } from '@memberjunction/core-entities';
 import { GetAPIKeyEngine, ScopeEvaluator } from '@memberjunction/api-keys';
 import type { APIKeyEngine, AuthorizationRequest } from '@memberjunction/api-keys';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
 /** Tag on every throwaway row this bundle creates, so a stranded fixture is identifiable. */
 const TEST_TAG = '(mj-integration-test — safe to delete)';
 
-/** Loud, uniform skip-as-pass note. Returns false so a caller can `if (!skip(...)) return;`. */
-function skipNote(checkId: string, reason: string): false {
-    console.warn(`  ⚠ scope-enforcement.${checkId} SKIPPED — ${reason}`);
-    return false;
-}
-
 /** A reversible cleanup step (delete one fixture row). Run LIFO so children precede parents. */
 type Cleanup = () => Promise<unknown>;
 
 /**
  * Resolve a seeded API Scope ID by its FullPath from the loaded engine cache, or undefined when the
- * scope is not seeded in this deployment (→ the caller skips-as-pass rather than asserting vacuously).
+ * scope is not seeded in this deployment (→ the caller calls SkipCheck rather than asserting vacuously).
  */
 function scopeIdByPath(engine: APIKeyEngine, fullPath: string): string | undefined {
     return engine.Scopes.find(s => s.FullPath === fullPath)?.ID;
@@ -227,8 +223,7 @@ export async function CheckSe1DenyPrecedence(ctx: IntegrationCheckContext): Prom
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!readScopeId) {
-        skipNote('SE1', "seeded scope 'entity:read' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -275,8 +270,7 @@ export async function CheckSe2AppCeilingCapsKey(ctx: IntegrationCheckContext): P
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     const execScopeId = scopeIdByPath(engine, 'agent:execute');
     if (!readScopeId || !execScopeId) {
-        skipNote('SE2', "seeded scopes 'entity:read' and/or 'agent:execute' not present");
-        return;
+        SkipCheck("seeded scopes 'entity:read' and/or 'agent:execute' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -321,12 +315,10 @@ export async function CheckSe3AppBinding(ctx: IntegrationCheckContext): Promise<
     await engine.Config(true, ctx.User);
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!readScopeId) {
-        skipNote('SE3', "seeded scope 'entity:read' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' not present");
     }
     if (!engine.Applications.some(a => a.Name.toLowerCase() === 'mjapi')) {
-        skipNote('SE3', "seeded application 'MJAPI' not present (needed as the foreign application)");
-        return;
+        SkipCheck("seeded application 'MJAPI' not present (needed as the foreign application)");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -374,8 +366,7 @@ export async function CheckSe4UnscopedKeyDefault(ctx: IntegrationCheckContext): 
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     const mjapi = engine.Applications.find(a => a.Name.toLowerCase() === 'mjapi');
     if (!readScopeId || !mjapi) {
-        skipNote('SE4', "seeded scope 'entity:read' and/or application 'MJAPI' not present");
-        return;
+        SkipCheck("seeded scope 'entity:read' and/or application 'MJAPI' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -394,8 +385,7 @@ export async function CheckSe4UnscopedKeyDefault(ctx: IntegrationCheckContext): 
         };
         const openResult = await ceilingProbe.EvaluateAccess(request, ctx.User);
         if (!openResult.Allowed) {
-            skipNote('SE4', `MJAPI ceiling does not admit entity:read here (reason: '${openResult.Reason}') — cannot isolate the key-level default`);
-            return;
+            SkipCheck(`MJAPI ceiling does not admit entity:read here (reason: '${openResult.Reason}') — cannot isolate the key-level default`);
         }
 
         // Same key + cache, deny default → the unscoped key is CLOSED.
@@ -437,8 +427,7 @@ export async function CheckSe5FullAccessIsOrdinaryAtEngine(ctx: IntegrationCheck
     const fullAccessId = scopeIdByPath(engine, 'full_access');
     const readScopeId = scopeIdByPath(engine, 'entity:read');
     if (!fullAccessId || !readScopeId) {
-        skipNote('SE5', "seeded scopes 'full_access' and/or 'entity:read' not present");
-        return;
+        SkipCheck("seeded scopes 'full_access' and/or 'entity:read' not present");
     }
     const cleanup: Cleanup[] = [];
     try {
@@ -470,6 +459,71 @@ export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationChec
     return CheckSe5FullAccessIsOrdinaryAtEngine(ctx);
 }
 
+/** Refresh interval SE6 uses so the check waits seconds, not the 60 s default TTL. */
+const SE6_REFRESH_MS = 1500;
+
+/**
+ * How long SE6 waits after saving its fixture row before deleting it. Must exceed BaseEngine's
+ * entity-event debounce (1.5 s): the save's debounced reload reads the database, so if it lands
+ * after the SQL delete it clears the row itself and SE6 passes without the timed refresh.
+ */
+const SE6_SAVE_SETTLE_MS = 2500;
+
+/** Polls `probe` until it returns true or `timeoutMs` elapses. */
+async function waitFor(probe: () => Promise<boolean>, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (await probe()) {
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    return probe();
+}
+
+/**
+ * SE6 ★ — out-of-process revocation. A key-scope row removed by another process (here: direct SQL,
+ * which raises no entity event, so nothing in this process invalidates the cache) must stop granting
+ * once the base engine's timed refresh re-reads the table. Before the timed refresh existed the
+ * removed scope kept granting until restart. SQL Server transport only (needs the raw pool).
+ */
+export async function CheckSe6OutOfProcessScopeRevocation(ctx: IntegrationCheckContext): Promise<void> {
+    const pool = ctx.Pool;
+    if (!pool) {
+        SkipCheck('no raw SQL pool on this transport — cannot simulate an out-of-process delete');
+    }
+    const engine = GetAPIKeyEngine();
+    await engine.Config(true, ctx.User);
+    const readScopeId = scopeIdByPath(engine, 'entity:read');
+    if (!readScopeId) {
+        SkipCheck("seeded scope 'entity:read' not present");
+    }
+    const previousTTL = engine.ScopeCacheTTLMs;
+    const cleanup: Cleanup[] = [];
+    try {
+        const key = await createKey(engine, ctx, cleanup);
+        await addKeyScope(ctx, cleanup, key.apiKeyId, readScopeId, { isDeny: false, priority: 0 });
+        // Let the save's debounced reload finish first, so only the timed refresh can see the delete.
+        await new Promise(resolve => setTimeout(resolve, SE6_SAVE_SETTLE_MS));
+        await engine.SetScopeCacheTTL(SE6_REFRESH_MS);
+
+        const authorize = () => engine.Authorize(key.hash, 'MJAPI', 'entity:read', 'Users', ctx.User, undefined, { skipLogging: true });
+        const before = await authorize();
+        Assert(before.Allowed, `fixture key was denied before the delete — not a revocation proof: ${before.Reason}`);
+
+        await pool.request().query(
+            `DELETE FROM [${ctx.Schema}].[APIKeyScope] WHERE [APIKeyID] = '${key.apiKeyId}'`
+        );
+
+        const revoked = await waitFor(async () => !(await authorize()).Allowed, SE6_REFRESH_MS * 4);
+        Assert(revoked, `a key scope deleted out of process still granted access after ${SE6_REFRESH_MS * 4} ms (SECURITY)`);
+        console.log(`      → entity:read: allowed, row deleted by SQL, denied within the ${SE6_REFRESH_MS} ms refresh`);
+    } finally {
+        await engine.SetScopeCacheTTL(previousTTL);
+        await runCleanup(cleanup);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -479,7 +533,8 @@ export const ScopeEnforcementChecks: NamedCheck[] = [
     { Id: 'scope-enforcement.SE2', Name: 'SE2: the application scope ceiling caps a key that grants a scope the ceiling omits', Fn: CheckSe2AppCeilingCapsKey },
     { Id: 'scope-enforcement.SE3', Name: 'SE3: a key bound to app X is refused against app Y (binding runs before the ceiling)', Fn: CheckSe3AppBinding },
     { Id: 'scope-enforcement.SE4', Name: 'SE4: an unscoped key resolves by defaultBehaviorNoScopes; the shared engine defaults to deny', Fn: CheckSe4UnscopedKeyDefault },
-    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5FullAccessIsOrdinaryAtEngine }
+    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5FullAccessIsOrdinaryAtEngine },
+    { Id: 'scope-enforcement.SE6', Name: 'SE6: a key scope deleted out of process stops granting after the timed refresh', Fn: CheckSe6OutOfProcessScopeRevocation }
 ];
 
 for (const check of ScopeEnforcementChecks) {

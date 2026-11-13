@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // empty catalog so the tests below exercise the tool set without a database.
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
-    return { ...actual, AIEngine: { Instance: { AgentActions: [] } } };
+    return { ...actual, AIEngine: { Instance: { AgentActions: [], GetAgentConfigurationPresets: (): unknown[] => [] } } };
 });
 import { BaseAgent } from '../base-agent';
 import { LoopAgentType } from '../agent-types/loop-agent-type';
@@ -85,6 +85,12 @@ describe('recordToolCallingInstrumentation — NativeDualChannel', () => {
         expect(a.NativeDualChannel).toBeNull();
         const b = step(); new Probe().Record(b, result('Envelope', undefined, '{"taskComplete":true}'));
         expect(b.NativeDualChannel).toBeUndefined();
+    });
+    it('counts the calls on a NativeRecovered turn, which is native (#5847)', () => {
+        const s = step(); new Probe().Record(s, result('NativeRecovered', [{ name: 'create_svg_chart' }], ''));
+        expect(s.ToolCallingMode).toBe('NativeRecovered');
+        expect(s.NativeToolCallCount).toBe(1);
+        expect(s.NativeDualChannel).toBe(false);
     });
     it('carries the flag into the queued save', () => {
         const p = new Probe(); const s = step();

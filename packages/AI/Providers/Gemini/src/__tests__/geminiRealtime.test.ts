@@ -117,6 +117,13 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(expires).toBeLessThanOrEqual(after + 30 * 60 * 1000);
     });
 
+    it('carries the effective session cap: 1800 by default, the smaller host cap otherwise', async () => {
+        const driver = new ClientDirectTestable('k');
+        expect((await driver.CreateClientSession(makeParams())).MaxSessionSeconds).toBe(1800);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 5000 }))).MaxSessionSeconds).toBe(1800);
+    });
+
     it('locks the server-built connect config into the token via liveConnectConstraints', async () => {
         const driver = new ClientDirectTestable('k');
         await driver.CreateClientSession(makeParams({
@@ -129,13 +136,14 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
 
         const mintConfig = driver.MintParams?.config;
         expect(mintConfig).toBeDefined();
-        expect(mintConfig?.uses).toBe(1);
         expect(mintConfig?.lockAdditionalFields).toEqual([]);
         expect(typeof mintConfig?.expireTime).toBe('string');
-        expect(typeof mintConfig?.newSessionExpireTime).toBe('string');
-        // The new-session window precedes the token expiry.
-        expect(new Date(mintConfig!.newSessionExpireTime!).getTime())
-            .toBeLessThan(new Date(mintConfig!.expireTime!).getTime());
+        // Gemini ends a Live connection after about 10 minutes, and the browser resumes on the SAME token, which Gemini
+        // counts as a new session (live runs: a single-use token is refused "Token has been used too many times", a
+        // 10-minute new-session window "new_session_expire_time deadline exceeded"). So the token must open new
+        // sessions until it expires, and allow at least one connection per 10 minutes of the cap the mint reports.
+        expect(mintConfig?.newSessionExpireTime).toBe(mintConfig?.expireTime);
+        expect(mintConfig?.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 600));
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
@@ -148,6 +156,41 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(locked.tools).toBeUndefined();
         expect(locked.inputAudioTranscription).toBeUndefined();
         expect(locked.outputAudioTranscription).toBeUndefined();
+    });
+
+    // The token is a credential the browser holds: it must not outlive the session cap the host set, or a guest with
+    // a 5-minute cap could keep talking to Gemini directly for the token's full 30 minutes.
+    it('bounds the token by the session cap: expiry and connection count follow a short host cap', async () => {
+        const driver = new ClientDirectTestable('k');
+        const before = Date.now();
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 300 }));
+        const mintConfig = driver.MintParams!.config!;
+        const expiresMs = new Date(mintConfig.expireTime!).getTime();
+        expect(cfg.MaxSessionSeconds).toBe(300);
+        expect(expiresMs).toBeLessThanOrEqual(Date.now() + (300 + 60) * 1000);
+        expect(expiresMs).toBeGreaterThanOrEqual(before + 300 * 1000);
+        expect(mintConfig.newSessionExpireTime).toBe(mintConfig.expireTime);
+        expect(cfg.ExpiresAt).toBe(mintConfig.expireTime);
+        expect(mintConfig.uses).toBeLessThan(6);
+        expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
+    });
+
+    // Each connection the browser opens spends one use, and it opens one per effective connection length (the catalog's
+    // connectionMaxSeconds), not one per Gemini's 10-minute ceiling. Live: a 45 s cap ran out after 6 opens and the 7th
+    // connection was refused "Token has been used too many times".
+    it('sizes the token uses from the effective connection length, not the 10-minute provider ceiling', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 1800, Config: { connectionMaxSeconds: 45 } }));
+        expect(cfg.ConnectionMaxSeconds).toBe(45);
+        expect(driver.MintParams!.config!.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 45));
+    });
+
+    // The browser counts the opens it spends on the token and refreshes before the last one is gone, which covers what
+    // no mint-time formula can bound (dropped connections, the 120 s uncompressed-video cap). It needs the minted count.
+    it('tells the browser how many connections the token opens', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { connectionMaxSeconds: 45 } }));
+        expect((cfg.SessionConfig as Record<string, unknown>)['tokenUses']).toBe(driver.MintParams!.config!.uses);
     });
 
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
@@ -1975,10 +2018,11 @@ class PactProbe extends EnterpriseClientDirect {
 }
 
 describe('SessionPactFor: the pact a client-direct mint returns', () => {
-    it('is what CreateClientSession mints: the full config by default, with the model facts', async () => {
+    it('is what CreateClientSession mints: the full config by default, with the model facts (plus the token uses)', async () => {
         const driver = new PactProbe('k');
         const params = makeParams({ Model: 'gemini-3.8-live', Avatar: BEN });
-        const minted = (await driver.CreateClientSession(params)).SessionConfig;
+        const { tokenUses, ...minted } = (await driver.CreateClientSession(params)).SessionConfig as Record<string, unknown>;
+        expect(typeof tokenUses).toBe('number');
         expect(driver.Pact('gemini-3.8-live', driver.Config(params))).toEqual(minted);
     });
 

@@ -34,7 +34,7 @@ import type {
   MJActionCategoryEntity,
 } from '@memberjunction/core-entities';
 
-import { SCORE_RECORD_SET_DRIVER_CLASS } from './score-record-set.action';
+import { SCORE_RECORD_SET_DRIVER_CLASS } from './driver-classes';
 
 /** Name of the find-or-create Action Category that holds per-model scoring actions. */
 const MODELS_CATEGORY_NAME = 'Predictive Studio Models';
@@ -156,6 +156,7 @@ export class ModelScoringActionGenerator {
         EntityName: 'MJ: Action Categories',
         ExtraFilter: `Name='${this.escape(MODELS_CATEGORY_NAME)}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -199,6 +200,7 @@ export class ModelScoringActionGenerator {
           `Name='${this.escape(PARENT_ACTION_NAME)}' AND ` +
           `DriverClass='${this.escape(SCORE_RECORD_SET_DRIVER_CLASS)}' AND ParentID IS NULL`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       },
       contextUser,
@@ -260,6 +262,7 @@ export class ModelScoringActionGenerator {
         EntityName: 'MJ: Actions',
         ExtraFilter: `Name='${this.escape(name)}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       },
       contextUser,

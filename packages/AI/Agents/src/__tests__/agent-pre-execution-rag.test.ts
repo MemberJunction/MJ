@@ -35,7 +35,7 @@ const {
         // Permitted by default, so a test that reaches the search path without stubbing the gate
         // behaves as before this gate existed, instead of tripping on an undefined verdict.
         mockResolvePermission: vi.fn(async (_input: ResolvePermissionInput): Promise<EffectivePermission> => PERMITTED),
-        mockRenderTemplate: vi.fn(async () => ({ Success: true, Output: 'rendered query' })),
+        mockRenderTemplate: vi.fn(async (..._args: unknown[]) => ({ Success: true, Output: 'rendered query' })),
         mockFindTemplate: vi.fn((_id: string): { GetHighestPriorityContent: () => { TemplateText: string } } | undefined => undefined),
         mockLogError: vi.fn((_message: string) => {}),
         mockLogStatusEx: vi.fn((_options: LogStatusOptions | string) => {}),
@@ -203,6 +203,8 @@ describe('AgentPreExecutionRAG', () => {
             await run();
             // Control: permitted, the template renders and its output is the query.
             expect(mockRenderTemplate).toHaveBeenCalledTimes(1);
+            // The render runs as the agent's caller, not as whoever last configured the engine.
+            expect(mockRenderTemplate.mock.calls[0][5]).toEqual({ ContextUser: fakeUser });
             expect(mockSearch.mock.calls[0][0]).toMatchObject({ Query: 'rendered query' });
 
             vi.clearAllMocks();
@@ -267,6 +269,23 @@ describe('AgentPreExecutionRAG', () => {
             await run({ activeSkillIDs: ['skill-1', 'skill-2'] });
             expect(resolverInput().Skill).toBeNull();
             expect(mockSearch.mock.calls[0][0].AISkillID).toBeUndefined();
+        });
+
+        it('injects the semantic graph lane\'s results, with their provenance, from the same search', async () => {
+            const breadcrumb = '"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"';
+            mockSearch.mockResolvedValue({
+                ...emptySearch,
+                Results: [{
+                    ID: 'abv-1', EntityName: 'MJ: Entity Alternate Base Views', RecordID: 'abv-1', SourceType: 'SemanticGraph',
+                    ResultType: 'entity-record', Title: 'Invoices.Open', Snippet: `${breadcrumb} — Unpaid invoices`, Score: 0.012,
+                    ScoreBreakdown: { Graph: 0.012 }, Tags: ['MJ Canon'], MatchedAt: new Date(),
+                }],
+                TotalCount: 1,
+                SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Graph: 1 },
+            });
+            const result = await run();
+            expect(result?.formattedSystemMessage).toContain('source: SemanticGraph');
+            expect(result?.formattedSystemMessage).toContain(breadcrumb);
         });
 
         describe('an audience (audienceReaders)', () => {

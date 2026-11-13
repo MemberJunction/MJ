@@ -3,7 +3,11 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { AgentDecisionQuestion, TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
+import type {
+    AgentDecisionQuestion,
+    TaskGraphDecisionAnswer,
+    TaskSecurityEnvelope,
+} from '@memberjunction/ai-core-plus';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -41,6 +45,12 @@ export type TaskRunProgressCallback = (message: string, percent?: number) => voi
  */
 export type TaskAgentRunner = {
     RunAgentForTask(params: TaskAgentRunParams): Promise<TaskAgentRunResult>;
+    /**
+     * True when the runner starts the node's run under its `SecurityEnvelope`: the same run scope,
+     * audience, bound parameters and taint, with the actions a tainted run may not call taken away.
+     * The dispatcher refuses a node whose envelope constrains anything when this is not true.
+     */
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything running one action for one task node needs. */
@@ -53,6 +63,11 @@ export type TaskActionRunParams = {
     DependencyOutputs: Map<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /**
+     * The node's security envelope: the submitting run's constraints, with `IsRunTainted` set to whether
+     * this node's input is tainted. `ContextUser` already carries the caller's tenant context.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -62,6 +77,8 @@ export type TaskActionRunResult = {
     Success: boolean;
     Output?: unknown;
     ErrorMessage?: string;
+    /** The action engine's result code (e.g. `AUDIENCE_UNSUPPORTED`, or `TAINTED_EGRESS_BLOCKED` from the runner's taint gate). */
+    ResultCode?: string;
     /**
      * The `MJ: Action Execution Logs` row this run produced.
      *
@@ -70,6 +87,12 @@ export type TaskActionRunResult = {
      * cannot produce one is limited, not broken.
      */
     ActionLogID?: string;
+    /**
+     * True when the action's own output is untrusted (its `outputTrustLevel` is `SemiTrusted` or
+     * `Untrusted`). The dispatcher ORs it with the node's input taint and records the result, so the
+     * nodes downstream inherit it until a completed Human step reviews it.
+     */
+    IsOutputTainted?: boolean;
 };
 
 /**
@@ -87,6 +110,13 @@ export type TaskActionRunResult = {
  */
 export type TaskActionRunner = {
     RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
+    /**
+     * True when the runner enforces the node's `SecurityEnvelope` on the action: the run scope passed
+     * as `RunScope`, the audience, the bound parameters, and the taint gate (a tainted node may not run
+     * an action whose configuration says `disallowWhenTainted`). The dispatcher refuses a node whose
+     * envelope constrains anything when this is not true.
+     */
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything running one prompt for one task node needs. */
@@ -101,6 +131,8 @@ export type TaskPromptRunParams = {
     TemplateParameters?: Record<string, string>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /** The node's security envelope; `IsRunTainted` is the node's input taint. */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -122,6 +154,8 @@ export type TaskPromptRunResult = {
      * abandoned graph.
      */
     ChatMessage?: string;
+    /** True when the prompt's own output is untrusted. The dispatcher always adds the node's input taint. */
+    IsOutputTainted?: boolean;
 };
 
 /**
@@ -374,6 +408,12 @@ export type TaskAgentRunParams = {
      */
     SubmittingAgentRunID?: string | null;
     /**
+     * Root-first ancestor agent hierarchy (`[...parentAgentHierarchy, submittingAgentName]`) of the
+     * submitting run, read from the parent task's metadata so `TaskGraphAgentRunner` can pass it
+     * directly to `AgentRunner.RunAgent` without walking ancestor runs in a loop.
+     */
+    ParentAgentHierarchy?: string[];
+    /**
      * How many continuation hops led to this run, from the graph's own metadata.
      *
      * Carried so the chain is BOUNDED. A flow that dispatches a graph containing itself recurses
@@ -391,6 +431,13 @@ export type TaskAgentRunParams = {
     Provider: IMetadataProvider;
     /** User the work runs as. */
     ContextUser: UserInfo;
+    /** Optional configuration preset name for the target agent, configured on the Agent step. */
+    ConfigurationPresetName?: string;
+    /**
+     * The node's security envelope (the submitting run's constraints, `IsRunTainted` set to the node's
+     * input taint). The runner starts the agent run under it; see `TaskAgentRunner.EnforcesSecurityEnvelope`.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -404,6 +451,8 @@ export type TaskAgentRunResult = {
     ErrorMessage?: string;
     /** The `MJ: AI Agent Runs` row that executed this task, for `Task.AgentRunID`. */
     AgentRunID?: string;
+    /** True when the run ingested untrusted content (`taintedSources`), including any it started with. */
+    IsOutputTainted?: boolean;
 };
 
 /**
@@ -427,6 +476,13 @@ export type TaskContinuationDeliverer = {
      * this, and the dispatcher degrades to `PostMessage` rather than dropping the completion.
      */
     Reinvoke?(params: TaskContinuationParams): Promise<void>;
+    /**
+     * True when `Reinvoke` starts the turn under `TaskContinuationParams.SecurityEnvelope` exactly as an
+     * agent node runs under its envelope: the same run scope, audience, bound parameters and tenant (on a
+     * per-run user clone), starting tainted when the outcome is. The dispatcher posts a message instead of
+     * reinvoking a graph whose envelope constrains anything when this is not true.
+     */
+    EnforcesSecurityEnvelope?: boolean;
 };
 
 /** Everything a continuation needs to say what happened. */
@@ -441,6 +497,12 @@ export type TaskContinuationParams = {
     SubmittedByUserID: string | null;
     /** How many continuation hops preceded this one, so a re-submitted graph can carry depth + 1. */
     ReinvokeDepth: number;
+    /**
+     * What a `reinvoke` turn runs under: the graph's stored security envelope (the submitting run's
+     * scope, audience, bound parameters and tenant), with `IsRunTainted` set when the submitting run was
+     * tainted or any step's output the outcome carries is. Absent when the graph carries neither.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /**
      * Per-task outcome. Deliberately carries a `summary` and an `outputRef`, not inline payloads —
      * a ten-task graph's full outputs would swamp the continuation turn's context window, and the
@@ -459,6 +521,13 @@ export type TaskContinuationParams = {
 
 /** Tuning knobs for the durable dispatcher. */
 export type TaskGraphDispatcherConfig = {
+    /**
+     * The first delay before retrying a failed idempotent action step; each later retry doubles it, up to
+     * 30× this. Only idempotent actions are retried at all (see `TaskCompensationStepMetadata.isIdempotent`
+     * and `Action.IsIdempotent`).
+     */
+    RetryBackoffBaseMs: number;
+
     /**
      * Identifies this dispatcher instance in `Task.ClaimedBy`. Must be stable for the process
      * lifetime and distinct per instance — it is what lets reconciliation tell "my orphaned work"
@@ -506,6 +575,7 @@ export type TaskGraphDispatcherConfig = {
 
 /** Defaults chosen so a heartbeat has several chances to land before a claim lapses. */
 export const DEFAULT_DISPATCHER_CONFIG: Omit<TaskGraphDispatcherConfig, 'InstanceID'> = {
+    RetryBackoffBaseMs: 1000,
     ClaimTTLSeconds: 300,
     HeartbeatIntervalSeconds: 60,
     MaxConcurrentTasks: 5,

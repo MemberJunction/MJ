@@ -56,10 +56,12 @@ import {
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchFusion, LabeledResultList, ApplySemanticFloor } from './SearchFusion';
 import { SearchEnricher } from './SearchEnricher';
+import { ProjectSearchResultForReader } from './ResultFieldProjection';
 import { FullTextSearchProvider } from './FullTextSearchProvider';
 import { StorageSearchProvider } from './StorageSearchProvider';
 import { BaseReRanker } from './BaseReRanker';
 import { NoopReRanker, LoadNoopReRanker } from './NoopReRanker';
+import { LoadGraphSearchProvider } from './GraphSearchProvider';
 import { RerankerBudgetGuard } from '../rerankers/RerankerBudgetGuard';
 import { RenderScopeTemplate, RenderScopeJsonTemplate } from './ScopeTemplateRenderer';
 import { LaneKindForIndexType } from './ScopeValueEscaper';
@@ -171,8 +173,9 @@ function refusedLanesDiagnostic(skipped: LaneExplanation[]): string {
         'A search refuses a scope with any unusable lane rather than search the others; fix the lane(s) to make it retrieve.';
 }
 
-// Keep the default re-ranker registration alive under tree-shaking
+// Keep the default re-ranker and graph search provider registrations alive under tree-shaking
 LoadNoopReRanker();
+LoadGraphSearchProvider();
 
 /** Where a content entity sits in the derived-content family (see `SearchEngine.VerifyOriginRecords`). */
 type ContentFamilyLevel = 'chunk' | 'item';
@@ -547,7 +550,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // ──────────────────────────────────────────────────────────
             // Execute providers — either unscoped (original path) or per-scope
             // ──────────────────────────────────────────────────────────
-            let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+            let sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
             let fusedResults: SearchResultItem[];
             // Per-scope decisions, captured for SearchExecutionLog.ScopeDecisionJSON. Empty on
             // the unconstrained path, which resolves no scope and therefore decides nothing.
@@ -560,7 +563,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     params.Filters,
                     contextUser,
                     isPreview,
-                    undefined,
+                    this.audienceConstraints(params.Audience, contextUser),
                     partialEvents,
                     params.MinScore,
                 );
@@ -582,16 +585,19 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         this.principalsFrom(params),
                         partialEvents,
                         params.MinScore,
+                        this.distinctReaders(params.Audience, contextUser),
                     )
                 ));
 
-                const sc = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+                const sc = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0, Graph: 0 };
                 const perScopeFused = new Map<string, SearchResultItem[]>();
                 for (const r of perScopeRunResults) {
                     sc.Vector += r.sourceCounts.Vector;
                     sc.FullText += r.sourceCounts.FullText;
                     sc.Entity += r.sourceCounts.Entity;
                     sc.Storage += r.sourceCounts.Storage;
+                    sc.Tag += r.sourceCounts.Tag ?? 0;
+                    sc.Graph += r.sourceCounts.Graph ?? 0;
                     perScopeFused.set(r.scopeID, r.fused);
                     scopeDecisions.push(r.decision);
                 }
@@ -797,6 +803,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             fulltext: 'FullText',
             entity: 'Entity',
             storage: 'Storage',
+            tag: 'Tag',
+            graph: 'SemanticGraph',
+            semanticgraph: 'SemanticGraph',
         };
 
         // A provider's hits arrive before any permission pass, so its event carries progress only: the name,
@@ -1032,6 +1041,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return readers;
     }
 
+    /**
+     * Constraints for an UNSCOPED search that carry only the audience, so a provider that traverses
+     * (the graph lane) can apply it while it walks; `undefined` — exactly as before — when the audience
+     * adds no reader. Every other field stays `undefined`, which providers read as "unscoped".
+     */
+    private audienceConstraints(audience: SearchAudience | undefined, contextUser: UserInfo): ScopeConstraints | undefined {
+        const readers = this.distinctReaders(audience, contextUser);
+        return readers.length > 0 ? { AudienceReaders: readers } : undefined;
+    }
+
     /** The distinct reader IDs, lower-cased and sorted, for the cache key. `undefined` when the audience adds no reader, so it keys like no audience. */
     private audienceReaderIDs(audience: SearchAudience | undefined, contextUser: UserInfo): string[] | undefined {
         const ids = this.distinctReaders(audience, contextUser).map(r => r.ID.toLowerCase()).sort();
@@ -1045,6 +1064,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * the asker's reach is the ceiling, each other reader's reach lowers it. Readers are checked concurrently;
      * a reader with the caller's own ID, or listed twice, is checked once. Expects a validated audience
      * (`searchInternal` validates it before doing any work).
+     *
+     * The intersection is then projected for every reader in turn, so a field any one of them may not read is
+     * removed from the shared results' metadata, snippets and titles.
      *
      * Two things the pass cannot do, both failing closed:
      * - **Storage hits are refused under an audience.** Their permission model is the storage account's;
@@ -1080,10 +1102,37 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const survivors = await Promise.all(readers.map(reader => this.filterByPermissions(checkable, reader)));
         this.logAudienceNarrowing(readers, survivors, checkable.length);
         const keptByEveryReader = survivors.map(list => new Set(list.map(r => this.audienceIdentity(r))));
-        return checkable.filter(r => {
+        const kept = checkable.filter(r => {
             const identity = this.audienceIdentity(r);
-            return keptByEveryReader.every(kept => kept.has(identity));
+            return keptByEveryReader.every(set => set.has(identity));
         });
+        // Every reader sees the same results, so each one's denied fields come out of all of them.
+        return readers.reduce((projected, reader) => this.projectResultsForReader(projected, reader), kept);
+    }
+
+    /**
+     * `results` with every field `reader` may not read projected out of each result's metadata, snippet and
+     * title, entity by entity (see {@link projectEntityResultsForReader}). A result naming an entity this
+     * provider does not know is left as it is: the permission pass never admits one.
+     */
+    private projectResultsForReader(results: SearchResultItem[], reader: UserInfo): SearchResultItem[] {
+        const entities = new Map<string, EntityInfo | null>();
+        return results.map(item => {
+            if (!entities.has(item.EntityName)) {
+                entities.set(item.EntityName, this.entityOrNull(item.EntityName));
+            }
+            const entity = entities.get(item.EntityName);
+            return entity ? this.projectEntityResultsForReader(entity, [item], reader)[0] : item;
+        });
+    }
+
+    /** `EntityByName`, with an unknown name (which it throws on) as null. */
+    private entityOrNull(entityName: string): EntityInfo | null {
+        try {
+            return this.ProviderToUse.EntityByName(entityName) ?? null;
+        } catch {
+            return null;
+        }
     }
 
     /** `EntityName|RecordID` for a result that names a record, else the object itself — see `FilterForAudience`'s identity contract. */
@@ -1746,10 +1795,12 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         principals: ScopePrincipals,
         onProviderResolved?: OnProviderResolved,
         minScore?: number,
+        /** The run's audience beyond the caller, handed to every provider (`ScopeConstraints.AudienceReaders`). */
+        audienceReaders: UserInfo[] = [],
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number };
         /**
          * What this scope decided — dimension provenance and per-lane outcomes.
          *
@@ -1818,7 +1869,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // under the provider's SourceType in QueryTransforms so the provider finds it.
                 const perProviderConstraints: ScopeConstraints = {
                     ...constraints,
-                    QueryTransforms: { ...perProviderQueryTransforms }
+                    QueryTransforms: { ...perProviderQueryTransforms },
+                    ...(audienceReaders.length > 0 ? { AudienceReaders: audienceReaders } : {}),
                 };
                 // (Note: actual Nunjucks-rendered `QueryTransformTemplateID` resolution for
                 // stored templates lives in AgentPreExecutionRAG/ScopedSearchAction, not here.
@@ -2583,8 +2635,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Count results contributed by each source before fusion.
      */
-    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number } {
-        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0 };
+    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number; Graph?: number } {
+        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0, Graph: 0 };
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
@@ -2601,6 +2653,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     break;
                 case 'tag':
                     counts.Tag += list.Results.length;
+                    break;
+                case 'graph':
+                case 'SemanticGraph':
+                    counts.Graph += list.Results.length;
                     break;
             }
         }
@@ -2629,6 +2685,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
      * 4. If RLS applies, a RunView validates which record IDs the user can read.
      * 5. Content items and chunks are kept only when the user may read the record they were
      *    derived from ({@link VerifyOriginRecords}).
+     * 6. Fields the user may not read are projected out of what is kept: metadata keys, and any
+     *    snippet or title taken from them ({@link projectEntityResultsForReader}). The returned
+     *    results are copies wherever something was removed.
      *
      * `storage-file` results take their own path ({@link filterStorageResults}): they are re-checked against
      * the storage-account permission model for this user, never passed through on the strength of their type.
@@ -2846,12 +2905,28 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const ownRows = await this.admitOwnRows(entity, entityResults, rlsClause, contextUser);
             const kept = await this.VerifyOriginRecords(entity, ownRows, contextUser);
             if (stats) stats.OriginGateRemoved += Math.max(0, ownRows.length - kept.length);
-            permitted.push(...kept);
+            permitted.push(...this.projectEntityResultsForReader(entity, kept, contextUser));
         } catch (error) {
             // Fail closed — if anything goes wrong, exclude the results
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchEngine: Permission filtering failed for entity "${entityName}": ${msg}`);
         }
+    }
+
+    /**
+     * Field-level security for results the user may read: the fields of `entity` they may not read come out
+     * of each result's `RawMetadata`, and a `Snippet`, `Title` or `RecordName` taken from one is cleared.
+     *
+     * Indexes are built once, under the identity of whoever ran the indexing job, and shared by every reader,
+     * so a row the user may read can still carry a value they may not. Results their provider read through
+     * `RunView` as this user ({@link isSelfEvidentRow}) were projected at the source; the rest are checked
+     * against their metadata, and lose their text when there is none to check it against. Returns copies;
+     * `EntityName` and `RecordID` are never changed (see {@link FilterForAudience}'s identity contract).
+     */
+    private projectEntityResultsForReader(entity: EntityInfo, results: SearchResultItem[], contextUser: UserInfo): SearchResultItem[] {
+        const denied = entity.GetDeniedReadFields(contextUser);
+        if (denied.size === 0) return results;
+        return results.map(item => ProjectSearchResultForReader(item, denied, { TextAlreadyProjected: this.isSelfEvidentRow(item) }));
     }
 
     /**
@@ -3026,7 +3101,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             ExtraFilter: filter,
             Fields: entity.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
-            MaxRows: recordIDs.length
+            MaxRows: recordIDs.length,
+            SkipTotalRowCount: true
         };
     }
 
@@ -3321,7 +3397,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             Fields: fields,
             ExtraFilter: `${keyField} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`,
             ResultType: 'simple',
-            MaxRows: ids.length
+            MaxRows: ids.length,
+            SkipTotalRowCount: true
         }, contextUser);
         if (!result.Success) {
             LogError(`SearchEngine: origin lookup of "${entityName}" failed for user ${contextUser.ID}: ${result.ErrorMessage ?? 'unknown error'}`);

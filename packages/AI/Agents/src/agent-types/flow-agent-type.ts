@@ -34,7 +34,8 @@ import {
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation, type LoopBodyActionStep } from '@memberjunction/ai-core-plus';
+import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -225,7 +226,8 @@ export interface FlowAgentExecuteParams {
      * - Testing specific branches of a flow
      * - Re-running a portion of a flow after a failure
      *
-     * The step must belong to the agent being executed.
+     * The step must belong to the agent being executed; a step from another agent ends the run.
+     * Honoured only in-run: a run on the task-graph dispatcher refuses it.
      * Use AIEngine.Instance.GetAgentSteps(agentId) to retrieve available steps.
      *
      * A Decision step's answers are held by the run, never written into the payload, so a run started
@@ -246,6 +248,10 @@ export interface FlowAgentExecuteParams {
      *
      * Skipped steps are still recorded in the execution path but marked as skipped.
      * The step's output mapping is not applied when skipped.
+     *
+     * Honoured only in-run. A run on the task-graph dispatcher executes the whole compiled graph,
+     * so it refuses a non-empty `skipSteps`, as it refuses `startAtStep`; set
+     * {@link executionMode} to `'inRun'` to use it.
      */
     skipSteps?: MJAIAgentStepEntity[];
 
@@ -1084,6 +1090,18 @@ export class FlowAgentType extends BaseAgentType {
             case 'Decision':
                 return this.createDecisionStep(node, payload);
 
+            case 'Human':
+                // A Human step waits for a person, which only the task-graph dispatcher can do: it
+                // parks the task until someone answers. The in-run walker has nowhere to wait, so the
+                // run stops here, naming the step. Only a run that reaches the step is refused, so a
+                // Human step on a branch the run does not take never fails it (#4621).
+                return this.stopFlow(
+                    `Workflow '${params.agent.Name}' reached Human step '${node.Name}', which this run cannot ` +
+                    `execute: Human steps wait for a person and run only on the task-graph dispatcher. Run the ` +
+                    `workflow as a top-level run with executionMode 'dispatch' (the default for a top-level run).`,
+                    payload
+                );
+
             default:
                 return this.createNextStep('Failed', {
                     errorMessage: `Unknown step type: ${node.StepType}`,
@@ -1631,7 +1649,10 @@ export class FlowAgentType extends BaseAgentType {
             flowState.executionMode = 'dispatch';
             flowState.executionModeReason = requested === 'dispatch'
                 ? 'requested by the caller'
-                : 'default for a top-level run';
+                // No parentRun: a top-level run, or a task-graph task whose submitting run could not be
+                // loaded (the runner logs that). The reason says both, so the recorded routing does
+                // not claim a nested flow was started at the top level (#4623).
+                : 'default for a run with no parent run (a top-level run, or a nested task whose submitting run did not resolve)';
         }
     }
 
@@ -1681,6 +1702,18 @@ export class FlowAgentType extends BaseAgentType {
                     `Starting at a specific step ('${flowParams.startAtStep.Name}') is not supported when a workflow ` +
                     `runs on the task-graph dispatcher. Set agentTypeParams.executionMode to 'inRun', run the ` +
                     `workflow from its starting step, or split it so the portion you want is its own workflow.`
+            });
+        }
+
+        // Skipping steps is the same kind of request: the dispatcher runs the whole compiled graph,
+        // so ignoring the list would run the steps the caller asked to skip (#4625).
+        if (flowParams?.skipSteps && flowParams.skipSteps.length > 0) {
+            const names = flowParams.skipSteps.map(s => `'${s.Name}'`).join(', ');
+            return this.createNextStep('Failed', {
+                errorMessage:
+                    `Skipping steps (${names}) is not supported when a workflow runs on the task-graph ` +
+                    `dispatcher. Set agentTypeParams.executionMode to 'inRun', or remove the steps from the ` +
+                    `workflow (or make them inactive) for this use.`
             });
         }
 
@@ -1799,9 +1832,10 @@ export class FlowAgentType extends BaseAgentType {
             const validStep = agentSteps.find(s => UUIDsEqual(s.ID, flowParams.startAtStep!.ID));
 
             if (!validStep) {
-                return this.createNextStep('Failed', {
-                    errorMessage: `startAtStep '${flowParams.startAtStep.Name}' (ID: ${flowParams.startAtStep.ID}) does not belong to agent '${params.agent.Name}'`
-                });
+                return this.stopFlow(
+                    `startAtStep '${flowParams.startAtStep.Name}' (ID: ${flowParams.startAtStep.ID}) does not belong to agent '${params.agent.Name}'`,
+                    payloadToUse
+                );
             }
 
             LogStatus(`Flow Agent: Starting at step '${validStep.Name}' (override via agentTypeParams.startAtStep)`);
@@ -1812,9 +1846,7 @@ export class FlowAgentType extends BaseAgentType {
         const startingSteps = await this.getStartingSteps(flowState.agentId);
 
         if (startingSteps.length === 0) {
-            return this.createNextStep('Failed', {
-                errorMessage: 'No starting steps defined for flow agent'
-            });
+            return this.stopFlow('No starting steps defined for flow agent', payloadToUse);
         }
 
         if (startingSteps.length > 1) {
@@ -1961,6 +1993,12 @@ export class FlowAgentType extends BaseAgentType {
         
         // We should have a current step ID from the flow state
         if (!flowState.currentStepId) {
+            // A refusal before the first step ran (for example a startAtStep from another agent)
+            // reaches here with no step to advance from. Ending the run on it keeps its message;
+            // a new failure would replace it and be retried until the consecutive-failure cap (#4624).
+            if (step.step === 'Failed') {
+                return { ...step, terminate: true };
+            }
             return this.createNextStep('Failed', {
                 errorMessage: 'No current step in flow state after action execution',
                 newPayload: currentPayload,
@@ -2146,7 +2184,7 @@ export class FlowAgentType extends BaseAgentType {
         // Build universal ForEachOperation
         const forEach: ForEachOperation = {
             collectionPath: baseConfig.collectionPath,
-            itemVariable: baseConfig.itemVariable,
+            itemVariable: baseConfig.itemVariable || 'item',
             indexVariable: baseConfig.indexVariable,
             maxIterations: baseConfig.maxIterations,
             continueOnError: baseConfig.continueOnError,
@@ -2155,8 +2193,19 @@ export class FlowAgentType extends BaseAgentType {
             maxConcurrency: baseConfig.maxConcurrency
         };
 
-        // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)
-        if (node.LoopBodyType === 'Action') {
+        // Multi-step loop bodies (`steps[]`, e.g. from graduated TaskGraphSpec workflows) take precedence
+        // over single-action `node.ActionID` (which only holds steps[0]'s ID on AIAgentStep).
+        if (Array.isArray(baseConfig.steps) && baseConfig.steps.length > 0) {
+            const resolvedSteps = this.resolveFlowLoopBodySteps(baseConfig.steps as LoopBodyActionStep[]);
+            if (resolvedSteps.errorMessage || !resolvedSteps.steps) {
+                return this.createNextStep('Failed', {
+                    errorMessage: resolvedSteps.errorMessage ?? `Failed to resolve steps[] for ForEach step '${node.Name}'`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+            forEach.steps = resolvedSteps.steps;
+        } else if (node.LoopBodyType === 'Action') {
             // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
             // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
             // standard Actions like Web Search, so a loop body over a normal Action would always miss.
@@ -2237,14 +2286,25 @@ export class FlowAgentType extends BaseAgentType {
         // Build universal WhileOperation
         const whileOp: WhileOperation = {
             condition: baseConfig.condition,
-            itemVariable: baseConfig.itemVariable,
+            itemVariable: baseConfig.itemVariable || 'attempt',
             maxIterations: baseConfig.maxIterations,
             continueOnError: baseConfig.continueOnError,
             delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs
         };
 
-        // Add action or subAgent based on LoopBodyType
-        if (node.LoopBodyType === 'Action') {
+        // Multi-step loop bodies (`steps[]`, e.g. from graduated TaskGraphSpec workflows) take precedence
+        // over single-action `node.ActionID` (which only holds steps[0]'s ID on AIAgentStep).
+        if (Array.isArray(baseConfig.steps) && baseConfig.steps.length > 0) {
+            const resolvedSteps = this.resolveFlowLoopBodySteps(baseConfig.steps as LoopBodyActionStep[]);
+            if (resolvedSteps.errorMessage || !resolvedSteps.steps) {
+                return this.createNextStep('Failed', {
+                    errorMessage: resolvedSteps.errorMessage ?? `Failed to resolve steps[] for While step '${node.Name}'`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+            whileOp.steps = resolvedSteps.steps;
+        } else if (node.LoopBodyType === 'Action') {
             // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
             // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
             // standard Actions like Web Search, so a loop body over a normal Action would always miss.
@@ -2299,6 +2359,47 @@ export class FlowAgentType extends BaseAgentType {
             previousPayload: payload,
             agentTypeData: { stepId: node.ID }
         } as BaseAgentNextStep<P> & { agentTypeData?: any };
+    }
+
+    /**
+     * Resolves and canonicalizes a `LoopBodyActionStep[]` from a Flow step's `Configuration.steps`,
+     * verifying that every step's action exists in `ActionEngineServer.Instance.Actions` (matching
+     * either canonical `Name` case-insensitively or unambiguous `SanitizeToolName`).
+     */
+    private resolveFlowLoopBodySteps(
+        rawSteps: readonly LoopBodyActionStep[]
+    ): { steps?: LoopBodyActionStep[]; errorMessage?: string } {
+        const actions = ActionEngineServer.Instance.Actions;
+        const resolvedSteps: LoopBodyActionStep[] = [];
+        for (const step of rawSteps) {
+            const rawName = step?.name?.trim() ?? '';
+            if (!rawName) {
+                return { errorMessage: 'Loop body step in steps[] is missing an action name' };
+            }
+            const lower = rawName.toLowerCase();
+            let action = actions.find((a) => a.Name.trim().toLowerCase() === lower);
+            if (!action) {
+                const targetSanitized = SanitizeToolName(rawName);
+                if (targetSanitized) {
+                    const matches = actions.filter((a) => SanitizeToolName(a.Name) === targetSanitized);
+                    if (matches.length === 1) {
+                        action = matches[0];
+                    } else if (matches.length > 1) {
+                        return {
+                            errorMessage: `Ambiguous action tool name '${step.name}' in loop steps[]: matches ${matches.map((m) => m.Name).join(', ')}`,
+                        };
+                    }
+                }
+            }
+            if (!action) {
+                return { errorMessage: `Action not found for loop body step '${step.id || step.name}': ${step.name}` };
+            }
+            resolvedSteps.push({
+                ...step,
+                name: action.Name,
+            });
+        }
+        return { steps: resolvedSteps };
     }
 
     /**

@@ -10,9 +10,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+    };
+});
 
 vi.mock('@memberjunction/actions-base', () => ({}));
 
@@ -28,7 +32,8 @@ const { logErrorSpy, globalMetadataStub } = vi.hoisted(() => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class CompositeKeyMock {
         public KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
         public static FromObject(obj: Record<string, unknown>): CompositeKeyMock {
@@ -38,13 +43,13 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        ...actual,
         LogError: logErrorSpy,
         Metadata: class Metadata {
             public EntityByName = globalMetadataStub.EntityByName;
             public GetEntityObject = globalMetadataStub.GetEntityObject;
         },
         CompositeKey: CompositeKeyMock,
-        BaseEntity: class BaseEntity {},
     };
 });
 
@@ -111,6 +116,25 @@ describe('UpdateRecordAction', () => {
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('VALIDATION_ERROR');
             expect(r.Message).toMatch(/Fields/);
+        });
+
+        it('accepts PrimaryKey and Fields serialized as JSON strings', async () => {
+            const entity = new FakeEntity(['Name', 'Status'], { ID: 'w-1', Name: 'Old', Status: 'Draft' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: JSON.stringify({ ID: 'w-1' }) },
+                    { Name: 'Fields', Value: JSON.stringify({ Status: 'Active' }) },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values['Status']).toBe('Active');
         });
 
         it('fails with VALIDATION_ERROR naming the missing primary key field', async () => {
@@ -191,6 +215,9 @@ describe('UpdateRecordAction', () => {
 
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('PERMISSION_DENIED');
+            expect(r.ErrorRecovery).toMatchObject({
+                Retryable: false,
+            });
         });
     });
 
@@ -264,14 +291,10 @@ describe('UpdateRecordAction', () => {
         });
     });
 
-    describe('unknown-field handling (documents current behavior)', () => {
-        // ⚠️ PRODUCT BUG (documented, not fixed here): unlike WriteEntityFieldsAction,
-        // which rejects unknown fields with VALIDATION_ERROR, UpdateRecordAction
-        // silently skips them (LogError only). A typo'd field name is dropped while
-        // the rest of the update proceeds as SUCCESS.
-        it('silently skips unknown fields (LogError only) while applying the known ones', async () => {
-            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
-            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
+    describe('unknown-field handling', () => {
+        it('fails with INVALID_FIELD_NAMES listing the unknown fields and the valid updatable ones, without mutating or saving', async () => {
+            const entity = new FakeEntity(['Status', 'Name'], { ID: '1', Status: 'Draft', Name: 'n' });
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Status', 'Name']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
@@ -283,27 +306,22 @@ describe('UpdateRecordAction', () => {
 
             const r = await action.InternalRunAction(params);
 
-            expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('SUCCESS');
-            expect(entity.values.Status).toBe('Active');
-            expect(entity.values.Stauts).toBeUndefined();
-            expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Field 'Stauts' does not exist on entity 'Widgets'"));
-
-            const updatedOut = findOutput(params.Params, 'UpdatedFields');
-            expect(updatedOut?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Stauts/);
+            expect(r.Message).toMatch(/Status, Name/);
+            expect(entity.values.Status).toBe('Draft');
+            expect(entity.saveCallCount).toBe(0);
         });
 
-        // ⚠️ PRODUCT BUG (documented, not fixed here): when EVERY field is unknown,
-        // the action reports Success=true / NO_CHANGES — the caller has no signal
-        // that its entire payload was ignored.
-        it('returns a NO_CHANGES success when every supplied field is unknown', async () => {
+        it('resolves field names case-insensitively against entity metadata', async () => {
             const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
             const provider = makeProvider({ entityInfo: makeEntityInfo(['Status']), entity });
             const params = makeParams(
                 [
                     { Name: 'EntityName', Value: 'Widgets' },
                     { Name: 'PrimaryKey', Value: { ID: '1' } },
-                    { Name: 'Fields', Value: { Stauts: 'typo', Nmae: 'typo2' } },
+                    { Name: 'Fields', Value: { status: 'Active' } },
                 ],
                 provider
             );
@@ -311,8 +329,79 @@ describe('UpdateRecordAction', () => {
             const r = await action.InternalRunAction(params);
 
             expect(r.Success).toBe(true);
-            expect(r.ResultCode).toBe('NO_CHANGES');
-            expect(entity.saveCallCount).toBe(0);
+            expect(r.ResultCode).toBe('SUCCESS');
+            expect(entity.values.Status).toBe('Active');
+            const updatedOut = findOutput(params.Params, 'UpdatedFields');
+            expect(updatedOut?.Value).toEqual({ Status: { oldValue: 'Draft', newValue: 'Active' } });
+        });
+
+        it('leaves read-only, virtual and primary-key fields out of the valid-field list', async () => {
+            const entity = new FakeEntity(['Status'], { ID: '1', Status: 'Draft' });
+            const entityInfo = makeEntityInfo([
+                { Name: 'ID', IsPrimaryKey: true },
+                { Name: 'Status' },
+                { Name: '__mj_UpdatedAt', ReadOnly: true },
+                { Name: 'Owner', IsVirtual: true },
+            ]);
+            const provider = makeProvider({ entityInfo, entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Nope: 1 } },
+                ],
+                provider
+            );
+
+            const r = await action.InternalRunAction(params);
+
+            expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(r.Message).toMatch(/Valid updatable fields: Status$/);
+        });
+
+        it('populates ErrorRecovery with fuzzy SuggestedValues on INVALID_FIELD_NAMES and ENTITY_NOT_FOUND', async () => {
+            const entity = new FakeEntity(['Status', 'Description'], { ID: '1', Status: 'Draft', Description: 'A' });
+            const entityInfo = makeEntityInfo(['Status', 'Description']);
+            const provider = {
+                ...makeProvider({ entityInfo, entity }),
+                Entities: [{ Name: 'Widgets' }, { Name: 'Widget Categories' }],
+            };
+
+            const badFieldParams = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Statuz: 'Active' } },
+                ],
+                provider
+            );
+            const badFieldResult = await action.InternalRunAction(badFieldParams);
+            expect(badFieldResult.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(badFieldResult.Message).toContain('did you mean: Status?');
+            expect(badFieldResult.Message).toMatch(/Valid updatable fields: Status, Description$/);
+            expect(badFieldResult.ErrorRecovery).toMatchObject({
+                Retryable: true,
+                SuggestedValues: ['Status'],
+                InvalidParams: [{ ParamName: 'Fields.Statuz' }],
+            });
+
+            provider.EntityByName.mockReturnValueOnce(undefined);
+            const badEntityParams = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgits' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Status: 'Active' } },
+                ],
+                provider
+            );
+            const badEntityResult = await action.InternalRunAction(badEntityParams);
+            expect(badEntityResult.ResultCode).toBe('ENTITY_NOT_FOUND');
+            expect(badEntityResult.Message).toContain('Did you mean: Widgets?');
+            expect(badEntityResult.ErrorRecovery).toMatchObject({
+                Retryable: true,
+                SuggestedValues: ['Widgets'],
+                InvalidParams: [{ ParamName: 'EntityName' }],
+            });
         });
     });
 
@@ -377,6 +466,9 @@ describe('UpdateRecordAction', () => {
 
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('PERMISSION_DENIED');
+            expect(r.ErrorRecovery).toMatchObject({
+                Retryable: false,
+            });
         });
     });
 

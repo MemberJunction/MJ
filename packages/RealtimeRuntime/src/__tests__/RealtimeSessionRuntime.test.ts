@@ -2,7 +2,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeClient, MEDIA_PLACEMENTS, REQUESTED_TRACKS_SESSION_KEY, type RealtimeClientError } from '@memberjunction/ai-realtime-client';
+import {
+    BaseRealtimeClient,
+    MEDIA_PLACEMENTS,
+    REQUESTED_TRACKS_SESSION_KEY,
+    type RealtimeClientError,
+    type RealtimeClientTokenRefreshOptions,
+    type RefreshedRealtimeClientCredential,
+} from '@memberjunction/ai-realtime-client';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
@@ -193,9 +200,12 @@ describe('session lifecycle, driven end to end with fakes', () => {
      */
     class RecordingProvider {
         public Mutations: string[] = [];
+        /** Every relay with its variables, for assertions on what a mutation carried. */
+        public Calls: Array<{ query: string; variables: Record<string, unknown> | undefined }> = [];
         public readonly sessionId = 'transport-session-1';
-        public async ExecuteGQL(query: string): Promise<unknown> {
+        public async ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<unknown> {
             this.Mutations.push(query);
+            this.Calls.push({ query, variables });
             return {};
         }
         public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
@@ -543,8 +553,8 @@ describe('session lifecycle, driven end to end with fakes', () => {
                 return release;
             }
 
-            public override async ExecuteGQL(query: string): Promise<unknown> {
-                const result = await super.ExecuteGQL(query);
+            public override async ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<unknown> {
+                const result = await super.ExecuteGQL(query, variables);
                 if (query.includes('CloseAgentSession')) {
                     await this.closeGate;
                 }
@@ -692,6 +702,273 @@ describe('session lifecycle, driven end to end with fakes', () => {
             expect(states.at(-1)).toBe('closed');
         });
 
+        describe('a minted session whose start fails is closed on the server as an Error (MJ#6013)', () => {
+            /** The variables of every CloseAgentSession the runtime sent. */
+            const closeVariables = (provider: RecordingProvider) =>
+                provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables);
+
+            it('closes the row when the provider refuses the connection, instead of leaving it Active for the janitor', async () => {
+                vi.spyOn(console, 'error').mockImplementation(() => {});
+                const handshake = (HandshakeClient.Next = new Handshake());
+                const { runtime, provider, ended } = buildWatched();
+
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+                await handshake.Reached;
+                handshake.Fail(new Error('The provider refused the session.'));
+                await starting;
+
+                expect(ended).toEqual([{ sessionId: 'session-1', reason: 'error' }]);
+                expect(closeVariables(provider)).toEqual([{ agentSessionId: 'session-1', closeReason: 'Error' }]);
+            });
+
+            it('closes an explicitly ended call as Explicit, so the row says who ended it', async () => {
+                const { runtime, provider } = build(new FakeMediaHost());
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+                await runtime.EndRealtimeSession();
+                expect(closeVariables(provider)).toEqual([{ agentSessionId: 'session-1', closeReason: 'Explicit' }]);
+            });
+        });
+
+        describe('one slot, one owner: a start never races a teardown or a live call (MJ#4629)', () => {
+            it('waits for a teardown still in flight, then goes live, instead of being dropped without a word', async () => {
+                const { runtime, provider } = buildWatched();
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+                const release = provider.HoldClose();
+                const ending = runtime.EndRealtimeSession();
+                // The first call is still closing on the server; the host starts the next one right away.
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+                release();
+                await ending;
+                await starting;
+                expect(runtime.IsActive).toBe(true);
+                expect(runtime.CurrentAgentSessionId).toBe('session-2');
+                expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+                await runtime.EndRealtimeSession();
+            });
+
+            it('does not go live when the host ends the next call while it still waits on the last teardown', async () => {
+                // End A -> Start B (waits on A's teardown) -> End B. End B finds IsActive still true (A is closing), so it
+                // joins A's teardown; B must notice that End when it resumes, not claim the slot and go live behind it.
+                const { runtime, provider, active } = buildWatched();
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+                const connectsBefore = FakeRealtimeClient.ConnectCalls;
+                const release = provider.HoldClose();
+                const endingFirst = runtime.EndRealtimeSession();
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'));
+                const endingSecond = runtime.EndRealtimeSession();
+                release();
+                await Promise.all([endingFirst, starting, endingSecond]);
+
+                expect(runtime.IsActive).toBe(false);
+                expect(runtime.CurrentAgentSessionId).toBeNull();
+                expect(active.at(-1)).toBe(false);
+                expect(FakeRealtimeClient.ConnectCalls).toBe(connectsBefore);
+                expect(provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables)).toEqual([
+                    { agentSessionId: 'session-1', closeReason: 'Explicit' },
+                ]);
+            });
+
+            it('refuses a start while a call is live, with an error the host can show, not a silent return', async () => {
+                const { runtime } = build(new FakeMediaHost());
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-1'));
+                await expect(runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider', 'session-2'))).rejects.toThrow(/already/i);
+                expect(runtime.CurrentAgentSessionId).toBe('session-1');
+                await runtime.EndRealtimeSession();
+            });
+        });
+
+        describe('a host that ends the call the moment it sees the error state keeps the failure an Error', () => {
+            /** A client whose socket dies after the call went live. */
+            @RegisterClass(BaseRealtimeClient, 'fake-dying-watched')
+            class DyingWatchedClient extends FakeRealtimeClient {
+                public static Last: DyingWatchedClient | null = null;
+                public override async Connect(): Promise<void> {
+                    DyingWatchedClient.Last = this;
+                }
+                public Die(): void {
+                    this.emitError({ Message: 'Gemini Live connection closed (1011): unexpected disconnect', Fatal: true });
+                }
+            }
+
+            /** A runtime watched by a host that ends the call synchronously on 'error' (MobileApp's voice screen does). */
+            function buildEndingOnError(host: IRealtimeMediaHost = new FakeMediaHost()) {
+                const runtime = new RealtimeSessionRuntime(host);
+                const provider = new RecordingProvider();
+                runtime.Provider = provider as unknown as IMetadataProvider;
+                const ended: string[] = [];
+                runtime.SessionEnded$.subscribe((end) => ended.push(end.reason));
+                runtime.ConnectionState$.subscribe((state) => {
+                    if (state === 'error') {
+                        void runtime.EndRealtimeSession();
+                    }
+                });
+                const closeReasons = () =>
+                    provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables?.['closeReason']);
+                return { runtime, ended, closeReasons };
+            }
+
+            it('closes the row as Error when the provider dies mid-call', async () => {
+                vi.spyOn(console, 'error').mockImplementation(() => {});
+                const { runtime, ended, closeReasons } = buildEndingOnError();
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-dying-watched'));
+                DyingWatchedClient.Last?.Die();
+                await vi.waitFor(() => expect(runtime.IsActive).toBe(false));
+
+                expect(closeReasons()).toEqual(['Error']);
+                expect(ended).toEqual(['error']);
+            });
+
+            it('closes the row as Error when the start fails after the mint', async () => {
+                vi.spyOn(console, 'error').mockImplementation(() => {});
+                const handshake = (HandshakeClient.Next = new Handshake());
+                const { runtime, ended, closeReasons } = buildEndingOnError();
+                const starting = runtime.StartRealtimeSessionFromResult(mintedSession('handshake-provider'));
+                await handshake.Reached;
+                handshake.Fail(new Error('The provider refused the session.'));
+                await starting;
+                await vi.waitFor(() => expect(runtime.IsActive).toBe(false));
+
+                expect(closeReasons()).toEqual(['Error']);
+                expect(ended).toEqual(['error']);
+            });
+
+            it('closes the row as Error when the host cannot carry the minted provider', async () => {
+                vi.spyOn(console, 'error').mockImplementation(() => {});
+                class NoProviderRuntime extends RealtimeSessionRuntime {
+                    protected override hostCanUseProvider(): boolean {
+                        return false;
+                    }
+                }
+                const runtime = new NoProviderRuntime(new FakeMediaHost());
+                const provider = new RecordingProvider();
+                runtime.Provider = provider as unknown as IMetadataProvider;
+                const ended: string[] = [];
+                runtime.SessionEnded$.subscribe((end) => ended.push(end.reason));
+                runtime.ConnectionState$.subscribe((state) => {
+                    if (state === 'error') {
+                        void runtime.EndRealtimeSession();
+                    }
+                });
+                await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+                await vi.waitFor(() => expect(runtime.IsActive).toBe(false));
+
+                expect(provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables?.['closeReason'])).toEqual(['Error']);
+                expect(ended).toEqual(['error']);
+            });
+        });
+
+        it('ends the call when the client reports a fatal error: microphone released, row closed as Error, host told (MJ#4629)', async () => {
+            /** A client whose socket dies after the call went live. */
+            @RegisterClass(BaseRealtimeClient, 'fake-dying')
+            class DyingClient extends FakeRealtimeClient {
+                public static Last: DyingClient | null = null;
+                public override async Connect(): Promise<void> {
+                    DyingClient.Last = this;
+                }
+                public Die(): void {
+                    this.emitError({ Message: 'Gemini Live connection closed (1011): unexpected disconnect', Fatal: true });
+                    this.emitStateChange('closed');
+                }
+            }
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const host = new ReleasingHost();
+            const runtime = new RealtimeSessionRuntime(host);
+            const provider = new RecordingProvider();
+            runtime.Provider = provider as unknown as IMetadataProvider;
+            const ended: { sessionId: string; reason: string }[] = [];
+            const states: string[] = [];
+            runtime.SessionEnded$.subscribe((end) => ended.push(end));
+            runtime.ConnectionState$.subscribe((state) => states.push(state));
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-dying', 'session-1'));
+            DyingClient.Last?.Die();
+            await vi.waitFor(() => expect(runtime.IsActive).toBe(false));
+
+            expect(host.ReleaseCalls).toBe(1);
+            expect(states.at(-1)).toBe('error');
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'error' }]);
+            const closes = provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables);
+            expect(closes).toEqual([{ agentSessionId: 'session-1', closeReason: 'Error' }]);
+            // The host's own End afterwards is a no-op, not a second close.
+            await runtime.EndRealtimeSession();
+            expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+        });
+
+        it('a Fatal the driver emits while an explicit End disconnects it does not turn the clean End into an error', async () => {
+            /** A driver that reports its own socket close as Fatal from inside Disconnect, as the WebSocket drivers can. */
+            @RegisterClass(BaseRealtimeClient, 'fake-fatal-on-disconnect')
+            class FatalOnDisconnectClient extends FakeRealtimeClient {
+                public override async Disconnect(): Promise<void> {
+                    this.emitError({ Message: 'socket closed during disconnect', Fatal: true });
+                    await super.Disconnect();
+                }
+            }
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const { runtime, provider } = build(new FakeMediaHost());
+            const ended: { sessionId: string; reason: string }[] = [];
+            const states: string[] = [];
+            runtime.SessionEnded$.subscribe((end) => ended.push(end));
+            runtime.ConnectionState$.subscribe((state) => states.push(state));
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-fatal-on-disconnect', 'session-1'));
+            await runtime.EndRealtimeSession();
+
+            expect(states.at(-1)).toBe('closed');
+            expect(ended).toEqual([{ sessionId: 'session-1', reason: 'explicit' }]);
+            expect(provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables))
+                .toEqual([{ agentSessionId: 'session-1', closeReason: 'Explicit' }]);
+        });
+
+        it('reports the connect error when the driver says Fatal while Connect is still pending (MJ#4629)', async () => {
+            // ElevenLabs, AssemblyAI and the OpenAI-protocol drivers emit Fatal from socket.onclose/onerror before
+            // their Connect rejects. The start's own failure path must report it, not a fatal-error teardown that
+            // makes the start look ended by the host.
+            @RegisterClass(BaseRealtimeClient, 'fake-dies-while-connecting')
+            class DiesWhileConnectingClient extends FakeRealtimeClient {
+                public override async Connect(): Promise<void> {
+                    this.emitError({ Message: 'socket closed during setup', Fatal: true });
+                    throw new Error('socket closed during setup');
+                }
+            }
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const { runtime, provider, states } = buildWatched();
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-dies-while-connecting'));
+
+            expect(runtime.LastStartError?.message).toBe('socket closed during setup');
+            expect(states.at(-1)).toBe('error');
+            expect(runtime.IsActive).toBe(false);
+            expect(provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables)).toEqual([
+                { agentSessionId: 'session-1', closeReason: 'Error' },
+            ]);
+        });
+
+        it('fails the start when the driver says Fatal during Connect but Connect still resolves (MJ#4629)', async () => {
+            // The real drivers keep awaiting (mic capture) after their connect-failure channel settles; a socket that
+            // closes in that window emits Fatal, yet Connect goes on to resolve. The start must not go live on it.
+            @RegisterClass(BaseRealtimeClient, 'fake-dies-then-resolves')
+            class DiesThenResolvesClient extends FakeRealtimeClient {
+                public override async Connect(): Promise<void> {
+                    this.emitError({ Message: 'socket closed after setup', Fatal: true });
+                    this.emitStateChange('listening');
+                }
+            }
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            const { runtime, provider, states } = buildWatched();
+            const started: string[] = [];
+            runtime.SessionStarted$.subscribe((start) => started.push(start.sessionId));
+
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-dies-then-resolves'));
+
+            expect(runtime.IsActive).toBe(false);
+            expect(runtime.LastStartError?.message).toBe('socket closed after setup');
+            expect(states.at(-1)).toBe('error');
+            expect(started).toEqual([]);
+            expect(provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables)).toEqual([
+                { agentSessionId: 'session-1', closeReason: 'Error' },
+            ]);
+        });
+
         it('still reports a connection that fails while the call is starting', async () => {
             vi.spyOn(console, 'error').mockImplementation(() => {});
             const handshake = (HandshakeClient.Next = new Handshake());
@@ -708,6 +985,68 @@ describe('session lifecycle, driven end to end with fakes', () => {
             expect(runtime.IsActive).toBe(false);
             expect(active).toEqual([false, true, false]);
             expect(ended).toEqual([{ sessionId: 'session-1', reason: 'error' }]);
+        });
+    });
+
+    describe('RequestSpokenOpening asks for a turn that is part of the conversation, not disposable narration (MJ#4591)', () => {
+        /** A live client that records which spoken-request method the runtime used. */
+        @RegisterClass(BaseRealtimeClient, 'fake-opening-turn')
+        class OpeningTurnClient extends FakeRealtimeClient {
+            public static Last: OpeningTurnClient | null = null;
+            public Turns: string[] = [];
+            public Updates: string[] = [];
+            public override async Connect(): Promise<void> {
+                OpeningTurnClient.Last = this;
+                this.emitStateChange('listening');
+            }
+            public RequestSpokenTurn(instructions: string): void {
+                this.Turns.push(instructions);
+            }
+            public override RequestSpokenUpdate(instructions: string): void {
+                this.Updates.push(instructions);
+            }
+            public Reply(text: string, kind: 'normal' | 'narration'): void {
+                this.emitTranscript({ Role: 'Assistant', Text: text, IsFinal: true, Kind: kind });
+            }
+        }
+        /** A live client from before RequestSpokenTurn existed. */
+        @RegisterClass(BaseRealtimeClient, 'fake-opening-update-only')
+        class UpdateOnlyClient extends FakeRealtimeClient {
+            public static Last: UpdateOnlyClient | null = null;
+            public Updates: string[] = [];
+            public override async Connect(): Promise<void> {
+                UpdateOnlyClient.Last = this;
+                this.emitStateChange('listening');
+            }
+            public override RequestSpokenUpdate(instructions: string): void {
+                this.Updates.push(instructions);
+            }
+        }
+        const relayed = (provider: RecordingProvider) =>
+            provider.Calls.filter((c) => c.query.includes('RelayRealtimeTranscript')).map((c) => c.variables?.text);
+
+        it('uses the driver\'s spoken TURN, whose reply is a normal turn: captioned and relayed', async () => {
+            const { runtime, provider } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-opening-turn'));
+            const captions: string[] = [];
+            runtime.Captions$.subscribe((list) => captions.splice(0, captions.length, ...list.map((c) => c.Text)));
+
+            expect(runtime.RequestSpokenOpening('Greet the participant and ask the first question.')).toBe(true);
+            expect(OpeningTurnClient.Last?.Turns).toEqual(['Greet the participant and ask the first question.']);
+            expect(OpeningTurnClient.Last?.Updates).toEqual([]);
+
+            OpeningTurnClient.Last?.Reply('Hello, I am Nadia. Where do you work today?', 'normal');
+            await vi.waitFor(() => expect(relayed(provider)).toEqual(['Hello, I am Nadia. Where do you work today?']));
+            expect(captions).toEqual(['Hello, I am Nadia. Where do you work today?']);
+            await runtime.EndRealtimeSession();
+        });
+
+        it('falls back to the disposable spoken update on a driver that has no spoken turn, so an older driver still speaks', async () => {
+            const { runtime } = build(new FakeMediaHost());
+            await runtime.StartRealtimeSessionFromResult(mintedSession('fake-opening-update-only'));
+            expect(runtime.RequestSpokenOpening('Greet the participant.')).toBe(true);
+            expect(UpdateOnlyClient.Last?.Updates).toEqual(['Greet the participant.']);
+            await runtime.EndRealtimeSession();
         });
     });
 
@@ -851,7 +1190,8 @@ describe('session lifecycle, driven end to end with fakes', () => {
 
         const closes = relays.filter((r) => r.query.includes('mutation CloseAgentSession'));
         expect(closes).toHaveLength(1);
-        expect(closes[0].variables).toEqual({ agentSessionId: 'session-1' });
+        // The host ended the start, so the row is closed as Explicit (MJ#6013 stamps why a close happened).
+        expect(closes[0].variables).toEqual({ agentSessionId: 'session-1', closeReason: 'Explicit' });
         expect(runtime.IsActive).toBe(false);
         expect(runtime.IsActiveFor('conv-2')).toBe(false);
         expect(runtime.CurrentAgentSessionId).toBeNull();
@@ -1349,9 +1689,304 @@ describe('BuildClientConfig: the requested-tracks key has one home', () => {
         expect(tracks).toEqual(expect.arrayContaining([expect.objectContaining(video), expect.objectContaining(minted)]));
     });
 
+    it('carries the minted catalog timing onto the client config (F1)', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const config = runtime.BuildClientConfig({
+            ...session('{}'),
+            ConnectionMaxSeconds: 45,
+            SessionMaxSeconds: 1200,
+            ReconnectBufferSeconds: 7,
+            TrustNativeResumption: false,
+        });
+        expect(config).toMatchObject({ ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false });
+        // Timing travels on the typed fields only, never in the provider-facing bag.
+        expect(config.SessionConfig).toEqual({});
+    });
+
+    it('leaves the timing fields out when the mint carried none (an older server, or null)', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        const config = runtime.BuildClientConfig({ ...session('{}'), ConnectionMaxSeconds: null, TrustNativeResumption: null });
+        expect('ConnectionMaxSeconds' in config).toBe(false);
+        expect('SessionMaxSeconds' in config).toBe(false);
+        expect('ReconnectBufferSeconds' in config).toBe(false);
+        expect('TrustNativeResumption' in config).toBe(false);
+    });
+
     it('never spells the key as a string literal in the runtime source', () => {
         const source = readFileSync(fileURLToPath(new URL('../session/RealtimeSessionRuntime.ts', import.meta.url)), 'utf8');
         expect(source.length).toBeGreaterThan(0);
         expect(source).not.toMatch(/['"`]requestedTracks['"`]/);
     });
 });
+
+describe('one slot, one owner on the mint path (StartRealtimeSession) and when a teardown step throws (MJ#4629)', () => {
+    /** A driver that connects to nothing; registered so the runtime's real driver lookup runs. */
+    @RegisterClass(BaseRealtimeClient, 'fake-mint-path')
+    class MintPathClient extends BaseRealtimeClient {
+        /** The instance the runtime last connected, so a test can drive the refresh callback the runtime registered. */
+        public static LastConnected: MintPathClient | null = null;
+        public async Connect(): Promise<void> {
+            MintPathClient.LastConnected = this;
+        }
+        /** Asks for a refresh through the runtime's registered callback, as a driver's reconnect does. */
+        public RequestRefresh(options?: RealtimeClientTokenRefreshOptions): Promise<RefreshedRealtimeClientCredential> {
+            return this.refreshCredentialForReconnect(options);
+        }
+        public SendText(): void {}
+        public CancelActiveResponse(): void {}
+        public SendContextNote(): void {}
+        public RequestSpokenUpdate(): void {}
+        public SendToolResult(): void {}
+        public SetMuted(): void {}
+        public async Disconnect(): Promise<void> {}
+        public get IsBusy(): boolean { return false; }
+        public get IsAudioPlaying(): boolean { return false; }
+    }
+
+    /** A microphone whose tracks can be made to throw on stop, as a released device can. */
+    class TrackHost implements IRealtimeMediaHost {
+        constructor(private readonly stopThrows = false) {}
+        public async AcquireMicrophone(): Promise<MediaStream> {
+            const stop = () => {
+                if (this.stopThrows) throw new Error('track.stop threw');
+            };
+            return { getTracks: () => [{ stop }], getAudioTracks: () => [{ stop }] } as unknown as MediaStream;
+        }
+    }
+
+    /** Answers StartRealtimeClientSession with a fresh session id each time; can hold CloseAgentSession. */
+    class MintingProvider {
+        public Calls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
+        public readonly sessionId = 'transport-session-1';
+        private minted = 0;
+        private closeGate: Promise<void> | null = null;
+        public HoldClose(): () => void {
+            let release: () => void = () => undefined;
+            this.closeGate = new Promise<void>((resolve) => (release = resolve));
+            return release;
+        }
+        public async ExecuteGQL(query: string, variables?: Record<string, unknown>): Promise<unknown> {
+            this.Calls.push({ query, variables });
+            if (query.includes('StartRealtimeClientSession')) {
+                this.minted++;
+                return { StartRealtimeClientSession: { AgentSessionId: `minted-${this.minted}`, ConversationId: 'conv-1', Provider: 'fake-mint-path', Model: 'model-1', EphemeralToken: 'token', ExpiresAt: '2030-01-01T00:00:00Z', SessionConfigJson: '{}', ModelName: 'Fake', NarrationInstructionsTemplate: null, PriorChannelStatesJson: null } };
+            }
+            if (query.includes('CloseAgentSession') && this.closeGate) {
+                const gate = this.closeGate;
+                this.closeGate = null;
+                await gate;
+            }
+            return {};
+        }
+        public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
+            return { subscribe: () => ({ unsubscribe: () => undefined }) };
+        }
+    }
+
+    function build(host: IRealtimeMediaHost = new TrackHost()) {
+        const runtime = new RealtimeSessionRuntime(host);
+        const provider = new MintingProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        const closes = () => provider.Calls.filter((c) => c.query.includes('CloseAgentSession')).map((c) => c.variables);
+        return { runtime, provider, closes };
+    }
+
+    it('a start through the mint waits for a teardown still in flight, then goes live', async () => {
+        const { runtime, provider, closes } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+        const release = provider.HoldClose();
+        const ending = runtime.EndRealtimeSession();
+        // The first call is still closing on the server; the host starts the next one right away.
+        const starting = runtime.StartRealtimeSession('agent-1', null);
+        release();
+        await ending;
+        await starting;
+
+        expect(runtime.IsActive).toBe(true);
+        expect(runtime.CurrentAgentSessionId).toBe('minted-2');
+        expect(closes()).toEqual([{ agentSessionId: 'minted-1', closeReason: 'Explicit' }]);
+        await runtime.EndRealtimeSession();
+    });
+
+    it('a teardown step that throws still releases the slot, so the next start goes live', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const { runtime } = build(new TrackHost(true));
+        await runtime.StartRealtimeSession('agent-1', null);
+        await runtime.EndRealtimeSession().catch(() => undefined);
+        expect(runtime.IsActive).toBe(false);
+
+        await runtime.StartRealtimeSession('agent-1', null).catch(() => undefined);
+        expect(runtime.CurrentAgentSessionId).toBe('minted-2');
+    });
+
+    it('wires SetTokenRefreshCallback to RefreshRealtimeClientSessionToken and supports rolling-upgrade fallback', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+
+        const refreshFn = (
+            runtime as unknown as {
+                refreshClientSessionCredential: (s: unknown) => Promise<{
+                    EphemeralToken: string;
+                    ExpiresAt: string;
+                    SessionConfig: Record<string, unknown>;
+                }>;
+            }
+        ).refreshClientSessionCredential.bind(runtime);
+
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        EphemeralToken: 'fresh-tok-99',
+                        ExpiresAt: '2030-01-01T00:10:00Z',
+                        SessionConfigJson: '{"voice":"alloy"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const refreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(refreshed.EphemeralToken).toBe('fresh-tok-99');
+        expect(refreshed.SessionConfig).toEqual({ voice: 'alloy' });
+
+        // Rolling-upgrade fallback when older MJServer rejects unknown field RefreshRealtimeClientSessionToken:
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                throw new Error('Cannot query field "RefreshRealtimeClientSessionToken" on type "Mutation".');
+            }
+            return origExecute(query, variables);
+        };
+
+        const fallback = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{"voice":"shimmer"}',
+        });
+        expect(fallback.EphemeralToken).toBe('initial-tok');
+        expect(fallback.SessionConfig).toEqual({ voice: 'shimmer' });
+
+        // Relay refresh path: Kind === 'relay' accepts an empty EphemeralToken without rejecting (#5, #21):
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        Kind: 'relay',
+                        EphemeralToken: '',
+                        ExpiresAt: '2030-01-01T00:20:00Z',
+                        RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-99',
+                        SessionConfigJson: '{"model":"gemini-live-2.5-flash-native-audio"}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const relayRefreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: '',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        expect(relayRefreshed.EphemeralToken).toBe('');
+        expect(relayRefreshed.SessionConfig).toEqual({ model: 'gemini-live-2.5-flash-native-audio' });
+
+        await runtime.EndRealtimeSession();
+    });
+
+    it('forwards the client\'s AllowFreshReopen request to the refresh mutation as allowFreshReopen (F7)', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+        const client = MintPathClient.LastConnected;
+        expect(client).not.toBeNull();
+
+        const refreshCalls: Array<{ query: string; variables?: Record<string, unknown> }> = [];
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                refreshCalls.push({ query, variables });
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        Kind: 'relay',
+                        EphemeralToken: '',
+                        ExpiresAt: '2030-01-01T00:20:00Z',
+                        RelayUrl: 'wss://mjapi.example.test/realtime/relay/ticket-f7',
+                        SessionConfigJson: '{}',
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        // The Gemini relay seed-fallback asks for a fresh reopen; the server only re-arms the
+        // handle-less reopen window when the mutation carries allowFreshReopen: true.
+        await client!.RequestRefresh({ AllowFreshReopen: true });
+        expect(refreshCalls).toHaveLength(1);
+        expect(refreshCalls[0].variables).toEqual({ agentSessionId: 'minted-1', allowFreshReopen: true });
+        expect(refreshCalls[0].query).toContain('allowFreshReopen: $allowFreshReopen');
+
+        // A plain refresh (no reopen asked for) keeps the narrow mutation without the variable.
+        await client!.RequestRefresh();
+        expect(refreshCalls[1].variables).toEqual({ agentSessionId: 'minted-1' });
+        expect(refreshCalls[1].query).not.toContain('allowFreshReopen');
+
+        await runtime.EndRealtimeSession();
+    });
+
+    it('asks the refresh for the catalog timing and hands it to the client driver (F1)', async () => {
+        const { runtime, provider } = build();
+        await runtime.StartRealtimeSession('agent-1', null);
+        const refreshFn = (
+            runtime as unknown as {
+                refreshClientSessionCredential: (s: unknown) => Promise<Record<string, unknown>>;
+            }
+        ).refreshClientSessionCredential.bind(runtime);
+
+        const queries: string[] = [];
+        const origExecute = provider.ExecuteGQL.bind(provider);
+        provider.ExecuteGQL = async (query: string, variables?: Record<string, unknown>) => {
+            if (query.includes('RefreshRealtimeClientSessionToken')) {
+                queries.push(query);
+                return {
+                    RefreshRealtimeClientSessionToken: {
+                        Success: true,
+                        EphemeralToken: 'fresh-tok-f1',
+                        ExpiresAt: '2030-01-01T00:10:00Z',
+                        SessionConfigJson: '{}',
+                        ConnectionMaxSeconds: 45,
+                        SessionMaxSeconds: 1200,
+                        ReconnectBufferSeconds: 7,
+                        TrustNativeResumption: false,
+                    },
+                };
+            }
+            return origExecute(query, variables);
+        };
+
+        const refreshed = await refreshFn({
+            AgentSessionId: 'minted-1',
+            EphemeralToken: 'initial-tok',
+            ExpiresAt: '2030-01-01T00:05:00Z',
+            SessionConfigJson: '{}',
+        });
+        for (const field of ['ConnectionMaxSeconds', 'SessionMaxSeconds', 'ReconnectBufferSeconds', 'TrustNativeResumption']) {
+            expect(queries[0]).toContain(field);
+        }
+        expect(refreshed).toMatchObject({ ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false });
+
+        await runtime.EndRealtimeSession();
+    });
+});
+
+
+

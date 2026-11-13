@@ -93,6 +93,10 @@
     },
     "primaryKey": {
       "ID": "E96278BA-C2FF-49CF-AFA6-5A2674A84526"
+    },
+    "sync": {
+      "lastModified": "2026-10-28T00:36:10.279Z",
+      "checksum": "be833a1e6798d35a55902aa6d2e155013e4f8065f28c98fabded742085757da3"
     }
   },
   {

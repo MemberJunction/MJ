@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock @memberjunction/global so @RegisterClass is a no-op decorator.
 vi.mock('@memberjunction/global', () => ({
@@ -8,40 +8,26 @@ vi.mock('@memberjunction/global', () => ({
 // Mock @memberjunction/ai — provide BaseModel/BaseRealtimeModel base classes only. The realtime
 // type aliases (RealtimeSessionParams, etc.) are compile-time interfaces and need no runtime mock.
 vi.mock('@memberjunction/ai', async () => {
-    class BaseModel {
-        private _apiKey: string;
-        protected get apiKey(): string {
-            return this._apiKey;
-        }
-        constructor(apiKey: string) {
-            this._apiKey = apiKey;
-        }
-    }
-    // Mirror the real BaseRealtimeModel's default client-direct surface so the driver — which does
-    // NOT override either member (Inworld is server-bridged only) — inherits the correct behavior:
-    // SupportsClientDirect defaults to false and CreateClientSession throws unless overridden.
-    class BaseRealtimeModel extends BaseModel {
-        public get SupportsClientDirect(): boolean {
-            return false;
-        }
-        public async CreateClientSession(): Promise<never> {
-            throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
-        }
-    }
-    // A REPRESENTATIVE shared-key list, not the real one. Reaching for the real export here means
-    // `importOriginal`, which loads the whole @memberjunction/ai barrel — realtimeProxyRegistry then
-    // wants BaseSingleton off the mocked @memberjunction/global, and the mocks cascade. Which is why
-    // this mock exists in the first place.
-    //
-    // The split that keeps this honest: these tests pin the driver's MECHANISM (it consults the
-    // registry and skips every key in it), while membership of the registry — that `firstMessage` is
-    // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
-    // can drift without the other failing.
-    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
+    const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
+    const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');
+    const realtimeMemory = await import('../../../../Core/src/generic/realtimeConversationMemory');
+    const realtimeConnectionSetup = await import('../../../../Core/src/generic/realtimeConnectionSetup');
+    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools', 'turnDetection'];
     // The dropped-input reporter is dependency-free, so the REAL implementation loads from its own
     // module without the barrel: the drop tests below assert against shipped behavior.
     const { RealtimeDroppedInputReporter } = await import('../../../../Core/src/generic/realtimeDroppedInputReporter');
-    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS, RealtimeDroppedInputReporter };
+    // The turn-detection reader is dependency-free too, so the mapping tests run against the real one.
+    const { ReadRealtimeTurnDetection, DescribeUnappliedTurnDetection } = await import('../../../../Core/src/generic/realtimeTurnDetection');
+    return {
+        BaseModel,
+        ...baseRealtime,
+        ...realtimeMemory,
+        ...realtimeConnectionSetup,
+        REALTIME_SHARED_CONFIG_KEYS,
+        RealtimeDroppedInputReporter,
+        ReadRealtimeTurnDetection,
+        DescribeUnappliedTurnDetection,
+    };
 });
 
 import {
@@ -50,6 +36,8 @@ import {
     INWORLD_REALTIME_WS_URL,
     INWORLD_DEFAULT_MODEL_ID,
     INWORLD_DEFAULT_VAD_EAGERNESS,
+    BuildInworldTurnDetection,
+    MapInworldEagerness,
     type InworldRealtimeSocket,
     type InworldConnectArgs,
     type InworldServerEvent,
@@ -261,6 +249,71 @@ describe('InworldRealtime', () => {
             await startReadySession(driver, { Config: { turn_detection: { type: 'server_vad', threshold: 0.6 } } });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
             expect(update.session?.['turn_detection']).toEqual({ type: 'server_vad', threshold: 0.6 });
+        });
+
+        describe('normalized turnDetection', () => {
+            let warn: ReturnType<typeof vi.spyOn>;
+            beforeEach(() => {
+                warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            });
+            afterEach(() => {
+                warn.mockRestore();
+            });
+
+            it('maps Eagerness onto semantic-VAD eagerness, auto becoming medium', () => {
+                expect(MapInworldEagerness('low')).toBe('low');
+                expect(MapInworldEagerness('auto')).toBe('medium');
+                expect(MapInworldEagerness('high')).toBe('high');
+                expect(MapInworldEagerness(undefined)).toBeUndefined();
+                expect(BuildInworldTurnDetection({ turnDetection: { Eagerness: 'low' } })).toEqual({
+                    Block: { type: 'semantic_vad', eagerness: 'low' },
+                    Warning: undefined,
+                });
+            });
+
+            it('sends the normalized Eagerness on the session and does not forward turnDetection raw', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'high' } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+                expect(update.session?.['turnDetection']).toBeUndefined();
+                expect(warn).not.toHaveBeenCalled();
+            });
+
+            it('lets the flat eagerness shorthand win over the normalized Eagerness', () => {
+                expect(BuildInworldTurnDetection({ eagerness: 'high', turnDetection: { Eagerness: 'low' } }).Block).toEqual({ type: 'semantic_vad', eagerness: 'high' });
+            });
+
+            it("maps Mode 'serverVad' with Threshold and SilenceDurationMs onto server_vad", () => {
+                const result = BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Threshold: 0.55, SilenceDurationMs: 800 } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.55, silence_duration_ms: 800 });
+                expect(result.Warning).toBeUndefined();
+            });
+
+            it('warns at launch for Threshold and SilenceDurationMs outside server VAD', async () => {
+                await startReadySession(driver, { Config: { turnDetection: { Eagerness: 'low', Threshold: 0.6, SilenceDurationMs: 900 } } });
+                const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+                expect(update.session?.['turn_detection']).toEqual({ type: 'semantic_vad', eagerness: 'low' });
+                expect(warn).toHaveBeenCalledTimes(1);
+                const line = String(warn.mock.calls[0][0]);
+                expect(line).toContain('[InworldRealtime]');
+                expect(line).toContain('Threshold=0.6');
+                expect(line).toContain('SilenceDurationMs=900');
+                expect(line).not.toContain('Eagerness=');
+            });
+
+            it('warns for Eagerness under server VAD, and for Coverage and Mode native', () => {
+                expect(BuildInworldTurnDetection({ turnDetection: { Mode: 'serverVad', Eagerness: 'low' } }).Warning).toContain('Eagerness="low"');
+                const native = BuildInworldTurnDetection({ turnDetection: { Mode: 'native', Coverage: 'audioActivityOnly' } });
+                expect(native.Block).toEqual({ type: 'semantic_vad', eagerness: INWORLD_DEFAULT_VAD_EAGERNESS });
+                expect(native.Warning).toContain('Mode="native"');
+                expect(native.Warning).toContain('Coverage="audioActivityOnly"');
+            });
+
+            it('sends a raw turn_detection block as given and warns that the normalized request was not applied', () => {
+                const result = BuildInworldTurnDetection({ turn_detection: { type: 'server_vad', threshold: 0.6 }, turnDetection: { Eagerness: 'low' } });
+                expect(result.Block).toEqual({ type: 'server_vad', threshold: 0.6 });
+                expect(result.Warning).toContain('raw `turn_detection`');
+            });
         });
 
         /**
@@ -761,6 +814,46 @@ describe('InworldRealtime', () => {
             };
             await expect(session.Close()).resolves.toBeUndefined();
             expect(driver.Fake.Closed).toBe(true);
+        });
+
+        it('reconnects in place with a fresh socket and seeds prior conversation turns (#21)', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'input_audio_transcription.completed', text: 'Caller turn 1' });
+            driver.Fire({ type: 'output_audio_transcript.done', text: 'Agent turn 1' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
+            await new Promise((r) => setTimeout(r, 0));
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            expect(socket1.Closed).toBe(true);
+            const updateFrame = socket2.Find('session.update') as { session?: { instructions?: string } } | undefined;
+            expect(updateFrame?.session?.instructions).toContain('Inworld base prompt.');
+            expect(updateFrame?.session?.instructions).toContain('Caller turn 1');
+            expect(updateFrame?.session?.instructions).toContain('Agent turn 1');
+        });
+
+        it('sends a tool result that arrives while the new socket opens to that socket, once, as a late-result note', async () => {
+            const session = await startReadySession(driver, { SystemPrompt: 'Inworld base prompt.' });
+            const socket1 = driver.Fake;
+            driver.Fire({ type: 'tool.call', call_id: 'call_1', name: 'GetWeather', arguments: '{"city":"NYC"}' });
+
+            const socket2 = new FakeSocket();
+            driver.Fake = socket2;
+            const reconnectPromise = session.TriggerReconnect('duration-expiry');
+            await new Promise((r) => setTimeout(r, 0));
+            await session.SendToolResult('call_1', '{"status":"shipped"}');
+            driver.Fire({ type: 'session.created' });
+            expect(await reconnectPromise).toBe(true);
+
+            const carrying = (socket: FakeSocket) => socket.SentRaw.filter((raw) => raw.includes('shipped'));
+            expect(carrying(socket1)).toEqual([]);
+            expect(carrying(socket2)).toHaveLength(1);
+            expect(JSON.parse(carrying(socket2)[0]).type).toBe('session.update'); // the late-result note rides the instructions
+            await session.Close();
         });
     });
 });

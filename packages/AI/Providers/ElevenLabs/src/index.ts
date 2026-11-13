@@ -1,6 +1,6 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer } from "@memberjunction/ai";
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { AIErrorInfo, BaseAudioGenerator, BaseTextToSpeech, BuildCancellationErrorInfo, IsRequestAborted, ThrowIfAborted, TextToSpeechParams, SpeechResult, SpeechToTextParams, VoiceInfo, AudioModel, PronounciationDictionary, ErrorAnalyzer, VoiceSettings, ModelUsage } from "@memberjunction/ai";
+import { ElevenLabs, ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 // Realtime (Agents Platform) driver — BaseRealtimeModel implementation
 export * from './elevenLabsRealtime';
@@ -29,28 +29,63 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
     /**
      * Speaks `params.text`. `params.CancellationToken` is passed to the request, and reading the audio
      * stops as soon as it aborts; the failure is then classified as a cancellation.
+     *
+     * When `params.IncludeTimestamps` is `true`, calls `textToSpeech.convertWithTimestamps` and populates
+     * `SpeechResult.Alignment` alongside `content` and `data`.
      */
     public async CreateSpeech(params: TextToSpeechParams): Promise<SpeechResult> {
         const speechResult = new SpeechResult();
         const signal = params.CancellationToken;
         try {
-            // New API uses textToSpeech.convert instead of generate
-            const audioStream = await this._elevenLabs.textToSpeech.convert(
-                params.voice,
-                {
+            if (params.IncludeTimestamps) {
+                const request: ElevenLabs.BodyTextToSpeechFullWithTimestamps = {
                     text: params.text,
                     modelId: params.model_id,
-                    voiceSettings: params.voice_settings,
+                    voiceSettings: ElevenLabsAudioGenerator.ToSdkVoiceSettings(params.voice_settings),
                     applyTextNormalization: params.apply_text_normalization,
                     pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
-                },
-                { abortSignal: signal }
-            )
+                };
+                const response: ElevenLabs.AudioWithTimestampsResponse =
+                    await this._elevenLabs.textToSpeech.convertWithTimestamps(
+                        params.voice,
+                        request,
+                        { abortSignal: signal }
+                    );
+                ThrowIfAborted(signal, 'ElevenLabs');
 
-            const audioBuffer = await this.readAudio(audioStream, signal);
-            speechResult.data = audioBuffer;
-            speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
-            speechResult.success = true;
+                speechResult.content = response.audioBase64;
+                speechResult.data = Buffer.from(response.audioBase64, 'base64');
+                const alignment: ElevenLabs.CharacterAlignmentResponseModel | undefined =
+                    response.alignment ?? response.normalizedAlignment;
+                if (alignment) {
+                    speechResult.Alignment = {
+                        Characters: alignment.characters,
+                        StartSeconds: alignment.characterStartTimesSeconds,
+                        EndSeconds: alignment.characterEndTimesSeconds,
+                    };
+                }
+                speechResult.usage = ElevenLabsAudioGenerator.CharacterUsage(params.text);
+                speechResult.success = true;
+            } else {
+                // New API uses textToSpeech.convert instead of generate
+                const audioStream = await this._elevenLabs.textToSpeech.convert(
+                    params.voice,
+                    {
+                        text: params.text,
+                        modelId: params.model_id,
+                        voiceSettings: ElevenLabsAudioGenerator.ToSdkVoiceSettings(params.voice_settings),
+                        applyTextNormalization: params.apply_text_normalization,
+                        pronunciationDictionaryLocators: params.pronunciation_dictionary_locators,
+                    },
+                    { abortSignal: signal }
+                )
+
+                const audioBuffer = await this.readAudio(audioStream, signal);
+                speechResult.data = audioBuffer;
+                speechResult.content = audioBuffer.toString('base64'); // Convert to base64 string
+                speechResult.usage = ElevenLabsAudioGenerator.CharacterUsage(params.text);
+                speechResult.success = true;
+            }
         } catch (error) {
             const errorInfo = this.classifySpeechError(error, signal);
             speechResult.success = false;
@@ -61,6 +96,34 @@ export class ElevenLabsAudioGenerator extends BaseAudioGenerator {
             console.error('ElevenLabs CreateSpeech error:', error, errorInfo);
         }
         return speechResult;
+    }
+
+    /**
+     * MJ's snake_case voice settings in the camelCase shape the ElevenLabs SDK expects. The SDK
+     * serializer drops keys it does not know, so passing MJ's object straight through lost
+     * `similarity_boost` and `use_speaker_boost` (#4863). Keys left unset stay unset, so the voice's
+     * own defaults apply.
+     */
+    public static ToSdkVoiceSettings(settings: VoiceSettings | undefined): ElevenLabs.VoiceSettings | undefined {
+        if (!settings) {
+            return undefined;
+        }
+        const mapped: ElevenLabs.VoiceSettings = {};
+        if (settings.stability !== undefined) mapped.stability = settings.stability;
+        if (settings.similarity_boost !== undefined) mapped.similarityBoost = settings.similarity_boost;
+        if (settings.style !== undefined) mapped.style = settings.style;
+        if (settings.use_speaker_boost !== undefined) mapped.useSpeakerBoost = settings.use_speaker_boost;
+        if (settings.speed !== undefined) mapped.speed = settings.speed;
+        return mapped;
+    }
+
+    /**
+     * Usage for one synthesis: ElevenLabs bills text-to-speech by the characters of the input text
+     * (#4865), recorded in the `Characters` base measure. Counted in code points, as the
+     * text-to-speech runner counts them, so an emoji is one character, not two UTF-16 units.
+     */
+    public static CharacterUsage(text: string | undefined): ModelUsage {
+        return ModelUsage.ForMedia('Characters', Array.from(text ?? '').length, 0);
     }
 
     /**

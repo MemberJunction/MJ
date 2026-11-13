@@ -16,8 +16,10 @@ import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
 import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { UserCache, GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
+import { ClassifySQLServerDefaultValue } from './sqlServerDefaultValues';
+import { DescribeSQLBatchObject, NormalizeSQLServerRoutineDefinition, SplitSQLServerBatches } from './sqlServerScriptText';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -36,6 +38,9 @@ const ssDialect = new SQLServerDialect();
  */
 @RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
+    /** Widest key SQL Server accepts for a nonclustered index without failing later writes. */
+    private static readonly MAX_NONCLUSTERED_INDEX_KEY_BYTES = 1700;
+
     /** @inheritdoc */
     get Dialect(): SQLDialect {
         return ssDialect;
@@ -78,8 +83,10 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         connectionInfo += '/' + cfg.database;
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
+        if (!currentUser) {
+            throw new Error('No active system user or Owner found in SQL Server; CodeGen needs one to run as.');
+        }
 
         SucceedSpinner('SQL Server connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
@@ -249,6 +256,10 @@ ${this.trimStatementTerminator(selectSQL)}`;
         const identityKey = entity.PrimaryKeys.find(k => k.AutoIncrement);
         const efString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, spName, 'Create');
+        // Expression defaults (#4000) are resolved into their parameters ahead of every INSERT
+        // branch below. Empty for the common case, which keeps those procedures byte-identical.
+        const assignmentSQL = this.GeneratePreInsertDefaultAssignments(entity);
+        const defaultAssignments = assignmentSQL.length > 0 ? `${assignmentSQL}\n    ` : '';
 
         let preInsertCode = '';
         let outputCode = '';
@@ -337,7 +348,11 @@ ${this.trimStatementTerminator(selectSQL)}`;
             }
             additionalFieldList = pkColumns.join(',\n                ');
             additionalValueList = pkValues.join(',\n                ');
-            const pkWhereClause = entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ');
+            // #3526: a key column that allows NULL is matched NULL-safely, or a row inserted with a NULL key
+            // part is never found again and the create reports "no rows returned". Index-friendly on SQL Server.
+            const pkWhereClause = entity.PrimaryKeys.map(k => k.AllowsNull
+                ? `([${k.Name}] = @${k.CodeName} OR ([${k.Name}] IS NULL AND @${k.CodeName} IS NULL))`
+                : `[${k.Name}] = @${k.CodeName}`).join(' AND ');
             selectInsertedRecord = this.buildCRUDReturnSelect(entity, pkWhereClause);
         }
 
@@ -390,7 +405,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${preInsertCode}${insertBlock}
+    ${defaultAssignments}${preInsertCode}${insertBlock}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
@@ -583,15 +598,18 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
-    FROM
-        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    IF NOT UPDATE([${EntityInfo.UpdatedAtFieldName}])
+    BEGIN
+        UPDATE
+            [${entity.SchemaName}].[${entity.BaseTable}]
+        SET
+            ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
+        FROM
+            [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    END
 END;
 GO`;
     }
@@ -642,6 +660,21 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      */
     protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
         return f.Length !== -1;
+    }
+
+    /**
+     * SQL Server refuses an unbounded column as an index key (error 1919), so the statement fails
+     * on every run. A key wider than 1,700 bytes is created with only a warning (1945), and any
+     * later insert or update of a longer value then fails. `Length` is in bytes for `nvarchar`.
+     */
+    protected ForeignKeyIndexSkipReason(f: EntityFieldInfo): string | null {
+        if (!this.isIndexableKeyColumn(f)) {
+            return 'unbounded, which SQL Server cannot use as an index key';
+        }
+        if (f.Length > SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES) {
+            return `${f.Length} bytes, over SQL Server's ${SQLServerCodeGenProvider.MAX_NONCLUSTERED_INDEX_KEY_BYTES}-byte index key limit`;
+        }
+        return null;
     }
 
     protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
@@ -841,12 +874,17 @@ RETURN
     )
     SELECT TOP 1
         a.[${primaryKey}] AS [RootID],
-        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
-        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
-        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
-        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+        a.[Depth] AS [Depth],
+        a.[Path] AS [Path],
+        CAST(CASE WHEN ch.[ChildCount] > 0 THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        ch.[ChildCount] AS [ChildCount]
     FROM
         CTE_Ancestors a
+    OUTER APPLY (
+        SELECT COUNT(1) AS [ChildCount]
+        FROM [${schemaName}].[${tableName}]
+        WHERE [${fieldName}] = @RecordID
+    ) ch
     WHERE
         a.[${fieldName}] IS NULL OR @ParentID IS NULL
     ORDER BY
@@ -1545,46 +1583,52 @@ WHERE s.name IN (${inList})`;
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
     /**
-     * Formats a raw default value string for embedding in generated SQL. Recognizes common
-     * SQL Server functions (`NEWID()`, `NEWSEQUENTIALID()`, `GETDATE()`, `GETUTCDATE()`,
-     * `SYSDATETIME()`, `SYSDATETIMEOFFSET()`, `CURRENT_TIMESTAMP`, `USER_NAME()`,
-     * `SUSER_NAME()`, `SYSTEM_USER`) and strips wrapping parentheses from them. For literal
-     * values, strips surrounding single quotes and re-applies them only if `needsQuotes`
-     * is true. Returns `'NULL'` for empty or whitespace-only inputs.
+     * Formats a column default for embedding in generated SQL. The value is classified by
+     * {@link ClassifySQLServerDefaultValue}: literals keep the long-standing quoting rule
+     * (`needsQuotes`), inline-safe functions such as `GETUTCDATE()` are emitted verbatim, a
+     * bare `NEWSEQUENTIALID()` becomes `NEWID()` (it is legal only in a DEFAULT constraint), and
+     * expressions are emitted verbatim rather than string-quoted. Returns `'NULL'` for empty or
+     * whitespace-only inputs.
      */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
-        if (!defaultValue || defaultValue.trim().length === 0) {
-            return 'NULL';
-        }
+        return ClassifySQLServerDefaultValue(defaultValue, needsQuotes).SQL;
+    }
 
-        let trimmedValue = defaultValue.trim();
-        const lowerValue = trimmedValue.toLowerCase();
+    /**
+     * An expression default (`NEXT VALUE FOR`, string concatenation, most function calls) is
+     * resolved into its parameter before the INSERT: T-SQL rejects `NEXT VALUE FOR` inside the
+     * `ISNULL`/`CASE` wrap the value list otherwise uses (#4000).
+     */
+    protected override isPreInsertDefault(ef: EntityFieldInfo): boolean {
+        return ClassifySQLServerDefaultValue(ef.DefaultValue, ef.NeedsQuotes).Kind === 'Expression';
+    }
 
-        const sqlFunctions = [
-            'newid()', 'newsequentialid()', 'getdate()', 'getutcdate()',
-            'sysdatetime()', 'sysdatetimeoffset()', 'current_timestamp',
-            'user_name()', 'suser_name()', 'system_user'
-        ];
-
-        for (const func of sqlFunctions) {
-            if (lowerValue.includes(func)) {
-                if (trimmedValue.startsWith('(') && trimmedValue.endsWith(')')) {
-                    trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
-                }
-                return trimmedValue;
+    /**
+     * Emits `IF @P IS NULL SET @P = <expr>;` for every create-routine parameter whose default is an
+     * expression. Mirrors the value-list branches of {@link GenerateInsertFieldString}: a NOT NULL
+     * uniqueidentifier also treats the empty GUID as "not supplied", and a nullable column skips the
+     * default when the caller set its `_Clear` companion.
+     */
+    override GeneratePreInsertDefaultAssignments(entity: EntityInfo): string {
+        const lines: string[] = [];
+        for (const ef of entity.Fields) {
+            if (ef.IsPrimaryKey || ef.IsVirtual || !ef.AllowUpdateAPI || ef.AutoIncrement || ef.IsSpecialDateField) {
+                continue;
             }
+            if (!ef.HasDefaultValue || !this.isPreInsertDefault(ef)) {
+                continue;
+            }
+            const param = `@${ef.CodeName}`;
+            const expr = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+            let condition = `${param} IS NULL`;
+            if (!ef.AllowsNull && ef.IsUniqueIdentifier) {
+                condition = `(${param} IS NULL OR ${param} = ${this.Dialect.EmptyUUIDLiteral()})`;
+            } else if (ef.AllowsNull && this.needsClearCompanion(ef)) {
+                condition = `${param} IS NULL AND ISNULL(@${ef.CodeName}_Clear, 0) = 0`;
+            }
+            lines.push(`IF ${condition} SET ${param} = ${expr};`);
         }
-
-        let cleanValue = trimmedValue;
-        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
-            cleanValue = cleanValue.substring(1, cleanValue.length - 1);
-        }
-
-        if (needsQuotes) {
-            return `'${cleanValue}'`;
-        }
-
-        return cleanValue;
+        return lines.join('\n    ');
     }
 
     /**
@@ -2019,17 +2063,44 @@ IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
-SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+SELECT FK_NAME, [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
 INTO #__mj__CodeGen__vwForeignKeys
 FROM [${schema}].[vwForeignKeys];
 
-SELECT TableName, ColumnName, SchemaName
+-- KeyColumnCount: a column of a composite primary key is not unique on its own (#4536)
+SELECT TableName, ColumnName, SchemaName,
+       COUNT(*) OVER (PARTITION BY SchemaName, TableName) AS KeyColumnCount
 INTO #__mj__CodeGen__vwTablePrimaryKeys
 FROM [${schema}].[vwTablePrimaryKeys];
 
-SELECT TableName, ColumnName, SchemaName
+-- Only columns that are, alone, the key of an unfiltered unique index or constraint (#4536).
+-- Composite unique keys are recorded as key sets in EntityUniqueKey, not on their columns.
+SELECT DISTINCT TableName, ColumnName, SchemaName
 INTO #__mj__CodeGen__vwTableUniqueKeys
-FROM [${schema}].[vwTableUniqueKeys];
+FROM [${schema}].[vwTableUniqueKeys]
+WHERE KeyColumnCount = 1
+  AND IsFiltered = 0;
+
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+DELETE fk
+FROM #__mj__CodeGen__vwForeignKeys fk
+WHERE EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwForeignKeys sibling
+          WHERE sibling.FK_NAME = fk.FK_NAME AND sibling.[schema_name] = fk.[schema_name]
+            AND sibling.[table] = fk.[table] AND sibling.[column] <> fk.[column]
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTablePrimaryKeys pk
+          WHERE pk.SchemaName = fk.referenced_schema AND pk.TableName = fk.referenced_table
+            AND pk.ColumnName = fk.referenced_column AND pk.KeyColumnCount = 1
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTableUniqueKeys uk
+          WHERE uk.SchemaName = fk.referenced_schema AND uk.TableName = fk.referenced_table
+            AND uk.ColumnName = fk.referenced_column
+      );
 `;
     }
 
@@ -2090,7 +2161,7 @@ NumberedRows AS (
       IIF(sf.FieldName = 'Name', 1, 0) IsNameField,
       IsPrimaryKey = CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END,
       IsUnique = CASE
-            WHEN pk.ColumnName IS NOT NULL THEN 1
+            WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
             WHEN uk.ColumnName IS NOT NULL THEN 1
             ELSE 0
          END,
@@ -2157,39 +2228,53 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
 
     /**
-     * Executes a SQL file against SQL Server using the `sqlcmd` command-line utility. Reads
-     * connection details (server, port, instance, user, password, database) from the shared
-     * `sqlConfig` object. On Windows, converts file paths containing spaces to 8.3 short
-     * format to avoid quoting issues with `sqlcmd`. Spawns the process with `QUOTED_IDENTIFIER`
-     * enabled (`-I`) and severity threshold 17 (`-V 17`). Optionally adds `-C` for
-     * `trustServerCertificate`. Returns `true` on successful execution, `false` on failure.
+     * Executes a SQL file against SQL Server over the shared in-process mssql pool, one `GO`
+     * batch at a time. Every batch runs even after one fails, so a single run reports the
+     * complete set of broken objects; each failure is logged as an error naming the object the
+     * batch acts on (`CREATE PROCEDURE [s].[spX]`, `GRANT ON [s].[vwX]`). Returns `false` when
+     * any batch failed or the file could not be read, `true` otherwise. A failed batch used to be
+     * logged as a warning with the file still reported as successful, which hid procedures that
+     * had been dropped and never recreated (#4000).
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
+        let sql: string;
         try {
-            const sql = fs.readFileSync(filePath, 'utf-8');
-            if (!sql.trim()) return true;
+            sql = fs.readFileSync(filePath, 'utf-8');
+        } catch (e) {
+            logError(`[CodeGen] Failed to read SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
+            return false;
+        }
+        if (!sql.trim()) return true;
 
-            const batches = sql
-                .split(/^\s*GO\s*$/gim)
-                .map(b => b.trim())
-                .filter(b => b.length > 0);
-
+        try {
             const pool = await MSSQLConnection();
-
-            for (const batch of batches) {
+            const failures: Array<{ Object: string; Message: string }> = [];
+            for (const batch of SplitSQLServerBatches(sql)) {
                 try {
                     await pool.request().query(batch);
                 } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    LogWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    failures.push({
+                        Object: DescribeSQLBatchObject(batch),
+                        Message: err instanceof Error ? err.message : String(err),
+                    });
                 }
             }
 
+            if (failures.length > 0) {
+                const list = failures.map(f => `  - ${f.Object}: ${f.Message.substring(0, 400)}`).join('\n');
+                logError(`[CodeGen] ${failures.length} SQL batch(es) failed in ${path.basename(filePath)}:\n${list}`);
+                return false;
+            }
             return true;
         } catch (e) {
             logError(`[CodeGen] Failed to execute SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         }
+    }
+
+    /** @inheritdoc */
+    override NormalizeRoutineDefinitionForComparison(definition: string): string | null {
+        return NormalizeSQLServerRoutineDefinition(definition);
     }
 
 }

@@ -255,13 +255,20 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   }
 
   /**
-   * The prompt the call runs under: `params.PromptID` when given, else the first active Embedding
-   * prompt, else an unsaved stand-in (see {@link createStandInPrompt}).
+   * The prompt the call runs under: `params.PromptID` when given, else the active prompt named
+   * `params.PromptName`, else the default Embedding prompt (see {@link findEmbeddingPrompt}), else an
+   * unsaved stand-in (see {@link createStandInPrompt}).
    */
   private async resolvePrompt(params: EmbeddingRunParams): Promise<ResolvedEmbeddingPrompt | string> {
     if (params.PromptID) {
       const named = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, params.PromptID));
       return named ? { Prompt: named, IsSaved: true } : `Prompt '${params.PromptID}' was not found`;
+    }
+    const named = params.PromptName
+      ? AIEngine.Instance.Prompts.find(p => p.Status === 'Active' && p.Name === params.PromptName)
+      : undefined;
+    if (named) {
+      return { Prompt: named, IsSaved: true };
     }
     const configured = this.findEmbeddingPrompt();
     if (configured) {
@@ -270,15 +277,24 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return { Prompt: await this.createStandInPrompt(params), IsSaved: false };
   }
 
+  /**
+   * The default prompt for an embedding call that names none: `Content Embedding` when it is
+   * active, else the first active Embedding prompt by name. Ordered by name so the choice does not
+   * depend on the order the engine loaded prompts in.
+   */
   private findEmbeddingPrompt(): MJAIPromptEntityExtended | undefined {
     const requiredTypeId = this.tryRequiredModelTypeID();
-    return AIEngine.Instance.Prompts.find(
-      p => p.Status === 'Active' && (
+    const candidates = AIEngine.Instance.Prompts
+      .filter(p => p.Status === 'Active' && (
         p.Type?.toLowerCase() === 'embedding' ||
         (requiredTypeId !== undefined && UUIDsEqual(p.AIModelTypeID, requiredTypeId))
-      )
-    );
+      ))
+      .sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+    return candidates.find(p => p.Name === AIEmbeddingRunner.DefaultEmbeddingPromptName) ?? candidates[0];
   }
+
+  /** The prompt an embedding call that names none runs under, when it exists. */
+  public static readonly DefaultEmbeddingPromptName = 'Content Embedding';
 
   /** The Embeddings model type's ID, or undefined when the catalog doesn't have that type yet. */
   private tryRequiredModelTypeID(): string | undefined {
@@ -329,21 +345,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     candidates: ModelVendorCandidate[],
     promptParams: AIPromptParams
   ): EmbeddingSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(
-        candidate.driverClass,
-        prompt.ID,
-        candidate.model.ID,
-        candidate.vendorId,
-        promptParams
-      );
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, promptParams),
+      true
+    );
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -397,10 +403,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return driver && driver.constructor !== BaseEmbeddings ? driver : null;
   }
 
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
-
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
@@ -416,7 +418,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,
@@ -588,11 +590,14 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   ): Promise<EmbeddingInternalResult> {
     const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
       const embedResult = await this.RaceWithinBound(
         driver.EmbedTexts({
-          texts: params.Texts,
+          texts: prepared.texts,
           model: candidate.apiName,
           dimensions: params.Dimensions,
+          inputType: params.InputType,
+          maxInputTokens: prepared.maxInputTokens,
           CancellationToken: bound.Signal,
         }),
         bound,

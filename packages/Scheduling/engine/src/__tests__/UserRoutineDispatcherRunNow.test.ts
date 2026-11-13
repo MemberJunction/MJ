@@ -1,0 +1,252 @@
+/**
+ * `RunRoutineNow` — a manual run of a routine that leaves its schedule alone.
+ *
+ * The sweep path claims a routine first (advancing NextRunAt, or nulling it for a one-shot) and
+ * only then runs it, so "Wake Now" implemented as "set NextRunAt to now" spends a one-shot: the
+ * reminder a user wanted tomorrow at 10 fires today and is then Disabled. A manual run must not
+ * go through the claim at all, and must not be skipped by the wake gate the user is trying to
+ * bypass; the post-run bookkeeping then sees NextRunAt still set and keeps the routine Active.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { runViewProbeMock } = vi.hoisted(() => ({
+    runViewProbeMock: vi.fn(),
+}));
+
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    ...(await importOriginal() as Record<string, unknown>),
+    RegisterClass: () => (target: unknown) => target,
+}));
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal() as Record<string, unknown>),
+    LogError: vi.fn(),
+    LogStatusEx: vi.fn(),
+    Metadata: vi.fn().mockImplementation(() => ({ GetEntityObject: vi.fn(), Provider: {} })),
+    RunView: class MockRunView {
+        public RunView(...args: unknown[]): Promise<unknown> {
+            return runViewProbeMock(...args);
+        }
+    },
+}));
+vi.mock('@memberjunction/ai-agents', () => ({ AgentRunner: class {} }));
+vi.mock('@memberjunction/ai-prompts', () => ({ AIPromptRunner: class {} }));
+vi.mock('@memberjunction/actions', () => ({ ActionEngineServer: { Instance: { Config: vi.fn(), RunAction: vi.fn() } } }));
+
+import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
+import type { ScheduledJobExecutionContext } from '../BaseScheduledJob';
+import type { MJScheduledJobEntity, MJUserRoutineEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+
+type Driver = UserRoutineDispatcherDriver & {
+    createRunRow(routine: unknown, user: unknown): Promise<unknown>;
+    runAndRecord(routine: unknown, run: unknown, context: unknown): Promise<unknown>;
+    updateRoutineAfterRun(routine: unknown, run: unknown): Promise<void>;
+    claimRoutine(routine: unknown, now: Date): Promise<boolean>;
+    wakeGateEvaluator: { Evaluate: ReturnType<typeof vi.fn> };
+    logError(...args: unknown[]): void;
+    log(...args: unknown[]): void;
+};
+
+const SYSTEM = { ID: 'SYS', Type: 'Owner' };
+const TOMORROW = new Date('2026-10-30T15:00:00Z');
+
+function makeOneShot(overrides: Record<string, unknown> = {}) {
+    const saves: Array<{ Status: unknown; NextRunAt: unknown }> = [];
+    const routine: Record<string, unknown> = {
+        ID: 'R-1', Name: 'Chief of Staff — Wake (reminder-call-amith)', UserID: 'OWNER',
+        RoutineType: 'AgentWake', ScheduleMode: 'OneShot', CronExpression: null,
+        Status: 'Active', NextRunAt: TOMORROW, LastRunAt: null, LastRunStatus: null, LastResultHash: null,
+        WakeConfiguration: '{"workstreamKey":"reminder-call-amith","wakeGate":{"skipIfUnchanged":true}}',
+        WakeConfigurationObject: null,
+        Save: async () => { saves.push({ Status: routine.Status, NextRunAt: routine.NextRunAt }); return true; },
+        ...overrides,
+    };
+    return { routine, saves };
+}
+
+function makeRun() {
+    return {
+        ID: 'RUN-1', Status: 'Success', StartedAt: new Date(), CompletedAt: new Date(), ResultHash: 'h',
+        GetFieldByName: () => ({ OldValue: 'Success' }),
+        Save: async () => true,
+    };
+}
+
+describe('UserRoutineDispatcherDriver.RunRoutineNow', () => {
+    let driver: Driver;
+    const globalRef = globalThis as {
+        ___SINGLETON__UserCache?: {
+            Users: Array<{ ID: string; IsActive?: boolean }>;
+            FindUser(criteria: { ID?: string }): Promise<{ ID: string; IsActive?: boolean } | undefined>;
+        };
+    };
+    let prevCache: typeof globalRef.___SINGLETON__UserCache;
+
+    beforeEach(() => {
+        prevCache = globalRef.___SINGLETON__UserCache;
+        const ownerUser = { ID: 'OWNER', IsActive: true };
+        globalRef.___SINGLETON__UserCache = {
+            Users: [ownerUser],
+            FindUser: async ({ ID }) => (ID === 'OWNER' ? ownerUser : undefined),
+        };
+        driver = new UserRoutineDispatcherDriver() as Driver;
+        driver.logError = vi.fn();
+        driver.log = vi.fn();
+        driver.claimRoutine = vi.fn(async () => true);
+        driver.wakeGateEvaluator = { Evaluate: vi.fn(async () => ({ shouldWake: false, decidedByTier: 'Tier0', reason: 'unchanged' })) };
+    });
+
+    afterEach(() => {
+        globalRef.___SINGLETON__UserCache = prevCache;
+    });
+
+    it('runs the routine without claiming it, so a one-shot keeps its scheduled time and stays Active', async () => {
+        const { routine, saves } = makeOneShot();
+        const run = makeRun();
+        driver.createRunRow = vi.fn(async () => run);
+        driver.runAndRecord = vi.fn(async (r, runRow) => {
+            await driver.updateRoutineAfterRun(r, runRow);
+            return { RoutineID: 'R-1', RunStatus: 'Success', Notified: false };
+        });
+
+        const summary = await driver.RunRoutineNow(routine as never, SYSTEM as never);
+
+        expect(summary.RunStatus).toBe('Success');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+        expect(routine.NextRunAt, 'the scheduled time survives the manual run').toBe(TOMORROW);
+        expect(routine.Status, 'a one-shot with a future wake is not spent by running it early').toBe('Active');
+        expect(saves.every((s) => s.NextRunAt === TOMORROW)).toBe(true);
+    });
+
+    it('bypasses the wake gate: the person asked for the run, so "nothing changed" is not a reason to skip', async () => {
+        const { routine } = makeOneShot();
+        driver.createRunRow = vi.fn(async () => makeRun());
+        driver.runAndRecord = vi.fn(async () => ({ RoutineID: 'R-1', RunStatus: 'Success', Notified: false }));
+
+        const summary = await driver.RunRoutineNow(routine as never, SYSTEM as never);
+
+        expect(driver.wakeGateEvaluator.Evaluate).not.toHaveBeenCalled();
+        expect(summary.RunStatus).toBe('Success');
+        expect(driver.createRunRow).toHaveBeenCalledWith(routine, SYSTEM);
+    });
+
+    it('the sweep path still honours the wake gate (only the manual path bypasses it)', async () => {
+        const { routine } = makeOneShot();
+        const exec = driver as unknown as { executeRoutine(r: unknown, c: unknown): Promise<{ RunStatus: string }> };
+
+        const summary = await exec.executeRoutine(routine, { ContextUser: SYSTEM });
+
+        expect(driver.wakeGateEvaluator.Evaluate).toHaveBeenCalledTimes(1);
+        expect(summary.RunStatus).toBe('Skipped');
+    });
+
+    it('a spent one-shot run by hand stays spent: no scheduled time is invented for it', async () => {
+        const { routine } = makeOneShot({ Status: 'Disabled', NextRunAt: null, LastRunAt: new Date('2026-10-29T15:34:05Z') });
+        const run = makeRun();
+        driver.createRunRow = vi.fn(async () => run);
+        driver.runAndRecord = vi.fn(async (r, runRow) => {
+            await driver.updateRoutineAfterRun(r, runRow);
+            return { RoutineID: 'R-1', RunStatus: 'Success', Notified: false };
+        });
+
+        await driver.RunRoutineNow(routine as never, SYSTEM as never);
+
+        expect(routine.NextRunAt).toBeNull();
+        expect(routine.Status).toBe('Disabled');
+    });
+
+    it('preserves a due OneShot routine NextRunAt without claiming it when resolveRoutineOwnerUser fails on a transient UserCache miss', async () => {
+        const pastDue = new Date(Date.now() - 60_000);
+        const { routine, saves } = makeOneShot({
+            UserID: 'MISSING-USER',
+            NextRunAt: pastDue,
+        });
+
+        // Simulate transient UserCache miss for MISSING-USER
+        globalRef.___SINGLETON__UserCache = {
+            Users: [],
+            FindUser: async () => undefined,
+        };
+
+        const sweepDriver = driver as UserRoutineDispatcherDriver & {
+            loadCandidateRoutines?: (u: UserInfo, now: Date) => Promise<MJUserRoutineEntity[]>;
+        };
+        sweepDriver.loadCandidateRoutines = vi.fn(async () => [routine as Partial<MJUserRoutineEntity> as MJUserRoutineEntity]);
+
+        const scheduleStub = { Configuration: null } as Partial<MJScheduledJobEntity> as MJScheduledJobEntity;
+        const context: ScheduledJobExecutionContext = {
+            Schedule: scheduleStub,
+            ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
+        };
+
+        const result = await driver.Execute(context);
+
+        expect(result.Success).toBe(true);
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+        expect(routine.NextRunAt).toBe(pastDue);
+        expect(saves).toHaveLength(0);
+        expect(driver.logError).toHaveBeenCalledTimes(1);
+    });
+
+    it('backs off on transient owner lookup failures without disabling, and disables only after MAX_OWNER_RESOLVE_RETRIES permanent missing/inactive owner failures', async () => {
+        UserRoutineDispatcherDriver.ClearOwnerResolveFailures();
+        const pastDue = new Date(Date.now() - 60_000);
+        const { routine } = makeOneShot({
+            ID: '44444444-4444-4444-8444-444444444444',
+            UserID: 'PERMANENTLY-DELETED-USER',
+            NextRunAt: pastDue,
+        });
+
+        const sweepDriver = driver as UserRoutineDispatcherDriver & {
+            loadCandidateRoutines?: (u: UserInfo, now: Date) => Promise<MJUserRoutineEntity[]>;
+        };
+        sweepDriver.loadCandidateRoutines = vi.fn(async () => [routine as Partial<MJUserRoutineEntity> as MJUserRoutineEntity]);
+
+        const scheduleStub = { Configuration: null } as Partial<MJScheduledJobEntity> as MJScheduledJobEntity;
+        const context: ScheduledJobExecutionContext = {
+            Schedule: scheduleStub,
+            ContextUser: SYSTEM as Partial<UserInfo> as UserInfo,
+        };
+
+        // 1. Transient lookup errors (FindUser returning undefined because DB failed during UserCache refresh -> RunView probe returns Success: false) NEVER disable the routine even across 4 sweeps
+        runViewProbeMock.mockReset().mockResolvedValue({
+            Success: false,
+            Results: [],
+            ErrorMessage: 'DB connection timeout',
+        });
+        globalRef.___SINGLETON__UserCache = {
+            Users: [SYSTEM as Partial<UserInfo> as UserInfo],
+            FindUser: async () => undefined,
+        };
+        for (let i = 0; i < 4; i++) {
+            await driver.Execute(context);
+        }
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        // 2. Populated UserCache where RunView confirms the owner row is permanently missing (Success: true, Results: []) disables after MAX_OWNER_RESOLVE_RETRIES (3) sweeps
+        runViewProbeMock.mockReset().mockResolvedValue({
+            Success: true,
+            Results: [],
+        });
+        globalRef.___SINGLETON__UserCache = {
+            Users: [SYSTEM as Partial<UserInfo> as UserInfo],
+            FindUser: async () => undefined,
+        };
+
+        // Sweep 1 and 2 preserve NextRunAt for retry
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Active');
+        expect(driver.claimRoutine).not.toHaveBeenCalled();
+
+        // Sweep 3 reaches MAX_OWNER_RESOLVE_RETRIES -> disables routine and claims occurrence
+        await driver.Execute(context);
+        expect(routine.Status).toBe('Disabled');
+        expect(routine.LastRunStatus).toBe('Failed');
+        expect(driver.claimRoutine).toHaveBeenCalledTimes(1);
+    });
+});

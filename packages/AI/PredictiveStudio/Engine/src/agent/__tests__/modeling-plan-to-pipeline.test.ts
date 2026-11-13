@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { DOMINANCE_THRESHOLD_DEFAULT, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { DOMINANCE_THRESHOLD_DEFAULT, InvalidMajorityBaselineRuleError, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ModelingPlanToPipelineConfig } from '../modeling-plan-to-pipeline';
+import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
 
 /**
  * The mapper is the deterministic heart of the agent's builder — it turns the conversation-accumulated
@@ -31,7 +32,7 @@ function baseSpec(overrides: Partial<ModelingPlanSpec> = {}): ModelingPlanSpec {
   };
 }
 
-describe('modelingPlanToPipelineConfig', () => {
+describe('ModelingPlanToPipelineConfig', () => {
   it('maps the plan into a concrete, trainable pipeline configuration', () => {
     const cfg = ModelingPlanToPipelineConfig(baseSpec());
     expect(cfg.targetEntityName).toBe('Memberships');
@@ -39,7 +40,18 @@ describe('modelingPlanToPipelineConfig', () => {
     expect(cfg.problemType).toBe('classification');
     expect(cfg.sourceBindings).toEqual([{ Kind: 'Entity', Ref: 'Memberships' }]);
     expect(cfg.asOf).toEqual({ Mode: 'none' });
-    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, LockedHoldoutFraction: 0.2 });
+    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined });
+  });
+
+  it("does not carry the plan's LockedHoldoutFraction: the bound Evaluation Protocol decides the holdout", () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({ ValidationStrategy: { Strategy: 'kfold', K: 5, LockedHoldoutFraction: 0.2 } }));
+    expect(cfg.validation).not.toHaveProperty('LockedHoldoutFraction');
+    expect(JSON.parse(JSON.stringify(cfg.validation))).toEqual({ Strategy: 'kfold', K: 5 });
+  });
+
+  it('builds a validation strategy from a plan that proposes no holdout share', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({ ValidationStrategy: { Strategy: 'kfold', K: 5 } }));
+    expect(JSON.parse(JSON.stringify(cfg.validation))).toEqual({ Strategy: 'kfold', K: 5 });
   });
 
   it('chooses the highest-priority (lowest Priority number) experiment for the algorithm', () => {
@@ -153,5 +165,42 @@ describe('modelingPlanToPipelineConfig', () => {
       FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
       Columns: ['JobFunction', 'SeniorityLevel'],
     });
+  });
+});
+
+describe('modelingPlanToPipelineConfig — evaluation settings and refusals (I2)', () => {
+  const target = baseSpec().TargetDefinition;
+
+  it('carries TimeIndexColumn and MajorityBaselineRule onto the pipeline validation strategy', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec({
+      ValidationStrategy: { Strategy: 'holdout', LockedHoldoutFraction: 0.2, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' },
+    }));
+    expect(cfg.validation).toEqual({ Strategy: 'holdout', TestSize: undefined, K: undefined, TimeIndexColumn: 'MonthIndex', MajorityBaselineRule: 'warn' });
+  });
+
+  it('leaves both settings off when the plan does not set them', () => {
+    const cfg = ModelingPlanToPipelineConfig(baseSpec());
+    expect(cfg.validation).not.toHaveProperty('TimeIndexColumn');
+    expect(cfg.validation).not.toHaveProperty('MajorityBaselineRule');
+  });
+
+  it('refuses an unknown MajorityBaselineRule before any pipeline row exists', () => {
+    // An LLM-authored plan can carry any string; the stored JSON is not held to the union.
+    const spec = baseSpec();
+    spec.ValidationStrategy = JSON.parse('{"Strategy":"holdout","LockedHoldoutFraction":0.2,"MajorityBaselineRule":"off"}');
+    expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(InvalidMajorityBaselineRuleError);
+  });
+
+  for (const asOf of [{ Mode: 'column' as const, Column: 'StartDate' }, { Mode: 'offset' as const, OffsetDays: 30 }]) {
+    it(`refuses AsOfStrategy.Mode='${asOf.Mode}' (training would ignore it) before any pipeline row exists`, () => {
+      const spec = baseSpec({ TargetDefinition: { ...target, AsOfStrategy: asOf } });
+      expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(AsOfSettingHasNoEffectError);
+      expect(() => ModelingPlanToPipelineConfig(spec)).toThrow(/modeling plan's TargetDefinition\.AsOfStrategy/);
+    });
+  }
+
+  it("keeps Mode='none' and an absent AsOfStrategy", () => {
+    expect(ModelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { ...target, AsOfStrategy: { Mode: 'none' } } })).asOf).toEqual({ Mode: 'none' });
+    expect(ModelingPlanToPipelineConfig(baseSpec()).asOf).toEqual({ Mode: 'none' });
   });
 });

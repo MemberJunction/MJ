@@ -40,6 +40,8 @@
  * redaction it replaces.
  */
 
+import { IsTransportError } from '@memberjunction/core';
+
 /** GraphQL error entry as returned in a response's `errors` array. */
 export interface SanitizedGraphQLErrorDetail {
     message?: string;
@@ -91,6 +93,13 @@ export interface SanitizedGraphQLError {
      * `@memberjunction/actions-base`.
      */
     variableShape?: VariableShape;
+    /**
+     * Whether the TRANSPORT failed (`IsTransportError` in `@memberjunction/core`), judged on the
+     * raw error before its message is discarded. Without it a dead server's "fetch failed" /
+     * ECONNREFUSED is gone from the rethrown error, and callers that may serve a cache over a
+     * transport failure cannot tell. A boolean, so it carries no payload.
+     */
+    isTransport?: boolean;
 }
 
 /**
@@ -145,6 +154,12 @@ export class SafeGraphQLError extends Error {
     public readonly Code?: string;
     /** Shape of the withheld variables — key names and value types, never values. */
     public readonly VariableShape?: VariableShape;
+    /**
+     * True when the request failed in transport (no answer, or a gateway/timeout status).
+     * `IsTransportError` in `@memberjunction/core` reads it, since the text it would otherwise
+     * inspect was discarded above.
+     */
+    public readonly IsTransportFailure?: boolean;
 
     constructor(sanitized: SanitizedGraphQLError) {
         super(sanitized.message);
@@ -153,6 +168,7 @@ export class SafeGraphQLError extends Error {
         this.request = { query: sanitized.query };
         this.Code = sanitized.code;
         this.VariableShape = sanitized.variableShape;
+        this.IsTransportFailure = sanitized.isTransport;
         // Rebuild the stack with a header derived from the sanitised message, keeping
         // the original frames. Assigning the raw `stack` would reintroduce the payload,
         // since V8's header line is `${name}: ${unsanitised message}`.
@@ -287,6 +303,10 @@ export function SanitizeGraphQLError(e: unknown, includeVariableValues = false):
     const status = typeof err.response?.status === 'number' ? err.response.status : undefined;
     const errors = extractErrors(err.response?.errors);
     const rawCode = errors?.[0]?.extensions?.['code'];
+    // With no response nothing answered, and the raw error (fetch failed, ECONNREFUSED, ENOTFOUND)
+    // is the only evidence of why. A ClientError's text embeds the serialized request, variables
+    // included, so for a response-bearing error only the HTTP status is evidence.
+    const isTransport = err.response === undefined ? IsTransportError(e) : IsTransportError({ status });
 
     return {
         name: typeof err.name === 'string' ? err.name : 'Error',
@@ -298,5 +318,6 @@ export function SanitizeGraphQLError(e: unknown, includeVariableValues = false):
         stackFrames: typeof err.stack === 'string' ? stripStackHeader(err.stack) : undefined,
         variables: includeVariableValues ? err.request?.variables : '[REDACTED]',
         variableShape: err.request?.variables === undefined ? undefined : describeShape(err.request.variables),
+        isTransport,
     };
 }

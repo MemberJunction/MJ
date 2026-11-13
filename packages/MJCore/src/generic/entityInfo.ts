@@ -4,8 +4,8 @@ import { IMetadataProvider } from "./interfaces"
 import { MetadataProviderFor } from "./infoProviderResolution"
 import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
-import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
-import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString } from "./util"
+import { MarkupFilterOptions, RowFilterParameterBinder, RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
+import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, SQLMaxByteLength, FormatValue, CodeNameFromString, CanonicalPrimaryKeyValue } from "./util"
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
@@ -17,13 +17,22 @@ import {
     ReadRelationshipJoinFields,
     type EntitySaveReturnMode,
     type IEntityConfiguration,
+    type IEntityCommentsConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
     type IEntityCloneConfiguration,
     type ICloneRelationshipPolicy,
     type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
-import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import type {
+    IEntitySubtypeSelectorConfig,
+    IEntitySubtypeDriverConfig,
+    IEntitySubtypeUIDriverConfig,
+    SubtypeSelectorChangeBehavior,
+} from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
+import { EntityLifecyclePolicyEngine, type IEntityLifecyclePolicy } from "./entityLifecyclePolicy"
+import { DocumentNumberingEngine, type IDocumentNumberPolicy } from "./documentNumberingEngine"
+import { CrossEntityPolicyEngine, type IDeclarativeParentStateLockPolicy } from "./crossEntityPolicyEngine"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -369,6 +378,51 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
 }
 
 /**
+ * A unique index or unique constraint on an entity's base table, as a set of columns. CodeGen
+ * keeps these in step with the database catalog; primary keys are not included (see
+ * {@link EntityFieldInfo.IsPrimaryKey}).
+ *
+ * {@link EntityFieldInfo.IsUnique} is true only for a column that is a key on its own. A composite
+ * key — for example Action Params' (ActionID, Name) — appears here and not on its columns.
+ * Maps to the MJ: Entity Unique Keys metadata entity.
+ */
+export class EntityUniqueKeyInfo extends BaseInfo {
+    ID: string = null
+    EntityID: string = null
+    /** Name of the unique index or constraint in the database. */
+    Name: string = null
+    /** Comma-separated key column names, in key order. Use {@link FieldNamesArray}. */
+    FieldNames: string = null
+    /** Predicate of a filtered (SQL Server) or partial (PostgreSQL) index; null when the key covers every row. */
+    FilterDefinition: string | null = null
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    Entity: string = null
+
+    /** The key's field names, in key order. */
+    get FieldNamesArray(): string[] {
+        return this.FieldNames ? this.FieldNames.split(',').map(f => f.trim()).filter(f => f.length > 0) : [];
+    }
+
+    /**
+     * True when the key only applies to rows matching {@link FilterDefinition}. Such a key does not
+     * make its columns unique across the whole table.
+     */
+    get IsFiltered(): boolean {
+        return this.FilterDefinition != null && this.FilterDefinition.trim().length > 0;
+    }
+
+    constructor(initData: Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+/**
  * Metadata describing a governed alternate SQL view on an entity that maintains 100% column
  * parity with the entity's canonical `BaseView` while applying a curated canonical filter
  * or join (for example, `Active` members or `Open` orders).
@@ -616,6 +670,11 @@ export class EntityPermissionInfo extends BaseInfo{
      */
     Type: string = 'Allow'
 
+    private _isDenyCache: boolean = false;
+    private _isDenySource: string | null | undefined = undefined;
+    private _normalizedRoleIdCache: string | null = null;
+    private _normalizedRoleIdSource: string | null | undefined = undefined;
+
     /**
      * True when this row is a Deny row (`Type = 'Deny'`, compared case- and whitespace-insensitively;
      * a null/blank Type — rows created before the column existed — is Allow). On a Deny row a set
@@ -623,7 +682,23 @@ export class EntityPermissionInfo extends BaseInfo{
      * look at a Deny row: `GetUserPermisions` subtracts these, and the RLS readers skip them.
      */
     public get IsDeny(): boolean {
-        return (this.Type || 'Allow').trim().toLowerCase() === 'deny';
+        if (this._isDenySource !== this.Type) {
+            this._isDenySource = this.Type;
+            this._isDenyCache = (this.Type || 'Allow').trim().toLowerCase() === 'deny';
+        }
+        return this._isDenyCache;
+    }
+
+    /**
+     * Trimmed, lowercased `RoleID` cached against the current `RoleID` value so hot permission
+     * and RLS checks avoid per-call string allocations.
+     */
+    public get NormalizedRoleID(): string | null {
+        if (this._normalizedRoleIdSource !== this.RoleID) {
+            this._normalizedRoleIdSource = this.RoleID;
+            this._normalizedRoleIdCache = this.RoleID ? this.RoleID.trim().toLowerCase() : null;
+        }
+        return this._normalizedRoleIdCache;
     }
     CanCreate: boolean = null
     CanRead: boolean = null
@@ -772,11 +847,17 @@ export const ReadableFieldsTransportKey = 'ReadableFields___';
  * set and aggregate it — see {@link EntityFieldInfo.AggregateFieldRulesForUser}.
  */
 export function IsRestrictingFieldRule(rule: FieldPermissionRuleVerbs | null | undefined): boolean {
-    return (
-        rule?.ReadAccess === FieldPermissionAccess.Deny ||
-        rule?.UpdateAccess === FieldPermissionAccess.Deny ||
-        rule?.CreateAccess === FieldPermissionAccess.Deny
-    );
+    return isDenyAccess(rule?.ReadAccess) || isDenyAccess(rule?.UpdateAccess) || isDenyAccess(rule?.CreateAccess);
+}
+
+/**
+ * Whether one Access value means `Deny`, compared the way the aggregation compares: ignoring case
+ * and surrounding whitespace. The column's CHECK constraint runs under a case-insensitive
+ * collation, so `'deny'` stores, and the aggregation enforces it as a Deny; a strict `===` here
+ * would call that same rule harmless.
+ */
+function isDenyAccess(access: string | null | undefined): boolean {
+    return (access ?? '').trim().toLowerCase() === 'deny';
 }
 
 /**
@@ -1089,7 +1170,10 @@ export class EntityFieldInfo extends BaseInfo {
      */
     IsSoftForeignKey: boolean = null
     /**
-     * If true, the field is a unique key for the entity. There can be zero to many unique key fields per entity.
+     * True only when this column alone is a key: the sole key column of an unfiltered unique index or
+     * unique constraint, or the sole column of the primary key. Columns of a composite unique key, of a
+     * composite primary key, or of a filtered (partial) unique index are false; unique keys are
+     * recorded as column sets in {@link EntityInfo.UniqueKeySets}.
      */
     IsUnique: boolean = null
     Category: string = null
@@ -2441,6 +2525,15 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns the canonical string lookup key for a value of this field when matching records
+     * across heterogeneous sources (e.g., SQL Server upper-case vs. PostgreSQL lower-case UUIDs,
+     * while preserving exact case for non-UUID string keys).
+     */
+    public FormatCanonicalValue(value: unknown): string {
+        return CanonicalPrimaryKeyValue(String(value ?? ''), this.IsUniqueIdentifier);
+    }
+
+    /**
      * Returns true if the field's SQL type is **fixed-width / space-padded**
      * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
      *
@@ -2787,6 +2880,8 @@ const _userRoleIdSetCache = new WeakMap<UserInfo, {
     rolesRef: UserRoleInfo[] | undefined;
     rolesLen: number;
     firstRoleId: string | undefined;
+    lastRoleId: string | undefined;
+    rolesKey: string;
     roleIds: Set<string>;
 }>();
 
@@ -2797,18 +2892,27 @@ function getUserRoleIdSet(user: UserInfo | null | undefined): Set<string> {
     const roles = user.UserRoles;
     const len = roles.length;
     const firstId = roles[0]?.RoleID;
+    const lastId = roles[len - 1]?.RoleID;
     const cached = _userRoleIdSetCache.get(user);
-    if (cached && cached.rolesRef === roles && cached.rolesLen === len && cached.firstRoleId === firstId) {
+    if (
+        cached &&
+        cached.rolesRef === roles &&
+        cached.rolesLen === len &&
+        cached.firstRoleId === firstId &&
+        cached.lastRoleId === lastId
+    ) {
         return cached.roleIds;
     }
     const roleIds = new Set<string>();
+    let rolesKey = '';
     for (let i = 0; i < len; i++) {
         const rid = roles[i]?.RoleID;
+        rolesKey += `${rid ?? ''}|`;
         if (rid) {
             roleIds.add(rid.trim().toLowerCase());
         }
     }
-    _userRoleIdSetCache.set(user, { rolesRef: roles, rolesLen: len, firstRoleId: firstId, roleIds });
+    _userRoleIdSetCache.set(user, { rolesRef: roles, rolesLen: len, firstRoleId: firstId, lastRoleId: lastId, rolesKey, roleIds });
     return roleIds;
 }
 
@@ -2819,16 +2923,125 @@ const _entityFieldIndexCache = new WeakMap<EntityInfo, {
     byCodeName: Map<string, number>;
 }>();
 
-const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, {
+/**
+ * One memoized set of denied-field answers for an (entity, user) pair, valid while the
+ * field-security generation, the entity's field list, its resolved IS-A ancestors and the user's
+ * roles are what they were when it was filled.
+ */
+type DeniedFieldsMemoEntry = {
     fieldsRef: EntityFieldInfo[];
-    fieldsLen: number;
-    totalPerms: number;
-    rolesRef: UserRoleInfo[] | undefined;
-    rolesLen: number;
+    generation: number;
+    ancestors: readonly EntityInfo[];
+    rolesKey: string;
     read?: Set<string>;
     update?: Set<string>;
     create?: Set<string>;
-}>>();
+};
+
+type EntityUserPermissionsMemoEntry = {
+    generation: number;
+    permissionsRef: EntityPermissionInfo[];
+    permissionsLen: number;
+    permissionsStamp: number;
+    firstPermRoleId: string | null | undefined;
+    lastPermRoleId: string | null | undefined;
+    roleIdsRef: Set<string>;
+    apiFlags: number;
+    result: EntityUserPermissionInfo;
+};
+
+const _entityUserPermissionsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, EntityUserPermissionsMemoEntry>>();
+
+const _entityDeniedFieldsCache = new WeakMap<EntityInfo, WeakMap<UserInfo, DeniedFieldsMemoEntry>>();
+
+/**
+ * The field-security generation: one process-wide number that moves whenever an answer derived
+ * from field-security configuration may have changed. It moves when an `EntityInfo` is built (a
+ * metadata refresh rebuilds every entity), when an entity's {@link EntityInfo.EnableFieldLevelSecurity}
+ * flag is assigned, and when {@link EntityInfo.InvalidateFieldSecurityCache} is called. Every memo
+ * of a field-security answer records the number it was filled under and is discarded once the
+ * number has moved, so a memo is never served across any of those changes. Numbers only grow.
+ */
+let _fieldSecurityGeneration = 0;
+
+/** Marks every memoized field-security answer stale (see {@link CurrentFieldSecurityGeneration}). */
+function advanceFieldSecurityGeneration(): void {
+    _fieldSecurityGeneration++;
+}
+
+/**
+ * The current field-security generation. A memo of anything derived from field-security
+ * configuration (denied sets, whether field security applies, a user's denial profile across a
+ * catalog) is valid only while this returns the number the memo was filled under. It moves when an
+ * `EntityInfo` is built, when an entity's `EnableFieldLevelSecurity` flag is assigned, and when
+ * `EntityInfo.InvalidateFieldSecurityCache()` is called.
+ */
+export function CurrentFieldSecurityGeneration(): number {
+    return _fieldSecurityGeneration;
+}
+
+/**
+ * An entity's IS-A ancestors as {@link EntityInfo.ParentEntityInfo} resolves them, nearest first,
+ * with what the resolution depended on: the field-security generation (which moves whenever any
+ * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider it went through, that
+ * provider's entity array and the entity's own `ParentID`.
+ */
+type LiveAncestorsMemo = {
+    generation: number;
+    provider: IMetadataProvider | undefined;
+    entities: EntityInfo[] | undefined;
+    parentID: string | null;
+    ancestors: readonly EntityInfo[];
+};
+
+const NO_ANCESTORS: readonly EntityInfo[] = Object.freeze([]);
+
+/** Whether two ancestor lists hold the same entities, by identity, in the same order. */
+function sameAncestors(a: readonly EntityInfo[], b: readonly EntityInfo[]): boolean {
+    if (a === b) {
+        return true;
+    }
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * The role IDs a user holds, in order, as one string: changes whenever a role is added, removed
+ * or swapped. Field-level security reads nothing else about a user, so this, with
+ * {@link CurrentFieldSecurityGeneration}, keys any memo of a user's field-security answers.
+ */
+export function FieldSecurityUserRolesKey(user: UserInfo): string {
+    return userRolesKey(user);
+}
+
+function userRolesKey(user: UserInfo): string {
+    const roles = user.UserRoles;
+    if (!roles || roles.length === 0) {
+        return '';
+    }
+    const len = roles.length;
+    const firstId = roles[0]?.RoleID;
+    const lastId = roles[len - 1]?.RoleID;
+    const cached = _userRoleIdSetCache.get(user);
+    if (
+        cached &&
+        cached.rolesRef === roles &&
+        cached.rolesLen === len &&
+        cached.firstRoleId === firstId &&
+        cached.lastRoleId === lastId
+    ) {
+        return cached.rolesKey;
+    }
+    getUserRoleIdSet(user);
+    return _userRoleIdSetCache.get(user)?.rolesKey ?? '';
+}
 
 const _entityChildEntitiesCache = new WeakMap<EntityInfo, {
     provider: IMetadataProvider | undefined;
@@ -3065,20 +3278,44 @@ export class EntityInfo extends BaseInfo {
     SubtypeSelector: string = null
 
     private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+    private _subtypeSelectorRaw: string | null | undefined = undefined;
 
     /**
      * Parsed SubtypeSelector configuration, if configured.
      */
     get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
-        if (this._subtypeSelectorConfig === undefined) {
+        if (this._subtypeSelectorConfig === undefined || this._subtypeSelectorRaw !== this.SubtypeSelector) {
+            this._subtypeSelectorRaw = this.SubtypeSelector;
             if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
                 try {
                     const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
                     if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
-                        this._subtypeSelectorConfig = {
+                        const config: IEntitySubtypeSelectorConfig = {
                             Path: parsed['Path'].trim(),
                             UseForLoadedRecords: this.parseSubtypeSelectorUseForLoadedRecords(parsed),
                         };
+                        if (parsed['AutoEnsureOnSave'] !== undefined && parsed['AutoEnsureOnSave'] !== null) {
+                            config.AutoEnsureOnSave = this.parseSubtypeSelectorBooleanFlag(parsed, 'AutoEnsureOnSave');
+                        }
+                        if (parsed['OnSubtypeChange'] !== undefined && parsed['OnSubtypeChange'] !== null) {
+                            config.OnSubtypeChange = this.parseSubtypeSelectorChangeBehavior(parsed);
+                        }
+                        if (parsed['Driver'] !== undefined && parsed['Driver'] !== null) {
+                            const driver = this.parseSubtypeSelectorDriver(parsed);
+                            if (driver) {
+                                config.Driver = driver;
+                            }
+                        }
+                        if (parsed['FoldIntoForm'] !== undefined && parsed['FoldIntoForm'] !== null) {
+                            config.FoldIntoForm = this.parseSubtypeSelectorBooleanFlag(parsed, 'FoldIntoForm');
+                        }
+                        if (parsed['UIDriver'] !== undefined && parsed['UIDriver'] !== null) {
+                            const uiDriver = this.parseSubtypeSelectorUIDriver(parsed);
+                            if (uiDriver) {
+                                config.UIDriver = uiDriver;
+                            }
+                        }
+                        this._subtypeSelectorConfig = config;
                     } else {
                         LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
                         this._subtypeSelectorConfig = null;
@@ -3106,6 +3343,59 @@ export class EntityInfo extends BaseInfo {
         }
         LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UseForLoadedRecords' must be true or false, but is ${JSON.stringify(value)}. Loads of this entity won't use the selector.`);
         return false;
+    }
+
+    private parseSubtypeSelectorBooleanFlag(parsed: Record<string, unknown>, key: string): boolean {
+        const value = parsed[key];
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector '${key}' must be true or false, but is ${JSON.stringify(value)}. Defaulting to false.`);
+        return false;
+    }
+
+    private parseSubtypeSelectorChangeBehavior(parsed: Record<string, unknown>): SubtypeSelectorChangeBehavior {
+        const value = parsed['OnSubtypeChange'];
+        if (value === 'Refuse' || value === 'Replace') {
+            return value;
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'OnSubtypeChange' must be 'Refuse' or 'Replace', but is ${JSON.stringify(value)}. Defaulting to 'Refuse'.`);
+        return 'Refuse';
+    }
+
+    private parseSubtypeSelectorDriver(parsed: Record<string, unknown>): IEntitySubtypeDriverConfig | null {
+        const raw = parsed['Driver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const driverObj = raw as Record<string, unknown>;
+            const path = driverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                const driver: IEntitySubtypeDriverConfig = { Path: path.trim() };
+                const baseClass = driverObj['BaseClass'];
+                if (baseClass !== undefined && baseClass !== null) {
+                    if (typeof baseClass === 'string' && baseClass.trim().length > 0) {
+                        driver.BaseClass = baseClass.trim();
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver.BaseClass' must be a non-empty string when provided, but is ${JSON.stringify(baseClass)}.`);
+                    }
+                }
+                return driver;
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'Driver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
+    }
+
+    private parseSubtypeSelectorUIDriver(parsed: Record<string, unknown>): IEntitySubtypeUIDriverConfig | null {
+        const raw = parsed['UIDriver'];
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            const uiDriverObj = raw as Record<string, unknown>;
+            const path = uiDriverObj['Path'];
+            if (typeof path === 'string' && path.trim().length > 0) {
+                return { Path: path.trim() };
+            }
+        }
+        LogError(`EntityInfo '${this.Name}': SubtypeSelector 'UIDriver' must be an object with a non-empty 'Path' string, but is ${JSON.stringify(raw)}.`);
+        return null;
     }
     /**
      * Whether to audit when users access records from this entity
@@ -3152,8 +3442,18 @@ export class EntityInfo extends BaseInfo {
      * Turning it on snapshots the entity's existing entity-level permissions into per-field
      * rows, so enabling changes no behavior until an administrator tightens a field. Turning it
      * off leaves the rows in place, inactive, so re-enabling does not lose the configuration.
+     *
+     * Assigning it moves the field-security generation ({@link CurrentFieldSecurityGeneration}),
+     * so every memoized field-security answer that read the old value is recomputed.
      */
-    EnableFieldLevelSecurity: boolean = false
+    public get EnableFieldLevelSecurity(): boolean {
+        return this._enableFieldLevelSecurity;
+    }
+    public set EnableFieldLevelSecurity(value: boolean) {
+        this._enableFieldLevelSecurity = value;
+        advanceFieldSecurityGeneration();
+    }
+    private _enableFieldLevelSecurity: boolean = false
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -3464,6 +3764,28 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Effective declarative + programmatic lifecycle policy (state machine, field-freeze, and
+     * `WriteAuthority`) resolved for this entity, or `null` when none is configured.
+     */
+    get LifecyclePolicy(): IEntityLifecyclePolicy | null {
+        return EntityLifecyclePolicyEngine.Instance.ResolvePolicy(this);
+    }
+
+    /**
+     * Effective declarative + programmatic document auto-numbering policies resolved for this entity.
+     */
+    get AutoNumberPolicies(): ReadonlyArray<IDocumentNumberPolicy> {
+        return DocumentNumberingEngine.Instance.ResolvePolicies(this);
+    }
+
+    /**
+     * Effective declarative cross-entity parent-state lock policies resolved for this entity.
+     */
+    get CrossEntityPolicies(): ReadonlyArray<IDeclarativeParentStateLockPolicy> {
+        return CrossEntityPolicyEngine.Instance.ResolveDeclarativePolicies(this);
+    }
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database
      * for this entity. Defaults to `'full'` when `Configuration.SaveReturnMode` is omitted or not
      * `'datestamps_only'`.
@@ -3503,6 +3825,103 @@ export class EntityInfo extends BaseInfo {
      */
     get NotCloneable(): boolean {
         return this.CloneConfig?.NotCloneable === true;
+    }
+
+    /**
+     * Parsed anchored record commenting configuration (`Configuration.Comments`) for this entity.
+     */
+    get CommentsConfig(): IEntityCommentsConfiguration | null {
+        return this.ConfigurationObject?.Comments ?? null;
+    }
+
+    /**
+     * Returns true when anchored record commenting (`MJ: Conversations` with `AnchorType` set)
+     * is enabled on this entity (`Configuration.Comments.Enabled !== false`).
+     * Defaults to `true` when omitted.
+     */
+    get AllowRecordComments(): boolean {
+        return this.CommentsConfig?.Enabled !== false;
+    }
+
+    /**
+     * Returns true when the specified user is permitted to post, reply to, or resolve
+     * anchored record comments on this entity according to `Configuration.Comments`:
+     * 1. `AllowRecordComments` must be `true`.
+     * 2. The user must hold the configured `RequiredPermission` (`'Read'` by default, or `'Update'`).
+     * 3. When `AllowedRoles` is non-empty, the user must belong to at least one listed role.
+     */
+    public CanUserComment(user: UserInfo | null | undefined): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        if (!user) {
+            return false;
+        }
+        const requiredPerm =
+            this.CommentsConfig?.RequiredPermission === 'Update'
+                ? EntityPermissionType.Update
+                : EntityPermissionType.Read;
+        if (!this.CheckPermissions(user, requiredPerm, false)) {
+            return false;
+        }
+        const allowedRoles = this.CommentsConfig?.AllowedRoles;
+        if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
+            const normalizedAllowed = new Set(
+                allowedRoles.map((r) => (r ?? '').trim().toLowerCase()).filter(Boolean)
+            );
+            if (normalizedAllowed.size > 0) {
+                const userRoles = user.UserRoles ?? [];
+                const hasRole = userRoles.some((ur) => {
+                    const roleName = (ur.Role ?? '').trim().toLowerCase();
+                    const roleId = (ur.RoleID ?? '').trim().toLowerCase();
+                    return (
+                        (roleName.length > 0 && normalizedAllowed.has(roleName)) ||
+                        (roleId.length > 0 && normalizedAllowed.has(roleId))
+                    );
+                });
+                if (!hasRole) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Returns true when a comment of the specified `MJ: Comment Types` code or name is permitted
+     * on records of this entity according to `Configuration.Comments.AllowedCommentTypes`.
+     *
+     * - Returns `false` whenever {@link AllowRecordComments} is `false`.
+     * - When `AllowedCommentTypes` is omitted, plain comments (`'COMMENT'` / `'Comment'`) are
+     *   allowed by default while specialized comment types (such as `'FIELD_SUGGESTION'`) must be
+     *   explicitly enabled by the entity.
+     * - When `AllowedCommentTypes` includes `'*'`, every comment type is permitted.
+     */
+    public IsCommentTypeAllowed(codeOrName: string | null | undefined, alternateName?: string | null): boolean {
+        if (!this.AllowRecordComments) {
+            return false;
+        }
+        const primary = (codeOrName ?? '').trim().toLowerCase();
+        const secondary = (alternateName ?? '').trim().toLowerCase();
+        if (!primary && !secondary) {
+            return true;
+        }
+
+        const configured = this.CommentsConfig?.AllowedCommentTypes;
+        if (!Array.isArray(configured)) {
+            return primary === 'comment' || secondary === 'comment';
+        }
+
+        const allowed = new Set(
+            configured.map((entry) => (entry ?? '').trim().toLowerCase()).filter(Boolean),
+        );
+        if (allowed.has('*')) {
+            return true;
+        }
+        return (
+            (primary.length > 0 && allowed.has(primary)) ||
+            (secondary.length > 0 && allowed.has(secondary))
+        );
     }
     /**
      * Date and time when this entity was created
@@ -3620,6 +4039,7 @@ export class EntityInfo extends BaseInfo {
     private _settings: EntitySettingInfo[]
     private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _organicKeys: EntityOrganicKeyInfo[] = []
+    private _uniqueKeySets: EntityUniqueKeyInfo[] = []
     private _alternateBaseViews: EntityAlternateBaseViewInfo[] = []
     HasIdField: boolean = false
 
@@ -3689,6 +4109,93 @@ export class EntityInfo extends BaseInfo {
     private _displayNamePluralCache: { source: string; plural: string } | undefined = undefined;
 
     /**
+     * Whether field-level security decides anything on this entity: its own
+     * {@link EnableFieldLevelSecurity} flag is on, or an IS-A ancestor's is.
+     *
+     * **Enforcement points gate on this, never on the raw flag.** An IS-A child carries each
+     * ancestor's fields as mirror fields of its own, read from the same row. Gating on the child's
+     * own flag — off on nearly every child, because nobody turns it on there — let a role denied
+     * `Phone` on the parent read it through the child's RunView, load and `GetAll()`. The denied
+     * sets ({@link GetDeniedReadFields} and siblings) carry the ancestor's denials for those mirror
+     * fields; this is the matching gate, so a caller that skips work when it is false never skips
+     * an ancestor's rules.
+     *
+     * The raw flag stays the right question for CONFIGURATION — which entities reconciliation,
+     * CodeGen and the system-user sweeps cover — because the rules themselves live on the entity
+     * that owns the field.
+     */
+    public get FieldLevelSecurityApplies(): boolean {
+        if (this.EnableFieldLevelSecurity) {
+            return true; // checked first: one boolean for every entity that has it on
+        }
+        if (!this.ParentID) {
+            return false; // one boolean for every entity outside an IS-A chain
+        }
+        // The ancestors are memoized; their flags are read live, so an in-place flip is seen at once.
+        const ancestors = this.liveAncestors();
+        for (let i = 0; i < ancestors.length; i++) {
+            if (ancestors[i].EnableFieldLevelSecurity) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** See {@link liveAncestors}. A `_` field with no matching getter, so `toJSON()` leaves it out. */
+    private _liveAncestorsMemo: LiveAncestorsMemo | null = null;
+
+    /**
+     * This entity's IS-A ancestors, nearest first, as {@link ParentEntityInfo} resolves them NOW
+     * rather than the cached {@link ParentChain}. The denied walk ({@link addFieldsDeniedOnParent})
+     * follows the live parent, so the gate and the memo key must too: read from a chain cached
+     * before a metadata refresh replaced an ancestor, the gate could answer "no" while the
+     * ancestor now in place has rules, and every enforcement point would skip them.
+     *
+     * The walk is memoized, valid while the field-security generation (which moves whenever any
+     * `EntityInfo` is built, so a rebuilt ancestor is noticed), the provider this entity resolves
+     * its parent through (its owning provider, else the global one), that provider's entity array
+     * and this entity's `ParentID` are unchanged. Ancestors resolve their own parents through
+     * their own providers; a chain whose entities came from one provider, the only way providers
+     * build them, is covered by that provider's array. A walk cut
+     * short because a `ParentID` did not resolve (asked before the provider held its entities) is
+     * returned but not kept, so it cannot pin an incomplete answer.
+     */
+    private liveAncestors(): readonly EntityInfo[] {
+        if (!this.ParentID) {
+            return NO_ANCESTORS;
+        }
+        const provider = MetadataProviderFor(this); // the provider ParentEntityInfo resolves through
+        const entities = provider?.Entities;
+        const memo = this._liveAncestorsMemo;
+        if (memo !== null && memo.generation === _fieldSecurityGeneration && memo.provider === provider
+            && memo.entities === entities && memo.parentID === this.ParentID) {
+            return memo.ancestors;
+        }
+        const generation = _fieldSecurityGeneration;
+        const { ancestors, complete } = this.walkLiveAncestors();
+        if (complete) {
+            this._liveAncestorsMemo = { generation, provider, entities, parentID: this.ParentID, ancestors };
+        }
+        return ancestors;
+    }
+
+    /** The uncached walk behind {@link liveAncestors}; stops at the root or at a cycle. */
+    private walkLiveAncestors(): { ancestors: readonly EntityInfo[]; complete: boolean } {
+        const ancestors: EntityInfo[] = [];
+        const visited = new Set<EntityInfo>([this]);
+        let current: EntityInfo = this;
+        let ancestor = this.ParentEntityInfo;
+        while (ancestor && !visited.has(ancestor)) {
+            visited.add(ancestor);
+            ancestors.push(ancestor);
+            current = ancestor;
+            ancestor = ancestor.ParentID ? ancestor.ParentEntityInfo : null;
+        }
+        const complete = !current.ParentID || ancestor !== null;
+        return { ancestors: Object.freeze(ancestors), complete };
+    }
+
+    /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
      * every field-security enforcement point is built on.
      *
@@ -3698,8 +4205,9 @@ export class EntityInfo extends BaseInfo {
      * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
      *
      * Names are lowercased so callers can match case-insensitively, consistent with
-     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
-     * field security switched off and when the user is denied nothing, so callers can treat
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when field security
+     * does not apply (see {@link FieldLevelSecurityApplies}) and when the user is denied nothing,
+     * so callers can treat
      * `size === 0` as the single "nothing to do" condition.
      */
     public GetDeniedReadFields(user: UserInfo): Set<string> {
@@ -3720,10 +4228,10 @@ export class EntityInfo extends BaseInfo {
      * The caller still decides what to render in place of the value, which is the part that
      * differs per surface and should not be hidden inside a getter.
      *
-     * **Fails open** on a missing user, a missing field name, or an entity with field security
-     * switched off — matching `BaseEntity`'s own gate and `MjFormFieldComponent`. The server is
-     * the real boundary; a UI that blanked out fields because no user had resolved yet would be
-     * worse than one that shows them.
+     * **Fails open** on a missing user, a missing field name, or an entity where field security
+     * does not apply ({@link FieldLevelSecurityApplies}) — matching `BaseEntity`'s own gate and
+     * `MjFormFieldComponent`. The server is the real boundary; a UI that blanked out fields
+     * because no user had resolved yet would be worse than one that shows them.
      *
      * PERFORMANCE: this delegates to {@link GetDeniedReadFields}, which walks every field on the
      * entity. Fine for the handful of chrome reads it exists for; do NOT call it per row in a
@@ -3733,7 +4241,7 @@ export class EntityInfo extends BaseInfo {
      * @param user the acting user
      */
     public IsFieldReadableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedReadFields(user).has(fieldName.trim().toLowerCase());
@@ -3746,7 +4254,7 @@ export class EntityInfo extends BaseInfo {
      * three conditions.
      */
     public IsFieldUpdatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedUpdateFields(user).has(fieldName.trim().toLowerCase());
@@ -3761,7 +4269,7 @@ export class EntityInfo extends BaseInfo {
      * the user typed, which is the case this exists to prevent.
      */
     public IsFieldCreatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
-        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+        if (!this.FieldLevelSecurityApplies || !fieldName || !user) {
             return true;
         }
         return !this.GetDeniedCreateFields(user).has(fieldName.trim().toLowerCase());
@@ -3790,59 +4298,74 @@ export class EntityInfo extends BaseInfo {
         return this.getCachedDeniedFields(user, 'create', (p) => !p.CanCreate);
     }
 
+    /**
+     * Discards the memoized field-security answers: this entity's denied-field sets, those of
+     * every IS-A descendant, and every other memo keyed on the field-security generation
+     * ({@link CurrentFieldSecurityGeneration}), such as a user's denial profile across a catalog.
+     * Invalidation is process-wide because a rule on one entity can change answers about others.
+     *
+     * A metadata refresh needs no call: it builds new `EntityInfo` objects, which start with
+     * empty memos. Call this only after changing field rules IN PLACE on an existing
+     * `EntityInfo`, for example editing an {@link EntityFieldPermissionInfo}'s access values.
+     */
+    public InvalidateFieldSecurityCache(): void {
+        advanceFieldSecurityGeneration();
+    }
+
+    /**
+     * Memoized front for {@link getDeniedFields}, per (entity, user, verb).
+     *
+     * An entry is reused while four things are unchanged: the field-security generation (see
+     * {@link CurrentFieldSecurityGeneration}; it moves on every rebuild, flag assignment and
+     * {@link InvalidateFieldSecurityCache}), the IS-A ancestors as they resolve now, the field
+     * array itself, and the role IDs the user holds. Counting fields or rules is not enough:
+     * editing a rule from `Allow` to `Deny` changes neither count.
+     */
     private getCachedDeniedFields(
         user: UserInfo,
         verb: 'read' | 'update' | 'create',
         isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
     ): Set<string> {
-        if (!this.EnableFieldLevelSecurity) {
-            return new Set<string>();
+        if (!this.FieldLevelSecurityApplies) {
+            return new Set<string>(); // gate on inheritance too: an ancestor's rules still apply
         }
         if (!user || typeof user !== 'object') {
-            return this.getDeniedFields(user, isDenied);
+            return this.getDeniedFields(user, verb, isDenied);
         }
-        let totalPerms = 0;
-        for (let i = 0; i < this._fields.length; i++) {
-            totalPerms += this._fields[i].FieldPermissions.length;
+        const entry = this.deniedFieldsMemoEntryFor(user);
+        const existing = entry[verb];
+        if (existing !== undefined) {
+            return existing;
         }
-        const rolesRef = user.UserRoles;
-        const rolesLen = rolesRef?.length ?? 0;
+        const computed = this.getDeniedFields(user, verb, isDenied);
+        entry[verb] = computed;
+        return computed;
+    }
 
+    /** The current memo entry for `user`, replaced with an empty one when any part of its key moved. */
+    private deniedFieldsMemoEntryFor(user: UserInfo): DeniedFieldsMemoEntry {
+        const generation = _fieldSecurityGeneration;
+        const ancestors = this.liveAncestors();
+        const rolesKey = userRolesKey(user);
         let byUser = _entityDeniedFieldsCache.get(this);
         if (!byUser) {
             byUser = new WeakMap();
             _entityDeniedFieldsCache.set(this, byUser);
         }
         let entry = byUser.get(user);
-        if (
-            !entry ||
-            entry.fieldsRef !== this._fields ||
-            entry.fieldsLen !== this._fields.length ||
-            entry.totalPerms !== totalPerms ||
-            entry.rolesRef !== rolesRef ||
-            entry.rolesLen !== rolesLen
-        ) {
-            entry = {
-                fieldsRef: this._fields,
-                fieldsLen: this._fields.length,
-                totalPerms,
-                rolesRef,
-                rolesLen,
-            };
+        if (!entry || entry.fieldsRef !== this._fields || entry.generation !== generation
+            || !sameAncestors(entry.ancestors, ancestors) || entry.rolesKey !== rolesKey) {
+            entry = { fieldsRef: this._fields, generation, ancestors, rolesKey };
             byUser.set(user, entry);
         }
-        const existing = entry[verb];
-        if (existing !== undefined) {
-            return existing;
-        }
-        const computed = this.getDeniedFields(user, isDenied);
-        entry[verb] = computed;
-        return computed;
+        return entry;
     }
 
     /**
      * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields} /
-     * {@link GetDeniedCreateFields}, short-circuiting on {@link EnableFieldLevelSecurity}.
+     * {@link GetDeniedCreateFields}. Walks this entity's own fields when its
+     * {@link EnableFieldLevelSecurity} is on, then adds the fields an IS-A parent denies (see
+     * {@link addFieldsDeniedOnParent}).
      *
      * Every field is aggregated, including those carrying no permission records — on an enabled
      * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
@@ -3865,18 +4388,65 @@ export class EntityInfo extends BaseInfo {
      * that collide on `CodeName` already collide on their generated property, which is not a
      * schema CodeGen can emit.
      */
-    private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
+    private getDeniedFields(
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): Set<string> {
         const denied = new Set<string>();
-        if (!this.EnableFieldLevelSecurity) {
-            return denied;
-        }
-        for (const field of this._fields) {
-            if (isDenied(field.GetUserFieldPermissions(user, true))) {
-                denied.add(field.Name.trim().toLowerCase());
-                denied.add(field.CodeName.trim().toLowerCase());
+        if (this.EnableFieldLevelSecurity) {
+            for (const field of this._fields) {
+                if (isDenied(field.GetUserFieldPermissions(user, true))) {
+                    this.addDeniedField(denied, field);
+                }
             }
         }
+        this.addFieldsDeniedOnParent(denied, user, verb, isDenied);
         return denied;
+    }
+
+    /**
+     * IS-A inheritance for the denied sets: a field the immediate parent denies is denied on this
+     * entity's mirror of it, whatever this entity's own flag says. The parent's set already
+     * includes ITS parent's denials (this method runs there too), so one hop covers any depth.
+     *
+     * A mirror is a field of this entity whose `Name` is the `Name` of one of the parent's own
+     * fields: an IS-A child's view exposes each parent column under the parent's column name, and
+     * a child cannot declare a column of its own with that name. Matching goes through the
+     * parent's field list rather than straight into the parent's denied set, because that set also
+     * holds each denied field's `CodeName`: a parent field `Base Salary` puts `base_salary` in it,
+     * and a child's OWN field named `Base_Salary` must not be denied for that.
+     *
+     * Additive only. When this entity ALSO has field security on, a mirror with no rows of its own
+     * is already denied by the walk above (no rows on an enabled entity means denied); the parent's
+     * rules cannot re-open it.
+     */
+    private addFieldsDeniedOnParent(
+        denied: Set<string>,
+        user: UserInfo,
+        verb: 'read' | 'update' | 'create',
+        isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean
+    ): void {
+        const parent = this.ParentEntityInfo;
+        if (!parent?.FieldLevelSecurityApplies) {
+            return;
+        }
+        const parentDenied = parent.getCachedDeniedFields(user, verb, isDenied);
+        if (parentDenied.size === 0) {
+            return;
+        }
+        for (const field of this._fields) {
+            const parentField = parent.FieldByName(field.Name);
+            if (parentField && parentDenied.has(parentField.Name.trim().toLowerCase())) {
+                this.addDeniedField(denied, field);
+            }
+        }
+    }
+
+    /** Adds a field under BOTH key spaces — see {@link getDeniedFields} for why. */
+    private addDeniedField(denied: Set<string>, field: EntityFieldInfo): void {
+        denied.add(field.Name.trim().toLowerCase());
+        denied.add(field.CodeName.trim().toLowerCase());
     }
 
     /**
@@ -3989,8 +4559,11 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns an array of all fields that have unique constraints on them.
-     * @returns {EntityFieldInfo[]} Array of fields with unique constraints
+     * Returns the fields that are unique on their own ({@link EntityFieldInfo.IsUnique}): a
+     * single-column primary key, or the only key column of an unfiltered unique index or
+     * constraint. Columns of a composite unique key are not included; use {@link UniqueKeySets}
+     * or {@link IsUniqueFieldSet} for those.
+     * @returns {EntityFieldInfo[]} Array of fields that are unique on their own
      */
     get UniqueKeys(): EntityFieldInfo[] {
         if (this._uniqueKeysCache === null) {
@@ -4152,6 +4725,47 @@ export class EntityInfo extends BaseInfo {
      */
     get OrganicKeys(): EntityOrganicKeyInfo[] {
         return this._organicKeys;
+    }
+
+    /**
+     * The unique indexes and unique constraints on this entity's base table, each as a set of
+     * columns, sorted by name. Primary keys are not included. Maintained by CodeGen from the
+     * database catalog.
+     * @returns {EntityUniqueKeyInfo[]} Array of unique key definitions
+     */
+    get UniqueKeySets(): EntityUniqueKeyInfo[] {
+        return this._uniqueKeySets;
+    }
+
+    /**
+     * Whether a row is identified by its values in `fieldNames`: true when the names include every
+     * primary key field, a field that is unique on its own ({@link EntityFieldInfo.IsUnique}, which
+     * also covers uniqueness declared by configuration on a view), or every field of an unfiltered
+     * unique key ({@link UniqueKeySets}). Matching is case-insensitive. A filtered key does not
+     * count, since rows outside its filter can repeat its values.
+     *
+     * `IsUniqueFieldSet(['ActionID'])` asks whether that column alone is unique — for a foreign key,
+     * whether the relationship is one-to-one.
+     */
+    public IsUniqueFieldSet(fieldNames: string[]): boolean {
+        return EntityInfo.IsUniqueFieldSetOf(this, fieldNames);
+    }
+
+    /**
+     * {@link IsUniqueFieldSet} over any object carrying an entity's `Fields` and `UniqueKeySets`,
+     * for callers that hold entity metadata in a plain shape. Missing collections count as empty.
+     */
+    public static IsUniqueFieldSetOf(entity: Pick<EntityInfo, 'Fields' | 'UniqueKeySets'>, fieldNames: string[]): boolean {
+        const names = new Set(fieldNames.map(n => n.trim().toLowerCase()));
+        if (names.size === 0) {
+            return false;
+        }
+        const covers = (keyFields: string[]) => keyFields.length > 0 && keyFields.every(f => names.has(f.toLowerCase()));
+        const fields = entity.Fields ?? [];
+        if (covers(fields.filter(f => f.IsPrimaryKey).map(f => f.Name)) || fields.some(f => f.IsUnique && names.has(f.Name.toLowerCase()))) {
+            return true;
+        }
+        return (entity.UniqueKeySets ?? []).some(k => !k.IsFiltered && covers(k.FieldNamesArray));
     }
 
     /**
@@ -4413,21 +5027,32 @@ export class EntityInfo extends BaseInfo {
      * Walks the IS-A chain upward from this entity to the root, returning all parent entities.
      * Does NOT include this entity itself.
      * Example: For Webinars (IS-A Meetings IS-A Products), returns [Meetings, Products].
-     * Results are cached after first computation for performance.
+     * Results are cached after first computation for performance — but only a COMPLETE chain:
+     * one that ends at an entity with no parent, or at a cycle. A walk cut short because a
+     * `ParentID` did not resolve (asked before the provider had its entities) is returned but not
+     * kept, so it cannot pin an incomplete answer; field security reads this chain to decide
+     * whether an ancestor's rules apply.
      */
     get ParentChain(): EntityInfo[] {
         if (this._parentChainCache !== null) return this._parentChainCache;
 
         const chain: EntityInfo[] = [];
         let current = this.ParentEntityInfo;
+        let complete = !this.ParentID || current !== null;
         const visited = new Set<string>(); // circular reference protection
         while (current) {
             if (visited.has(current.ID)) break; // prevent infinite loop
             visited.add(current.ID);
             chain.push(current);
-            current = current.ParentEntityInfo;
+            const next = current.ParentEntityInfo;
+            if (current.ParentID && !next) {
+                complete = false;
+            }
+            current = next;
         }
-        this._parentChainCache = chain;
+        if (complete) {
+            this._parentChainCache = chain;
+        }
         return chain;
     }
 
@@ -4587,13 +5212,51 @@ export class EntityInfo extends BaseInfo {
         try {
             const _ = user.UserRoles; // preserve throw-on-null behavior
             const userRoleIds = getUserRoleIdSet(user);
+            const perms = this.Permissions;
+            const permsLen = perms.length;
+            const apiFlags =
+                (this.AllowCreateAPI ? 1 : 0) |
+                (this.AllowUpdateAPI ? 2 : 0) |
+                (this.AllowDeleteAPI ? 4 : 0);
+
+            let permsStamp = permsLen;
+            for (let k = 0; k < permsLen; k++) {
+                const p = perms[k];
+                const mask =
+                    (p.CanCreate ? 1 : 0) |
+                    (p.CanRead ? 2 : 0) |
+                    (p.CanUpdate ? 4 : 0) |
+                    (p.CanDelete ? 8 : 0) |
+                    (p.IsDeny ? 16 : 0);
+                permsStamp = ((permsStamp * 31) + mask) | 0;
+            }
+            const firstPermRoleId = permsLen > 0 ? perms[0].RoleID : undefined;
+            const lastPermRoleId = permsLen > 0 ? perms[permsLen - 1].RoleID : undefined;
+
+            let byUser = _entityUserPermissionsCache.get(this);
+            const cached = byUser?.get(user);
+            if (
+                cached &&
+                cached.generation === _fieldSecurityGeneration &&
+                cached.permissionsRef === perms &&
+                cached.permissionsLen === permsLen &&
+                cached.permissionsStamp === permsStamp &&
+                cached.firstPermRoleId === firstPermRoleId &&
+                cached.lastPermRoleId === lastPermRoleId &&
+                cached.roleIdsRef === userRoleIds &&
+                cached.apiFlags === apiFlags
+            ) {
+                return cached.result;
+            }
+
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
 
             if (userRoleIds.size > 0) {
-                for (let j: number = 0; j < this.Permissions.length; j++) {
-                    const ep: EntityPermissionInfo = this.Permissions[j];
-                    if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) {
+                for (let j: number = 0; j < permsLen; j++) {
+                    const ep: EntityPermissionInfo = perms[j];
+                    const normRoleId = ep.NormalizedRoleID;
+                    if (normRoleId && userRoleIds.has(normRoleId)) {
                         const bucket = ep.IsDeny ? deny : allow;
                         bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
                         bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
@@ -4608,12 +5271,28 @@ export class EntityInfo extends BaseInfo {
             // corresponding API is disabled — so fold the entity-level flag into the result.
             // (Read has no `Allow*API` flag; it's governed by the entity view, so it's unchanged.)
             const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
-            userPermission.CanCreate = this.AllowCreateAPI && allow.CanCreate && !deny.CanCreate;
-            userPermission.CanRead   = allow.CanRead   && !deny.CanRead;
-            userPermission.CanUpdate = this.AllowUpdateAPI && allow.CanUpdate && !deny.CanUpdate;
-            userPermission.CanDelete = this.AllowDeleteAPI && allow.CanDelete && !deny.CanDelete;
+            userPermission.CanCreate = Boolean(this.AllowCreateAPI && allow.CanCreate && !deny.CanCreate);
+            userPermission.CanRead   = Boolean(allow.CanRead && !deny.CanRead);
+            userPermission.CanUpdate = Boolean(this.AllowUpdateAPI && allow.CanUpdate && !deny.CanUpdate);
+            userPermission.CanDelete = Boolean(this.AllowDeleteAPI && allow.CanDelete && !deny.CanDelete);
             userPermission.Entity = this;
             userPermission.User = user;
+
+            if (!byUser) {
+                byUser = new WeakMap<UserInfo, EntityUserPermissionsMemoEntry>();
+                _entityUserPermissionsCache.set(this, byUser);
+            }
+            byUser.set(user, {
+                generation: _fieldSecurityGeneration,
+                permissionsRef: perms,
+                permissionsLen: permsLen,
+                permissionsStamp: permsStamp,
+                firstPermRoleId,
+                lastPermRoleId,
+                roleIdsRef: userRoleIds,
+                apiFlags,
+                result: userPermission,
+            });
 
             return userPermission;
         }
@@ -4688,7 +5367,8 @@ export class EntityInfo extends BaseInfo {
             if (ep.IsDeny) {
                 continue; // a Deny row's Can* flags are denials, never grants — it cannot exempt anyone
             }
-            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role 
+            const normRoleId = ep.NormalizedRoleID;
+            if (normRoleId && userRoleIds.has(normRoleId)) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
                         if (ep.CanCreate && !ep.CreateRLSFilterID)
@@ -4742,7 +5422,8 @@ export class EntityInfo extends BaseInfo {
             if (ep.IsDeny) {
                 continue; // never a grant — see the doc comment
             }
-            if (ep.RoleID && userRoleIds.has(ep.RoleID.trim().toLowerCase())) { // user has this role
+            const normRoleId = ep.NormalizedRoleID;
+            if (normRoleId && userRoleIds.has(normRoleId)) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:
@@ -4793,19 +5474,29 @@ export class EntityInfo extends BaseInfo {
             return '';
         }
 
-        const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
-        if (userRLS && userRLS.length > 0) {
-            // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
-            let sRLSSQL: string = '';
-            userRLS.forEach((rls) => {
-                if (sRLSSQL.length > 0)
-                sRLSSQL += ' OR ';
-                sRLSSQL += `(${rls.MarkupFilterText(user)})`;
-            });
-            return sRLSSQL.length > 0 ? `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}` : '';
-        }
-        else
+        const sRLSSQL = this.roleRowFilterClause(user, type, null);
+        if (sRLSSQL.length === 0) {
             return '';
+        }
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
+    }
+
+    /**
+     * The role layer of the row filter, '' when no role filter applies. Callers check the
+     * role-RLS exemption first. With a `binder`, user values bind as parameters
+     * ({@link RowLevelSecurityFilterInfo.MarkupFilterParameterized}).
+     */
+    private roleRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
+        const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
+        if (!userRLS || userRLS.length === 0) {
+            return '';
+        }
+        // The user is NOT exempt, so every filter that applies is OR'd together. Each filter is
+        // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
+        // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
+        // than binding to the first one only. A single filter keeps its one pair of parentheses.
+        const terms = userRLS.map((rls) => `(${binder ? rls.MarkupFilterParameterized(user, binder) : rls.MarkupFilterText(user)})`);
+        return terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
     }
 
     /**
@@ -4824,22 +5515,40 @@ export class EntityInfo extends BaseInfo {
      *
      * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
      * design decision; the column ships unused and the term composes here when it lands.
+     *
+     * With a `binder`, the user's values bind as query parameters (#5713): same layers, same
+     * order, same composition, but each token that is a whole quoted literal is replaced by the
+     * placeholder `binder` returns, so the clause text is the same for every user and the
+     * database reuses one plan per query shape. The binder collects the parameters in
+     * placeholder order, and binds nothing when no layer contributes. The binder is an optional
+     * argument of this method rather than a separate one so that every implementation of the
+     * method, test doubles included, keeps answering the call. The RunView cache fingerprint
+     * must call this without a binder: the literal clause is what keeps two users from sharing
+     * a cached result.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder): string {
+        const sql = this.effectiveRowFilterClause(user, type, binder ?? null);
+        if (sql.length === 0) {
+            return '';
+        }
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+    }
+
+    /** The composed row-filter clause without a prefix; literal when `binder` is null. */
+    private effectiveRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
         const layers: string[] = [];
-        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '');
+        // The literal form goes through GetUserRowLevelSecurityWhereClause, which applies the exemption itself.
+        const roleClause = binder === null
+            ? this.GetUserRowLevelSecurityWhereClause(user, type, '')
+            : (this.UserExemptFromRowLevelSecurity(user, type) ? '' : this.roleRowFilterClause(user, type, binder));
         if (roleClause && roleClause.length > 0) {
             layers.push(`(${roleClause})`);
         }
-        const keyClause = this.getAPIKeyRowFilterClause(user, type);
+        const keyClause = this.getAPIKeyRowFilterClause(user, type, binder);
         if (keyClause && keyClause.length > 0) {
             layers.push(`(${keyClause})`);
         }
-        if (layers.length === 0) {
-            return '';
-        }
-        const sql = layers.join(' AND ');
-        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+        return layers.join(' AND ');
     }
 
     /**
@@ -4850,7 +5559,7 @@ export class EntityInfo extends BaseInfo {
      * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
      * to `(1=0)` via the match-nothing markup mode.
      */
-    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType): string {
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder | null): string {
         const bindings = user?.APIKeyRowFilters;
         if (!bindings || bindings.length === 0) {
             return '';
@@ -4867,7 +5576,8 @@ export class EntityInfo extends BaseInfo {
                     LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
                     return '(1=0)';
                 }
-                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing' })})`;
+                const options: MarkupFilterOptions = { unresolvedBehavior: 'match-nothing' };
+                return `(${binder ? filter.MarkupFilterParameterized(user, binder, options) : filter.MarkupFilterText(user, options)})`;
             });
         return clauses.join(' AND ');
     }
@@ -5230,6 +5940,7 @@ export class EntityInfo extends BaseInfo {
         'EntitySettings', '_Settings', 'Settings',
         'EntityRelationships', '_RelatedEntities', 'RelatedEntities',
         'EntityOrganicKeys', '_OrganicKeys', 'OrganicKeys',
+        'EntityUniqueKeys', '_UniqueKeySets', 'UniqueKeySets',
         'EntityAlternateBaseViews', '_AlternateBaseViews', 'AlternateBaseViews',
     ]);
 
@@ -5241,6 +5952,9 @@ export class EntityInfo extends BaseInfo {
      */
     constructor(initData: any = null, md?: IMetadataProvider) {
         super();
+        // A new entity can replace one that memoized field-security answers point at (a metadata
+        // refresh, an IS-A ancestor rebuilt), so building one moves the generation.
+        advanceFieldSecurityGeneration();
         this.SetOwningProvider(md);
         if (initData) {
             this.copyInitData(initData, EntityInfo.CHILD_INIT_KEYS);
@@ -5337,6 +6051,16 @@ export class EntityInfo extends BaseInfo {
                 for (const item of ok) {
                     this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
+            }
+
+            // copy the Unique Key Sets, sorted by name so consumers see a stable order
+            this._uniqueKeySets = [];
+            const uk = initData.EntityUniqueKeys || initData._UniqueKeySets || initData.UniqueKeySets;
+            if (uk && Array.isArray(uk)) {
+                for (const item of uk) {
+                    this._uniqueKeySets.push(new EntityUniqueKeyInfo(item as Record<string, unknown>));
+                }
+                this._uniqueKeySets.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
             }
 
             // copy the Alternate Base Views (sorted by Sequence, Name, ID, then linked via ParentID)

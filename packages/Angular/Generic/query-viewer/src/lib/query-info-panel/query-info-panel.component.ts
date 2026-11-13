@@ -153,11 +153,13 @@ export class QueryInfoPanelComponent extends BaseAngularComponent implements OnI
     public OnDependentQueryClick(dep: MJQueryDependencyEntity): void {
         // Navigate to the dependent (referencing) query
         const depQuery = this.queryEngine.Queries.find(q => UUIDsEqual(q.ID, dep.QueryID));
+        const queryName = dep.Query ?? depQuery?.Name;
+        if (!queryName) return;
         const categoryPath = depQuery?.CategoryPath || '';
-        const fullPath = categoryPath ? `${categoryPath}/${dep.Query}` : dep.Query;
+        const fullPath = categoryPath ? `${categoryPath}/${queryName}` : queryName;
         this.CompositionTokenClick.emit({
             FullToken: `{{query:"${fullPath}"}}`,
-            QueryName: dep.Query,
+            QueryName: queryName,
             CategorySegments: categoryPath ? categoryPath.split('/') : [],
             FullPath: fullPath,
             MouseEvent: new MouseEvent('click')
@@ -230,6 +232,16 @@ export class QueryInfoPanelComponent extends BaseAngularComponent implements OnI
 
     public GetParamTypeDisplay(param: MJQueryParameterEntity): string {
         return param.Type || 'string';
+    }
+
+    /**
+     * The query's fields the current user may see: a field whose source the user may not read is
+     * left out of the results the user gets, so it is not listed or counted here either.
+     */
+    public get VisibleFields(): MJQueryFieldEntity[] {
+        if (!this.QueryInfo) return [];
+        const provider = this.ProviderToUse;
+        return this.QueryInfo.QueryFieldsVisibleTo(provider?.CurrentUser, provider?.Entities ?? []);
     }
 
     public TrackByField(index: number, field: MJQueryFieldEntity): string {

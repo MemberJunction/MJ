@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import {
+  BUILT_IN_CONVERSATION_TYPE_IDS,
+  CONVERSATION_TYPE_CODES,
+  ConversationEngine,
   MJConversationEntity,
   MJConversationArtifactEntity,
   MJConversationArtifactVersionEntity
@@ -315,6 +318,7 @@ export class ComponentVersionService {
       ExtraFilter: `UserID='${currentUser.ID}' AND Name='Component Studio'`,
       Fields: ['ID'],
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
 
@@ -327,7 +331,9 @@ export class ComponentVersionService {
     const conversation = await this.metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations');
     conversation.UserID = currentUser.ID;
     conversation.Name = 'Component Studio';
-    conversation.Type = 'Skip';
+    conversation.TypeID =
+      ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.SKIP) ??
+      BUILT_IN_CONVERSATION_TYPE_IDS.SKIP;
 
     const saved = await conversation.Save();
     if (saved) {
@@ -354,6 +360,7 @@ export class ComponentVersionService {
       Fields: ['Version'],
       OrderBy: 'Version DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
 
@@ -415,6 +422,7 @@ export class ComponentVersionService {
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
       OrderBy: 'Version DESC',
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'entity_object'
     });
 

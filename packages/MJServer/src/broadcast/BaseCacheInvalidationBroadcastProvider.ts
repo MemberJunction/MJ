@@ -13,6 +13,7 @@ import type {
  */
 export type CacheInvalidationBroadcastTopology =
     | 'SequencedRoleBucket'
+    | 'RedisStream'
     | 'AzureWebPubSub'
     | 'AWSIoTCore'
     | 'GCPPubSub';
@@ -37,6 +38,15 @@ export interface CacheBroadcastProviderConfig {
      * (e.g., high-churn telemetry/audit tables never cached on the client).
      */
     excludedEntities?: string[];
+    /**
+     * Redis Stream cluster sequencing and catch-up configuration (used when `provider === 'RedisStream'`).
+     */
+    redisStream?: {
+        streamKeySuffix?: string;
+        seqKeySuffix?: string;
+        epochKeySuffix?: string;
+        channelName?: string;
+    };
     /**
      * Azure Web PubSub configuration (used when `provider === 'AzureWebPubSub'`).
      */
@@ -153,7 +163,8 @@ export const DEFAULT_HIGH_CHURN_SYSTEM_ENTITIES: readonly string[] = [
     'MJ: AI Prompt Runs',
     'MJ: AI Agent Runs',
     'MJ: AI Agent Run Steps',
-    'MJ: Query Execution Histories',
+    'MJ: Diagnostic Session Chunks',
+    'MJ: Diagnostic Bundles',
 ];
 
 /**
@@ -241,6 +252,43 @@ export abstract class BaseCacheInvalidationBroadcastProvider {
     }
 
     /**
+     * Monotonic sequence number of the oldest invalidation event currently retained
+     * in the circular ring buffer, or `null` if the buffer is empty.
+     */
+    public get OldestRingBufferSequence(): number | null {
+        if (this._ringCount === 0) {
+            return null;
+        }
+        const entry = this._ringBuffer[this._ringHead];
+        return entry ? entry.Sequence : null;
+    }
+
+    /**
+     * Advances the internal monotonic sequence number if `sequence` is greater than `_currentSequence`.
+     */
+    protected AdvanceCurrentSequence(sequence: number): void {
+        this._currentSequence = Math.max(this._currentSequence, sequence);
+    }
+
+    /**
+     * Optional cluster hook for distributed broadcast providers (such as `RedisStreamBroadcastProvider`)
+     * to assign an atomic cluster sequence and broadcast across replicas before local WebSocket delivery.
+     */
+    public PublishClusterInvalidation?(
+        payload: CacheInvalidationPayload,
+        deliverLocalPubSub: (sequenced: CacheInvalidationPayload) => void
+    ): Promise<void>;
+
+    /**
+     * Optional cluster hook for distributed broadcast providers to catch up missed deltas
+     * across peer replicas from a shared cluster log (such as Redis Stream `XRANGE`).
+     */
+    public GetChangesSinceAsync?(
+        sinceSequence: number,
+        user: UserInfo | undefined
+    ): Promise<CacheInvalidationCatchUpResponse>;
+
+    /**
      * Configures the provider instance with buffer sizing, entity exclusions, and cloud settings.
      */
     public Configure(config?: CacheBroadcastProviderConfig): void {
@@ -325,9 +373,14 @@ export abstract class BaseCacheInvalidationBroadcastProvider {
             this._payloadEntityCache.set(payload, null);
             return null;
         }
-        const entity = entityLookup
-            ? (entityLookup(entityName) ?? null)
-            : (new Metadata().EntityByName(entityName) ?? null); // global-provider-ok: subscription broadcast provider resolves server-wide entity metadata once per event
+        let entity: EntityInfo | null = null;
+        try {
+            entity = entityLookup
+                ? (entityLookup(entityName) ?? null)
+                : (new Metadata().EntityByName(entityName) ?? null); // global-provider-ok: subscription broadcast provider resolves server-wide entity metadata once per event
+        } catch {
+            entity = null;
+        }
         this._payloadEntityCache.set(payload, entity);
         return entity;
     }
@@ -441,6 +494,44 @@ export abstract class BaseCacheInvalidationBroadcastProvider {
     }
 
     /**
+     * Records an invalidation event with an explicit sequence number into the bounded circular
+     * ring buffer, advancing `CurrentSequence` and optionally invoking `OnInvalidationRecorded`.
+     *
+     * Used by `RedisStreamBroadcastProvider` to record cluster-sequenced events arriving from
+     * Redis Streams without duplicating ring-buffer math.
+     */
+    protected RecordSequencedInvalidation(
+        sequence: number,
+        payload: CacheInvalidationPayload,
+        invokeHook = false
+    ): CacheInvalidationPayload {
+        if (!this.ShouldBroadcastEntity(payload.entityName)) {
+            return payload;
+        }
+        if (this._ringBuffer.length === 0) {
+            this.Configure(this._config);
+        }
+
+        payload.sequence = sequence;
+        this._currentSequence = Math.max(this._currentSequence, sequence);
+
+        const writeIndex = (this._ringHead + this._ringCount) % this._maxRingBufferSize;
+        if (this._ringCount < this._maxRingBufferSize) {
+            this._ringBuffer[writeIndex] = { Sequence: sequence, Payload: payload };
+            this._ringCount++;
+        } else {
+            // Buffer full: overwrite oldest at _ringHead and advance head
+            this._ringBuffer[this._ringHead] = { Sequence: sequence, Payload: payload };
+            this._ringHead = (this._ringHead + 1) % this._maxRingBufferSize;
+        }
+
+        if (invokeHook) {
+            void this.OnInvalidationRecorded(payload);
+        }
+        return payload;
+    }
+
+    /**
      * Assigns the next monotonic sequence number to `payload` (if not already stamped on this server),
      * appends it to the bounded circular ring buffer, and invokes `OnInvalidationRecorded` for
      * provider-specific fan-out.
@@ -449,25 +540,51 @@ export abstract class BaseCacheInvalidationBroadcastProvider {
         if (!this.ShouldBroadcastEntity(payload.entityName)) {
             return payload;
         }
-        if (this._ringBuffer.length === 0) {
-            this.Configure(this._config);
+        return this.RecordSequencedInvalidation(++this._currentSequence, payload, true);
+    }
+
+    /**
+     * Builds a permission-filtered, RLS-shaped, entity+PK coalesced catch-up response from an
+     * ordered sequence of invalidation entries. Shared by `GetChangesSince` (in-memory ring buffer)
+     * and `RedisStreamBroadcastProvider.GetChangesSinceAsync` (Redis Stream `XRANGE`).
+     */
+    protected BuildCatchUpResponseFromPayloads(
+        sinceSequence: number,
+        currentSequence: number,
+        entries: ReadonlyArray<{ Sequence: number; Payload: CacheInvalidationPayload }>,
+        user: UserInfo
+    ): CacheInvalidationCatchUpResponse {
+        // Coalesce duplicate entity+PK events within the catch-up window (latest event wins)
+        const coalescedPayloads = new Map<string, CacheInvalidationPayload>();
+        for (const entry of entries) {
+            if (!entry || entry.Sequence <= sinceSequence) {
+                continue;
+            }
+            const payload = entry.Payload;
+            if (!this.EvaluateEntityReadAccess(payload, user)) {
+                continue;
+            }
+            const entity = this.ResolveEntityForPayload(payload);
+            const shaped = this.ShapeEventForSubscriber(payload, user, entity);
+            // If key is withheld (RLS-filtered), coalesce at whole-entity granularity; otherwise entity + PK
+            const dedupKey = shaped.PrimaryKeyValues
+                ? `${shaped.EntityName.toLowerCase()}::pk::${shaped.PrimaryKeyValues}`
+                : `${shaped.EntityName.toLowerCase()}::all`;
+            coalescedPayloads.set(dedupKey, payload);
         }
 
-        const seq = ++this._currentSequence;
-        payload.sequence = seq;
-
-        const writeIndex = (this._ringHead + this._ringCount) % this._maxRingBufferSize;
-        if (this._ringCount < this._maxRingBufferSize) {
-            this._ringBuffer[writeIndex] = { Sequence: seq, Payload: payload };
-            this._ringCount++;
-        } else {
-            // Buffer full: overwrite oldest at _ringHead and advance head
-            this._ringBuffer[this._ringHead] = { Sequence: seq, Payload: payload };
-            this._ringHead = (this._ringHead + 1) % this._maxRingBufferSize;
+        const events: CacheInvalidationNotification[] = [];
+        for (const payload of coalescedPayloads.values()) {
+            const entity = this.ResolveEntityForPayload(payload);
+            events.push(this.ShapeEventForSubscriber(payload, user, entity));
         }
 
-        void this.OnInvalidationRecorded(payload);
-        return payload;
+        return {
+            RequiresFullRefresh: false,
+            CurrentSequence: currentSequence,
+            ServerProcessID: this.ServerProcessID,
+            Events: events,
+        };
     }
 
     /**
@@ -525,39 +642,16 @@ export abstract class BaseCacheInvalidationBroadcastProvider {
             };
         }
 
-        // Coalesce duplicate entity+PK events within the catch-up window (latest event wins)
-        const coalescedPayloads = new Map<string, CacheInvalidationPayload>();
+        const entries: Array<{ Sequence: number; Payload: CacheInvalidationPayload }> = [];
         for (let i = 0; i < this._ringCount; i++) {
             const idx = (this._ringHead + i) % this._maxRingBufferSize;
             const entry = this._ringBuffer[idx];
-            if (!entry || entry.Sequence <= sinceSequence) {
-                continue;
+            if (entry && entry.Sequence > sinceSequence) {
+                entries.push(entry);
             }
-            const payload = entry.Payload;
-            if (!this.EvaluateEntityReadAccess(payload, user)) {
-                continue;
-            }
-            const entity = this.ResolveEntityForPayload(payload);
-            const shaped = this.ShapeEventForSubscriber(payload, user, entity);
-            // If key is withheld (RLS-filtered), coalesce at whole-entity granularity; otherwise entity + PK
-            const dedupKey = shaped.PrimaryKeyValues
-                ? `${shaped.EntityName.toLowerCase()}::pk::${shaped.PrimaryKeyValues}`
-                : `${shaped.EntityName.toLowerCase()}::all`;
-            coalescedPayloads.set(dedupKey, payload);
         }
 
-        const events: CacheInvalidationNotification[] = [];
-        for (const payload of coalescedPayloads.values()) {
-            const entity = this.ResolveEntityForPayload(payload);
-            events.push(this.ShapeEventForSubscriber(payload, user, entity));
-        }
-
-        return {
-            RequiresFullRefresh: false,
-            CurrentSequence: this._currentSequence,
-            ServerProcessID: this.ServerProcessID,
-            Events: events,
-        };
+        return this.BuildCatchUpResponseFromPayloads(sinceSequence, this._currentSequence, entries, user);
     }
 
     /**

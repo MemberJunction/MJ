@@ -8,8 +8,10 @@
  */
 import { createHash } from 'crypto';
 import type { ChatMessage, ChatParams, ChatResult } from '@memberjunction/ai';
+import { SharedWeakMap } from './sharedWeakMap';
 
-const sentPrefixFingerprints = new WeakMap<ChatResult, string>();
+/** Shared by every copy of this package ({@link SharedWeakMap}): the agent that reads it may load another copy. */
+const sentPrefixFingerprints = SharedWeakMap<ChatResult, string>('ai-prompts:sentPrefixFingerprint');
 
 /** A fingerprint of a request's system prompt and tool declarations. */
 export function ReplayedReasoningPrefixFingerprint(chatParams: ChatParams): string {

@@ -127,10 +127,12 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | `Chat` | Send a message back to the user |
 | `Actions` | Execute one or more server-side actions |
 | `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
-| `SubAgents` | Delegate to sub-agents |
+| `SubAgents` / `Sub-Agent` | Delegate to child, related, or runtime-granted sub-agents and receive their result in-run |
+| `Handoff` | Transfer a top-level interactive conversation to a directly discoverable peer agent (hosts that pass `handoffChain` only) |
+| `Tasks` | Submit a durable `TaskGraphSpec` to the task-graph dispatcher and detach |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
-| `End` | Complete execution |
+| `End` / `Success` / `Failed` | Complete execution |
 | `ForEach` | Iterate over a collection |
 | `While` | Loop while a condition is true |
 
@@ -148,10 +150,34 @@ An agent can ask a fast decision model typed questions in six places on its own.
 | `finishIf` gates on an Actions or Sub-Agent step | `finishIfMode: 'shadow'` or `'on'` |
 | Decision discovery (suggest an agent before the first prompt) | `decisionDiscovery: true` |
 | Payload change check | `payloadFeedbackCheck: true` |
-| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` > 0 |
+| Catalog narrowing | `maxActionsInPrompt` / `maxSubAgentsInPrompt` / `maxSkillsInPrompt` > 0 |
 | Memory Manager note gate | run `data.enableDecisionGate: true` |
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
+
+##### Skill Catalog Narrowing & Hybrid Prioritization (`maxSkillsInPrompt`)
+
+When an agent has access to a large library of skills (`AcceptsSkills = 'All'`), `LoopAgentPromptParams` supports capping the skills injected into the system prompt via `maxSkillsInPrompt` (default `25` when `decisionsEnabled: true` or when explicitly set) and `maxSkillDecisionCandidates` (default `60`).
+
+In [`catalog-narrowing.ts`](./src/catalog-narrowing.ts), [`BaseAgent.narrowCatalogsIfConfigured`](./src/base-agent.ts) runs a **two-stage narrowing pipeline**:
+1. **Stage 1 (`PreFilterSkillCandidatesForDecision` + `RankSkillsByHybridRelevance`)**: Ranks all available skills in-memory (`0ms`) using a weighted hybrid score combining lexical/semantic query fit across skill name, description, category, and bundled action names (`0.55`), log-normalized agent-specific + global usage frequency from recent `MJ: AI Agent Run Steps` (`0.25`), and exponential recency decay with a 7-day half-life (`0.20`), slicing the top `maxSkillDecisionCandidates` (60).
+2. **Stage 2 (`NarrowSkillsWithDecision`)**: When `decisionsEnabled: true`, passes the Stage 1 shortlist to `AgentDecisionService` (`selectRelevantCatalogItems`) to pick up to `maxSkillsInPrompt`. When `decisionsEnabled: false` (or if the decision call fails), deterministically slices the top `maxSkillsInPrompt` from Stage 1.
+3. **Pinned Skills & Discovery Guidance**: Any skill already activated in the run (`_activatedSkillIDs`) or requested via `requestedSkillIDs` is pinned (`pinnedSkillIDs`) so it is never dropped. When skills are narrowed and the agent holds `Find Candidate Skills`, `BuildCatalogNarrowingNote` appends guidance instructing the model to use `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
+
+##### Untrusted external data
+
+Some actions return content that nobody inside MJ wrote: web pages, search results, mail, feeds, arbitrary HTTP responses, MCP tool output. The loop agent wraps such a result in an `<untrusted_external_data source="…" trust="…" warning="…">` envelope (any closing tag inside the content is escaped first), drops the action's `AIDirectives`, and marks the run **tainted**. A tainted run's `memory_write` notes land with `Status = 'Pending'` and the sources named in `Comments`, so an instruction smuggled in a web page cannot become an active memory. A parent run absorbs its sub-agents' sources when the sub-agent step completes. `ExecuteAgentResult.taintedSources` carries them to the caller.
+
+How a result's trust level is decided, first match wins:
+
+| Precedence | Source |
+|---|---|
+| 1 | `actionTrustLevels: { "<action>": "Trusted" \| "SemiTrusted" \| "Untrusted" }` in the agent's `AgentTypePromptParams` or the run's `data.__agentTypePromptParams` |
+| 2 | `trustedActionNames` / `untrustedActionNames` lists in the same prompt params |
+| 3 | `Action.Config_Object?.outputTrustLevel` on the `MJ: Actions` metadata record (`IActionConfiguration` JSONType on `Action.Config`) |
+| 4 | `Trusted` |
+
+Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
 
 ##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
 
@@ -169,6 +195,20 @@ When a Loop agent (such as `Sage`) emits `nextStep.type: 'Tasks'`, `LoopAgentTyp
 
 - **Single-node task graphs (1 task of kind `'Agent'` or `'Action'`)**: Automatically fold inline into a standard in-process `'Sub-Agents'` or `'Actions'` step — even when `taskGraph.continuation === 'reinvoke'` is specified (`terminateAfter: false` so the parent Loop agent gets another turn to synthesize the specialist's output). This avoids durable task-graph dispatch overhead for 1-step specialist delegations (e.g., `Query Builder`, `Visualization Agent`) and keeps live sub-agent streaming in the active chat turn.
 - **Multi-node task graphs (2+ tasks with `dependsOn` / `payloadMapping` or non-trivial scheduling)**: Dispatch as durable `MJ: Tasks` rows through [`@memberjunction/task-graph`](../../TaskGraph/README.md), broadcasting real-time step transitions via `TaskGraphFrameBroadcaster` and delivering synthesized continuation replies and artifacts back to the conversation via `TaskGraphContinuationDeliverer`.
+
+##### Execution Primitive Hierarchy & Native Tool-Calling JSON Envelope Bridge
+
+Loop agents choose from four structured execution primitives depending on dataflow, iteration, and durability needs:
+
+| Primitive | When to Use | Execution & Persistence |
+|---|---|---|
+| `Actions` / Native tool calls | 1–3 independent calls whose raw results the LLM needs in context | In-turn `Actions` / `Sub-Agents` run steps |
+| `Pipeline` (`nextStep.type = 'Pipeline'`) | Linear server-side tool chains (`tool`, `jsonpath`, `select`, `grep`, `slice`, `head`, `tail`, `count`, `unique`, `sort`, `parse_json`) where intermediate outputs stay out of context | Single `Tool` (`Pipeline: N step(s)`) run step; `StructureActionResult` automatically coerces structured JSON `ActionResult.Message` payloads when an action declares no `Output` params |
+| `ForEach` / `While` (`nextStep.type = 'ForEach' \| 'While'`) | In-turn batch iteration or bounded convergence, either with a single `action` / `subAgent` body or an ordered multi-step `steps?: LoopBodyActionStep[]` sequence chaining outputs via `{{steps.<id>.<field>}}` | Single `ForEach` / `While` run step plus linked child `Actions` / `Sub-Agents` steps |
+| `Tasks` (`nextStep.type = 'Tasks'`) | Durable DAGs (`Agent`, `Action`, `Human`, `Prompt`, `ForEach` including `steps[]`, `While`, `Decision`), conditional/XOR `exclusiveGroup` forks, or long-running sleep/wake (`continuation: 'reinvoke'`) | Persisted `StepType = 'TaskGraph'` run step; submitting `AIAgentRun` parks in `Paused` until `TaskGraphDispatcher` settles the graph to `Completed` |
+
+- **Native tool-calling JSON envelope bridge**: When a model runs in `Native` (hybrid) or `NativeImplicit` tool-calling mode (`ResolveNativeToolCalling`), it uses native tool calls for ordinary `Actions` / `Sub-Agent` / `ClientTools` turns, and bridges cleanly to `Pipeline`, `ForEach`, `While`, or `Tasks` by emitting **no native tool call on that turn** and replying with a `LoopAgentResponse` JSON envelope (`{ "taskComplete": false, "nextStep": { "type": "..." } }`).
+- **Sanitized tool-name normalization**: `PipelineToolRegistry`, `BaseAgent` (`Actions`, `Sub-Agent`, `ForEach`/`While`, and `validateTasksNextStep`), and `TaskGraphService` / `TaskGraphDispatcher` normalize sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_query_builder` → `"Query Builder"`) via `SanitizeToolName` so JSON envelopes work seamlessly whether the model writes canonical MJ names or native tool identifiers.
 
 #### FlowAgentType
 
@@ -302,6 +342,17 @@ Optimizes agent startup by batch-loading all required metadata in parallel:
 - Sub-agent data
 - Prompt configurations
 
+### AgentRunWatchdog
+
+Process-wide guard that keeps an `AIAgentRun` from being left `Running` forever when its process dies or its final save fails. `BaseAgent` calls `Track()` once the run row exists and `Untrack()` as soon as the run leaves `Running` (Completed, Failed, Cancelled, AwaitingFeedback or Paused) — first thing in `Execute()`'s teardown, before any subclass `finalizeRun` hook.
+
+- **Heartbeat** — every `heartbeatIntervalMs` (30s) it stamps `LastHeartbeatAt` on this process's in-flight runs.
+- **Sweep** — every `sweepIntervalMs` (5 min) it force-fails `Running` runs whose heartbeat went stale (`staleThresholdMinutes`, 5) and drops finished runs from its tracked set. Once the process has tracked a run, the sweep keeps running even with nothing tracked, so it also closes runs that other, crashed instances left `Running`. The host also runs `SweepOrphanedRuns` once at startup.
+- **Stop relay** — every 3s it checks whether one of its runs was marked `Cancelled` (the Stop button) and aborts that run.
+- **Idle** — the heartbeat and the stop relay run only while at least one run is tracked: the last run leaving stops them, and the next `Track()` starts them again. With `sweepIntervalMs: 0` the sweep never starts either, so an idle process issues no periodic database statements; see the [Serverless Database Auto-Pause Guide](../../../guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md) for the trade-off.
+
+Tune it with `AgentRunWatchdog.Instance.Configure({ ... })`; MJServer passes its `agentRunWatchdog` settings through at startup. `sweepIntervalMs: 0` turns the periodic sweep off (the startup sweep still runs, and the tracked-set prune moves to the heartbeat). Other values must be greater than 0; an invalid value throws.
+
 > 📖 **Memory is a big topic.** For the complete architecture — the three-tier model, injection and scoping, the in-flight write pipeline, and the Memory Manager's hardening/consolidation/decay phases — see the **[Agent Memory Guide](../../../guides/AGENT_MEMORY_GUIDE.md)**. The sections below are component-level summaries.
 
 ### MemoryWriteManager (In-Flight Memory Writes)
@@ -356,6 +407,16 @@ Run-level payload fields added: `scoreDistribution`, `entityTriplesExtracted`, `
 Memory Cleanup Agent has been deprecated — its responsibilities are folded into MemoryManagerAgent's pipeline.
 
 For the full design (functional requirements, threshold rationale, decay curve, contradiction taxonomy), see [`specs/001-memory-consolidation/spec.md`](../../../specs/001-memory-consolidation/spec.md) and the implementation in [`src/memory-manager-agent.ts`](./src/memory-manager-agent.ts).
+
+### DuplicateReasoningAgentProvider
+
+The `'Agent'` reasoning mode for duplicate detection. It registers under the `'Agent'` key against
+`DuplicateReasoningProvider` (from `@memberjunction/ai-vector-dupe`) and runs the **Duplicate
+Resolution Agent** — or the entity document's `ReasoningAgentID` — over one matched set, returning the
+same per-candidate verdict, proposed survivor and field choices as the single-shot `'Prompt'` mode.
+The match rows record the run in `AIAgentRunID`. It lives here, not in the dupe package, because this
+package depends on that one. See the
+[Duplicate Management Guide](../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md#6-the-llm-reasoning-layer).
 
 ## Usage
 
@@ -621,6 +682,49 @@ const result = await runner.RunAgent({
     maxTreeDurationMs: 120_000
 });
 ```
+
+## Event-Driven Agent Wakes (`AgentWakeTriggerService`)
+
+Self-scheduling agents such as the Chief of Staff normally wake on a cron or adaptive `MJ: User Routines` schedule guarded by the 3-tier wake gate (see [Built-In Agents Guide](../../../guides/BUILT_IN_AGENTS_GUIDE.md)). `AgentWakeTriggerService` (a `BaseSingleton`, exported from this package) adds the event-driven complement: when something happens that an agent should react to now, it writes a one-shot `AgentWake` routine for the right user so the agent runs on the dispatcher's next sweep instead of waiting for its next scheduled slot.
+
+**Delivery is a routine row, not a direct agent invocation.** Every trigger ends in `upsertImmediateWakeRoutine`, which finds (by `UserID` + `TargetID` + `WakeConfigurationObject.workstreamKey`) or creates an `MJ: User Routines` row with `RoutineType = 'AgentWake'`, `TargetType = 'Agent'`, `ScheduleMode = 'OneShot'`, `Status = 'Active'`, `NextRunAt = now`, and stores `{ workstreamKey, wakeReason, resumeState }` in `WakeConfigurationObject` (also mirrored into `StartingPayload` and `InitialMessage`). `resumeState` carries the latest event at its top level **and** every event since the last dispatcher claim in `resumeState.pendingEvents`: while the routine is still waiting (`Status = 'Active'` with a `NextRunAt`), a new event is appended rather than replacing the previous one, so two approvals clicked within one sweep both reach the agent; once the dispatcher has claimed the routine the list starts over. The same request in the same status is queued once. With more than one pending event, `wakeReason` / `InitialMessage` enumerate them. `UserRoutineDispatcherDriver` sweeps due routines once a minute, so "immediate" means **on the next sweep, within about a minute**. The dispatcher hands the agent `payload._wakeContext.resumeState` and runs it with `compactAfterRun: true`. A freshly created event routine carries no tier configuration, so `WakeGateEvaluator` fails open; an existing routine for the same workstream keeps whatever gate it already had.
+
+| Trigger | Fired by | Whose agent wakes | `workstreamKey` | `resumeState.triggerType` |
+|---|---|---|---|---|
+| `TriggerWakeOnAgentRequestResolution` | `MJAIAgentRequestEntityServer.Save()` when an action-created `MJ: AI Agent Requests` row (`OriginatingAgentRunID` and `OriginatingTaskID` both null) moves from `Requested` to `Approved`, `Rejected` or `Responded` | The request owner (`RequestForUserID`) and `AgentID` | `approval-resolution` | `AgentRequestResolution` — `requestID`, `status`, `request`, `response`, parsed `responseData` and `commentsData`, `respondedByUserID`, `respondedAt` |
+| Same method, inter-agent envelope | The resolved request's `Comments` is a `Send Inter-Agent Request` envelope (`interAgentCoordination: true`) | The **sender** user (`envelope.senderUserID`) and `senderAgentID` | envelope `workstreamKey`, else `inter-agent-resolution` | `InterAgentRequestResolved` — `requestID`, `status`, `subject`, `response`, `responseData`, `respondedByUserID`, `respondedAt`, `targetUserID`, `targetUserName` |
+| `TriggerWakeOnIncomingInterAgentRequest` | `MJAIAgentRequestEntityServer.Save()` on a **new** `Requested` row whose `Comments` is an inter-agent envelope (`interAgentCoordination: true`) | The **target** user (`envelope.targetUserID`) and the request's `AgentID` | envelope `workstreamKey`, else `inter-agent-inbox` | `InterAgentRequestReceived` — `requestID`, `senderUserID`, `senderUserName`, `senderAgentID`, `subject`, `messageBody` |
+| `TriggerWakeForWorkstream` | Generic programmatic entry point (`Trigger Agent Wake` action, `TaskType` `OnCreate` / `OnStatusChange` hooks, GitHub webhook handlers, Software Factory pipeline gates) passing `TriggerWorkstreamWakeInput` | Explicit `targetUserID` + `targetAgentID` (or `targetAgentName`) | Required `workstreamKey` (e.g., `task:<TaskID>`) | `ExternalWorkstreamEvent` (or caller's `resumeState.triggerType`) — `workstreamKey`, `wakeReason`, `triggeredAt`, and caller `resumeState` |
+| `RouteInboundUtilityMailboxWake` | An inbound-email ingestion path (none wired yet) passing an `InboundUtilityMailboxEmailInput` | The verified internal sender (`fromAddress` matches an active `MJ: Users` row) and the `AgentID` of the matching `MJ: AI Bridge Agent Identities` row (`IdentityType = 'Email'`, `IsActive`) | input `workstreamKey`, else identity `Configuration.defaultWorkstreamKey`, else `inbound-utility-mailbox` | `InboundUtilityMailboxEmail` — `identityID`, `utilityMailboxAddress`, `senderUserID`, `senderEmail`, `messageID`, `subject`, `bodyPreview`, `receivedAt` |
+
+Every `resumeState` also repeats the `workstreamKey`. Requests that carry `OriginatingAgentRunID` (a paused run) or `OriginatingTaskID` (a task graph) are skipped — those resume through the existing `lastRunId` path and the task dispatcher, not through a wake.
+
+**Policy checks.** `AgentUserPolicyEngine.GetPolicyForAgentAndUser` is consulted for the target user. A `Disabled` or `Paused` `MJ: AI Agent User Policies` row blocks every trigger; the incoming inter-agent trigger additionally requires an `Active` policy with `AllowInterAgentCoordination` not `false`; the mailbox trigger also refuses `EmailChannelMode = 'Disabled'`, enforces the identity's optional `Configuration.allowedUserID` / `allowedEmailDomains`, and rejects any sender that is not an active internal user.
+
+**Result.** Each method returns an `AgentWakeTriggerResult` — `{ triggered, resultCode, reason, routineID, targetUserID, targetAgentID, workstreamKey, nextRunAtISO }` — and never throws for business outcomes. `resultCode` is one of `WAKE_SCHEDULED`, `SKIPPED_NOT_APPLICABLE`, `POLICY_DENIED`, `IDENTITY_NOT_FOUND`, `UNVERIFIED_EXTERNAL_SENDER`, `SENDER_NOT_AUTHORIZED_FOR_IDENTITY`, `SAVE_FAILED`.
+
+```typescript
+import { LogStatus } from '@memberjunction/core';
+import { AgentWakeTriggerService } from '@memberjunction/ai-agents';
+
+// Inside a server-side entity subclass or resolver, after the request has saved:
+const result = await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(
+    request,                // MJAIAgentRequestEntity, Status already Approved/Rejected/Responded
+    contextUser,            // UserInfo the save ran under
+    this.ProviderToUse      // IMetadataProvider; defaults to Metadata.Provider when omitted
+);
+if (!result.triggered) {
+    LogStatus(`No wake scheduled (${result.resultCode}): ${result.reason}`);
+}
+```
+
+**Current limitations**
+
+- Routines are private to their owner (`MJUserRoutineEntityServer.validateOwnership`, plus row-level security on the lookup). A wake for the caller's own agent is saved in the caller's scope; a wake for another user (inter-agent arrival, or a resolution that wakes the sender) is saved as the scheduler's **system user** from `UserCache`, which the ownership gate exempts. If no system user is cached (unit tests, unusual hosts) the service falls back to the caller and logs that the save may be rejected.
+- The service's `InterAgentCoordinationEnvelopeShape` accepts both the `InterAgentCoordinationEnvelope` field names the action writes (`protocolVersion`, `message`) and the older `envelopeVersion` / `messageBody` names. The two shapes are still declared separately because `@memberjunction/core-actions` depends on this package, not the reverse.
+- Wakes are keyed by `UserID` + `TargetID` + `workstreamKey`; events for the same workstream that land between sweeps are queued in `resumeState.pendingEvents` (see above). The queue is at-least-once: an event that lands between the dispatcher's claim save and the service's save can be delivered twice, so the agent should treat `requestID` as idempotent and re-check the request's current status.
+- `RouteInboundUtilityMailboxWake` has no production caller. Wiring it needs an inbound-email ingestion path (mailbox poller or provider webhook) that does not exist yet, and `resolveVerifiedInternalSender` should then resolve the sender through `UserCache` rather than building a role-less `UserInfo`. Deferred to a follow-up by decision.
+- The wake is a `OneShot` `MJ: User Routines` row picked up by the dispatcher, not a direct `AgentRunner` call, so delivery latency is bounded by the sweep interval and the dispatcher's concurrency limit.
 
 ## Documentation
 

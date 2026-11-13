@@ -19,7 +19,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatMessageRole, createBase64DataUrl } from '@memberjunction/ai';
-import type { ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
+import type { AIAPIKeyResolver, AICredentialScope, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -113,6 +113,9 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private promptRunner: AIPromptRunner;
     private contextUser: UserInfo | undefined;
     private agentRunId: string | undefined;
+    /** The calling run's key resolver and credential scope, stashed per Run()/Replay() for every prompt it executes. */
+    private apiKeyResolver: AIAPIKeyResolver | undefined;
+    private credentialScope: AICredentialScope | undefined;
     private lastPromptRunId: string | undefined;
     private lastJudgePromptRunId: string | undefined;
     private _provider: IMetadataProvider | null = null;
@@ -169,6 +172,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     public override async Replay(trace: ComputerUseTrace, params: MJRunComputerUseParams): Promise<ComputerUseResult> {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
+        this.CaptureRunCredentials(params);
         // Resolve the heal-disambiguation prompt (non-throwing; absent ⇒ deterministic-only heal).
         if (!this.healPromptEntity) {
             this.healPromptEntity = await this.resolveDefaultPromptByName(DEFAULT_HEAL_PROMPT_NAME);
@@ -196,6 +200,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     public override async Run(params: MJRunComputerUseParams): Promise<ComputerUseResult> {
         this.contextUser = params.ContextUser;
         this.agentRunId = params.AgentRunId;
+        this.CaptureRunCredentials(params);
         this.controllerGeneration = params.ControllerGeneration;   // per-test determinism knobs
         this.lastPromptRunId = undefined;
         this.lastJudgePromptRunId = undefined;
@@ -628,6 +633,32 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     // ═══════════════════════════════════════════════════════════
 
     /**
+     * Stashes the calling run's key resolver and credential scope for the prompts this run executes.
+     * Called at the start of {@link Run} and {@link Replay}, so one engine instance reused across runs
+     * never carries one run's keys into the next.
+     */
+    protected CaptureRunCredentials(params: MJRunComputerUseParams): void {
+        this.apiKeyResolver = params.APIKeyResolver;
+        this.credentialScope = params.CredentialScope;
+    }
+
+    /**
+     * The base `AIPromptParams` for one controller, judge or heal prompt: the prompt, its template
+     * data, the run's user, and the run's credentials — `APIKeyResolver` and `CredentialScope` from
+     * {@link CaptureRunCredentials} — so the prompt spends the agent run's keys, not the server's (#4807).
+     */
+    protected BuildPromptParams(promptEntity: MJAIPromptEntityExtended, templateData: Record<string, unknown>): AIPromptParams {
+        const params = new AIPromptParams();
+        params.prompt = promptEntity;
+        params.data = templateData;
+        params.contextUser = this.contextUser;
+        params.attemptJSONRepair = true;
+        params.APIKeyResolver = this.apiKeyResolver;
+        params.CredentialScope = this.credentialScope;
+        return params;
+    }
+
+    /**
      * Execute a prompt via AIPromptRunner with standard MJ integration.
      * Shared by both controller and judge prompt execution paths.
      *
@@ -654,11 +685,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
         // Build image conversation messages for the vision model
         const conversationMessages = this.buildScreenshotMessages(currentScreenshot, screenshotHistory);
 
-        const params = new AIPromptParams();
-        params.prompt = promptEntity;
-        params.data = templateData;
-        params.contextUser = this.contextUser;
-        params.attemptJSONRepair = true;
+        const params = this.BuildPromptParams(promptEntity, templateData);
         // Cancellation: let engine.Stop() abort an in-flight LLM call so a
         // cancelled run releases its worker slot in seconds instead of at step end.
         if (signal) {
@@ -785,6 +812,11 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     ): Promise<DomainAuthBinding> {
         const credential = binding.Credential!;
         const credTypeName = credential.CredentialType;
+        if (credTypeName == null) {
+            throw new Error(
+                `Credential "${credential.Name}" has no credential type (its CredentialTypeID does not resolve to a credential type record).`
+            );
+        }
         const values = this.parseCredentialValues(credential);
         const method = this.mapCredentialToAuthMethod(credTypeName, values);
 

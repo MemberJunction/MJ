@@ -7,7 +7,7 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJEntityFieldPermissionEntity } from '@memberjunction/core-entities';
-import { ComputeFieldPermissionDelta, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
+import { ComputeFieldPermissionDelta, ExistingFieldPermissionRow, IsEmptyFieldPermissionDelta } from './fieldPermissionDelta';
 
 /** What a reconciliation run actually wrote. */
 export type FieldPermissionReconcileResult = {
@@ -32,16 +32,19 @@ const NOTHING_DONE: FieldPermissionReconcileResult = { Inserted: 0, Deleted: 0 }
  * @param entity the entity to reconcile — its `Fields` and `Permissions` are the desired state
  * @param provider the provider to transact on and to build entity objects from
  * @param contextUser the user the writes are attributed to
+ * @param existingRows the entity's field-permission rows as read from the database; when omitted,
+ *   the rows metadata holds are used (see {@link ComputeFieldPermissionDelta})
  */
 export async function ReconcileFieldPermissions(
     entity: EntityInfo,
     provider: IMetadataProvider,
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    existingRows?: ExistingFieldPermissionRow[]
 ): Promise<FieldPermissionReconcileResult> {
     if (!entity || !provider) {
         return NOTHING_DONE;
     }
-    const delta = ComputeFieldPermissionDelta(entity);
+    const delta = ComputeFieldPermissionDelta(entity, existingRows);
     if (IsEmptyFieldPermissionDelta(delta)) {
         return NOTHING_DONE;
     }
@@ -62,6 +65,15 @@ export async function ReconcileFieldPermissions(
  * Deletes happen BEFORE inserts. A row can be an orphan for one (field, role) while the same
  * pair needs a fresh row at snapshot defaults — doing it the other way round would collide on
  * the (EntityFieldID, RoleID) uniqueness constraint.
+ *
+ * **A refused delete is logged and skipped, not fatal.** The system-user guard on
+ * `MJEntityFieldPermissionEntityServer.Delete` legitimately refuses to remove a row holding that
+ * account's last `Allow` on a field, and reconciliation can ask for exactly that delete — a role's
+ * entity permission is revoked while its row carried the only `Allow`. Throwing there rolled back
+ * the inserts too, so a newly-permitted role got no rows, and every re-run failed identically.
+ * The halves are independent: a surviving orphan grants more than the delta wanted, never less,
+ * and it cannot collide with an insert, because inserts only target (field, role) pairs that
+ * have no row at all.
  */
 async function deleteRows(ids: string[], provider: IMetadataProvider, contextUser: UserInfo): Promise<number> {
     let deleted = 0;
@@ -74,9 +86,10 @@ async function deleteRows(ids: string[], provider: IMetadataProvider, contextUse
         if (await row.Delete()) {
             deleted++;
         } else {
-            throw new Error(
-                `Field-permission reconciliation could not remove row '${id}': ` +
-                `${row.LatestResult?.CompleteMessage ?? 'no error reported'}`
+            LogError(
+                `[FieldSecurity] Field-permission reconciliation could not remove row '${id}' ` +
+                `(field ${row.EntityFieldID}, role ${row.RoleID}): ` +
+                `${row.LatestResult?.CompleteMessage ?? 'no error reported'}. Leaving it in place and continuing.`
             );
         }
     }

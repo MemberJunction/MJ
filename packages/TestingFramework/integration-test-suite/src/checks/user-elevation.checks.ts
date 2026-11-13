@@ -18,6 +18,9 @@
  *        escalation itself.
  *   UE3: as an Owner principal, the same row validates — clean AND with `Type` flipped in memory.
  *        The admin path must not have been closed.
+ *   UE5: `User.Email` carries a unique constraint or index. The guard leaves `Email` mutable on the
+ *        strength of that constraint (an Email edit cannot impersonate another user's identity), so
+ *        dropping it would silently reopen that path; this pins it on both platforms.
  *   UE4: the end-to-end leg. If a non-Owner principal that actually holds `CanUpdate` on
  *        'MJ: Users' exists, a real `Save()` of a `Type` change is attempted and must NOT succeed.
  *
@@ -64,7 +67,7 @@ import type {
 import { MJGlobal } from '@memberjunction/global';
 import type { MJUserEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -202,12 +205,11 @@ export const UserElevationChecks: NamedCheck[] = [
             const usersEntity = requireUsersEntity(ctx, 'UE2');
             const caller = findNonOwnerWithGrant(usersEntity, (p) => p.CanRead);
             if (!caller) {
-                console.warn(
-                    `  ⚠ user-elevation.UE2 SKIPPED — no ACTIVE non-Owner principal can READ '${USERS_ENTITY}' on ` +
+                SkipCheck(
+                    `no ACTIVE non-Owner principal can READ '${USERS_ENTITY}' on ` +
                     `this database (an all-Owner database, or one where no non-Owner role holds the grant), so the ` +
                     `caller's own row cannot even be loaded. Unexercised, not violated.`
                 );
-                return;
             }
 
             const row = await loadOwnRow(ctx, caller, 'UE2');
@@ -238,8 +240,7 @@ export const UserElevationChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             const owner = findOwner();
             if (!owner) {
-                console.warn('  ⚠ user-elevation.UE3 SKIPPED — no ACTIVE Owner user in the cache.');
-                return;
+                SkipCheck('no ACTIVE Owner user in the user cache.');
             }
 
             const row = await loadOwnRow(ctx, owner, 'UE3');
@@ -289,12 +290,11 @@ export const UserElevationChecks: NamedCheck[] = [
             const usersEntity = requireUsersEntity(ctx, 'UE4');
             const caller = findNonOwnerWithGrant(usersEntity, (p) => p.CanUpdate);
             if (!caller) {
-                console.warn(
-                    `  ⚠ user-elevation.UE4 SKIPPED — no ACTIVE non-Owner principal holds CanUpdate on ` +
+                SkipCheck(
+                    `no ACTIVE non-Owner principal holds CanUpdate on ` +
                     `'${USERS_ENTITY}' on this database, so the end-to-end Save() path cannot be reached ` +
                     `(CheckPermissions would refuse before Validate() runs). UE2 still proves the guard's refusal.`
                 );
-                return;
             }
 
             // UE4 is the one check that issues a real write, and the danger is inverted from the
@@ -307,12 +307,11 @@ export const UserElevationChecks: NamedCheck[] = [
             // UE4 skips rather than running unprotected.
             const provider = asDataProvider(ctx.Provider);
             if (provider.SupportsEntityTransactions !== true || !provider.BeginEntityTransaction) {
-                console.warn(
-                    '  ⚠ user-elevation.UE4 SKIPPED — this provider cannot open a transaction, and UE4 refuses to ' +
+                SkipCheck(
+                    'this provider cannot open a transaction, and UE4 refuses to ' +
                     'attempt a real Type change without a guaranteed rollback (a regressed guard would leave a real ' +
                     'account promoted to Owner). Run this bundle on the server transport.'
                 );
-                return;
             }
 
             const row = await loadOwnRow(ctx, caller, 'UE4');
@@ -373,7 +372,13 @@ export const UserElevationChecks: NamedCheck[] = [
             );
             console.log(`      → real Save() refused for ${caller.Email}; rollback verified, row unchanged`);
         }
-    }
+    },
+    {
+        Id: 'user-elevation.UE5',
+        Name: 'UE5: User.Email carries a unique constraint (the guard leaves Email mutable because of it)',
+        RequiresMutation: false,
+        Fn: checkEmailIsUnique,
+    },
 ];
 
 /**
@@ -400,6 +405,48 @@ async function restoreType(
             `${row.LatestResult?.CompleteMessage ?? 'no error detail'}`
         );
     }
+}
+
+/** The slice of a database provider UE5 needs to read the PostgreSQL catalog. */
+interface CatalogQueryProvider {
+    PlatformKey?: string;
+    ExecuteSQL?<T>(query: string): Promise<T[]>;
+}
+
+/**
+ * UE5 — `User.Email` is unique in the database. SQL Server: a unique index (a UNIQUE constraint is
+ * backed by one) whose only key column is `Email`. PostgreSQL: a unique index whose definition
+ * names only `Email`.
+ */
+async function checkEmailIsUnique(ctx: IntegrationCheckContext): Promise<void> {
+    if (ctx.Pool) {
+        const result = await ctx.Pool.request().query<{ name: string }>(`
+            SELECT i.name
+              FROM sys.indexes i
+              JOIN sys.tables t ON t.object_id = i.object_id
+              JOIN sys.schemas s ON s.schema_id = t.schema_id
+             WHERE s.name = '${ctx.Schema}' AND t.name = 'User' AND i.is_unique = 1
+               AND (SELECT COUNT(*) FROM sys.index_columns ic
+                     WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0) = 1
+               AND EXISTS (SELECT 1 FROM sys.index_columns ic
+                             JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                            WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND c.name = 'Email')
+        `);
+        Assert(result.recordset.length > 0, `UE5: no unique constraint or index on ${ctx.Schema}.User(Email)`);
+        console.log(`      → User.Email is unique (${result.recordset.map(r => r.name).join(', ')})`);
+        return;
+    }
+    const provider = ctx.Provider as unknown as CatalogQueryProvider;
+    if (provider?.PlatformKey !== 'postgresql' || typeof provider.ExecuteSQL !== 'function') {
+        SkipCheck('UE5: no catalog access on this run path (needs an mssql pool or a PostgreSQL provider with ExecuteSQL)');
+    }
+    const rows = await provider.ExecuteSQL!<{ indexname: string; indexdef: string }>(`
+        SELECT indexname, indexdef FROM pg_indexes
+         WHERE schemaname = '${ctx.Schema}' AND tablename = 'User'
+    `);
+    const unique = rows.filter(r => /UNIQUE INDEX/i.test(r.indexdef) && /\(\s*"?Email"?\s*\)/i.test(r.indexdef));
+    Assert(unique.length > 0, `UE5: no unique index on ${ctx.Schema}."User"("Email")`);
+    console.log(`      → User.Email is unique (${unique.map(r => r.indexname).join(', ')})`);
 }
 
 for (const check of UserElevationChecks) {

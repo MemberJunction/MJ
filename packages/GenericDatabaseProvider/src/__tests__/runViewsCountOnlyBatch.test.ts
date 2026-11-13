@@ -58,6 +58,7 @@ function fakeProvider(executeSQL: (sql: string) => Promise<Record<string, unknow
             return { Success: true, Results: [], RowCount: rows[0].TotalRowCount, TotalRowCount: rows[0].TotalRowCount } as unknown as RunViewResult;
         }),
         RunCoalescedCountBatch: proto.RunCoalescedCountBatch,
+        runBatchedView: proto.runBatchedView,
         isConnectionError: (e: unknown) => (e as { code?: string }).code === 'POOL_CLOSED',
     };
     const internalRunViews = (params: RunViewParams[]) => (proto.InternalRunViews as Function).call(self, params) as Promise<RunViewResult[]>;

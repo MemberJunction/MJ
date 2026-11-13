@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentConfigurationEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity, MJAIPromptRunEntity, ConversationEngine, type ConversationBranchRow } from '@memberjunction/core-entities';
 import { BuildActionToolSet, CoerceActionArguments, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { DescribeValueSchemaInline, GetStoredValueSchema } from './native-tools/action-param-schema';
 import { ApplyBoundActionParams, BindingsForAction, BoundParamsApplication, IsBoundParamName, UnboundParams } from './bound-action-params';
@@ -19,23 +19,27 @@ import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type Nat
 import { TurnToolCallingMode } from './native-tools/turn-mode';
 import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-breaker';
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase, ToPlainJSON, ServerOperationScopeManager } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPrefixFingerprint } from '@memberjunction/ai-prompts';
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { LoopAgentType } from './agent-types/loop-agent-type';
+import { CreateAgentInstance } from './agent-instance';
+import { FailingStepError, IsPromptTurnStep, MAX_REPEATED_FAILING_STEP, RepeatedFailingStepTracker } from './repeated-failing-step';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID, IndexByUUID } from '@memberjunction/global';
+import { CopyScalarsAndArrays, GroupByUUID, IndexByUUID, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, UUIDSet, EscapeSQLString, IsPlainObject, CleanAndParseJSON, IsValidUUID } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
-import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
+import { PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
-import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
+import { type CodeLang } from '@memberjunction/context-crush/code';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -56,7 +60,8 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeKeyFixHint, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime/realtime-platform-credentials';
 import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
 import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
@@ -106,9 +111,6 @@ import {
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
-    AgentRequestAssignmentStrategy,
-    parseAssignmentStrategy,
-    mergeAssignmentStrategies,
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
@@ -139,13 +141,24 @@ import {
     type AgentPostRunCompactionConfig,
     type AIPromptExecutionScope,
     type AgentRunAudience,
+    type AgentHandoffResult,
+    ApplyOutputMapping,
+    BuildActionOutputObject,
     ConfigOf,
+    ResolveLoopBodyParams,
+    ValidateLoopOperationStructure,
+    type LoopBodyActionStep,
     type TaskGraphSpec,
-    type TaskGraphSpecNode
+    type TaskGraphSpecNode,
+    BuildTaskSecurityEnvelope,
+    MergeTaskSecurityEnvelopes,
+    TAINTED_EGRESS_BLOCKED,
+    TenantContextCarryProblem,
+    type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import {
-    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
-    ActionRunScopeIsBounded, type ActionRunScope
+    ActionEngineBase, MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    ActionRunScopeIsBounded, type ActionRunScope, type ActionOutputTrustLevel, type ActionErrorRecovery
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
@@ -182,10 +195,14 @@ import {
     CatalogNarrowingNote,
     CatalogNarrowingOutcome,
     CATALOG_NARROWING_FIND_ACTIONS,
+    CATALOG_NARROWING_FIND_SKILLS,
+    DEFAULT_MAX_SKILL_DECISION_CANDIDATES,
     IsAlwaysShownAction,
     IsCatalogListNarrowed,
     NoCatalogNarrowing,
     OpeningRequestText,
+    PreFilterSkillCandidatesForDecision,
+    RankSkillsByHybridRelevance,
     ReachableCatalogNarrowingLimits,
     ResolveCatalogNarrowingLimits,
     SelectCatalogNarrowing,
@@ -208,8 +225,10 @@ import {
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
     IsOpeningTurn,
+    KeepHostAllowedAgents,
     MentionsAgent,
 } from './decision-discovery';
+import { ResolveHandoffTarget } from './handoff-target';
 import {
     BuildFinishIfQuestions,
     CapFinishIfState,
@@ -232,14 +251,28 @@ import {
     formatFinalOutput,
     summarizePipelineStages,
 } from './pipeline';
-import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { AgentPayloadChangeRequest, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
+import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
-import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
+import { GetValueFromPath } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
-import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
+import {
+    CanAgentOwnSubAgentConsults,
+    DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
+    FormatReloadedConsultsMessage,
+    FormatResponseFormSummary,
+    FormatSubAgentConsultMessage,
+    LoadOpenSubAgentConsults,
+    SubAgentConsultRecord
+} from './sub-agent-consult';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
+import { AgentTreeBudgetTracker, type AgentRunTokenStats } from './AgentTreeBudgetTracker';
+import { AgentFeedbackCoordinator } from './AgentFeedbackCoordinator';
+import { AgentContextAssembler } from './AgentContextAssembler';
+import { AgentStepDispatcher, type LoopIterationError } from './AgentStepDispatcher';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
 
@@ -247,24 +280,12 @@ import _ from 'lodash';
  * Base iteration context for tracking loop execution in BaseAgent.
  * This is agent-type agnostic and handles both ForEach and While loops.
  */
-/**
- * The six denormalized token/cost figures rolled up from a run's steps — the single
- * shape shared by `calculateTokenStats` (producer) and `applyTokenStatsToRun`
- * (consumer) so a new stat added to one cannot silently be dropped by the other.
- */
-interface AgentRunTokenStats {
-    totalTokens: number;
-    promptTokens: number;
-    completionTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    totalCost: number;
-}
-
 /** What one run's prompt leaves out (`BaseAgent.promptWithholding`). */
 interface PromptWithholding {
-    /** Task graphs are not offered (an audience, or a tenant-scoped run). */
+    /** Task graphs are not offered (a constraint no security envelope will carry: see taskGraphWithholdingReason). */
     TaskGraphs: boolean;
+    /** Handoff is not offered (a sub-agent run, no conversation detail row, or a host that does not carry handoffs). */
+    Handoff: boolean;
     /** The caller's browser and view are not: no client tools, no app context (an audience). */
     CallerContext: boolean;
 }
@@ -318,7 +339,7 @@ interface StoppedRunContinuation {
     Steps: StoppedRunStackStepRecord[];
 }
 
-interface ActionResultSummary {
+export interface ActionResultSummary {
     actionName: string;
     success: boolean;
     params: ActionParam[];
@@ -327,6 +348,10 @@ interface ActionResultSummary {
     aiDirectives?: AIDirective[];
     /** Set when the circuit breaker blocked the call without dispatching it. */
     breakerReason?: ActionCircuitBreakerReason;
+    /** Trust classification of the action's output ('Trusted' | 'SemiTrusted' | 'Untrusted'). */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Structured recovery hints returned on action failure. */
+    errorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -350,15 +375,6 @@ export interface ActionResultCrushConfig {
      * or specifications the model must read verbatim. Set with the `uncrushedActions` prompt param.
      */
     exemptActions?: ReadonlySet<string>;
-}
-
-/** One failed loop iteration (ForEach or While), or a loop that failed before its first iteration. */
-interface LoopIterationError {
-    /** Zero-based index of the iteration that failed. */
-    index: number;
-    message: string;
-    /** The ForEach collection element or While attempt context. Arbitrary payload data, only ever serialized. */
-    item?: unknown;
 }
 
 /** What a While loop produced, handed from executeWhileIterations to completeWhileLoop. */
@@ -482,6 +498,8 @@ interface ParallelSubAgentExecution<SR> {
     /** Undefined only for synthetic entries representing an unresolved sub-agent. */
     stepEntity?: MJAIAgentRunStepEntityExtended;
     upstreamPaths: string[];
+    consult?: SubAgentConsultRecord;
+    maxConsultRounds?: number;
 }
 
 /**
@@ -528,12 +546,46 @@ export interface ExecuteSingleActionOptions {
  * - `'audience'` — the action engine refused the action for the run's audience (`AUDIENCE_UNSUPPORTED`): it cannot
  *   limit what it returns to what everyone in a shared conversation may see, so it is locked out for the run. Not a
  *   configuration or credential error, and the model is told so.
+ * - `'tainted'` — the run read untrusted content under a task-graph envelope and the action is `disallowWhenTainted`
+ *   (`TAINTED_EGRESS_BLOCKED`), so it is locked out until a person reviews that content. Not a configuration or
+ *   credential error either, and the model is told so.
  * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
  *   with these exact arguments.
  * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
  *   across any arguments.
  */
-export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-arguments' | 'attempts-exhausted';
+export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'tainted' | 'identical-arguments' | 'attempts-exhausted';
+
+/**
+ * What {@link BaseAgent.classifyActionFailure} names for a failed action: the breaker rule that fired, a refusal by
+ * the user's agent policy (`'policy'` — governance, not a parameter error, so the guidance must not tell the model
+ * to adjust its arguments and retry), or a plain `'warning'`.
+ */
+export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'non-retryable' | 'warning';
+
+/** Result codes that are structurally non-retryable (permission or run-scope refusals). */
+export const NON_RETRYABLE_RESULT_CODES: ReadonlySet<string> = new Set([
+    'PERMISSION_DENIED',
+    'RUN_SCOPE_UNSUPPORTED',
+]);
+
+/** Result code of a call the user's agent policy denies outright (`checkUserActionPolicy`). */
+export const POLICY_DENIED_RESULT_CODE = 'POLICY_DENIED';
+/** Result code of a call the user's agent policy allows only with the user's approval. */
+export const POLICY_APPROVAL_REQUIRED_RESULT_CODE = 'POLICY_APPROVAL_REQUIRED';
+/** Result code of a call the user's agent policy defers to its next allowed time window. */
+export const POLICY_DEFERRED_RESULT_CODE = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+
+/**
+ * The result codes `checkUserActionPolicy` returns when the user's agent policy refuses a call. None of them is
+ * fixed by retrying: approval cannot be granted inside the run, a time window does not open by asking again, and
+ * a denial repeats for the same call.
+ */
+const POLICY_REFUSAL_RESULT_CODES: ReadonlySet<string> = new Set([
+    POLICY_DENIED_RESULT_CODE,
+    POLICY_APPROVAL_REQUIRED_RESULT_CODE,
+    POLICY_DEFERRED_RESULT_CODE,
+]);
 
 /** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
 export const IDENTICAL_FAILURE_THRESHOLD = 2;
@@ -635,6 +687,13 @@ interface DecisionCallAllowance {
     Allowed: number;
 }
 
+/** A payload change from a refused completion, held until a completion is accepted. */
+interface HeldCompletionChange {
+    Change: AgentPayloadChangeRequest<unknown>;
+    /** Whether it was built on a payload still inherited unmodified from a prior run (see applyTurnPayloadChange). */
+    UnmodifiedInheritedPayload: boolean;
+}
+
 /** The prompt params that limit one turn's decisions. */
 type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
@@ -709,6 +768,32 @@ export class BaseAgent {
      */
     protected _treeBudget: AgentTreeBudget | undefined;
 
+    private __budgetTracker?: AgentTreeBudgetTracker;
+    /** Collaborator tracking hierarchical token, cost, wall-clock, and attempt budgets across the agent tree. */
+    private get _budgetTracker(): AgentTreeBudgetTracker {
+        return (this.__budgetTracker ??= new AgentTreeBudgetTracker());
+    }
+
+    private __feedbackCoordinator?: AgentFeedbackCoordinator;
+    /** Collaborator coordinating HITL feedback requests, assignment strategy resolution, and List routing. */
+    private get _feedbackCoordinator(): AgentFeedbackCoordinator {
+        return (this.__feedbackCoordinator ??= new AgentFeedbackCoordinator({
+            OnLogStatus: (message, isVerboseOnly, params) => this.logStatus(message, isVerboseOnly, params),
+        }));
+    }
+
+    private __contextAssembler?: AgentContextAssembler;
+    /** Collaborator assembling outgoing message arrays, trailing runtime-state fragments, and prompt catalogs. */
+    private get _contextAssembler(): AgentContextAssembler {
+        return (this.__contextAssembler ??= new AgentContextAssembler());
+    }
+
+    private __stepDispatcher?: AgentStepDispatcher;
+    /** Collaborator dispatching step/loop formatting, payload mapping, and template resolution. */
+    private get _stepDispatcher(): AgentStepDispatcher {
+        return (this.__stepDispatcher ??= new AgentStepDispatcher());
+    }
+
     /**
      * Gets the shared {@link AgentTreeBudget} tracking cumulative steps, tokens, cost,
      * and elapsed wall-clock duration across the root agent and all descendant sub-agents.
@@ -739,6 +824,13 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /**
+     * Payload changes sent with completions that were refused, in order. They are held, not
+     * committed: the next prompt sees the payload with them applied, and the next completion is
+     * built on top of them, so a model only has to send its corrections. They are committed with
+     * the next accepted completion, and dropped if the run ends without one.
+     */
+    private _heldCompletionChanges: HeldCompletionChange[] = [];
     /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
     private _lastSentFingerprints: string[] | undefined;
     /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
@@ -774,6 +866,14 @@ export class BaseAgent {
     private _audienceLockedActions: Set<string> = new Set();
 
     /**
+     * Actions refused because the run read untrusted content under a task-graph envelope (`TAINTED_EGRESS_BLOCKED`) —
+     * locked out like {@link _fatalActionFailures}, under their own breaker reason (`'tainted'`) so the model is told
+     * a person must review that content first rather than that the action is misconfigured.
+     * @private
+     */
+    private _taintLockedActions: Set<string> = new Set();
+
+    /**
      * The run's audience readers beyond the caller (`ExecuteAgentParams.Audience`), hydrated from the user cache:
      * `[]` when the audience adds nobody, `undefined` until hydrated for this run. Set after the permission check
      * in {@link Execute}; {@link ExecuteSingleAction}, which is also called directly, hydrates it lazily.
@@ -794,6 +894,29 @@ export class BaseAgent {
     private _runScope: ActionRunScope | undefined;
 
     /**
+     * External/untrusted data sources ingested during the current agent run (Primitive 2).
+     * Once non-empty, {@link IsRunTainted} is true for the remainder of the run and any memory
+     * notes written by the run land as `Status = 'Pending'` with taint provenance in `Comments`.
+     * @protected
+     */
+    protected _taintedSources: AgentTaintedSource[] = [];
+
+    /**
+     * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
+     * action or client-tool result.
+     */
+    public get IsRunTainted(): boolean {
+        return this._taintedSources.length > 0;
+    }
+
+    /**
+     * Read-only view of all `'Untrusted'` and `'SemiTrusted'` sources ingested during the current run.
+     */
+    public get TaintedSources(): ReadonlyArray<AgentTaintedSource> {
+        return this._taintedSources;
+    }
+
+    /**
      * Parameter-aware failure tracking per action name for the current agent run.
      * Differentiates identical retries (which trip quickly) from parameter modifications (which allow self-correction).
      * @private
@@ -803,6 +926,13 @@ export class BaseAgent {
         identicalFailures: number;
         totalConsecutiveFailures: number;
     }> = new Map();
+
+    /**
+     * The same identical-arguments and attempt-budget rules for agent-local tools
+     * ({@link GetAgentTools}), which run outside the action dispatch path.
+     * @private
+     */
+    private _agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
 
     /**
      * The identity of one action call's arguments, for the circuit breaker's identical-arguments
@@ -958,11 +1088,18 @@ export class BaseAgent {
     }
 
     /**
-     * Locks an action out for the rest of the run: later calls short-circuit on the breaker's `'fatal'` rule, or on
-     * its `'audience'` rule for an action the engine refused for the run's audience.
+     * Locks an action out for the rest of the run: later calls short-circuit on the breaker's `'fatal'` rule, on
+     * its `'audience'` rule for an action the engine refused for the run's audience, or on its `'tainted'` rule for
+     * an action refused because the run read untrusted content.
      */
-    private lockOutAction(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, reason: 'fatal' | 'audience' = 'fatal'): void {
-        const lockouts = reason === 'audience' ? this._audienceLockedActions : this._fatalActionFailures;
+    private lockOutAction(
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended | undefined,
+        reason: 'fatal' | 'audience' | 'tainted' = 'fatal'
+    ): void {
+        const lockouts = reason === 'audience' ? this._audienceLockedActions
+            : reason === 'tainted' ? this._taintLockedActions
+            : this._fatalActionFailures;
         lockouts.add(action.name);
         if (actionEntity?.Name) {
             lockouts.add(actionEntity.Name);
@@ -973,12 +1110,15 @@ export class BaseAgent {
     private resetActionCircuitBreaker(): void {
         this._fatalActionFailures.clear();
         this._audienceLockedActions.clear();
+        this._taintLockedActions.clear();
         this._actionFailureHistory.clear();
+        this._agentToolBreaker.Reset();
     }
 
     /**
-     * The blocked result for an action locked out for the run — refused for the audience (`'audience'`), or failed
-     * with an unrecoverable configuration or credential error (`'fatal'`) — or null when it is not locked out.
+     * The blocked result for an action locked out for the run — refused for the audience (`'audience'`), refused
+     * because the run read untrusted content (`'tainted'`), or failed with an unrecoverable configuration or
+     * credential error (`'fatal'`) — or null when it is not locked out.
      */
     private lockedOutActionResult(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended): CircuitBreakerActionResult | null {
         const isLocked = (lockouts: Set<string>): boolean =>
@@ -989,6 +1129,10 @@ export class BaseAgent {
                 `Action '${action.name}' is not available in this shared conversation: what it returns could not be limited to what ` +
                 'everyone here may see. Do not call it again in this run; use another tool or answer from what you have.');
         }
+        if (isLocked(this._taintLockedActions)) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): this run read untrusted content`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'tainted', this.taintLockoutText(action.name));
+        }
         if (isLocked(this._fatalActionFailures)) {
             this.logStatus(
                 `   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`,
@@ -998,6 +1142,14 @@ export class BaseAgent {
                 'credential error. You must select an alternative action.');
         }
         return null;
+    }
+
+    /** What the model is told about an action locked out because the run read untrusted content (`'tainted'`). */
+    private taintLockoutText(name: string): string {
+        return `Action '${name}' is not allowed in this run: the run has read untrusted content, and this action sends data ` +
+            'out or cannot be undone, so it cannot run until a person reviews that content. It is not broken or misconfigured, ' +
+            `and no change to its arguments will help. DO NOT call '${name}' again during this run; use another tool, or tell ` +
+            'the user it needs a person to review the content first.';
     }
 
     /**
@@ -1213,27 +1365,59 @@ export class BaseAgent {
      * the action is blocked whatever the arguments are, and telling the model to change them
      * would send it in circles.
      */
-    protected classifyActionFailure(summary: ActionResultSummary): ActionCircuitBreakerReason | 'warning' {
+    protected classifyActionFailure(summary: ActionResultSummary): ActionFailureClass {
         if (summary.breakerReason) {
             return summary.breakerReason;
         }
         if (this._audienceLockedActions.has(summary.actionName)) {
             return 'audience';
         }
+        if (this._taintLockedActions.has(summary.actionName)) {
+            return 'tainted';
+        }
         if (this._fatalActionFailures.has(summary.actionName)) {
             return 'fatal';
         }
         const record = this._actionFailureHistory.get(summary.actionName);
-        if (!record) {
-            return 'warning';
-        }
-        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+        if (record && record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
             return 'attempts-exhausted';
         }
-        if (record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+        // A policy refusal still counts in the history, so the budget above stays as the backstop; but it
+        // outranks the identical-arguments rule, whose guidance ("adjust your parameters") is exactly what
+        // a refused call must not be told. Approval and a time window do not come from different arguments.
+        if (POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode)) {
+            return 'policy';
+        }
+        if (NON_RETRYABLE_RESULT_CODES.has(summary.resultCode) || summary.errorRecovery?.Retryable === false) {
+            return 'non-retryable';
+        }
+        if (record && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
             return 'identical-arguments';
         }
         return 'warning';
+    }
+
+    /**
+     * The guidance line for a call the user's agent policy refused. The default `[WARNING/ACTION_FAILURE]`
+     * line tells the model to adjust its parameters and try again, up to the budget; a refusal is not a
+     * parameter error, and a retry burns the budget without ever succeeding.
+     */
+    private formatPolicyRefusalDirective(summary: ActionResultSummary): string {
+        const name = summary.actionName;
+        switch (summary.resultCode) {
+            case POLICY_APPROVAL_REQUIRED_RESULT_CODE:
+                return `[CRITICAL/POLICY_APPROVAL_REQUIRED] Action '${name}' requires the user's approval under their agent policy: "${summary.message}". ` +
+                    `Approval cannot be granted inside this run, so DO NOT retry '${name}'. Tell the user exactly what you intended to do and why, ` +
+                    'and ask them to approve it or do it themselves.';
+            case POLICY_DEFERRED_RESULT_CODE:
+                return `[CRITICAL/POLICY_DEFERRED] Action '${name}' is outside the time window the user's agent policy allows: "${summary.message}". ` +
+                    `Retrying now will not help; DO NOT call '${name}' again during this run. Tell the user it was deferred and when it can run.`;
+            default:
+                return `[CRITICAL/POLICY_DENIED] Action '${name}' was refused by the user's agent policy: "${summary.message}". ` +
+                    'This is a governance decision, not a problem with your arguments: the same call will be refused again. ' +
+                    `Call '${name}' again only with materially different parameters, and only if the reason says the refusal depends on them; ` +
+                    'otherwise use another tool or tell the user what you could not do.';
+        }
     }
 
     /** The guidance line appended to the history for one failed action. */
@@ -1241,18 +1425,147 @@ export class BaseAgent {
         const name = summary.actionName;
         const record = this._actionFailureHistory.get(name);
         switch (this.classifyActionFailure(summary)) {
+            case 'policy':
+                return this.formatPolicyRefusalDirective(summary);
+            case 'non-retryable': {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const nextActions = summary.errorRecovery?.SuggestedNextActions?.length
+                    ? ` Suggested alternative actions: ${summary.errorRecovery.SuggestedNextActions.map(a => `\`${a}\``).join(', ')}.`
+                    : '';
+                return `[CRITICAL/NON_RETRYABLE_FAILURE] Action '${name}' failed with non-retryable error (${summary.resultCode}): "${summary.message}".${suggestion}${nextActions} DO NOT retry '${name}' against the same target or with the same parameters; pivot to an alternative tool, a different target, or inform the user.`;
+            }
             case 'audience':
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
                     `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
                     `DO NOT call '${name}' again during this run. Use another tool, or answer from what you already have.`;
+            case 'tainted':
+                return `[CRITICAL/NOT_ALLOWED_AFTER_UNTRUSTED_CONTENT] ${this.taintLockoutText(name)}`;
             case 'fatal':
                 return `[CRITICAL/ACTION_UNAVAILABLE] Action '${name}' failed with an unrecoverable configuration or credential error: "${summary.message}". This action cannot execute in this environment. DO NOT call '${name}' again during this run. You MUST select an alternative tool or proceed with available data.`;
             case 'attempts-exhausted':
                 return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${name}' has failed ${record?.totalConsecutiveFailures ?? ACTION_FAILURE_BUDGET} consecutive times: "${summary.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
             case 'identical-arguments':
                 return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${name}' failed again with the EXACT SAME arguments: "${summary.message}". Calling '${name}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
-            default:
-                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}". Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            default: {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const suggestedValues = summary.errorRecovery?.SuggestedValues?.length
+                    ? ` Valid alternatives: ${summary.errorRecovery.SuggestedValues.join(', ')}.`
+                    : '';
+                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}".${suggestion}${suggestedValues} Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            }
+        }
+    }
+
+    /**
+     * Resolves the output trust classification for an action from its `MJ: Actions` metadata
+     * (`actionEntity.Config_Object?.outputTrustLevel`), with per-agent or per-run overrides via
+     * `AgentTypePromptParams`.
+     *
+     * Precedence:
+     * 1. An explicit per-action `actionTrustLevels` entry in `AgentTypePromptParams` — the operator's last word
+     * 2. The `trustedActionNames` / `untrustedActionNames` lists in `AgentTypePromptParams`
+     * 3. The action's metadata catalog setting (`Action.Config_Object?.outputTrustLevel`, looking up the
+     *    action by name in `ActionEngineBase.Instance.Actions` when `actionEntity` is omitted)
+     * 4. `'Trusted'`
+     * @protected
+     */
+    protected resolveActionTrustLevel(
+        actionName: string,
+        actionEntity?: MJActionEntityExtended,
+        params?: ExecuteAgentParams
+    ): ActionOutputTrustLevel {
+        const normalizedName = actionName.trim().toLowerCase();
+        const entity = actionEntity ?? ActionEngineBase.Instance.Actions?.find(
+            a => a.Name?.trim().toLowerCase() === normalizedName
+        );
+        const entityName = entity?.Name?.trim().toLowerCase();
+        const namesAction = (candidate: string): boolean => {
+            const n = candidate.trim().toLowerCase();
+            return n === normalizedName || (entityName !== undefined && n === entityName);
+        };
+        const isLevel = (v: unknown): v is ActionOutputTrustLevel => v === 'Trusted' || v === 'SemiTrusted' || v === 'Untrusted';
+        const promptParams = (params?.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Partial<LoopAgentTypePromptParams> | undefined;
+
+        // 1. Explicit per-action override
+        if (promptParams?.actionTrustLevels && typeof promptParams.actionTrustLevels === 'object') {
+            for (const [key, level] of Object.entries(promptParams.actionTrustLevels)) {
+                if (namesAction(key) && isLevel(level)) {
+                    return level;
+                }
+            }
+        }
+
+        // 2. Per-agent / per-run name lists
+        if (Array.isArray(promptParams?.trustedActionNames) && promptParams.trustedActionNames.some(namesAction)) {
+            return 'Trusted';
+        }
+        if (Array.isArray(promptParams?.untrustedActionNames) && promptParams.untrustedActionNames.some(namesAction)) {
+            return 'Untrusted';
+        }
+
+        // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
+        const metadataLevel = entity?.Config_Object?.outputTrustLevel;
+        if (isLevel(metadataLevel)) {
+            return metadataLevel;
+        }
+        if (typeof entity?.Config_ === 'string' && entity.Config_.trim().length > 0) {
+            const parsed = CleanAndParseJSON<Record<string, unknown>>(entity.Config_, false);
+            if (parsed && isLevel(parsed.outputTrustLevel)) {
+                return parsed.outputTrustLevel;
+            }
+        }
+
+        return 'Trusted';
+    }
+
+    /**
+     * Records a tainted source ingested during the current agent run.
+     * @protected
+     */
+    protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
+        if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
+            this._taintedSources.push({ stepNumber, sourceName, trustLevel });
+        }
+    }
+
+    /**
+     * Starts a run tainted when it executes a task-graph node whose input is tainted
+     * (`ExecuteAgentParams.SecurityEnvelope.IsRunTainted`): the node's input derives from untrusted content no
+     * completed Human step reviewed, so the run is tainted before it reads anything itself, exactly as the run
+     * that ingested the content was. Private: a security seed is not an extension point, and an override that
+     * skipped it would start a tainted run clean.
+     */
+    private seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
+        if (params.SecurityEnvelope?.IsRunTainted === true) {
+            this.recordTaintedSource(0, 'task-graph:security-envelope', 'Untrusted');
+        }
+    }
+
+    /**
+     * Starts a sub-agent run tainted when its parent, running outside any task graph, was tainted
+     * (`ExecuteAgentParams.ParentRunTainted`): it works from the parent's context. A sub-agent of a graph
+     * node is seeded through its envelope instead ({@link seedTaintFromSecurityEnvelope}). Private for
+     * the same reason.
+     */
+    private seedTaintFromParentRun(params: ExecuteAgentParams): void {
+        if (params.ParentRunTainted === true) {
+            this.recordTaintedSource(0, 'parent-run', 'Untrusted');
+        }
+    }
+
+    /**
+     * Folds a finished sub-agent's tainted sources into this run's, attributed to the sub-agent step,
+     * so delegating a web search taints the parent exactly as searching itself would. Runs whether or
+     * not the child succeeded: a failed child may still have read external content.
+     * @protected
+     */
+    protected absorbSubAgentTaint(subAgentName: string, subAgentResult: Pick<ExecuteAgentResult, 'taintedSources'>, stepNumber: number): void {
+        for (const source of subAgentResult.taintedSources ?? []) {
+            this.recordTaintedSource(stepNumber, `sub-agent:${subAgentName}/${source.sourceName}`, source.trustLevel);
         }
     }
 
@@ -1365,12 +1678,23 @@ export class BaseAgent {
     private _awaitingWorkflowTaskID: string | null = null;
 
     /**
-     * Stores the ID of an AIAgentRequest created when a Chat step fires.
-     * Populated by executeChatStep(), returned in ExecuteAgentResult.feedbackRequestId.
+     * Stores the ID of an AIAgentRequest created when a Chat or Plan step fires.
+     * Populated by createFeedbackRequest(), returned in ExecuteAgentResult.feedbackRequestId.
      * Only set for root agents (depth 0), not sub-agents.
      * @private
      */
     private _feedbackRequestId: string | null = null;
+
+    /**
+     * Stores the handoff outcome when a Handoff step fires.
+     * Populated by executeHandoffStep(), returned in ExecuteAgentResult.handoff.
+     */
+    private _handoffResult: AgentHandoffResult | null = null;
+
+    /**
+     * Stores the target agent resolved during validateHandoffNextStep() for executeHandoffStep().
+     */
+    private _resolvedHandoffTarget: { id: string; name: string } | null = null;
 
     private _resolvedStorageAccountId: string | null = null;
 
@@ -1573,8 +1897,8 @@ export class BaseAgent {
 
                 for (let i = 0; i < mediaItems.length; i++) {
                     const media = mediaItems[i];
-                    // Only intercept if there's substantial data
-                    if (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
+                    // Intercept when already stored in MJ Storage (fileId) or when inline data exceeds threshold
+                    if (media.fileId || (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD)) {
                         // Generate unique reference ID
                         const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
@@ -1640,19 +1964,20 @@ export class BaseAgent {
 
     /**
      * Substitutes `${media:<refId>}` placeholders in a string with the actual
-     * data URI (`data:<mime>;base64,<bytes>`) of the matching intercepted media item.
+     * data URI (`data:<mime>;base64,<bytes>`) or stored `fileId` (for `fileId`-only
+     * media items) of the matching intercepted media item.
      *
      * Used for payload / actionable-command resolution at the terminal step, where the
-     * LLM wants to embed image (or other media) data inline at a specific position in
-     * its structured output rather than as a trailing attachment card. The string
-     * variant of placeholder resolution; recursive walker lives in
-     * {@link resolveMediaPlaceholdersInPayload}.
+     * LLM wants to embed image (or other media) data or a stored file ID inline at a
+     * specific position in its structured output rather than only as a trailing
+     * attachment card. The string variant of placeholder resolution; recursive walker
+     * lives in {@link resolveMediaPlaceholdersInPayload}.
      *
      * This function only does substitution — it has no persistence side effects.
      *
      * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to actual data URIs (or the original
-     *          placeholder if the refId is unknown — defensive, shouldn't happen)
+     * @returns String with placeholders resolved to data URIs or stored file IDs (or the
+     *          original placeholder if the refId is unknown — defensive, shouldn't happen)
      * @private
      * @since 3.1.0
      */
@@ -1671,6 +1996,9 @@ export class BaseAgent {
             const media = this._mediaOutputs.find(m => m.refId === refId);
             if (media?.data) {
                 return `data:${media.mimeType};base64,${media.data}`;
+            }
+            if (media?.fileId) {
+                return media.fileId;
             }
             // Unknown refId — leave the placeholder in place rather than emit a broken
             // data URI. Defensive; this branch should not fire in normal flow.
@@ -1902,6 +2230,15 @@ export class BaseAgent {
     private _effectiveSubAgents: MJAIAgentEntityExtended[] = [];
 
     /**
+     * True once gatherPromptTemplateData() has computed {@link _effectiveActions} and
+     * {@link _effectiveSubAgents} for this run. An empty list is then authoritative: a host's
+     * `actionChanges` that remove every action leave the run with none, instead of falling back to
+     * the agent's database configuration as an uncomputed list does.
+     * @private
+     */
+    private _effectiveCatalogComputed = false;
+
+    /**
      * The merged agent-type prompt params of the current step. Populated during
      * gatherPromptTemplateData() and read by the finishIf gate, which runs in executeActionsStep()
      * and executeNextStep() after the prompt that requested the step.
@@ -2062,6 +2399,32 @@ export class BaseAgent {
      * @private
      */
     private _validationRetryCount: number = 0;
+
+    /**
+     * Per-parent-run consultation round counter keyed by `subAgentEntity.ID`.
+     * Tracks how many times each sub-agent has returned `FinalStep === 'Chat'`
+     * under `ChatHandlingOption = 'Consult'` during this run.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _subAgentConsultRounds: Map<string, number> = new Map();
+
+    /**
+     * Open sub-agent consultations keyed by `childRunId`.
+     * Populated when a child sub-agent pauses with `FinalStep === 'Chat'` under `'Consult'`,
+     * and removed when the parent resumes that child run.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _openSubAgentConsults: Map<string, SubAgentConsultRecord> = new Map();
+
+    /**
+     * Tracks whether we have already logged the warning that `'Consult'` is not
+     * supported on agent types where `InjectLoopResultsAsMessage` is `false`.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _loggedConsultUnsupportedAgentType: boolean = false;
 
     /**
      * Counter tracking the number of context recovery attempts made in this run.
@@ -2410,6 +2773,14 @@ export class BaseAgent {
     }
 
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // A run is server work even when a client's own request started it (a request answered through the
+        // API resumes its agent without waiting): the async scope would otherwise carry the client's CRUD
+        // boundary into the run, and a save the run makes would read as that person's own act (a task-graph
+        // Human step's completer, an agent request's responder).
+        return ServerOperationScopeManager.Instance.RunAsServerWork(() => this.executeRun<C, R>(params));
+    }
+
+    private async executeRun<C, R>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Initialize or inherit the shared root-tree cumulative budget before any shallow clone of
         // `params` occurs so that callers, parent agents, and child runs share one object reference.
         this._treeBudget = undefined;
@@ -2521,6 +2892,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._heldCompletionChanges = [];
             this._resolvedTrailingStateMode = undefined;
             this._lastSentFingerprints = undefined;
             this._lastSentPrefix = undefined;
@@ -2561,7 +2933,12 @@ export class BaseAgent {
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts);
+                this._artifactToolManager.Initialize(inputArtifacts, {
+                    contextUser: params.contextUser,
+                    provider: this.ProviderToUse,
+                    getAgentRun: () => this._agentRun,
+                    agentName: params.agent?.Name ?? undefined,
+                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
@@ -2624,7 +3001,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -2635,10 +3012,20 @@ export class BaseAgent {
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
             this._contextRecoveryAttempts = 0;
+            this._subAgentConsultRounds.clear();
+            this._openSubAgentConsults.clear();
+            this._loggedConsultUnsupportedAgentType = false;
             this._effectiveActions = [];
+            this._effectiveSubAgents = [];
+            this._effectiveCatalogComputed = false;
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
+            this._handoffResult = null;
+            this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
+            this._taintedSources = [];
+            this.seedTaintFromSecurityEnvelope(params);
+            this.seedTaintFromParentRun(params);
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -2690,8 +3077,8 @@ export class BaseAgent {
             // no I/O — safe to do before launching the parallel phase).
             const userId = params.userId || params.contextUser?.ID;
             const companyId = params.companyId;
-            const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
-            const inputText = lastUserMessage?.content || '';
+            const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop() as AgentChatMessage | undefined;
+            const inputText = lastUserMessage?.metadata?.rawContent ?? (lastUserMessage?.content || '');
 
             // The run's scope exactly as initializeAgentRun validated it in Phase 1 — what the run row records and every
             // action is handed — so notes, RAG and scoped prompt parts search the same tenant and dimensions.
@@ -2701,8 +3088,14 @@ export class BaseAgent {
             // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
             const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
-            // Positions matter: [0] is the config and [5] the stopped-run continuation.
-            const [config, , , , , stoppedRunContinuation] = await Promise.all([
+            // Stage Phase 2 system message injections in isolated arrays so their prefix order is
+            // 100% deterministic regardless of Promise.all completion timing (Lesson 1 Vector 5).
+            const memoryStagedMessages: ChatMessage[] = [];
+            const ragStagedMessages: ChatMessage[] = [];
+            const discoveryStagedMessages: ChatMessage[] = [];
+
+            // Positions matter: [0] is the config, [5] the stopped-run continuation, and [7] open sub-agent consults.
+            const [config, , , , , stoppedRunContinuation, , openConsults] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
                 this.preloadAgentData(wrappedParams),
                 this.InjectContextMemory(
@@ -2711,7 +3104,7 @@ export class BaseAgent {
                     userId,
                     companyId,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    memoryStagedMessages,
                     runScope.EntityID,
                     runScope.RecordID,
                     runScope.Secondary,
@@ -2723,7 +3116,7 @@ export class BaseAgent {
                     typeof inputText === 'string' ? inputText : '',
                     params.agent,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    ragStagedMessages,
                     params.conversationMessages,
                     runScope.EntityID,
                     runScope.RecordID,
@@ -2743,8 +3136,19 @@ export class BaseAgent {
                 this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data)
+                this.InjectDecisionDiscovery(params.agent, params.contextUser, discoveryStagedMessages, params.data),
+                // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
+                // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
+                this.loadOpenConsults(wrappedParams)
             ]);
+
+            if (memoryStagedMessages.length > 0 || ragStagedMessages.length > 0 || discoveryStagedMessages.length > 0) {
+                wrappedParams.conversationMessages.unshift(
+                    ...memoryStagedMessages,
+                    ...ragStagedMessages,
+                    ...discoveryStagedMessages
+                );
+            }
 
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
             this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
@@ -2754,6 +3158,10 @@ export class BaseAgent {
             const messagesBeforeParts = new Set(wrappedParams.conversationMessages);
             this.InjectScopedPromptParts(params.agent, wrappedParams.conversationMessages, runScope.EntityID, runScope.RecordID, runScope.Secondary);
             await this.replaceScopedPartPlaceholders(wrappedParams.conversationMessages, messagesBeforeParts, params.contextUser);
+
+            // Restore open sub-agent consults from a resumed Chat run and splice the reminder immediately
+            // before the caller's answer (continuationMessage).
+            this.applyOpenConsults(wrappedParams, openConsults, continuationMessage);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -2853,17 +3261,26 @@ export class BaseAgent {
             // passed in, not our chained signal.
             params.cancellationToken = upstreamToken;
             this._runAbortController = null;
-            // A cancellation, or an error thrown out of the step loop, leaves any held decision
-            // requests unasked. The terminate path has already logged and cleared its own.
-            this.skipHeldDecisions(params, this.runEndForHeldDecisions());
-            this.releasePerRunDataCache();
-            await this.finalizeRun(this.deriveRunOutcome());
-            if (this._agentRun?.ID) {
-                AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
-            }
-            // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
-            this.clearRunBoundState();
+            await this.endRun(params);
         }
+    }
+
+    /**
+     * {@link Execute}'s per-run teardown, called from its top-level `finally` on every exit path.
+     * The run leaves the watchdog first, before the subclass {@link finalizeRun} hook, so a hook
+     * that throws can never leave a finished run being heart-beaten for the life of the process.
+     */
+    private async endRun(params: ExecuteAgentParams): Promise<void> {
+        if (this._agentRun?.ID) {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
+        // A cancellation, or an error thrown out of the step loop, leaves any held decision
+        // requests unasked. The terminate path has already logged and cleared its own.
+        this.skipHeldDecisions(params, this.runEndForHeldDecisions());
+        this.releasePerRunDataCache();
+        await this.finalizeRun(this.deriveRunOutcome());
+        // The run is over: a later direct ExecuteSingleAction resolves the scope and the audience from its own params.
+        this.clearRunBoundState();
     }
 
     /**
@@ -2955,20 +3372,55 @@ export class BaseAgent {
     }
 
     /**
-     * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
-     * predicate, so every condition that withholds graphs is added in one place. A graph runs outside the run: its
-     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) with no `Audience`,
-     * no `RunScope` and no run `Context`, outside {@link ExecuteSingleAction}, and an agent node starts a run
-     * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
-     * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
-     * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
-     * agent node would drop it.
+     * What this run carries that a graph would have to carry too, or null when nothing: an audience that adds a
+     * reader, host-assigned search scopes, a tenant or secondary dimension (`ActionRunScopeIsBounded`), bound
+     * action parameters, the caller's tenant context, or taint. A graph runs outside the run — its nodes are claimed later
+     * by a dispatcher, as a background worker — so each of these is lost unless the graph's security envelope
+     * carries it.
      */
-    private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
+    private taskGraphConstraint(params: ExecuteAgentParams): string | null {
         if (this.runAudienceAddsReader(params)) {
             return 'a run with an audience';
         }
-        return ActionRunScopeIsBounded(this._runScope ?? this.validatedRunScope(params)) ? 'a tenant-scoped run' : null;
+        const scope = this._runScope ?? this.validatedRunScope(params);
+        if (scope?.SearchScopeIDs?.length) {
+            return 'a run with host-assigned search scopes';
+        }
+        if (ActionRunScopeIsBounded(scope)) {
+            return 'a tenant-scoped run';
+        }
+        if (this.hasBoundActionParams(params.boundActionParams)) {
+            return 'a run with bound action parameters';
+        }
+        if (params.contextUser?.TenantContext) {
+            return 'a run with a tenant context';
+        }
+        // Taint alone is a constraint too: a graph is the run's work continued elsewhere, and only an
+        // envelope-carrying submitter takes the taint along, so its nodes still refuse egress actions.
+        return this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true ? 'a run that ingested untrusted content' : null;
+    }
+
+    /**
+     * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
+     * predicate, read by the prompt (`promptWithholding`) and by {@link executeTasksStep} alike, so the two cannot
+     * disagree. A constrained run ({@link taskGraphConstraint}) may use graphs only when the registered submitter
+     * enforces security envelopes (`TaskGraphSubmitter.SupportsSecurityEnvelope`): then the envelope carries the
+     * audience, the validated run scope (tenant, dimensions and search scopes), the bound parameters, the caller's
+     * tenant context and the taint into every node. Nothing the caller passes opens this gate. What the envelope
+     * cannot carry keeps the refusal: a malformed audience, and a tenant context JSON would change.
+     */
+    private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
+        const constraint = this.taskGraphConstraint(params);
+        if (!constraint) {
+            return null;
+        }
+        if (GetTaskGraphSubmitter()?.SupportsSecurityEnvelope !== true) {
+            return constraint;
+        }
+        if (AgentAudienceProblem(params.Audience) !== null) {
+            return 'a run with an audience';
+        }
+        return TenantContextCarryProblem(params.contextUser?.TenantContext) ? 'a run whose tenant context cannot be carried into a task graph' : null;
     }
 
     /** Whether this run withholds task graphs ({@link taskGraphWithholdingReason}). */
@@ -2997,12 +3449,39 @@ export class BaseAgent {
     }
 
     /**
-     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), and — when the audience adds a
-     * reader — the caller's own browser and view (`CallerContext`): client tools run in the caller's browser and what they
-     * return reaches the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
+     * Whether this run withholds Handoff (`enableHandoff` off and the `handoff` response section hidden).
+     * True when the run has a `parentRun` (sub-agents cannot transfer the conversation), has no
+     * `conversationDetailId` (there is no conversation reply row to hand over), has no `handoffChain`
+     * (the host does not carry out handoffs), or runs for an anonymous/widget guest without a trusted
+     * host allow-list (`TrustReservedRunData === true` and `HostAllowedAgentIDs(params.data)` defined).
+     */
+    private runWithholdsHandoff(params: ExecuteAgentParams): boolean {
+        const hasTrustedHostAllowList =
+            params.TrustReservedRunData === true &&
+            HostAllowedAgentIDs(params.data) !== undefined;
+        const isUnscopedGuest =
+            Boolean(params.contextUser?.IsMagicLinkAnonymous || params.contextUser?.WidgetGuestContext) &&
+            !hasTrustedHostAllowList;
+        return (
+            Boolean(params.parentRun) ||
+            !params.conversationDetailId ||
+            !Array.isArray(params.handoffChain) ||
+            isUnscopedGuest
+        );
+    }
+
+    /**
+     * What this run's prompt leaves out: task graphs ({@link taskGraphWithholdingReason}), handoff
+     * ({@link runWithholdsHandoff}), and — when the audience adds a reader — the caller's own browser
+     * and view (`CallerContext`): client tools run in the caller's browser and what they return reaches
+     * the room, and the app context (`data.appContext`, with its `AdditionalContext`) is the caller's screen.
      */
     private promptWithholding(params: ExecuteAgentParams): PromptWithholding {
-        return { TaskGraphs: this.runWithholdsTaskGraphs(params), CallerContext: this.runAudienceAddsReader(params) };
+        return {
+            TaskGraphs: this.runWithholdsTaskGraphs(params),
+            Handoff: this.runWithholdsHandoff(params),
+            CallerContext: this.runAudienceAddsReader(params)
+        };
     }
 
     /**
@@ -3059,6 +3538,17 @@ export class BaseAgent {
             ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
             : {};
         return { ...promptParams, enableTaskGraphs: false, includeResponseTypeDefinition: { ...responseType, tasks: false } };
+    }
+
+    /**
+     * A copy of the agent-type prompt params with handoff withheld (`enableHandoff` off and the `handoff`
+     * response section hidden). A copy, never a write: the input may be the process-wide cached base.
+     */
+    private withoutHandoff(promptParams: Record<string, unknown>): Record<string, unknown> {
+        const responseType = IsPlainObject(promptParams.includeResponseTypeDefinition)
+            ? (promptParams.includeResponseTypeDefinition as Record<string, unknown>)
+            : {};
+        return { ...promptParams, enableHandoff: false, includeResponseTypeDefinition: { ...responseType, handoff: false } };
     }
 
     /**
@@ -3196,9 +3686,8 @@ export class BaseAgent {
         if (!modelResolution) {
             const message =
                 `Agent '${params.agent.Name}' is session-driven (Realtime) but no usable Realtime model could be ` +
-                `resolved. Configure a model of AIModelType 'Realtime' with an active vendor DriverClass and a ` +
-                `valid API key (e.g. AI_VENDOR_API_KEY__<driver>). This is expected until the realtime drivers ` +
-                `and model metadata are provisioned.`;
+                `resolved: no active vendor of an active model of AIModelType 'Realtime' has a usable key and ` +
+                `driver. ${RealtimeKeyFixHint(params.CredentialScope)}`;
             this.logError(message, { agent: params.agent, category: 'RealtimeSession' });
             return await this.createFailureResult(message, params.contextUser) as ExecuteAgentResult<R>;
         }
@@ -3327,12 +3816,16 @@ export class BaseAgent {
             HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
             PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
             ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
-            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
-            // the run carries one for the realtime driver (the same run-key → platform order as
-            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // The run's runtime API keys. The session service resolves each vendor's key in a prompt's
+            // order: the platform's MJ Credential for the vendor, then these keys, then the environment
+            // ('RuntimeOnly' scope: these keys alone). Absent ⇒ platform credentials, then the environment.
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
+            // The run's validated scope and active skills, built here on the server (never read from the session's
+            // Config), so the session's direct tool calls and delegated runs carry them (#5624).
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -3381,21 +3874,25 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
-        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
-        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
-        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
+        // Keys resolve per vendor in the order a prompt's do: the platform's MJ Credential for the vendor
+        // (AICredentialBindings on the model-vendor row, then the vendor, then the vendor's default
+        // credential), then the run's key for the driver class, then the environment. A run whose
+        // CredentialScope is 'RuntimeOnly' skips the platform credential and the environment.
         //
         // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
-        // candidates by priority and takes the first whose key resolves, so an organization that
-        // brings its own credential for a vendor we hold no platform key for now reaches that
-        // vendor — which is the point of bringing your own key, not a side effect of it.
-        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // candidates by priority and takes the first whose key resolves, so a vendor reachable only
+        // through a bound credential or the run's own key is still reached.
+        const runThenEnvironment = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
         // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
         // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
         const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
+        // Credential resolution is async and vendor selection is not, so every candidate's credentials
+        // are resolved first; selection and the mint then read the same answer.
+        const platform = await this.resolveRealtimePlatformCredentials(candidates.map(m => m.ID), params);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+            const resolveAPIKey = platform.ResolverFor(model.ID, runThenEnvironment);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey, params.CredentialScope);
             const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
             if (!vendor || !first) {
                 continue;
@@ -3425,6 +3922,18 @@ export class BaseAgent {
             AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
             PhoneCall: params.data?.realtimePhoneCall === true,
         });
+    }
+
+    /**
+     * The platform MJ Credentials of the candidate realtime models' vendors, read as the run's user.
+     * **Overridable seam** so tests can supply credentials without a credential store. Under a
+     * `'RuntimeOnly'` scope it resolves none.
+     *
+     * @param modelIDs The candidate `MJ: AI Models` row ids.
+     * @param params The execution parameters (context user and credential scope).
+     */
+    protected async resolveRealtimePlatformCredentials(modelIDs: string[], params: ExecuteAgentParams): Promise<RealtimePlatformCredentials> {
+        return ResolveRealtimePlatformCredentials(modelIDs, params.contextUser, params.CredentialScope);
     }
 
     /**
@@ -3703,8 +4212,8 @@ export class BaseAgent {
      * @returns The concatenated context text (empty string when nothing was injected).
      */
     private async assembleRealtimeContext(params: ExecuteAgentParams): Promise<string> {
-        const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop();
-        const inputText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
+        const lastUserMessage = params.conversationMessages.filter(m => m.role === 'user').pop() as AgentChatMessage | undefined;
+        const inputText = lastUserMessage?.metadata?.rawContent ?? (typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '');
         const scratch: ChatMessage[] = [];
 
         const builder = new AgentMemoryContextBuilder();
@@ -3779,6 +4288,7 @@ export class BaseAgent {
                 apiKeys: params.apiKeys,
                 CredentialScope: params.CredentialScope,
                 Audience: params.Audience, // the target answers the same people, so it is bounded the same way
+                SearchScopeIDs: params.SearchScopeIDs, // and searches what the host assigned (never read from data)
                 data: params.data,
                 TrustReservedRunData: params.TrustReservedRunData, // the session's data, already vetted when it started
                 verbose: params.verbose,
@@ -4306,6 +4816,35 @@ export class BaseAgent {
     }
 
     /**
+     * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
+     * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
+     * the prompt between two failures returns a non-Failed decision and resets it. When the same
+     * decision has failed {@link MAX_REPEATED_FAILING_STEP} times in a row, `nextStep` is turned
+     * into a terminating Failed step naming the step type and the last error.
+     */
+    private checkRepeatedFailingStep<P>(
+        params: ExecuteAgentParams,
+        tracker: RepeatedFailingStepTracker,
+        executedDecision: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>
+    ): void {
+        const count = tracker.Observe(executedDecision, nextStep);
+        if (count < MAX_REPEATED_FAILING_STEP) {
+            return;
+        }
+        const lastError = FailingStepError(nextStep);
+        const message = `Agent repeated the same failing ${executedDecision.step} step ${count} times. Last error: ${lastError}`;
+        this.logError(`⛔ Agent '${params.agent.Name}': ${message}`, {
+            agent: params.agent,
+            category: 'ExecutionSafetyNet',
+            metadata: { repeatedFailures: count, stepType: executedDecision.step, lastError }
+        });
+        nextStep.step = 'Failed';
+        nextStep.terminate = true;
+        nextStep.errorMessage = message;
+    }
+
+    /**
      * Executes the agent's internal logic.
      * 
      * This method contains the core execution logic that drives agent behavior. By default,
@@ -4332,6 +4871,9 @@ export class BaseAgent {
         let stepCount = 0;
         let consecutiveFailedSteps = 0;
         let consecutiveUnproductiveRetries = 0;
+        // Model-driven types only: a Flow graph may re-run a failing node on purpose (see
+        // BaseAgentType.UsesActionCircuitBreaker), and has no model that could repeat itself.
+        const repeatedFailures = this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? null : new RepeatedFailingStepTracker();
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -4342,10 +4884,15 @@ export class BaseAgent {
             // Prune and compact expired messages before executing the next step.
             // Uses _promptTurnCount (not stepCount) so expiration is measured in prompt
             // executions, not all steps (which include actions, loops, sub-agents, etc.)
-            await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            // Rewriting an earlier turn costs the cached prefix, so unless the caller asked for it
+            // (messageExpirationOverride) it waits until the window reaches the compaction trigger.
+            if (params.messageExpirationOverride || this.isMidLoopCompactionThresholdReached(params)) {
+                await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            }
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
+            const executedDecision = currentNextStep;
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
@@ -4385,6 +4932,10 @@ export class BaseAgent {
                 }
             } else if (nextStep.step !== 'Failed') {
                 consecutiveFailedSteps = 0;
+            }
+
+            if (repeatedFailures && executedDecision && !IsPromptTurnStep(executedDecision) && !nextStep.terminate) {
+                this.checkRepeatedFailingStep(params, repeatedFailures, executedDecision, nextStep);
             }
 
             // Track consecutive *unproductive* retries to prevent infinite loops that the
@@ -5080,6 +5631,12 @@ export class BaseAgent {
                     }
                 }
             }
+
+            // Also convert rawContent in metadata when speaker attribution is active
+            const agentMessage = message as AgentChatMessage;
+            if (typeof agentMessage.metadata?.rawContent === 'string') {
+                agentMessage.metadata.rawContent = ConversationUtility.ToPlainText(agentMessage.metadata.rawContent);
+            }
         }
     }
 
@@ -5401,7 +5958,7 @@ export class BaseAgent {
             }
             // Counted only on the native path: null means "envelope", which is different from a
             // native turn where the model chose not to call anything (0).
-            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit' || mode === 'NativeRecovered') {
                 const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
                 const callCount = message?.toolCalls?.length ?? 0;
                 stepEntity.NativeToolCallCount = callCount;
@@ -5674,7 +6231,13 @@ export class BaseAgent {
             const frameworkTools = control.NativeOnly
                 ? BuildFrameworkTools(this.frameworkToolHost(params), this.frameworkToolAvailability(promptParams, params))
                 : [];
-            const toolSet = BuildNativeToolSet(actionSet, subAgents, control, agentTools, frameworkTools);
+            const toolSet = BuildNativeToolSet(actionSet, subAgents, control, agentTools, frameworkTools, (sa) => {
+                const presetNames = (AIEngine.Instance.GetAgentConfigurationPresets?.(sa.ID, true) ?? []).map(p => p.Name);
+                return {
+                    consultEnabled: this.isSubAgentConsultEnabledForSubAgent(params.agent, sa),
+                    ...(presetNames.length > 0 ? { presetNames } : {})
+                };
+            });
             if (control.NativeOnly && promptParams.data) {
                 // The template renders the tools-only prompt when this is set AND the runner resolves implicit control flow.
                 promptParams.data[NATIVE_ONLY_TEMPLATE_FLAG] = true;
@@ -5781,6 +6344,7 @@ export class BaseAgent {
 
     private async runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
         const results = await this.executeDecisionRequestsAsSteps(requests, payload, this._agentTypePromptParams, params);
+        // fls-guard: decision outcomes, not entity rows
         return { Content: JSON.stringify(results), IsError: results.length > 0 && results.every((r) => !r.success) };
     }
 
@@ -5828,24 +6392,71 @@ export class BaseAgent {
         });
         // Whatever fails below, the step is finalized and the call answered — never left Running.
         let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        const breakerKey = this.agentToolBreakerKey(call);
         try {
-            const ran = await this.runAgentTool(call, payload, params);
-            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
-            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
-            const applied = !ran.IsError && ran.PayloadChange
-                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
-                : { payload, error: undefined };
-            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+            const refusal = breakerKey === null ? null : this._agentToolBreaker.Check(call.toolName, breakerKey);
+            if (refusal) {
+                this.logStatus(`   ⚡ Circuit breaker: agent tool '${call.toolName}' not run (0ms)`, false, params);
+                outcome = { payload, content: refusal, isError: true };
+            } else {
+                outcome = await this.runAndApplyAgentTool(call, payload, params);
+                this.recordAgentToolOutcome(call.toolName, breakerKey, outcome.isError);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
             outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+            this.recordAgentToolOutcome(call.toolName, breakerKey, true);
         } finally {
             step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
             await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
                 { tool: call.toolName, content: outcome.content, isError: outcome.isError });
         }
         return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Runs one call and applies its payload change; a refused change makes the call an error. */
+    private async runAndApplyAgentTool<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; content: string; isError: boolean }> {
+        const ran = await this.runAgentTool(call, payload, params);
+        // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+        const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+        const applied = !ran.IsError && ran.PayloadChange
+            ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+            : { payload, error: undefined };
+        return { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+    }
+
+    /**
+     * The identity of a call's arguments for the agent-tool circuit breaker, or null when the call is
+     * not tracked: it is not an agent tool (`payload_change_request`, an unknown name), the agent type
+     * opted out of the breaker (`UsesActionCircuitBreaker === false`), or the tool did
+     * (`UsesCircuitBreaker === false`). Arguments are normalized like an action's.
+     */
+    private agentToolBreakerKey(call: AgentToolCallRequest): string | null {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind !== 'agentTool' || binding.definition.UsesCircuitBreaker === false) {
+            return null;
+        }
+        if (this.AgentTypeInstance?.UsesActionCircuitBreaker === false) {
+            return null;
+        }
+        return this.normalizeActionParams(call.arguments);
+    }
+
+    /** Updates the agent-tool circuit breaker after a call that ran (nothing for an untracked call). */
+    private recordAgentToolOutcome(toolName: string, breakerKey: string | null, isError: boolean): void {
+        if (breakerKey === null) {
+            return;
+        }
+        if (isError) {
+            this._agentToolBreaker.RecordFailure(toolName, breakerKey);
+        } else {
+            this._agentToolBreaker.RecordSuccess(toolName);
+        }
     }
 
     /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
@@ -6032,7 +6643,8 @@ export class BaseAgent {
             params.actionChanges,
             params.subAgentChanges,
             params.boundActionParams,
-            this.promptWithholding(params)
+            this.promptWithholding(params),
+            params.parentRun
         );
 
         // Set up the hierarchical prompt execution
@@ -6061,9 +6673,12 @@ export class BaseAgent {
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
         if (this.GetNativeControlConfig(params).CompactToolArguments) {
-            const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
-            if (compacted > 0) {
-                this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+            const compactionBudget = this.resolveCompactionBudget(params, config);
+            if (compactionBudget.BoundedBy === 'Default' || this.isMidLoopCompactionThresholdReached(params)) {
+                const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
+                if (compacted > 0) {
+                    this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+                }
             }
         }
         promptParams.conversationMessages = params.conversationMessages;
@@ -6264,26 +6879,85 @@ export class BaseAgent {
             ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
+        return promptParams;
+    }
+
+    /**
+     * Completes the prompt params once {@link preparePromptParams} — including any subclass override —
+     * has returned: builds the trailing runtime-state message and checks the outgoing history for replayed
+     * reasoning that no longer matches.
+     *
+     * This runs after the hook, not inside it, because building the trailing message can render the child
+     * prompt (a relocated specialization) and caches that render for the prompt runner. Rendered inside the
+     * hook, it would miss the template data a subclass adds after calling `super.preparePromptParams()`, and
+     * the prompt would be sent without it. The history comes from `promptParams.conversationMessages`, so a
+     * subclass's own changes to the outgoing messages are kept and the trailing message stays last.
+     */
+    private async finalizePromptParams<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
         // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
         // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
         // In append-only mode (OpenAI prompt caching), prior runtime-state fragments are retained in history
         // so each turn extends the exact byte prefix of the previous request, maintaining ~93% cache hits.
         // In replace-in-place mode (Gemini/Cerebras), only the latest fragment is attached, keeping history lean.
-        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
         if (volatileStateMessage) {
             const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
             this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
-            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
+            promptParams.conversationMessages = this.assembleOutgoingMessages(promptParams.conversationMessages ?? params.conversationMessages, volatileStateMessage, isAppendOnly);
             if (isAppendOnly) {
                 params.conversationMessages.push(volatileStateMessage);
             }
             this._lastVolatileStateMessage = volatileStateMessage;
+            if (promptParams.data?._SPECIALIZATION_RELOCATED === true) {
+                promptParams.OnTemplateDataFinalized = (finalParams) =>
+                    this.refreshRelocatedSpecialization(finalParams, config, payload, params, volatileStateMessage);
+            }
         }
         if (promptParams.conversationMessages) {
             promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
-
         return promptParams;
+    }
+
+    /**
+     * Renders the trailing message again once the prompt runner has set the native tool-calling flags,
+     * and swaps it in when the text changed.
+     *
+     * A relocated specialization is pre-rendered here, before a model is selected, so it renders
+     * without the flags the runner sets from the selected model's tool-calling decision — a child
+     * prompt that words its instructions for the native or envelope path would get the envelope
+     * wording while the system prompt gets the native one. The runner calls this through
+     * {@link AIPromptParams.OnTemplateDataFinalized}. On any failure the message already built is kept.
+     */
+    private async refreshRelocatedSpecialization<P>(
+        promptParams: AIPromptParams,
+        config: AgentConfiguration,
+        payload: P,
+        params: ExecuteAgentParams,
+        previous: AgentChatMessage
+    ): Promise<void> {
+        try {
+            const rebuilt = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
+            if (!rebuilt || rebuilt.content === previous.content) {
+                return;
+            }
+            const replace = (messages: ChatMessage[] | undefined) => {
+                const at = messages ? messages.indexOf(previous) : -1;
+                if (messages && at >= 0) {
+                    messages[at] = rebuilt;
+                }
+            };
+            replace(promptParams.conversationMessages);
+            replace(params.conversationMessages);
+            this._lastVolatileStateMessage = rebuilt;
+            // The fingerprints were taken before the swap; without this, an append-only history
+            // reads the swapped message as changed next turn and drops the reasoning after it.
+            if (promptParams.conversationMessages) {
+                this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
+            }
+        } catch (error) {
+            this.logStatus(`Kept the trailing message as first built: re-rendering it with the final template data failed (${error instanceof Error ? error.message : String(error)})`, true, params);
+        }
     }
 
     /**
@@ -6344,12 +7018,19 @@ export class BaseAgent {
      * Keeps the system-prompt-and-tools fingerprint of the request just sent, for the next one. When
      * it changed, the runner sent this request without replayed reasoning; the history drops it too,
      * so no later request replays a block made under the old prompt or tools.
+     *
+     * A result with no fingerprint (a request that failed before or while it was sent, such as a
+     * failover that ran out of candidates) leaves the baseline as it was. Clearing it would let the
+     * next request skip the comparison and replay thinking made under a prompt or tools it no longer has.
      */
     private trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
         const sent = GetSentPrefixFingerprint(promptResult.chatResult);
+        if (sent === undefined) {
+            return;
+        }
         const previous = this._lastSentPrefix;
         this._lastSentPrefix = sent;
-        if (previous === undefined || sent === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
+        if (previous === undefined || sent === previous || !this.replaysPrefixBoundReasoning()) {
             return;
         }
         params.conversationMessages.forEach((m, i) => {
@@ -6413,9 +7094,7 @@ export class BaseAgent {
      * and framework-authored volatile state messages are left alone.
      */
     protected assembleOutgoingMessages(history: ChatMessage[], fragment: AgentChatMessage, isAppendOnly: boolean = false): ChatMessage[] {
-        const source = isAppendOnly ? history : history.filter(m => !(m as AgentChatMessage).metadata?.volatileState);
-        const sanitized = source.map(m => (m.role === 'system' || (m as AgentChatMessage).metadata?.volatileState ? m : EscapeRuntimeStateTagsInMessage(m)));
-        return [...sanitized, fragment];
+        return this._contextAssembler.AssembleOutgoingMessages(history, fragment, isAppendOnly);
     }
 
     /**
@@ -6435,8 +7114,10 @@ export class BaseAgent {
      * declares native tools to a driver whose replayed reasoning needs the history before it
      * unchanged is append-only too (see {@link ResolveAppendOnlyState}).
      *
-     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
-     * immediately. Otherwise the answer is frozen at the first model selection and reused for every
+     * Decided ONCE per run. An explicit `trailingStateMode` answers immediately, and so does a runtime
+     * model override that names a vendor, or whose catalog says the cache is a byte-prefix cache.
+     * Otherwise (no override, or one that names no vendor and whose catalog does not say yes) the
+     * answer is frozen at the first model selection and reused for every
      * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
      * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
      * before any selection is known, the answer is replace-in-place: turn 1's fragment is kept and, if
@@ -6500,17 +7181,7 @@ export class BaseAgent {
 
     /** Whether the driver serving `model` on `vendor` binds replayed reasoning to the unchanged history before it. */
     protected DriverRequiresStableReasoningPrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
-        if (!model || !vendor) {
-            return false;
-        }
-        const engine = AIEngine.Instance;
-        const modelVendor = (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? [])
-            .find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv));
-        if (!modelVendor?.DriverClass) {
-            return false;
-        }
-        const driver = MJGlobal.Instance.ClassFactory.GetRegistration(BaseLLM, modelVendor.DriverClass)?.SubClass as typeof BaseLLM | undefined;
-        return driver?.ReplayedReasoningRequiresStablePrefix === true;
+        return this._contextAssembler.DriverRequiresStableReasoningPrefix(model, vendor);
     }
 
     /**
@@ -6527,14 +7198,7 @@ export class BaseAgent {
      * rows carry no flag, say) can override this rather than the mode decision above.
      */
     protected resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
-        if (!model) {
-            return false;
-        }
-        const engine = AIEngine.Instance;
-        const modelVendor = vendor
-            ? (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv))
-            : undefined;
-        return IsPrefixPromptCache(engine.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID));
+        return this._contextAssembler.ResolvePrefixPromptCache(model, vendor);
     }
 
     /**
@@ -6589,11 +7253,12 @@ export class BaseAgent {
         const includePayload = agentTypePromptParams?.includePayloadInPrompt !== false;
 
         const specialization = await this.resolveRelocatedSpecialization(promptParams, childPrompt, agentType, params.contextUser);
-        const fragment = new RuntimeStateFragmentBuilder().Build({
+        const fragment = this._contextAssembler.BuildRuntimeStateFragment({
             DateTime: includeDateTime ? await this.resolveFragmentDateTime(promptParams) : null,
             Scratchpad: includeScratchpad ? this.readScratchpadFromTemplateData(data) : null,
             // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
-            Payload: includePayload ? { Value: payload || {} } : null,
+            Payload: payload || {},
+            IncludePayload: includePayload,
             Specialization: specialization,
         });
         if (!fragment) {
@@ -6709,7 +7374,7 @@ export class BaseAgent {
      * Loop layout, or any template that embeds the payload.
      */
     protected templateTextEmbedsVolatileState(templateText: string): boolean {
-        return this.volatileTemplateMarkers.some(marker => templateText.includes(marker));
+        return this._contextAssembler.TemplateTextEmbedsVolatileState(templateText, this.volatileTemplateMarkers);
     }
 
     /**
@@ -6771,24 +7436,13 @@ export class BaseAgent {
      * on every loop iteration.
      */
     protected async resolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null> {
-        const resolve = async (name: string): Promise<string | null> => {
-            const placeholder = SystemPlaceholderManager.getPlaceholders().find(p => p.name === name);
-            if (!placeholder) {
-                return null;
-            }
-            try {
-                const value = await placeholder.getValue(promptParams);
-                return value == null ? null : String(value);
-            } catch (e) {
-                this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning', metadata: { placeholder: name } });
-                return null;
-            }
-        };
-        const [date, dayOfWeek, time] = await Promise.all([resolve(CURRENT_DATE_PLACEHOLDER), resolve(CURRENT_DAY_OF_WEEK_PLACEHOLDER), resolve(CURRENT_TIME_PLACEHOLDER)]);
-        if (!date || !dayOfWeek || !time) {
-            return null;
-        }
-        return { Date: date, DayOfWeek: dayOfWeek, Time: time };
+        return this._contextAssembler.ResolveFragmentDateTime(promptParams, (error, placeholder) => {
+            this.logError(error instanceof Error ? error : String(error), {
+                category: 'RuntimeStateFragment',
+                severity: 'warning',
+                metadata: { placeholder },
+            });
+        });
     }
 
     /**
@@ -6796,11 +7450,7 @@ export class BaseAgent {
      * exactly what the template would have). Null when the scratchpad is disabled or absent.
      */
     protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
-        const notes = data[SCRATCHPAD_NOTES_PLACEHOLDER], tasks = data[SCRATCHPAD_TASKS_PLACEHOLDER], summary = data[SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER];
-        if (typeof notes !== 'string' || typeof tasks !== 'string' || typeof summary !== 'string') {
-            return null;
-        }
-        return { Notes: notes, Tasks: tasks, TaskSummary: summary };
+        return this._contextAssembler.ReadScratchpadFromTemplateData(data);
     }
 
     /**
@@ -6837,8 +7487,10 @@ export class BaseAgent {
         // (schema defaults -> agent.AgentTypePromptParams -> runtime override) without mutating
         // the caller's ExecuteAgentParams or params.data object.
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const paramsForAgentType: ExecuteAgentParams =
-            this._agentTypePromptParams && params?.data?.__agentTypePromptParams === undefined
+        const stepParams: ExecuteAgentParams =
+            this._agentTypePromptParams &&
+            this.AgentTypeInstance instanceof LoopAgentType &&
+            params?.data?.__agentTypePromptParams === undefined
                 ? {
                       ...params,
                       data: {
@@ -6847,7 +7499,7 @@ export class BaseAgent {
                       },
                   }
                 : params;
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, paramsForAgentType, currentPayload, this.AgentTypeState, this._nativeToolBindings);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, stepParams, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 
@@ -6888,7 +7540,37 @@ export class BaseAgent {
 
         // for next step, let's do a little quick validation here for sub-agent and actions to ensure requests are valid
         switch (nextStep.step) {
-            case 'Sub-Agent':           
+            case 'Sub-Agent':
+                if (
+                    nextStep.taskGraph?.folded &&
+                    nextStep.subAgent?.name &&
+                    Boolean(GetTaskGraphSubmitter()) &&
+                    !this.resolveSubAgentByName(params, nextStep.subAgent.name)
+                ) {
+                    const activeAgentExists = AIEngine.Instance.Agents.some(
+                        (a) =>
+                            a.Status === 'Active' &&
+                            a.Name === nextStep.subAgent!.name &&
+                            !UUIDsEqual(a.ID, params.agent.ID),
+                    );
+                    if (activeAgentExists) {
+                        this.logStatus(
+                            `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
+                            false,
+                            params
+                        );
+                        const unfolded: BaseAgentNextStep<P> = {
+                            ...nextStep,
+                            step: 'Tasks' as typeof nextStep.step,
+                            subAgent: undefined,
+                            taskGraph: {
+                                spec: nextStep.taskGraph.spec,
+                                folded: false,
+                            },
+                        };
+                        return this.validateTasksNextStep<P>(params, unfolded, currentPayload, agentRun, currentStep);
+                    }
+                }
                 return this.validateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Actions':
                 return this.validateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
@@ -6925,6 +7607,10 @@ export class BaseAgent {
             // Retry step instead of hard-failing the run in executeTasksStep.
             case 'Tasks' as typeof nextStep.step:
                 return this.validateTasksNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union (transfer-and-detach — the terminal step it produces is 'Success').
+            case 'Handoff' as typeof nextStep.step:
+                return this.validateHandoffNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -6974,7 +7660,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         const curAgentSubAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
-        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true;
+        const allowFoldedTaskGraphTarget = nextStep.taskGraph?.folded === true && !GetTaskGraphSubmitter();
 
         // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
         // fall back to singular `subAgent` for the classic single-sub-agent next step.
@@ -6996,15 +7682,21 @@ export class BaseAgent {
         }
 
         // Validate each requested sub-agent: existence + user run permission + MaxExecutionsPerRun
+        const seenResumeRunIds = new Set<string>();
+        const openConsultsBySubAgent = GroupByUUID(this._openSubAgentConsults.values(), c => c.subAgentId);
         for (const req of requested) {
             const name = req?.name;
             const normalizedName = name?.trim().toLowerCase();
-            const directSubAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName);
+            const directSubAgent =
+                curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === normalizedName)
+                ?? (name ? this.matchNamedBySanitizedToolName(name, curAgentSubAgents, true).match : undefined);
+            const activeCatalogAgents = allowFoldedTaskGraphTarget
+                ? AIEngine.Instance.Agents.filter(a => a.Status === 'Active')
+                : [];
             const catalogSubAgent =
-                !directSubAgent && allowFoldedTaskGraphTarget && normalizedName
-                    ? AIEngine.Instance.Agents.find(
-                          a => a.Status === 'Active' && a.Name.trim().toLowerCase() === normalizedName
-                      )
+                !directSubAgent && allowFoldedTaskGraphTarget && name
+                    ? (activeCatalogAgents.find(a => a.Name.trim().toLowerCase() === normalizedName)
+                        ?? this.matchNamedBySanitizedToolName(name, activeCatalogAgents, true).match)
                     : undefined;
             const subAgent = directSubAgent ?? catalogSubAgent;
             const hasRunPermission =
@@ -7052,10 +7744,126 @@ export class BaseAgent {
                     };
                 }
             }
+
+            if (req.resumeRunId != null && req.resumeRunId !== '') {
+                const openForSubAgent = openConsultsBySubAgent.Get(subAgent.ID) ?? [];
+                const matchingConsult = IsValidUUID(req.resumeRunId)
+                    ? IndexByUUID(openForSubAgent, c => c.childRunId).Get(req.resumeRunId)
+                    : undefined;
+                if (!matchingConsult) {
+                    const openIds = openForSubAgent.length > 0
+                        ? openForSubAgent.map(c => c.childRunId).join(', ')
+                        : 'none';
+                    const errorMessage = `Invalid resumeRunId '${req.resumeRunId}' for sub-agent '${subAgent.Name}'. Open consult run IDs for '${subAgent.Name}': ${openIds}`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId,
+                            openConsultIds: openIds
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+
+                const normalizedResumeId = matchingConsult.childRunId.trim().toLowerCase();
+                if (seenResumeRunIds.has(normalizedResumeId)) {
+                    const errorMessage = `resumeRunId '${req.resumeRunId}' is used more than once`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            resumeRunId: req.resumeRunId
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+                seenResumeRunIds.add(normalizedResumeId);
+            }
+
+            if (req.presetName != null && req.presetName.trim() !== '') {
+                const matchedPreset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, req.presetName);
+                if (!matchedPreset) {
+                    const availablePresets = AIEngine.Instance.GetAgentConfigurationPresets(subAgent.ID, true)
+                        .map(p => p.Name);
+                    const availableList = availablePresets.length > 0 ? availablePresets.join(', ') : 'none';
+                    const errorMessage = `Sub-agent '${subAgent.Name}' has no preset '${req.presetName}'. Available: ${availableList}.`;
+                    this.logError(errorMessage, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            presetName: req.presetName,
+                            availablePresets: availableList
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        ...nextStep,
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage
+                    };
+                }
+            }
         }
 
         // All requested sub-agents are valid
         return nextStep;
+    }
+
+    /**
+     * Strips an optional `delegate_to_` native sub-agent tool prefix when a model running
+     * with native tool calling references a sub-agent by its declared tool name inside an
+     * envelope primitive (`Sub-Agent`, `ForEach`, `While`, or `Tasks`).
+     */
+    protected stripSubAgentToolPrefix(rawName: string): string {
+        const trimmed = rawName.trim();
+        return trimmed.toLowerCase().startsWith(SUB_AGENT_TOOL_PREFIX)
+            ? trimmed.slice(SUB_AGENT_TOOL_PREFIX.length)
+            : trimmed;
+    }
+
+    /**
+     * Resolves a unique entity from `pool` whose sanitized native tool name matches `rawName`.
+     * Returns `{ ambiguous }` when multiple entities collide on the same sanitized name.
+     */
+    protected matchNamedBySanitizedToolName<T extends { Name?: string | null }>(
+        rawName: string,
+        pool: readonly T[],
+        stripSubAgentPrefix = false
+    ): { match?: T; ambiguous?: T[] } {
+        const candidate = stripSubAgentPrefix ? this.stripSubAgentToolPrefix(rawName) : rawName.trim();
+        const sanitized = SanitizeToolName(candidate);
+        if (!sanitized) {
+            return {};
+        }
+        const matches = pool.filter(item => item.Name && SanitizeToolName(item.Name) === sanitized);
+        if (matches.length === 1) {
+            return { match: matches[0] };
+        }
+        if (matches.length > 1) {
+            return { ambiguous: matches };
+        }
+        return {};
     }
 
     /**
@@ -7078,11 +7886,9 @@ export class BaseAgent {
      * Validates a `'Tasks'` next step before `executeTasksStep` submits the graph.
      *
      * Verifies that every referenced `Agent` (including `ForEach`/`While` loop sub-agents) is
-     * active and runnable by `params.contextUser`, and that every referenced `Action` is active.
-     * When an agent or action name is unknown or inaccessible, converts the step to a self-correcting
-     * `Retry` with the user's permitted runnable agent list instead of letting `TaskGraphService.Submit`
-     * terminate the entire agent run as `Failed`. Never reveals whether an invalid agent name was
-     * nonexistent versus restricted by permissions.
+     * active and runnable by `params.contextUser`, and that every referenced `Action` (including
+     * multi-step `steps[]` loop bodies) is active. Accepts sanitized native tool names
+     * (`calculate_expression`, `delegate_to_query_builder`) and canonicalizes them in place.
      */
     protected async validateTasksNextStep<P>(
         params: ExecuteAgentParams,
@@ -7104,7 +7910,11 @@ export class BaseAgent {
         };
         const extractNodeActionNames = (node: TaskGraphSpecNode): string[] => {
             const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
-            return [ConfigOf(node, 'Action')?.actionName, loopOp?.action?.name].filter(
+            return [
+                ConfigOf(node, 'Action')?.actionName,
+                loopOp?.action?.name,
+                ...(loopOp?.steps?.map((s) => s.name) ?? [])
+            ].filter(
                 (n): n is string => typeof n === 'string' && n.trim().length > 0
             );
         };
@@ -7112,14 +7922,20 @@ export class BaseAgent {
         const referencedAgents = [...new Set(spec.tasks.flatMap(extractNodeAgentNames))];
         const referencedActions = [...new Set(spec.tasks.flatMap(extractNodeActionNames))];
 
+        const hostAllowedIds = HostAllowedAgentIDs(params.data);
+        const disallowedAgents: string[] = [];
         const invalidAgents: string[] = [];
-        const allAgents = AIEngine.Instance?.Agents ?? [];
-        if (referencedAgents.length > 0 && allAgents.length > 0) {
+        const activeAgents = (AIEngine.Instance?.Agents ?? []).filter(a => a.Status === 'Active');
+        if (referencedAgents.length > 0 && (activeAgents.length > 0 || hostAllowedIds !== undefined)) {
             for (const agentName of referencedAgents) {
                 const normalized = agentName.trim().toLowerCase();
-                const matched = allAgents.find(
-                    a => a.Status === 'Active' && a.Name?.trim().toLowerCase() === normalized
-                );
+                const matched =
+                    activeAgents.find(a => a.Name?.trim().toLowerCase() === normalized)
+                    ?? this.matchNamedBySanitizedToolName(agentName, activeAgents, true).match;
+                if (hostAllowedIds !== undefined && (!matched || KeepHostAllowedAgents([matched], hostAllowedIds).length === 0)) {
+                    disallowedAgents.push(agentName);
+                    continue;
+                }
                 const permitted = matched
                     ? params.contextUser
                         ? await AIAgentPermissionHelper.HasPermission(matched.ID, params.contextUser, 'run')
@@ -7131,14 +7947,34 @@ export class BaseAgent {
             }
         }
 
+        if (disallowedAgents.length > 0) {
+            const subject = disallowedAgents.join(', ');
+            const refusalMessage =
+                disallowedAgents.length === 1
+                    ? `${subject} isn't available in this chat, so it didn't run.`
+                    : `${subject} aren't available in this chat, so they didn't run.`;
+            this.logError(refusalMessage, {
+                agent: params.agent,
+                category: 'NextStepValidation'
+            });
+            return {
+                step: 'Failed',
+                terminate: true,
+                message: refusalMessage,
+                errorMessage: refusalMessage,
+                previousPayload: nextStep.previousPayload,
+                newPayload: nextStep.newPayload || nextStep.previousPayload
+            };
+        }
+
         const invalidActions: string[] = [];
-        const allActions = ActionEngineServer.Instance?.Actions ?? [];
-        if (referencedActions.length > 0 && allActions.length > 0) {
+        const activeActions = (ActionEngineServer.Instance?.Actions ?? []).filter(act => act.Status === 'Active');
+        if (referencedActions.length > 0 && activeActions.length > 0) {
             for (const actionName of referencedActions) {
                 const normalized = actionName.trim().toLowerCase();
-                const matched = allActions.find(
-                    act => act.Status === 'Active' && act.Name?.trim().toLowerCase() === normalized
-                );
+                const matched =
+                    activeActions.find(act => act.Name?.trim().toLowerCase() === normalized)
+                    ?? this.matchNamedBySanitizedToolName(actionName, activeActions).match;
                 if (!matched) {
                     invalidActions.push(actionName);
                 }
@@ -7195,7 +8031,7 @@ export class BaseAgent {
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
         // Use effective actions which includes runtime action changes (populated in gatherPromptTemplateData)
-        // Fall back to database-configured actions if _effectiveActions is empty
+        // Falls back to database-configured actions only when the list was never computed for this run
         const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
         // Also get the database-configured agent actions for MaxExecutionsPerRun lookup
@@ -7203,31 +8039,12 @@ export class BaseAgent {
             aa => UUIDsEqual(aa.AgentID, params.agent.ID) && aa.Status === 'Active'
         );
 
+        const resolvedByAction = new Map<AgentAction, MJActionEntityExtended>();
         const missingActions = nextStep.actions?.filter(action => {
-            const actionName = action.name.trim().toLowerCase();
-
-            // Try exact match first against effective actions (by Name property)
-            const exactMatch = effectiveActions.find(a =>
-                a.Name.trim().toLowerCase() === actionName
-            );
-            if (exactMatch) return false;  // Found exact match, not missing
-
-            // Fallback: Try CONTAINS search for partial matches
-            const containsMatches = effectiveActions.filter(a =>
-                a.Name.trim().toLowerCase().includes(actionName)
-            );
-
-            if (containsMatches.length === 1) {
-                // Exactly one partial match - use it and update action name
-                const correctedName = containsMatches[0].Name;
-                this.logStatus(`Action name fuzzy matched: '${action.name}' → '${correctedName}'`, true, params);
-                action.name = correctedName;  // Update to correct full name
-                return false;  // Found via contains, not missing
-            }
-
-            // No matches or ambiguous (multiple matches) - it's missing
-            if (containsMatches.length > 1) {
-                this.logStatus(`Ambiguous action name '${action.name}' matches ${containsMatches.length} actions: ${containsMatches.map(a => a.Name).join(', ')}`, true, params);
+            const matched = this.resolveActionEntityForAgent(action.name, effectiveActions, params, true);
+            if (matched) {
+                resolvedByAction.set(action, matched);
+                return false;
             }
             return true;
         });
@@ -7256,9 +8073,9 @@ export class BaseAgent {
             const violatedActions: string[] = [];
 
             for (const action of nextStep.actions) {
-                const actionEntity = effectiveActions.find(a =>
-                    a.Name.trim().toLowerCase() === action.name.trim().toLowerCase()
-                );
+                const actionEntity =
+                    resolvedByAction.get(action)
+                    ?? effectiveActions.find(a => a.Name.trim().toLowerCase() === action.name.trim().toLowerCase());
 
                 if (!actionEntity) continue;
 
@@ -7309,7 +8126,8 @@ export class BaseAgent {
 
     /**
      * Gets the effective actions for validation, using runtime changes if available.
-     * Falls back to database-configured actions if _effectiveActions is empty.
+     * Falls back to database-configured actions only when the list was never computed for this run;
+     * a computed empty list (a host's actionChanges removed every action) is returned as-is.
      *
      * @param agentId - The ID of the agent to get actions for
      * @returns Array of effective actions available to the agent
@@ -7317,7 +8135,7 @@ export class BaseAgent {
      * @since 2.123.0
      */
     protected getEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[] {
-        if (this._effectiveActions.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveActions.length > 0) {
             return this._effectiveActions;
         }
 
@@ -7331,8 +8149,206 @@ export class BaseAgent {
     }
 
     /**
+     * Returns active actions referenced directly by an agent's Flow steps (`AIAgentStep.ActionID`
+     * plus any `steps[].name` inside a `ForEach`/`While` Flow step's `Configuration` JSON).
+     * Flow agents bind actions on `AIAgentStep` rather than `AIAgentAction`, so in-run Flow loops
+     * need these actions in scope alongside {@link getEffectiveActionsForValidation}.
+     */
+    private getFlowStepActions(agentId: string): MJActionEntityExtended[] {
+        const allActions = ActionEngineServer.Instance?.Actions;
+        if (!Array.isArray(allActions) || allActions.length === 0 || !agentId) {
+            return [];
+        }
+        const agentSteps = AIEngine.Instance.GetAgentSteps?.(agentId) || [];
+        if (agentSteps.length === 0) {
+            return [];
+        }
+        const stepActionIds = new UUIDSet(
+            agentSteps.map((s) => s.ActionID).filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        const stepActionNamesLower = new Set<string>();
+        const stepActionNamesSanitized = new Set<string>();
+        for (const s of agentSteps) {
+            if (!s.Configuration) continue;
+            try {
+                const cfg = JSON.parse(s.Configuration) as { steps?: Array<{ name?: string }> };
+                if (Array.isArray(cfg?.steps)) {
+                    for (const bodyStep of cfg.steps) {
+                        const raw = bodyStep?.name?.trim();
+                        if (raw) {
+                            stepActionNamesLower.add(raw.toLowerCase());
+                            const san = SanitizeToolName(raw);
+                            if (san) stepActionNamesSanitized.add(san);
+                        }
+                    }
+                }
+            } catch {
+                // Malformed step configuration JSON is reported by FlowAgentType when that step runs.
+            }
+        }
+        return allActions.filter(
+            (a) =>
+                a.Status !== 'Disabled' &&
+                (stepActionIds.Has(a.ID) ||
+                    stepActionNamesLower.has(a.Name.trim().toLowerCase()) ||
+                    stepActionNamesSanitized.has(SanitizeToolName(a.Name)))
+        );
+    }
+
+    /**
+     * Returns the active agents named by an agent's own active Flow steps: a `Sub-Agent` step's
+     * `SubAgentID`, or the `SubAgentID` of a `ForEach`/`While` step whose `LoopBodyType` is
+     * `'Sub-Agent'`. Flow agents bind sub-agents on `AIAgentStep` rather than through `ParentID`
+     * or `AIAgentRelationship`, so {@link resolveSubAgentByName} needs these in scope, as
+     * {@link getFlowStepActions} does for actions.
+     */
+    private getFlowStepSubAgents(agentId: string): MJAIAgentEntityExtended[] {
+        if (!agentId) return [];
+        const steps = AIEngine.Instance.GetAgentSteps?.(agentId, 'Active') ?? [];
+        const ids = new UUIDSet(
+            steps
+                .filter(s => s.StepType === 'Sub-Agent'
+                    || ((s.StepType === 'ForEach' || s.StepType === 'While') && s.LoopBodyType === 'Sub-Agent'))
+                .map(s => s.SubAgentID)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (ids.Size === 0) return [];
+        return AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && ids.Has(a.ID));
+    }
+
+    /**
+     * Combines {@link getEffectiveActionsForValidation} with {@link getFlowStepActions} (deduplicated
+     * by `ID`) so both Loop agents (strictly `AIAgentAction` / `_effectiveActions`) and Flow agents
+     * (`AIAgentStep` / `Configuration.steps[]`) resolve permitted actions consistently.
+     */
+    private getAvailableActionsForAgent(agentId: string): MJActionEntityExtended[] {
+        const effective = this.getEffectiveActionsForValidation(agentId);
+        const flowActions = this.getFlowStepActions(agentId);
+        if (flowActions.length === 0) {
+            return effective;
+        }
+        const seen = new UUIDSet(effective.map((a) => a.ID));
+        const combined = [...effective];
+        for (const fa of flowActions) {
+            if (!seen.Has(fa.ID)) {
+                seen.Add(fa.ID);
+                combined.push(fa);
+            }
+        }
+        return combined;
+    }
+
+    /**
+     * Resolves an action name against `pool` without mutating caller objects:
+     * 1) exact case-insensitive match, 2) unambiguous sanitized native tool-name match,
+     * 3) unambiguous CONTAINS partial match.
+     */
+    private resolveActionEntityForAgent(
+        rawName: string,
+        pool: readonly MJActionEntityExtended[],
+        params?: ExecuteAgentParams,
+        logMatches = false
+    ): MJActionEntityExtended | undefined {
+        const trimmedLower = rawName.trim().toLowerCase();
+        if (!trimmedLower) {
+            return undefined;
+        }
+        const exact = pool.find((a) => a.Name.trim().toLowerCase() === trimmedLower);
+        if (exact) {
+            return exact;
+        }
+        const sanitizedMatch = this.matchNamedBySanitizedToolName(rawName, pool);
+        if (sanitizedMatch.match) {
+            if (logMatches && params) {
+                this.logStatus(`Action native tool name matched: '${rawName}' → '${sanitizedMatch.match.Name}'`, true, params);
+            }
+            return sanitizedMatch.match;
+        }
+        if (sanitizedMatch.ambiguous) {
+            if (logMatches && params) {
+                this.logStatus(
+                    `Ambiguous action tool name '${rawName}' matches ${sanitizedMatch.ambiguous.length} actions: ${sanitizedMatch.ambiguous.map((a) => a.Name).join(', ')}`,
+                    true,
+                    params
+                );
+            }
+            return undefined;
+        }
+        const containsMatches = pool.filter((a) => a.Name.trim().toLowerCase().includes(trimmedLower));
+        if (containsMatches.length === 1) {
+            if (logMatches && params) {
+                this.logStatus(`Action name fuzzy matched: '${rawName}' → '${containsMatches[0].Name}'`, true, params);
+            }
+            return containsMatches[0];
+        }
+        if (containsMatches.length > 1 && logMatches && params) {
+            this.logStatus(
+                `Ambiguous action name '${rawName}' matches ${containsMatches.length} actions: ${containsMatches.map((a) => a.Name).join(', ')}`,
+                true,
+                params
+            );
+        }
+        return undefined;
+    }
+
+    /**
+     * Returns a deep-cloned `TaskGraphSpec` with sanitized native tool names (`calculate_expression`,
+     * `delegate_to_query_builder`) canonicalized to exact metadata names before durable submission,
+     * without mutating the caller's `spec`.
+     */
+    private canonicalizeTaskGraphSpec(spec: TaskGraphSpec): TaskGraphSpec {
+        const cloned = this.cloneSubAgentPayload(spec);
+        const activeAgents = (AIEngine.Instance?.Agents ?? []).filter((a) => a.Status === 'Active');
+        const activeActions = (ActionEngineServer.Instance?.Actions ?? []).filter((act) => act.Status === 'Active');
+
+        const resolveAgent = (name: string | undefined): string | undefined => {
+            if (!name) return name;
+            const lower = name.trim().toLowerCase();
+            const found =
+                activeAgents.find((a) => a.Name?.trim().toLowerCase() === lower)
+                ?? this.matchNamedBySanitizedToolName(name, activeAgents, true).match;
+            return found?.Name ?? name;
+        };
+        const resolveAction = (name: string | undefined): string | undefined => {
+            if (!name) return name;
+            const lower = name.trim().toLowerCase();
+            const found =
+                activeActions.find((act) => act.Name?.trim().toLowerCase() === lower)
+                ?? this.matchNamedBySanitizedToolName(name, activeActions).match;
+            return found?.Name ?? name;
+        };
+
+        for (const node of cloned.tasks ?? []) {
+            const agentCfg = ConfigOf(node, 'Agent');
+            if (agentCfg?.agentName) {
+                agentCfg.agentName = resolveAgent(agentCfg.agentName)!;
+            }
+            const actionCfg = ConfigOf(node, 'Action');
+            if (actionCfg?.actionName) {
+                actionCfg.actionName = resolveAction(actionCfg.actionName)!;
+            }
+            const loopOp = ConfigOf(node, 'ForEach') ?? ConfigOf(node, 'While');
+            if (loopOp?.subAgent?.name) {
+                loopOp.subAgent.name = resolveAgent(loopOp.subAgent.name)!;
+            }
+            if (loopOp?.action?.name) {
+                loopOp.action.name = resolveAction(loopOp.action.name)!;
+            }
+            if (Array.isArray(loopOp?.steps)) {
+                for (const step of loopOp.steps) {
+                    if (step.name) {
+                        step.name = resolveAction(step.name)!;
+                    }
+                }
+            }
+        }
+        return cloned;
+    }
+
+    /**
      * Gets the effective sub-agents for validation, using runtime subAgentChanges if available.
-     * Falls back to the database-configured relationship set if _effectiveSubAgents is empty.
+     * Falls back to the database-configured relationship set only when the list was never computed
+     * for this run; a computed empty list is returned as-is.
      * Mirrors {@link getEffectiveActionsForValidation}.
      *
      * @param agentId - The ID of the agent to get sub-agents for
@@ -7340,7 +8356,7 @@ export class BaseAgent {
      * @protected
      */
     protected getEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[] {
-        if (this._effectiveSubAgents.length > 0) {
+        if (this._effectiveCatalogComputed || this._effectiveSubAgents.length > 0) {
             return this._effectiveSubAgents;
         }
 
@@ -7470,6 +8486,95 @@ export class BaseAgent {
             };
         }
 
+        return nextStep;
+    }
+
+    /**
+     * Validates a `'Handoff'` next step: re-checks the runtime withholding conditions (sub-agent run,
+     * missing `conversationDetailId`, or missing `handoffChain`) and validates the requested target
+     * via {@link ResolveHandoffTarget} (Active status, `'view'` and `'run'` permissions, direct
+     * discoverability, host allow-list, cycle check, and hop limit). On refusal, writes a Failed
+     * `'Handoff'` step and returns a `'Retry'` step naming up to 20 candidate agents; on approval,
+     * stores the resolved target ID and name for {@link executeHandoffStep}.
+     *
+     * @protected
+     */
+    protected async validateHandoffNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        _currentPayload: P,
+        _agentRun: MJAIAgentRunEntityExtended,
+        _currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        if (this.runWithholdsHandoff(params)) {
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                message:
+                    'Handoff is not available here, so nextStep.type must never be "Handoff". ' +
+                    'Answer directly, or use nextStep.type "Sub-Agent" or "Actions" instead.',
+                errorMessage: 'Handoff is not available on this run'
+            };
+        }
+
+        const requestedName = nextStep.handoff?.agentName ?? '';
+        const brief = nextStep.handoff?.brief ?? '';
+        const reason = nextStep.handoff?.reason ?? '';
+        const data = WithAgentRunDataTrustApplied(params).Params.data;
+        const resolution = await ResolveHandoffTarget({
+            AgentName: requestedName,
+            SourceAgentID: params.agent.ID,
+            HandoffChain: params.handoffChain ?? [],
+            HostAllowedIDs: HostAllowedAgentIDs(data),
+            ContextUser: params.contextUser,
+            Agents: AIEngine.Instance.Agents,
+        });
+
+        if (resolution.Refusal) {
+            const refusal = resolution.Refusal;
+            this.logError(`Handoff target agent '${requestedName}' refused (${refusal.Reason}) for agent '${params.agent.Name}': ${refusal.Message}`, {
+                agent: params.agent,
+                category: 'NextStepValidation'
+            });
+            await this.createStepEntity({
+                stepType: 'Handoff',
+                stepName: `Handoff: ${requestedName.trim() || '(unknown)'}`,
+                contextUser: params.contextUser,
+                inputData: {
+                    agentName: requestedName,
+                    brief,
+                    reason
+                },
+                completed: {
+                    success: false,
+                    errorMessage: refusal.Message,
+                    outputData: {
+                        RefusalReason: refusal.Reason,
+                        AgentName: requestedName,
+                        Brief: brief,
+                        Reason: reason
+                    }
+                }
+            });
+            if (nextStep.step !== 'Retry') {
+                this._generalValidationRetryCount++;
+            }
+            return {
+                step: 'Retry',
+                terminate: false,
+                message: refusal.Message,
+                errorMessage: refusal.Message
+            };
+        }
+
+        const target = resolution.Target;
+        this._resolvedHandoffTarget = { id: target.ID, name: target.Name };
+        if (nextStep.handoff) {
+            nextStep.handoff = { ...nextStep.handoff, agentName: target.Name };
+        }
         return nextStep;
     }
 
@@ -7764,9 +8869,95 @@ export class BaseAgent {
     }
 
     /**
+     * Resolves the effective `ChatHandlingOption` for a sub-agent execution:
+     * `relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null`.
+     * @private
+     */
+    private resolveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity
+    ): MJAIAgentEntity['ChatHandlingOption'] {
+        return relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null;
+    }
+
+    /**
+     * Returns `true` only when `resolvedOption === 'Consult'` AND the parent agent's
+     * type supports injecting loop/consult messages into conversation history
+     * (`this.AgentTypeInstance?.InjectLoopResultsAsMessage !== false`).
+     *
+     * When `resolvedOption === 'Consult'` and `this.AgentTypeInstance?.InjectLoopResultsAsMessage === false`
+     * (e.g., a Flow parent), logs a warning once per run and returns `false` so `'Consult'`
+     * is treated as `null` (propagate).
+     * @private
+     */
+    private isSubAgentConsultActive(
+        resolvedOption: MJAIAgentEntity['ChatHandlingOption'],
+        params?: ExecuteAgentParams
+    ): boolean {
+        if (resolvedOption !== 'Consult') {
+            return false;
+        }
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            if (!this._loggedConsultUnsupportedAgentType) {
+                this._loggedConsultUnsupportedAgentType = true;
+                this.logStatus(
+                    "⚠️ ChatHandlingOption 'Consult' is not supported for agent types where InjectLoopResultsAsMessage is false; treating as null (propagate).",
+                    false,
+                    params
+                );
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Resolves the sub-agent `ChatHandlingOption` and downgrades `'Consult'` to `null`
+     * when `isSubAgentConsultActive` returns `false` (e.g., on Flow parents).
+     * @private
+     */
+    private effectiveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity,
+        params?: ExecuteAgentParams
+    ): MJAIAgentEntity['ChatHandlingOption'] {
+        const resolved = this.resolveSubAgentChatHandlingOption(parentAgent, relationship);
+        if (resolved === 'Consult' && !this.isSubAgentConsultActive(resolved, params)) {
+            return null;
+        }
+        return resolved;
+    }
+
+    /**
+     * Side-effect-free check used during prompt and native-tool construction to determine
+     * whether `'Consult'` is active for a specific sub-agent of `parentAgent`.
+     * @private
+     */
+    private isSubAgentConsultEnabledForSubAgent(
+        parentAgent: MJAIAgentEntityExtended,
+        subAgent: MJAIAgentEntityExtended
+    ): boolean {
+        if (this.AgentTypeInstance?.InjectLoopResultsAsMessage === false) {
+            return false;
+        }
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, parentAgent.ID);
+        const relationship = isDirectChild
+            ? undefined
+            : (AIEngine.Instance.AgentRelationships ?? []).find(
+                r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, subAgent.ID) && r.Status === 'Active'
+            );
+        return this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
+    }
+
+    /**
      * Validates that the Chat next step is valid and can be executed by the current agent. 
-     * Implements ChatHandlingOption remapping logic - if the agent has ChatHandlingOption set,
-     * the Chat step is remapped to the specified value (Success, Fail, or Retry).
+     * Implements ChatHandlingOption remapping logic - if the agent (or sub-agent relationship)
+     * has ChatHandlingOption set:
+     * - `'Consult'`: leaves the Chat step unchanged (an agent's own Chat propagates to its caller;
+     *   sub-agent Consult is intercepted before this validator).
+     * - `'Success'` / `'Failed'`: remaps `step` while preserving `terminate: true` to end the run.
+     * - `'Retry'`: remaps `step` to `'Retry'`, sets `terminate: false` so the loop continues, and
+     *   populates `errorMessage` so the unproductive-retry safety net bounds repeated Chat attempts.
      * Subclasses can override this method to implement custom validation logic if needed.
      * @param params 
      * @param nextStep 
@@ -7777,16 +8968,21 @@ export class BaseAgent {
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
+        currentStep: MJAIAgentRunStepEntityExtended,
+        chatHandlingOption?: MJAIAgentEntity['ChatHandlingOption']
     ): Promise<BaseAgentNextStep<P>> {
-        // Check if the agent has ChatHandlingOption configured
-        const chatHandlingOption = params.agent.ChatHandlingOption;
+        // Use caller-resolved option when provided; otherwise fall back to params.agent.ChatHandlingOption
+        const effectiveOption = chatHandlingOption !== undefined
+            ? chatHandlingOption
+            : params.agent.ChatHandlingOption;
         
-        if (chatHandlingOption) {
+        if (effectiveOption) {
             // Use a switch to validate and map the ChatHandlingOption value
             let mappedStep: 'Success' | 'Failed' | 'Retry';
             
-            switch (chatHandlingOption) {
+            switch (effectiveOption) {
+                case 'Consult':
+                    return nextStep;
                 case 'Success':
                     mappedStep = 'Success';
                     break;
@@ -7798,19 +8994,28 @@ export class BaseAgent {
                     break;
                 default:
                     // Log error and treat as null (default behavior)
-                    LogError(`Invalid ChatHandlingOption value: ${chatHandlingOption}. Expected 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
+                    LogError(`Invalid ChatHandlingOption value: ${effectiveOption}. Expected 'Consult', 'Success', 'Failed', or 'Retry'. Treating as null and allowing Chat to propagate.`);
                     return nextStep;
             }
             
-            // Remap the Chat step to the configured option
-            const remappedStep: BaseAgentNextStep<P> = {
-                ...nextStep,
-                step: mappedStep
-            };
+            // Remap the Chat step to the configured option.
+            // Retry sets terminate to false so the loop continues and sets errorMessage so the
+            // unproductive-retry cap bounds a model that repeatedly emits Chat.
+            const remappedStep: BaseAgentNextStep<P> = mappedStep === 'Retry'
+                ? {
+                    ...nextStep,
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: nextStep.errorMessage || 'Chat was remapped to Retry by ChatHandlingOption'
+                }
+                : {
+                    ...nextStep,
+                    step: mappedStep
+                };
             
             // Log the remapping for debugging
             if (params.verbose === true || IsVerboseLoggingEnabled()) {
-                LogStatus(`Remapping Chat step to ${chatHandlingOption} based on agent's ChatHandlingOption`);
+                LogStatus(`Remapping Chat step to ${effectiveOption} based on agent's ChatHandlingOption`);
             }
             
             // Re-validate the remapped step using the appropriate validator
@@ -8005,8 +9210,6 @@ export class BaseAgent {
         current?: number;
         reason?: string;
     }> {
-        const agent = params.agent;
-
         // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
         // static limits.
         //
@@ -8031,106 +9234,21 @@ export class BaseAgent {
             this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
         }
 
-        // Check absolute maximum iterations (safety net to prevent infinite loops)
         const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
-
-        if (agentRun.TotalPromptIterations != null && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
-            return {
-                exceeded: true,
-                type: 'iterations',
-                limit: absoluteMaxIterations,
-                current: agentRun.TotalPromptIterations,
-                reason: `Absolute maximum iteration safety limit of ${absoluteMaxIterations} exceeded. Current iterations: ${agentRun.TotalPromptIterations}. This is a system-wide safety measure to prevent infinite loops.`
-            };
-        }
-
-        // Check cost limit
-        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
-            if (agentRun.TotalCost >= agent.MaxCostPerRun) {
-                return {
-                    exceeded: true,
-                    type: 'cost',
-                    limit: agent.MaxCostPerRun,
-                    current: agentRun.TotalCost,
-                    reason: `Maximum cost limit of $${agent.MaxCostPerRun} exceeded. Current cost: $${agentRun.TotalCost.toFixed(4)}`
-                };
-            }
-        }
-        
-        // Check token limit
-        if (agent.MaxTokensPerRun != null && agentRun.TotalTokensUsed != null) {
-            if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
-                return {
-                    exceeded: true,
-                    type: 'tokens',
-                    limit: agent.MaxTokensPerRun,
-                    current: agentRun.TotalTokensUsed,
-                    reason: `Maximum token limit of ${agent.MaxTokensPerRun} exceeded. Current tokens: ${agentRun.TotalTokensUsed}`
-                };
-            }
-        }
-        
-        // Check iteration limit
-        if (agent.MaxIterationsPerRun != null && agentRun.TotalPromptIterations != null) {
-            if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
-                return {
-                    exceeded: true,
-                    type: 'iterations',
-                    limit: agent.MaxIterationsPerRun,
-                    current: agentRun.TotalPromptIterations,
-                    reason: `Maximum iteration limit of ${agent.MaxIterationsPerRun} exceeded. Current iterations: ${agentRun.TotalPromptIterations}`
-                };
-            }
-        }
-        
-        // Check time limit
-        if (agent.MaxTimePerRun != null && agentRun.StartedAt) {
-            const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
-            if (elapsedSeconds >= agent.MaxTimePerRun) {
-                return {
-                    exceeded: true,
-                    type: 'time',
-                    limit: agent.MaxTimePerRun,
-                    current: elapsedSeconds,
-                    reason: `Maximum time limit of ${agent.MaxTimePerRun} seconds exceeded. Elapsed time: ${elapsedSeconds} seconds`
-                };
-            }
-        }
-        
-        // Check validation retry limit
-        if (this._generalValidationRetryCount >= BaseAgent.MAX_VALIDATION_RETRIES) {
-            return {
-                exceeded: true,
-                type: 'iterations', // Using iterations type since validation retries are a form of iteration
-                limit: BaseAgent.MAX_VALIDATION_RETRIES,
-                current: this._generalValidationRetryCount,
-                reason: `Maximum validation retries of ${BaseAgent.MAX_VALIDATION_RETRIES} exceeded. The agent is unable to produce valid output after ${this._generalValidationRetryCount} validation failures.`
-            };
-        }
-
-        // Synchronize shared tree budget floor with the current agentRun's metrics (handles both
-        // multi-agent trees and direct guardrail invocations with pre-populated agentRun entities)
-        // and evaluate cumulative root-tree ceilings (maxTreeSteps, maxTreeTokens, maxTreeCost, maxTreeDurationMs).
-        const budget = this.ensureTreeBudget(params);
-        if (agentRun) {
-            const runStepsCount = Math.max(agentRun.Steps?.length ?? 0, agentRun.TotalPromptIterations ?? 0);
-            if (runStepsCount > budget.totalSteps) {
-                budget.totalSteps = runStepsCount;
-            }
-            if ((agentRun.TotalTokensUsed ?? 0) > budget.totalTokens) {
-                budget.totalTokens = agentRun.TotalTokensUsed ?? 0;
-            }
-            if ((agentRun.TotalCost ?? 0) > budget.totalCost) {
-                budget.totalCost = agentRun.TotalCost ?? 0;
-            }
-        }
-        const treeBudgetCheck = this.checkTreeBudgetLimit(params);
-        if (treeBudgetCheck.exceeded) {
-            return treeBudgetCheck;
-        }
-        
-        // No guardrails exceeded
-        return { exceeded: false };
+        const { Result, Budget } = this._budgetTracker.CheckRunAndTreeGuardrails({
+            Params: params,
+            AgentRun: agentRun,
+            ActiveAgentRun: this._agentRun,
+            CurrentBudget: this._treeBudget,
+            FallbackParams: this._executeParams,
+            AbsoluteMaxIterations: absoluteMaxIterations,
+            ValidationRetryCount: this._generalValidationRetryCount,
+            MaxValidationRetries: BaseAgent.MAX_VALIDATION_RETRIES,
+            EnsureTreeBudgetFn: (p) => this.ensureTreeBudget(p),
+            CheckTreeBudgetLimitFn: (p) => this.checkTreeBudgetLimit(p),
+        });
+        this._treeBudget = Budget;
+        return this._budgetTracker.ToLegacyGuardrailVerdict(Result);
     }
 
     /**
@@ -8150,41 +9268,8 @@ export class BaseAgent {
      * @protected
      */
     protected ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
-        const effectiveParams = params ?? this._executeParams;
-        let budget = effectiveParams?.treeBudget ?? this._treeBudget;
-        if (!budget) {
-            budget = {
-                maxTreeSteps: effectiveParams?.maxTreeSteps,
-                maxTreeTokens: effectiveParams?.maxTreeTokens,
-                maxTreeCost: effectiveParams?.maxTreeCost,
-                maxTreeDurationMs: effectiveParams?.maxTreeDurationMs,
-                totalSteps: 0,
-                totalTokens: 0,
-                totalCost: 0,
-                startedAtMs: Date.now()
-            };
-        } else if (effectiveParams) {
-            if (budget.maxTreeSteps === undefined && effectiveParams.maxTreeSteps !== undefined) {
-                budget.maxTreeSteps = effectiveParams.maxTreeSteps;
-            }
-            if (budget.maxTreeTokens === undefined && effectiveParams.maxTreeTokens !== undefined) {
-                budget.maxTreeTokens = effectiveParams.maxTreeTokens;
-            }
-            if (budget.maxTreeCost === undefined && effectiveParams.maxTreeCost !== undefined) {
-                budget.maxTreeCost = effectiveParams.maxTreeCost;
-            }
-            if (budget.maxTreeDurationMs === undefined && effectiveParams.maxTreeDurationMs !== undefined) {
-                budget.maxTreeDurationMs = effectiveParams.maxTreeDurationMs;
-            }
-        }
-
+        const budget = this._budgetTracker.EnsureTreeBudget(params, this._treeBudget, this._executeParams);
         this._treeBudget = budget;
-        if (effectiveParams) {
-            effectiveParams.treeBudget = budget;
-        }
-        if (this._executeParams && this._executeParams !== effectiveParams) {
-            this._executeParams.treeBudget = budget;
-        }
         return budget;
     }
 
@@ -8208,53 +9293,7 @@ export class BaseAgent {
         params?: ExecuteAgentParams
     ): void {
         const budget = this.ensureTreeBudget(params);
-
-        let tokensDelta = 0;
-        if (promptRun) {
-            if (promptRun.TokensUsedRollup != null && promptRun.TokensUsedRollup > 0) {
-                tokensDelta = promptRun.TokensUsedRollup;
-            } else if ((promptRun.TokensPromptRollup != null && promptRun.TokensPromptRollup > 0) ||
-                       (promptRun.TokensCompletionRollup != null && promptRun.TokensCompletionRollup > 0)) {
-                tokensDelta = (promptRun.TokensPromptRollup ?? 0) + (promptRun.TokensCompletionRollup ?? 0);
-            } else if (promptRun.TokensUsed != null && promptRun.TokensUsed > 0) {
-                tokensDelta = promptRun.TokensUsed;
-            } else if ((promptRun.TokensPrompt != null && promptRun.TokensPrompt > 0) ||
-                       (promptRun.TokensCompletion != null && promptRun.TokensCompletion > 0)) {
-                tokensDelta = (promptRun.TokensPrompt ?? 0) + (promptRun.TokensCompletion ?? 0);
-            }
-        }
-        if (tokensDelta === 0 && promptResult) {
-            if (promptResult.combinedTokensUsed != null && promptResult.combinedTokensUsed > 0) {
-                tokensDelta = promptResult.combinedTokensUsed;
-            } else if ((promptResult.combinedPromptTokens != null && promptResult.combinedPromptTokens > 0) ||
-                       (promptResult.combinedCompletionTokens != null && promptResult.combinedCompletionTokens > 0)) {
-                tokensDelta = (promptResult.combinedPromptTokens ?? 0) + (promptResult.combinedCompletionTokens ?? 0);
-            } else if (promptResult.tokensUsed != null && promptResult.tokensUsed > 0) {
-                tokensDelta = promptResult.tokensUsed;
-            } else if ((promptResult.promptTokens != null && promptResult.promptTokens > 0) ||
-                       (promptResult.completionTokens != null && promptResult.completionTokens > 0)) {
-                tokensDelta = (promptResult.promptTokens ?? 0) + (promptResult.completionTokens ?? 0);
-            }
-        }
-
-        let costDelta = 0;
-        if (promptRun) {
-            if (promptRun.TotalCost != null && promptRun.TotalCost > 0) {
-                costDelta = promptRun.TotalCost;
-            } else if (promptRun.Cost != null && promptRun.Cost > 0) {
-                costDelta = promptRun.Cost;
-            }
-        }
-        if (costDelta === 0 && promptResult) {
-            if (promptResult.combinedCost != null && promptResult.combinedCost > 0) {
-                costDelta = promptResult.combinedCost;
-            } else if (promptResult.cost != null && promptResult.cost > 0) {
-                costDelta = promptResult.cost;
-            }
-        }
-
-        budget.totalTokens += tokensDelta;
-        budget.totalCost += costDelta;
+        this._budgetTracker.RecordPromptUsage(budget, promptRun, promptResult);
     }
 
     /**
@@ -8278,66 +9317,8 @@ export class BaseAgent {
         reason?: string;
     } {
         const budget = this.ensureTreeBudget(params);
-
-        if (budget.maxTreeSteps != null && budget.totalSteps >= budget.maxTreeSteps) {
-            const reason = budget.breachedReason ?? `Agent tree step budget exceeded (${budget.totalSteps}/${budget.maxTreeSteps} total steps across tree)`;
-            budget.breachedReason = reason;
-            return {
-                exceeded: true,
-                type: 'iterations',
-                limit: budget.maxTreeSteps,
-                current: budget.totalSteps,
-                reason
-            };
-        }
-
-        if (budget.maxTreeTokens != null && budget.totalTokens >= budget.maxTreeTokens) {
-            const reason = budget.breachedReason ?? `Agent tree token budget exceeded (${budget.totalTokens}/${budget.maxTreeTokens} total tokens across tree)`;
-            budget.breachedReason = reason;
-            return {
-                exceeded: true,
-                type: 'tokens',
-                limit: budget.maxTreeTokens,
-                current: budget.totalTokens,
-                reason
-            };
-        }
-
-        if (budget.maxTreeCost != null && budget.totalCost >= budget.maxTreeCost) {
-            const reason = budget.breachedReason ?? `Agent tree cost budget exceeded ($${budget.totalCost.toFixed(4)}/$${budget.maxTreeCost.toFixed(4)} across tree)`;
-            budget.breachedReason = reason;
-            return {
-                exceeded: true,
-                type: 'cost',
-                limit: budget.maxTreeCost,
-                current: budget.totalCost,
-                reason
-            };
-        }
-
-        if (budget.maxTreeDurationMs != null) {
-            const elapsedMs = Date.now() - budget.startedAtMs;
-            if (elapsedMs >= budget.maxTreeDurationMs) {
-                const reason = budget.breachedReason ?? `Agent tree duration budget exceeded (${elapsedMs}ms/${budget.maxTreeDurationMs}ms across tree)`;
-                budget.breachedReason = reason;
-                return {
-                    exceeded: true,
-                    type: 'time',
-                    limit: budget.maxTreeDurationMs,
-                    current: elapsedMs,
-                    reason
-                };
-            }
-        }
-
-        if (budget.breachedReason) {
-            return {
-                exceeded: true,
-                reason: budget.breachedReason
-            };
-        }
-
-        return { exceeded: false };
+        const result = this._budgetTracker.CheckTreeBudgetLimit(budget);
+        return this._budgetTracker.ToLegacyGuardrailVerdict(result);
     }
 
     /**
@@ -9230,16 +10211,19 @@ The context is now within limits. Please retry your request with the recovered c
         currentPayload: P,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Read before validation: a subclass may change the step in place (turn a Chat into a Success),
+        // and only a change the prompt step held as a completion draft can have been discarded.
+        const heldCompletionChange = BaseAgent.carriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteHeldCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
             this._agentRun!, 
             currentStep
-        );
+        ));
         
         this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
@@ -9286,6 +10270,30 @@ The context is now within limits. Please retry your request with the recovered c
         return guardrailCheckedStep;
     }
  
+    /**
+     * A completion refused with a payload change in hand: the change is held, not applied (see
+     * {@link _heldCompletionChanges}), so the refusal the model reads says so and asks for the
+     * corrections only. The model sees the payload with the held change applied from the next turn,
+     * and its next completion's change is applied on top of it. The change is removed from the step,
+     * so nothing later applies it a second time. Any other step is returned as it is.
+     *
+     * `heldChange` is the change the prompt step held as a draft, read from the step before
+     * validation, so a step a subclass changed in place is judged by what the model sent.
+     */
+    private noteHeldCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+        if (!heldChange || step.step === 'Success') {
+            return step;
+        }
+        const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
+        const call = native ? 'complete_task call' : 'completion';
+        const note = `The payloadChangeRequest sent with this ${call} was not applied yet: it is held, and the payload you see `
+            + `from now on includes it. It is applied together with your next ${call}. In that ${call}, send only the `
+            + `corrections, not the whole change again.`;
+        const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
+        const { payloadChangeRequest: _held, ...rest } = step;
+        return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };
+    }
+
     /**
      * Answers a retried native tool-call turn in the protocol itself: every call gets an `is_error`
      * result carrying the retry reason, and no user message follows.
@@ -9534,6 +10542,125 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
         } catch (error) {
             this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
+        }
+    }
+
+    /**
+     * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
+     * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
+     * so a middle agent resumed via `resumeRunId` also reloads its own open child consults. Fail-soft.
+     * @private
+     */
+    private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
+        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !CanAgentOwnSubAgentConsults(params.agent)) {
+            return [];
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const runResult = await rv.RunView<{
+                ID: string;
+                FinalStep: string | null;
+                Status: string;
+                CancellationReason: string | null;
+            }>({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: `ID='${params.lastRunId}'`,
+                MaxRows: 1,
+                Fields: ['ID', 'FinalStep', 'Status', 'CancellationReason'],
+                ResultType: 'simple',
+                BypassCache: true,
+            }, params.contextUser);
+
+            const priorRun = runResult.Success ? runResult.Results?.[0] : undefined;
+            if (
+                !priorRun ||
+                priorRun.FinalStep !== 'Chat' ||
+                MJAIAgentRunEntityExtended.IsUserStopped(priorRun.Status, priorRun.CancellationReason)
+            ) {
+                return [];
+            }
+
+            return await LoadOpenSubAgentConsults(this.ProviderToUse, params.lastRunId, params.contextUser);
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped loading open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Restores reloaded open sub-agent consults into `this._openSubAgentConsults` (so `resumeRunId`
+     * validation accepts them) and splices a `sub-agent-consult` reminder message immediately before
+     * `continuationMessage` (the caller's answer). Fail-soft.
+     * @private
+     */
+    private applyOpenConsults(
+        params: ExecuteAgentParams,
+        openConsults: SubAgentConsultRecord[],
+        continuationMessage: ChatMessage | undefined
+    ): void {
+        if (!openConsults || openConsults.length === 0) {
+            return;
+        }
+        try {
+            for (const consult of openConsults) {
+                if (consult.childRunId) {
+                    this._openSubAgentConsults.set(consult.childRunId, consult);
+                }
+            }
+            const content = FormatReloadedConsultsMessage(openConsults);
+            if (!content) {
+                return;
+            }
+            const metadata: AgentChatMessageMetadata = {
+                turnAdded: 0,
+                messageType: 'sub-agent-consult',
+                ...(openConsults.length === 1
+                    ? {
+                          subAgentName: openConsults[0].subAgentName,
+                          subAgentId: openConsults[0].subAgentId,
+                      }
+                    : {}),
+                expirationTurns: 3,
+                expirationMode: 'Remove',
+            };
+            const consultReminder: AgentChatMessage = {
+                role: 'user',
+                content,
+                metadata,
+            };
+
+            const at = continuationMessage ? params.conversationMessages.indexOf(continuationMessage) : -1;
+            if (at >= 0) {
+                params.conversationMessages.splice(at, 0, consultReminder);
+            } else {
+                let lastUserIdx = -1;
+                for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+                    if (params.conversationMessages[i].role === 'user') {
+                        lastUserIdx = i;
+                        break;
+                    }
+                }
+                if (lastUserIdx >= 0) {
+                    params.conversationMessages.splice(lastUserIdx, 0, consultReminder);
+                } else {
+                    params.conversationMessages.push(consultReminder);
+                }
+            }
+            this.logStatus(
+                `[SubAgentConsult] Reloaded ${openConsults.length} open consult(s) from prior run ${params.lastRunId}`,
+                true,
+                params
+            );
+        } catch (error) {
+            this.logStatus(
+                `[SubAgentConsult] Skipped applying open consults (contained error): ${error instanceof Error ? error.message : error}`,
+                true,
+                params
+            );
         }
     }
 
@@ -9849,6 +10976,7 @@ The context is now within limits. Please retry your request with the recovered c
             ),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
             // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
@@ -9874,6 +11002,7 @@ The context is now within limits. Please retry your request with the recovered c
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ID='${runId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID', 'Status', 'CancellationReason'],
             ResultType: 'simple',
             // The row this checks was written by the Stop button moments ago; read the database, not a cache.
@@ -10051,6 +11180,7 @@ The context is now within limits. Please retry your request with the recovered c
             ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             Fields: ['ID'],
             ResultType: 'simple',
         }, params.contextUser);
@@ -10501,6 +11631,8 @@ The context is now within limits. Please retry your request with the recovered c
             companyId: params.companyId,
             verbose: params.verbose,
             provider: this.ProviderToUse,
+            isRunTainted: this.IsRunTainted,
+            taintedSources: this._taintedSources,
         };
     }
 
@@ -10772,7 +11904,17 @@ The context is now within limits. Please retry your request with the recovered c
         // failure surfaces as a 'Failed' step (answering "do pipeline errors show as errors?": yes).
         let result: PipelineExecutionResult;
         try {
-            result = await new PipelineExecutor(registry).Execute(pipeline.steps as PipelineStage[]);
+            // The run's audience (hydrated once per run): a graphExpand stage admits only nodes every reader
+            // may see. An unusable audience refuses the pipeline, as it refuses an action call.
+            const audience = await this.audienceReadersFor(params);
+            if ('Error' in audience) {
+                throw new Error(audience.Error);
+            }
+            result = await new PipelineExecutor(registry, undefined, {
+                contextUser: params.contextUser,
+                provider: this.ProviderToUse,
+                audienceReaders: audience.Readers,
+            }).Execute(pipeline.steps as PipelineStage[]);
         } catch (e) {
             result = {
                 success: false,
@@ -11403,6 +12545,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         const message: AgentChatMessage = {
             role: 'user',
+            // fls-guard: decision outcomes, not entity rows
             content: `Decision results:\n${JSON.stringify(results)}`,
             metadata: {
                 turnAdded: this._promptTurnCount,
@@ -11460,8 +12603,17 @@ The context is now within limits. Please retry your request with the recovered c
         actionChanges?: ActionChange[],
         subAgentChanges?: SubAgentChange[],
         boundActionParams?: BoundActionParams,
-        withholding?: PromptWithholding
+        withholdingOrParentRun?: PromptWithholding | MJAIAgentRunEntityExtended,
+        parentRun?: MJAIAgentRunEntityExtended
     ): Promise<AgentContextData> {
+        const isWithholdingShape = (
+            val: PromptWithholding | MJAIAgentRunEntityExtended | undefined
+        ): val is PromptWithholding =>
+            typeof val === 'object' && val !== null && 'TaskGraphs' in val;
+        const withholding = isWithholdingShape(withholdingOrParentRun) ? withholdingOrParentRun : undefined;
+        const resolvedParentRun = isWithholdingShape(withholdingOrParentRun)
+            ? parentRun
+            : (parentRun ?? withholdingOrParentRun);
         try {
             const engine = AIEngine.Instance;
 
@@ -11521,6 +12673,7 @@ The context is now within limits. Please retry your request with the recovered c
             this._effectiveActions = activeActions;
             // Store for later validation in validateSubAgentNextStep (see getEffectiveSubAgentsForValidation)
             this._effectiveSubAgents = uniqueActiveSubAgents;
+            this._effectiveCatalogComputed = true;
 
             // Agent type prompt params: reuse cached base merge unless a runtime override is present.
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -11535,12 +12688,14 @@ The context is now within limits. Please retry your request with the recovered c
                 // and removes any cache-poisoning foot-gun should a future consumer write to it.
                 agentTypePromptParams = { ...catalog.baseAgentTypePromptParams };
             }
-            // A run that withholds task graphs (an audience or a tenant: see taskGraphWithholdingReason) is not offered
-            // them; a copy, so the cached base is never written. executeTasksStep refuses a graph the model writes anyway.
-            // A bound run (ExecuteAgentParams.boundActionParams) is not offered them either: a graph's action
-            // nodes are dispatched outside the binding gate (executeTasksStep refuses one of those too).
-            if (withholding?.TaskGraphs || this.hasBoundActionParams(boundActionParams)) {
+            // A run that withholds task graphs (taskGraphWithholdingReason: a constraint no security envelope will
+            // carry) is not offered them; a copy, so the cached base is never written. executeTasksStep refuses a
+            // graph the model writes anyway, through the same predicate.
+            if (withholding?.TaskGraphs) {
                 agentTypePromptParams = this.withoutTaskGraphs(agentTypePromptParams);
+            }
+            if (withholding?.Handoff) {
+                agentTypePromptParams = this.withoutHandoff(agentTypePromptParams);
             }
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
@@ -11569,6 +12724,30 @@ The context is now within limits. Please retry your request with the recovered c
 
             // The client tools and the app context (per-run, from extraData) — neither under an audience (callerContextSections).
             const { clientToolDetails, appContext } = this.callerContextSections(agent, extraData, withholding?.CallerContext === true);
+
+            const subAgentConsultEnabled = uniqueActiveSubAgents.some(
+                sa => this.isSubAgentConsultEnabledForSubAgent(agent, sa)
+            );
+            const subAgentPresetsAvailable = uniqueActiveSubAgents.some(
+                sa => AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true).length > 0
+            );
+
+            let parentConsults = false;
+            const effectiveParentRun = resolvedParentRun ?? this._executeParams?.parentRun;
+            if (!isRoot && effectiveParentRun?.AgentID) {
+                const parentAgent = (engine.Agents ?? []).find(
+                    a => UUIDsEqual(a.ID, effectiveParentRun.AgentID)
+                );
+                if (parentAgent) {
+                    const isDirectChild = agent.ParentID != null && UUIDsEqual(agent.ParentID, parentAgent.ID);
+                    const relationship = isDirectChild
+                        ? undefined
+                        : (engine.AgentRelationships ?? []).find(
+                            r => UUIDsEqual(r.AgentID, parentAgent.ID) && UUIDsEqual(r.SubAgentID, agent.ID) && r.Status === 'Active'
+                        );
+                    parentConsults = this.resolveSubAgentChatHandlingOption(parentAgent, relationship) === 'Consult';
+                }
+            }
 
             const cachedUserPolicy = _contextUser?.ID
                 ? AgentUserPolicyEngine.Instance.GetCachedPolicy(agent.ID, _contextUser.ID)
@@ -11605,6 +12784,9 @@ The context is now within limits. Please retry your request with the recovered c
                 skillsCatalog: skillsCatalog,
                 planModeActive: this._planModeActive,
                 planApproved: this._planApproved,
+                ...(subAgentConsultEnabled ? { subAgentConsultEnabled: true } : {}),
+                ...(parentConsults ? { parentConsults: true } : {}),
+                ...(subAgentPresetsAvailable ? { subAgentPresetsAvailable: true } : {}),
                 appContext: appContext,
             };
 
@@ -11673,10 +12855,37 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
         try {
-            const candidates = this.catalogNarrowingCandidates(agent, actions, subAgents, skills);
+            const rawCandidates = this.catalogNarrowingCandidates(agent, actions, subAgents, skills);
+            const maxSkillDecisionCandidates =
+                typeof promptParams.maxSkillDecisionCandidates === 'number' && promptParams.maxSkillDecisionCandidates >= 1
+                    ? Math.floor(promptParams.maxSkillDecisionCandidates)
+                    : DEFAULT_MAX_SKILL_DECISION_CANDIDATES;
+            const { FilteredCandidates: candidates, PreHiddenSkillIDs: preHiddenSkillIDs } =
+                PreFilterSkillCandidatesForDecision(
+                    rawCandidates,
+                    this._openingRequest ?? '',
+                    maxSkillDecisionCandidates
+                );
             const asked = CatalogNarrowingCandidatesToAsk(candidates, limits);
             if (asked.length > 0) {
-                this._catalogNarrowing = await this.narrowCatalog(agent, contextUser, promptParams, candidates, asked, limits);
+                const outcome = await this.narrowCatalog(agent, contextUser, promptParams, candidates, asked, limits);
+                if (preHiddenSkillIDs.size > 0) {
+                    const mergedSkillHidden = new Set<string>(outcome.Hidden.skill);
+                    for (const id of preHiddenSkillIDs) {
+                        mergedSkillHidden.add(id);
+                    }
+                    outcome.Hidden.skill = mergedSkillHidden;
+                }
+                this._catalogNarrowing = outcome;
+            } else if (preHiddenSkillIDs.size > 0) {
+                this._catalogNarrowing = {
+                    Hidden: {
+                        action: new Set<string>(),
+                        agent: new Set<string>(),
+                        skill: preHiddenSkillIDs,
+                    },
+                    Lists: {},
+                };
             }
         } catch (error) {
             this.warnCatalogNarrowing(agent, error instanceof Error ? error.message : String(error));
@@ -11707,7 +12916,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Every item of the three lists as a narrowing candidate. An action or sub-agent with
-     * `MinExecutionsPerRun` set, and the Find Candidate tools, are pinned: always shown.
+     * `MinExecutionsPerRun` set, explicitly assigned `MJ: AI Agent Skills` (when the agent also has
+     * unpinned auto-activatable skills), and the Find Candidate tools, are pinned: always shown.
      */
     private catalogNarrowingCandidates(
         agent: MJAIAgentEntityExtended,
@@ -11718,12 +12928,18 @@ The context is now within limits. Please retry your request with the recovered c
         const requiredActionIDs = AIEngine.Instance.AgentActions
             .filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active' && (aa.MinExecutionsPerRun ?? 0) > 0)
             .map(aa => aa.ActionID);
+        const assignedSkillIDs = new UUIDSet(
+            (AIEngine.Instance.AgentSkills ?? [])
+                .filter(as => UUIDsEqual(as.AgentID, agent.ID) && as.Status === 'Active')
+                .map(as => as.SkillID)
+        );
+        const hasUnpinnedSkills = skills.some(s => !assignedSkillIDs.Has(s.ID));
         const candidate = (kind: CatalogNarrowingKind, item: { ID: string; Name: string; Description: string | null }, pinned: boolean): CatalogNarrowingCandidate =>
             ({ Kind: kind, ID: item.ID, Name: item.Name, Description: item.Description ?? '', Pinned: pinned });
         return [
             ...actions.map(a => candidate('action', a, IsAlwaysShownAction(a.Name) || requiredActionIDs.some(id => UUIDsEqual(id, a.ID)))),
             ...subAgents.filter(s => !!s).map(s => candidate('agent', s, (s.MinExecutionsPerRun ?? 0) > 0)),
-            ...skills.map(s => candidate('skill', s, false)),
+            ...skills.map(s => candidate('skill', s, hasUnpinnedSkills && assignedSkillIDs.Has(s.ID))),
         ];
     }
 
@@ -11908,7 +13124,17 @@ The context is now within limits. Please retry your request with the recovered c
             }
             const shownSet = new Set(shown);
             const hiddenNames = items.filter(item => !shownSet.has(item)).map(item => item.Name);
-            return `${CatalogNarrowingNote(kind, hiddenNames)}\n\n${format(shown)}`;
+            const hasFindCandidateSkills =
+                kind === 'skill' &&
+                this._effectiveActions.some(
+                    a => (a.Name ?? '').trim().toLowerCase() === CATALOG_NARROWING_FIND_SKILLS.toLowerCase()
+                );
+            const note = CatalogNarrowingNote(
+                kind,
+                hiddenNames,
+                hasFindCandidateSkills ? { hasFindCandidateSkills: true } : undefined
+            );
+            return `${note}\n\n${format(shown)}`;
         } catch (error) {
             LogErrorEx({
                 message: `Catalog narrowing could not narrow the ${kind} list, so all of it is shown: ${error instanceof Error ? error.message : String(error)}`,
@@ -12157,97 +13383,11 @@ The context is now within limits. Please retry your request with the recovered c
         params: Record<string, unknown>,
         explicitResponseType?: Record<string, unknown>
     ): void {
-        // Align a copy: the object may be the caller's per-run override, which sub-agents inherit with the
-        // run's data. Writing into it would turn a key "explicit" for every later merge of that override.
-        if (IsPlainObject(params.includeResponseTypeDefinition)) {
-            params.includeResponseTypeDefinition = { ...params.includeResponseTypeDefinition };
-        }
-        // Ensure includeResponseTypeDefinition is an object
-        else if (!params.includeResponseTypeDefinition || typeof params.includeResponseTypeDefinition !== 'object') {
-            params.includeResponseTypeDefinition = {
-                payload: true,
-                responseForms: true,
-                commands: true,
-                forEach: true,
-                while: true,
-                scratchpad: true,
-                decisions: true,
-                finishIf: true
-            };
-        }
-
-        const responseType = params.includeResponseTypeDefinition as Record<string, unknown>;
-        const decisionsEnabled = this.DecisionsEnabled(params);
-
-        // finishIf gates are opt-in (`finishIfMode`), and need the master switch. While off, the model is
-        // not taught to write one, whatever includeFinishIfDocs says, so the response field below follows it off too.
-        if (!decisionsEnabled || ResolveFinishIfMode(params.finishIfMode) === 'off') {
-            params.includeFinishIfDocs = false;
-        }
-
-        // `decisions` is opt-in too (`includeDecisionsDocs: true`), and needs the master switch. Its docs and
-        // types add about 1,200 tokens to every turn, and on the Prompt Eval corpus no model used it
-        // (typed-decision plan, Task 4.7). Unset means off, so the response field below follows it off too.
-        if (!decisionsEnabled || params.includeDecisionsDocs !== true) {
-            params.includeDecisionsDocs = false;
-        }
-
-        // Auto-alignment mappings: docs flag → response type property
-        const alignmentMappings: Array<{ docsFlag: string; responseTypeKey: string }> = [
-            { docsFlag: 'includePayloadInPrompt', responseTypeKey: 'payload' },
-            { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
-            { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
-            { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
-            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
-            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
-            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' },
-            { docsFlag: 'includeConversationToolsDocs', responseTypeKey: 'conversationToolCalls' },
-            { docsFlag: 'includePipelineDocs', responseTypeKey: 'pipeline' },
-            { docsFlag: 'includeMemoryWritesDocs', responseTypeKey: 'memoryWrites' },
-            { docsFlag: 'includeDecisionsDocs', responseTypeKey: 'decisions' },
-            { docsFlag: 'includeFinishIfDocs', responseTypeKey: 'finishIf' }
-        ];
-
-        for (const { docsFlag, responseTypeKey } of alignmentMappings) {
-            // Check if the user explicitly set this response type property
-            // (not from schema defaults, which always provide true)
-            const wasExplicitlySet = explicitResponseType &&
-                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
-
-            // Auto-align: if docs flag is false AND user didn't explicitly set the response type
-            // then auto-align the response type to false
-            if (params[docsFlag] === false && !wasExplicitlySet) {
-                responseType[responseTypeKey] = false;
-            }
-            // If user explicitly set the value, respect it regardless of docs flag
-            // Otherwise default to true if not set
-            else if (responseType[responseTypeKey] === undefined) {
-                responseType[responseTypeKey] = true;
-            }
-        }
-
-        // With the master switch off, neither decision field is offered, even when set explicitly: the
-        // model must not be invited to ask for something the run would refuse.
-        if (!decisionsEnabled) {
-            responseType.decisions = false;
-            responseType.finishIf = false;
-        }
-
-        // Capability gates align the OTHER way: default OFF, and the section appears only when the
-        // gate is explicitly on. Running these through the loop above would invert their meaning —
-        // that loop's `else` branch defaults an unset key to true, which is exactly what a gated
-        // capability must never do.
-        const gateMappings: Array<{ gateFlag: string; responseTypeKey: string }> = [
-            { gateFlag: 'enableTaskGraphs', responseTypeKey: 'tasks' }
-        ];
-
-        for (const { gateFlag, responseTypeKey } of gateMappings) {
-            const wasExplicitlySet = explicitResponseType &&
-                Object.prototype.hasOwnProperty.call(explicitResponseType, responseTypeKey);
-            if (!wasExplicitlySet) {
-                responseType[responseTypeKey] = params[gateFlag] === true;
-            }
-        }
+        this._contextAssembler.ApplyResponseTypeAutoAlignment(
+            params,
+            explicitResponseType,
+            this.DecisionsEnabled(params),
+        );
     }
 
     /**
@@ -12260,26 +13400,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @since 2.131.0
      */
     protected extractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown> {
-        if (!schemaJson) return {};
-
-        try {
-            const schema = JSON.parse(schemaJson);
-            const defaults: Record<string, unknown> = {};
-
-            if (schema.properties) {
-                for (const [key, prop] of Object.entries(schema.properties)) {
-                    const propDef = prop as { default?: unknown };
-                    if (propDef.default !== undefined) {
-                        defaults[key] = propDef.default;
-                    }
-                }
-            }
-
-            return defaults;
-        } catch (e) {
-            LogError(`Failed to parse PromptParamsSchema: ${e instanceof Error ? e.message : String(e)}`);
-            return {};
-        }
+        return this._contextAssembler.ExtractSchemaDefaults(schemaJson);
     }
 
     /**
@@ -12796,7 +13917,7 @@ The context is now within limits. Please retry your request with the recovered c
         const secondary = scope.SecondaryScopes
             ? Object.fromEntries(Object.entries(scope.SecondaryScopes).map(([key, value]) => [key, Array.isArray(value) ? [...value] : value]))
             : null;
-        return { ...scope, SecondaryScopes: secondary };
+        return { ...scope, SecondaryScopes: secondary, ...(scope.SearchScopeIDs ? { SearchScopeIDs: [...scope.SearchScopeIDs] } : {}) };
     }
 
     /**
@@ -12873,9 +13994,20 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Enforce per-(Agent, User) action policy narrowing rules when a user policy is active
-        const policyBlocked = this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
+        const policyBlocked = await this.checkUserActionPolicy(params, action, actionEntity, contextUser ?? params.contextUser);
         if (policyBlocked) {
             return policyBlocked;
+        }
+
+        // A run under a task-graph envelope refuses egress once tainted, whenever the taint arrived. The run
+        // stays tainted and no argument changes the refusal, so the action is locked out for the run, as a
+        // refused binding is: the model is told to stop calling it, not to adjust its arguments and retry.
+        const taintBlocked = this.checkTaintedEgress(params, action, actionEntity, contextUser ?? params.contextUser);
+        if (taintBlocked) {
+            if (!skipBreaker) {
+                this.lockOutAction(action, actionEntity, 'tainted');
+            }
+            return taintBlocked;
         }
 
         // The run's audience, hydrated once per run — lazily here, since this method is also called outside
@@ -12887,15 +14019,19 @@ The context is now within limits. Please retry your request with the recovered c
 
         try {
             // Execute the action and return the full ActionResult
-            const result = await ActionEngineServer.Instance.RunAction({
-                Action: actionEntity,
-                Params: this.toActionParams(binding, actionEntity),
-                ContextUser: contextUser,
-                Filters: [],
-                SkipActionLog: false,
-                Context: this.stampActionContext(params),
-                ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
-            });
+            const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
+                params.agent?.ID ?? '',
+                () =>
+                    ActionEngineServer.Instance.RunAction({
+                        Action: actionEntity,
+                        Params: this.toActionParams(binding, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                        SkipActionLog: false,
+                        Context: this.stampActionContext(params),
+                        ...this.runBoundDispatchParams(params, actionEntity, audience.Readers, contextUser),
+                    })
+            );
             this.recordDispatchOutcome(params, action, actionEntity, result, normalizedParams, skipBreaker);
             return result;
 
@@ -12916,20 +14052,79 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
-     * before dispatching an action. Returns a synthetic ActionResult when the action is denied,
-     * deferred outside a configured time window, or requires explicit user approval.
+     * Refuses a `disallowWhenTainted` action (`Action.Config_Object`) in a run that executes under a
+     * task-graph security envelope (`ExecuteAgentParams.SecurityEnvelope`: a graph's agent node, its
+     * continuation turn, or a sub-agent of either) once the run is tainted — checked on every call against
+     * the run's current taint. The node's runner takes those actions away from a run that starts tainted;
+     * this is what stops one that becomes tainted mid-run (it read a web page, then tries to send mail).
      */
-    protected checkUserActionPolicy(
+    private checkTaintedEgress(
         params: ExecuteAgentParams,
         action: AgentAction,
         actionEntity: MJActionEntityExtended,
         contextUser?: UserInfo
     ): ActionResult | null {
+        if (!params.SecurityEnvelope || !this.IsRunTainted || actionEntity.Config_Object?.disallowWhenTainted !== true) {
+            return null;
+        }
+        return {
+            Success: false,
+            ResultCode: TAINTED_EGRESS_BLOCKED,
+            Message: `Action "${actionEntity.Name}" was not run: this workflow step has read untrusted content, and the action ` +
+                'sends data out or cannot be undone. A person must review the content in a Human step before it can run.',
+            Params: [],
+            RunParams: {
+                Action: actionEntity,
+                Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                ContextUser: contextUser,
+                Filters: [],
+            },
+        };
+    }
+
+    /**
+     * Checks per-(Agent, User) action policy narrowing rules (`MJ: AI Agent User Policies`)
+     * before dispatching an action. Loads the user's policy on cold cache (failing closed on
+     * lookup error) and returns a synthetic ActionResult when the action is denied, deferred
+     * outside a configured time window, or requires explicit user approval.
+     */
+    protected async checkUserActionPolicy(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): Promise<ActionResult | null> {
         if (!contextUser?.ID || !params?.agent?.ID) {
             return null;
         }
-        const policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(params.agent.ID, contextUser.ID);
+        let policy = AgentUserPolicyEngine.Instance.GetCachedPolicy(
+            params.agent.ID,
+            contextUser.ID,
+            params.provider
+        );
+        if (!policy) {
+            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
+                params.agent.ID,
+                contextUser.ID,
+                contextUser,
+                { provider: params.provider }
+            );
+            if (lookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: POLICY_DENIED_RESULT_CODE,
+                    Message: `Action "${actionEntity.Name || action.name}" blocked (fail-closed): user policy lookup failed (${lookup.errorMessage}).`,
+                    Params: [],
+                    RunParams: {
+                        Action: actionEntity,
+                        Params: this.toActionParams({ Params: action.params ?? {}, Bound: [] }, actionEntity),
+                        ContextUser: contextUser,
+                        Filters: [],
+                    },
+                };
+            }
+            policy = lookup.policy;
+        }
         if (!policy) {
             return null;
         }
@@ -12954,10 +14149,10 @@ The context is now within limits. Please retry your request with the recovered c
         }
         const resultCode =
             evaluation.verdict === 'Deny'
-                ? 'POLICY_DENIED'
+                ? POLICY_DENIED_RESULT_CODE
                 : evaluation.verdict === 'DeferUntilNextWindow'
-                ? 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW'
-                : 'POLICY_APPROVAL_REQUIRED';
+                ? POLICY_DEFERRED_RESULT_CODE
+                : POLICY_APPROVAL_REQUIRED_RESULT_CODE;
         return {
             Success: false,
             ResultCode: resultCode,
@@ -13055,6 +14250,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
      * @param {MJAIAgentEntityExtended} subAgent - The sub-agent entity
      * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @param {string | null | undefined} consultQuestion - Optional open-consult question when resuming a child run
      * @returns {ChatMessage[]} Prepared message array for sub-agent execution
      *
      * @protected
@@ -13063,7 +14259,8 @@ The context is now within limits. Please retry your request with the recovered c
         params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest,
         subAgent: MJAIAgentEntityExtended,
-        contextMessage?: ChatMessage
+        contextMessage?: ChatMessage,
+        consultQuestion?: string | null
     ): ChatMessage[] {
         const engine = AIEngine.Instance;
         let messages: ChatMessage[] = [];
@@ -13132,6 +14329,14 @@ The context is now within limits. Please retry your request with the recovered c
             messages.push(contextMessage);
         }
 
+        // On resume, insert the consult's question as an assistant turn right before the request message
+        if (consultQuestion) {
+            messages.push({
+                role: 'assistant',
+                content: consultQuestion
+            });
+        }
+
         if (subAgentRequest.message) {
             messages.push({
                 role: 'user',
@@ -13183,12 +14388,39 @@ The context is now within limits. Please retry your request with the recovered c
             // Create a new AgentRunner instance with the same isolated provider
             const runner = new AgentRunner(params.provider || this._activeProvider);
 
+            // Look up an open consult matching both childRunId and subAgent.ID once.
+            // Only resume when the consult is open for this sub-agent; otherwise log an error and run fresh.
+            const requestedResumeRunId = subAgentRequest.resumeRunId?.trim() || undefined;
+            let matchedConsult: SubAgentConsultRecord | undefined;
+            if (requestedResumeRunId) {
+                matchedConsult = Array.from(this._openSubAgentConsults.values()).find(
+                    c => UUIDsEqual(c.childRunId, requestedResumeRunId) && UUIDsEqual(c.subAgentId, subAgent.ID)
+                );
+                if (matchedConsult) {
+                    this._openSubAgentConsults.delete(matchedConsult.childRunId);
+                } else {
+                    this.logError(
+                        `ExecuteSubAgent: ignoring unknown or mismatched resumeRunId '${requestedResumeRunId}' for sub-agent '${subAgent.Name}'`,
+                        {
+                            agent: params.agent,
+                            category: 'SubAgentExecution',
+                            metadata: {
+                                subAgentName: subAgent.Name,
+                                resumeRunId: requestedResumeRunId
+                            }
+                        }
+                    );
+                }
+            }
+            const verifiedResumeRunId = matchedConsult?.childRunId;
+
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
                 params,
                 subAgentRequest,
                 subAgent,
-                contextMessage
+                contextMessage,
+                matchedConsult?.question
             );
             
             // Set parent run ID in the sub-agent's execution
@@ -13214,6 +14446,17 @@ The context is now within limits. Please retry your request with the recovered c
             // Use subAgentRequest.context if provided, otherwise fall back to params.context
             // This allows Flow agents and Loop agents to propagate context through sub-agent requests
             const subAgentContext = subAgentRequest.context !== undefined ? subAgentRequest.context : params.context;
+            const resolvedConfig = this.resolveSubAgentConfiguration(params, subAgentRequest, subAgent);
+            if (resolvedConfig.presetId && stepEntity) {
+                const parsedInput = stepEntity.InputData
+                    ? (JSON.parse(stepEntity.InputData) as Record<string, unknown>)
+                    : {};
+                parsedInput.presetName = resolvedConfig.presetName;
+                parsedInput.presetId = resolvedConfig.presetId;
+                const updatedInputJson = JSON.stringify(parsedInput);
+                stepEntity.InputData = updatedInputJson;
+                this.queueStepSave(stepEntity, (s) => { s.InputData = updatedInputJson; });
+            }
 
             const result = await runner.RunAgent<SC, SR>({
                 agent: subAgent,
@@ -13227,8 +14470,9 @@ The context is now within limits. Please retry your request with the recovered c
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
                 parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
-                payload: payload, // pass the payload if provided
-                configurationId: params.configurationId, // propagate configuration ID to sub-agent
+                payload: verifiedResumeRunId ? undefined : payload, // on resume, ignore computed/mapped payload so autoPopulateLastRunPayload loads the child's prior FinalPayload
+                ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
+                configurationId: resolvedConfig.configurationId, // resolved preset configuration ID or inherited parent configurationId
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 apiKeys: params.apiKeys, // propagate API keys to sub-agent
                 CredentialScope: params.CredentialScope, // a sub-agent may not spend keys its parent could not
@@ -13249,6 +14493,8 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
+                SearchScopeIDs: params.SearchScopeIDs, // the host's search scopes bound the sub-agent too
+                ...this.subAgentTaint(params), // a tainted parent's sub-agent starts tainted
                 conversationDetailId: params.conversationDetailId, // propagate conversationDetailId so sub-agent task graphs attach to the chat message
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -13258,6 +14504,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             });
             
+            // Every sub-agent path (child, related, parallel) comes through here, so the child's taint reaches
+            // the parent whichever path ran it.
+            this.absorbSubAgentTaint(subAgentRequest.name, result, stepEntity?.StepNumber ?? (stepCount + 1));
+
             // Check if execution was successful
             if (result.success) {
                 this.logStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
@@ -13279,6 +14529,66 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing sub-agent: ${error.message}`);
         }
+    }
+
+    /**
+     * Resolves the configuration to pass to a sub-agent run in precedence order:
+     * 1. Per-call `subAgentRequest.presetName` -> matching Active preset of `subAgent`.
+     * 2. Active `AIAgentRelationship.ConfigurationPresetID` -> that preset if Active and owned by `subAgent`;
+     *    otherwise logs a warning and falls through.
+     * 3. Inherit `params.configurationId`.
+     *
+     * When a preset is selected, `configurationId` is `preset.AIConfigurationID ?? undefined` (a NULL
+     * `AIConfigurationID` means default rows and intentionally does NOT inherit `params.configurationId`).
+     */
+    private resolveSubAgentConfiguration(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        subAgent: MJAIAgentEntityExtended
+    ): { configurationId: string | undefined; presetName?: string; presetId?: string } {
+        if (subAgentRequest.presetName != null && subAgentRequest.presetName.trim() !== '') {
+            const preset = AIEngine.Instance.FindActiveAgentConfigurationPreset(subAgent.ID, subAgentRequest.presetName);
+            if (preset) {
+                return {
+                    configurationId: preset.AIConfigurationID ?? undefined,
+                    presetName: preset.Name,
+                    presetId: preset.ID
+                };
+            }
+            this.logStatus(
+                `⚠️ Sub-agent '${subAgent.Name}' has no active preset matching '${subAgentRequest.presetName}'; falling through.`,
+                false,
+                params
+            );
+        }
+
+        const isDirectChild = subAgent.ParentID != null && UUIDsEqual(subAgent.ParentID, params.agent.ID);
+        if (!isDirectChild) {
+            const relationship = AIEngine.Instance.AgentRelationships.find(
+                r => UUIDsEqual(r.AgentID, params.agent.ID) &&
+                     UUIDsEqual(r.SubAgentID, subAgent.ID) &&
+                     r.Status === 'Active'
+            );
+            if (relationship?.ConfigurationPresetID) {
+                const preset = AIEngine.Instance.AgentConfigurations.find(
+                    p => UUIDsEqual(p.ID, relationship.ConfigurationPresetID)
+                );
+                if (preset && preset.Status === 'Active' && UUIDsEqual(preset.AgentID, subAgent.ID)) {
+                    return {
+                        configurationId: preset.AIConfigurationID ?? undefined,
+                        presetName: preset.Name,
+                        presetId: preset.ID
+                    };
+                }
+                this.logStatus(
+                    `⚠️ Sub-agent relationship for '${subAgent.Name}' references preset '${relationship.ConfigurationPresetID}' which is missing, inactive, or belongs to another agent; inheriting parent configuration.`,
+                    false,
+                    params
+                );
+            }
+        }
+
+        return { configurationId: params.configurationId };
     }
 
     /**
@@ -13316,13 +14626,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatSubAgentDetails(subAgents: MJAIAgentEntityExtended[]): string {
-        return subAgents.map(sa => {
-            let line = `- **${sa.Name}** — ${sa.Description}`;
-            if (sa.ExecutionMode !== 'Sequential') {
-                line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
-            }
-            return line;
-        }).join('\n');
+        return this._contextAssembler.FormatSubAgentDetails(subAgents);
     }
 
     /**
@@ -13334,7 +14638,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatSkillsCatalog(skills: MJAISkillEntity[]): string {
-        return skills.map(s => `- **${s.Name}** — ${s.Description ?? '(no description)'}`).join('\n');
+        return this._contextAssembler.FormatSkillsCatalog(skills);
     }
 
     /**
@@ -13383,43 +14687,20 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatActionDetails(actions: MJActionEntityExtended[], boundActionParams?: BoundActionParams): string {
-        return actions.map(action => {
-            const lines: string[] = [];
-            lines.push(`### ${action.Name}`);
-            lines.push(action.Description);
+        return this._contextAssembler.FormatActionDetails(actions, boundActionParams);
+    }
 
-            const visibleParams = UnboundParams(action.Params.Items, BindingsForAction(boundActionParams, action.ID));
-            const inputParams = visibleParams
-                .filter(p => {
-                    const t = p.Type.trim().toLowerCase();
-                    return t === 'input' || t === 'both';
-                });
-            const outputParams = visibleParams
-                .filter(p => {
-                    const t = p.Type.trim().toLowerCase();
-                    return t === 'output' || t === 'both';
-                });
-
-            if (inputParams.length > 0) {
-                lines.push(`**Input:** ${inputParams.map(p => this.formatActionParameter(p)).join(', ')}`);
-            }
-            if (outputParams.length > 0) {
-                lines.push(`**Output:** ${outputParams.map(p => this.formatActionParameter(p)).join(', ')}`);
-            }
-
-            if (action.ResultCodes.Items.length > 0) {
-                const rcParts = action.ResultCodes.Items.map(rc => {
-                    const marker = rc.IsSuccess ? '✓' : '✗';
-                    const desc = rc.Description && rc.Description.toLowerCase() !== rc.ResultCode.toLowerCase()
-                        ? ` ${rc.Description}`
-                        : '';
-                    return `${rc.ResultCode} ${marker}${desc}`;
-                });
-                lines.push(`**Results:** ${rcParts.join(' · ')}`);
-            }
-
-            return lines.join('\n');
-        }).join('\n\n');
+    /**
+     * The client tools in force for a run: the agent's static metadata tools under the session, app
+     * and override tiers, merged by {@link ResolveClientTools} with its fixed precedence. The prompt
+     * section and the client-tool step both resolve through here, so the tools the model is offered
+     * and the metadata its results are classified against are one list.
+     *
+     * @param data - The run's data bag: `sessionID` selects the session tier, `appContext` the app
+     *   tier, `clientTools` the override tier.
+     */
+    private resolveClientToolsForRun(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): ClientToolMetadata[] {
+        return this._contextAssembler.ResolveClientToolsForRun(agent, data);
     }
 
     /**
@@ -13441,62 +14722,7 @@ The context is now within limits. Please retry your request with the recovered c
      * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
-        const engine = AIEngine.Instance;
-        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
-            Name: tool.Name,
-            Description: tool.Description,
-            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-            Category: tool.Category || undefined,
-            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-        }));
-
-        // Dynamic (session) tier — client-SDK enriched tools for this session.
-        const sessionID = extraData?.sessionID as string | undefined;
-        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
-
-        // App tier — tools the active surface published in the app-context capability manifest.
-        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
-        const appTools = appContext?.Capabilities?.Tools ?? [];
-
-        // Override tier — tools passed directly in the run's data.
-        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
-
-        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
-
-        if (tools.length === 0) {
-            return ''; // No client tools available
-        }
-
-        const lines: string[] = [];
-        lines.push('### Client Tools (execute in the user\'s browser)');
-        lines.push('Client tools run in the user\'s browser and interact with the UI. Use these when you need');
-        lines.push('to navigate the user somewhere, display a specific view, switch dashboard tabs, or show');
-        lines.push('records. When you choose client tools, set nextStep.type to "ClientTools".');
-        lines.push('');
-        lines.push('NOTE: Do NOT use client tools for asking the user questions or collecting input.');
-        lines.push('Use the "Chat" step for that. Client tools read and change the user\'s UI; some return an image.');
-        lines.push('');
-
-        for (const tool of tools) {
-            const categoryTag = tool.Category ? ` [${tool.Category}]` : '';
-            lines.push(`- **${tool.Name}**${categoryTag}: ${tool.Description}`);
-
-            // Show input parameters from InputSchema
-            const props = (tool.InputSchema as Record<string, unknown>)?.properties as Record<string, Record<string, unknown>> | undefined;
-            const required = (tool.InputSchema as Record<string, unknown>)?.required as string[] | undefined;
-            if (props) {
-                const paramParts = Object.entries(props).map(([name, schema]) => {
-                    const req = required?.includes(name) ? '\\*' : '';
-                    const desc = schema.description ? ` — ${schema.description}` : '';
-                    return `\`${name}\`${req}${desc}`;
-                });
-                lines.push(`  Inputs: ${paramParts.join(', ')}`);
-            }
-        }
-
-        return lines.join('\n');
+        return this._contextAssembler.BuildClientToolPromptSection(agent, extraData);
     }
 
     /**
@@ -13505,51 +14731,7 @@ The context is now within limits. Please retry your request with the recovered c
      * it as a concise markdown section the LLM can reference.
      */
     private buildAppContextSection(extraData?: Record<string, unknown>): string {
-        const ctx = extraData?.appContext as Record<string, unknown> | undefined;
-        if (!ctx) return '';
-
-        const app = ctx['App'] as { Name?: string; Description?: string } | undefined;
-        const activeNav = ctx['ActiveNavItem'] as { Name?: string; Description?: string; ResourceType?: string } | undefined;
-        const otherNavs = ctx['OtherNavItems'] as Array<{ Name?: string; Description?: string }> | undefined;
-        const user = ctx['User'] as { Name?: string; Roles?: string[] } | undefined;
-
-        if (!app?.Name) return '';
-
-        const lines: string[] = [];
-        lines.push('### Current Application Context');
-        lines.push(`The user is currently in the **${app.Name}** application${app.Description ? ` — ${app.Description}` : ''}.`);
-
-        if (activeNav?.Name) {
-            lines.push('');
-            lines.push(`**Active view:** ${activeNav.Name}${activeNav.Description ? ` — ${activeNav.Description}` : ''}${activeNav.ResourceType ? ` (${activeNav.ResourceType})` : ''}`);
-        }
-
-        if (otherNavs && otherNavs.length > 0) {
-            lines.push('');
-            lines.push('**Other views available in this app:**');
-            for (const nav of otherNavs) {
-                lines.push(`- ${nav.Name}${nav.Description ? ` — ${nav.Description}` : ''}`);
-            }
-        }
-
-        if (user?.Name) {
-            lines.push('');
-            lines.push(`**User:** ${user.Name}${user.Roles?.length ? ` (Roles: ${user.Roles.join(', ')})` : ''}`);
-        }
-
-        // Additional context reported by the active view/component
-        const dashboardCtx = ctx['AdditionalContext'] as Record<string, unknown> | undefined;
-        if (dashboardCtx && Object.keys(dashboardCtx).length > 0) {
-            lines.push('');
-            lines.push('**Dashboard state:**');
-            for (const [key, value] of Object.entries(dashboardCtx)) {
-                if (value === null || value === undefined) continue;
-                const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                lines.push(`- ${key}: ${displayValue}`);
-            }
-        }
-
-        return lines.join('\n');
+        return this._contextAssembler.BuildAppContextSection(extraData);
     }
 
     /**
@@ -13562,32 +14744,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatActionParameter(param: MJActionParamEntity): string {
-        const requiredMarker = param.IsRequired ? '\\*' : '';
-        const parts: string[] = [];
-
-        if (param.IsArray) {
-            parts.push('array');
-        }
-
-        // A stored ValueSchema is the real type, so it replaces the coarse ValueType label — the
-        // same information the native tool declaration carries.
-        const valueSchema = GetStoredValueSchema(param);
-        const vt = param.ValueType?.trim();
-        if (valueSchema) {
-            parts.push(DescribeValueSchemaInline(valueSchema));
-        } else if (vt && vt !== 'Scalar' && vt !== 'Other') {
-            parts.push(vt);
-        }
-
-        const suffix = parts.length > 0 ? ` (${parts.join(', ')})` : '';
-
-        let defaultStr = '';
-        if (param.DefaultValue != null && param.DefaultValue !== '') {
-            defaultStr = ` (default: ${JSON.stringify(param.DefaultValue)})`;
-        }
-
-        const desc = param.Description ? ` — ${param.Description}` : '';
-        return `\`${param.Name}\`${requiredMarker}${suffix}${desc}${defaultStr}`;
+        return this._contextAssembler.FormatActionParameter(param);
     }
 
     /**
@@ -13597,28 +14754,10 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected buildActionInvocationMessage(actions: AgentAction[], params: ExecuteAgentParams): string {
-        if (actions.length === 1) {
-            const aa = actions[0];
-            const shownParams = this.shownActionParamEntries(params, aa);
-            if (shownParams.length === 0) {
-                return `[You invoked the **${aa.name}** action.]`;
-            }
-            const paramsList = shownParams
-                .map(([key, value]) => `• **${key}**: ${this.formatParamValueForMessage(value)}`)
-                .join('\n');
-            return `[You invoked the **${aa.name}** action with parameters:\n${paramsList}\n]`;
-        }
-        return `[You invoked **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
-            const actionText = `${index + 1}. **${aa.name}**`;
-            const shownParams = this.shownActionParamEntries(params, aa);
-            if (shownParams.length === 0) {
-                return actionText;
-            }
-            const paramsList = shownParams
-                .map(([key, value]) => `   • **${key}**: ${this.formatParamValueForMessage(value)}`)
-                .join('\n');
-            return `${actionText}\n${paramsList}`;
-        }).join('\n\n') + '\n]';
+        return this._stepDispatcher.BuildActionInvocationMessage(
+            actions,
+            (aa) => this.shownActionParamEntries(params, aa),
+        );
     }
 
     /**
@@ -13634,7 +14773,7 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Formats an array of action result summaries as compact markdown instead of
-     * pretty-printed JSON.  This typically saves 60-70 % of the tokens that the
+     * pretty-printed JSON. This typically saves 60-70 % of the tokens that the
      * old `JSON.stringify(actionSummaries, null, 2)` approach consumed, while
      * remaining equally parseable by LLMs.
      *
@@ -13651,32 +14790,15 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @param actionSummaries - The action summary objects built by executeActionStep
      * @returns Compact markdown string
-     * @private
+     * @protected
      */
-    private formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
-        return actionSummaries.map(a => {
-            const marker = a.success ? '✓' : '✗';
-            const lines: string[] = [];
-
-            lines.push(`## ${a.actionName} ${marker}`);
-            lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
-
-            // Format output params as bullet list. An exempt action's values go out verbatim.
-            if (a.params && a.params.length > 0) {
-                const crush = !this._actionResultCrush?.exemptActions?.has(a.actionName);
-                lines.push('**Output:**');
-                for (const p of a.params) {
-                    lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value, 0, crush)}`);
-                }
-            }
-
-            return lines.join('\n');
-        }).join('\n\n');
+    protected formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
+        return this._stepDispatcher.FormatActionResultsAsMarkdown(actionSummaries, this._actionResultCrush);
     }
 
     /**
      * Formats an ExecuteAgentResult as compact markdown for inclusion in
-     * conversation messages.  Extracts only the fields that are meaningful
+     * conversation messages. Extracts only the fields that are meaningful
      * to the calling agent (success, status, error, and payload) and
      * presents them in a concise format.
      *
@@ -13686,92 +14808,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private formatSubAgentResultAsMarkdown(subAgentName: string, result: ExecuteAgentResult): string {
-        const marker = result.success ? '✓' : '✗';
-        const lines: string[] = [];
-
-        lines.push(`## Sub-agent: ${subAgentName} ${marker}`);
-
-        // Status / error from the agent run
-        const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
-        lines.push(`**Status:** ${status}`);
-
-        if (!result.success && result.agentRun?.ErrorMessage) {
-            lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
-        }
-
-        if (result.agentRun?.Message?.trim()) {
-            lines.push(`**Message:**\n${result.agentRun.Message.trim()}`);
-        }
-
-        // Payload — the actual result data the parent agent cares about.
-        // Not truncated by default — the expiration/compaction lifecycle handles
-        // context window management. Truncating here permanently discards data
-        // before the LLM ever sees it.
-        if (result.payload != null) {
-            const payloadStr = typeof result.payload === 'string'
-                ? result.payload
-                : JSON.stringify(result.payload);
-            lines.push(`**Payload:**\n${payloadStr}`);
-        }
-
-        return lines.join('\n');
-    }
-
-    /**
-     * Formats a single output parameter value for inclusion in action result
-     * markdown.  Scalars are shown inline with backtick formatting; objects and
-     * arrays use compact (single-line) JSON to avoid the indentation overhead
-     * of pretty-printed JSON.
-     *
-     * By default, values are **not truncated** — the expiration/compaction lifecycle
-     * handles context window management. Truncating at formatting time permanently
-     * discards data before the LLM ever sees it. Pass an explicit maxLength only
-     * when you have a specific reason to limit output size.
-     *
-     * @param value - The parameter value (any type)
-     * @param maxLength - Maximum character length before truncation (0 = no limit, default 0)
-     * @returns Formatted string
-     * @private
-     */
-    private formatParamValueForResult(value: unknown, maxLength: number = 0, crush: boolean = true): string {
-        if (value === null || value === undefined) {
-            return '`null`';
-        }
-
-        if (typeof value === 'boolean' || typeof value === 'number') {
-            return `\`${String(value)}\``;
-        }
-
-        if (typeof value === 'string') {
-            // A string param may carry JSON (many actions JSON.stringify their payloads),
-            // SQL/TS code, or plain text. Try structural JSON compression first — it is a
-            // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
-            // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
-            // through (optionally length-capped).
-            const crushedJson = crush ? this.crushParamValue(value) : null;
-            if (crushedJson !== null) {
-                return crushedJson;
-            }
-            const crushedCode = crush ? this.crushCodeValue(value) : null;
-            if (crushedCode !== null) {
-                return crushedCode;
-            }
-            return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
-        }
-
-        // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
-        // compressed via context-crush when crushing is enabled and the value is large.
-        const stringValue = JSON.stringify(value);
-        const crushed = crush ? this.crushParamValue(stringValue) : null;
-        if (crushed !== null) {
-            return crushed;
-        }
-
-        if (maxLength > 0 && stringValue.length > maxLength) {
-            return `${stringValue.substring(0, maxLength)}…`;
-        }
-
-        return stringValue;
+        return this._stepDispatcher.FormatSubAgentResultAsMarkdown(subAgentName, result);
     }
 
     /**
@@ -13781,113 +14818,24 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
-        const agentTypePromptParams = (params.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Record<string, unknown> | undefined;
-        if (agentTypePromptParams?.crushActionResults === false) {
-            return undefined;
-        }
-        const requestedLang = agentTypePromptParams?.crushCodeLang;
-        const codeLang: CodeLang | undefined =
-            requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
-        const uncrushed = agentTypePromptParams?.uncrushedActions;
-        const exemptActions = new Set(Array.isArray(uncrushed) ? uncrushed.filter((name): name is string => typeof name === 'string') : []);
-        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang, exemptActions };
-    }
-
-    /**
-     * AST-reduce a large code-string action-result value when the agent opted into a code
-     * language (via `crushCodeLang` or a subclass override) and the value clears the size
-     * threshold. Returns reduced code plus a one-line legend, or null to keep the string
-     * verbatim (crushing disabled, too small, or no net saving).
-     *
-     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
-     * @private
-     */
-    private crushCodeValue(stringValue: string): string | null {
-        const config = this._actionResultCrush;
-        if (!config || !config.codeLang || stringValue.length < config.threshold) {
-            return null;
-        }
-        // Crushing is a best-effort optimization — it must never break an agent turn. Any
-        // failure falls back to the verbatim value.
-        try {
-            const result = CrushCode(stringValue, config.codeLang);
-            if (result.CrushedChars >= result.OriginalChars) {
-                return null;
-            }
-            const legend = DescribeCrush(result);
-            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * Structurally compress a JSON action-result value when crushing is enabled for the run
-     * and the value clears the size threshold. Accepts either the `JSON.stringify` of an
-     * object/array param, or a raw string param that itself contains JSON (many actions
-     * stringify their payloads, e.g. `run-adhoc-query`'s `Results`). Returns crushed text
-     * plus a one-line legend, or null when crushing is disabled, the value is too small, the
-     * value isn't valid JSON, or compression wouldn't actually save characters — so callers
-     * fall back to verbatim (and, for strings, to code crushing) behavior.
-     *
-     * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
-     * @private
-     */
-    private crushParamValue(stringValue: string): string | null {
-        const config = this._actionResultCrush;
-        if (!config || stringValue.length < config.threshold) {
-            return null;
-        }
-        // Crushing is a best-effort optimization — it must never break an agent turn. Any
-        // failure (non-JSON input, pathologically deep payloads) falls back to verbatim.
-        try {
-            // Parse to a plain JSON value. This is the JSON.stringify of an object/array
-            // param, or a raw string param that contains JSON; non-JSON strings throw here
-            // and are caught below (caller then tries code crushing / verbatim).
-            const json = JSON.parse(stringValue) as JsonValue;
-            const result = CrushJSON(json, { MaxChars: config.maxChars });
-            if (result.CrushedChars >= result.OriginalChars) {
-                return null; // no net saving — keep the verbatim JSON
-            }
-            const legend = DescribeCrush(result);
-            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
-        } catch {
-            return null;
-        }
+        return this._stepDispatcher.ResolveActionResultCrush(
+            params,
+            this._agentTypePromptParams,
+            BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD,
+        );
     }
 
     /**
      * Formats a parameter value for display in action execution messages.
      * Truncates long strings and formats objects/arrays for readability.
      *
-     * @param {any} value - The parameter value to format
+     * @param {unknown} value - The parameter value to format
      * @param {number} maxLength - Maximum length before truncation (default: 100)
      * @returns {string} Formatted value suitable for message display
      * @private
      */
-    private formatParamValueForMessage(value: any, maxLength: number = 100): string {
-        if (value === null || value === undefined) {
-            return 'null';
-        }
-
-        let stringValue: string;
-
-        if (typeof value === 'string') {
-            stringValue = value;
-        } else if (typeof value === 'object') {
-            // For objects/arrays, use compact JSON
-            stringValue = JSON.stringify(value);
-        } else {
-            stringValue = String(value);
-        }
-
-        // Truncate if too long
-        if (stringValue.length > maxLength) {
-            return `\`${stringValue.substring(0, maxLength)}...\``;
-        }
-
-        // Use inline code formatting for values
-        return `\`${stringValue}\``;
+    private formatParamValueForMessage(value: unknown, maxLength: number = 100): string {
+        return this._stepDispatcher.FormatParamValueForMessage(value, maxLength);
     }
 
     /**
@@ -14119,6 +15067,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._templateEngineConfiguredForRun = false;
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
+        this._taintedSources = [];
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -14337,6 +15286,7 @@ The context is now within limits. Please retry your request with the recovered c
             Fields: ['Status', 'OriginatingAgentRunStepID'],
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, params.contextUser);
 
@@ -14358,6 +15308,7 @@ The context is now within limits. Please retry your request with the recovered c
             ExtraFilter: `ID='${request.OriginatingAgentRunStepID}'`,
             Fields: ['StepType'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         }, params.contextUser);
 
@@ -15213,7 +16164,12 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            await this.recordExecutionRouting(params);
+            // A run refused before its first step (a dispatch refusal, a flow that does not compile)
+            // never ran on either engine, so it gets no routing record: a completed Decision step
+            // there would read as a successful dispatch (#4622).
+            if (initialStep?.step !== 'Failed') {
+                await this.recordExecutionRouting(params);
+            }
 
             if (initialStep) {
                 // Agent type provided an initial step
@@ -15289,6 +16245,11 @@ The context is now within limits. Please retry your request with the recovered c
             // durable task graph. executeTasksStep detaches (see its doc comment).
             case 'Tasks' as typeof previousDecision.step:
                 return await this.executeTasksStep(params, previousDecision);
+            // Type assertion required because 'Handoff' is not part of the BaseAgentNextStep step
+            // union — LoopAgentType.DetermineNextStep() emits it when an opted-in agent transfers
+            // the conversation to another agent. executeHandoffStep records the step and ends Success.
+            case 'Handoff' as typeof previousDecision.step:
+                return await this.executeHandoffStep(params, previousDecision);
             // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
@@ -15460,6 +16421,115 @@ The context is now within limits. Please retry your request with the recovered c
      * 
      * @private
      */
+    /** Whether a step is a completion that carries a payload change, which is held until the completion is accepted. */
+    private static carriesCompletionChange(step: BaseAgentNextStep): boolean {
+        return step.step === 'Success' && !!step.payloadChangeRequest;
+    }
+
+    /**
+     * Applies a turn's `payloadChangeRequest` to `current` and returns the result; `current` is not
+     * changed. Honours `PayloadSelfWritePaths`. A brand-new artifact whose payload is still the one
+     * inherited from a prior run (or that uses `replaceElements`) is built on an empty object, so
+     * keys from the previous artifact cannot bleed in.
+     */
+    private applyTurnPayloadChange<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, current: P, isUnmodifiedInheritedPayload: boolean): PayloadManagerResult<P> {
+        const change = step.payloadChangeRequest!;
+        const allowedPaths = params.agent.PayloadSelfWritePaths
+            ? JSON.parse(params.agent.PayloadSelfWritePaths)
+            : this.getDefaultPayloadSelfWritePaths();
+        const basePayload = (step.artifactDirective?.behavior === 'create-new'
+            && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(change.replaceElements)))
+            ? ({} as P)
+            : current;
+        const changeResult = this._payloadManager.applyAgentChangeRequest(basePayload, change, {
+            validateChanges: true,
+            logChanges: true,
+            agentName: params.agent.Name,
+            analyzeChanges: true,
+            generateDiff: true,
+            allowedPaths,
+            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+        });
+        if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+            LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
+        }
+        return changeResult;
+    }
+
+    /**
+     * The payload a completion would leave behind: the committed payload with the held changes and
+     * then the completion's own change applied. Success validation (the minimum-execution check, then
+     * `FinalPayloadValidation`) checks this draft, and it becomes the payload only if the completion is
+     * accepted. A change identical to a held one is not applied again, so a model that resends its whole
+     * refused change does not duplicate array elements. The opt-in payload change check is not asked
+     * here: it never runs on a step that ends the run.
+     */
+    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary | undefined } {
+        const working = this.withHeldCompletionChanges(params, committed);
+        const change = step.payloadChangeRequest;
+        if (!change || this.isHeldCompletionChange(change)) {
+            return { payload: working, summary: undefined };
+        }
+        const changeResult = this.applyTurnPayloadChange(params, step, working, isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0);
+        return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
+    }
+
+    /** `payload` with the held completion changes applied in order; `payload` itself when none are held. */
+    private withHeldCompletionChanges<P>(params: ExecuteAgentParams, payload: P): P {
+        return this._heldCompletionChanges.reduce<P>((current, held) => {
+            const step: BaseAgentNextStep<P> = { step: 'Success', terminate: false, payloadChangeRequest: held.Change as AgentPayloadChangeRequest<P> };
+            return this.applyTurnPayloadChange(params, step, current, held.UnmodifiedInheritedPayload).result;
+        }, payload);
+    }
+
+    /**
+     * After a completion: an accepted one commits the held changes (they were in its draft), so the
+     * list is cleared; a refused one adds its own change to the list, unless the same change is held.
+     */
+    private updateHeldCompletionChanges<P>(step: BaseAgentNextStep<P>, committedDraft: boolean, isUnmodifiedInheritedPayload: boolean): void {
+        if (committedDraft) {
+            this._heldCompletionChanges = [];
+            return;
+        }
+        const change = BaseAgent.carriesCompletionChange(step) ? step.payloadChangeRequest : undefined;
+        if (change && !this.isHeldCompletionChange(change)) {
+            this._heldCompletionChanges.push({
+                Change: change as AgentPayloadChangeRequest<unknown>,
+                UnmodifiedInheritedPayload: isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0
+            });
+        }
+    }
+
+    /** Whether `change` is, key order aside, one of the held completion changes. */
+    private isHeldCompletionChange<P>(change: AgentPayloadChangeRequest<P>): boolean {
+        const key = BaseAgent.stableJSON(change);
+        return this._heldCompletionChanges.some((held) => BaseAgent.stableJSON(held.Change) === key);
+    }
+
+    /** JSON with object keys sorted, so two equal values serialize the same. */
+    private static stableJSON(value: unknown): string {
+        return JSON.stringify(value, (_key, v: unknown) =>
+            v && typeof v === 'object' && !Array.isArray(v)
+                ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+                : v);
+    }
+
+    /**
+     * The payload a turn leaves behind. A held completion draft is committed only when the step is
+     * still `Success` after validation; on a refusal the committed payload stands (a subclass that
+     * set a payload of its own still wins). Without a draft, a subclass's `newPayload` wins as before.
+     */
+    private resolveTurnPayload<P>(step: BaseAgentNextStep<P>, committed: P, draft: { payload: P } | undefined): { payload: P; committedDraft: boolean } {
+        if (!draft) {
+            return { payload: step.newPayload || committed, committedDraft: false };
+        }
+        if (step.step === 'Success') {
+            return { payload: step.newPayload || draft.payload, committedDraft: true };
+        }
+        const own = step.newPayload && step.newPayload !== draft.payload ? step.newPayload : undefined;
+        return { payload: own || committed, committedDraft: false };
+    }
+
     private async executePromptStep<P = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
@@ -15516,13 +16586,15 @@ The context is now within limits. Please retry your request with the recovered c
             // PayloadAtStart was already serialized from this same `payload` by createStepEntity
             // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
 
-            let downstreamPayload = payload; // Start with current payload
+            // The model sees the payload with any held completion changes applied (see _heldCompletionChanges).
+            const workingPayload = this.withHeldCompletionChanges(params, payload);
+            let downstreamPayload = workingPayload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
                 // Extract only allowed downstream payload
                 downstreamPayload = this._payloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
-                    payload, // our inbound payload before prompt
+                    workingPayload, // our inbound payload before prompt
                     downstreamPaths
                 );
             }
@@ -15544,7 +16616,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // don't need to save here, the run will be saved later
             }
 
-            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
+            const promptParams = await this.finalizePromptParams(
+                await this.preparePromptParams(promptConfig, downstreamPayload, params), promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution.
             // Coalesce rapid token chunks within a ~35ms window while emitting the first chunk immediately
@@ -15739,46 +16812,16 @@ The context is now within limits. Please retry your request with the recovered c
                 && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload))
                 ? ({} as P)
                 : payload; // Start with current payload
-            let currentStepPayloadChangeResult = undefined;
-            if (initialNextStep.payloadChangeRequest) {
-                // Parse the allowed paths if configured
-                const allowedPaths = params.agent.PayloadSelfWritePaths 
-                    ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                    : this.getDefaultPayloadSelfWritePaths();
-
-                // When creating a brand-new artifact where the current payload is still the inherited
-                // payload from a prior conversation run (even if read-only action steps ran first) or when
-                // replaceElements is used with behavior='create-new', apply against a clean empty object
-                // so keys from the previous artifact cannot bleed in.
-                const basePayload = (initialNextStep.artifactDirective?.behavior === 'create-new'
-                    && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(initialNextStep.payloadChangeRequest.replaceElements)))
-                    ? ({} as P)
-                    : payload;
-
-                // Apply the changes to the payload with operation control
-                const changeResult = this._payloadManager.applyAgentChangeRequest(
-                    basePayload,
-                    initialNextStep.payloadChangeRequest,
-                    {
-                        validateChanges: true,
-                        logChanges: true,
-                        agentName: params.agent.Name,
-                        analyzeChanges: true,
-                        generateDiff: true,
-                        allowedPaths: allowedPaths,
-                        verbose: params.verbose === true || IsVerboseLoggingEnabled()
-                    }
-                );
-                
-                if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
-                    LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
-                }
-                
-                // Store payload change metadata for audit trail
-                // This will be merged into outputData later
+            let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
+            // A completion's payload change is held as a draft until Success validation accepts it
+            // (see buildCompletionDraft); every other step's change is applied now, as it always was.
+            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep)
+                || (initialNextStep.step === 'Success' && this._heldCompletionChanges.length > 0);
+            if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
+                const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
+                // Store payload change metadata for audit trail; merged into outputData later
                 currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
-
-                // Set the final payload - the changeResult already respects the allowed paths
+                // The changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
 
                 // Opt-in payload change check: asks whether the flagged changes were intended. It never
@@ -15872,12 +16915,25 @@ The context is now within limits. Please retry your request with the recovered c
                 await this.processTurnDecisions(decisions, initialNextStep, finalPayload, agentTypePromptParams, params);
             }
 
+            // A completion's change is validated as a draft (the committed payload with the change
+            // applied), and committed only if the completion is accepted.
+            const draft = holdsCompletionChange && initialNextStep.step === 'Success'
+                ? this.buildCompletionDraft(params, initialNextStep, finalPayload, finalPayload === params.payload)
+                : undefined;
+            currentStepPayloadChangeResult = draft?.summary ?? currentStepPayloadChangeResult;
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
-            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
+            const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, draft ? draft.payload : finalPayload, stepEntity);
 
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
-            finalPayload = updatedNextStep.newPayload || finalPayload;
+            const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
+            finalPayload = resolved.payload;
+            const heldCompletionChange = holdsCompletionChange && !resolved.committedDraft;
+            this.updateHeldCompletionChanges(initialNextStep, resolved.committedDraft, finalPayload === params.payload);
+            if (heldCompletionChange && currentStepPayloadChangeResult) {
+                currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
+            }
 
             // Prepare output data, these are simple elements of the state that are not typically
             // included in payload but are helpful. We do not include the prompt result here
@@ -15891,6 +16947,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
                     payloadChangeResult: currentStepPayloadChangeResult
+                }),
+                // A completion's change that was not applied because the completion was refused
+                ...(heldCompletionChange && {
+                    payloadChangeHeld: 'The completion was refused, so its payload change is held: it is applied with the next accepted completion, or dropped if the run ends without one.'
                 }),
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
@@ -16200,6 +17260,8 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             parentAgentHierarchy: this._agentHierarchy
         };
         
@@ -16253,7 +17315,7 @@ The context is now within limits. Please retry your request with the recovered c
                 undefined, // No context message for child sub-agents
                 stepCount
             );
-            
+
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             if (subAgentResult.success) {
@@ -16430,30 +17492,24 @@ The context is now within limits. Please retry your request with the recovered c
                 })
             }; 
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    undefined,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(stepEntity, subAgentResult.success,
                 subAgentResult.agentRun?.ErrorMessage, outputData);
-
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
 
             // When a sub-agent (e.g. Workflow Planner) submits a durable task graph, its run parks
             // with Status === 'Paused'. Propagate the parked state to the parent run and terminate
@@ -16474,47 +17530,23 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    handoff: undefined
                 };
             }
             
             // Add user message with the sub-agent results using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const subAgentMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                // Default: keep sub-agent results for 3 turns then remove
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            // Apply global override if configured
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    subAgentMetadata.expirationTurns = override.expirationTurns;
-                    subAgentMetadata.expirationMode = override.expirationMode || 'Remove';
-                    subAgentMetadata.compactMode = override.compactMode;
-                    subAgentMetadata.compactLength = override.compactLength;
-                    subAgentMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result.
-                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: resultMessage,
-                    isError: !subAgentResult.success
-                }], subAgentMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload with the merged result
             if (this._agentRun) {
@@ -16541,7 +17573,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // terminates the parent run directly (shouldTerminate=true), carry the terminal
                 // sub-agent's directive if the parent did not specify one.
                 artifactDirective: previousDecision?.artifactDirective
-                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                handoff: undefined
             };            
         } catch (error) {
             // Preserve payload on error
@@ -16637,21 +17670,34 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         const resolved = this.resolveSubAgentByName(params, name, previousDecision.taskGraph?.folded === true);
-        if (resolved?.relationship) {
-            return await this.executeRelatedSubAgentStep<SC, SR>(
-                params,
-                previousDecision,
-                resolved.subAgentEntity,
-                resolved.relationship,
-                parentStepId,
-                subAgentPayloadOverride as SR | undefined,
-                stepCount
-            );
-        }
         if (resolved) {
+            const canonicalName = resolved.subAgentEntity.Name || name;
+            const canonicalDecision: BaseAgentNextStep<SR, SC> =
+                canonicalName !== name
+                    ? {
+                        ...previousDecision,
+                        ...(previousDecision.subAgent
+                            ? { subAgent: { ...previousDecision.subAgent, name: canonicalName } }
+                            : {}),
+                        ...(previousDecision.subAgents
+                            ? { subAgents: [{ ...subAgentRequest, name: canonicalName }] }
+                            : {}),
+                    }
+                    : previousDecision;
+            if (resolved.relationship) {
+                return await this.executeRelatedSubAgentStep<SC, SR>(
+                    params,
+                    canonicalDecision,
+                    resolved.subAgentEntity,
+                    resolved.relationship,
+                    parentStepId,
+                    subAgentPayloadOverride as SR | undefined,
+                    stepCount
+                );
+            }
             return await this.executeChildSubAgentStep<SC, SR>(
                 params,
-                previousDecision,
+                canonicalDecision,
                 parentStepId,
                 subAgentPayloadOverride,
                 stepCount,
@@ -16682,7 +17728,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Finds a sub-agent by name, checking child agents (ParentID) first, then
-     * related agents (AgentRelationships). Returns `undefined` when the name
+     * related agents (AgentRelationships), then agents named on this agent's own
+     * Flow steps, then runtime-granted sub-agents. Returns `undefined` when the name
      * doesn't resolve to an active agent reachable from `params.agent`.
      *
      * Used by both the single and parallel sub-agent dispatch paths so name
@@ -16700,47 +17747,77 @@ The context is now within limits. Please retry your request with the recovered c
         allowAnyActiveAgent: boolean = false
     ): { subAgentEntity: MJAIAgentEntityExtended; relationship?: MJAIAgentRelationshipEntity } | undefined {
         const normalized = name.trim().toLowerCase();
-        const childAgent = AIEngine.Instance.Agents.find(a =>
-            UUIDsEqual(a.ParentID, params.agent.ID) &&
-            a.Status === 'Active' &&
-            a.Name.trim().toLowerCase() === normalized
+        const activeChildAgents = AIEngine.Instance.Agents.filter(a =>
+            UUIDsEqual(a.ParentID, params.agent.ID) && a.Status === 'Active'
         );
+        const childAgent =
+            activeChildAgents.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, activeChildAgents, true).match;
         if (childAgent) {
             return { subAgentEntity: childAgent };
         }
         const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
             UUIDsEqual(ar.AgentID, params.agent.ID) && ar.Status === 'Active'
         );
+        const relatedPairs: Array<{ agent: MJAIAgentEntityExtended; rel: MJAIAgentRelationshipEntity }> = [];
         for (const rel of activeRelationships) {
             const relatedAgent = AIEngine.Instance.Agents.find(a =>
-                UUIDsEqual(a.ID, rel.SubAgentID) &&
-                a.Status === 'Active' &&
-                a.Name.trim().toLowerCase() === normalized
+                UUIDsEqual(a.ID, rel.SubAgentID) && a.Status === 'Active'
             );
             if (relatedAgent) {
-                return { subAgentEntity: relatedAgent, relationship: rel };
+                if (relatedAgent.Name.trim().toLowerCase() === normalized) {
+                    return { subAgentEntity: relatedAgent, relationship: rel };
+                }
+                relatedPairs.push({ agent: relatedAgent, rel });
             }
         }
-        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        const sanitizedRelated = this.matchNamedBySanitizedToolName(
+            name,
+            relatedPairs.map(p => p.agent),
+            true
+        ).match;
+        if (sanitizedRelated) {
+            const matchedPair = relatedPairs.find(p => UUIDsEqual(p.agent.ID, sanitizedRelated.ID));
+            if (matchedPair) {
+                return { subAgentEntity: matchedPair.agent, relationship: matchedPair.rel };
+            }
+        }
+        // 3) Sub-agents named on this agent's own Flow steps (#1415). A Flow agent binds a sub-agent on
+        // its step (`AIAgentStep.SubAgentID`, or a ForEach/While body with LoopBodyType 'Sub-Agent'),
+        // not through ParentID or a relationship row, so without this tier an in-run Flow could not
+        // reach the agent its own step names. The same reasoning as getFlowStepActions. A Loop agent
+        // has no steps, so this adds nothing for it.
+        const flowStepPool = this.getFlowStepSubAgents(params.agent.ID);
+        const flowStepAgent =
+            flowStepPool.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, flowStepPool, true).match;
+        if (flowStepAgent) {
+            return { subAgentEntity: flowStepAgent };
+        }
+        // 4) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
         // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
         // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
         // or not active") — and because the catalog keeps offering it, the model re-picks the same
         // sub-agent forever (observed live: Research Agent looping 36+ turns on the skill-granted
         // Infographic Agent). No relationship row exists for these, so they dispatch child-style.
-        const effectiveAgent = this.getEffectiveSubAgentsForValidation(params.agent.ID).find(a =>
-            a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
+        const effectivePool = this.getEffectiveSubAgentsForValidation(params.agent.ID).filter(
+            a => a.Status === 'Active'
         );
+        const effectiveAgent =
+            effectivePool.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, effectivePool, true).match;
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
         }
-        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // 5) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
         // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
         // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
         // so allow resolving any active agent in AIEngine.Instance.Agents.
         if (allowAnyActiveAgent) {
-            const anyActiveAgent = AIEngine.Instance.Agents.find(a =>
-                a.Status === 'Active' && a.Name.trim().toLowerCase() === normalized
-            );
+            const allActive = AIEngine.Instance.Agents.filter(a => a.Status === 'Active');
+            const anyActiveAgent =
+                allActive.find(a => a.Name.trim().toLowerCase() === normalized)
+                ?? this.matchNamedBySanitizedToolName(name, allActive, true).match;
             if (anyActiveAgent) {
                 return { subAgentEntity: anyActiveAgent };
             }
@@ -16775,24 +17852,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected cloneSubAgentPayload<T>(payload: T): T {
-        if (payload === null || payload === undefined) return payload;
-        if (typeof payload !== 'object') return payload;
-        if (typeof globalThis.structuredClone === 'function') {
-            try {
-                return globalThis.structuredClone(payload);
-            } catch {
-                // DataCloneError — typically a Proxy (a live JSONType `<Field>Object` view) or an
-                // object holding functions. Fall through to the JSON clone below; returning the
-                // original here would silently give the sub-agent the caller's LIVE object and lose
-                // payload isolation.
-            }
-        }
-        try {
-            return ToPlainJSON(payload);
-        } catch (error) {
-            LogError(`BaseAgent.cloneSubAgentPayload: payload could not be cloned (${error instanceof Error ? error.message : String(error)}); sub-agent will share the caller's object`);
-            return payload;
-        }
+        return this._stepDispatcher.CloneSubAgentPayload(payload);
     }
 
     /**
@@ -16822,14 +17882,18 @@ The context is now within limits. Please retry your request with the recovered c
             return undefined;
         }
         const { subAgentEntity, relationship } = resolved;
+        const canonicalRequest: AgentSubAgentRequest<SC> =
+            subAgentEntity.Name && request.name !== subAgentEntity.Name
+                ? { ...request, name: subAgentEntity.Name }
+                : request;
 
         this.safeOnProgress(params, {
             step: 'subagent_execution',
-            message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${request.name}`),
+            message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${canonicalRequest.name}`),
             metadata: {
                 agentName: params.agent.Name,
-                subAgentName: request.name,
-                reason: request.message,
+                subAgentName: canonicalRequest.name,
+                reason: canonicalRequest.message,
                 relationshipType: relationship ? 'related' : 'child',
                 stepCount: stepCount + 1,
                 hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
@@ -16839,14 +17903,14 @@ The context is now within limits. Please retry your request with the recovered c
         // single-delegation push above for why framework prose must not be stored as assistant turns.
         // skipped when the call is natively recorded and will be answered by a tool result (see the
         // single-delegation push for why a user turn between call and result must not be inserted).
-        if (!(nativeResults && request.toolCallId)) {
+        if (!(nativeResults && canonicalRequest.toolCallId)) {
             params.conversationMessages.push({
                 role: 'user',
-                content: `[You delegated this task to the parallel sub-agent "${request.name}". Reason: ${request.message}]`
+                content: `[You delegated this task to the parallel sub-agent "${canonicalRequest.name}". Reason: ${canonicalRequest.message}]`
             });
         }
 
-        return { request: request as AgentSubAgentRequest<unknown>, subAgentEntity, relationship };
+        return { request: canonicalRequest as AgentSubAgentRequest<unknown>, subAgentEntity, relationship };
     }
 
     /**
@@ -16991,14 +18055,33 @@ The context is now within limits. Please retry your request with the recovered c
         return executions
             .map(execution => {
                 const statusEmoji = execution.result.success ? '✅' : '❌';
-                const baseInfo =
-                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**\n` +
-                    `* Message: "${execution.request.message}"\n` +
-                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`;
-                if (execution.result.agentRun?.ErrorMessage) {
-                    return `${baseInfo}\n* Error: ${execution.result.agentRun.ErrorMessage}`;
+                const lines: string[] = [
+                    `${statusEmoji} **Sub-Agent: ${execution.request.name}**`,
+                    `* Message: "${execution.request.message}"`,
+                    `* Status: ${execution.result.agentRun?.FinalStep || 'Failed'}`
+                ];
+                const isChat = execution.result.agentRun?.FinalStep === 'Chat';
+                const question = execution.result.agentRun?.Message;
+                if (execution.consult) {
+                    const maxRounds = execution.maxConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    lines.push(
+                        `* Question (round ${execution.consult.round} of ${maxRounds}): ${question?.trim() ? question : '(no message provided)'}`
+                    );
+                    const formSummary = FormatResponseFormSummary(execution.result.responseForm);
+                    if (formSummary) {
+                        lines.push(`* Form:\n${formSummary}`);
+                    }
+                    lines.push(`* Child run ID: ${execution.consult.childRunId || '(unknown)'}`);
+                    lines.push(
+                        `* To answer, call ${execution.request.name} again with resumeRunId: "${execution.consult.childRunId}" and your answer as the message.`
+                    );
+                } else if (isChat && question?.trim()) {
+                    lines.push(`* Question: ${question}`);
                 }
-                return baseInfo;
+                if (execution.result.agentRun?.ErrorMessage) {
+                    lines.push(`* Error: ${execution.result.agentRun.ErrorMessage}`);
+                }
+                return lines.join('\n');
             })
             .join('\n\n---\n\n');
     }
@@ -17053,6 +18136,8 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentName: request.name,
                 message: request.message,
                 terminateAfter: request.terminateAfter,
+                ...(request.resumeRunId ? { resumeRunId: request.resumeRunId } : {}),
+                ...(request.presetName ? { presetName: request.presetName } : {}),
                 parentAgentHierarchy: this._agentHierarchy,
                 relationshipType: relationship ? 'related' : 'child'
             },
@@ -17131,6 +18216,31 @@ The context is now within limits. Please retry your request with the recovered c
             if (execution.result.mediaOutputs?.length) this._mediaOutputs.push(...execution.result.mediaOutputs);
             if (execution.result.fileOutputs?.length) this._fileOutputs.push(...execution.result.fileOutputs);
 
+            if (execution.result.agentRun?.FinalStep === 'Chat') {
+                const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, execution.relationship);
+                if (this.isSubAgentConsultActive(resolvedOption, params)) {
+                    const round = (this._subAgentConsultRounds.get(execution.subAgentEntity.ID) ?? 0) + 1;
+                    this._subAgentConsultRounds.set(execution.subAgentEntity.ID, round);
+                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+                    if (round <= maxRounds) {
+                        const childRunId = execution.result.agentRun?.ID || '';
+                        const question = execution.result.agentRun?.Message || null;
+                        const consultRecord: SubAgentConsultRecord = {
+                            childRunId,
+                            subAgentId: execution.subAgentEntity.ID,
+                            subAgentName: execution.request.name,
+                            round,
+                            question
+                        };
+                        if (childRunId) {
+                            this._openSubAgentConsults.set(childRunId, consultRecord);
+                        }
+                        execution.consult = consultRecord;
+                        execution.maxConsultRounds = maxRounds;
+                    }
+                }
+            }
+
             const { mergedPayload: newMerged, stepPayloadAtEnd } = this.mergeParallelSubAgentResult(
                 params, execution, mergedPayload
             );
@@ -17154,6 +18264,7 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<void> {
         if (!execution.stepEntity) return;
         execution.stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(stepPayloadAtEnd);
+        const shouldTerminate = execution.request.terminateAfter === true && !execution.consult;
         await this.finalizeStepEntity(
             execution.stepEntity,
             execution.result.success,
@@ -17165,8 +18276,9 @@ The context is now within limits. Please retry your request with the recovered c
                     errorMessage: execution.result.agentRun?.ErrorMessage,
                     stepCount: execution.result.agentRun?.Steps?.length || 0,
                 },
-                shouldTerminate: execution.request.terminateAfter === true,
-                nextStep: execution.request.terminateAfter === true ? 'success' : 'retry'
+                shouldTerminate,
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                ...(execution.consult && { consult: execution.consult })
             }
         );
     }
@@ -17230,10 +18342,10 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Termination semantics: matches the single sub-agent path —
         // `terminateAfter` triggers parent termination regardless of the child's
-        // success/failure. The parent's step reflects whether any child failed:
-        // Failed if any did, Success if terminating cleanly, otherwise Retry.
+        // success/failure, EXCEPT when a Chat child is handled under Consult
+        // (the parent must get its turn to answer).
         const shouldTerminateParent = allExecutions.some(e =>
-            e.request.terminateAfter === true
+            e.request.terminateAfter === true && !e.consult
         );
         const subAgentNames = allExecutions.map(e => e.request.name).join(', ');
         return {
@@ -17245,6 +18357,200 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload
         };
+    }
+
+    /**
+     * Pushes a sub-agent result or consult message to the parent's conversation history,
+     * answering natively-invoked `delegate_to_*` calls as a tool-result turn when applicable
+     * and applying expiration defaults / overrides.
+     *
+     * @private
+     */
+    private pushSubAgentConversationMessage<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        messageContent: string,
+        messageType: 'sub-agent-result' | 'sub-agent-consult',
+        isError: boolean
+    ): void {
+        const metadata: AgentChatMessageMetadata = {
+            turnAdded: this._promptTurnCount,
+            messageType,
+            subAgentName: subAgentRequest.name,
+            subAgentId: subAgentEntity.ID,
+            expirationTurns: 3,
+            expirationMode: 'Remove'
+        };
+
+        if (params.messageExpirationOverride) {
+            const override = params.messageExpirationOverride;
+            if (override.expirationTurns != null) {
+                metadata.expirationTurns = override.expirationTurns;
+                metadata.expirationMode = override.expirationMode || 'Remove';
+                metadata.compactMode = override.compactMode;
+                metadata.compactLength = override.compactLength;
+                metadata.compactPromptId = override.compactPromptId;
+            }
+        }
+
+        if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
+            this.PushToolResultTurn(params, BuildToolResultTurn([
+                ...this.payloadToolResult(previousDecision),
+                {
+                    toolCallId: subAgentRequest.toolCallId,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
+                    content: messageContent,
+                    isError
+                }
+            ], metadata) as AgentChatMessage);
+        } else {
+            params.conversationMessages.push({
+                role: 'user',
+                content: messageContent,
+                metadata
+            } as AgentChatMessage);
+        }
+    }
+
+    /**
+     * Unified handler for a single sub-agent (child, related, or runtime-granted) that
+     * finished with `FinalStep === 'Chat'`. Resolves `ChatHandlingOption` for the pairing,
+     * runs the consult flow when `'Consult'` is active and within the per-sub-agent round
+     * bound, and otherwise finalizes the step and delegates to `validateChatNextStep`.
+     *
+     * @private
+     */
+    private async handleSingleSubAgentChatStep<SC, SR>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        subAgentEntity: MJAIAgentEntityExtended,
+        relationship: MJAIAgentRelationshipEntity | undefined,
+        subAgentResult: ExecuteAgentResult<SR>,
+        mergedPayload: SR,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        outputData: Record<string, unknown>
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const resolvedOption = this.resolveSubAgentChatHandlingOption(params.agent, relationship);
+
+        if (this.isSubAgentConsultActive(resolvedOption, params)) {
+            const round = (this._subAgentConsultRounds.get(subAgentEntity.ID) ?? 0) + 1;
+            this._subAgentConsultRounds.set(subAgentEntity.ID, round);
+            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS;
+
+            const childRunId = subAgentResult.agentRun?.ID || '';
+            const question = subAgentResult.agentRun?.Message || null;
+            const consultRecord: SubAgentConsultRecord = {
+                childRunId,
+                subAgentId: subAgentEntity.ID,
+                subAgentName: subAgentRequest.name,
+                round,
+                question
+            };
+            if (childRunId) {
+                this._openSubAgentConsults.set(childRunId, consultRecord);
+            }
+            outputData.consult = consultRecord;
+
+            if (round <= maxRounds) {
+                outputData.shouldTerminate = false;
+                outputData.nextStep = 'retry';
+
+                await this.finalizeStepEntity(
+                    stepEntity,
+                    subAgentResult.success,
+                    subAgentResult.agentRun?.ErrorMessage,
+                    outputData
+                );
+
+                const consultMessage = FormatSubAgentConsultMessage({
+                    subAgentName: subAgentRequest.name,
+                    round,
+                    maxRounds,
+                    question,
+                    responseForm: subAgentResult.responseForm,
+                    childRunId
+                });
+
+                this.pushSubAgentConversationMessage(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    consultMessage,
+                    'sub-agent-consult',
+                    false
+                );
+
+                if (this._agentRun) {
+                    this._agentRun.FinalPayloadObject = mergedPayload;
+                }
+
+                this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
+                return {
+                    ...subAgentResult,
+                    step: 'Success',
+                    errorMessage: undefined,
+                    terminate: false,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: mergedPayload,
+                    artifactDirective: undefined,
+                    handoff: undefined
+                };
+            }
+        }
+
+        // Not under active Consult (or round exceeded bound): finalize step and validate/propagate Chat
+        await this.finalizeStepEntity(
+            stepEntity,
+            subAgentResult.success,
+            subAgentResult.agentRun?.ErrorMessage,
+            outputData
+        );
+
+        const chatStep: BaseAgentNextStep<SR, SC> = {
+            step: 'Chat',
+            terminate: true,
+            message: subAgentResult.agentRun?.Message || null,
+            previousPayload: previousDecision?.newPayload,
+            newPayload: mergedPayload,
+            responseForm: subAgentResult.responseForm,
+            actionableCommands: subAgentResult.actionableCommands,
+            automaticCommands: subAgentResult.automaticCommands,
+            artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+        };
+
+        const effectiveOption = this.effectiveSubAgentChatHandlingOption(params.agent, relationship, params);
+        const validatedStep = await this.validateChatNextStep(
+            params,
+            chatStep,
+            mergedPayload,
+            this._agentRun!,
+            stepEntity!,
+            effectiveOption
+        );
+
+        if (validatedStep.step === 'Chat' && effectiveOption === 'Consult' && this._depth === 0) {
+            await this.raiseFeedbackRequest(params, stepEntity, chatStep);
+        } else if (validatedStep.step === 'Retry') {
+            const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                resultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+        }
+
+        return validatedStep;
     }
 
     /**
@@ -17306,6 +18612,8 @@ The context is now within limits. Please retry your request with the recovered c
             subAgentName: subAgentRequest.name,
             message: subAgentRequest.message,
             terminateAfter: subAgentRequest.terminateAfter,
+            ...(subAgentRequest.resumeRunId ? { resumeRunId: subAgentRequest.resumeRunId } : {}),
+            ...(subAgentRequest.presetName ? { presetName: subAgentRequest.presetName } : {}),
             parentAgentHierarchy: this._agentHierarchy,
             relationshipType: 'related'
         };
@@ -17434,7 +18742,7 @@ The context is now within limits. Please retry your request with the recovered c
             const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
             // Prepare output data
-            const outputData = {
+            const outputData: Record<string, unknown> = {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
@@ -17454,6 +18762,21 @@ The context is now within limits. Please retry your request with the recovered c
                 stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
             }
 
+            // Check if sub-agent returned a Chat step (handled before finalizeStepEntity so Consult can update outputData)
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return await this.handleSingleSubAgentChatStep(
+                    params,
+                    previousDecision,
+                    subAgentRequest,
+                    subAgentEntity,
+                    relationship,
+                    subAgentResult,
+                    mergedPayload,
+                    stepEntity,
+                    outputData
+                );
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(
                 stepEntity,
@@ -17461,27 +18784,6 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentResult.agentRun?.ErrorMessage,
                 outputData
             );
-
-            // Check if sub-agent returned a Chat step
-            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
-                // Create Chat nextStep but validate it through parent's ChatHandlingOption
-                // This allows parent agents to remap Chat -> Success/Failed/Retry if configured
-                const chatStep: BaseAgentNextStep<SR, SC> = {
-                    step: 'Chat',
-                    terminate: true,
-                    message: subAgentResult.agentRun?.Message || null,
-                    previousPayload: previousDecision?.newPayload,
-                    newPayload: mergedPayload, // Preserve sub-agent payload changes
-                    responseForm: subAgentResult.responseForm,
-                    actionableCommands: subAgentResult.actionableCommands,
-                    automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
-                };
-
-                // Validate through parent's ChatHandlingOption (if configured)
-                // This ensures parent agents can override child Chat steps
-                return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
-            }
 
             // When a related sub-agent submits a durable task graph, its run parks with Status === 'Paused'.
             // Propagate the parked state to the parent run and terminate immediately with the sub-agent's
@@ -17501,49 +18803,23 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands,
-                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective
+                    artifactDirective: previousDecision?.artifactDirective ?? subAgentResult.artifactDirective,
+                    handoff: undefined
                 };
             }
 
             // Add sub-agent result to conversation as user message using markdown format
             // and expiration metadata so it persists across multiple prompt turns
             const relatedResultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
-
-            const relatedMetadata: AgentChatMessageMetadata = {
-                turnAdded: this._promptTurnCount,
-                messageType: 'sub-agent-result',
-                subAgentName: subAgentRequest.name,
-                subAgentId: subAgentEntity.ID,
-                expirationTurns: 3,
-                expirationMode: 'Remove'
-            };
-
-            if (params.messageExpirationOverride) {
-                const override = params.messageExpirationOverride;
-                if (override.expirationTurns != null) {
-                    relatedMetadata.expirationTurns = override.expirationTurns;
-                    relatedMetadata.expirationMode = override.expirationMode || 'Remove';
-                    relatedMetadata.compactMode = override.compactMode;
-                    relatedMetadata.compactLength = override.compactLength;
-                    relatedMetadata.compactPromptId = override.compactPromptId;
-                }
-            }
-
-            if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
-                // the delegate_to_* call is answered as a tool result (same as the child path).
-                this.PushToolResultTurn(params, BuildToolResultTurn([...this.payloadToolResult(previousDecision), {
-                    toolCallId: subAgentRequest.toolCallId,
-                    toolName: `${SUB_AGENT_TOOL_PREFIX}${SanitizeToolName(subAgentRequest.name)}`,
-                    content: relatedResultMessage,
-                    isError: !subAgentResult.success
-                }], relatedMetadata) as AgentChatMessage);
-            } else {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: relatedResultMessage,
-                    metadata: relatedMetadata
-                } as AgentChatMessage);
-            }
+            this.pushSubAgentConversationMessage(
+                params,
+                previousDecision,
+                subAgentRequest,
+                subAgentEntity,
+                relatedResultMessage,
+                'sub-agent-result',
+                !subAgentResult.success
+            );
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -17565,7 +18841,8 @@ The context is now within limits. Please retry your request with the recovered c
                 previousPayload: previousDecision?.newPayload,
                 newPayload: mergedPayload,
                 artifactDirective: previousDecision?.artifactDirective
-                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined)
+                    ?? (shouldTerminate ? subAgentResult.artifactDirective : undefined),
+                handoff: undefined
             };
         } catch (error) {
             // Preserve payload on error
@@ -17624,78 +18901,15 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private applySubAgentOutputMapping<P>(
         subAgentResult: Record<string, unknown>,
-        _parentPayload: Record<string, unknown>,
+        parentPayload: Record<string, unknown>,
         mappingConfig: string
     ): AgentPayloadChangeRequest<P> | null {
-        try {
-            const mapping: Record<string, string> = JSON.parse(mappingConfig);
-            const updateObj: Record<string, unknown> = {};
-
-            for (const [subAgentPath, parentPath] of Object.entries(mapping)) {
-                let value: unknown;
-
-                if (subAgentPath === '*') {
-                    // Wildcard - capture entire sub-agent result
-                    value = subAgentResult;
-                } else {
-                    // Extract from sub-agent result using dot notation
-                    value = this.getValueFromPath(subAgentResult, subAgentPath);
-                }
-
-                if (value !== undefined) {
-                    // Parse the parent path and build nested object
-                    const pathParts = parentPath.split('.');
-                    let current = updateObj;
-
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        const part = pathParts[i];
-                        // Remove [] suffix for intermediate path parts
-                        const cleanPart = part.endsWith('[]') ? part.slice(0, -2) : part;
-                        if (!(cleanPart in current)) {
-                            current[cleanPart] = {};
-                        }
-                        current = current[cleanPart] as Record<string, unknown>;
-                    }
-
-                    // Use helper to support array append on final path part
-                    this.setMappedValue(current, pathParts[pathParts.length - 1], value);
-                }
-            }
-
-            if (Object.keys(updateObj).length === 0) {
-                return null;
-            }
-
-            return {
-                updateElements: updateObj as Partial<P>
-            };
-        } catch (error) {
-            LogError(`Failed to parse SubAgentOutputMapping: ${error.message}`);
-            return null;
-        }
-    }
-
-    /**
-     * Sets a value in a target object, supporting array append operations.
-     * If the key ends with [], the value is appended to an array instead of replacing.
-     *
-     * @param target - Target object to modify
-     * @param key - Property key, optionally ending with [] for array append
-     * @param value - Value to set or append
-     * @private
-     */
-    /**
-     * Sets a value on a target object, honouring the `[]` array-append suffix.
-     *
-     * Delegates for the same reason as {@link getValueFromPath} — `results[]` must mean append in
-     * both engines, or a workflow accumulates in one and overwrites in the other.
-     */
-    private setMappedValue(
-        target: Record<string, unknown>,
-        key: string,
-        value: unknown
-    ): void {
-        SetMappedValue(target, key, value);
+        return this._stepDispatcher.ApplySubAgentOutputMapping(
+            subAgentResult,
+            parentPayload,
+            mappingConfig,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -17712,47 +18926,11 @@ The context is now within limits. Please retry your request with the recovered c
         parentPayload: Record<string, unknown>,
         mappingConfig: string
     ): Record<string, unknown> | null {
-        try {
-            const mapping: Record<string, string> = JSON.parse(mappingConfig);
-            const subAgentPayload: Record<string, unknown> = {};
-
-            for (const [parentPath, subAgentPath] of Object.entries(mapping)) {
-                let value: unknown;
-
-                if (parentPath === '*') {
-                    // Wildcard - send entire parent payload to sub-agent
-                    value = parentPayload;
-                } else {
-                    // Extract from parent payload using dot notation
-                    value = this.getValueFromPath(parentPayload, parentPath);
-                }
-
-                if (value !== undefined) {
-                    // Parse the sub-agent path and build nested object
-                    const pathParts = subAgentPath.split('.');
-                    let current = subAgentPayload;
-
-                    for (let i = 0; i < pathParts.length - 1; i++) {
-                        const part = pathParts[i];
-                        if (!(part in current)) {
-                            current[part] = {};
-                        }
-                        current = current[part] as Record<string, unknown>;
-                    }
-
-                    current[pathParts[pathParts.length - 1]] = value;
-                }
-            }
-
-            if (Object.keys(subAgentPayload).length === 0) {
-                return null;
-            }
-
-            return subAgentPayload;
-        } catch (error) {
-            LogError(`Failed to parse SubAgentInputMapping: ${error.message}`);
-            return null;
-        }
+        return this._stepDispatcher.ApplySubAgentInputMapping(
+            parentPayload,
+            mappingConfig,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -17775,53 +18953,12 @@ The context is now within limits. Please retry your request with the recovered c
         contextPaths: string[],
         params?: ExecuteAgentParams
     ): ChatMessage | null {
-        if (!contextPaths || contextPaths.length === 0) {
-            return null;
-        }
-
-        // Check for wildcard - send entire payload
-        if (contextPaths.includes('*')) {
-            return {
-                role: 'user',
-                content: `Parent Agent Context:\n\n${JSON.stringify(parentPayload, null, 2)}`
-            };
-        }
-
-        // Extract specific paths (supports both payload paths and conversation paths)
-        const contextData: Record<string, unknown> = {};
-
-        for (const path of contextPaths) {
-            let value: unknown;
-
-            // Check if this is a conversation reference
-            if (ConversationMessageResolver.isConversationReference(path) && params?.conversationMessages) {
-                value = ConversationMessageResolver.resolve(path, params.conversationMessages);
-            } else {
-                // Regular payload path
-                value = this.getValueFromPath(parentPayload, path);
-            }
-
-            if (value !== undefined) {
-                contextData[path] = value;
-            }
-        }
-
-        if (Object.keys(contextData).length === 0) {
-            return null;
-        }
-
-        // Format as readable context
-        const contextLines = Object.entries(contextData).map(([key, value]) => {
-            const valueStr = typeof value === 'object'
-                ? JSON.stringify(value, null, 2)
-                : String(value);
-            return `${key}:\n${valueStr}`;
-        });
-
-        return {
-            role: 'user',
-            content: `Parent Agent Context:\n\n${contextLines.join('\n\n')}`
-        };
+        return this._stepDispatcher.PrepareRelatedSubAgentContextMessage(
+            parentPayload,
+            contextPaths,
+            params,
+            (obj, path) => this.getValueFromPath(obj, path)
+        );
     }
 
     /**
@@ -17855,7 +18992,11 @@ The context is now within limits. Please retry your request with the recovered c
         
         try {
             const currentPayload = previousDecision?.newPayload || previousDecision?.previousPayload || params.payload;
-            const actions: AgentAction[] = previousDecision.actions || [];
+            const availableForExecution = this.getAvailableActionsForAgent(params.agent.ID);
+            const actions: AgentAction[] = (previousDecision.actions || []).map((a) => {
+                const matched = this.resolveActionEntityForAgent(a.name, availableForExecution, params, false);
+                return matched && matched.Name !== a.name ? { ...a, name: matched.Name } : { ...a };
+            });
             // Check for cancellation before starting
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled before action execution');
@@ -17944,17 +19085,13 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            const actionEngine = ActionEngineServer.Instance;
             // Get the AIAgentAction metadata records for this agent (used for expiration settings)
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, params.agent.ID));
 
             // Use _effectiveActions which includes runtime action changes applied in gatherPromptTemplateData
-            // Fall back to database-configured actions if _effectiveActions is empty (shouldn't happen in normal flow)
-            const effectiveActions = this._effectiveActions.length > 0
-                ? this._effectiveActions
-                : (actionEngine.Actions || []).filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                  );
+            // getEffectiveActionsForValidation falls back to the configured actions only when none were computed;
+            // an empty computed list (a host's actionChanges removed every action) is authoritative
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
 
             // Call agent type's pre-processing for actions
             try {
@@ -17975,20 +19112,20 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Track step numbers for parallel actions
             let numActionsProcessed = 0;
-            const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
+            const baseStepNumber = (this._agentRun?.Steps?.length || 0) + 1;
 
             // Execute all actions in parallel
             let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
+            const flowStepActions = this.getFlowStepActions(params.agent.ID);
             const actionPromises = actions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes),
-                // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID)
-                let actionEntity = effectiveActions.find(a => a.Name === aa.name);
-                if (!actionEntity && Array.isArray(actionEngine?.Actions)) {
-                    const agentSteps = AIEngine.Instance.GetAgentSteps?.(params.agent.ID) || [];
-                    const stepActionIds = new UUIDSet(agentSteps.map(s => s.ActionID));
-                    actionEntity = actionEngine.Actions.find(
-                        a => a.Name === aa.name && stepActionIds.Has(a.ID)
-                    );
+                // or from actions referenced directly by this agent's Flow steps (AIAgentStep.ActionID / Configuration.steps[])
+                let actionEntity = this.resolveActionEntityForAgent(aa.name, effectiveActions, params, false);
+                if (!actionEntity && flowStepActions.length > 0) {
+                    actionEntity = this.resolveActionEntityForAgent(aa.name, flowStepActions, params, false);
+                }
+                if (actionEntity && aa.name !== actionEntity.Name) {
+                    aa.name = actionEntity.Name;
                 }
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}". Available actions: ${effectiveActions.map(a => a.Name).join(', ')}`);
@@ -18074,14 +19211,30 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
+                const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, params);
+                if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
+                    this.recordTaintedSource(
+                        result.stepEntity?.StepNumber ?? (stepCount + 1),
+                        `action:${result.action.name}`,
+                        trustLevel
+                    );
+                }
+
                 return {
                     actionName: result.action.name,
                     success: isActionSuccess,
                     params: sanitizedParams,
-                    resultCode: actionResult?.Result?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
+                    // The action's own code when it matches none of its metadata result codes (`Result` is then
+                    // undefined), so a custom failure code such as UNKNOWN_ENTITY_FIELDS reaches the model
+                    // instead of a bare 'ERROR'.
+                    resultCode: actionResult?.Result?.ResultCode || actionResult?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
                     message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
-                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined,
-                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
+                    // Kept on failure too: an action's recovery guidance is most useful when it failed.
+                    // Stripped on Untrusted actions (Primitive 2) so external payloads cannot inject high-priority AI directives.
+                    aiDirectives: trustLevel === 'Untrusted' ? undefined : actionResult?.AIDirectives,
+                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined,
+                    trustLevel,
+                    errorRecovery: actionResult?.ErrorRecovery,
                 };
             });
             
@@ -18119,7 +19272,7 @@ The context is now within limits. Please retry your request with the recovered c
                     }
                 }
 
-                // Only add metadata if we have expiration settings
+                // Expiration settings only when the configuration has them; the tag itself is always stamped below.
                 if (minExpirationTurns !== null && expirationMode !== 'None') {
                     metadata = {
                         turnAdded: this._promptTurnCount,
@@ -18131,6 +19284,13 @@ The context is now within limits. Please retry your request with the recovered c
                         compactPromptId: compactPromptId
                     };
                 }
+            }
+
+            // Every action result is tagged, with or without expiration settings, so IsToolResultMessage
+            // and IsVolatileResultMessage recognize it: context recovery and post-run compaction can then
+            // compact it, and `pruneAndCompactExpiredMessages` still leaves it alone (no expirationTurns).
+            if (!metadata) {
+                metadata = { turnAdded: this._promptTurnCount, messageType: 'action-result' };
             }
 
             if (addConversationMessage) {
@@ -18146,9 +19306,10 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Surface explicit AI directives from action results as a separate instruction message.
                 // Actions that need the AI to follow specific instructions (not just acknowledge data)
-                // populate AIDirectives on their ActionResultSimple return value.
+                // populate AIDirectives on their ActionResultSimple return value. Failed actions are
+                // included: a directive on a failure is the action telling the model how to recover.
                 const allDirectives = actionSummaries
-                    .filter(a => a.success && a.aiDirectives && a.aiDirectives.length > 0)
+                    .filter(a => a.aiDirectives && a.aiDirectives.length > 0)
                     .flatMap(a => a.aiDirectives!);
                 if (allDirectives.length > 0) {
                     const directiveText = allDirectives
@@ -18346,6 +19507,12 @@ The context is now within limits. Please retry your request with the recovered c
 
         const results: ClientToolResultSummary[] = [];
         const agentRunID = this._agentRun?.ID ?? 'unknown';
+        // Resolved once: the same tiers and precedence the prompt offered the model, keyed by name so each
+        // result can read the tool's declared TrustLevel.
+        const toolsByName = new Map(
+            this.resolveClientToolsForRun(params.agent, { ...(params.data ?? {}), sessionID: params.sessionID })
+                .map(t => [t.Name.trim().toLowerCase(), t] as const)
+        );
 
         // Execute tools sequentially (client may not support parallel UI operations)
         for (const tool of clientTools) {
@@ -18380,12 +19547,27 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             );
 
+            const matchedClientToolMeta = toolsByName.get(tool.Name.trim().toLowerCase());
+            const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, params);
+            const clientToolTrustLevel: ActionOutputTrustLevel =
+                resolvedActionTrust !== 'Trusted'
+                    ? resolvedActionTrust
+                    : (matchedClientToolMeta?.TrustLevel ?? 'Trusted');
+            if (clientToolTrustLevel === 'Untrusted' || clientToolTrustLevel === 'SemiTrusted') {
+                this.recordTaintedSource(
+                    stepEntity?.StepNumber ?? (stepCount + 1),
+                    `client-tool:${tool.Name}`,
+                    clientToolTrustLevel
+                );
+            }
+
             results.push({
                 ToolName: tool.Name,
                 Success: response.Success,
                 Result: response.Result,
                 Media: response.Media,
-                ErrorMessage: response.ErrorMessage
+                ErrorMessage: response.ErrorMessage,
+                TrustLevel: clientToolTrustLevel,
             });
         }
 
@@ -18694,7 +19876,7 @@ The context is now within limits. Please retry your request with the recovered c
             const existing = await rv.RunView<MJConversationSkillEntity>({
                 EntityName: 'MJ: Conversation Skills',
                 ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skill.ID)}'`,
-                ResultType: 'entity_object', MaxRows: 1,
+                ResultType: 'entity_object', MaxRows: 1, SkipTotalRowCount: true,
             }, params.contextUser);
             if (!existing.Success) {
                 LogErrorEx({ message: `Could not read conversation skill '${skill.Name}': ${existing.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
@@ -18730,7 +19912,7 @@ The context is now within limits. Please retry your request with the recovered c
             const existing = await rv.RunView<MJConversationSkillEntity>({
                 EntityName: 'MJ: Conversation Skills',
                 ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skillId)}' AND Status = 'Active'`,
-                ResultType: 'entity_object', MaxRows: 1,
+                ResultType: 'entity_object', MaxRows: 1, SkipTotalRowCount: true,
             }, contextUser);
             const row = existing.Success ? existing.Results?.[0] : undefined;
             if (!row) return;
@@ -19051,8 +20233,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         const graph = previousDecision.taskGraph;
-        const spec = graph?.spec;
-        if (!spec) {
+        const rawSpec = graph?.spec;
+        if (!rawSpec) {
             return {
                 step: 'Failed',
                 terminate: true,
@@ -19061,24 +20243,23 @@ The context is now within limits. Please retry your request with the recovered c
                 newPayload: previousDecision.newPayload || previousDecision.previousPayload
             };
         }
-        // Fail closed under bound parameters (ExecuteAgentParams.boundActionParams): a graph's action nodes
-        // are dispatched by the task-graph runner with the inputs the model authored, outside
-        // ExecuteSingleAction, so nothing would hide or apply a binding. The response type already withholds
-        // `tasks` from a bound run; this is the gate for a model that emits one anyway.
-        if (this.hasBoundActionParams(params.boundActionParams)) {
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: 'Task graphs are not available in a run with bound action parameters: a graph dispatches actions outside the binding gate.',
-                previousPayload: previousDecision.previousPayload,
-                newPayload: previousDecision.newPayload || previousDecision.previousPayload
-            };
-        }
-        // Fail closed under an audience or a tenant-scoped run (taskGraphRefusal): a graph runs outside the run's gates.
+        const spec = this.canonicalizeTaskGraphSpec(rawSpec);
+        // Fail closed on anything the graph could not carry (the same predicate the prompt used to hide `tasks`).
         const withheld = this.taskGraphRefusal(params, previousDecision);
         if (withheld) {
             return withheld;
         }
+        const envelope = this.taskGraphSecurityEnvelope(params);
+        if ('Refusal' in envelope) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Task graph not submitted: ${envelope.Refusal}`,
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+        const securityEnvelope = envelope.Envelope;
 
         const stepEntity = await this.createStepEntity({
             stepType: 'TaskGraph',
@@ -19107,6 +20288,7 @@ The context is now within limits. Please retry your request with the recovered c
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
+            ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
@@ -19117,9 +20299,10 @@ The context is now within limits. Please retry your request with the recovered c
             // path carried neither, so every documented `data.x` condition evaluated against the
             // origin step's output, found nothing, and silently took the other branch.
             Invocation: { Data: params.data, Context: params.context },
-            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
+            Debug: BuildTaskGraphStartDebug(params.taskGraphDebug),
             ContextUser: params.contextUser,
-            Provider: this.ProviderToUse
+            Provider: this.ProviderToUse,
+            ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
         });
 
         await this.finalizeStepEntity(
@@ -19157,6 +20340,129 @@ The context is now within limits. Please retry your request with the recovered c
                 previousDecision.message ||
                 `Started **${spec.workflowName}** — ${spec.tasks.length} task(s) running. ` +
                 `I'll follow up when it finishes.`,
+            reasoning: previousDecision.reasoning,
+            confidence: previousDecision.confidence,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * How a sub-agent run inherits this run's taint (S2). A sub-agent works from this run's context, so it
+     * starts tainted when this run is tainted now, and carries the taint into its memory writes and any graph
+     * it submits. When this run executes under a task-graph envelope (`params.SecurityEnvelope`), the
+     * sub-agent gets that envelope with `IsRunTainted` set, and so refuses `disallowWhenTainted` actions as
+     * an agent node does. A run outside any graph hands down only the taint (`ParentRunTainted`): its
+     * sub-agent is held to what the run itself is, not to a gate the run is not under.
+     */
+    private subAgentTaint(params: ExecuteAgentParams): Pick<ExecuteAgentParams, 'SecurityEnvelope' | 'ParentRunTainted'> {
+        const tainted = this.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true;
+        if (params.SecurityEnvelope) {
+            return { SecurityEnvelope: { ...params.SecurityEnvelope, IsRunTainted: tainted } };
+        }
+        return tainted ? { ParentRunTainted: true } : {};
+    }
+
+    /**
+     * The security envelope a graph this run submits carries: the run's bound parameters, the readers its audience
+     * adds, its validated scope exactly as each action dispatch is handed it ({@link runScopeFor}), the caller's
+     * tenant context and its taint — merged with the envelope this run itself executes under, when it is a
+     * task-graph node (`ExecuteAgentParams.SecurityEnvelope`), keeping the stricter of each part.
+     */
+    private taskGraphSecurityEnvelope(params: ExecuteAgentParams): { Envelope: TaskSecurityEnvelope | undefined } | { Refusal: string } {
+        const scope = this.runScopeFor(params);
+        const derived = BuildTaskSecurityEnvelope({
+            BoundActionParams: params.boundActionParams,
+            AudienceReaderUserIDs: AgentAudienceReaderIDs(params.Audience, params.contextUser?.ID),
+            RunScope: {
+                PrimaryScopeEntityName: scope.PrimaryScopeEntityName ?? null,
+                PrimaryScopeRecordID: scope.PrimaryScopeRecordID,
+                SecondaryScopes: scope.SecondaryScopes ?? null,
+                ...(scope.SearchScopeIDs ? { SearchScopeIDs: scope.SearchScopeIDs } : {}),
+            },
+            CallerTenantContext: params.contextUser?.TenantContext,
+            IsRunTainted: this.IsRunTainted,
+        });
+        const merged = MergeTaskSecurityEnvelopes(derived, params.SecurityEnvelope);
+        return 'Reason' in merged ? { Refusal: merged.Reason } : { Envelope: merged.Envelope };
+    }
+
+
+    /**
+     * Executes a `'Handoff'` next step: records the `'Handoff'` step entity with the resolved
+     * target agent ID, stores {@link _handoffResult} for {@link ExecuteAgentResult.handoff},
+     * and ends this run `'Success'` with the handoff message so the host can invoke the target agent.
+     *
+     * @protected
+     */
+    protected async executeHandoffStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const handoff = previousDecision.handoff;
+        const resolved = this._resolvedHandoffTarget;
+        if (!handoff || !resolved) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'A Handoff step reached execution without a validated handoff target.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        if (this.runWithholdsHandoff(params)) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'Handoff is not available on this run.',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Handoff',
+            stepName: `Handoff: ${resolved.name}`,
+            targetId: resolved.id,
+            contextUser: params.contextUser,
+            inputData: {
+                agentName: handoff.agentName,
+                brief: handoff.brief,
+                reason: handoff.reason
+            }
+        });
+
+        const chain = [...(params.handoffChain ?? []), params.agent.ID];
+        const hop = chain.length;
+
+        await this.finalizeStepEntity(
+            stepEntity,
+            true,
+            undefined,
+            {
+                HandoffToAgentID: resolved.id,
+                TargetAgentName: resolved.name,
+                Brief: handoff.brief,
+                Reason: handoff.reason,
+                Hop: hop,
+                Chain: chain
+            }
+        );
+
+        this._handoffResult = {
+            targetAgentId: resolved.id,
+            targetAgentName: resolved.name,
+            sourceAgentId: params.agent.ID,
+            brief: handoff.brief,
+            reason: handoff.reason,
+            runStepId: stepEntity.ID
+        };
+
+        return {
+            step: 'Success',
+            terminate: true,
+            message: previousDecision.message || `Transferring you to **${resolved.name}**…`,
             reasoning: previousDecision.reasoning,
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
@@ -19259,40 +20565,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected buildPlanApprovalForm(planText: string): AgentResponseForm {
-        return {
-            title: 'Review Plan',
-            description: 'Review the proposed plan below. Edit it if needed, then approve to proceed — or reject (with a note on what to change) and the agent will re-plan.',
-            submitLabel: 'Submit',
-            questions: [
-                {
-                    id: 'plan',
-                    label: 'Plan',
-                    // markdown: agents author plans in Markdown (see the plan-mode prompt
-                    // instructions); the UI renders a formatted preview with an Edit toggle.
-                    type: { type: 'textarea', markdown: true },
-                    defaultValue: planText,
-                    required: true
-                },
-                {
-                    id: 'reason',
-                    label: 'Feedback',
-                    type: { type: 'textarea', placeholder: 'Optional — if rejecting, tell the agent what to change and it will re-plan.' },
-                    required: false
-                },
-                {
-                    id: 'decision',
-                    label: 'Decision',
-                    type: {
-                        type: 'buttongroup',
-                        options: [
-                            { value: 'approve', label: 'Approve' },
-                            { value: 'reject', label: 'Reject' }
-                        ]
-                    },
-                    required: true
-                }
-            ]
-        };
+        return this._feedbackCoordinator.BuildPlanApprovalForm(planText);
     }
 
     private async executeChatStep(
@@ -19356,13 +20629,14 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Creates a persistent AIAgentRequest row when a Chat step fires.
-     * Resolves the target user via the assignment chain:
-     *   1. contextUser (explicit caller)
-     *   2. AgentRun.UserID (run initiator)
-     *   3. Conversation.UserID (conversation fallback)
-     *   4. Agent.OwnerUserID (agent owner)
-     *   5. null (system-level, visible to admins)
+     * Creates a persistent AIAgentRequest row when a Chat or Plan step fires.
+     * Resolves the target user via the assignment chain (delegating to
+     * {@link AgentFeedbackCoordinator.CreateFeedbackRequest}):
+     *   1. ExecuteAgentParams.assignmentStrategy (per-invocation override)
+     *   2. Agent Type's AssignmentStrategy
+     *   3. Agent's Category AssignmentStrategy (walks up ParentID tree)
+     *   4. Request Type's DefaultAssignmentStrategy
+     *   5. Fallback: contextUser (explicit caller) or null (system-level, visible to admins)
      *
      * @private
      */
@@ -19371,130 +20645,17 @@ The context is now within limits. Please retry your request with the recovered c
         stepEntity: MJAIAgentRunStepEntityExtended,
         previousDecision: BaseAgentNextStep
     ): Promise<void> {
-        try {
-            const requestTypeId = await this.resolveRequestTypeId(previousDecision, params.contextUser);
-            const resolvedStrategy = await this.resolveAssignmentStrategy(params, requestTypeId);
-            const requestForUserId = this.resolveUserFromStrategy(resolvedStrategy, params);
-            const priority = resolvedStrategy?.priority ?? 50;
-            const expirationMinutes = resolvedStrategy?.expirationMinutes;
-
-            const request = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRequestEntity>(
-                'MJ: AI Agent Requests',
-                params.contextUser
-            );
-            request.NewRecord();
-            request.AgentID = params.agent.ID;
-            request.RequestedAt = new Date();
-            request.RequestForUserID = requestForUserId;
-            request.Status = 'Requested';
-            request.Request = previousDecision.message || 'Agent needs user input';
-            request.RequestTypeID = requestTypeId;
-            request.ResponseSchema = previousDecision.responseForm
-                ? JSON.stringify(previousDecision.responseForm)
-                : null;
-            request.Priority = priority;
-            request.OriginatingAgentRunID = this._agentRun?.ID || null;
-            request.OriginatingAgentRunStepID = stepEntity.ID;
-
-            if (expirationMinutes != null && expirationMinutes > 0) {
-                request.ExpiresAt = new Date(Date.now() + expirationMinutes * 60_000);
-            }
-
-            const saved = await request.Save();
-            if (saved) {
-                this._feedbackRequestId = request.ID;
-                this.logStatus(
-                    `📋 Created feedback request ${request.ID} for user ${requestForUserId || '(system)'}`,
-                    true,
-                    params
-                );
-            } else {
-                LogError(`Failed to save AIAgentRequest for agent ${params.agent.Name}`);
-            }
-        } catch (error) {
-            // Don't let request creation failure break the agent execution
-            LogError(`Error creating feedback request: ${(error as Error).message}`);
+        const requestId = await this._feedbackCoordinator.CreateFeedbackRequest({
+            Params: params,
+            StepEntity: stepEntity,
+            Decision: previousDecision,
+            AgentRun: this._agentRun,
+            Provider: params.provider || this._activeProvider,
+        });
+        if (requestId) {
+            this._feedbackRequestId = requestId;
         }
     }
-
-    /**
-     * Walks the assignment strategy resolution chain (bottom-up, first-non-null wins):
-     * 1. ExecuteAgentParams.assignmentStrategy (per-invocation)
-     * 2. Agent Type's AssignmentStrategy
-     * 3. Agent's Category AssignmentStrategy (walks up ParentID tree)
-     * 4. Request Type's DefaultAssignmentStrategy
-     * 5. Fallback: null (caller uses contextUser + warning)
-     * @private
-     */
-    private async resolveAssignmentStrategy(
-        params: ExecuteAgentParams,
-        requestTypeId: string | null
-    ): Promise<AgentRequestAssignmentStrategy | null> {
-        // 1. Per-invocation override (highest precedence)
-        if (params.assignmentStrategy) {
-            return params.assignmentStrategy;
-        }
-
-        // 2. Agent Type's AssignmentStrategy
-        const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
-        const typeStrategy = parseAssignmentStrategy(agentType?.AssignmentStrategy ?? null);
-        if (typeStrategy) {
-            return typeStrategy;
-        }
-
-        // 3. Agent's Category AssignmentStrategy (walk up ParentID tree)
-        const categoryStrategy = await this.resolveCategoryAssignmentStrategy(params);
-        if (categoryStrategy) {
-            return categoryStrategy;
-        }
-
-        // 4. Request Type's DefaultAssignmentStrategy
-        if (requestTypeId && this._requestTypeCache) {
-            const requestType = this._requestTypeCache.find(t => UUIDsEqual(t.ID, requestTypeId));
-            if (requestType) {
-                const rtStrategy = parseAssignmentStrategy(requestType.DefaultAssignmentStrategy);
-                if (rtStrategy) {
-                    return rtStrategy;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
-     * Uses AIEngine.Instance.AgentCategories (cached during engine Config).
-     */
-    private async resolveCategoryAssignmentStrategy(
-        params: ExecuteAgentParams
-    ): Promise<AgentRequestAssignmentStrategy | null> {
-        const categoryId = params.agent.CategoryID;
-        if (!categoryId) return null;
-
-        try {
-            const categories = AIEngine.Instance.AgentCategories;
-
-            // Walk up the tree from the agent's category to the root
-            let currentId: string | null = categoryId;
-            const visited = new Set<string>(); // prevent infinite loops
-            while (currentId && !visited.has(currentId)) {
-                visited.add(currentId);
-                const cat = categories.find(c => UUIDsEqual(c.ID, currentId));
-                if (!cat) break;
-
-                const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
-                if (strategy) return strategy;
-
-                currentId = cat.ParentID;
-            }
-        } catch (error) {
-            LogError(`Error resolving category assignment strategy: ${(error as Error).message}`);
-        }
-
-        return null;
-    }
-
 
     /**
      * Resolves the file storage account ID for this agent's file artifacts.
@@ -19515,123 +20676,7 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Resolves the target user ID from a resolved assignment strategy.
-     * For simple strategies (RunUser, AgentOwner, SpecificUser), resolves immediately.
-     * For List/SharedInbox strategies, delegates to list-based resolution.
-     * Falls back to contextUser with a warning if no strategy is provided.
-     * @private
-     */
-    private resolveUserFromStrategy(
-        strategy: AgentRequestAssignmentStrategy | null,
-        params: ExecuteAgentParams
-    ): string | null {
-        if (!strategy) {
-            // No strategy resolved anywhere — fall back to contextUser + warning
-            if (params.contextUser?.ID) {
-                LogStatus(`⚠️ No assignment strategy configured for agent ${params.agent.Name}; defaulting to context user`);
-                return params.contextUser.ID;
-            }
-            LogStatus(`⚠️ No assignment strategy and no context user for agent ${params.agent.Name}; request will be unassigned`);
-            return null;
-        }
-
-        switch (strategy.type) {
-            case 'RunUser':
-                return params.contextUser?.ID
-                    ?? this._agentRun?.UserID
-                    ?? null;
-
-            case 'AgentOwner':
-                return params.agent.OwnerUserID ?? null;
-
-            case 'SpecificUser':
-                return strategy.userID ?? null;
-
-            case 'List':
-                // List-based resolution (RoundRobin, LeastBusy, Random) requires async DB lookups.
-                // For now, fall back to contextUser. Full list resolution is a future enhancement
-                // that will query ListDetail records and track assignment state.
-                LogStatus(`ℹ️ List-based assignment strategy configured but not yet implemented; defaulting to context user`);
-                return params.contextUser?.ID ?? null;
-
-            case 'SharedInbox':
-                // SharedInbox means "unassigned — anyone in the list can claim it"
-                return null;
-
-            default:
-                return params.contextUser?.ID ?? null;
-        }
-    }
-
-    /**
-     * Determines the request type ID based on the Chat step's context.
-     * - If the responseForm has only approve/reject-style buttons, uses "Approval"
-     * - If there's a responseForm with fields, uses "Information"
-     * - Otherwise defaults to "Information"
-     *
-     * Caches the request type lookup for the duration of this agent execution.
-     * @private
-     */
-    private _requestTypeCache: MJAIAgentRequestTypeEntity[] | null = null;
-
-    private async resolveRequestTypeId(
-        previousDecision: BaseAgentNextStep,
-        contextUser?: UserInfo
-    ): Promise<string | null> {
-        try {
-            // Load request types if not cached
-            if (!this._requestTypeCache) {
-                const rv = new RunView();
-                const result = await rv.RunView<MJAIAgentRequestTypeEntity>({
-                    EntityName: 'MJ: AI Agent Request Types',
-                    ResultType: 'entity_object'
-                }, contextUser);
-                this._requestTypeCache = result.Success ? result.Results : [];
-            }
-
-            // Determine type name based on responseForm content
-            let typeName = 'Information'; // default
-            if (previousDecision.responseForm) {
-                typeName = this.detectRequestTypeName(previousDecision.responseForm);
-            }
-
-            const matchedType = this._requestTypeCache.find(t => t.Name === typeName);
-            return matchedType?.ID || null;
-        } catch (error) {
-            LogError(`Error resolving request type: ${(error as Error).message}`);
-            return null;
-        }
-    }
-
-    /**
-     * Inspects an AgentResponseForm to determine the best request type name.
-     * Returns "Approval" if the form is a simple two-option approve/reject pattern,
-     * otherwise returns "Information".
-     * @private
-     */
-    private detectRequestTypeName(form: AgentResponseForm): string {
-        const q = form.questions?.[0];
-        if (!q || form.questions.length !== 1) {
-            return 'Information';
-        }
-        const qType = q.type;
-        if ((qType.type === 'buttongroup' || qType.type === 'radio') && 'options' in qType) {
-            const opts = qType.options;
-            if (opts.length === 2) {
-                const labels = opts.map(o => o.label.toLowerCase());
-                const hasPositive = labels.some(l => l.includes('approv') || l.includes('yes') || l.includes('accept'));
-                const hasNegative = labels.some(l => l.includes('reject') || l.includes('no') || l.includes('deny'));
-                if (hasPositive && hasNegative) {
-                    return 'Approval';
-                }
-            }
-        }
-        return 'Information';
-    }
-
-    /**
      * Executes a ForEach loop with actual for loop
-     * @private
      */
     private async executeForEachLoop(
         params: ExecuteAgentParams,
@@ -19645,10 +20690,11 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
-        const validationMessage = this.validateForEachOperation(forEach);
-        if (validationMessage) {
-            return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${validationMessage}`,
-                                                     previousDecision, params, forEach.action?.name);
+        const primaryActionName = forEach.action?.name ?? forEach.steps?.[0]?.name;
+        const headerMessage = this.validateForEachHeader(forEach);
+        if (headerMessage) {
+            return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${headerMessage}`,
+                                                     previousDecision, params, primaryActionName);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -19656,7 +20702,14 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (!collection) {
             return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `Collection path "${forEach.collectionPath}" not an array`,
-                                                     previousDecision, params, forEach.action?.name);
+                                                     previousDecision, params, primaryActionName);
+        }
+
+        const agentId = params.agent?.ID ?? this._agentRun?.AgentID ?? '';
+        const bodyMessage = this.validateLoopBodyOperation('ForEach', forEach, agentId);
+        if (bodyMessage) {
+            return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${bodyMessage}`,
+                                                     previousDecision, params, primaryActionName);
         }
 
         const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
@@ -19665,57 +20718,75 @@ The context is now within limits. Please retry your request with the recovered c
         return this.completeForEachLoop(forEach, loopStepEntity, loopResults, previousDecision, params);
     }
 
-    private validateWhileOperation(whileOp: WhileOperation): string | null {
-        if (!whileOp.condition || whileOp.condition.trim() === '') {
-            return 'Condition is required';
-        }
-        if (!whileOp.itemVariable || whileOp.itemVariable.trim() === '') {
-            return 'Item variable is required';
+    private validateWhileOperation(whileOp: WhileOperation, agentId: string = this._agentRun?.AgentID ?? ''): string | null {
+        return this._stepDispatcher.ValidateWhileOperation(whileOp, (kind, op) =>
+            this.validateLoopBodyOperation(kind, op, agentId),
+        );
+    }
+
+    private validateForEachHeader(forEach: ForEachOperation): string | null {
+        return this._stepDispatcher.ValidateForEachHeader(forEach);
+    }
+
+    /**
+     * Validates the loop body arm (`action` | `steps` | `subAgent`) shared by `ForEach` and `While`.
+     * Structural validation is delegated to CorePlus {@link ValidateLoopOperationStructure} so in-turn
+     * and durable loops enforce one identical contract; runtime action/sub-agent membership is checked
+     * here without mutating `op`.
+     */
+    private validateLoopBodyOperation(
+        kind: 'ForEach' | 'While',
+        op: ForEachOperation | WhileOperation,
+        agentId: string = this._agentRun?.AgentID ?? ''
+    ): string | null {
+        const structuralErrors = ValidateLoopOperationStructure(kind, op);
+        if (structuralErrors.length > 0) {
+            return structuralErrors[0].Message;
         }
 
-        // now validate the action or sub-agent
-        if (whileOp.action) {
-            return this.validateActionInAgent(whileOp.action.name);
-        }
-        else if (whileOp.subAgent) {
-            // check to make sure sub-agent is valid
-            return this.validateSubAgentInAgent(whileOp.subAgent.name);
+        if (op.prompt) {
+            return 'Prompt loop bodies are only supported in durable TaskGraph execution';
         }
 
-        // if we get here, all good
+        if (op.action) {
+            return this.validateActionInAgent(op.action.name, agentId);
+        }
+
+        if (op.steps !== undefined) {
+            for (const step of op.steps) {
+                const actionErr = this.validateActionInAgent(step.name, agentId);
+                if (actionErr) {
+                    return actionErr;
+                }
+            }
+            return null;
+        }
+
+        if (op.subAgent) {
+            return this.validateSubAgentInAgent(op.subAgent.name, agentId);
+        }
+
         return null;
     }
 
-    private validateForEachOperation(forEach: ForEachOperation): string | null {
-        // make sure that for actions it is valid action and for sub-agents it is valid sub-agent
-        if (!forEach.itemVariable || forEach.itemVariable.trim() === '') {
-            return 'Item variable is required';
-        }
-        if (!forEach.collectionPath || forEach.collectionPath.trim() === '') {
-            return 'Collection path is required';
-        }
-
-        if (forEach.action) {
-            return this.validateActionInAgent(forEach.action.name);
-        }
-        else if (forEach.subAgent) {
-            // check to make sure sub-agent is valid
-            return this.validateSubAgentInAgent(forEach.subAgent.name);
-        }
-
-        // if we get here, all good
-        return null;
-    }
-
-    protected validateActionInAgent(actionName: string): string | null {
-        // Use effective actions which includes runtime action changes
-        const effectiveActions = this.getEffectiveActionsForValidation(this._agentRun!.AgentID);
+    protected validateActionInAgent(actionName: string, agentId: string = this._agentRun?.AgentID ?? ''): string | null {
+        // Use effective actions + any Flow step actions configured for this agent
+        const effectiveActions = this.getAvailableActionsForAgent(agentId);
         const normalizedName = actionName.trim().toLowerCase();
 
         // Try exact match first
         const exactMatch = effectiveActions.find(a => a.Name.trim().toLowerCase() === normalizedName);
         if (exactMatch) {
             return null; // Valid
+        }
+
+        // Try sanitized native tool-name match
+        const sanitizedMatch = this.matchNamedBySanitizedToolName(actionName, effectiveActions);
+        if (sanitizedMatch.match) {
+            return null;
+        }
+        if (sanitizedMatch.ambiguous) {
+            return `Ambiguous action '${actionName}' specified. Matches: ${sanitizedMatch.ambiguous.map(a => a.Name).join(', ')}`;
         }
 
         // Try partial/contains match
@@ -19732,33 +20803,43 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
-    protected validateSubAgentInAgent(subAgentName: string): string | null {
+    protected validateSubAgentInAgent(subAgentName: string, agentId: string = this._agentRun?.AgentID ?? ''): string | null {
         // check to make sure sub-agent is valid
-        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, this._agentRun!.AgentID));
-        const childAgents = AIEngine.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this._agentRun!.AgentID));
+        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => UUIDsEqual(ar.AgentID, agentId));
+        const childAgents = AIEngine.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, agentId));
+        const candidate = this.stripSubAgentToolPrefix(subAgentName);
+        const lower = candidate.toLowerCase();
+        const sanitized = SanitizeToolName(candidate);
 
-        // now check to make sure that subAgentName is either in relatedAgents or childAgents
-        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+        // Check relatedAgents: exact -> sanitized native tool name -> partial
+        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === lower);
+        if (subAgent.length === 0 && sanitized) {
+            subAgent = relatedAgents.filter(ra => Boolean(ra.SubAgent && SanitizeToolName(ra.SubAgent) === sanitized));
+        }
+        if (subAgent.length > 1) {
+            return `Ambiguous sub-agent '${subAgentName}' specified`;
+        }
         if (subAgent.length === 0) {
-            // no exact match, try for partial match
-            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(lower || ''));
             if (subAgent.length > 1) {
                 return `Ambiguous sub-agent '${subAgentName}' specified`;
-            } 
-            else if (subAgent.length === 0) {
-                // try child agents now
-                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+            }
+            if (subAgent.length === 0) {
+                // try child agents: exact -> sanitized native tool name -> partial
+                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === lower);
+                if (childAgent.length === 0 && sanitized) {
+                    childAgent = childAgents.filter(ca => Boolean(ca.Name && SanitizeToolName(ca.Name) === sanitized));
+                }
+                if (childAgent.length > 1) {
+                    return `Ambiguous child agent '${subAgentName}' specified`;
+                }
                 if (childAgent.length === 0) {
-                    // no exact match, try for partial match
-                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(lower || ''));
                     if (childAgent.length > 1) {
                         return `Ambiguous child agent '${subAgentName}' specified`;
                     } else if (childAgent.length === 0) {
                         return `No child agent '${subAgentName}' found`;
                     }
-                } 
-                else {
-                    // we have one match, so we're good here
                 }
             }
         }
@@ -19771,26 +20852,10 @@ The context is now within limits. Please retry your request with the recovered c
      * Helper: Validate and extract collection from payload
      * Strips "payload." prefix if present (for LLM convenience)
      */
-    private getCollectionFromPayload(payload: any, path: string): any[] | null {
-        // Support a literal static collection: "static:[1,2,3,4,5]". This lets a ForEach iterate a
-        // fixed list/range without a prior step having to build the array in the payload first.
-        const trimmed = path.trim();
-        if (trimmed.toLowerCase().startsWith('static:')) {
-            try {
-                const parsed = JSON.parse(trimmed.substring(trimmed.indexOf(':') + 1).trim());
-                return Array.isArray(parsed) ? parsed : null;
-            } catch {
-                return null;
-            }
-        }
-
-        // Remove "payload." prefix if present
-        const cleanPath = path.toLowerCase().startsWith('payload.')
-            ? path.substring(8)
-            : path;
-
-        const value = this.getValueFromPath(payload, cleanPath);
-        return Array.isArray(value) ? value : null;
+    private getCollectionFromPayload(payload: unknown, path: string): unknown[] | null {
+        return this._stepDispatcher.GetCollectionFromPayload(payload, path, (obj, p) =>
+            this.getValueFromPath(obj, p)
+        );
     }
 
     /**
@@ -19898,7 +20963,13 @@ The context is now within limits. Please retry your request with the recovered c
         // Create batches for parallel processing
         const batches = this.createBatches(collection.slice(0, itemsToProcess), maxConcurrency);
 
-        const allResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }> = [];
+        const allResults: Array<{
+            index: number;
+            result?: BaseAgentNextStep;
+            error?: LoopIterationError;
+            payload?: unknown;
+            appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+        }> = [];
 
         // Process each batch in parallel
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
@@ -19918,7 +20989,8 @@ The context is now within limits. Please retry your request with the recovered c
                     index,
                     result: iterResult.result,
                     error: iterResult.error,
-                    payload: iterResult.payload
+                    payload: iterResult.payload,
+                    appliedFolds: iterResult.appliedFolds
                 }))
             );
 
@@ -19952,17 +21024,7 @@ The context is now within limits. Please retry your request with the recovered c
         items: T[],
         maxConcurrency: number
     ): Array<Array<{ item: T; index: number }>> {
-        const batches: Array<Array<{ item: T; index: number }>> = [];
-
-        for (let i = 0; i < items.length; i += maxConcurrency) {
-            const batch = items.slice(i, i + maxConcurrency).map((item, batchOffset) => ({
-                item,
-                index: i + batchOffset
-            }));
-            batches.push(batch);
-        }
-
-        return batches;
+        return this._stepDispatcher.CreateBatches(items, maxConcurrency);
     }
 
     /**
@@ -19970,28 +21032,155 @@ The context is now within limits. Please retry your request with the recovered c
      * This ensures payload changes are applied in order even when iterations ran in parallel.
      */
     private applyForEachResultsSequentially(
-        sortedResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }>,
-        initialPayload: any,
+        sortedResults: Array<{
+            index: number;
+            result?: BaseAgentNextStep;
+            error?: LoopIterationError;
+            payload?: unknown;
+            appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+        }>,
+        initialPayload: unknown,
         continueOnError: boolean
-    ): { results: BaseAgentNextStep[], errors: any[], finalPayload: any } {
-        let currentPayload = initialPayload;
-        const results: BaseAgentNextStep[] = [];
-        const errors: any[] = [];
+    ): { results: BaseAgentNextStep[]; errors: LoopIterationError[]; finalPayload: unknown } {
+        return this._stepDispatcher.ApplyForEachResultsSequentially(
+            sortedResults,
+            initialPayload,
+            continueOnError,
+            (p) => this.cloneSubAgentPayload(p)
+        );
+    }
 
-        for (const { result, error, payload } of sortedResults) {
-            if (error) {
-                errors.push(error);
-                if (!continueOnError) {
-                    break;
+    private extractActionOutputObject(summaries: readonly ActionResultSummary[]): Record<string, unknown> {
+        return this._stepDispatcher.ExtractActionOutputObject(summaries);
+    }
+
+    private applyLoopOutputFold(basePayload: unknown, output: Record<string, unknown>, mapping: string): Record<string, unknown> {
+        return this._stepDispatcher.ApplyLoopOutputFold(basePayload, output, mapping, (p) =>
+            this.cloneSubAgentPayload(p)
+        );
+    }
+
+    /**
+     * Executes an ordered sequence of `LoopBodyActionStep` actions inside a single `ForEach` or `While`
+     * iteration, chaining step outputs under `steps.<id>.*` / `steps.step_<index>.*`, evaluating optional
+     * per-step `condition` expressions, folding optional per-step `outputMapping` onto the working payload,
+     * and halting remaining steps in the pass if any step fails.
+     */
+    private async executeLoopStepsIteration(args: {
+        steps: readonly LoopBodyActionStep[];
+        item: unknown;
+        itemVariable: string;
+        index: number;
+        attemptContext?: { attemptNumber: number; totalAttempts: number };
+        currentPayload: unknown;
+        parentStepId: string;
+        params: ExecuteAgentParams;
+    }): Promise<{
+        payload: unknown;
+        result: BaseAgentNextStep;
+        appliedFolds: Array<{ output: Record<string, unknown>; mapping: string }>;
+    }> {
+        const { steps, item, itemVariable, index, attemptContext, currentPayload, parentStepId, params } = args;
+        const stepsOutputs: Record<string, Record<string, unknown>> = {};
+        const appliedFolds: Array<{ output: Record<string, unknown>; mapping: string }> = [];
+        const aggregatedSummaries: ActionResultSummary[] = [];
+        const evaluator = new SafeExpressionEvaluator();
+
+        let workingPayload: Record<string, unknown> = IsPlainObject(currentPayload)
+            ? this.cloneSubAgentPayload(currentPayload as Record<string, unknown>)
+            : {};
+
+        for (let stepIdx = 0; stepIdx < steps.length; stepIdx++) {
+            const step = steps[stepIdx];
+            const stepKey = step.id?.trim() || `step_${stepIdx}`;
+            const stepBindings: Record<string, unknown> = {
+                ...(attemptContext ? { attemptNumber: attemptContext.attemptNumber, totalAttempts: attemptContext.totalAttempts } : {}),
+                item,
+                [itemVariable]: item,
+                index,
+                steps: stepsOutputs
+            };
+
+            if (step.condition?.trim()) {
+                const conditionScope: Record<string, unknown> = {
+                    ...workingPayload,
+                    ...stepBindings,
+                    payload: { ...workingPayload, ...stepBindings },
+                    steps: stepsOutputs,
+                    index,
+                    iteration: index,
+                    ...(params.data !== undefined ? { data: params.data } : {}),
+                    ...(params.context !== undefined ? { context: params.context } : {})
+                };
+                const evalResult = evaluator.evaluate(step.condition.trim(), conditionScope);
+                if (!evalResult.success) {
+                    throw new Error(
+                        `Loop step "${stepKey}" condition "${step.condition}" could not be evaluated: ${evalResult.error ?? 'unknown error'}`
+                    );
                 }
-            } else if (result) {
-                results.push(result);
-                // Apply payload change from this iteration
-                currentPayload = payload || currentPayload;
+                if (!evalResult.value) {
+                    continue;
+                }
+            }
+
+            const matchedAction = this.findAgentActionForLoop(step.name, params.agent.ID, params.agent.Name, params);
+            const stepPayload = { ...workingPayload, ...stepBindings };
+            const resolvedParams = ResolveLoopBodyParams(
+                step.params ?? {},
+                stepBindings,
+                { payload: stepPayload, data: params.data, context: params.context }
+            );
+
+            const actionStep: BaseAgentNextStep = {
+                step: 'Actions',
+                actions: [{ name: matchedAction.Action, params: resolvedParams }],
+                newPayload: workingPayload,
+                previousPayload: workingPayload,
+                terminate: false
+            };
+            const stepResult = await this.executeActionsStep(
+                params,
+                actionStep,
+                parentStepId,
+                false,
+                0,
+                { skipCircuitBreaker: true }
+            );
+            const summaries = Array.isArray(stepResult.priorStepResult)
+                ? (stepResult.priorStepResult as ActionResultSummary[])
+                : [];
+            aggregatedSummaries.push(...summaries);
+
+            const failedSummary = summaries.find((s) => !s.success);
+            if (failedSummary) {
+                throw new Error(
+                    `Loop step "${stepKey}" (${matchedAction.Action}) failed: ${failedSummary.message || failedSummary.resultCode || 'Action failed'}`
+                );
+            }
+
+            const stepOutput = this.extractActionOutputObject(summaries);
+            stepsOutputs[stepKey] = stepOutput;
+            if (stepKey !== `step_${stepIdx}`) {
+                stepsOutputs[`step_${stepIdx}`] ??= stepOutput;
+            }
+
+            if (step.outputMapping?.trim()) {
+                workingPayload = this.applyLoopOutputFold(workingPayload, stepOutput, step.outputMapping);
+                appliedFolds.push({ output: stepOutput, mapping: step.outputMapping });
+            } else if (IsPlainObject(stepResult.newPayload)) {
+                workingPayload = stepResult.newPayload as Record<string, unknown>;
             }
         }
 
-        return { results, errors, finalPayload: currentPayload };
+        const outPayload: unknown = IsPlainObject(currentPayload) || appliedFolds.length > 0 ? workingPayload : currentPayload;
+        const syntheticStep: BaseAgentNextStep = {
+            step: 'Retry',
+            terminate: false,
+            previousPayload: currentPayload,
+            newPayload: outPayload,
+            priorStepResult: aggregatedSummaries
+        };
+        return { payload: outPayload, result: syntheticStep, appliedFolds };
     }
 
     /**
@@ -19999,22 +21188,39 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async executeSingleForEachIteration(
         forEach: ForEachOperation,
-        item: any,
+        item: unknown,
         index: number,
-        currentPayload: any,
+        currentPayload: unknown,
         parentStepId: string,
         params: ExecuteAgentParams,
-        config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
+        _config: AgentConfiguration
+    ): Promise<{
+        payload?: unknown;
+        error?: LoopIterationError;
+        result?: BaseAgentNextStep;
+        appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+    }> {
         try {
+            if (Array.isArray(forEach.steps) && forEach.steps.length > 0) {
+                return await this.executeLoopStepsIteration({
+                    steps: forEach.steps,
+                    item,
+                    itemVariable: forEach.itemVariable || 'item',
+                    index,
+                    currentPayload,
+                    parentStepId,
+                    params
+                });
+            }
+
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
+                { item, itemVariable: forEach.itemVariable, index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
             );
             let resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
 
             // Execute action, sub-agent, or prompt
-            let result;
+            let result: BaseAgentNextStep;
             if (forEach.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
@@ -20032,7 +21238,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
-                }
+                };
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
                 // Loop iterations bypass the circuit breaker: the loop does its own per-item accounting and
                 // there is no model between items to act on the breaker's guidance.
@@ -20046,16 +21252,28 @@ The context is now within limits. Please retry your request with the recovered c
                     result as unknown as ExecuteAgentResult
                 );
             } else {
-                throw new Error('ForEach missing action/subAgent');
+                throw new Error('ForEach missing action/steps/subAgent');
             }
 
-            // Apply AfterLoopIteration hook
+            // Apply AfterLoopIteration hook (or ApplyOutputMapping fallback when LoopAgentType has no hook)
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
                 { currentPayload: iterPayload, item, itemVariable: forEach.itemVariable, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } }
             );
+            if (afterHook) {
+                return { payload: afterHook, result };
+            }
+            if (forEach.action?.outputMapping?.trim() && Array.isArray(result.priorStepResult)) {
+                const stepOutput = this.extractActionOutputObject(result.priorStepResult as ActionResultSummary[]);
+                const folded = this.applyLoopOutputFold(iterPayload, stepOutput, forEach.action.outputMapping);
+                return {
+                    payload: folded,
+                    result,
+                    appliedFolds: [{ output: stepOutput, mapping: forEach.action.outputMapping }]
+                };
+            }
 
-            return { payload: afterHook || iterPayload, result };
+            return { payload: iterPayload, result };
 
         } catch (error) {
             return { error: { index, item, message: error.message } };
@@ -20080,7 +21298,7 @@ The context is now within limits. Please retry your request with the recovered c
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name);
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name ?? forEach.steps?.[0]?.name);
         }
 
         return {
@@ -20142,18 +21360,9 @@ The context is now within limits. Please retry your request with the recovered c
         return this.createFailedStep(errorMessage, previousDecision);
     }
 
-    /**
-     * One loop error as readable text. Joining the error objects directly wrote "[object Object]"
-     * into the step's ErrorMessage. Falls back to JSON when an iteration threw something with no
-     * message (a thrown non-Error).
-     */
-    private describeLoopError(err: LoopIterationError): string {
-        return err.message ? err.message : JSON.stringify(err);
-    }
-
     /** All loop errors as text for a step's ErrorMessage. */
     private formatLoopErrors(errors: LoopIterationError[]): string {
-        return errors.map(err => this.describeLoopError(err)).join('\n\n');
+        return this._stepDispatcher.FormatLoopErrors(errors);
     }
 
     /**
@@ -20161,7 +21370,7 @@ The context is now within limits. Please retry your request with the recovered c
      * depending on whether the loop body executed actions or sub-agents:
      *
      * - **Action iterations**: `priorStepResult` is an `ActionResultSummary[]`, set by
-     *   `executeActionsStep()` (line ~7003). These are formatted via `formatActionResultsAsMarkdown()`.
+     *   `executeActionsStep()`. These are formatted via `formatActionResultsAsMarkdown()`.
      *
      * - **Sub-agent iterations**: `priorStepResult` is a **pre-formatted markdown string**,
      *   set by the loop handlers (`executeSingleForEachIteration` / `executeSingleWhileIteration`)
@@ -20173,36 +21382,12 @@ The context is now within limits. Please retry your request with the recovered c
      * markdown style used by non-loop results, ensuring consistency across the codebase.
      */
     private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: LoopIterationError[]): string {
-        const lines: string[] = [];
-
-        for (let i = 0; i < results.length; i++) {
-            const iterResult = results[i].priorStepResult;
-
-            // Action iterations: priorStepResult is ActionResultSummary[] — format via shared helper
-            if (Array.isArray(iterResult)) {
-                lines.push(`### Iteration ${i + 1}`);
-                lines.push(this.formatActionResultsAsMarkdown(iterResult));
-            } else if (iterResult != null) {
-                // Sub-agent iterations: priorStepResult is already a markdown string from
-                // formatSubAgentResultAsMarkdown() called in the loop handler. Non-string
-                // results (edge cases) are JSON-stringified as a fallback.
-                lines.push(`### Iteration ${i + 1}`);
-                const text = typeof iterResult === 'string'
-                    ? iterResult
-                    : JSON.stringify(iterResult);
-                lines.push(text);
-            }
-            // null/undefined priorStepResult: iteration produced no output — skip silently
-        }
-
-        if (errors.length > 0) {
-            lines.push(`### Errors`);
-            for (const err of errors) {
-                lines.push(`• ✗ ${this.describeLoopError(err)}`);
-            }
-        }
-
-        return lines.join('\n');
+        return this._stepDispatcher.FormatLoopResultsAsMarkdown(
+            results,
+            errors,
+            this._actionResultCrush,
+            (summaries) => this.formatActionResultsAsMarkdown(summaries)
+        );
     }
 
     /**
@@ -20239,14 +21424,10 @@ The context is now within limits. Please retry your request with the recovered c
             const agentActions = AIEngine.Instance.AgentActions.filter(
                 aa => UUIDsEqual(aa.AgentID, params.agent.ID)
             );
-            const effectiveActions = this._effectiveActions.length > 0
-                ? this._effectiveActions
-                : ActionEngineServer.Instance.Actions.filter(a =>
-                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
-                );
-            const matchedAction = effectiveActions.find(
-                a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase()
-            );
+            const effectiveActions = this.getEffectiveActionsForValidation(params.agent.ID);
+            const matchedAction =
+                effectiveActions.find(a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase())
+                ?? this.matchNamedBySanitizedToolName(actionName, effectiveActions).match;
 
             if (matchedAction) {
                 const agentAction = agentActions.find(aa => UUIDsEqual(aa.ActionID, matchedAction.ID));
@@ -20284,14 +21465,25 @@ The context is now within limits. Please retry your request with the recovered c
         agentName: string,
         params: ExecuteAgentParams
     ): { Action: string } {
-        // Use effective actions which includes runtime action changes
-        const effectiveActions = this.getEffectiveActionsForValidation(agentId);
+        // Use effective actions + Flow step actions configured for this agent
+        const effectiveActions = this.getAvailableActionsForAgent(agentId);
         const normalizedName = actionName.trim().toLowerCase();
 
         // Try exact match first
         let matchedAction = effectiveActions.find(a =>
             a.Name.trim().toLowerCase() === normalizedName
         );
+
+        // Try sanitized native tool-name match
+        if (!matchedAction) {
+            const sanitizedMatch = this.matchNamedBySanitizedToolName(actionName, effectiveActions);
+            if (sanitizedMatch.match) {
+                matchedAction = sanitizedMatch.match;
+                this.logStatus(`Action native tool name matched: '${actionName}' → '${matchedAction.Name}'`, true, params);
+            } else if (sanitizedMatch.ambiguous) {
+                throw new Error(`Ambiguous action '${actionName}'. Matches: ${sanitizedMatch.ambiguous.map(a => a.Name).join(', ')}`);
+            }
+        }
 
         // Fallback: CONTAINS search
         if (!matchedAction) {
@@ -20317,18 +21509,11 @@ The context is now within limits. Please retry your request with the recovered c
      * Helper: Create failed step
      */
     private createFailedStep(errorMessage: string, previousDecision: BaseAgentNextStep): BaseAgentNextStep {
-        return {
-            step: 'Failed',
-            terminate: false,
-            errorMessage,
-            previousPayload: previousDecision.previousPayload,
-            newPayload: previousDecision.newPayload || previousDecision.previousPayload
-        };
+        return this._stepDispatcher.CreateFailedStep(errorMessage, previousDecision);
     }
  
     /**
      * Executes a While loop with actual while loop
-     * @private
      */
     private async executeWhileLoop(
         params: ExecuteAgentParams,
@@ -20342,10 +21527,12 @@ The context is now within limits. Please retry your request with the recovered c
             return this.createFailedStep('While configuration missing', previousDecision);
         }
 
-        const validationMessage = this.validateWhileOperation(whileOp);
+        const primaryActionName = whileOp.action?.name ?? whileOp.steps?.[0]?.name;
+        const agentId = params.agent?.ID ?? this._agentRun?.AgentID ?? '';
+        const validationMessage = this.validateWhileOperation(whileOp, agentId);
         if (validationMessage) {
             return this.failLoopBeforeFirstIteration('While', whileOp.condition, `While configuration invalid: ${validationMessage}`,
-                                                     previousDecision, params, whileOp.action?.name);
+                                                     previousDecision, params, primaryActionName);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -20441,14 +21628,28 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private async executeSingleWhileIteration(
         whileOp: WhileOperation,
-        attemptContext: any,
+        attemptContext: { attemptNumber: number; totalAttempts: number },
         index: number,
-        currentPayload: any,
+        currentPayload: unknown,
         parentStepId: string,
         params: ExecuteAgentParams,
-        config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: LoopIterationError, result?: BaseAgentNextStep }> {
+        _config: AgentConfiguration
+    ): Promise<{ payload?: unknown; error?: LoopIterationError; result?: BaseAgentNextStep }> {
         try {
+            if (Array.isArray(whileOp.steps) && whileOp.steps.length > 0) {
+                const stepsOutcome = await this.executeLoopStepsIteration({
+                    steps: whileOp.steps,
+                    item: attemptContext,
+                    itemVariable: whileOp.itemVariable || 'attempt',
+                    index,
+                    attemptContext,
+                    currentPayload,
+                    parentStepId,
+                    params
+                });
+                return { payload: stepsOutcome.payload, result: stepsOutcome.result };
+            }
+
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
@@ -20456,7 +21657,7 @@ The context is now within limits. Please retry your request with the recovered c
             let resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
 
             // Execute action or sub-agent
-            let result;
+            let result: BaseAgentNextStep;
             if (whileOp.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
@@ -20488,16 +21689,24 @@ The context is now within limits. Please retry your request with the recovered c
                     result as unknown as ExecuteAgentResult
                 );
             } else {
-                throw new Error('While missing action/subAgent');
+                throw new Error('While missing action/steps/subAgent');
             }
 
-            // Apply AfterLoopIteration hook
+            // Apply AfterLoopIteration hook (or ApplyOutputMapping fallback when LoopAgentType has no hook)
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
                 { currentPayload: iterPayload, item: attemptContext, itemVariable: whileOp.itemVariable, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } }
             );
+            if (afterHook) {
+                return { payload: afterHook, result };
+            }
+            if (whileOp.action?.outputMapping?.trim() && Array.isArray(result.priorStepResult)) {
+                const stepOutput = this.extractActionOutputObject(result.priorStepResult as ActionResultSummary[]);
+                const folded = this.applyLoopOutputFold(iterPayload, stepOutput, whileOp.action.outputMapping);
+                return { payload: folded, result };
+            }
 
-            return { payload: afterHook || iterPayload, result };
+            return { payload: iterPayload, result };
 
         } catch (error) {
             return { error: { index, item: attemptContext, message: error.message } };
@@ -20524,7 +21733,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Inject before the early return below: a Loop agent re-prompts after a Failed step, and the
         // loop-results message (the condition error, under Errors) is the only way the model learns why.
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name ?? whileOp.steps?.[0]?.name);
         }
 
         // A condition that never evaluated means the loop never ran: fail the step rather than
@@ -20586,12 +21795,13 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -20605,6 +21815,12 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        // The watchdog aborts a run it force-failed with the row's own message (#4883). The row
+        // already says Failed and clients were told so; finalizing Cancelled would contradict it.
+        const abortReason = this._runAbortController?.signal.reason;
+        if (AgentRunWatchdog.IsForceFailedAbortReason(typeof abortReason === 'string' ? abortReason : null)) {
+            return this.createFailureResult(abortReason, contextUser);
+        }
         const [{ failures }] = await Promise.all([
             this._stepSaveQueue.Flush(),
             this.flushPromptRunnerSaves(),
@@ -20638,12 +21854,13 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -20652,7 +21869,9 @@ The context is now within limits. Please retry your request with the recovered c
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
      * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
      * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
-     * anything else (an upstream caller's token, a shutdown) is `System`.
+     * anything else (an upstream caller's token, a shutdown) is `System`. A watchdog force-fail
+     * ({@link AgentRunWatchdog.ForceFailedAbortReason}) never gets here: {@link createCancelledResult}
+     * finalizes it `Failed`, with no cancellation reason.
      */
     public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === AgentRunWatchdog.UserCancelAbortReason) {
@@ -20712,6 +21931,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -20805,7 +22037,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -20872,6 +22104,8 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
+            handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
     }
@@ -20879,44 +22113,12 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Calculate total token statistics from the agent run's persisted steps.
-     * 
+     *
      * @returns Token statistics including totals and costs
      * @private
      */
     private calculateTokenStats(): AgentRunTokenStats {
-        let totalTokens = 0;
-        let promptTokens = 0;
-        let completionTokens = 0;
-        let cacheReadTokens = 0;
-        let cacheWriteTokens = 0;
-        let totalCost = 0;
-
-        // Iterate through the agent run's steps to sum up tokens
-        if (this._agentRun?.Steps) {
-            for (const step of this._agentRun.Steps) {
-                if ((step.StepType === 'Prompt' || step.StepType === 'Compaction' || step.StepType === 'Decision') && step.PromptRun) {
-                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs).
-                    // A Decision step carries its own decision call's run — the Finish check, a single-state
-                    // request, or one item of a forEachItemIn request — so each call is counted once.
-                    totalTokens += step.PromptRun.TokensUsedRollup || 0;
-                    promptTokens += step.PromptRun.TokensPromptRollup || 0;
-                    completionTokens += step.PromptRun.TokensCompletionRollup || 0;
-                    cacheReadTokens += step.PromptRun.TokensCacheReadRollup || 0;
-                    cacheWriteTokens += step.PromptRun.TokensCacheWriteRollup || 0;
-                    totalCost += step.PromptRun.TotalCost || 0;
-                } else if (step.StepType === 'Sub-Agent' && step.SubAgentRun) {
-                    // Add tokens from sub-agent runs (these should already be calculated recursively)
-                    totalTokens += step.SubAgentRun.TotalTokensUsed || 0;
-                    promptTokens += step.SubAgentRun.TotalPromptTokensUsed || 0;
-                    completionTokens += step.SubAgentRun.TotalCompletionTokensUsed || 0;
-                    cacheReadTokens += step.SubAgentRun.TotalCacheReadTokensUsed || 0;
-                    cacheWriteTokens += step.SubAgentRun.TotalCacheWriteTokensUsed || 0;
-                    totalCost += step.SubAgentRun.TotalCost || 0;
-                }
-            }
-        }
-
-        return { totalTokens, promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens, totalCost };
+        return this._budgetTracker.CalculateRunTokenStats(this._agentRun);
     }
 
     /**
@@ -20927,12 +22129,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private applyTokenStatsToRun(run: MJAIAgentRunEntityExtended, tokenStats: AgentRunTokenStats): void {
-        run.TotalTokensUsed = tokenStats.totalTokens;
-        run.TotalPromptTokensUsed = tokenStats.promptTokens;
-        run.TotalCompletionTokensUsed = tokenStats.completionTokens;
-        run.TotalCacheReadTokensUsed = tokenStats.cacheReadTokens;
-        run.TotalCacheWriteTokensUsed = tokenStats.cacheWriteTokens;
-        run.TotalCost = tokenStats.totalCost;
+        this._budgetTracker.ApplyTokenStatsToRun(run, tokenStats);
     }
 
     /**
@@ -20948,7 +22145,7 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Gets the count of how many times a specific sub-agent has been executed in this agent run.
-     * 
+     *
      * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
      * @param subAgentId - The sub-agent ID to count
      * @returns The number of times the sub-agent has been executed
@@ -20968,8 +22165,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected incrementExecutionCount(itemId: string): void {
-        const currentCount = this._executionCounts.get(itemId) || 0;
-        this._executionCounts.set(itemId, currentCount + 1);
+        this._budgetTracker.IncrementExecutionCount(this._executionCounts, itemId);
     }
 
     /**
@@ -20980,7 +22176,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @protected
      */
     protected getExecutionCount(itemId: string): number {
-        return this._executionCounts.get(itemId) || 0;
+        return this._budgetTracker.GetExecutionCount(this._executionCounts, itemId);
     }
 
     /**
@@ -21028,6 +22224,41 @@ The context is now within limits. Please retry your request with the recovered c
         }
         
         return violations;
+    }
+
+    /**
+     * Whether the window has reached the compaction trigger the operator configured — the same
+     * `CompactionTriggerPercent` (agent, then agent type, then the default) that drives cross-turn
+     * compaction, resolved by {@link resolveCompactionBudget} into `TriggerTokens`. Below it, the
+     * mid-loop rewrites of earlier turns (shortening replayed tool-call arguments, expiring old action
+     * results) are deferred, so routine tool loops keep the provider's byte-exact prompt-cache prefix.
+     * One knob governs both kinds of compaction on purpose: a second number would be one more thing
+     * to tune, and an in-run rewrite is only worth a cache miss once the window is actually filling up.
+     * @protected
+     */
+    protected isMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean {
+        const messages = params?.conversationMessages;
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return false;
+        }
+        const budget = this.resolveCompactionBudget(params, this._agentConfig);
+        if (!budget.TriggerTokens || budget.TriggerTokens <= 0) {
+            return false;
+        }
+        // estimateConversationTokens counts message content only. The arguments of replayed tool calls
+        // travel on every turn too, so they are added here; nothing is counted twice.
+        let estimatedTokens = this.estimateConversationTokens(messages);
+        for (const msg of messages) {
+            const toolCalls = (msg as AgentChatMessage).toolCalls;
+            if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+                for (const call of toolCalls) {
+                    if (call?.arguments !== undefined) {
+                        estimatedTokens += this.estimateTokens(JSON.stringify(call.arguments));
+                    }
+                }
+            }
+        }
+        return estimatedTokens >= budget.TriggerTokens;
     }
 
     /**
@@ -21719,9 +22950,16 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
 
-        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
-        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
-        if (!memoryAgent) {
+        // Resolved like every other agent (CreateAgentInstance); a Memory Manager row matched by name
+        // with no DriverClass still runs its own class rather than the plain BaseAgent.
+        let memoryAgent: BaseAgent;
+        try {
+            memoryAgent = await CreateAgentInstance({
+                Name: memoryManagerEntity.Name,
+                DriverClass: memoryManagerEntity.DriverClass?.trim() || 'MemoryManagerAgent',
+            });
+        } catch (error) {
+            LogError(`Post-run MemoryManager not started: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
 
@@ -21986,6 +23224,7 @@ The context is now within limits. Please retry your request with the recovered c
             || messageType === 'client-tool-result'
             || messageType === BaseAgent.toolResultMessageType
             || messageType === 'sub-agent-result'
+            || messageType === 'sub-agent-consult'
             || messageType === 'loop-result';
     }
 
@@ -22003,17 +23242,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);
@@ -22164,23 +23415,13 @@ The context is now within limits. Please retry your request with the recovered c
         context: Record<string, any>,
         itemVariable: string
     ): Record<string, unknown> {
-        const result: Record<string, unknown> = {};
-
-        for (const [key, value] of Object.entries(obj)) {
-            if (typeof value === 'string') {
-                result[key] = this.resolveValueFromContext(value, context, itemVariable);
-            } else if (Array.isArray(value)) {
-                result[key] = value.map(v =>
-                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
-                );
-            } else if (typeof value === 'object' && value !== null) {
-                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
-            } else {
-                result[key] = value;
-            }
-        }
-
-        return result;
+        return this._stepDispatcher.ResolveTemplates(
+            obj,
+            context,
+            itemVariable,
+            (val, ctx, iv) => this.resolveValueFromContext(val, ctx, iv),
+            (nested, ctx, iv) => this.resolveTemplates(nested, ctx, iv),
+        );
     }
 
     /**
@@ -22202,57 +23443,10 @@ The context is now within limits. Please retry your request with the recovered c
      *   Template: "{{user}}" → resolves to entire object {name: "Alice", age: 30}
      */
     protected resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
-        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
-        // if so, remove that wrapping to get the actual variable name.
-        // we only do this if the string starts and ends with the {{ }} pattern
-        // and we trim whitespace first
-        const trimmedValue = value.trim();
-        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
-            // Single-variable case: "{{city.name}}" — strip wrappers, fall through to
-            // single-variable resolution below which can return non-string types (objects, numbers)
-            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
-        } else if (trimmedValue.includes('{{')) {
-            // Inline template interpolation: "text {{var.prop}} more {{var2.field}}"
-            // The string contains embedded {{}} expressions mixed with literal text.
-            // Each expression is resolved individually and stringified back into the template.
-            return this.resolveInlineTemplateExpressions(trimmedValue, context, itemVariable);
-        }
-
-        // Check itemVariable reference (the custom loop variable name like "entityName" or "user")
-        // This handles both direct references and path-based property access
-        const ivToLower = itemVariable?.trim().toLowerCase();
-        const valueLower = value?.toLowerCase();
-
-        // CRITICAL: Check for exact match FIRST (handles scalar arrays and direct object references)
-        // Example: {{entityName}} where context.item = "Users" (scalar)
-        // Example: {{user}} where context.item = {name: "Alice", age: 30} (object)
-        if (valueLower === ivToLower) {
-            return context.item;  // Return the current iteration item (scalar or object)
-        }
-
-        // Check for path notation (handles property access on object arrays)
-        // Example: {{entityName.property}} - won't work for scalars but handles objects
-        // Example: {{user.name}} where context.item = {name: "Alice"} → returns "Alice"
-        if (valueLower?.startsWith(`${ivToLower}.`)) {
-            const path = value.substring(ivToLower.length + 1);
-            return this.getValueFromPath(context.item, path);
-        }
-
-        // Check for direct context variable references (index, payload, data, etc.)
-        // These are the fixed context properties set up by the loop execution
-        for (const [varName, varValue] of Object.entries(context)) {
-            if (value === varName) {
-                return varValue;
-            }
-
-            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
-                const path = value.substring(varName.length + 1);
-                return this.getValueFromPath(varValue, path);
-            }
-        }
-
-        // Static value - no variable reference found, return as literal string
-        return value;
+        return this._stepDispatcher.ResolveValueFromContext(value, context, itemVariable, {
+            resolveInline: (tpl, ctx, iv) => this.resolveInlineTemplateExpressions(tpl, ctx, iv),
+            getPath: (obj, path) => this.getValueFromPath(obj, path),
+        });
     }
 
     /**
@@ -22274,16 +23468,12 @@ The context is now within limits. Please retry your request with the recovered c
         context: Record<string, any>,
         itemVariable: string
     ): string {
-        const expressionPattern = /\{\{\s*([^}]+?)\s*\}\}/g;
-        return template.replace(expressionPattern, (_match: string, expr: string) => {
-            // Resolve each expression using the single-variable path (without {{ }} wrappers)
-            const resolved = this.resolveValueFromContext(expr.trim(), context, itemVariable);
-            // If the expression didn't resolve (returned unchanged), keep original {{ }} for transparency
-            if (resolved === expr.trim()) {
-                return _match;
-            }
-            return String(resolved ?? '');
-        });
+        return this._stepDispatcher.ResolveInlineTemplateExpressions(
+            template,
+            context,
+            itemVariable,
+            (val, ctx, iv) => this.resolveValueFromContext(val, ctx, iv),
+        );
     }
 
     /**
@@ -22369,15 +23559,37 @@ The context is now within limits. Please retry your request with the recovered c
      */
     private validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
         const inputs = this.runScopeInputs(params);
+        // Only a run whose host assigned scopes carries the key, so every other run keeps the shape it had
+        const searchScopeIDs = this.hostSearchScopeIDs(params);
+        const hostScopes = searchScopeIDs ? { SearchScopeIDs: searchScopeIDs } : {};
         if (!inputs.EntityName && !inputs.RecordID && !inputs.Secondary) {
-            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+            return { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null, ...hostScopes };
         }
         const secondary = this.validateAndApplySecondaryScopes(inputs.Secondary, this.parseSecondaryScopeConfig(params.agent), params.agent.Name);
         return {
             PrimaryScopeEntityName: inputs.EntityName ?? null,
             PrimaryScopeRecordID: inputs.RecordID ?? null,
             SecondaryScopes: secondary && Object.keys(secondary).length > 0 ? secondary : null,
+            ...hostScopes,
         };
+    }
+
+    /**
+     * The search scopes the host assigned this run ({@link ExecuteAgentParams.SearchScopeIDs}): trimmed, de-duplicated,
+     * in the host's order, or `null` for none. Read from the first-class parameter only — never from `data`, which a
+     * caller could otherwise use to hand an agent a scope its own SearchScopeAccess refuses.
+     */
+    private hostSearchScopeIDs(params: ExecuteAgentParams): string[] | null {
+        const seen = new UUIDSet();
+        const ids: string[] = [];
+        for (const id of params.SearchScopeIDs ?? []) {
+            const trimmed = typeof id === 'string' ? id.trim() : '';
+            if (trimmed && !seen.Has(trimmed)) {
+                seen.Add(trimmed);
+                ids.push(trimmed);
+            }
+        }
+        return ids.length > 0 ? ids : null;
     }
 
     /**

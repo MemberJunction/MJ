@@ -25,6 +25,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
+import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { AgentRunner } from '../AgentRunner';
 
 interface FakeEntity {
@@ -68,7 +69,15 @@ interface ArtifactWorld {
 }
 
 function world(overrides: Partial<ArtifactWorld> = {}): ArtifactWorld {
-    return { owners: new Map(), grants: new Set(), ...overrides };
+    const defaultOwners = new Map<string, string>([
+        [SOURCE_UUID.toLowerCase(), 'user-1'],
+        [PRIOR_UUID.toLowerCase(), 'user-1'],
+    ]);
+    return {
+        owners: overrides.owners ?? defaultOwners,
+        grants: overrides.grants ?? new Set(),
+        throws: overrides.throws,
+    };
 }
 
 /** Pulls the value out of a `Field='value'` fragment so the fake can answer by id. */
@@ -91,34 +100,44 @@ function makeProvider(factory: (entityName: string) => FakeEntity, w: ArtifactWo
 } {
     const requested: string[] = [];
     const runViewsCalls: RunViewParams[][] = [];
+    const answerView = (view: RunViewParams): RunViewResult => {
+        if (view.EntityName === 'MJ: Artifacts') {
+            const id = filterValue(view.ExtraFilter as string, 'ID');
+            const owner = w.owners.get(id.toLowerCase());
+            return {
+                Success: true,
+                Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
+            } as unknown as RunViewResult;
+        }
+        if (view.EntityName === 'MJ: Artifact Permissions') {
+            const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
+            return {
+                Success: true,
+                Results: w.grants.has(id.toLowerCase())
+                    ? [{ ID: 'perm-1', CanRead: true, CanEdit: true, CanDelete: false, CanShare: false }]
+                    : [],
+            } as unknown as RunViewResult;
+        }
+        return { Success: true, Results: [] } as unknown as RunViewResult;
+    };
     const provider = {
         GetEntityObject: vi.fn(async (entityName: string) => {
             requested.push(entityName);
             return factory(entityName);
+        }),
+        RunView: vi.fn(async (view: RunViewParams): Promise<RunViewResult> => {
+            runViewsCalls.push([view]);
+            if (w.throws) {
+                throw new Error(w.throws);
+            }
+            return answerView(view);
         }),
         RunViews: vi.fn(async (params: RunViewParams[]): Promise<RunViewResult[]> => {
             runViewsCalls.push(params);
             if (w.throws) {
                 throw new Error(w.throws);
             }
-            return params.map((view) => {
-                if (view.EntityName === 'MJ: Artifacts') {
-                    const id = filterValue(view.ExtraFilter as string, 'ID');
-                    const owner = w.owners.get(id.toLowerCase());
-                    return {
-                        Success: true,
-                        Results: owner === undefined ? [] : [{ ID: id, UserID: owner }],
-                    } as unknown as RunViewResult;
-                }
-                if (view.EntityName === 'MJ: Artifact Permissions') {
-                    const id = filterValue(view.ExtraFilter as string, 'ArtifactID');
-                    return {
-                        Success: true,
-                        Results: w.grants.has(id.toLowerCase()) ? [{ ID: 'perm-1' }] : [],
-                    } as unknown as RunViewResult;
-                }
-                return { Success: false, Results: [] } as unknown as RunViewResult;
-            });
+            return params.map(answerView);
         }),
     } as unknown as IMetadataProvider;
     return { provider, requested, runViewsCalls };
@@ -160,7 +179,37 @@ class TestableAgentRunner extends AgentRunner {
         this.DuplicateSpy(artifactId);
         return this.DuplicateVersionId;
     }
+
+    /** artifactId (lowercased) → TypeID for an existing artifact being versioned. */
+    public ExistingArtifactTypes = new Map<string, string>();
+
+    protected override async GetArtifactTypeIDForArtifact(artifactId: string): Promise<string | null> {
+        return this.ExistingArtifactTypes.get(artifactId.toLowerCase()) ?? null;
+    }
 }
+
+/** Artifact types the engine answers with; ids are the runner's built-in JSON type plus two others. */
+const JSON_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+const IMAGE_TYPE_ID = 'b1b2b3b4-c5c6-4d7d-8e8e-f9f9f0f0a1a1';
+const HTML_TYPE_ID = 'c1c2c3c4-d5d6-4e7e-8f8f-a9a9a0a0b1b1';
+type EngineTypes = { _artifactTypes: Array<{ ID: string; Name: string; ContentType: string }> };
+let priorEngineTypes: EngineTypes['_artifactTypes'];
+
+beforeEach(() => {
+    vi.spyOn(ArtifactMetadataEngine.Instance, 'Config').mockResolvedValue(undefined);
+    const internals = ArtifactMetadataEngine.Instance as unknown as EngineTypes;
+    priorEngineTypes = internals._artifactTypes;
+    internals._artifactTypes = [
+        { ID: JSON_TYPE_ID, Name: 'JSON', ContentType: 'application/json' },
+        { ID: IMAGE_TYPE_ID, Name: 'Image', ContentType: 'image/*' },
+        { ID: HTML_TYPE_ID, Name: 'HTML', ContentType: 'text/html' },
+    ];
+});
+
+afterEach(() => {
+    (ArtifactMetadataEngine.Instance as unknown as EngineTypes)._artifactTypes = priorEngineTypes;
+    vi.restoreAllMocks();
+});
 
 const contextUser = { ID: 'user-1', Email: 'u@example.com' } as unknown as UserInfo;
 
@@ -373,6 +422,13 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
             }),
             RunView: vi.fn(async (params: RunViewParams): Promise<RunViewResult> => {
                 runViewCalls.push(params);
+                if (params.EntityName === 'MJ: Artifacts') {
+                    const id = filterValue(params.ExtraFilter as string, 'ID');
+                    return {
+                        Success: true,
+                        Results: [{ ID: id, UserID: 'user-1' }],
+                    } as unknown as RunViewResult;
+                }
                 if (params.EntityName !== 'MJ: Conversation Detail Artifacts') {
                     return { Success: true, Results: [] } as unknown as RunViewResult;
                 }
@@ -380,6 +436,18 @@ describe('AgentRunner.ProcessAgentArtifacts — duplicate content reuses the ver
                     return { Success: false, Results: [], ErrorMessage: readError } as unknown as RunViewResult;
                 }
                 return { Success: true, Results: existingLinks } as unknown as RunViewResult;
+            }),
+            RunViews: vi.fn(async (params: RunViewParams[]): Promise<RunViewResult[]> => {
+                return params.map((view) => {
+                    if (view.EntityName === 'MJ: Artifacts') {
+                        const id = filterValue(view.ExtraFilter as string, 'ID');
+                        return {
+                            Success: true,
+                            Results: [{ ID: id, UserID: 'user-1' }],
+                        } as unknown as RunViewResult;
+                    }
+                    return { Success: true, Results: [] } as unknown as RunViewResult;
+                });
             }),
         } as unknown as IMetadataProvider;
         return { provider, requested, junctions, runViewCalls };
@@ -508,9 +576,9 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
         expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-9', versionNumber: 5 });
         expect(version.ArtifactID).toBe(TARGET_UUID);
-        // Existence and authorization in ONE round trip, not a full-entity Load.
+        // Existence and owner authorization resolved via ArtifactPermissionEngine in a single MJ: Artifacts query.
         expect(runViewsCalls).toHaveLength(1);
-        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts', 'MJ: Artifact Permissions']);
+        expect(runViewsCalls[0].map((v) => v.EntityName)).toEqual(['MJ: Artifacts']);
         // Writable target -> versioned in place; no new artifact header was created.
         expect(requested).not.toContain('MJ: Artifacts');
     });
@@ -628,8 +696,11 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
     it("falls back to the run's sourceArtifactId when the directive-named target does not exist", async () => {
         const version = makeEntity('ver-12');
-        // Empty world: the target id resolves to no row.
-        const { provider, requested, runViewsCalls } = makeProvider(() => version, world());
+        // Target id resolves to no row; sourceArtifactId belongs to user-1.
+        const { provider, requested, runViewsCalls } = makeProvider(
+            () => version,
+            world({ owners: new Map([[SOURCE_UUID.toLowerCase(), 'user-1']]) })
+        );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 6;
 
@@ -638,7 +709,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             'detail-1', SOURCE_UUID, contextUser, provider
         );
 
-        expect(runViewsCalls).toHaveLength(1);
+        expect(runViewsCalls).toHaveLength(2);
         expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: 'ver-12', versionNumber: 7 });
         expect(version.ArtifactID).toBe(SOURCE_UUID);
         // The missing target never reached either raw ExtraFilter, and nothing new was created.
@@ -685,18 +756,27 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             );
 
             expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-20', versionNumber: 2 });
-            // The grant lookup is scoped to BOTH the artifact and this user.
-            const grantFilter = runViewsCalls[0][1].ExtraFilter as string;
+            // The grant lookup via ArtifactPermissionEngine is scoped to BOTH the artifact and this user.
+            const permQuery = runViewsCalls
+                .flat()
+                .find((v) => v.EntityName === 'MJ: Artifact Permissions');
+            expect(permQuery).toBeDefined();
+            const grantFilter = permQuery?.ExtraFilter as string;
             expect(grantFilter).toContain(`ArtifactID='${TARGET_UUID}'`);
             expect(grantFilter).toContain("UserID='user-1'");
-            expect(grantFilter).toContain('CanEdit=1');
+            expect(permQuery?.Fields).toContain('CanEdit');
         });
 
         it("REFUSES an artifact owned by another user with no grant, and falls back", async () => {
             const version = makeEntity('ver-21');
             const { provider, requested } = makeProvider(
                 () => version,
-                world({ owners: new Map([[TARGET_UUID, 'somebody-else']]) })
+                world({
+                    owners: new Map([
+                        [TARGET_UUID.toLowerCase(), 'somebody-else'],
+                        [SOURCE_UUID.toLowerCase(), 'user-1'],
+                    ]),
+                })
             );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 3;
@@ -714,10 +794,14 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
 
         it('falls back rather than losing the artifact when the lookup THROWS', async () => {
             // BaseEntity.Load throws on a permission denial, a SQL conversion error or any transient
-            // fault. A throw here used to reach the method-wide catch and return undefined: no
-            // artifact, no version, no link — the deliverable survived only in the run's payload.
+            // fault. When RunViews throws continuously, every version rung fails closed and degrades
+            // cleanly to create-new so the deliverable is never lost.
+            const artifact = makeEntity('art-fresh-fallback');
             const version = makeEntity('ver-22');
-            const { provider } = makeProvider(() => version, world({ throws: 'Conversion failed when converting from a character string to uniqueidentifier' }));
+            const { provider } = makeProvider(
+                (name) => (name === 'MJ: Artifacts' ? artifact : version),
+                world({ throws: 'Conversion failed when converting from a character string to uniqueidentifier' })
+            );
             const runner = new TestableAgentRunner(provider);
             runner.MaxVersion = 8;
 
@@ -726,7 +810,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
                 'detail-1', SOURCE_UUID, contextUser, provider
             );
 
-            expect(info).toEqual({ artifactId: SOURCE_UUID, versionId: 'ver-22', versionNumber: 9 });
+            expect(info).toEqual({ artifactId: 'art-fresh-fallback', versionId: 'ver-22', versionNumber: 1 });
         });
 
         it('does not re-admit a rejected id when the agent echoed the run\'s own sourceArtifactId', async () => {
@@ -738,7 +822,7 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             const version = makeEntity('ver-23');
             const { provider } = makeProvider(
                 (name) => (name === 'MJ: Artifacts' ? artifact : version),
-                world() // the echoed id resolves to nothing
+                world({ owners: new Map() }) // the echoed id resolves to nothing
             );
             const runner = new TestableAgentRunner(provider);
 
@@ -751,6 +835,47 @@ describe('AgentRunner.ProcessAgentArtifacts — artifactDirective (#529)', () =>
             expect(info).toEqual({ artifactId: 'art-fresh', versionId: 'ver-23', versionNumber: 1 });
             expect(runner.MaxVersionSpy).not.toHaveBeenCalled();
             expect(runner.DuplicateSpy).not.toHaveBeenCalled();
+        });
+
+        it('Blocker 5: falls back to create-new with logged reason when user B continues user A\'s artifact via sourceArtifactId or legacy look-behind without CanEdit', async () => {
+            const artifact = makeEntity('art-user-b-fork');
+            const version = makeEntity('ver-user-b-1');
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+            const permGrant = makeEntity('perm-user-a-read');
+            const { provider } = makeProvider(
+                (name) =>
+                    name === 'MJ: Artifacts'
+                        ? artifact
+                        : name === 'MJ: Artifact Versions'
+                          ? version
+                          : permGrant,
+                world({
+                    owners: new Map([
+                        [SOURCE_UUID.toLowerCase(), 'user-owner-a'],
+                        [PRIOR_UUID.toLowerCase(), 'user-owner-a'],
+                    ]),
+                })
+            );
+            const runner = new TestableAgentRunner(provider);
+            runner.PreviousArtifact = { artifactId: PRIOR_UUID, versionNumber: 2 };
+
+            // Both sourceArtifactId AND legacy previousArtifact are owned by user-owner-a without CanEdit -> creates new artifact!
+            const info = await runner.ProcessAgentArtifacts(
+                makeResult(),
+                'detail-shared',
+                SOURCE_UUID,
+                contextUser,
+                provider
+            );
+
+            expect(info).toEqual({ artifactId: 'art-user-b-fork', versionId: 'ver-user-b-1', versionNumber: 1 });
+            expect(artifact.Save).toHaveBeenCalledTimes(1);
+            expect(version.Save).toHaveBeenCalledTimes(1);
+            const loggedErrors = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+            expect(loggedErrors).toContain('no CanEdit grant on it');
+            expect(loggedErrors).toContain('falling back to create-new');
+            errorSpy.mockRestore();
         });
 
         it('trims a target id before it reaches a filter or the version row', async () => {
@@ -1013,7 +1138,10 @@ describe('AgentRunner.ProcessAgentArtifacts — unrecognized directive behavior 
 
     it('an unrecognized behavior still versions the run sourceArtifactId, exactly like no directive', async () => {
         const version = makeEntity('ver-2');
-        const { provider } = makeProvider(() => version);
+        const { provider } = makeProvider(
+            () => version,
+            world({ owners: new Map([[TARGET_UUID.toLowerCase(), 'user-1']]) })
+        );
         const runner = new TestableAgentRunner(provider);
         runner.MaxVersion = 1;
 
@@ -1256,3 +1384,65 @@ describe('QueryBuilderAgent — single-table vs multi-table payload normalizatio
 });
 
 
+
+/** Payload versions carry their artifact type's concrete ContentType so preview plugins can match it (#4597). */
+describe('AgentRunner.ProcessAgentArtifacts — payload version MimeType', () => {
+    it('stamps application/json on a new artifact of the default JSON type', async () => {
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(JSON_TYPE_ID);
+        expect(version.MimeType).toBe('application/json');
+    });
+
+    it('leaves MimeType null when the artifact type is a wildcard (Image → image/*)', async () => {
+        engineAgents[0].DefaultArtifactTypeID = IMAGE_TYPE_ID;
+        const artifact = makeEntity('art-1');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, undefined, contextUser, provider);
+
+        expect(artifact.TypeID).toBe(IMAGE_TYPE_ID);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it("gives a new version of an existing artifact that artifact's type, not the agent default", async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+        runner.ExistingArtifactTypes.set(SOURCE_UUID, HTML_TYPE_ID);
+
+        await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(version.MimeType).toBe('text/html');
+    });
+
+    it('leaves MimeType null when the existing artifact type cannot be read', async () => {
+        const version = makeEntity('ver-5');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 4;
+
+        const info = await runner.ProcessAgentArtifacts(makeResult(), undefined, SOURCE_UUID, contextUser, provider);
+
+        expect(info?.versionNumber).toBe(5);
+        expect(version.MimeType).toBeNull();
+    });
+
+    it('PayloadVersionMimeType keeps concrete types and drops wildcards and blanks', () => {
+        expect(AgentRunner.PayloadVersionMimeType('application/json')).toBe('application/json');
+        expect(AgentRunner.PayloadVersionMimeType(' text/html ')).toBe('text/html');
+        expect(AgentRunner.PayloadVersionMimeType('image/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('*/*')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType('')).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(null)).toBeNull();
+        expect(AgentRunner.PayloadVersionMimeType(undefined)).toBeNull();
+    });
+});

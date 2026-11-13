@@ -13,6 +13,7 @@
       @if (ShowLabel) {
         <div class="mj-forms-field-label-row">
           <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldCommentsBadgeTpl"></ng-container>
           @if (HasTimeTravelDiff) {
             <span class="mj-forms-time-travel-badge" title="This field's value at the previewed historical version differs from the current live record">
               <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
@@ -204,6 +205,7 @@
       @if (ShowLabel) {
         <div class="mj-forms-field-label-row">
           <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldCommentsBadgeTpl"></ng-container>
           <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
         </div>
       }
@@ -348,6 +350,16 @@
                   <div class="mj-fk-status">
                     <i class="fa-solid fa-circle-notch fa-spin"></i>
                     <span>Searching…</span>
+                  </div>
+                }
+                @if (!FKLoading && FKSearchError) {
+                  <div class="mj-fk-status mj-fk-status--error" role="alert">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span class="mj-fk-status-text">{{ FKSearchError }}</span>
+                    <button type="button" class="mj-fk-retry" (mousedown)="OnFKRetryClick($event)">
+                      <i class="fa-solid fa-rotate-right"></i>
+                      Retry
+                    </button>
                   </div>
                 }
                 @if (!FKLoading && FKNoMatches) {
@@ -687,5 +699,46 @@
       <span>Updated live</span>
       <span class="mj-forms-field__auto-merged-tooltip">Previously: {{ FormattedAutoMergedPreviousValue }}</span>
     </span>
+  }
+</ng-template>
+
+<!-- Shared template for field-level anchored notes & suggestions badges / hover trigger -->
+<ng-template #fieldCommentsBadgeTpl>
+  @if (CanCommentOnField) {
+    @if (FieldOpenCommentCount > 0) {
+      <span class="mj-forms-field__comment-badges">
+        @if (FieldOpenNoteCount > 0) {
+          <button
+            type="button"
+            class="mj-forms-field__comment-pill"
+            [title]="FieldOpenNoteCount + (FieldOpenNoteCount === 1 ? ' open note' : ' open notes') + ' on ' + DisplayName"
+            [attr.aria-label]="FieldOpenNoteCount + (FieldOpenNoteCount === 1 ? ' open note' : ' open notes') + ' on ' + DisplayName"
+            (click)="OnOpenFieldComments($event, FieldOpenSuggestionCount > 0 ? 'COMMENT' : undefined)">
+            <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+            <span>{{ FieldOpenNoteCount }}</span>
+          </button>
+        }
+        @if (FieldOpenSuggestionCount > 0) {
+          <button
+            type="button"
+            class="mj-forms-field__comment-pill mj-forms-field__comment-pill--suggestion"
+            [title]="FieldOpenSuggestionCount + (FieldOpenSuggestionCount === 1 ? ' pending suggestion' : ' pending suggestions') + ' on ' + DisplayName"
+            [attr.aria-label]="FieldOpenSuggestionCount + (FieldOpenSuggestionCount === 1 ? ' pending suggestion' : ' pending suggestions') + ' on ' + DisplayName"
+            (click)="OnOpenFieldComments($event, FieldOpenNoteCount > 0 ? 'FIELD_SUGGESTION' : undefined)">
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+            <span>{{ FieldOpenSuggestionCount }}</span>
+          </button>
+        }
+      </span>
+    } @else {
+      <button
+        type="button"
+        class="mj-forms-field__comment-trigger"
+        [title]="'Add note on ' + DisplayName"
+        [attr.aria-label]="'Add note on ' + DisplayName"
+        (click)="OnOpenFieldComments($event)">
+        <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+      </button>
+    }
   }
 </ng-template>

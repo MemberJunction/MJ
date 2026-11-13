@@ -282,3 +282,69 @@ export interface TwilioCredentialValues {
     accountSid: string;
     authToken: string;
 }
+
+/**
+ * Values stored for a per-user delegated OAuth 2.0 (`3LO`) credential (Posture 3).
+ * `ownerUserId` is encrypted inside `Values` and strictly enforced by `CredentialEngine`
+ * against `contextUser.ID` on every resolution.
+ */
+export interface UserDelegatedOAuthCredentialValues {
+    [key: string]: string;
+    ownerUserId: string;
+    principalEmail: string;
+    providerName: string;
+    accessToken: string;
+    refreshToken: string;
+    tokenType: string;
+    scope: string;
+    tenantId: string;
+    issuedAt: string;
+}
+
+/**
+ * Options for storing or rotating a per-user delegated OAuth 2.0 (`3LO`) credential.
+ */
+export interface StoreUserDelegatedCredentialOptions {
+    credentialTypeName?: string;
+    providerName: string;
+    ownerUserId: string;
+    principalEmail: string;
+    accessToken: string;
+    refreshToken?: string;
+    tokenType?: string;
+    scope?: string;
+    tenantId?: string;
+    expiresAt?: Date;
+    categoryId?: string;
+}
+
+/**
+ * Values for "GitHub App" credential type (`schemas/github-app.schema.json`).
+ * Used to mint short-lived, repository-scoped installation access tokens via RS256 JWT.
+ */
+export interface GitHubAppCredentialValues {
+    [key: string]: string | undefined;
+    appId: string;
+    installationId: string;
+    privateKey: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+    webhookSecret?: string;
+}
+
+/**
+ * Values for "GitHub Personal Access Token" credential type (`schemas/github-pat.schema.json`).
+ */
+export interface GitHubPATCredentialValues {
+    [key: string]: string | undefined;
+    token: string;
+    defaultOwner?: string;
+    allowedRepositories?: string;
+    allowMerge?: string;
+    defaultPRMode?: 'draft' | 'ready';
+    apiBaseUrl?: string;
+}
+

@@ -21,6 +21,7 @@ import { ChildProcessExecutor } from './ChildProcessExecutor.js';
  * boundary is soft.
  */
 export class LocalDirectorySandboxProvider implements ISandboxProvider {
+    public readonly Name = 'local' as const;
     private readonly rootPath: string;
 
     /**
@@ -38,6 +39,7 @@ export class LocalDirectorySandboxProvider implements ISandboxProvider {
         await mkdir(workspacePath, { recursive: true });
         return {
             WorkspacePath: workspacePath,
+            HostWorkspacePath: workspacePath,
             Key: key,
             Ephemeral: key.Scope === 'run',
             // Runs directly on the MJAPI host. The workspace path is a host path here, which is the

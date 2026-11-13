@@ -2,12 +2,29 @@ import { BaseEntity, LogError, Metadata, RunView, RunQuery, SetProvider, Startup
 import { GraphQLDataProvider, GraphQLProviderConfigData } from "./graphQLDataProvider";
 import { MJGlobal, MJEventType } from "@memberjunction/global";
 
+function resolveGraphQLProviderInstance(providerInstance?: GraphQLDataProvider): GraphQLDataProvider {
+    if (providerInstance) {
+        return providerInstance;
+    }
+    if (GraphQLDataProvider.Instance) {
+        return GraphQLDataProvider.Instance;
+    }
+    const registered = MJGlobal.Instance.ClassFactory?.CreateInstance<GraphQLDataProvider>(GraphQLDataProvider);
+    return registered ?? new GraphQLDataProvider();
+}
+
 /**
  * Setup the GraphQL client for the project using the provided configuration data.
+ *
+ * @param config - Connection, token, and schema configuration
+ * @param providerInstance - Optional pre-constructed {@link GraphQLDataProvider} subclass (such as `AngularGraphQLDataProvider`). When omitted, resolves an existing singleton, a `ClassFactory`-registered subclass, or a default `GraphQLDataProvider`.
  */
-export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
+export async function SetupGraphQLClient(
+    config: GraphQLProviderConfigData,
+    providerInstance?: GraphQLDataProvider
+): Promise<GraphQLDataProvider> {
     // Set the provider for all entities to be GraphQL in this project, can use a different provider in other situations....
-    const provider = new GraphQLDataProvider()
+    const provider = resolveGraphQLProviderInstance(providerInstance);
 
     // BaseEntity + Metadata share the same GraphQLDataProvider instance
     SetProvider(provider);
@@ -65,8 +82,11 @@ export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Pro
  * identity. The same applies when {@link SetupGraphQLClient} later runs with a login's config
  * (an anonymous connect upgraded to a signed-in user).
  */
-export async function ConnectGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
-    const provider = new GraphQLDataProvider(); // returns the global singleton when one exists
+export async function ConnectGraphQLClient(
+    config: GraphQLProviderConfigData,
+    providerInstance?: GraphQLDataProvider
+): Promise<GraphQLDataProvider> {
+    const provider = resolveGraphQLProviderInstance(providerInstance); // returns the global singleton when one exists
     if (provider.Entities.length > 0) {
         return provider;
     }
@@ -85,6 +105,9 @@ export async function ConnectGraphQLClient(config: GraphQLProviderConfigData): P
 }
 
 /** @deprecated Use {@link SetupGraphQLClient}. */
-export async function setupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
-    return SetupGraphQLClient(config);
+export async function setupGraphQLClient(
+    config: GraphQLProviderConfigData,
+    providerInstance?: GraphQLDataProvider
+): Promise<GraphQLDataProvider> {
+    return SetupGraphQLClient(config, providerInstance);
 }

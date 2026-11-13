@@ -200,12 +200,18 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
         ResultType: 'entity_object'
       });
 
+      // The dialog may have been reopened for another user while this load was in flight
+      if (!UUIDsEqual(this.Data?.user?.ID, userId)) return;
+
       if (result.Success && result.Results) {
         this.ExistingUserRoles = result.Results;
         // Pre-select existing roles
         for (const userRole of this.ExistingUserRoles) {
           this.SelectedRoleIds.add(userRole.RoleID);
         }
+        // The roles arrive after the dialog has rendered, and adding to a Set is not a change
+        // Angular sees; without an explicit pass the cards stay unchecked until the next click.
+        this.cdr.detectChanges();
       }
     } catch (error) {
       console.warn('Failed to load existing user roles:', error);

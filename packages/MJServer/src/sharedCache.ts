@@ -10,14 +10,16 @@
  *
  */
 import { BaseEngineSweeper, CacheCategory, LocalCacheManager, LogError, LogStatusEx } from '@memberjunction/core';
-import type { CacheChangedEvent, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
+import type { CacheChangedEvent, ILocalStorageProvider, LocalCacheManagerConfig, ProviderBase } from '@memberjunction/core';
 import type { CacheSettingsConfig } from './config.js';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import type { CachePublishMode } from '@memberjunction/redis-provider';
-import { MJGlobal } from '@memberjunction/global';
+import type { CachePublishMode, RedisProviderConfig } from '@memberjunction/redis-provider';
+import * as RedisProviderModule from '@memberjunction/redis-provider';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { PUSH_STATUS_UPDATES_TOPIC, SetPushStatusPublishHook, ParseReplicatedStatusUpdate } from './generic/PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { CacheInvalidationBroadcastManager } from './broadcast/index.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 /**
@@ -40,7 +42,28 @@ export interface SharedCacheProviderOptions {
     Url: string;
     KeyPrefix: string;
     DefaultTTLSeconds?: number;
+    /** Longest a cache read waits before it is answered as a miss; 0 = no limit. */
+    ReadTimeoutMs?: number;
     EnableLogging: boolean;
+}
+
+/** Read timeout for the shared cache when neither config nor environment sets one. */
+export const DEFAULT_REDIS_READ_TIMEOUT_MS = 2000;
+
+/**
+ * Read timeout for the shared Redis cache: `REDIS_READ_TIMEOUT_MS` when it holds a non-negative
+ * integer, otherwise `cacheSettings.redisReadTimeoutMs`, otherwise {@link DEFAULT_REDIS_READ_TIMEOUT_MS}.
+ */
+export function ResolveRedisReadTimeoutMs(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const fromEnv = env.REDIS_READ_TIMEOUT_MS;
+  if (fromEnv !== undefined && fromEnv.trim() !== '') {
+    const parsed = Number(fromEnv);
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+    console.warn(`REDIS_READ_TIMEOUT_MS="${fromEnv}" is not a non-negative integer; ignoring it`);
+  }
+  return configured ?? DEFAULT_REDIS_READ_TIMEOUT_MS;
 }
 
 /**
@@ -60,7 +83,8 @@ export function ResolveSharedCacheTTLSeconds(configured: number | undefined, env
 }
 
 /**
- * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`),
+ * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`,
+ * `REDIS_READ_TIMEOUT_MS`),
  * or null. Built before the database provider so metadata and startup engines use it from the
  * first read.
  */
@@ -72,6 +96,7 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
         Url: env.REDIS_URL,
         KeyPrefix: env.REDIS_KEY_PREFIX || 'mj',
         DefaultTTLSeconds: ResolveSharedCacheTTLSeconds(settings?.sharedCacheTTLSeconds, env),
+        ReadTimeoutMs: ResolveRedisReadTimeoutMs(settings?.redisReadTimeoutMs, env),
         EnableLogging: settings?.verboseLogging ?? false,
     });
 }
@@ -182,18 +207,61 @@ export function StartUserCacheChecks(settings: CacheSettingsConfig | undefined):
     return intervalMs;
 }
 
+/** Extended configuration for Redis provider supporting hash storage for RunView slots. */
+export interface ExtendedRedisProviderConfig extends RedisProviderConfig {
+    useHashForRunViewSlots?: boolean;
+}
+
+/** Configuration options for optional TwoTierCacheStorageProvider from `@memberjunction/redis-provider`. */
+export interface TwoTierCacheStorageConfig {
+    MaxL1Bytes?: number;
+    CategoriesInL1?: ReadonlyArray<string>;
+}
+
+/** Structural type for optional TwoTierCacheStorageProvider constructor from `@memberjunction/redis-provider`. */
+type TwoTierStorageConstructor = new (
+    redisProvider: RedisLocalStorageProvider,
+    config?: TwoTierCacheStorageConfig
+) => ILocalStorageProvider;
+
+interface OptionalTwoTierModule {
+    RedisLocalStorageProvider: typeof RedisLocalStorageProvider;
+    TwoTierCacheStorageProvider?: TwoTierStorageConstructor;
+}
+
+/**
+ * Wraps a Redis shared cache provider in a two-tier L1 (in-memory LRU) + L2 (Redis) cache
+ * if `@memberjunction/redis-provider` exports `TwoTierCacheStorageProvider`.
+ * Falls back cleanly to the raw Redis provider if TwoTierCacheStorageProvider is not available.
+ */
+export function WrapSharedCacheWithL1(
+    redis: RedisLocalStorageProvider,
+    settings?: CacheSettingsConfig
+): ILocalStorageProvider {
+    const mod: OptionalTwoTierModule = RedisProviderModule;
+    if (typeof mod.TwoTierCacheStorageProvider === 'function' && typeof redis?.OnCacheChanged === 'function') {
+        const maxBytes = (settings?.maxMemoryMB ?? 150) * 1024 * 1024;
+        return new mod.TwoTierCacheStorageProvider(redis, {
+            MaxL1Bytes: maxBytes,
+        });
+    }
+    return redis;
+}
+
 /** Builds the Redis provider MJAPI uses as its shared cache. Pub/sub starts with {@link WireSharedCacheEvents}. */
 export function CreateSharedCacheProvider(options: SharedCacheProviderOptions): RedisLocalStorageProvider {
-    // The provider's own config keys stay as the package declares them.
-    return new RedisLocalStorageProvider({
+    const config: ExtendedRedisProviderConfig = {
         url: options.Url,
         keyPrefix: options.KeyPrefix,
         defaultTTLSeconds: options.DefaultTTLSeconds,
+        readTimeoutMs: options.ReadTimeoutMs,
         enablePubSub: true,
         enableLogging: options.EnableLogging,
         publishModes: MJAPI_PUBLISH_MODES,
         defaultPublishMode: 'none',
-    });
+        useHashForRunViewSlots: true,
+    };
+    return new RedisLocalStorageProvider(config);
 }
 
 /**
@@ -231,6 +299,15 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     if (event.Category !== CacheCategory.RunViewCache || event.Action === 'category_cleared') {
         return;
     }
+    // Only relay 'removed' or 'row_delta' to browsers. When a peer suffers a RunView cache miss
+    // on a pure read, it sets the cache entry (Action: 'set'). Relaying Action: 'set' with
+    // primaryKeyValues: null wiped every connected browser's entity cache on every peer read miss!
+    if (event.Action !== 'removed' && event.Action !== 'row_delta') {
+        return;
+    }
+    if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation === 'function') {
+        return;
+    }
     const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
     if (!entityName) {
         return;
@@ -238,7 +315,7 @@ function relayRunViewChangeToBrowsers(event: CacheChangedEvent): void {
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
         entityName,
         primaryKeyValues: null, // entity-level invalidation
-        action: event.Action,
+        action: event.Action === 'row_delta' ? 'set' : event.Action,
         sourceServerId: event.SourceServerId || 'unknown',
         timestamp: new Date(),
     });
@@ -301,5 +378,105 @@ export async function WirePushStatusFanOut(redis: RedisLocalStorageProvider): Pr
         // Single-instance delivery still works, and the durable tail query covers the rest.
         // Degraded, not broken — so this must not stop the server from starting.
         console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
+    }
+}
+
+/** Redis channel carrying cross-replica entity cache invalidation payloads. */
+const ENTITY_INVALIDATION_FANOUT_CHANNEL = 'entity-cache-invalidation';
+
+interface EntityInvalidationWirePayload {
+    entityName: string;
+    primaryKeyValues: string | null;
+    action: 'save' | 'delete' | 'set' | 'removed';
+    sourceServerId: string;
+    timestamp: string;
+    originSessionId: string | null;
+    recordData?: string;
+}
+
+type EntityInvalidationPublishHook = (payload: EntityInvalidationWirePayload) => void;
+let entityInvalidationPublishHook: EntityInvalidationPublishHook | undefined;
+
+export function SetEntityInvalidationPublishHook(hook: EntityInvalidationPublishHook | undefined): void {
+    entityInvalidationPublishHook = hook;
+}
+
+export function ResetEntityInvalidationFanOutForTests(): void {
+    entityInvalidationPublishHook = undefined;
+}
+
+/**
+ * Publishes an entity invalidation payload to peer replicas across Redis.
+ * Called when a local entity Save() / Delete() occurs.
+ */
+export function PublishEntityInvalidationToPeers(payload: {
+    entityName: string;
+    primaryKeyValues: string | null;
+    action: string;
+    sourceServerId: string;
+    timestamp: Date | string;
+    originSessionId?: string | null;
+    recordData?: string;
+}): void {
+    if (typeof CacheInvalidationBroadcastManager.Instance.Provider?.PublishClusterInvalidation === 'function') {
+        return;
+    }
+    if (!entityInvalidationPublishHook) {
+        return;
+    }
+    const wirePayload: EntityInvalidationWirePayload = {
+        entityName: payload.entityName,
+        primaryKeyValues: payload.primaryKeyValues,
+        action: payload.action as 'save' | 'delete' | 'set' | 'removed',
+        sourceServerId: payload.sourceServerId,
+        timestamp: typeof payload.timestamp === 'string' ? payload.timestamp : payload.timestamp.toISOString(),
+        originSessionId: payload.originSessionId ?? null,
+        ...(payload.recordData !== undefined ? { recordData: payload.recordData } : {}),
+    };
+    entityInvalidationPublishHook(wirePayload);
+}
+
+/**
+ * Replicate entity invalidations across server instances over Redis.
+ *
+ * Inbound: listens on ENTITY_INVALIDATION_FANOUT_CHANNEL, suppresses self-echo,
+ * and republishes onto local PubSubManager CACHE_INVALIDATION_TOPIC.
+ *
+ * Outbound: registers hook so PublishEntityInvalidationToPeers forwards invalidations
+ * onto Redis.
+ */
+export async function WireEntityInvalidationFanOut(redis: RedisLocalStorageProvider): Promise<void> {
+    try {
+        await redis.SubscribeToChannel(ENTITY_INVALIDATION_FANOUT_CHANNEL, (raw: string) => {
+            try {
+                const parsed = JSON.parse(raw) as EntityInvalidationWirePayload;
+                if (!parsed || typeof parsed !== 'object') {
+                    return;
+                }
+                // Ignore self-echo: do not re-process invalidations originated by this process
+                if (parsed.sourceServerId && UUIDsEqual(parsed.sourceServerId, MJGlobal.Instance.ProcessUUID)) {
+                    return;
+                }
+                PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+                    entityName: parsed.entityName,
+                    primaryKeyValues: parsed.primaryKeyValues,
+                    action: parsed.action,
+                    sourceServerId: parsed.sourceServerId,
+                    timestamp: new Date(parsed.timestamp),
+                    originSessionId: parsed.originSessionId,
+                    recordData: parsed.recordData,
+                });
+            } catch (err) {
+                LogError('Error processing entity invalidation fan-out message', undefined, err);
+            }
+        });
+
+        SetEntityInvalidationPublishHook((payload) => {
+            redis.PublishMessage(ENTITY_INVALIDATION_FANOUT_CHANNEL, JSON.stringify(payload));
+        });
+
+        console.log('[MJAPI] Entity invalidation: cross-instance fan-out enabled via Redis');
+    } catch (err) {
+        console.warn(`Entity invalidation fan-out unavailable: ${(err as Error).message}`);
     }
 }

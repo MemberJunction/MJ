@@ -13,7 +13,7 @@
 
 import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual, BaseSingleton } from '@memberjunction/global';
+import { UUIDsEqual, BaseSingleton, UserScopedCacheKey, MJLruCache } from '@memberjunction/global';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { MJAIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
 import _ from 'lodash';
@@ -59,7 +59,8 @@ interface CacheEntry {
  * in AIAgentDataSource metadata. Supports three cache policies:
  * - None: No caching, data is loaded fresh every time
  * - PerRun: Data is cached for the duration of a single agent run
- * - PerAgent: Data is cached globally with a TTL, shared across all runs
+ * - PerAgent: Data is cached with a TTL across runs of the agent, separately for each user,
+ *   because the rows were loaded under that user's permissions
  *
  * @class AgentDataPreloader
  * @example
@@ -77,9 +78,16 @@ const PRELOAD_CONCURRENCY_LIMIT = 10;
 
 export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     /**
-     * Per-agent cache (global, TTL-based)
+     * Per-agent cache, keyed by agent, data source and user. Each entry carries its own
+     * data-source-specific TTL (checked on read); the LRU cap bounds total entries so
+     * expired-but-never-re-read keys cannot accumulate (one entry per user x agent x source).
      */
-    private _perAgentCache: Map<string, CacheEntry> = new Map();
+    private _perAgentCache: MJLruCache<string, CacheEntry> = new MJLruCache<string, CacheEntry>({
+        maxSize: AgentDataPreloader.MAX_PER_AGENT_CACHE_ENTRIES
+    });
+
+    /** Upper bound on cached per-agent datasets before least-recently-used eviction. */
+    public static readonly MAX_PER_AGENT_CACHE_ENTRIES = 200;
 
     /**
      * Per-run cache (scoped to a single run ID)
@@ -237,7 +245,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      * Can be called to force refresh of global cached data.
      */
     public ClearAgentCache(): void {
-        this._perAgentCache.clear();
+        this._perAgentCache.Clear();
         LogStatusEx({
             message: `AgentDataPreloader: Cleared all per-agent cache`,
             verboseOnly: true,
@@ -331,7 +339,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         runId?: string
     ): Promise<unknown> {
         // Check cache first
-        const cachedData = this.getCachedData(source, runId);
+        const cachedData = this.getCachedData(source, contextUser, runId);
         if (cachedData !== null) {
             LogStatusEx({
                 message: `AgentDataPreloader: Using cached data for '${source.Name}'`,
@@ -353,7 +361,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         }
 
         // Cache the data if policy dictates
-        this.cacheData(source, data, runId);
+        this.cacheData(source, data, contextUser, runId);
 
         return data;
     }
@@ -444,6 +452,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      */
     private getCachedData(
         source: MJAIAgentDataSourceEntity,
+        contextUser: UserInfo,
         runId?: string
     ): unknown | null {
         if (source.CachePolicy === 'None') {
@@ -459,8 +468,11 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         }
 
         if (source.CachePolicy === 'PerAgent') {
-            const cacheKey = this.getPerAgentCacheKey(source);
-            const entry = this._perAgentCache.get(cacheKey);
+            const cacheKey = this.getPerAgentCacheKey(source, contextUser);
+            if (cacheKey === null) {
+                return null;
+            }
+            const entry = this._perAgentCache.Get(cacheKey);
 
             if (entry) {
                 // Check if expired
@@ -471,7 +483,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                     return entry.data;
                 } else {
                     // Expired, remove from cache
-                    this._perAgentCache.delete(cacheKey);
+                    this._perAgentCache.Delete(cacheKey);
                 }
             }
             return null;
@@ -488,6 +500,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     private cacheData(
         source: MJAIAgentDataSourceEntity,
         data: unknown,
+        contextUser: UserInfo,
         runId?: string
     ): void {
         if (source.CachePolicy === 'None') {
@@ -510,23 +523,28 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                 return;
             }
 
-            const cacheKey = this.getPerAgentCacheKey(source);
+            const cacheKey = this.getPerAgentCacheKey(source, contextUser);
+            if (cacheKey === null) {
+                return;
+            }
             const entry: CacheEntry = {
                 data,
                 timestamp: new Date(),
                 timeoutSeconds: source.CacheTimeoutSeconds
             };
-            this._perAgentCache.set(cacheKey, entry);
+            this._perAgentCache.Set(cacheKey, entry);
         }
     }
 
     /**
-     * Generates a cache key for per-agent caching.
+     * Generates a cache key for per-agent caching. The key includes the user, because the rows were
+     * loaded under that user's row- and field-level permissions and must never be served to another
+     * user. Returns null when there is no user, in which case the data is not cached.
      *
      * @private
      */
-    private getPerAgentCacheKey(source: MJAIAgentDataSourceEntity): string {
-        return `${source.AgentID}:${source.Name}`;
+    private getPerAgentCacheKey(source: MJAIAgentDataSourceEntity, contextUser: UserInfo): string | null {
+        return UserScopedCacheKey(contextUser?.ID, source.AgentID, source.Name);
     }
 }
 

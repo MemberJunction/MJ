@@ -50,12 +50,73 @@ export interface IEntityConfiguration {
     Clone?: IEntityCloneConfiguration;
 
     /**
+     * Optional anchored record commenting configuration for this entity.
+     * Controls whether anchored conversations (`MJ: Conversations` with `AnchorType` set)
+     * are permitted on records of this entity and which permissions/roles may post or resolve comments.
+     */
+    Comments?: IEntityCommentsConfiguration;
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
      * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
      * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: EntitySaveReturnMode;
+
+    /**
+     * Optional declarative lifecycle configuration (state machine transitions, field-freeze rules,
+     * post-create immutability, and `WriteAuthority`: `'Standard' | 'AppendOnly' | 'ServerOperationOnly'`).
+     */
+    Lifecycle?: IEntityLifecycleConfiguration;
+
+    /**
+     * Optional declarative document auto-numbering policy (or array of policies for multi-sequence entities).
+     */
+    AutoNumber?: IDocumentNumberPolicyConfiguration | IDocumentNumberPolicyConfiguration[];
+
+    /**
+     * Optional declarative cross-entity parent-state lock policies evaluated with transaction/batch memoization.
+     */
+    CrossEntityPolicies?: IDeclarativeParentStateLockConfiguration[];
+}
+
+/**
+ * Configuration for entity-level anchored record comments (`MJ: Conversations`).
+ */
+export interface IEntityCommentsConfiguration {
+    /**
+     * Master switch for anchored record commenting on this entity.
+     * Defaults to `true` when omitted. Set to `false` to disable record, field, and section
+     * commenting on this entity in both the form UI and server-side validation.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Minimum entity permission required on this entity to create, reply to, or resolve
+     * anchored comments on its records:
+     * - `'Read'` (default): Any user who can read the record (including RLS) can participate
+     *   in anchored discussions on it without needing column-level `Update` rights.
+     * - `'Update'`: Only users with `Update` permission on the entity can post or resolve
+     *   comments; users with `Read`-only permission can still view existing comments.
+     */
+    RequiredPermission?: 'Read' | 'Update';
+
+    /**
+     * Optional list of role names (`MJ: Roles.Name`, case-insensitive) allowed to post or
+     * resolve comments on this entity. When omitted or empty, any user meeting
+     * {@link RequiredPermission} may comment.
+     */
+    AllowedRoles?: string[];
+
+    /**
+     * Optional list of comment type codes or names (`MJ: Comment Types.Code` or `Name`,
+     * case-insensitive, or `'*'` for all registered comment types) allowed on this entity.
+     *
+     * When omitted, plain discussion comments (`'COMMENT'`) are allowed and specialized
+     * comment types (such as `'FIELD_SUGGESTION'`) require explicit opt-in.
+     */
+    AllowedCommentTypes?: string[];
 }
 
 /**
@@ -354,5 +415,84 @@ export interface IClonePreset {
      * copied to someone else, which does not apply to a record built to be copied.
      */
     TemplateSourceField?: string;
+}
+
+/**
+ * Declarative entity lifecycle policy stored in `MJ: Entities.Configuration.Lifecycle`.
+ */
+export interface IEntityLifecycleConfiguration {
+    stateMachine?: IEntityStateMachineConfiguration;
+    writeAuthority?: IEntityWriteAuthorityConfiguration;
+}
+
+export interface IStateTransitionRuleConfiguration {
+    from: string | '*';
+    to: string;
+    allowedRoles?: string[];
+    requireServerOperation?: boolean;
+    allowedOperations?: string[];
+    requiredFieldsOnEnter?: string[];
+    clearedFieldsOnTransition?: string[];
+    errorMessage?: string;
+}
+
+export interface IEntityStateMachineConfiguration {
+    statusField: string;
+    initialStates?: string[];
+    transitions: IStateTransitionRuleConfiguration[];
+    terminalStates?: string[];
+    freezeAllFieldsInTerminalStates?: boolean;
+    immutableAfterCreateFields?: string[];
+    editableFieldsByState?: Record<string, string[]>;
+    frozenFieldsByState?: Record<string, string[]>;
+    deletableInStates?: string[];
+    nonDeletableStates?: string[];
+    fieldFreezeExemptOperations?: string[];
+}
+
+export interface IEntityWriteAuthorityConfiguration {
+    mode: 'Standard' | 'AppendOnly' | 'ServerOperationOnly';
+    perOperationMode?: Partial<Record<'Create' | 'Update' | 'Delete', 'Standard' | 'AppendOnly' | 'ServerOperationOnly'>>;
+    allowedOperations?: string[];
+    errorMessage?: string;
+}
+
+/**
+ * Declarative document auto-numbering policy stored in `MJ: Entities.Configuration.AutoNumber`.
+ */
+export interface IDocumentNumberPolicyConfiguration {
+    targetField: string;
+    sequenceKey?: string;
+    pattern: string;
+    prefix?: string;
+    scopeFields?: string[];
+    scopeFieldFallbacks?: Record<string, string>;
+    scopeByTenant?: boolean;
+    resetPeriod?: 'Never' | 'CalendarYear' | 'CalendarMonth' | 'FiscalYear';
+    dateSourceField?: string;
+    fiscalYearStartMonth?: number;
+    startAt?: number;
+    incrementBy?: number;
+    manualValueMode?: 'AllowNonColliding' | 'AllowAny' | 'Forbid';
+    immutableAfterCreate?: boolean;
+    gapFreeTransactional?: boolean;
+}
+
+/**
+ * Declarative cross-entity parent-state lock policy stored in `MJ: Entities.Configuration.CrossEntityPolicies`.
+ */
+export interface IDeclarativeParentStateLockConfiguration {
+    kind?: 'ParentStateLock';
+    policyKey?: string;
+    foreignKeyField: string;
+    parentEntityName: string;
+    parentKeyField?: string;
+    parentStatusField: string;
+    allowedParentStates?: string[];
+    forbiddenParentStates?: string[];
+    operations?: Array<'Create' | 'Update' | 'Delete'>;
+    allowOrphanWhenForeignKeyNull?: boolean;
+    exemptOperations?: string[];
+    errorMessage?: string;
 }
 

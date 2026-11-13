@@ -730,9 +730,9 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
                 console.error(`Agent Run Analysis: run counts failed to load. ${totalResult.ErrorMessage ?? successResult.ErrorMessage}`);
             }
             this.agentRuns = agentResult.Success ? (agentResult.Results as AgentRunRecord[]) ?? [] : [];
-            this.totalRunCount = totalResult.Success ? totalResult.TotalRowCount : this.agentRuns.length;
+            this.totalRunCount = totalResult.Success ? totalResult.TotalRowCount ?? 0 : this.agentRuns.length;
             this.successRunCount = successResult.Success
-                ? successResult.TotalRowCount
+                ? successResult.TotalRowCount ?? 0
                 : this.agentRuns.filter(r => r.Success === true).length;
             const agentIds = new Set(this.Filters.Agents.map(a => a.toLowerCase()));
             const usage: UsageRow[] = usageRows;

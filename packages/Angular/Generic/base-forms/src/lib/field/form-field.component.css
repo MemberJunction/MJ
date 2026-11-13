@@ -986,6 +986,31 @@
   font-style: italic;
 }
 
+.mj-fk-status--error {
+  color: var(--mj-status-error);
+}
+
+.mj-fk-status-text {
+  flex: 1;
+}
+
+.mj-fk-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mj-fk-retry:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
 /* Sticky "create new" footer — sits below the (scrolling) options as a direct child of
    the dropdown panel, so it's always visible regardless of list length. */
 .mj-fk-create-footer {
@@ -1824,5 +1849,75 @@ mj-form-field.mj-forms-field--remotely-updated .mj-forms-field {
   outline: 2px solid var(--mj-border-focus);
   outline-offset: 1px;
 }
+
+/* ============================================
+   FIELD-LEVEL ANCHORED COMMENTS & SUGGESTIONS
+   ============================================ */
+.mj-forms-field__comment-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mj-forms-field__comment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.3;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.mj-forms-field__comment-pill:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-forms-field__comment-pill--suggestion {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 55%, transparent);
+  background: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 14%, var(--mj-bg-surface));
+  color: var(--mj-status-warning, var(--mj-brand-primary));
+}
+
+.mj-forms-field__comment-pill--suggestion:hover {
+  background: color-mix(in srgb, var(--mj-status-warning, var(--mj-brand-primary)) 22%, var(--mj-bg-surface));
+  border-color: var(--mj-status-warning, var(--mj-brand-primary));
+}
+
+.mj-forms-field__comment-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--mj-radius-sm, 5px);
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.mj-forms-field:hover .mj-forms-field__comment-trigger,
+.mj-forms-field:focus-within .mj-forms-field__comment-trigger,
+.mj-forms-field__comment-trigger:focus-visible {
+  opacity: 1;
+}
+
+.mj-forms-field__comment-trigger:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-brand-primary);
+}
+
 
 

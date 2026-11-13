@@ -275,6 +275,55 @@ Two layers, in `@memberjunction/ai-agents`:
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
 
+### 1.8 Scaling to Hundreds or Thousands of Skills — Semantic Discovery & Hybrid Prioritization
+
+When an instance grows to hundreds or thousands of skills, injecting every available skill (`AcceptsSkills = 'All'`) into the system prompt wastes context tokens and degrades attention. MemberJunction solves this with a three-layer architecture (full design in [`plans/skill-scaling-and-semantic-discovery.md`](../plans/skill-scaling-and-semantic-discovery.md)):
+
+#### 1. Semantic Index (`"AI Skills Search"` Entity Document)
+The `MJ: AI Skills` entity is indexed via the `"AI Skills Search"` `MJ: Entity Documents` template ([`metadata/entity-documents/templates/mj-ai-skills-search.njk`](../metadata/entity-documents/templates/mj-ai-skills-search.njk)), which embeds:
+- Skill `Name`, `Description`, `Category`, `Status`, `ActivationMode`, and `ActivationScope`
+- Bundled action names and descriptions (`MJ: AI Skill Actions` where `ExposeToModel = 1`)
+- Bundled sub-agent names (`MJ: AI Skill Sub Agents`)
+- A summary excerpt (first 800 characters) of `Instructions` so domain vocabulary is indexed without diluting embedding vectors with boilerplate
+
+#### 2. Skill Discovery Actions (`@memberjunction/core-actions`)
+Agents (such as `SkillSmith`, `Research Agent`, and large-catalog orchestrators) can search and inspect skills on demand via three dedicated actions in [`packages/Actions/CoreActions/src/custom/ai/`](../packages/Actions/CoreActions/src/custom/ai/):
+
+| Action | Class | Purpose |
+|---|---|---|
+| **`Find Candidate Skills`** | `FindCandidateSkillsAction` | Hybrid vector + keyword search over `MJ: AI Skills` using `RunSemanticEntitySearch` with an automatic lexical fallback when no vector index is synced. Supports `CategoryFilter`, `ActionNameFilter`, `EnforceAgentPermissions` (`GetSkillsForAgent(agent, contextUser)`), and `OnlyAutoActivatable`. |
+| **`Find Best Skill`** | `FindBestSkillAction` | Single-result convenience action returning `Found`, `SkillID`, `SkillName`, `SimilarityScore`, `BundledActionNames`, and `BundledSubAgentNames`. |
+| **`Get Skill Details`** | `GetSkillDetailsAction` | On-demand progressive-disclosure inspector returning full `Instructions`, bundled `Actions` (with parameter summaries and `ExposeToModel`), bundled `SubAgents`, and portable `SkillMarkdown` (`SKILL.md`). Enforces `AISkillPermissionHelper.Instance.UserCanViewSkill`. |
+
+#### 3. Two-Stage Hybrid Skill Prioritization (`maxSkillsInPrompt`)
+Loop agents configure prompt catalog caps in `LoopAgentPromptParams` (`AgentTypePromptParams`):
+- **`maxSkillsInPrompt`** (default `25` when `decisionsEnabled: true` or when explicitly set): Maximum number of skills rendered in the `## Available Skills` prompt catalog per turn.
+- **`maxSkillDecisionCandidates`** (default `60`): Maximum candidate skills passed to the fast decision model (`selectRelevantCatalogItems`) before LLM narrowing.
+
+When an agent's available skills exceed `maxSkillsInPrompt`, [`BaseAgent.narrowCatalogsIfConfigured`](../packages/AI/Agents/src/base-agent.ts) runs a **two-stage narrowing pipeline** implemented in [`catalog-narrowing.ts`](../packages/AI/Agents/src/catalog-narrowing.ts):
+
+```
+Stage 1: PreFilterSkillCandidatesForDecision (in-memory, 0ms)
+   └─ RankSkillsByHybridRelevance(skills, userMessage, usageStatsMap)
+         Score = 0.55 × LexicalAndSemanticFit (name, description, category, bundled action names)
+               + 0.25 × AgentUsageFrequency   (log-normalized agent-specific + global run-step usage)
+               + 0.20 × RecencyDecay          (exponential half-life = 7 days, agent-preferred)
+   └─ Slices top `maxSkillDecisionCandidates` (60) from N (e.g., 1,000+)
+
+Stage 2: Decision-Model Narrowing (or deterministic fallback)
+   ├─ When `decisionsEnabled: true`: `AgentDecisionService` selects up to `maxSkillsInPrompt` from the Stage 1 shortlist
+   └─ When `decisionsEnabled: false` (or on error): deterministically slices the top `maxSkillsInPrompt` from Stage 1
+```
+
+- **Pinned skills never drop**: Any skill already activated in the current run (`_activatedSkillIDs`) or explicitly requested by the user (`requestedSkillIDs`) is pinned (`pinnedSkillIDs`) and guaranteed to remain in the prompt catalog regardless of `maxSkillsInPrompt`.
+- **Scale-aware `CatalogNarrowingNote`**: When skills are narrowed and the agent holds `Find Candidate Skills` in its effective actions, `BuildCatalogNarrowingNote` explicitly instructs the model that it can call `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
+
+### 1.9 Built-in Skill Example: `GitHub Engineering & Repository Steward`
+
+MemberJunction ships a first-class **`GitHub Engineering & Repository Steward`** skill ([`metadata/ai-skills/.github-skill.json`](../metadata/ai-skills/.github-skill.json), template at [`metadata/ai-skills/templates/github-engineering.skill.md`](../metadata/ai-skills/templates/github-engineering.skill.md), and portable [`SKILL.md`](../packages/Actions/CoreActions/src/custom/github/SKILL.md)) with `ActivationMode = 'Auto'` that bundles all 14 `GitHub: *` actions:
+- **6 Read-Only Discovery Actions**: `GitHub: Get Repository Context`, `GitHub: Search Code`, `GitHub: Read File Content`, `GitHub: List Issues and PRs`, `GitHub: Get Issue or PR Details`, and `GitHub: Get Workflow Runs and Logs`. (Also granted directly to `Research Agent`, `ActionSmith`, and `SkillSmith`.)
+- **8 Governed Write Actions**: `GitHub: Create or Update Issue`, `GitHub: Add Issue or PR Comment`, `GitHub: Commit Files and Create PR`, `GitHub: Commit Files to Branch`, `GitHub: Submit PR Review`, `GitHub: Merge Pull Request`, `GitHub: Trigger Workflow Dispatch`, and `GitHub: Re-run Failed Workflow`.
+
 ---
 
 ## Part 2 — Plan Mode
@@ -331,6 +380,7 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 - **The step returned to the framework is `'Chat'`, not `'Plan'`.** `'Plan'` is only an intermediate classification and the `AIAgentRunStep.StepType` audit value the UI keys on. The *terminal* step must stay within `AIAgentRun.FinalStep`'s DB-CHECK-constrained vocabulary, which deliberately excludes `Plan`/`Skill`/`ClientTools` (same reason as §1.3). So a plan-approval pause is represented with the same terminal shape `executeChatStep` uses.
 - **Rejection forces a re-plan** because `resumeAgent` re-enables `planMode` **only** when the resume originated from a `Plan` run-step. Without that, the gate would be off on the resumed run and a rejected plan would silently execute anyway. Regular Chat-clarification resumes are unaffected — they leave `planMode` off.
+- **Plan Mode is root-only (`depth === 0`).** Sub-agents never enter Plan Mode (`resolvePlanModeGate` requires `this._depth === 0`). When a sub-agent needs a human or parent sign-off before acting, its approval point is a regular `Chat` step carrying a `responseForm` — which a parent configured with `ChatHandlingOption = 'Consult'` can either answer itself (via `resumeRunId`) or escalate to its own caller.
 
 `resolvePlanModeGate`, `validatePlanNextStep`, `executePlanStep`, and `buildPlanApprovalForm` are all `protected` — override to change eligibility rules, plan-quality validation, or the approval card's layout.
 
@@ -370,7 +420,10 @@ Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) 
 | `/skill` composer UX | `packages/Angular/Generic/conversations/src/lib/services/mention-autocomplete.service.ts` (`getSuggestions(…, '/', targetAgentId)` → `skillsForTarget` → `skill-picker-narrowing.ts` `IntersectAcceptedSkills`; the host binds `TargetAgentId` on `mj-ai-composer` — `mj-message-input` binds `pickerTargetAgentId`: an `@agent` chip in the draft, else its resolved agent), `components/mention/mention-editor.component.ts`, `components/message/message-input.component.ts` |
 | `requestedSkillIDs` transport | `AgentsClient/src/generic/AgentClientTypes.ts` + `AgentClientSession.ts`, `GraphQLDataProvider/src/graphQLAIClient.ts`, `MJServer/src/resolvers/RunAIAgentResolver.ts`, `ConversationsRuntime/src/agent-runner/ConversationAgentRunner.ts` |
 | SKILL.md | `packages/AI/Agents/src/SkillMarkdownConverter.ts`, `SkillImportExportService.ts`, `operations/AISkillMarkdownOperations.ts` |
+| Skill catalog narrowing & hybrid prioritization | `packages/AI/Agents/src/catalog-narrowing.ts` (`RankSkillsByHybridRelevance`, `PreFilterSkillCandidatesForDecision`, `NarrowSkillsWithDecision`, `BuildCatalogNarrowingNote`), `packages/AI/Agents/src/base-agent.ts` (`narrowCatalogsIfConfigured`, `getSkillUsageStatsForCatalog`) |
+| Semantic skill discovery actions | `packages/Actions/CoreActions/src/custom/ai/{base-find-skills,find-candidate-skills,find-best-skill,get-skill-details}.action.ts`, `metadata/entity-documents/templates/mj-ai-skills-search.njk`, `metadata/actions/.skill-discovery-actions.json` |
+| GitHub Engineering skill & actions | `packages/Actions/CoreActions/src/custom/github/`, `metadata/ai-skills/.github-skill.json`, `metadata/ai-skills/templates/github-engineering.skill.md`, `metadata/actions/.github-actions.json` |
 | Plan-approval resume | `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts` |
 | Sharing / permission grid / import UI | `packages/Angular/Explorer/core-entity-forms/src/lib/panels/ai-skill-sharing/`, `packages/Angular/Generic/agents/src/lib/{services/skill-permissions.service,components/skill-permissions-*}` |
 | Governance metadata | `metadata/authorizations/` (`Can Share Skills`), `metadata/permission-domains/` (`AI Skill Permissions`) |
-| Tests | unit: `packages/AI/Agents/src/__tests__/{skill-step,plan-mode-gate,loop-agent-type,SkillMarkdownConverter}.test.ts`, `packages/AI/BaseAIEngine/src/__tests__/AISkillPermissionHelper.test.ts`, `packages/MJCoreEntities/src/__tests__/PermissionProviders/AISkillPermissionProvider.test.ts`, `packages/MJCoreEntitiesServer/src/__tests__/MJAISkillPermissionEntityServer.test.ts`; integration: `packages/MJServer/integration-test-scripts/ai-skills-tests.ts` |
+| Tests | unit: `packages/AI/Agents/src/__tests__/{skill-step,plan-mode-gate,loop-agent-type,SkillMarkdownConverter,catalog-narrowing,github-skill-agent-run.integration}.test.ts`, `packages/Actions/CoreActions/src/__tests__/{find-candidate-skills.action,github-actions}.test.ts`, `packages/AI/BaseAIEngine/src/__tests__/AISkillPermissionHelper.test.ts`, `packages/MJCoreEntities/src/__tests__/PermissionProviders/AISkillPermissionProvider.test.ts`, `packages/MJCoreEntitiesServer/src/__tests__/MJAISkillPermissionEntityServer.test.ts`; integration: `packages/MJServer/integration-test-scripts/ai-skills-tests.ts` |

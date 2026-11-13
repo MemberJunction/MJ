@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2, HostBinding} from '@angular/core';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly, DocumentNumberingEngine } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -19,11 +19,12 @@ import {
   type RecordPreviewUpdatedEvent
 } from '../preview-popover/record-preview-popover.component';
 import { MjRecordPreviewPopoverService } from '../preview-popover/record-preview-popover.service';
+import { FormRecordCommentsCoordinatorService } from '../comments/form-record-comments-coordinator.service';
 import {
   ApplyQuickEditToHostRecord,
   ResolveRecordLinkTarget
 } from '../links/record-link-utils';
-import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
+import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList, FKSearchTimeoutError, WithFKSearchTimeout } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
   FKLookupStrategy,
@@ -42,6 +43,16 @@ import { CombineFilters, DefaultFKLookupStrategy } from './default-fk-lookup-str
  * initializer runs before the component's own statics are available.
  */
 const FK_DB_SEARCH_LIMIT = 20;
+
+/**
+ * How long the dropdown waits on a lookup before it shows an error with Retry. A lookup normally
+ * answers in well under a second; this bounds the wait when a request is never answered at all
+ * (a gateway timeout, a dropped connection), which otherwise left the field on "Searching…".
+ */
+const FK_SEARCH_TIMEOUT_MS = 20_000;
+
+/** What one lookup produced: rows to render, or the message for the error row. */
+type FKLookupOutcome = { Groups: FKLookupGroup[]; Recent: FKLookupRow[] } | { Failure: string };
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -221,6 +232,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private fieldEdits = inject(FormFieldEditCoordinator, { optional: true });
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
   private previewPopoverService = inject(MjRecordPreviewPopoverService, { optional: true });
+  private commentsCoordinator = inject(FormRecordCommentsCoordinatorService, { optional: true });
   private _coordinatorSubs: Subscription[] = [];
   private _remoteHighlightTimer: ReturnType<typeof setTimeout> | null = null;
   private _lastPolymorphicEntityRef: string | null | undefined = undefined;
@@ -359,6 +371,75 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         })
       );
     }
+
+    if (this.commentsCoordinator) {
+      this._coordinatorSubs.push(
+        this.commentsCoordinator.Changed$.subscribe(() => {
+          this.sectionHost?.NotifyFieldChanged(this);
+          this.cdr.markForCheck();
+        })
+      );
+    }
+  }
+
+  /** Total number of open (unresolved) anchored threads (notes + suggestions) targeting this field. */
+  public get FieldOpenCommentCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenCommentCount(this.FieldName) ?? 0;
+  }
+
+  /** Number of open non-suggestion note threads targeting this field. */
+  public get FieldOpenNoteCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenNoteCount(this.FieldName) ?? 0;
+  }
+
+  /** Number of open `FIELD_SUGGESTION` threads targeting this field. */
+  public get FieldOpenSuggestionCount(): number {
+    return this.commentsCoordinator?.GetFieldOpenSuggestionCount(this.FieldName) ?? 0;
+  }
+
+  /** Whether inline field commenting is available on this field. */
+  public get CanCommentOnField(): boolean {
+    return Boolean(
+      this.commentsCoordinator &&
+      this.Record?.IsSaved &&
+      this.Record?.EntityInfo?.AllowRecordComments !== false &&
+      this.IsFieldReadableByUser &&
+      this.FieldName
+    );
+  }
+
+  /** Opens the inline anchored comment popover (or drawer) targeted at this field. */
+  public OnOpenFieldComments(event: MouseEvent, preferredTypeFilter?: string): void {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!this.commentsCoordinator || !this.FieldName) return;
+
+    const btn = event.currentTarget as HTMLElement | null;
+    const rect = btn?.getBoundingClientRect();
+    const hostPanel = this.sectionHost as { SectionKey?: string; SectionName?: string } | null;
+    // Never snapshot restricted (FLS) or encrypted field values into plain AnchorMetadata JSON
+    const isProtectedField = Boolean(this.FieldInfo?.HasFieldPermissions || this.FieldInfo?.Encrypt);
+    const formattedVal = isProtectedField ? '' : this.FormatValue();
+
+    this.commentsCoordinator.OpenPopoverForTarget({
+      AnchorType: 'Field',
+      AnchorKey: this.FieldName,
+      Label: this.DisplayName,
+      QuotedValue: formattedVal && formattedVal.trim().length > 0 ? formattedVal : undefined,
+      SectionKey: hostPanel?.SectionKey || undefined,
+      SectionDisplayName: hostPanel?.SectionName || undefined,
+      PreferredTypeFilter: preferredTypeFilter ?? null,
+      AnchorRect: rect
+        ? {
+            top: rect.top,
+            left: rect.left,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          }
+        : undefined
+    });
   }
 
   /** This component's host element — what a section uses to confirm the field is inside it. */
@@ -391,13 +472,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * The control type to render in edit mode.
    * Determines which input component is used.
    *
-   * Also accepts deprecated Kendo-style type names for backward compatibility:
+   * Also accepts these deprecated legacy type names for backward compatibility:
    * - `'dropdownlist'` → `'select'`
    * - `'numerictextbox'` → `'number'`
    */
   @Input()
   set Type(value: 'textbox' | 'textarea' | 'number' | 'datepicker' | 'checkbox' | 'select' | 'autocomplete' | 'code' | 'dropdownlist' | 'numerictextbox') {
-    // Normalize deprecated Kendo type names to modern equivalents
+    // Normalize deprecated legacy type names to modern equivalents
     switch (value) {
       case 'dropdownlist':  this._type = 'select'; break;
       case 'numerictextbox': this._type = 'number'; break;
@@ -491,8 +572,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * `GetDeniedReadFields` walks every field on the entity and aggregates permissions across the
    * user's roles. `ngOnChanges` clears the memo when `Record` or `FieldName` changes.
    *
-   * Fails OPEN — on a missing entity, missing user, or an entity with field security switched
-   * off — matching `BaseEntity`'s own gate. A form that hid fields because no user had resolved
+   * Fails OPEN — on a missing entity, missing user, or an entity field security does not apply
+   * to (its own flag off and, for an IS-A child, every ancestor's flag off too) — matching
+   * `BaseEntity`'s own gate. A form that hid fields because no user had resolved
    * yet would be worse than one that shows them, since the server is the real boundary.
    */
   get IsFieldReadableByUser(): boolean {
@@ -504,7 +586,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldReadableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -668,7 +750,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   private computeIsFieldWritableByUser(): boolean {
     const entityInfo = this.Record?.EntityInfo;
-    if (!entityInfo?.EnableFieldLevelSecurity) {
+    if (!entityInfo?.FieldLevelSecurityApplies) {
       return true; // one boolean for the overwhelming majority of entities
     }
     const user = this.ProviderToUse?.CurrentUser;
@@ -848,9 +930,20 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     );
   }
 
-  /** Whether this field is required (not nullable) */
+  /**
+   * Whether this field is required (not nullable). A field an AutoNumber policy fills (#4001, the
+   * document numbering added in #6203) is not required on a new record: the number is assigned
+   * during Save(), and `BaseEntity.Validate()` already accepts it blank until then.
+   */
   get IsRequired(): boolean {
-    return this.FieldInfo?.AllowsNull === false;
+    if (this.FieldInfo?.AllowsNull !== false) return false;
+    return !this.IsAutoNumberedOnCreate;
+  }
+
+  /** True on a new (unsaved) record when an AutoNumber policy assigns this field during Save(). */
+  get IsAutoNumberedOnCreate(): boolean {
+    if (!this.Record || this.Record.IsSaved || !this.FieldName) return false;
+    return DocumentNumberingEngine.Instance.WillAutoPopulateOnCreate(this.Record.EntityInfo, this.FieldName);
   }
 
   /**
@@ -1024,6 +1117,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!this.IsFieldReadableByUser) return true;
     if (this.FormContext?.hiddenFieldNames?.includes(this.FieldName)) return true;
     if (this.HasTimeTravelDiff) return false;
+    if (this.FieldOpenCommentCount > 0) return false;
     if (this.EditMode && !this.ActiveVersionPreview) return false;
     if (!this.HideWhenEmptyInReadOnlyMode) return false;
     if (this.FormContext?.showEmptyFields) return false;
@@ -1181,7 +1275,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
 
     const currentEntityRef = this.IsPolymorphicFK ? this.polymorphicEntityRefValue : null;
-    if (this._resolvedFKValue !== fkValue || (this.IsPolymorphicFK && this._resolvedFKEntityRef !== currentEntityRef)) {
+    const valueChanged = !this.sameFKValue(this._resolvedFKValue, fkValue) ||
+      (this.IsPolymorphicFK && !this.sameFKValue(this._resolvedFKEntityRef, currentEntityRef));
+
+    if (valueChanged) {
       this._resolvedFKName = undefined;
       this._fkNameLoading = false;
     }
@@ -1225,6 +1322,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether an async lookup is in flight */
   private _fkNameLoading = false;
 
+  /** Monotonic request sequence so out-of-order FK name completions never overwrite newer values */
+  private _fkResolveSeq = 0;
+
+  private sameFKValue(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    if (typeof a === 'string' && typeof b === 'string') {
+      return UUIDsEqual(a, b) || a.trim().toLowerCase() === b.trim().toLowerCase();
+    }
+    return String(a) === String(b);
+  }
+
   /**
    * Asynchronously resolves the display name for an FK field (or polymorphic FK field)
    * that lacks a RelatedEntityNameFieldMap by calling Metadata.GetEntityRecordName.
@@ -1255,6 +1365,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
 
     const currentEntityRef = this.IsPolymorphicFK ? this.polymorphicEntityRefValue : null;
+    const seq = ++this._fkResolveSeq;
     this._fkNameLoading = true;
     this._resolvedFKValue = fkValue;
     this._resolvedFKEntityRef = currentEntityRef;
@@ -1262,7 +1373,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const md = this.ProviderToUse;
     md.GetEntityRecordName(relatedEntityName, pk)
       .then(name => {
-        if (this._destroyed) return;
+        if (this._destroyed || seq !== this._fkResolveSeq) return;
         this._resolvedFKName = name || null;
         this._fkNameLoading = false;
         this.cdr.markForCheck();
@@ -1273,7 +1384,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         });
       })
       .catch(() => {
-        if (this._destroyed) return;
+        if (this._destroyed || seq !== this._fkResolveSeq) return;
         this._resolvedFKName = null;
         this._fkNameLoading = false;
       });
@@ -1386,6 +1497,12 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Rows requested from a lookup. */
   @Input() FKMaxRows = FK_DB_SEARCH_LIMIT;
+
+  /**
+   * Milliseconds a lookup may take before the dropdown shows an error with Retry. Zero or less
+   * waits indefinitely.
+   */
+  @Input() FKSearchTimeoutMs = FK_SEARCH_TIMEOUT_MS;
 
   /**
    * Opaque options handed to the resolved {@link FKLookupStrategy} — e.g.
@@ -1559,6 +1676,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKActiveIndex = -1;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this._portaledDropdownEl = null;
     this.ShowValueListDropdown = false;
     this.ShowSelectDropdown = false;
@@ -1644,6 +1762,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** True when a search completed with zero results (drives the "No matches" row). */
   FKNoMatches = false;
+
+  /**
+   * Set when the last lookup failed or timed out (drives the error row with Retry). Kept apart
+   * from {@link FKNoMatches}: "No matches" tells the user the record does not exist, which a
+   * failed request does not establish.
+   */
+  FKSearchError: string | null = null;
 
   /** Index of the keyboard-highlighted active suggestion (-1 = none). */
   FKActiveIndex = -1;
@@ -2147,6 +2272,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKHasIconColumn = (this.FKSelectedSuggestion?.Icon != null) || suggestions.some(s => s.Icon != null);
     this.FKSuggestions = this.sortSuggestions(suggestions);
     this.FKActiveIndex = this.FKSuggestions.length > 0 ? 0 : -1;
+    this.FKSearchError = null;
     this.FKNoMatches = suggestions.length === 0 && !this.FKSelectedSuggestion;
 
     // Show the dropdown for rows, a "no matches" state, or just the pinned selection.
@@ -2802,6 +2928,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.ShowFKDropdown = false;
     this.FKLoading = false;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.FKActiveIndex = -1;
     this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
@@ -2823,6 +2950,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const seq = ++this._fkSearchSeq;
     this.FKLoading = true;
     this.FKNoMatches = false;
+    this.FKSearchError = null;
     this.ShowFKDropdown = true;
     if (this._lastFKInputEl) {
       this.updateDropdownPosition(this._lastFKInputEl);
@@ -2834,37 +2962,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const context = this.buildLookupContext(plan, query);
     if (!context) { this.FKLoading = false; return; }
 
-    const strategy = this.resolveStrategy();
-
-    // Everything from here to the results is third-party code: this seam exists so an app can
-    // supply its own lookup. A strategy that throws must not leave the field spinning forever on
-    // an unhandled rejection, so contain it, say so, and fall back to MJ's own rows.
-    let groups: FKLookupGroup[];
-    let recent: FKLookupRow[];
-    try {
-      this.FKScopeLabels = strategy.ScopeLabels(context);
-
-      // Recent picks only make sense on the browse list; once the user types, what they typed is
-      // the better signal than what they picked last week.
-      [groups, recent] = await Promise.all([
-        strategy.Lookup(context),
-        query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
-      ]);
-    } catch (err) {
-      // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight.
-      if (seq !== this._fkSearchSeq) return;
-      LogError(
-        `FK lookup strategy failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
-          `${err instanceof Error ? err.message : String(err)}`
-      );
-      [groups, recent] = [await this.fallbackLookup(context), []];
-      this.FKScopeLabels = null;
-    }
+    const outcome = await this.runLookup(context, query, seq);
 
     // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight. A
     // dismissed panel stays dismissed — this result must not reopen it.
-    if (seq !== this._fkSearchSeq) return;
+    if (!outcome || seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
+    if ('Failure' in outcome) {
+      this.showFKSearchFailure(outcome.Failure);
+      return;
+    }
+    const { Groups: groups, Recent: recent } = outcome;
 
     // A recent pick the strategy also returned renders once, in the strategy's group.
     const pkOf = (r: FKLookupRow): string => String(r.Values[plan.PkFieldName] ?? '').toLowerCase();
@@ -2884,17 +2992,80 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
+   * Run the resolved strategy under the field's timeout. Everything inside is third-party code:
+   * the seam exists so an app can supply its own lookup. A registered strategy that throws falls
+   * back to MJ's own rows; a timeout, or a failure of MJ's own lookup, becomes the error row.
+   * Null when a newer lookup superseded this one before it failed.
+   */
+  private async runLookup(context: FKLookupContext, query: string, seq: number): Promise<FKLookupOutcome | null> {
+    const strategy = this.resolveStrategy();
+    try {
+      this.FKScopeLabels = strategy.ScopeLabels(context);
+      // Recent picks only make sense on the browse list; once the user types, what they typed is
+      // the better signal than what they picked last week.
+      const [groups, recent] = await WithFKSearchTimeout(
+        Promise.all([
+          strategy.Lookup(context),
+          query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
+        ]),
+        this.FKSearchTimeoutMs
+      );
+      return { Groups: groups, Recent: recent };
+    } catch (err) {
+      if (seq !== this._fkSearchSeq) return null;
+      LogError(
+        `FK lookup failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      if (err instanceof FKSearchTimeoutError || !this.hasCustomStrategy()) {
+        return { Failure: this.describeFKSearchFailure(err) };
+      }
+      this.FKScopeLabels = null;
+      return this.fallbackLookup(context);
+    }
+  }
+
+  /** The error row's text: a timeout says so, anything else is a plain failure. */
+  private describeFKSearchFailure(err: unknown): string {
+    return err instanceof FKSearchTimeoutError ? 'The search took too long.' : 'The search failed.';
+  }
+
+  /** Replace the dropdown's rows with the error row. The pinned current selection stays. */
+  private showFKSearchFailure(message: string): void {
+    this.FKSuggestions = [];
+    this.FKGroups = [];
+    this.FKNoMatches = false;
+    this.FKActiveIndex = -1;
+    this.FKSearchError = message;
+    this.ShowFKDropdown = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Re-run the query that failed. `mousedown` with `preventDefault`, like the clear button, so
+   * the input keeps focus and the blur grace period never closes the panel under the click.
+   */
+  OnFKRetryClick(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.cancelPendingFKBlur();
+    void this.searchRelatedEntity(this._fkQuery);
+  }
+
+  /**
    * MJ's own rows, used when a registered strategy threw. Contained in turn: if the default
    * cannot answer either, the dropdown shows "no matches" rather than propagating.
    */
-  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
+  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupOutcome> {
     try {
-      return await new DefaultFKLookupStrategy().Lookup(context);
+      const groups = await WithFKSearchTimeout(new DefaultFKLookupStrategy().Lookup(context), this.FKSearchTimeoutMs);
+      return { Groups: groups, Recent: [] };
     } catch (err) {
       LogError(`Default FK lookup also failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
-      return [];
+      return { Failure: this.describeFKSearchFailure(err) };
     }
   }
+
 
   /**
    * Hydrate the user's last picks for this field into rows. Run through the related entity's
@@ -3275,6 +3446,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this.FKActiveIndex = -1;
         this.FKLoading = false;
         this.FKNoMatches = false;
+        this.FKSearchError = null;
         this.FKColumnHeaders = [];
         this.FKColumnFields = [];
         this.FKSortField = null;

@@ -1,5 +1,6 @@
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { ModelInfo } from '@memberjunction/ai-core-plus';
+import type { EmbeddingInputType } from '@memberjunction/ai';
 
 /**
  * Result of an embedding execution via AIEmbeddingRunner.
@@ -36,11 +37,19 @@ export interface EmbeddingRunParams {
   /**
    * Optional: the AIPrompt (type Embedding) this call runs under. Its model configuration picks the
    * model when `ModelID` is not given, its failover and retry settings apply, and the run row is
-   * recorded against it. When omitted, the first active Embedding prompt is used, so name your
-   * prompt here to keep its costs separate. When no Embedding prompt exists at all, the call still
-   * runs (with the entity's default settings) but writes no run row.
+   * recorded against it. When omitted, `PromptName` is tried, then the `Content Embedding` prompt,
+   * then the first active Embedding prompt by name, so name your prompt here to keep its costs
+   * separate. When no Embedding prompt exists at all, the call still runs (with the entity's default
+   * settings) but writes no run row.
    */
   PromptID?: string;
+  /**
+   * Optional: the name of the AIPrompt this call runs under, used when `PromptID` is not given. The
+   * runner looks it up after the AI engine has loaded, so a caller need not load it first. An unknown
+   * or inactive name falls back as if no prompt were named. Platform callers use the carrier prompts
+   * in {@link EmbeddingCarrierPrompts}, so their runs are booked apart (#4923).
+   */
+  PromptName?: string;
   /**
    * Optional: the model to embed with. When given, only this model's vendors are tried, so every
    * vector comes from this model. **Pass it whenever the vectors will be compared with stored
@@ -61,6 +70,13 @@ export interface EmbeddingRunParams {
    * should read it from there and pass it here.
    */
   Dimensions?: number;
+  /**
+   * Optional: the retrieval role of the texts — `'query'` for search queries, `'document'` (the
+   * default) for text that is stored and searched. The runner prepends the model's catalog prefix
+   * for that role (`ModelConfiguration.Embedding`) and passes the role to the driver, so pass
+   * `'query'` on every search path and leave it unset when embedding records for storage.
+   */
+  InputType?: EmbeddingInputType;
   /** Optional metadata provider override */
   Provider?: IMetadataProvider;
   /**
@@ -85,3 +101,17 @@ export interface EmbeddingRunParams {
    */
   CancellationToken?: AbortSignal;
 }
+
+/**
+ * Embedding prompts the platform's own callers run under, so cost reports can tell bulk vector sync
+ * from duplicate detection from interactive search (#4923). Each is an `Embedding` prompt with no
+ * model bindings: callers pin the model with `ModelID`, and the prompt only books the run.
+ */
+export const EmbeddingCarrierPrompts = {
+    /** Entity vector sync (`EntityVectorSyncer`). */
+    VectorSync: 'Vector Sync Embedding',
+    /** Duplicate record detection. */
+    DuplicateDetection: 'Duplicate Detection Embedding',
+    /** Vector search queries (`VectorSearchProvider`). */
+    VectorSearch: 'Vector Search Embedding'
+} as const;

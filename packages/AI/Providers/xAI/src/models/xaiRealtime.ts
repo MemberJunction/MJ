@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRealtimeModel, RealtimeVoiceOption } from '@memberjunction/ai';
+import { BaseRealtimeModel, RealtimeDriverFactsOf, RealtimeVoiceOption, type RealtimeDriverFacts, type RealtimeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     OpenAIRealtime,
     OpenAIRealtimeSession,
@@ -31,6 +31,36 @@ const XAI_BASE_URL = 'https://api.x.ai/v1';
 const XAI_INPUT_TRANSCRIPTION_MODEL = 'whisper-1';
 
 /**
+ * xAI has no eagerness knob, so MJ maps Eagerness onto end-of-turn silence instead: low = most patient
+ * (longest silence before the turn ends), high = eager (shortest). Values are from the approved design
+ * for Caliber's Grok voice.
+ */
+export const XAI_EAGERNESS_SILENCE_MS: Readonly<Record<NonNullable<RealtimeTurnDetectionSettings['Eagerness']>, number>> = {
+    low: 1200,
+    auto: 700,
+    high: 400,
+};
+
+/**
+ * Prepares a normalized request for the shared server-VAD mapping. serverVad is xAI's only mode, so a
+ * request that sets any tuning field without a Mode is read as serverVad; without that the mapping
+ * returns nothing and the field is silently dropped. An explicit Mode is kept as written ('default'
+ * means the profile default, so no ladder; 'semanticVad' is unsupported and falls back). Eagerness
+ * fills SilenceDurationMs from the ladder only when no layer set an explicit one.
+ */
+function prepareXaiTurnRequest(requested: RealtimeTurnDetectionSettings | undefined): RealtimeTurnDetectionSettings | undefined {
+    if (!requested) {
+        return requested;
+    }
+    const hasTuning = requested.Eagerness !== undefined || requested.Threshold !== undefined || requested.SilenceDurationMs !== undefined;
+    if (!hasTuning) {
+        return requested;
+    }
+    const silence = requested.SilenceDurationMs ?? (requested.Eagerness ? XAI_EAGERNESS_SILENCE_MS[requested.Eagerness] : undefined);
+    return { ...requested, Mode: requested.Mode ?? 'serverVad', ...(silence !== undefined ? { SilenceDurationMs: silence } : {}) };
+}
+
+/**
  * The Grok Voice provider profile — the per-provider knobs the shared {@link OpenAIRealtime}
  * protocol implementation runs with when driving xAI.
  *
@@ -42,10 +72,11 @@ const XAI_INPUT_TRANSCRIPTION_MODEL = 'whisper-1';
 export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     providerKey: 'xai',
     inputTranscriptionModel: XAI_INPUT_TRANSCRIPTION_MODEL,
-    // xAI's socket accepts session.update immediately after connect (observed in production), so
-    // the config is sent synchronously — honoring driver obligation #7 ("Ready" only after the
-    // session config is applied) without waiting on a session.created frame.
-    deferInitialConfigUntilSessionCreated: false,
+    // The socket is still connecting when StartSession returns, and a session.update sent then is dropped
+    // ("could not send data"), so the start config waits for session.created, which xAI sends first once
+    // the socket is open (as OpenAI does). Driver obligation #7 ("Ready" only after the session config
+    // is applied) is met by WaitForConfigApplied resolving after that send.
+    deferInitialConfigUntilSessionCreated: true,
     foldInitialContextIntoPrompt: false,
     supportsReasoningEffort: false,
     supportsParallelToolCalls: false,
@@ -53,6 +84,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
     supportsDynamicToolSet: true,
+    supportsNativeResumption: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
     // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
@@ -66,7 +98,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // detection but hands the speak decision to the bridge. A normalized request maps first
     // (serverVad tuning knobs apply); the required explicit block is the unconditional fallback.
     buildTurnDetection: (disableAutoResponse, requested) =>
-        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, requested)
+        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, prepareXaiTurnRequest(requested))
         ?? {
             type: 'server_vad',
             create_response: !disableAutoResponse,
@@ -144,7 +176,28 @@ export interface IxAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
 export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
+    /** xAI's Grok Voice sessions run up to 120 minutes. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 7200,
+        // Eagerness is approximate: xAI has no eagerness knob, so it is derived onto a silence ladder.
+        SupportedTurnSettings: { Mode: 'exact', Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'exact' },
+    };
+
     public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
+
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return 7200;
+    }
+
+    /**
+     * False by default: live probing against `wss://api.x.ai/v1/realtime` confirmed that resuming via
+     * `?conversation_id=<id>` drops all client-created `conversation.item.create` `message` items
+     * (`SendContextNote`, `SendText`, and any history seeded after a network drop), whereas `ConversationMemory`
+     * text seeding is lossless (~0.9 s). Explicit `Config.trustNativeResumption = true` still opts in.
+     */
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
 
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
@@ -163,7 +216,7 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
 
     /** Returns the xAI-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new xAIRealtimeSession(connection);
+        return new xAIRealtimeSession(connection, RealtimeDriverFactsOf(this), this);
     }
 
     /**
@@ -180,14 +233,29 @@ export class xAIRealtime extends OpenAIRealtime {  // case-violation-ok-legacy-b
  * Live realtime session for Grok Voice — the shared {@link OpenAIRealtimeSession} protocol
  * implementation bound to {@link XAI_REALTIME_PROFILE}. Exists as a named subclass so tests and
  * logs identify xAI sessions, and so direct construction (`new xAIRealtimeSession(connection)`)
- * keeps working exactly as it did when this was a standalone clone.
+ * keeps working exactly as it did when this was a standalone clone; a directly built session reports
+ * the facts of its own driver's static ({@link xAIRealtime.DriverFacts}).
  */
 export class xAIRealtimeSession extends OpenAIRealtimeSession {  // case-violation-ok-legacy-back-compat: the vendor spells its own name "xAI"; this identifier is also the class-factory registration key
     /**
      * @param connection The injectable provider-connection seam (a real `OpenAIRealtimeWebSocket`
      * in production, a fake in tests).
+     * @param driverFacts The creating driver's static facts; defaults to {@link xAIRealtime.DriverFacts} (xAI's own static) for direct construction.
+     * @param model Optional parent driver instance.
      */
-    constructor(connection: IxAIRealtimeConnection) {
-        super(connection, XAI_REALTIME_PROFILE);
+    constructor(
+        connection: IxAIRealtimeConnection,
+        driverFacts: Readonly<RealtimeDriverFacts> = xAIRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
+    ) {
+        super(connection, XAI_REALTIME_PROFILE, driverFacts, model);
+    }
+
+    protected override get DefaultCallDurationSeconds(): number | undefined {
+        return this.model?.DefaultCallDurationSeconds ?? 7200;
+    }
+
+    protected override get DefaultTrustsNativeResumption(): boolean {
+        return this.model?.TrustsNativeResumption ?? false;
     }
 }

@@ -3,6 +3,7 @@ import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
+import type { PdfOrientation } from '@memberjunction/ng-react';
 
 /**
  * General-purpose navigation request emitted by artifact viewer plugins.
@@ -70,6 +71,16 @@ export interface ArtifactViewerTab {
 }
 
 /**
+ * Strongly-typed contract implemented by per-artifact-type visual version diff viewer components.
+ * Mounted dynamically inside the Version Compare workspace when a plugin returns `true` from
+ * {@link BaseArtifactViewerPluginComponent.SupportsVersionDiff}.
+ */
+export interface IArtifactVersionDiffViewer {
+  BaseVersion: MJArtifactVersionEntity;
+  TargetVersion: MJArtifactVersionEntity;
+}
+
+/**
  * Abstract base component for all artifact viewer plugins.
  * Provides common functionality and enforces the contract.
  * Note: This is an abstract class and should not be declared in Angular module.
@@ -116,6 +127,21 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * scope. Null when the viewer has no scope, so every version of the artifact counts.
    */
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
+
+  /**
+   * Emitted when an inline-editable plugin (such as `MarkdownArtifactViewerComponent` or
+   * `WhiteboardArtifactViewerComponent` in OLE canvas mode) commits updated serialized
+   * content that should be persisted as a new `MJ: Artifact Versions` record.
+   */
+  public ContentCommitted = new EventEmitter<string>();
+
+  /**
+   * Whether this plugin supports inline editing when `[readonly]="false"` ("MS OLE" inline mode, § 3.4.1).
+   * Subclasses that support inline editing override this getter to return `true`.
+   */
+  public get SupportsInlineEdit(): boolean {
+    return false;
+  }
 
   /**
    * Whether this plugin is showing an "elevated" display (e.g., extracted markdown/HTML)
@@ -241,6 +267,44 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    */
   public AskUserForFeedback(): void {
     // Subclasses override to implement feedback UX
+  }
+
+  /**
+   * Whether this plugin can export what it shows as a PDF.
+   * Plugins that return true get an Export PDF button in the artifact viewer header.
+   *
+   * Default: false
+   */
+  public get SupportsPDFExport(): boolean {
+    return false;
+  }
+
+  /**
+   * Download what the plugin shows as a PDF on A4 pages. Called from the artifact viewer header menu.
+   *
+   * Default: no-op. Subclasses that return true from {@link SupportsPDFExport} override it.
+   */
+  public async ExportPDF(_orientation: PdfOrientation = 'portrait'): Promise<void> {
+    // Subclasses override to export their content
+  }
+
+  /**
+   * Whether this plugin provides a domain-specific visual diff viewer for comparing two versions
+   * of the artifact inside the Git-style Version Compare workspace.
+   *
+   * When `false` (default), the workspace automatically falls back to the universal structural
+   * JSON diff (`DeepDiffer`) and unified/split line diff.
+   */
+  public get SupportsVersionDiff(): boolean {
+    return false;
+  }
+
+  /**
+   * Returns the Angular component type implementing {@link IArtifactVersionDiffViewer} when
+   * {@link SupportsVersionDiff} is `true`, or `null` to use the universal diff viewer.
+   */
+  public GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> | null {
+    return null;
   }
 
   /**

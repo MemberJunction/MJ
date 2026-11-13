@@ -1,5 +1,5 @@
 /**
- * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA12, client
+ * conversation-authorship-client.checks.ts — the 'conversation-authorship-client' bundle (CA1–CA13, client
  * transport, needs MJAPI): who a conversation message is from, enforced by the server and proven over the GraphQL
  * wire as two real users.
  *
@@ -53,6 +53,8 @@
  *   CA12: the grantee's agent turn still gets a reply, written by the server: the agent-turn mutation names the
  *        grantee's message, its acknowledgement names the reply row the server created, the server settles it, and
  *        the grantee cannot rewrite it. With no model keys the run itself fails fast; the check is about who writes.
+ *   CA13: the owner cannot hand the conversation to the grantee: a save with the grantee's `UserID` is refused, the
+ *        conversation keeps its owner, and the owner's message with no `UserID` still reads as the owner's (#5623).
  *
  * CA1–CA6 and CA10 save with entity objects from the acting user's own connection and assert both the
  * `Save()`/`Delete()` result and `LatestResult.CompleteMessage`. CA7–CA9 bypass the entity layer and send raw GraphQL,
@@ -60,7 +62,7 @@
  * the run's own identity to prove what moved and what did not.
  *
  * MUTATION TIER. Every check writes (or would write if its guard regressed), so every check carries
- * `RequiresMutation: true`, and Setup provisions nothing when the tier is off. Checks skip LOUDLY when the tier is
+ * `RequiresMutation: true`, and Setup provisions nothing when the tier is off. Checks skip (SkipCheck) when the tier is
  * off or the seed is absent, and FAIL when the seed is present but provisioning broke. Teardown deletes every
  * message in the fixture conversation and in the grantee's own conversation from CA10, the grant, both conversations
  * and the minted keys. Saving the grant also makes
@@ -77,7 +79,7 @@ import type {
     MJResourcePermissionEntity,
     MJUserNotificationEntity
 } from '@memberjunction/core-entities';
-import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, IsTierEnabled, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, MintedUserKeyIds } from './fls-client.checks';
@@ -106,7 +108,8 @@ const REFUSAL = {
     NoAccess: 'You do not have access to this conversation.',
     MovedConversation: 'A message cannot be moved to another conversation or fork.',
     TransactionVariable: 'A conversation message cannot take its values from a transaction variable.',
-    ServerWritesReplies: "Only the server writes an agent's reply."
+    ServerWritesReplies: "Only the server writes an agent's reply.",
+    OwnerUnchangeable: "A conversation's owner cannot be changed."
 } as const;
 
 /** How long CA12 waits for the server to settle the reply row it created (the run ends fast with no model to call). */
@@ -317,19 +320,17 @@ function isReady(fx: ConversationAuthorshipFixture): fx is ReadyFixture {
 }
 
 /**
- * The fixture, or undefined after logging a loud skip (tier off, seed absent). A seed that is present but could
- * not be provisioned FAILS the check: skipping there would hide a broken share flow behind a green run.
+ * The fixture; skips the running check (SkipCheck) when the tier is off or the seed is absent. A seed that is
+ * present but could not be provisioned FAILS the check: skipping there would hide a broken share flow behind a green run.
  */
-function readyFixture(checkId: string): ReadyFixture | undefined {
+function readyFixture(checkId: string): ReadyFixture {
     const fx = fixture.Current;
     if (!fx || fx.SkipReason) {
-        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${fx?.SkipReason ?? 'fixture not provisioned'}. Seed with \`${SEED_COMMAND}\` and start MJAPI.`);
-        return undefined;
+        SkipCheck(`${fx?.SkipReason ?? 'fixture not provisioned'}. Seed with \`${SEED_COMMAND}\` and start MJAPI.`);
     }
     Assert(!fx.ProvisionError, `${checkId}: Setup could not build the shared conversation: ${fx.ProvisionError}`);
     if (!isReady(fx)) {
-        Assert(false, `${checkId}: Setup did not finish building the shared conversation`);
-        return undefined;
+        throw new Error(`${checkId}: Setup did not finish building the shared conversation`);
     }
     return fx;
 }
@@ -724,7 +725,6 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
 /** CA1 — the grantee cannot post a person's message as the owner, and nothing is written. Uses only Setup's conversation and grant. */
 async function checkCa1GranteeCannotPostAsOwner(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA1');
-    if (!fx) return;
     const text = `${fx.RunTag} CA1: the grantee posting as the owner ${MARKER}`;
     const message = await draftMessage(fx.Grantee, fx.ConversationID, text);
     message.UserID = fx.Owner.UserID;
@@ -739,7 +739,6 @@ async function checkCa1GranteeCannotPostAsOwner(ctx: IntegrationCheckContext): P
 /** CA2 — the grantee posting with no UserID is saved as the grantee's. Uses only Setup's conversation and grant. */
 async function checkCa2GranteePostIsStampedWithGrantee(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA2');
-    if (!fx) return;
     const message = await draftMessage(fx.Grantee, fx.ConversationID, `${fx.RunTag} CA2: the grantee posting with no UserID ${MARKER}`);
 
     assertDone(await attemptSave(message), `CA2: ${fx.Grantee.Email} posting a message with no UserID`);
@@ -758,7 +757,6 @@ async function checkCa2GranteePostIsStampedWithGrantee(ctx: IntegrationCheckCont
  */
 async function checkCa3GranteeCannotEditOwnersMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA3');
-    if (!fx) return;
     const before = await readOwnerMessage(ctx, fx, 'CA3');
 
     const message = await loadMessage(fx.Grantee, fx.OwnerMessageID);
@@ -771,7 +769,6 @@ async function checkCa3GranteeCannotEditOwnersMessage(ctx: IntegrationCheckConte
 /** CA4 — the grantee cannot delete the owner's message. Depends on Setup's owner message; a passing run leaves it in place. */
 async function checkCa4GranteeCannotDeleteOwnersMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA4');
-    if (!fx) return;
     const before = await readOwnerMessage(ctx, fx, 'CA4');
 
     const message = await loadMessage(fx.Grantee, fx.OwnerMessageID);
@@ -783,7 +780,6 @@ async function checkCa4GranteeCannotDeleteOwnersMessage(ctx: IntegrationCheckCon
 /** CA5 — the grantee edits their own message, and the owner deletes it. Self-contained: posts its own message. */
 async function checkCa5AuthorEditsAndOwnerDeletes(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA5');
-    if (!fx) return;
     const own = await draftMessage(fx.Grantee, fx.ConversationID, `${fx.RunTag} CA5: the grantee's own words ${MARKER}`);
     assertDone(await attemptSave(own), `CA5 (arrange): ${fx.Grantee.Email} posting their own message`);
 
@@ -805,7 +801,6 @@ async function checkCa5AuthorEditsAndOwnerDeletes(ctx: IntegrationCheckContext):
 /** CA6 — the owner posts with no UserID (it stays empty) and edits their own message. Self-contained: posts its own message. */
 async function checkCa6OwnerPostsAndEditsAsBefore(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA6');
-    if (!fx) return;
     const message = await draftMessage(fx.Owner, fx.ConversationID, `${fx.RunTag} CA6: the owner's new words ${MARKER}`);
     assertDone(await attemptSave(message), `CA6: ${fx.Owner.Email} posting a message with no UserID`);
     Assert(!message.UserID,
@@ -835,7 +830,6 @@ async function checkCa6OwnerPostsAndEditsAsBefore(ctx: IntegrationCheckContext):
  */
 async function checkCa7ForgedOldValuesCannotClaimAuthorship(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA7');
-    if (!fx) return;
     const before = await readOwnerMessage(ctx, fx, 'CA7');
 
     const claimedAuthor = await sendDetailUpdate(fx.Grantee, {
@@ -873,7 +867,6 @@ async function checkCa7ForgedOldValuesCannotClaimAuthorship(ctx: IntegrationChec
  */
 async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA8');
-    if (!fx) return;
     const before = await readOwnerMessage(ctx, fx, 'CA8');
     Assert(!before.IsPinned, "CA8 precondition: Setup's owner message must start unpinned, or the pin proves nothing");
 
@@ -901,7 +894,6 @@ async function checkCa8TransactionVariableCannotFillAMessage(ctx: IntegrationChe
 /** CA9 — `Role='user'` (lower case) is still a person's message: posting it as the owner is refused. Uses only Setup's conversation and grant. */
 async function checkCa9LowerCaseRoleCannotPostAsOwner(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA9');
-    if (!fx) return;
     const text = `${fx.RunTag} CA9: the grantee posting as the owner with a lower-case role ${MARKER}`;
     const outcome = await sendDetailCreate(fx.Grantee, {
         ConversationID: fx.ConversationID,
@@ -921,7 +913,6 @@ async function checkCa9LowerCaseRoleCannotPostAsOwner(ctx: IntegrationCheckConte
  */
 async function checkCa10MessageCannotMoveConversation(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA10');
-    if (!fx) return;
     const before = await readOwnerMessage(ctx, fx, 'CA10');
     const granteeConversationId = await createConversation(fx.Grantee, `IT115 grantee's own conversation ${fx.RunTag}`);
     fx.GranteeConversationIDs.push(granteeConversationId);
@@ -944,7 +935,6 @@ async function checkCa10MessageCannotMoveConversation(ctx: IntegrationCheckConte
  */
 async function checkCa11PeopleCannotWriteAgentReplies(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA11');
-    if (!fx) return;
     for (const leg of [fx.Grantee, fx.Owner]) {
         const text = `${fx.RunTag} CA11: ${leg.Email} writing an agent reply ${MARKER}`;
         const reply = await draftMessage(leg, fx.ConversationID, text);
@@ -1019,11 +1009,9 @@ async function waitForSettledReply(ctx: IntegrationCheckContext, id: string): Pr
  */
 async function checkCa12AgentTurnGetsAServerWrittenReply(ctx: IntegrationCheckContext): Promise<void> {
     const fx = readyFixture('CA12');
-    if (!fx) return;
     const agentId = await findActiveAgentId(ctx, CA12_AGENT_NAME);
     if (!agentId) {
-        console.warn(`  ⚠ ${BUNDLE}.CA12 SKIPPED — no Active '${CA12_AGENT_NAME}' agent on this install`);
-        return;
+        SkipCheck(`no Active '${CA12_AGENT_NAME}' agent on this install`);
     }
     const question = await draftMessage(fx.Grantee, fx.ConversationID, `${fx.RunTag} CA12: the grantee asks an agent ${MARKER}`);
     assertDone(await attemptSave(question), `CA12: ${fx.Grantee.Email} posting the question`);
@@ -1048,6 +1036,36 @@ async function checkCa12AgentTurnGetsAServerWrittenReply(ctx: IntegrationCheckCo
     assertRefusedWith(await attemptSave(rewrite), REFUSAL.ServerWritesReplies, `CA12: ${fx.Grantee.Email} rewriting the server's reply`);
     AssertEqual((await readReply(ctx, created!.ID))?.Message, settled.Message, 'CA12: the reply text after the refused rewrite');
     console.log(`      → reply ${created!.ID} created by the server before the ack, settled ${settled.Status}, and not rewritable by the grantee`);
+}
+
+/**
+ * CA13 — the owner cannot hand the conversation to the grantee (#5623). Uses only Setup's conversation and owner
+ * message; a passing run leaves both untouched.
+ */
+async function checkCa13OwnerCannotChangeOwner(ctx: IntegrationCheckContext): Promise<void> {
+    const fx = readyFixture('CA13');
+    const before = await readOwnerMessage(ctx, fx, 'CA13');
+
+    const conversation = await fx.Owner.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, fx.Owner.Provider.CurrentUser);
+    Assert(await conversation.Load(fx.ConversationID), `CA13: ${fx.Owner.Email} could not load their conversation ${fx.ConversationID}`);
+    conversation.UserID = fx.Grantee.UserID;
+    let outcome: WriteOutcome;
+    try {
+        const done = await conversation.Save();
+        outcome = { Done: done, Message: conversation.LatestResult?.CompleteMessage ?? '' };
+    } catch (e) {
+        outcome = { Done: false, Message: errorText(e) };
+    }
+    assertRefusedWith(outcome, REFUSAL.OwnerUnchangeable, `CA13: ${fx.Owner.Email} handing the conversation to ${fx.Grantee.Email}`);
+
+    const stored = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJConversationEntity, 'ID' | 'UserID'>>(
+        { EntityName: CONVERSATIONS_ENTITY, ExtraFilter: `ID = '${fx.ConversationID}'`, Fields: ['ID', 'UserID'], ResultType: 'simple', BypassCache: true },
+        ctx.User
+    );
+    Assert(stored.Success && stored.Results.length === 1, `CA13: reading conversation ${fx.ConversationID} failed: ${stored.ErrorMessage}`);
+    Assert(sameUser(stored.Results[0].UserID, fx.Owner.UserID),
+        `CA13: the conversation's owner is now ${stored.Results[0].UserID}, expected ${fx.Owner.UserID}`);
+    await assertMessageUnchanged(ctx, before, "CA13: the owner's message after the refused owner change");
 }
 
 export const ConversationAuthorshipClientChecks: NamedCheck[] = [
@@ -1122,6 +1140,12 @@ export const ConversationAuthorshipClientChecks: NamedCheck[] = [
         Name: "CA12: the grantee's agent turn gets a reply the server creates (named in the ack) and settles, and the grantee cannot rewrite it",
         RequiresMutation: true,
         Fn: checkCa12AgentTurnGetsAServerWrittenReply
+    },
+    {
+        Id: `${BUNDLE}.CA13`,
+        Name: "CA13: the owner handing the conversation to the grantee is refused; the owner and the owner's message stay as they were",
+        RequiresMutation: true,
+        Fn: checkCa13OwnerCannotChangeOwner
     }
 ];
 
