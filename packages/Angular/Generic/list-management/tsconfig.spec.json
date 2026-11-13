@@ -17,6 +17,7 @@
     "src/lib/services/list-refresh.service.ts",
     "src/lib/models/list-refresh.models.ts",
     "src/lib/components/list-source-refresh-panel/**/*.ts",
+    "src/lib/components/list-link-source-dialog/**/*.ts",
     "src/lib/utils/cron-description.ts"
   ],
   "exclude": [

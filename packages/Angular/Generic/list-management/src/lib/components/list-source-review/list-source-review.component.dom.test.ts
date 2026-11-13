@@ -60,7 +60,7 @@ function makeService(previewResult: ListRefreshPreview) {
   };
 }
 
-const rows = (p: RunViewParams) =>
+const rows = (p: RunViewParams): Array<Record<string, string>> =>
   p.EntityName === 'MJ: Lists'
     ? [{ ID: 'list-1', SourceFingerprint: '3f9a0000000000c21', SourceQueryParameters: '{"Region":"Northeast"}' }]
     : p.EntityName === 'MJ: Queries' ? [{ ID: 'query-1', DefinitionFingerprint: '8b07000000000e4d' }] : [];
