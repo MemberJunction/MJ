@@ -554,6 +554,23 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(indexes[0]).toContain('"__mj"."TestEntity"');
         });
 
+        it('wraps the index in a DO block that skips it when another non-partial index leads with the column (#6466)', () => {
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '', RelatedEntityID: null },
+                { ID: 'f2', Name: 'CategoryID', IsPrimaryKey: false, Type: 'uniqueidentifier', Length: 16, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '', RelatedEntityID: 'category-entity-id' },
+            ]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+            expect(sql).toContain('DO $$');
+            expect(sql).toContain('FROM pg_index ix');
+            expect(sql).toContain("n.nspname = '__mj'");
+            expect(sql).toContain("t.relname = 'TestEntity'");
+            expect(sql).toContain('ix.indpred IS NULL');
+            expect(sql).toContain("ix.indkey[0] = (SELECT a.attnum FROM pg_attribute a WHERE a.attrelid = t.oid AND a.attname = 'CategoryID')");
+            expect(sql).toContain('CREATE INDEX IF NOT EXISTS');
+            expect(sql.trim().endsWith('$$;')).toBe(true);
+        });
+
         it('should not create index for PK fields', () => {
             const entity = createMockEntity({}, [
                 { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '', RelatedEntityID: 'some-id' },

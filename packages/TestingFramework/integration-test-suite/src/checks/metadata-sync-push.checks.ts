@@ -19,6 +19,9 @@
  *    With the later folder's `overrides` declaration, validation passes and push saves the later
  *    value; without it, or with the folders in the wrong order, validation still reports it.
  *
+ * Every push is bounded (`PUSH_TIMEOUT_MS`, MSP3 tighter): a hung push fails its own check, and
+ * the driver rolls back the transaction it left open so later bundles start at depth 0 (#5389).
+ *
  * Every row the bundle writes is named with the `zzz-it94` prefix. Teardown deletes all of them
  * (Action Params before Actions, then vendors) and removes the scratch directories, even after a
  * failed check.
@@ -125,6 +128,30 @@ interface PushRunOutcome {
     Warnings: string[];
 }
 
+/**
+ * Bound on one push (#5389). A one-record push takes seconds; the bound only has to fail a hung
+ * push well inside the run budget, so the driver can roll back the transaction it left open
+ * and the rest of the suite keeps running.
+ */
+const PUSH_TIMEOUT_MS = 120_000;
+
+async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+    });
+    try {
+        return await Promise.race([work, timeout]);
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+/** The timeout message for a push, naming the check (the scratch folder name, e.g. MSP1). */
+function pushTimeoutMessage(label: string): string {
+    return `${label}: the push did not finish within ${PUSH_TIMEOUT_MS / 1000}s (hung push)`;
+}
+
 async function runPush(user: UserInfo, dir: string, extra: Partial<PushOptions> = {}): Promise<PushRunOutcome> {
     const engine = new SyncEngine(user);
     await engine.initialize();
@@ -132,7 +159,7 @@ async function runPush(user: UserInfo, dir: string, extra: Partial<PushOptions> 
     const warnings: string[] = [];
     const callbacks: PushCallbacks = { onWarn: (m) => warnings.push(m) };
     try {
-        await service.push({ dir, ...extra }, callbacks);
+        await withTimeout(service.push({ dir, ...extra }, callbacks), PUSH_TIMEOUT_MS, pushTimeoutMessage(path.basename(dir).toUpperCase()));
         return { Warnings: warnings };
     } catch (error) {
         return { Error: error, Warnings: warnings };
@@ -374,17 +401,6 @@ async function checkMsp4NonAtomicReportsWhatStayedCommitted(ctx: IntegrationChec
     AssertEqual(await countRows(ctx, 'MJ: AI Vendors', `ID='${newVendorID}'`), 1, 'MSP4: the reported create really is committed');
 }
 
-async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(message)), ms);
-    });
-    try {
-        return await Promise.race([work, timeout]);
-    } finally {
-        if (timer) clearTimeout(timer);
-    }
-}
 
 
 // ─── Entities that derive child rows inside their own Save() ────────────────
@@ -520,7 +536,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
     await engine.initialize();
     const service = new PushService(engine, ctx.User);
     try {
-        await service.push({ dir }, {
+        await withTimeout(service.push({ dir }, {
             onProgress: (message: string) => {
                 if (!message.includes('b-vendors')) {
                     return;
@@ -528,7 +544,7 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
                 const names = Metadata.Provider?.Authorizations?.map((auth) => auth.Name) ?? []; // global-provider-ok: the check reads the provider the push reloads
                 seenAtSecondFolder = names.includes(authName);
             },
-        });
+        }), PUSH_TIMEOUT_MS, pushTimeoutMessage('MSP9'));
     } catch (error) {
         pushError = error;
     } finally {
@@ -570,7 +586,7 @@ async function checkMsp10OneRecordPushOfARowLevelSecurityFilter(ctx: Integration
         await engine.initialize();
         const service = new PushService(engine, ctx.User);
         try {
-            await service.push({ dir: root });
+            await withTimeout(service.push({ dir: root }), PUSH_TIMEOUT_MS, pushTimeoutMessage('MSP10'));
         } catch (error) {
             pushError = error;
         }
