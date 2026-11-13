@@ -5,8 +5,11 @@
  *                                        as the test-runner image needs), points every workspace
  *                                        @memberjunction package at its workspace copy, runs
  *                                        `mj app install <repo> --version <v> --packages-only` for
- *                                        each app, then fails if a workspace @memberjunction package
- *                                        now also has a registry copy.
+ *                                        each app, turns off the client packages that an entry's
+ *                                        `disableClientPackages` names, builds the workspace packages
+ *                                        that the installed app packages use, then fails if a
+ *                                        workspace @memberjunction package now also has a registry
+ *                                        copy.
  *   node open-apps.cjs database          db-setup (database up). Runs `--database-only` for each app.
  *   node open-apps.cjs check-duplicates  Only the duplicate check.
  *
@@ -27,6 +30,8 @@ const LIST_PATH = process.env.OPEN_APPS_FILE || path.resolve(__dirname, '..', 'o
 const SECRET_PATH = '/run/secrets/github_token';
 const MJ_CLI = 'packages/MJCLI/bin/run.js';
 const ROOT_MANIFEST = 'package.json';
+const CONFIG_PATH = 'mj.config.cjs';
+const PNPM_STORE = 'node_modules/.pnpm';
 
 /** Reads and checks the pinned list: an array of { repo, version }. */
 function readAppList() {
@@ -38,6 +43,10 @@ function readAppList() {
         }
         if (typeof app.version !== 'string' || app.version.length === 0) {
             throw new Error(`Each entry in ${LIST_PATH} needs a "version": ${JSON.stringify(app)}`);
+        }
+        const off = app.disableClientPackages ?? [];
+        if (!Array.isArray(off) || off.some((name) => typeof name !== 'string')) {
+            throw new Error(`"disableClientPackages" in ${LIST_PATH} must be an array of package names: ${JSON.stringify(app)}`);
         }
     }
     return apps;
@@ -102,6 +111,78 @@ function linkWorkspacePackages() {
     console.log(`Linked the ${names.length} workspace @memberjunction packages for the app install (pnpm.overrides).`);
 }
 
+/** The `[` … `]` span of the `dynamicPackages.client` array in mj.config.cjs, or null. */
+function clientArraySpan(text) {
+    const section = /dynamicPackages\s*:\s*\{/.exec(text);
+    if (!section) return null;
+    const key = /\bclient\s*:\s*\[/g;
+    key.lastIndex = section.index;
+    const match = key.exec(text);
+    if (!match) return null;
+    const start = match.index + match[0].length - 1;
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+        if (text[i] === '[') depth++;
+        else if (text[i] === ']' && --depth === 0) return { start, end: i + 1 };
+    }
+    return null;
+}
+
+/**
+ * Sets `Enabled: false` on the named `dynamicPackages.client` entries in mj.config.cjs, so the
+ * Explorer manifest emits them as comments. Fails when a name has no client entry.
+ */
+function disableClientPackages(names) {
+    if (names.length === 0) return;
+    let text = fs.readFileSync(CONFIG_PATH, 'utf8');
+    const span = clientArraySpan(text);
+    if (!span) throw new Error(`${CONFIG_PATH} has no dynamicPackages.client array`);
+    let client = text.slice(span.start, span.end);
+    for (const name of names) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+        const entry = new RegExp(`(PackageName:\\s*["']${escaped}["'][^{}]*?Enabled:\\s*)(true|false)`);
+        if (!entry.test(client)) throw new Error(`disableClientPackages: ${name} has no client entry in ${CONFIG_PATH}`);
+        client = client.replace(entry, '$1false');
+    }
+    text = text.slice(0, span.start) + client + text.slice(span.end);
+    fs.writeFileSync(CONFIG_PATH, text);
+    console.log(`Turned off ${names.length} Open App client package(s): ${names.join(', ')}`);
+}
+
+/** The package name of a node_modules/.pnpm folder name (`@scope+name@1.0.0_x` → `@scope/name`). */
+function storeFolderPackage(folder) {
+    const scoped = folder.startsWith('@');
+    const at = folder.indexOf('@', scoped ? 1 : 0);
+    const name = at === -1 ? folder : folder.slice(0, at);
+    return scoped ? name.replace('+', '/') : name;
+}
+
+/** Workspace @memberjunction packages that a registry package (an app package) depends on. */
+function workspacePackagesUsedByApps(workspace) {
+    const used = new Set();
+    for (const folder of fs.readdirSync(PNPM_STORE)) {
+        if (folder.startsWith('@memberjunction+') || folder === 'node_modules' || folder.startsWith('.')) continue;
+        const manifestPath = path.join(PNPM_STORE, folder, 'node_modules', storeFolderPackage(folder), 'package.json');
+        if (!fs.existsSync(manifestPath)) continue;
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        for (const name of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies })) {
+            if (workspace.has(name)) used.add(name);
+        }
+    }
+    return [...used].sort();
+}
+
+/**
+ * Builds the workspace packages that the installed app packages use. The image build only builds
+ * what MJAPI and MJExplorer depend on, and turbo does not see an app package's dependencies.
+ */
+function buildWorkspacePackagesUsedByApps(env) {
+    const names = workspacePackagesUsedByApps(workspacePackageNames());
+    if (names.length === 0) return;
+    console.log(`Building the ${names.length} workspace packages that the app packages use.`);
+    run('pnpm', ['exec', 'turbo', 'build', '--concurrency=2', ...names.map((name) => `--filter=${name}`)], env);
+}
+
 /**
  * Fails when node_modules/.pnpm holds a registry copy (`@memberjunction+<name>@<version>…`) of a
  * workspace package. Workspace packages are linked, so any such entry is a second copy.
@@ -138,6 +219,8 @@ function main() {
         run('pnpm', ['exec', 'turbo', 'build', '--concurrency=2', '--filter=@memberjunction/cli'], env);
         linkWorkspacePackages();
         installAll(apps, '--packages-only', env);
+        disableClientPackages(apps.flatMap((app) => app.disableClientPackages ?? []));
+        buildWorkspacePackagesUsedByApps(env);
         checkDuplicates();
     } else {
         installAll(apps, '--database-only', env);
