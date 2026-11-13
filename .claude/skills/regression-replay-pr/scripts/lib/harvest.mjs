@@ -12,6 +12,8 @@ const TRACES_DIR = `${HARVEST_DIR}/regression/traces`;
 const FILE_REF_PREFIX = '@file:';
 const SCRIPT_FIELDS = ['ReplayScript', 'PendingReplayScript'];
 const MAX_MESSAGE_LENGTH = 160;
+const STACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const URL_HOST = /https?:\/\/([^\/\s"'?#]+)/g;
 const FOOTER = '🤖 Generated with [Claude Code](https://claude.com/claude-code)';
 
 function isPlainObject(value) {
@@ -146,6 +148,16 @@ function isValidJson(text) {
     }
 }
 
+/** The hosts other than the local stack that absolute URLs in a script point to, sorted. */
+function foreignHosts(text) {
+    const hosts = new Set();
+    for (const match of text.matchAll(URL_HOST)) {
+        const host = match[1].replace(/^[^@]*@/, '').replace(/:\d+$/, '').toLowerCase();
+        if (!STACK_HOSTS.has(host)) hosts.add(host);
+    }
+    return [...hosts].sort();
+}
+
 function checkScriptEntry(entry, ctx) {
     if (entry.status === 'deleted') {
         ctx.result.removedScripts.push({ file: entry.path });
@@ -157,6 +169,13 @@ function checkScriptEntry(entry, ctx) {
     }
     const text = ctx.scriptText.get(entry.path);
     if (text === undefined || !isValidJson(text)) ctx.result.problems.push(`${entry.path}: not valid JSON`);
+    const hosts = foreignHosts(text ?? '');
+    if (hosts.length > 0) {
+        ctx.result.problems.push(
+            `${entry.path}: holds URLs on another host than localhost (${hosts.join(', ')}); ` +
+                'record it again with a build that stores those URLs as paths',
+        );
+    }
     const owner = ctx.owners.get(entry.path);
     if (owner?.field === 'PendingReplayScript') return;
     const item = { test: owner?.name ?? '(no test)', file: entry.path };

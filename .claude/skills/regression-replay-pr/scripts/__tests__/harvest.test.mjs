@@ -113,6 +113,19 @@ describe('CheckHarvest', () => {
         expect(result.scriptedTests).toEqual(['T001 - Login Smoke']);
     });
 
+    it('reports a new script that holds a URL on another host than the stack (an identity-provider tenant)', () => {
+        const text = JSON.stringify({ Steps: [
+            { UrlBefore: 'http://localhost:4200/' },
+            { UrlBefore: 'https://dev-tenant.us.auth0.com/u/login', Postcondition: { UrlPattern: 'https://dev-tenant.us.auth0.com/u/login' } },
+        ] });
+        const result = CheckHarvest({
+            entries: [{ status: 'new', path: SCRIPT_PATH }, { status: 'modified', path: TEST_PATH }],
+            tests: [testEntry(TEST_PATH, withScript, record())],
+            scripts: [{ path: SCRIPT_PATH, text }],
+        });
+        expect(result.problems).toEqual([expect.stringContaining(`${SCRIPT_PATH}: holds URLs on another host than localhost (dev-tenant.us.auth0.com)`)]);
+    });
+
     it('reports a pending script', () => {
         const pending = record({
             ReplayScript: '@file:regression/scripts/t001-login-smoke.json',
