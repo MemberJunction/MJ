@@ -525,13 +525,16 @@ duplicate check and the build of the workspace packages that apps use (D32), bec
 how the stack builds an app into the repo, not changes to the app. Kept: the T106 goal hint
 (D43), because it does not change the result when the page cannot scroll.
 
-Which break belongs to which version (read from each branch, not run):
+Which break belongs to which version (6.2.2 column from a stack run on `v6.2.2` with no workarounds, 2026-11-13):
 
 | Break | On `next` (6.3) | On LTS 6.2.2 |
 |---|---|---|
-| MoreCheese data migration calls `spCreateConversation` with `@Type` | Fails (6.3 removed `@Type`) | Works |
-| Sonar 0.7.0 imports `IsCompositeFilter` from `ng-filter-builder` | Explorer build fails | Works (6.1 and 6.2 export it) |
-| Committees 1.5.0 `vwMeetings` columns that its code does not define | Meetings reads fail | Same (the metadata refresh is in MJ since 6.1.0) |
-| Secure-messaging 2.1.0 lists server packages as client packages | Explorer build failed | Not known yet |
+| MoreCheese data migration calls `spCreateConversation` with `@Type` | Fails (6.3 removed `@Type`) | Works: all 11 apps install as Active |
+| Sonar 0.7.0 imports `IsCompositeFilter` from `ng-filter-builder` | Explorer build fails | Not in the 6.2.2 build errors (6.1 and 6.2 export it) |
+| Committees 1.5.0 `vwMeetings` columns that its code does not define | Meetings reads fail | Same: the fields exist after the install (the metadata refresh is in MJ since 6.1.0) |
+| Secure-messaging 2.1.0 packaging | Explorer build fails | Explorer build fails: `-core` and `-actions` are `shared` Node libraries with no `platform: "node"`, so MJ puts them in the browser bundle; `-element` names `main: dist/mj-secure-messaging.js`, a file its package does not ship |
 
-So on `next` the stack stops until MJ keeps the old names or the apps release builds for 6.3.
+So the stack stops on both versions until secure-messaging releases a fixed package, and on
+`next` also until MJ keeps the old names or the apps release builds for 6.3. The 6.2.2 run used a
+local branch, `CB-regression-morecheese-lts-6-2` (the stack folders of this branch on `v6.2.2`,
+with the install split applied and the conversation seed using `Type`).
