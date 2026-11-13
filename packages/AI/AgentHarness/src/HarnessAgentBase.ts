@@ -1,4 +1,4 @@
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -989,6 +989,7 @@ export class HarnessAgentBase extends BaseAgent {
         fallbackContextUser?: UserInfo,
     ): Promise<Record<string, string>> {
         const renderedMap: Record<string, string> = {};
+        const templatesById = IndexByUUID(TemplateEngineServer.Instance.Templates ?? []);
         for (const childParam of childPrompts) {
             if (!childParam) {
                 continue;
@@ -1010,9 +1011,7 @@ export class HarnessAgentBase extends BaseAgent {
                 continue;
             }
             try {
-                const childTemplate = TemplateEngineServer.Instance.Templates?.find((t) =>
-                    UUIDsEqual(t.ID, childPrompt.TemplateID),
-                );
+                const childTemplate = templatesById.Get(childPrompt.TemplateID);
                 const childContent = childTemplate?.GetHighestPriorityContent();
                 if (childTemplate && childContent) {
                     const nestedChildren =
