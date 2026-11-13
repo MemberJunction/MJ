@@ -112,9 +112,10 @@ export function CreateOAuthProxyRouter(config: OAuthProxyConfig): Router {
     console.log('[OAuth Proxy] JWT signing not configured - passing through upstream tokens');
   }
 
-  // Parse URL-encoded bodies for token endpoint
-  router.use(urlencoded({ extended: true }));
-  router.use(json());
+  // Parse bodies for the /oauth/* endpoints only (token, registration, consent). This router is
+  // mounted at the MCP server's root, so an unscoped parser would also consume the body of the
+  // legacy SSE /mcp/messages route, which reads it as a raw stream.
+  router.use('/oauth', urlencoded({ extended: true }), json());
 
   // Authorization Server Metadata (RFC 8414)
   router.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {

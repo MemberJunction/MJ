@@ -123,6 +123,8 @@ serverExtensions: [
 **Settings that work differently inside MJAPI:**
 
 - `enableMCPServer` and `port` apply only to the standalone server. Inside MJAPI, the extension entry turns MCP on or off.
+- `auth.mode: 'none'` is refused: the extension does not mount. That mode runs every request as the system user with no credentials, and inside MJAPI the MCP routes sit on its public port, before its own authentication.
+- `systemApiKey` gives whoever sends it every tool as the system user. MJAPI logs a warning while it is still the stock placeholder `MY_API_KEY_FOR_MCP_SERVER`.
 - `trustProxy` has no effect, because Express reads `trust proxy` from MJAPI's app. MJAPI logs a warning when it is set.
 - `auth.resourceIdentifier` should normally be left unset. The extension builds it from MJAPI's public URL (`MJAPI_PUBLIC_URL`, e.g. `https://app.example.com/api` gives `https://app.example.com/api/mcp`). A leftover value such as `http://localhost:3100` sends OAuth clients to the wrong place, and MJAPI logs a warning.
 - With the OAuth proxy, register the upstream redirect URI under the mount: `https://app.example.com/api/mcp/oauth/callback`.
@@ -248,7 +250,7 @@ The OAuth proxy handles the authorization flow for MCP clients that don't native
 
 #### Rate limit and reverse proxies
 
-The OAuth proxy router limits requests per client IP: 60 per minute by default. It covers the OAuth routes, the `.well-known` documents and `/health`. The MCP transport routes (`/mcp`, `/mcp/sse`, `/mcp/messages`) are mounted ahead of it and are not counted. Size the limit with `auth.proxy.rateLimit`.
+The OAuth proxy router limits requests per client IP: 60 per minute by default. On the standalone server it is mounted at the app root, so `/mcp` traffic counts against the limit too, not only the `/oauth/*` routes. Inside MJAPI the MCP transport routes are mounted ahead of it and are not counted, because MJAPI does not set `trust proxy` by default and behind a proxy every client would share one limit. Size the limit with `auth.proxy.rateLimit`.
 
 Behind CloudFront, a load balancer or another reverse proxy, also set `trustProxy`. It is passed to Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Without it, Express sees the proxy as every request's client, so all users share one limit.
 

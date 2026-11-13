@@ -16,10 +16,17 @@ import type { UserInfo } from '@memberjunction/core';
 import type { AuthResult } from '../auth/types.js';
 
 vi.mock('@memberjunction/server', () => ({}));
+// ScopeService reaches @memberjunction/server's config loader; these routes never consult it.
+vi.mock('../auth/ScopeService.js', () => ({
+    LoadActiveScopes: async () => [],
+    GetDefaultScopes: () => [],
+    GroupScopesHierarchically: () => ({ fullAccessScope: null, categories: new Map() }),
+}));
 
 import { BuildMCPTransportRouter, MCPCorsMiddleware } from '../Server.js';
 import type { MCPSessionFactory, MCPTransportRouter } from '../Server.js';
 import { SetHostedResourceIdentifier } from '../auth/OAuthConfig.js';
+import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
 
 const MOUNT = '/api/mcp';
 const GOOD_KEY = 'good-key';
@@ -42,14 +49,19 @@ let httpServer: Server | undefined;
 let transportRouter: MCPTransportRouter | undefined;
 
 /**
- * Mounts the transport router under MOUNT, followed by a JSON-parsing router like the OAuth
- * proxy's, so the SSE /messages route proves it still reads its raw body.
+ * Mounts the real OAuth proxy router AHEAD of the transport router under MOUNT — the standalone
+ * server's order — so the SSE /messages route proves the proxy no longer consumes its raw body.
  */
 async function startServer(): Promise<string> {
     transportRouter = BuildMCPTransportRouter({ SSEMessagesPath: `${MOUNT}/messages`, Sessions: fakeSessions });
-    const discoveryLike = express.Router().use(express.json());
+    const oauthProxy = CreateOAuthProxyRouter({
+        baseUrl: 'https://x.example/api/mcp',
+        upstream: { authorizationEndpoint: 'https://idp.example/authorize', tokenEndpoint: 'https://idp.example/token', clientId: 'c', scopes: ['openid'] },
+        enableDynamicRegistration: false,
+        rateLimit: { limit: 1000 },
+    });
     const app = express();
-    app.use(MOUNT, MCPCorsMiddleware, transportRouter.Router, discoveryLike);
+    app.use(MOUNT, MCPCorsMiddleware, oauthProxy, transportRouter.Router);
     const s = app.listen(0);
     httpServer = s;
     await new Promise<void>(resolve => s.once('listening', () => resolve()));

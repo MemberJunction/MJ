@@ -1576,9 +1576,12 @@ export interface MCPRouters {
     /** The transports — see {@link MCPTransportRouter}. */
     Transport: MCPTransportRouter;
     /**
-     * OAuth discovery (`/.well-known/*`), the OAuth proxy (`/oauth/*`) and `/health`. Mount it AFTER
-     * {@link Transport}: the OAuth proxy parses JSON bodies, which would consume the body the SSE
-     * `/messages` route reads as a raw stream.
+     * OAuth discovery (`/.well-known/*`), the OAuth proxy (`/oauth/*`) and `/health`.
+     *
+     * Mount order decides one thing: the OAuth proxy's per-IP rate limit runs on every request that
+     * reaches this router. The standalone server mounts it first, so `/mcp` traffic is limited too
+     * (as it always was). MJAPI mounts it after {@link Transport}: MJAPI does not set `trust proxy`
+     * by default, and behind a proxy every MCP client would then share one bucket.
      */
     Discovery: Router;
 }
@@ -1641,8 +1644,9 @@ function createStandaloneApp(routers: MCPRouters): express.Express {
         }
     });
 
-    app.use('/mcp', routers.Transport.Router);
+    // Discovery first, as before the routers were split: the OAuth proxy's rate limit covers /mcp too.
     app.use(routers.Discovery);
+    app.use('/mcp', routers.Transport.Router);
     return app;
 }
 

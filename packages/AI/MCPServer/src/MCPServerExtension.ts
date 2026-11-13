@@ -27,7 +27,7 @@ import type {
 } from '@memberjunction/server-extensions-core';
 import { CreateMCPRouters, MCPCorsMiddleware, ToolFilterOptions } from './Server.js';
 import type { MCPTransportRouter } from './Server.js';
-import { GetResourceIdentifier, SetHostedResourceIdentifier } from './auth/OAuthConfig.js';
+import { GetAuthMode, GetResourceIdentifier, SetHostedResourceIdentifier } from './auth/OAuthConfig.js';
 import { InitConfig, McpServerSettings } from './config.js';
 
 /**
@@ -140,13 +140,14 @@ export class MCPServerExtension extends BaseServerExtension {
             const mount = ResolveMCPMount(context.config.RootPath, context.apiRootPath, sub => ApiRoute(sub, { absolute: true }));
 
             await InitConfig();
+            refuseUnauthenticatedMode();
             SetHostedResourceIdentifier(mount.PublicEndpointUrl);
             warnAboutHostedSettings(context.config, mount);
             const routers = await CreateMCPRouters({
                 SSEMessagesPath: mount.SSEMessagesPath,
                 filterOptions: ParseMCPExtensionToolFilter(context.config.Settings),
             });
-            // Transport before Discovery: see MCPRouters.Discovery
+            // Transport before Discovery, so MCP traffic skips the OAuth proxy's per-IP limit: see MCPRouters.Discovery
             context.app.use(mount.MountPath, MCPCorsMiddleware, routers.Transport.Router, routers.Discovery);
 
             this.transport = routers.Transport;
@@ -176,6 +177,20 @@ export class MCPServerExtension extends BaseServerExtension {
     }
 }
 
+/** The stock `mcpServerSettings.systemApiKey` in the repo's `mj.config.cjs`. */
+const PLACEHOLDER_SYSTEM_API_KEY = 'MY_API_KEY_FOR_MCP_SERVER';
+
+/**
+ * Fails closed on `auth.mode: 'none'`. That mode gives every request the system user, with no
+ * credentials; inside MJAPI the MCP routes mount before MJAPI's own authentication and share its
+ * public port, so MCP's auth mode is the only gate.
+ */
+function refuseUnauthenticatedMode(): void {
+    if (GetAuthMode() === 'none') {
+        throw new Error("MCPServerExtension refuses to mount with mcpServerSettings.auth.mode 'none': every request would run as the system user, with no credentials, on MJAPI's public port. Use 'apiKey', 'oauth' or 'both'.");
+    }
+}
+
 /** Logs settings that don't behave inside MJAPI the way they do on the standalone server. */
 function warnAboutHostedSettings(config: ServerExtensionConfig, mount: MCPMount): void {
     if (config.OwnsCORS !== true) {
@@ -184,6 +199,9 @@ function warnAboutHostedSettings(config: ServerExtensionConfig, mount: MCPMount)
     const advertised = GetResourceIdentifier();
     if (advertised !== mount.PublicEndpointUrl) {
         console.warn(`[MCPServerExtension] mcpServerSettings.auth.resourceIdentifier (${advertised}) overrides the URL MCP is served at (${mount.PublicEndpointUrl}). OAuth clients will look for metadata under ${advertised}; remove the setting unless a proxy maps it here.`);
+    }
+    if (McpServerSettings?.systemApiKey === PLACEHOLDER_SYSTEM_API_KEY) {
+        console.warn(`[MCPServerExtension] mcpServerSettings.systemApiKey is the stock placeholder '${PLACEHOLDER_SYSTEM_API_KEY}'. Anyone who sends it gets every MCP tool as the system user, now on MJAPI's public port. Set a secret value or remove the setting.`);
     }
     if (McpServerSettings?.trustProxy !== undefined) {
         console.warn('[MCPServerExtension] mcpServerSettings.trustProxy has no effect inside MJAPI: Express reads trust proxy from MJAPI\'s app, which the extension does not change. Set it with an MJAPI server middleware if the OAuth proxy rate limit needs real client IPs.');

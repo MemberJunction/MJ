@@ -14,6 +14,8 @@ const fakes = vi.hoisted(() => ({
     apiRoute: (subpath: string) => `http://localhost:4000/api${subpath}`,
     configuredResourceIdentifier: undefined as string | undefined,
     trustProxy: undefined as boolean | undefined,
+    authMode: undefined as 'apiKey' | 'oauth' | 'both' | 'none' | undefined,
+    systemApiKey: undefined as string | undefined,
 }));
 
 vi.mock('@memberjunction/server', () => ({
@@ -29,9 +31,12 @@ vi.mock('../config.js', () => ({
         return {
             auth: fakes.configuredResourceIdentifier ? { resourceIdentifier: fakes.configuredResourceIdentifier } : undefined,
             trustProxy: fakes.trustProxy,
+            systemApiKey: fakes.systemApiKey,
         };
     },
-    McpServerAuth: undefined,
+    get McpServerAuth() {
+        return fakes.authMode ? { mode: fakes.authMode } : undefined;
+    },
     InitConfig: async () => ({}),
 }));
 
@@ -52,6 +57,8 @@ function contextFor(rootPath: string, apiRootPath: string, publicUrl: string): S
 beforeEach(() => {
     fakes.configuredResourceIdentifier = undefined;
     fakes.trustProxy = undefined;
+    fakes.authMode = undefined;
+    fakes.systemApiKey = undefined;
     fakes.createMCPRouters.mockReset();
     fakes.createMCPRouters.mockResolvedValue({
         Transport: { Router: express.Router(), SessionCount: () => 0, Shutdown: async () => undefined },
@@ -102,6 +109,26 @@ describe('MCPServerExtension.Initialize', () => {
         await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
 
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('trustProxy'));
+    });
+
+    it('refuses to load with auth mode none, which would serve the system user to anyone on MJAPI\'s port', async () => {
+        fakes.authMode = 'none';
+
+        const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(result.Success).toBe(false);
+        expect(result.Message).toMatch(/auth\.mode 'none'/);
+        expect(fakes.createMCPRouters).not.toHaveBeenCalled();
+    });
+
+    it('warns when systemApiKey is still the stock mj.config.cjs placeholder', async () => {
+        fakes.systemApiKey = 'MY_API_KEY_FOR_MCP_SERVER';
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        const result = await new MCPServerExtension().Initialize(contextFor('/api/mcp', '/api', 'http://localhost:4000/'));
+
+        expect(result.Success).toBe(true);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('systemApiKey'));
     });
 
     it('clears the hosted identifier when building the routers fails', async () => {
