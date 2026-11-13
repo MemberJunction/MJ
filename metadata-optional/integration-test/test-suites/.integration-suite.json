@@ -1572,7 +1572,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT172 - Conversation Delete Guard (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - Conversation Delete Guard (client transport)",
             "Sequence": 83,
             "Status": "Active"
           },
