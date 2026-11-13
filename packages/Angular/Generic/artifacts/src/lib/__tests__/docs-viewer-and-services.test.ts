@@ -2161,6 +2161,68 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     expect(upEvt.prevented()).toBe(true);
     expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
   });
+
+  it('automatically transitions persisted documents from Read (preview) to Write (edit) mode once permissions and collaboration sync resolve, and supports double-clicking any block in Read mode to enter Write mode', async () => {
+    const collabService = new DocumentCollaborationService();
+    vi.spyOn(collabService, 'ResolvePermissionsFromServer').mockResolvedValue({
+      ArtifactID: '99999999-9999-4999-8999-999999999991',
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: true,
+      CanShare: true,
+      Source: 'Owner',
+      Reason: 'Artifact owner',
+    });
+
+    const injector = Injector.create({
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: () => {}, detectChanges: () => {} } },
+        { provide: DocumentCollaborationService, useValue: collabService },
+        { provide: DocumentImportExportService, useValue: new DocumentImportExportService() },
+        { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },
+      ],
+    });
+
+    const viewer = runInInjectionContext(injector, () => new MarkdownArtifactViewerComponent());
+    const mockUser = Object.create(null) as UserInfo;
+    Object.assign(mockUser, {
+      ID: '11111111-2222-4333-8444-555555555555',
+      Name: 'Alice Author',
+      Email: 'alice@example.com',
+    });
+    const mockProvider = Object.create(null) as IMetadataProvider;
+    Object.assign(mockProvider, {
+      CurrentUser: mockUser,
+      Entities: [],
+      EntityByName: () => undefined,
+    });
+    viewer.Provider = mockProvider;
+    viewer.readonly = false;
+
+    const ver = Object.create(MJArtifactVersionEntity.prototype) as MJArtifactVersionEntity;
+    Object.defineProperties(ver, {
+      ID: { value: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeee1', enumerable: true },
+      ArtifactID: { value: '99999999-9999-4999-8999-999999999991', enumerable: true },
+      VersionNumber: { value: 1, enumerable: true },
+      Content: { value: '# Persisted Document\n\nReady to edit.', enumerable: true },
+    });
+    viewer.artifactVersion = ver;
+    viewer.ngOnInit();
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(viewer.HasEditPermission).toBe(true);
+    expect(viewer.CanUserEdit).toBe(true);
+    expect(viewer.ViewMode).toBe('edit');
+    expect(viewer.IsInteractiveCanvasMode).toBe(true);
+
+    // Explicitly switch to Read ('preview') mode, then double-click a block to jump back to Write ('edit') mode
+    viewer.SetViewMode('preview');
+    expect(viewer.ViewMode).toBe('preview');
+    viewer.OnPreviewBlockDoubleClick(viewer.DocumentSegments[1]);
+    expect(viewer.ViewMode).toBe('edit');
+    expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
+    viewer.ngOnDestroy();
+  });
 });
 
 

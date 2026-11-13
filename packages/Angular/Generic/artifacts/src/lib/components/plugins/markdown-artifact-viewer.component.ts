@@ -952,8 +952,12 @@ export interface DocsPermissionEntry {
                             }
                           }
                         } @else {
-                          <!-- Reader Preview Markdown Block -->
-                          <div class="markdown-preview">
+                          <!-- Reader Preview Markdown Block (Double-click to switch to Write mode when editable) -->
+                          <div
+                            class="markdown-preview"
+                            [attr.title]="CanUserEdit ? 'Double-click to edit block (or click Write in toolbar)' : null"
+                            (dblclick)="OnPreviewBlockDoubleClick(seg)"
+                          >
                             <mj-markdown
                               [data]="seg.RawMarkdown"
                               [enableCollapsibleHeadings]="true"
@@ -4307,6 +4311,27 @@ export class MarkdownArtifactViewerComponent
       this.DocumentSegments = [this.createDraftParagraphSegment(1)];
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Transitions from Reader (`preview`) mode into Write (`edit`) mode and focuses the double-clicked block
+   * whenever the current user has edit permission.
+   */
+  public OnPreviewBlockDoubleClick(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.SetViewMode('edit');
+    this.focusEditableSegment(seg.SegmentID, 'end');
+  }
+
+  private promoteToDefaultEditModeIfEligible(): void {
+    if (!this.userExplicitlySelectedMode && this.CanUserEdit && this.ViewMode === 'preview') {
+      this.ViewMode = 'edit';
+      if (this.DocumentSegments.length === 0) {
+        this.DocumentSegments = [this.createDraftParagraphSegment(1)];
+      }
+    }
   }
 
   private static readonly OUTLINE_PREF_SETTING_KEY = 'MJ.Docs.ShowOutlineRail';
@@ -8516,6 +8541,7 @@ export class MarkdownArtifactViewerComponent
     const gen = ++this.sessionInitGeneration;
     this.refreshParsedStructure();
     this.setupCollaborationSession();
+    this.promoteToDefaultEditModeIfEligible();
     void this.evaluatePermissionsAndLoadThreads(gen);
   }
 
@@ -8593,11 +8619,17 @@ export class MarkdownArtifactViewerComponent
       }),
       this.session.StatusChanged$.subscribe((status) => {
         this.CollaborationStatus = status;
-        if (status === 'revoked' || (status === 'readonly' && !this.session?.CanEdit)) {
+        if (status === 'revoked') {
           this.HasEditPermission = false;
           if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
             this.ViewMode = 'preview';
           }
+        } else if (status === 'readonly' && !this.session?.CanEdit) {
+          if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
+            this.ViewMode = 'preview';
+          }
+        } else {
+          this.promoteToDefaultEditModeIfEligible();
         }
         this.cdr.markForCheck();
       }),
@@ -8721,8 +8753,13 @@ export class MarkdownArtifactViewerComponent
       } else {
         this.AccessRevoked = false;
         this.session?.SetCanEdit(this.hasPermissionToEdit);
+        if (this.session) {
+          this.CollaborationStatus = this.session.Status;
+        }
         if (!perms.CanEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest')) {
           this.ViewMode = 'preview';
+        } else {
+          this.promoteToDefaultEditModeIfEligible();
         }
       }
       this.cdr.markForCheck();
@@ -8799,6 +8836,11 @@ export class MarkdownArtifactViewerComponent
               if (this.ViewMode === 'edit' || this.ViewMode === 'suggest') {
                 this.ViewMode = 'preview';
               }
+            } else {
+              if (this.session) {
+                this.CollaborationStatus = this.session.Status;
+              }
+              this.promoteToDefaultEditModeIfEligible();
             }
           }
           this.cdr.markForCheck();

@@ -484,6 +484,9 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     const f = await renderDocsViewer(richDoc, false);
     const root = f.nativeElement as HTMLElement;
 
+    expect(f.componentInstance.ViewMode).toBe('edit');
+    f.componentInstance.SetViewMode('preview');
+    f.detectChanges();
     expect(f.componentInstance.ViewMode).toBe('preview');
     f.componentInstance.SetViewMode('edit');
     f.detectChanges();

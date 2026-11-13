@@ -2599,11 +2599,24 @@ export class SpreadsheetArtifactViewerComponent
     if (this.readonly || this.FallbackXlsxBytes !== null) {
       return false;
     }
-    if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+    if (this.ConnectionStatus === 'revoked') {
       return false;
     }
     if (this.artifactVersion?.ArtifactID) {
-      return this.Permissions?.CanEdit === true;
+      if (this.Permissions?.CanEdit !== true) {
+        return false;
+      }
+      if (
+        this.CollaborationSession &&
+        !this.CollaborationSession.CanEdit &&
+        this.ConnectionStatus === 'readonly'
+      ) {
+        return false;
+      }
+      return true;
+    }
+    if (this.ConnectionStatus === 'readonly') {
+      return false;
     }
     return true;
   }
@@ -2702,7 +2715,13 @@ export class SpreadsheetArtifactViewerComponent
               : 'local';
         }
       }
-      this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
+      const nextCanEdit =
+        !this.readonly &&
+        this.FallbackXlsxBytes === null &&
+        this.ConnectionStatus !== 'revoked' &&
+        !this.LiveSyncUnavailable &&
+        (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true);
+      this.CollaborationSession?.SetCanEdit(nextCanEdit);
       if (this.CollaborationSession) {
         this.ConnectionStatus = this.CollaborationSession.Status;
       }
