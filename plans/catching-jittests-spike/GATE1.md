@@ -318,7 +318,7 @@ Generator `gemini-4-hydrogen`. All decisions of this night, with their options, 
 
 | Setting | PRs | Mean USD per PR | PRs with a reported catch that is the known bug |
 |---|---|---|---|
-| Round 1: default thinking, one session per risk, no type check | 5 | 2.70 | 2 of 5 (#3831, #5906) |
+| Round 1: default thinking, one session per risk, no type check | 5 | 2.70 | 1 of 5 (#3831); on #5906 a test found the bug but it was not the reported one |
 | Round 3: medium thinking, shared session, type check | 3 | 0.73 | 1 of 3 (#3831) |
 | Validation: same, PRs with 2 or 3 packages | 4 | 2.85 | 1 of 3 checked (#4450) |
 | Round 7: kept settings | 5 | 2.07 | 1 of 5 (#4450) |
