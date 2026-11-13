@@ -5,6 +5,7 @@ import {
   MJCollectionEntity,
   StorageAccountWithProvider,
 } from '@memberjunction/core-entities';
+import type { ArtifactPreviewSnapshot } from '@memberjunction/ng-artifacts';
 
 /**
  * Primary surface layout mode of the Library workspace:
@@ -12,6 +13,22 @@ import {
  * - `'navigator'`: Power-user collapsible tree + list/grid + resizable Split Studio
  */
 export type LibrarySurfaceMode = 'hub' | 'navigator';
+
+/**
+ * Unified scope in the single-shell Library UX.
+ */
+export type LibraryUnifiedScope = 'home' | 'all' | 'shared' | 'starred' | 'collection' | 'drive';
+
+/**
+ * Unified layout mode (`Grid | List | Split`) that preserves the active scope.
+ */
+export type LibraryUnifiedLayout = 'grid' | 'list' | 'split';
+
+export interface LibraryBreadcrumbSegment {
+  Label: string;
+  Scope: LibraryUnifiedScope;
+  CollectionId?: string | null;
+}
 
 /**
  * Top-level tabs displayed in `Hub` mode.
@@ -65,6 +82,8 @@ export interface LibraryItemSummary {
   MimeType: string | null;
   FileName: string | null;
   ContentSnippet: string;
+  PreviewSnapshot?: ArtifactPreviewSnapshot | null;
+  ThumbnailDataUrl?: string | null;
   UpdatedAt: Date;
   OwnerUserId: string;
   OwnerName: string;

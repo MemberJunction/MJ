@@ -14,6 +14,11 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
 import { ArtifactFileService } from '../services/artifact-file.service';
 import { DocumentCollaborationService } from '../services/document-collaboration.service';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
+import {
+  BuildArtifactPreviewSnapshot,
+  BuildSvgThumbnailDataUrl,
+  MergeArtifactVersionPreviewConfig,
+} from '../utils/artifact-preview-thumbnail';
 
 /** Fields of the version list query: version metadata without Content. */
 const VERSION_LIST_FIELDS = [
@@ -1496,6 +1501,23 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       newVer.VersionNumber = nextVersionNum;
       newVer.Name = this.artifactVersion?.Name || this.Artifact.Name;
       newVer.Content = serializedContent;
+      const driverClass = this.Artifact.Type
+        ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type)?.DriverClass
+        : undefined;
+      const previewSnapshot = BuildArtifactPreviewSnapshot(
+        serializedContent,
+        driverClass,
+        newVer.Name,
+      );
+      const thumbnailDataUrl = BuildSvgThumbnailDataUrl(previewSnapshot);
+      const mergedConfig = MergeArtifactVersionPreviewConfig(
+        this.artifactVersion?.Configuration,
+        previewSnapshot,
+        thumbnailDataUrl,
+      );
+      if (mergedConfig !== null) {
+        newVer.Configuration = mergedConfig;
+      }
       const saved = await newVer.Save();
       if (saved) {
         if (newVer.ID) {

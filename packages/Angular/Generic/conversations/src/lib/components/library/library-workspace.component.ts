@@ -26,7 +26,10 @@ import {
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
-import { ArtifactIconService } from '@memberjunction/ng-artifacts';
+import {
+  ArtifactIconService,
+  ParseArtifactVersionConfiguration,
+} from '@memberjunction/ng-artifacts';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   FilterFieldConfig,
@@ -42,6 +45,7 @@ import {
 } from '../../services/library-creation.service';
 import { LibraryCreateDialogTab } from './library-create-dialog.component';
 import {
+  LibraryBreadcrumbSegment,
   LibraryCategoryFilter,
   LibraryCollectionNode,
   LibraryDriveSummary,
@@ -52,6 +56,8 @@ import {
   LibraryNavigatorSection,
   LibraryOwnershipFilter,
   LibrarySurfaceMode,
+  LibraryUnifiedLayout,
+  LibraryUnifiedScope,
   LibraryWorkspaceState,
 } from './library.models';
 
@@ -64,6 +70,7 @@ interface VersionSummaryRow {
   ContentMode: MJArtifactVersionEntity['ContentMode'];
   MimeType: string | null;
   FileName: string | null;
+  Configuration?: string | null;
   __mj_UpdatedAt: Date | string;
 }
 
@@ -107,6 +114,7 @@ const PERMISSION_PAGE_BATCH_SIZE = 4;
 const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
+const SETTING_LEFT_RAIL_COLLAPSED = 'MJ.Library.LeftRailCollapsed';
 
 const VERSION_SUMMARY_FIELDS: string[] = [
   'ID',
@@ -117,6 +125,7 @@ const VERSION_SUMMARY_FIELDS: string[] = [
   'ContentMode',
   'MimeType',
   'FileName',
+  'Configuration',
   '__mj_UpdatedAt',
 ];
 
@@ -424,23 +433,106 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     return this.AllItems.find((i) => UUIDsEqual(i.Id, this.ActiveArtifactId)) ?? null;
   }
 
+  public get UnifiedScope(): LibraryUnifiedScope {
+    if (
+      this.SelectedDriveId ||
+      (this.SurfaceMode === 'hub' && this.HubTab === 'drives') ||
+      (this.SurfaceMode === 'navigator' && this.NavigatorSection === 'drive')
+    ) {
+      return 'drive';
+    }
+    if (this.SelectedCollectionId) {
+      return 'collection';
+    }
+    if (this.SurfaceMode === 'navigator') {
+      if (this.NavigatorSection === 'shared') return 'shared';
+      if (this.NavigatorSection === 'starred') return 'starred';
+      return 'all';
+    }
+    if (this.HubTab === 'shared') return 'shared';
+    if (this.HubTab === 'all') return 'all';
+    return 'home';
+  }
+
+  public get UnifiedLayout(): LibraryUnifiedLayout {
+    if (this.SurfaceMode === 'navigator') return 'split';
+    return this.ListStyle === 'list' ? 'list' : 'grid';
+  }
+
+  public get LibraryBreadcrumbs(): LibraryBreadcrumbSegment[] {
+    const segments: LibraryBreadcrumbSegment[] = [{ Label: 'Library', Scope: 'home' }];
+    const scope = this.UnifiedScope;
+    if (scope === 'all') {
+      segments.push({ Label: 'All Items', Scope: 'all' });
+    } else if (scope === 'shared') {
+      segments.push({ Label: 'Shared with Me', Scope: 'shared' });
+    } else if (scope === 'starred') {
+      segments.push({ Label: 'Starred', Scope: 'starred' });
+    } else if (scope === 'collection') {
+      segments.push({ Label: 'Collections', Scope: 'home' });
+      for (const anc of this.SelectedCollectionAncestors) {
+        segments.push({ Label: anc.Name, Scope: 'collection', CollectionId: anc.Id });
+      }
+    } else if (scope === 'drive') {
+      segments.push({
+        Label: this.SelectedDrive?.AccountName || 'Connected Drives',
+        Scope: 'drive',
+      });
+    }
+    return segments;
+  }
+
+  public get CurrentScopeLabel(): string {
+    const scope = this.UnifiedScope;
+    if (scope === 'collection' && this.SelectedCollectionNode) {
+      return this.SelectedCollectionNode.Name;
+    }
+    if (scope === 'drive') {
+      return this.SelectedDrive?.AccountName || 'Connected Drives';
+    }
+    if (scope === 'shared') return 'Shared with Me';
+    if (scope === 'starred') return 'Starred Items';
+    if (scope === 'all') return 'All Items';
+    return 'Library Home';
+  }
+
+  public get CurrentScopeSubtitle(): string {
+    const scope = this.UnifiedScope;
+    if (scope === 'collection' && this.SelectedCollectionNode) {
+      return this.SelectedCollectionNode.Description || 'Collection items and nested folders';
+    }
+    if (scope === 'drive' && this.SelectedDrive) {
+      return `${this.SelectedDrive.ProviderName} · Dynamic remote browsing`;
+    }
+    if (scope === 'shared') {
+      return 'Documents, spreadsheets, slides, and collections shared with you';
+    }
+    if (scope === 'starred') {
+      return 'Pinned items for instant access';
+    }
+    if (scope === 'all') {
+      return 'All native documents, spreadsheets, presentations, components, queries, and files';
+    }
+    return 'Your documents, spreadsheets, presentations, and collections in one unified workspace';
+  }
+
+  public get SubCollectionsOfSelected(): LibraryCollectionNode[] {
+    if (!this.SelectedCollectionId) return [];
+    return this.SelectedCollectionNode?.Children ?? [];
+  }
+
   public get FilteredItems(): LibraryItemSummary[] {
     let items = this.AllItems;
 
-    // Scope by active surface view
-    if (this.SurfaceMode === 'hub') {
-      if (this.HubTab === 'shared') {
-        items = items.filter((i) => i.IsSharedWithMe);
-      }
-    } else {
-      if (this.NavigatorSection === 'shared') {
-        items = items.filter((i) => i.IsSharedWithMe);
-      } else if (this.NavigatorSection === 'starred') {
-        items = items.filter((i) => i.IsStarred);
-      } else if (this.NavigatorSection === 'collection' && this.SelectedCollectionId) {
-        const targetId = NormalizeUUID(this.SelectedCollectionId);
-        items = items.filter((i) => i.CollectionIds.some((cid) => NormalizeUUID(cid) === targetId));
-      }
+    // Scope by unified scope (preserved across Grid / List / Split layouts)
+    const scope = this.UnifiedScope;
+    if (scope === 'shared') {
+      items = items.filter((i) => i.IsSharedWithMe);
+    } else if (scope === 'starred') {
+      items = items.filter((i) => i.IsStarred);
+    } else if (scope === 'collection' && this.SelectedCollectionId) {
+      const targetId = NormalizeUUID(this.SelectedCollectionId);
+      items = items.filter((i) => i.CollectionIds.some((cid) => NormalizeUUID(cid) === targetId));
     }
 
     // Category filter
@@ -566,7 +658,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   }
 
   public OpenCollectionById(collectionId: string): void {
-    this.SurfaceMode = 'navigator';
     this.NavigatorSection = 'collection';
     this.SelectedCollectionId = collectionId;
     this.SelectedDriveId = null;
@@ -574,6 +665,71 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsFullCanvasOpen = false;
     this.expandAncestorsOf(collectionId);
     this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  public SetUnifiedScope(scope: LibraryUnifiedScope, collectionId?: string | null): void {
+    this.IsFullCanvasOpen = false;
+    if (scope === 'collection') {
+      const targetId = collectionId ?? this.SelectedCollectionId;
+      if (!targetId) {
+        this.SetUnifiedScope('home');
+        return;
+      }
+      this.NavigatorSection = 'collection';
+      this.SelectedCollectionId = targetId;
+      this.SelectedDriveId = null;
+      this.DriveFolderPrefix = '';
+      this.expandAncestorsOf(targetId);
+    } else if (scope === 'drive') {
+      this.HubTab = 'drives';
+      this.NavigatorSection = 'drive';
+      this.SelectedCollectionId = null;
+      if (!this.SelectedDriveId && this.ConnectedDrives.length > 0) {
+        this.SelectedDriveId = this.ConnectedDrives[0].AccountId;
+      }
+    } else {
+      this.SelectedCollectionId = null;
+      this.SelectedDriveId = null;
+      this.DriveFolderPrefix = '';
+      if (scope === 'shared') {
+        this.HubTab = 'shared';
+        this.NavigatorSection = 'shared';
+      } else if (scope === 'starred') {
+        this.HubTab = 'all';
+        this.NavigatorSection = 'starred';
+      } else if (scope === 'all') {
+        this.HubTab = 'all';
+        this.NavigatorSection = 'all';
+      } else {
+        this.HubTab = 'overview';
+        this.NavigatorSection = 'all';
+      }
+    }
+    this.emitWorkspaceState();
+    this.cdr.detectChanges();
+  }
+
+  public SetUnifiedLayout(layout: LibraryUnifiedLayout): void {
+    this.IsFullCanvasOpen = false;
+    if (layout === 'split') {
+      this.ListStyle = 'cards';
+      if (!this.ActiveArtifactId && this.FilteredItems.length > 0 && this.UnifiedScope !== 'drive') {
+        this.ActiveArtifactId = this.FilteredItems[0].Id;
+        this.ActiveVersionNumber = undefined;
+      }
+      this.SwitchSurfaceMode('navigator', true);
+      return;
+    }
+    const nextListStyle: LibraryListStyle = layout === 'list' ? 'list' : 'cards';
+    this.ListStyle = nextListStyle;
+    this.saveSettingSafe(SETTING_LIST_STYLE, nextListStyle);
+    this.SwitchSurfaceMode('hub', true);
+  }
+
+  public ToggleLeftRail(): void {
+    this.LeftRailCollapsed = !this.LeftRailCollapsed;
+    this.saveSettingSafe(SETTING_LEFT_RAIL_COLLAPSED, this.LeftRailCollapsed ? '1' : '0');
     this.cdr.detectChanges();
   }
 
@@ -2210,6 +2366,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         .map((cid) => readableColById.get(cid))
         .filter((c): c is MJCollectionEntity => !!c);
 
+      const parsedConfig = ParseArtifactVersionConfiguration(latest?.Configuration);
+
       items.push({
         Id: art.ID,
         Name: art.Name,
@@ -2227,6 +2385,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         MimeType: latest?.MimeType ?? typeEntity?.ContentType ?? null,
         FileName: latest?.FileName ?? null,
         ContentSnippet: art.Description || latest?.Description || typeEntity?.Description || '',
+        PreviewSnapshot: parsedConfig?.previewSnapshot ?? null,
+        ThumbnailDataUrl: parsedConfig?.thumbnailDataUrl ?? null,
         UpdatedAt: art.__mj_UpdatedAt instanceof Date ? art.__mj_UpdatedAt : new Date(art.__mj_UpdatedAt),
         OwnerUserId: art.UserID,
         OwnerName: art.User || (isOwner ? 'You' : 'Shared'),
@@ -2394,15 +2554,13 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
     if (
       params.collectionId &&
-      params.mode !== 'hub' &&
       !params.driveId &&
       (!params.section || params.section === 'collection')
     ) {
       this.SelectedCollectionId = params.collectionId;
-      this.SurfaceMode = 'navigator';
       this.NavigatorSection = 'collection';
       this.expandAncestorsOf(params.collectionId);
-    } else if (params.mode !== 'hub' && (!params.section || params.section !== 'collection')) {
+    } else if (!params.section || params.section !== 'collection') {
       this.SelectedCollectionId = null;
     }
 
@@ -2449,6 +2607,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
     if (listStyle === 'cards' || listStyle === 'list') {
       this.ListStyle = listStyle;
+    }
+    const railCollapsed = UserInfoEngine.Instance.GetSetting(SETTING_LEFT_RAIL_COLLAPSED);
+    if (railCollapsed === '1' || railCollapsed === 'true') {
+      this.LeftRailCollapsed = true;
+    } else if (railCollapsed === '0' || railCollapsed === 'false') {
+      this.LeftRailCollapsed = false;
     }
     const starredRaw = UserInfoEngine.Instance.GetSetting(SETTING_STARRED_IDS);
     if (starredRaw) {
