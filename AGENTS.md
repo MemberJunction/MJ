@@ -580,7 +580,7 @@ describe('ClassName', () => {
 ### CI/CD Integration
 
 - **Every PR** must pass unit tests before merging (GitHub Actions gate)
-- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not CI
+- **Every release** is validated by `.github/workflows/release-test.yml` (full unit suite as a publish gate, plus a nightly Playwright e2e lane when secrets are configured) — the Docker regression stack is a local tool, not a PR gate (`regression-replay-scripts.yml` runs it on demand to refresh replay scripts)
 - Tests are cached by Turborepo — unchanged packages skip test execution
 
 ## Switching Database Platforms (SQL Server ↔ PostgreSQL)

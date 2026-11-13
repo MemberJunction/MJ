@@ -229,6 +229,18 @@ Three things worth knowing:
   driven by the config, not by what the file already contains — so a pull with the entries removed
   writes the scripts into the test JSONs and orphans the files.
 
+**Getting scripts into git.** Two paths run the suite, pull the scripts back into these files, check
+that only script files and their `ReplayScript`/`PendingReplayScript` references changed, and open
+a PR:
+
+- The `regression-replay-pr` Claude skill, on your machine, for any branch (usually `next`).
+- The `Regression replay scripts` GitHub workflow (`.github/workflows/regression-replay-scripts.yml`),
+  on demand, or nightly when the `REGRESSION_NIGHTLY` repository variable is `true`. It needs the
+  secrets listed at the top of the workflow.
+
+Neither path promotes a pending script by itself: the PR body lists each pending script with its
+drift report, for a person to promote or discard.
+
 ## Tuning Failing Tests
 
 When a test fails, the first questions to ask:
