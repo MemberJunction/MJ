@@ -3,7 +3,7 @@ import type { BaseLLM } from '@memberjunction/ai';
 import { GetTextFromContent } from '@memberjunction/ai';
 import { BaseCatchJudge } from '../contracts/BaseCatchJudge';
 import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
-import type { Bucket, CatchContext, JudgeScore, TokenUsage } from '../types';
+import type { Bucket, CatchContext, JudgeScore, TokenUsage, Vendor } from '../types';
 import { SafeChat, JUDGE_ERROR_PREFIX } from './SafeChat';
 import { BuildJudgeInput, BUCKET_SCORE } from './JudgePanel';
 import { AddUsage, NoUsage, UsageFromChat, type Price } from '../generator/UsageCounter';
@@ -62,8 +62,11 @@ function parseAnswer(text: string): { bucket: Bucket; reason: string } | null {
 
 /** Bucket judge: asks for `{"bucket","reason"}`, retries once on an unreadable reply, and maps High/Medium/Low to 1/0/−1. */
 export class BucketJudge extends BaseCatchJudge {
-    /** `price` (per million tokens) prices the reported usage; without one the cost is 0. */
-    constructor(private readonly llm: BaseLLM, private readonly model: string, private readonly price: Price | null = null) { super(); }
+    /**
+     * `price` (per million tokens) prices the reported usage; without one the cost is 0. For an `Anthropic` vendor the
+     * prompt marks its run-constant part for the provider's prompt cache.
+     */
+    constructor(private readonly llm: BaseLLM, private readonly model: string, private readonly price: Price | null = null, private readonly vendor: Vendor | null = null) { super(); }
 
     public get Name(): string { return `Bucket:${this.model}`; }
 
@@ -71,7 +74,7 @@ export class BucketJudge extends BaseCatchJudge {
 
     /** A provider error returns at once, without a retry, with a Reason that starts with {@link JUDGE_ERROR_PREFIX}; the panel then records no bucket for this judge. */
     public async Judge(c: CatchContext): Promise<JudgeScore> {
-        const input = BuildJudgeInput(c);
+        const input = BuildJudgeInput(c, this.vendor === 'Anthropic');
         let usage: TokenUsage | null = null;
         for (let attempt = 0; attempt < 2; attempt++) {
             const r = await SafeChat(this.llm, { model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: input }], temperature: 0, maxOutputTokens: MAX_OUTPUT_TOKENS });

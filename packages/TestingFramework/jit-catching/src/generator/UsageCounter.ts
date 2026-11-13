@@ -44,19 +44,25 @@ export class UsageCounter {
     }
 }
 
-/** Cost in dollars of a token count at a price per million tokens; 0 without a price. */
-function costUSD(inputTokens: number, cacheReadTokens: number, outputTokens: number, price: Price | null): number {
+/** A cache write costs this many times the input price (Anthropic, 5-minute cache). */
+const CACHE_WRITE_PRICE_FACTOR = 1.25;
+
+/**
+ * Cost in dollars of a token count at a price per million tokens; 0 without a price. `inputTokens` is priced at the
+ * input price; `cacheWriteTokens` is an extra count priced at {@link CACHE_WRITE_PRICE_FACTOR} times it.
+ */
+function costUSD(inputTokens: number, cacheReadTokens: number, outputTokens: number, price: Price | null, cacheWriteTokens = 0): number {
     if (!price) return 0;
-    return (inputTokens * price.Input + cacheReadTokens * price.CachedInput + outputTokens * price.Output) / 1_000_000;
+    return (inputTokens * price.Input + cacheWriteTokens * price.Input * CACHE_WRITE_PRICE_FACTOR + cacheReadTokens * price.CachedInput + outputTokens * price.Output) / 1_000_000;
 }
 
 /**
  * Token usage of one MJ provider call: uncached plus cache-write input as `InputTokens`, cache reads apart, and the
- * cost from `price`. A call without usage counts as zero tokens.
+ * cost from `price` (cache writes at 1.25 times the input price, cache reads at the cached price). A call without usage counts as zero tokens.
  */
 export function UsageFromChat(model: string, u: ModelUsage | undefined, price: Price | null): TokenUsage {
-    const input = (u?.promptTokens ?? 0) + (u?.cacheWriteTokens ?? 0); const cached = u?.cacheReadTokens ?? 0; const output = u?.completionTokens ?? 0;
-    return { Model: model, InputTokens: input, OutputTokens: output, CacheReadTokens: cached, CostUSD: costUSD(input, cached, output, price) };
+    const uncached = u?.promptTokens ?? 0; const written = u?.cacheWriteTokens ?? 0; const cached = u?.cacheReadTokens ?? 0; const output = u?.completionTokens ?? 0;
+    return { Model: model, InputTokens: uncached + written, OutputTokens: output, CacheReadTokens: cached, CostUSD: costUSD(uncached, cached, output, price, written) };
 }
 
 /** Sum of two usages, under the model of the first. */
