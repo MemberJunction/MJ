@@ -4859,7 +4859,7 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     if (this.session.Undo()) {
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
     }
   }
 
@@ -4868,13 +4868,13 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     if (this.session.Redo()) {
-      this.cdr.markForCheck();
+      this.cdr.detectChanges();
     }
   }
 
-  @HostListener('keydown', ['$event'])
+  @HostListener('document:keydown', ['$event'])
   public OnViewerKeydown(event: KeyboardEvent): void {
-    if (!this.CanUserEdit) {
+    if (!this.CanUserEdit || this.ViewMode === 'preview' || this.isComponentDestroyed) {
       return;
     }
     const isMod = event.metaKey || event.ctrlKey;
@@ -4886,6 +4886,7 @@ export class MarkdownArtifactViewerComponent
     const isModalOrCommentInput =
       target !== null &&
       (target.tagName === 'INPUT' ||
+        target.tagName === 'SELECT' ||
         (target.tagName === 'TEXTAREA' && !target.classList.contains('mj-docs-source-editor')));
     if (isModalOrCommentInput) {
       return;
@@ -5047,6 +5048,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnSegmentSurfaceFocus(seg: DocumentRenderSegment): void {
+    if (this.lastFocusedSegmentId && this.lastFocusedSegmentId !== seg.SegmentID) {
+      this.session?.StopUndoCapture();
+    }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
     this.lastFocusedListItemIndex = null;
@@ -5055,6 +5059,12 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnListItemFocus(seg: DocumentRenderSegment, itemIndex: number): void {
+    if (
+      (this.lastFocusedSegmentId && this.lastFocusedSegmentId !== seg.SegmentID) ||
+      (this.lastFocusedListItemIndex !== null && this.lastFocusedListItemIndex !== itemIndex)
+    ) {
+      this.session?.StopUndoCapture();
+    }
     this.lastFocusedSegmentId = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
     this.lastFocusedListItemIndex = itemIndex;

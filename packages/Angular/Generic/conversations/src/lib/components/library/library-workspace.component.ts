@@ -749,7 +749,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(result.Artifact.ID, {
       fullCanvas: true,
-      versionNumber: result.Version.VersionNumber,
     });
   }
 
@@ -757,7 +756,6 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     await this.ReloadWorkspaceData();
     this.OpenArtifactStudio(event.ArtifactId, {
       fullCanvas: true,
-      versionNumber: event.VersionNumber,
     });
   }
 
@@ -2419,8 +2417,14 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
 
     if (params.artifactId) {
       this.ActiveArtifactId = params.artifactId;
-      const parsedVer = params.version ? Number(params.version) : undefined;
-      this.ActiveVersionNumber = parsedVer && Number.isFinite(parsedVer) ? parsedVer : undefined;
+      const rawVersion =
+        params.version != null ? String(params.version).trim().toLowerCase() : undefined;
+      const parsedVer =
+        rawVersion && rawVersion !== 'latest' ? Number(rawVersion) : undefined;
+      this.ActiveVersionNumber =
+        parsedVer !== undefined && Number.isFinite(parsedVer) && parsedVer > 0
+          ? Math.floor(parsedVer)
+          : undefined;
       this.IsFullCanvasOpen =
         params.canvas === '1' || params.canvas === 'true' || params.canvas === true || this.SurfaceMode === 'hub';
     } else {

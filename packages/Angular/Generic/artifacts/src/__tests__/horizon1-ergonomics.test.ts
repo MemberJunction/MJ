@@ -11,6 +11,7 @@ import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
 } from '../lib/services/document-collaboration.service';
+import { ArtifactIconService } from '../lib/services/artifact-icon.service';
 import {
   DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS,
   SHEETS_TOOLBAR_PINS_SETTING_KEY,
@@ -269,6 +270,31 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       const cmds = service.GetSlashCommands('sheet');
       expect(cmds.some((c) => c.Command === '/sheet-chart')).toBe(true);
       expect(cmds.some((c) => c.Command === '/sheet-range')).toBe(true);
+    });
+  });
+
+  describe('Multi-step Undo & ArtifactIconService FA6 Free normalization', () => {
+    it('splits undo steps on StopUndoCapture so multiple sequential block edits undo one by one', () => {
+      const service = new DocumentCollaborationService();
+      const session = service.CreateSession('multi-undo-doc', 'Block A\n\nBlock B', { id: 'u1', name: 'Alice' }, true, false);
+      session.SetContent('Block A edited\n\nBlock B');
+      session.StopUndoCapture();
+      session.SetContent('Block A edited\n\nBlock B edited');
+
+      expect(session.CanUndo).toBe(true);
+      expect(session.Undo()).toBe(true);
+      expect(session.GetContent()).toBe('Block A edited\n\nBlock B');
+      expect(session.CanUndo).toBe(true);
+      expect(session.Undo()).toBe(true);
+      expect(session.GetContent()).toBe('Block A\n\nBlock B');
+      session.Destroy();
+    });
+
+    it('normalizes bare and Pro-only spreadsheet icon tokens to fa-solid Font Awesome 6 Free classes', () => {
+      const iconService = new ArtifactIconService();
+      expect(iconService.NormalizeMetadataIcon('fa-file-excel')).toBe('fa-solid fa-file-excel');
+      expect(iconService.NormalizeMetadataIcon('fa-file-spreadsheet')).toBe('fa-solid fa-file-excel');
+      expect(iconService.NormalizeMetadataIcon('fa-solid fa-file-lines')).toBe('fa-solid fa-file-lines');
     });
   });
 });

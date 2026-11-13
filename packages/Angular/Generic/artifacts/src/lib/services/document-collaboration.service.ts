@@ -752,6 +752,14 @@ export class DocumentCollaborationSession {
     return true;
   }
 
+  /**
+   * Closes the current undo capture window so subsequent edits form a distinct undo step
+   * (e.g., when moving focus between blocks, cells, or slides).
+   */
+  public StopUndoCapture(): void {
+    this.undoManager?.stopCapturing();
+  }
+
   public get Recoverable(): boolean {
     return this.recoverable;
   }
