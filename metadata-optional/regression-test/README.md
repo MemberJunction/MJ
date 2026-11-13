@@ -163,6 +163,9 @@ Always add `regression` as a tag too. Other useful tags: `smoke`, `crud`, `auth`
 
 ## Adding a New Test
 
+The `author-regression-test` Claude skill runs these steps from your branch's UI changes: it lists
+the related tests, proposes new ones, scaffolds them, and can record the first replay script.
+
 1. **Scaffold it.** The command picks the next free number, writes the test file, adds the suite member, and runs the parity check. It does not touch a database.
    ```bash
    pnpm mj test regression new --name "My new test" --priority P1 --tags my-area \

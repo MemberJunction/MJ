@@ -5,7 +5,7 @@
  * Checks the MJ Explorer regression suite metadata in `metadata-optional/regression-test/`:
  *   - every `tests/regression/.T###-*.json` file is a member of `.regression-suite.json`, and
  *     every member names an existing test;
- *   - test numbers, test names and member sequences are unique, and each Name starts with the
+ *   - test numbers, test names, member sequences and record IDs are unique, and each Name starts with the
  *     file's `T### - ` prefix;
  *   - each test has a primaryKey UUID, the Computer Use TypeID, a Description, a Status, an
  *     InputDefinition goal and startUrl, judge criteria (judgeValidationCriteria or checkpoints),
@@ -103,6 +103,12 @@ function findDuplicates(items, keyOf) {
     return [...groups.entries()].filter(([, group]) => group.length > 1);
 }
 
+/** The record's primaryKey ID in upper case (UUIDs compare without case), or null. */
+function recordId(record) {
+    const id = String(record?.primaryKey?.ID ?? '');
+    return UUID_RE.test(id) ? id.toUpperCase() : null;
+}
+
 /** Checks one test record. Returns its summary, or null when it has no fields. */
 function checkTestRecord(rel, numberText, record, problems) {
     const fields = record?.fields;
@@ -146,6 +152,7 @@ function checkTestRecord(rel, numberText, record, problems) {
 
     return {
         rel,
+        id: recordId(record),
         number: Number(numberText),
         name: isNonEmptyString(fields.Name) ? fields.Name : null,
         configuration: isPlainObject(fields.Configuration) ? fields.Configuration : {},
@@ -195,7 +202,7 @@ function readMembers(repoRoot, problems) {
         }
         if (!Number.isInteger(fields.Sequence) || fields.Sequence < 1) problems.push(`${where}: Sequence must be a positive integer`);
         if (!UUID_RE.test(String(member.primaryKey?.ID ?? ''))) problems.push(`${where}: missing primaryKey.ID (generate one with: uuidgen)`);
-        members.push({ name: testId.slice(MEMBER_LOOKUP_PREFIX.length), sequence: fields.Sequence, where });
+        members.push({ name: testId.slice(MEMBER_LOOKUP_PREFIX.length), sequence: fields.Sequence, id: recordId(member), where });
     });
     return members;
 }
@@ -213,6 +220,12 @@ function checkUniqueness(tests, members, problems) {
     }
     for (const [sequence, group] of findDuplicates(members, (m) => (Number.isInteger(m.sequence) ? m.sequence : null))) {
         problems.push(`${SUITE_FILE}: Sequence ${sequence} is used by ${group.map((m) => `"${m.name}"`).join(', ')}`);
+    }
+    for (const [id, group] of findDuplicates(tests, (t) => t.id)) {
+        problems.push(`primaryKey.ID ${id} is used by ${group.map((t) => t.rel).join(', ')} (give the copy a new one: uuidgen)`);
+    }
+    for (const [id, group] of findDuplicates(members, (m) => m.id)) {
+        problems.push(`${SUITE_FILE}: primaryKey.ID ${id} is used by ${group.map((m) => `"${m.name}"`).join(', ')} (give the copy a new one: uuidgen)`);
     }
 }
 
