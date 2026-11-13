@@ -2599,11 +2599,24 @@ export class SpreadsheetArtifactViewerComponent
     if (this.readonly || this.FallbackXlsxBytes !== null) {
       return false;
     }
-    if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+    if (this.ConnectionStatus === 'revoked') {
       return false;
     }
     if (this.artifactVersion?.ArtifactID) {
-      return this.Permissions?.CanEdit === true;
+      if (this.Permissions?.CanEdit !== true) {
+        return false;
+      }
+      if (
+        this.CollaborationSession &&
+        !this.CollaborationSession.CanEdit &&
+        this.ConnectionStatus === 'readonly'
+      ) {
+        return false;
+      }
+      return true;
+    }
+    if (this.ConnectionStatus === 'readonly') {
+      return false;
     }
     return true;
   }
@@ -2621,7 +2634,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get CanEdit(): boolean {
-    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
   public get CanComment(): boolean {
@@ -2702,7 +2715,13 @@ export class SpreadsheetArtifactViewerComponent
               : 'local';
         }
       }
-      this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
+      const nextCanEdit =
+        !this.readonly &&
+        this.FallbackXlsxBytes === null &&
+        this.ConnectionStatus !== 'revoked' &&
+        !this.LiveSyncUnavailable &&
+        (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true);
+      this.CollaborationSession?.SetCanEdit(nextCanEdit);
       if (this.CollaborationSession) {
         this.ConnectionStatus = this.CollaborationSession.Status;
       }
@@ -2980,12 +2999,12 @@ export class SpreadsheetArtifactViewerComponent
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.ConnectionStatus = status;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.CollaboratorsChanged$.subscribe((collabs: CollaboratorPresence[]) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.Collaborators = collabs;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
@@ -3094,6 +3113,9 @@ export class SpreadsheetArtifactViewerComponent
         } else {
           this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
         }
+      }
+      if (!this.isComponentDestroyed) {
+        this.cdr.detectChanges();
       }
       await this.loadPersistedSheetRangeComments();
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {

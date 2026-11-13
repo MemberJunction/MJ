@@ -2145,11 +2145,20 @@ export class SlideDeckArtifactViewerComponent
     if (this.readonly) {
       return false;
     }
-    if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+    if (this.ConnectionStatus === 'revoked') {
       return false;
     }
     if (this.artifactVersion?.ArtifactID) {
-      return this.ResolvedPermissions?.CanEdit === true;
+      if (this.ResolvedPermissions?.CanEdit !== true) {
+        return false;
+      }
+      if (this.session && !this.session.CanEdit && this.ConnectionStatus === 'readonly') {
+        return false;
+      }
+      return true;
+    }
+    if (this.ConnectionStatus === 'readonly') {
+      return false;
     }
     return true;
   }
@@ -2167,7 +2176,7 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public get IsEditable(): boolean {
-    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
   public get CanComment(): boolean {
@@ -2277,13 +2286,19 @@ export class SlideDeckArtifactViewerComponent
         !this.LiveSyncUnavailable
       ) {
         if (!this.artifactVersion?.ArtifactID || this.ResolvedPermissions?.CanEdit === true) {
-          this.ConnectionStatus =
+          const nextStatus =
             this.session?.Status && this.session.Status !== 'readonly'
               ? this.session.Status
               : 'local';
+          this.ConnectionStatus = nextStatus;
         }
       }
-      this.session?.SetCanEdit(this.hasPermissionToEdit);
+      const nextCanEdit =
+        !this.readonly &&
+        this.ConnectionStatus !== 'revoked' &&
+        !this.LiveSyncUnavailable &&
+        (!this.artifactVersion?.ArtifactID || this.ResolvedPermissions?.CanEdit === true);
+      this.session?.SetCanEdit(nextCanEdit);
       if (this.session) {
         this.ConnectionStatus = this.session.Status;
       }
@@ -3498,11 +3513,15 @@ export class SlideDeckArtifactViewerComponent
       }),
       this.session.StatusChanged$.subscribe((status) => {
         this.ConnectionStatus = status;
-        this.cdr.markForCheck();
+        if (!this.isComponentDestroyed) {
+          this.cdr.detectChanges();
+        }
       }),
       this.session.CollaboratorsChanged$.subscribe((peers) => {
         this.Collaborators = peers;
-        this.cdr.markForCheck();
+        if (!this.isComponentDestroyed) {
+          this.cdr.detectChanges();
+        }
       }),
       this.session.VersionSaved$.subscribe(({ versionNumber }) => {
         this.lastSavedComparableDeckJson = this.getComparableDeckJson(this.Deck);
@@ -3739,6 +3758,10 @@ export class SlideDeckArtifactViewerComponent
       this.PermissionVerifyError = true;
       this.ConnectionStatus = 'readonly';
       this.session?.SetCanEdit(false);
+    }
+
+    if (!this.isComponentDestroyed) {
+      this.cdr.detectChanges();
     }
 
     if (this.permissionUnsub) {
