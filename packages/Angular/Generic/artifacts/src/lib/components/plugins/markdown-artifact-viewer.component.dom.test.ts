@@ -841,4 +841,46 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     });
     expect(comp.MarkdownContent).toContain('# Governance Report — Final');
   });
+
+  it('renders WYSIWYG <strong>/<em> inside contenteditable surfaces and round-trips DOM bold/italic elements cleanly', async () => {
+    const mock = createDocsMockProvider();
+    const f = await renderDocsViewer(
+      '# Demo Doc\n\n- Collaborative real-time editing\n\nPlain paragraph text',
+      false,
+      mock.provider,
+    );
+    const root = f.nativeElement as HTMLElement;
+    const comp = f.componentInstance;
+
+    const listSeg = comp.DocumentSegments[1];
+    expect(listSeg.BlockKind).toBe('list');
+    const listEl = root.querySelector<HTMLElement>(`[data-testid="list-item-text-${listSeg.SegmentID}-0"]`);
+    expect(listEl).not.toBeNull();
+
+    // Select 'ative' in 'Collaborative' via visible DOM snapshot and apply Bold + Italic
+    comp.OnListItemFocus(listSeg, 0);
+    comp.CaptureSelectionSnapshot({
+      segmentId: listSeg.SegmentID,
+      listItemIndex: 0,
+      start: 8,
+      end: 13,
+    });
+    comp.InsertFormattingSnippet('**', '**');
+    f.detectChanges();
+
+    const updatedListSeg = comp.DocumentSegments[1];
+    const updatedListEl = root.querySelector<HTMLElement>(
+      `[data-testid="list-item-text-${updatedListSeg.SegmentID}-0"]`,
+    );
+    expect(updatedListEl).not.toBeNull();
+    expect(updatedListEl?.querySelector('strong')?.textContent).toBe('ative');
+    expect(updatedListEl?.textContent).toBe('Collaborative real-time editing');
+
+    // Simulate native browser <em> / <b> DOM nodes created inside contenteditable and verify ExtractMarkdownFromEditableElement round-trips them
+    const syntheticEditable = document.createElement('div');
+    syntheticEditable.innerHTML = 'Hello <b>bold</b> and <em>italic</em> and <code>snippet</code>';
+    expect(comp.ExtractMarkdownFromEditableElement(syntheticEditable)).toBe(
+      'Hello **bold** and *italic* and `snippet`',
+    );
+  });
 });

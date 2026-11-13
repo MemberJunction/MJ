@@ -2344,6 +2344,42 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     expect(blockViewer.DocumentSegments[0].BlockKind).toBe('callout');
     expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('> [!NOTE]\n> Release Readiness Notes');
   });
+
+  it('renders WYSIWYG inline HTML (<strong>, <em>, <code>) for editable blocks and serializes DOM formatting back to Markdown while preserving visible selection offsets', () => {
+    const viewer = createEditableDocsViewer('Collabor**ative** and *italic* and `code`');
+
+    // 1. RenderInlineEditableHtml produces true WYSIWYG HTML tags without literal ** or *
+    const rendered = viewer.RenderInlineEditableHtml('Collabor**ative** and *italic* and `code`');
+    expect(rendered).toBe('Collabor<strong>ative</strong> and <em>italic</em> and <code>code</code>');
+
+    // 2. RenderInlineEditableHtml escapes raw HTML entities safely while preserving inline formatting
+    expect(viewer.RenderInlineEditableHtml('<script> & **bold** & ***both***')).toBe(
+      '&lt;script&gt; &amp; <strong>bold</strong> &amp; <strong><em>both</em></strong>',
+    );
+
+    // 3. Toggling Italic on already-bold text creates ***both*** and toggles back cleanly using visible offsets
+    const seg0 = viewer.DocumentSegments[0];
+    viewer.OnSegmentSurfaceFocus(seg0);
+    // Visible string is "Collaborative and italic and code"; "ative" is visible offsets 8..13
+    viewer.CaptureSelectionSnapshot({
+      segmentId: seg0.SegmentID,
+      start: 8,
+      end: 13,
+    });
+    viewer.InsertFormattingSnippet('*', '*');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collabor***ative*** and *italic* and `code`');
+    expect(viewer.RenderInlineEditableHtml(viewer.DocumentSegments[0].RawMarkdown)).toBe(
+      'Collabor<strong><em>ative</em></strong> and <em>italic</em> and <code>code</code>',
+    );
+
+    // Toggling Bold off on ***ative*** leaves *ative* (italic only)
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collabor*ative* and *italic* and `code`');
+
+    // Toggling Italic off on *ative* leaves plain text
+    viewer.InsertFormattingSnippet('*', '*');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collaborative and *italic* and `code`');
+  });
 });
 
 

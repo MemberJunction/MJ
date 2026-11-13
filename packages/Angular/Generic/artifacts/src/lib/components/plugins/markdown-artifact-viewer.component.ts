@@ -96,6 +96,16 @@ export interface DocsSelectionSnapshot {
   end: number;
 }
 
+interface DocsInlineToken {
+  kind: 'text' | 'code' | 'bold_italic' | 'bold' | 'italic';
+  mdStart: number;
+  mdEnd: number;
+  visStart: number;
+  visEnd: number;
+  markerLen: number;
+  content: string;
+}
+
 /**
  * Collaborative Rich Document Editor & Viewer plugin for `"Markdown Document"` artifacts (§ 4).
  *
@@ -833,7 +843,7 @@ export interface DocsSelectionSnapshot {
                                   role="textbox"
                                   data-placeholder="Heading title (press Enter for paragraph below)…"
                                   [attr.data-testid]="'editable-heading-' + seg.SegmentID"
-                                  [textContent]="seg.HeadingText ?? GetEditableHeadingText(seg)"
+                                  [innerHTML]="RenderInlineEditableHtml(seg.HeadingText ?? GetEditableHeadingText(seg))"
                                   (focus)="OnSegmentSurfaceFocus(seg)"
                                   (input)="OnEditableBlockInput(seg, $event)"
                                   (blur)="CommitEditableHeading(seg, $event)"
@@ -885,7 +895,7 @@ export interface DocsSelectionSnapshot {
                                           <th
                                             contenteditable="true"
                                             [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
-                                            [textContent]="hdr"
+                                            [innerHTML]="RenderInlineEditableHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
                                             (blur)="UpdateTableHeaderCell(seg, cIdx, $event)"
                                           ></th>
@@ -899,7 +909,7 @@ export interface DocsSelectionSnapshot {
                                             <td
                                               contenteditable="true"
                                               [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
-                                              [textContent]="cell"
+                                              [innerHTML]="RenderInlineEditableHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
                                               (blur)="UpdateTableBodyCell(seg, rIdx, cIdx, $event)"
                                             ></td>
@@ -937,7 +947,7 @@ export interface DocsSelectionSnapshot {
                                         role="textbox"
                                         data-placeholder="List item (press Enter for next, or Enter when empty to exit)…"
                                         [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
-                                        [textContent]="item.Text"
+                                        [innerHTML]="RenderInlineEditableHtml(item.Text)"
                                         (focus)="OnListItemFocus(seg, item.Index)"
                                         (input)="OnEditableBlockInput(seg, $event)"
                                         (blur)="UpdateListItemText(seg, item.Index, $event)"
@@ -983,7 +993,7 @@ export interface DocsSelectionSnapshot {
                                     role="textbox"
                                     data-placeholder="Callout details (press Enter for paragraph below)…"
                                     [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
-                                    [textContent]="callout.BodyText"
+                                    [innerHTML]="RenderInlineEditableHtml(callout.BodyText)"
                                     (focus)="OnSegmentSurfaceFocus(seg)"
                                     (input)="OnEditableBlockInput(seg, $event)"
                                     (blur)="CommitEditableCallout(seg, $event)"
@@ -1029,7 +1039,7 @@ export interface DocsSelectionSnapshot {
                                 aria-multiline="true"
                                 data-placeholder="Type text, '/' for commands, '#' for heading, or '-' for list…"
                                 [attr.data-testid]="'editable-paragraph-' + seg.SegmentID"
-                                [textContent]="seg.RawMarkdown"
+                                [innerHTML]="RenderInlineEditableHtml(seg.RawMarkdown)"
                                 (focus)="OnSegmentSurfaceFocus(seg)"
                                 (input)="OnEditableBlockInput(seg, $event)"
                                 (blur)="CommitEditableParagraph(seg, $event)"
@@ -2730,6 +2740,25 @@ export interface DocsSelectionSnapshot {
       .mj-docs-editable-surface:focus {
         background: var(--mj-bg-surface-hover);
         box-shadow: 0 0 0 1px var(--mj-brand-primary);
+      }
+
+      .mj-docs-editable-surface strong,
+      .mj-docs-editable-surface b {
+        font-weight: 700;
+      }
+
+      .mj-docs-editable-surface em,
+      .mj-docs-editable-surface i {
+        font-style: italic;
+      }
+
+      .mj-docs-editable-surface code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.9em;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
       }
 
       .mj-docs-trailing-flow-zone {
@@ -4978,7 +5007,8 @@ export class MarkdownArtifactViewerComponent
     }
 
     const el = event.target as HTMLElement | null;
-    const rawText = el?.textContent ?? '';
+    const rawVisibleText = el?.textContent ?? '';
+    const rawMarkdown = this.ExtractMarkdownFromEditableElement(el);
     const caret = this.getCaretCharacterOffsetWithin(el);
     const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
     if (segIdx < 0) {
@@ -4996,7 +5026,7 @@ export class MarkdownArtifactViewerComponent
           start: caret.start,
           end: caret.end,
         });
-        this.applyInlineFormattingToSegment(segIdx, marker, marker, rawText);
+        this.applyInlineFormattingToSegment(segIdx, marker, marker, rawMarkdown);
         return;
       }
     }
@@ -5006,9 +5036,10 @@ export class MarkdownArtifactViewerComponent
       if (seg.BlockKind === 'heading') {
         event.preventDefault();
         const level = seg.HeadingLevel ?? 1;
-        const cleanFull = rawText.replace(/\n+/g, ' ');
-        const before = cleanFull.slice(0, caret.start).trim();
-        const after = cleanFull.slice(caret.end).trim();
+        const cleanFull = rawMarkdown.replace(/\n+/g, ' ');
+        const mdRange = this.mapVisibleRangeToMarkdownRange(cleanFull, caret.start, caret.end, true);
+        const before = cleanFull.slice(0, mdRange.start).trim();
+        const after = cleanFull.slice(mdRange.end).trim();
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
         if (caret.start === 0 && before.length === 0 && after.length > 0) {
@@ -5026,11 +5057,12 @@ export class MarkdownArtifactViewerComponent
 
       if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
         event.preventDefault();
-        const before = rawText.slice(0, caret.start);
-        const after = rawText.slice(caret.end);
+        const mdRange = this.mapVisibleRangeToMarkdownRange(rawMarkdown, caret.start, caret.end, true);
+        const before = rawMarkdown.slice(0, mdRange.start);
+        const after = rawMarkdown.slice(mdRange.end);
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
-        if (rawText.trim().length === 0) {
+        if (rawVisibleText.trim().length === 0 && rawMarkdown.trim().length === 0) {
           // Pressing Enter on an empty paragraph creates or moves to the next line below cleanly
           blocks.splice(segIdx + 1, 0, '');
           this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
@@ -5052,7 +5084,7 @@ export class MarkdownArtifactViewerComponent
       if (seg.BlockKind === 'callout') {
         event.preventDefault();
         const parsed = this.GetParsedCallout(seg);
-        const bodyText = rawText.trim();
+        const bodyText = rawMarkdown.trim();
         const bodyLines = bodyText.split('\n').map((l) => `> ${l}`);
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
         blocks[segIdx] = [`> [!${parsed.CalloutType}]`, ...bodyLines].join('\n');
@@ -5075,20 +5107,20 @@ export class MarkdownArtifactViewerComponent
 
       if (seg.BlockKind === 'heading') {
         event.preventDefault();
-        blocks[segIdx] = rawText.replace(/\n+/g, ' ').trim();
+        blocks[segIdx] = rawMarkdown.replace(/\n+/g, ' ').trim();
         this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
         return;
       }
 
       if (seg.BlockKind === 'callout') {
         event.preventDefault();
-        blocks[segIdx] = rawText.trim();
+        blocks[segIdx] = rawMarkdown.trim();
         this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
         return;
       }
 
       if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
-        if (rawText.trim().length === 0) {
+        if (rawVisibleText.trim().length === 0 && rawMarkdown.trim().length === 0) {
           if (this.DocumentSegments.length > 1) {
             event.preventDefault();
             blocks.splice(segIdx, 1);
@@ -5105,7 +5137,7 @@ export class MarkdownArtifactViewerComponent
             (prevSeg.BlockKind === 'paragraph' || !prevSeg.BlockKind || prevSeg.BlockKind === 'heading')
           ) {
             event.preventDefault();
-            const currentTrimmed = rawText.trim();
+            const currentTrimmed = rawMarkdown.trim();
             if (prevSeg.RawMarkdown.trim().length === 0 && prevSeg.BlockKind !== 'heading') {
               blocks[segIdx] = currentTrimmed;
               blocks.splice(segIdx - 1, 1);
@@ -5116,7 +5148,10 @@ export class MarkdownArtifactViewerComponent
               const level = prevSeg.HeadingLevel ?? 1;
               const prevHeadingText = (prevSeg.HeadingText ?? this.GetEditableHeadingText(prevSeg)).trim();
               const joiner = prevHeadingText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
-              const seamOffset = prevHeadingText.length + joiner.length;
+              const seamOffset = this.mapMarkdownOffsetToVisibleOffset(
+                `${prevHeadingText}${joiner}${currentTrimmed}`,
+                prevHeadingText.length + joiner.length,
+              );
               blocks[segIdx - 1] = `${'#'.repeat(level)} ${prevHeadingText}${joiner}${currentTrimmed}`;
               blocks.splice(segIdx, 1);
               this.applyBlockFlowTransaction(blocks, {
@@ -5127,7 +5162,10 @@ export class MarkdownArtifactViewerComponent
             }
             const prevParaText = prevSeg.RawMarkdown.trim();
             const joiner = prevParaText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
-            const seamOffset = prevParaText.length + joiner.length;
+            const seamOffset = this.mapMarkdownOffsetToVisibleOffset(
+              `${prevParaText}${joiner}${currentTrimmed}`,
+              prevParaText.length + joiner.length,
+            );
             blocks[segIdx - 1] = `${prevParaText}${joiner}${currentTrimmed}`;
             blocks.splice(segIdx, 1);
             this.applyBlockFlowTransaction(blocks, {
@@ -5157,7 +5195,7 @@ export class MarkdownArtifactViewerComponent
         }
         return;
       }
-      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawText.length) {
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawVisibleText.length) {
         const nextIdx = this.findAdjacentEditableSegmentIndex(seg.SegmentID, 1);
         if (nextIdx >= 0) {
           event.preventDefault();
@@ -5185,7 +5223,7 @@ export class MarkdownArtifactViewerComponent
 
   public CommitEditableHeading(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
-    const rawText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
+    const rawText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
     if (rawText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
       return;
     }
@@ -5198,7 +5236,7 @@ export class MarkdownArtifactViewerComponent
 
   public CommitEditableParagraph(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
-    const nextText = (el?.textContent ?? '').trim();
+    const nextText = this.ExtractMarkdownFromEditableElement(el).trim();
     if (nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
       return;
     }
@@ -5254,7 +5292,7 @@ export class MarkdownArtifactViewerComponent
 
   public UpdateTableHeaderCell(seg: DocumentRenderSegment, colIndex: number, event: Event): void {
     const el = event.target as HTMLElement | null;
-    const nextVal = (el?.textContent ?? '').replace(/\|/g, '/').trim();
+    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
     const parsed = this.GetParsedTable(seg);
     if (parsed.Headers[colIndex] === nextVal) {
       return;
@@ -5272,7 +5310,7 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     const el = event.target as HTMLElement | null;
-    const nextVal = (el?.textContent ?? '').replace(/\|/g, '/').trim();
+    const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
     const parsed = this.GetParsedTable(seg);
     const targetRow = parsed.Rows.at(rowIndex);
     if (!targetRow || colIndex >= targetRow.length || targetRow.at(colIndex) === nextVal) {
@@ -5415,7 +5453,7 @@ export class MarkdownArtifactViewerComponent
 
   public UpdateListItemText(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
     const el = event.target as HTMLElement | null;
-    const nextText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
+    const nextText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
     const items = this.GetParsedListItems(seg);
     if (!items[itemIndex] || items[itemIndex].Text === nextText) {
       return;
@@ -5435,7 +5473,8 @@ export class MarkdownArtifactViewerComponent
     }
 
     const el = event.target as HTMLElement | null;
-    const rawText = (el?.textContent ?? '').replace(/\n+/g, ' ');
+    const rawVisibleText = (el?.textContent ?? '').replace(/\n+/g, ' ');
+    const rawMarkdown = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ');
     const caret = this.getCaretCharacterOffsetWithin(el);
     const items = this.GetParsedListItems(seg);
     const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
@@ -5459,7 +5498,7 @@ export class MarkdownArtifactViewerComponent
           start: caret.start,
           end: caret.end,
         });
-        this.applyInlineFormattingToSegment(segIdx, marker, marker, rawText);
+        this.applyInlineFormattingToSegment(segIdx, marker, marker, rawMarkdown);
         return;
       }
     }
@@ -5469,7 +5508,7 @@ export class MarkdownArtifactViewerComponent
       if (!this.CanUserEdit || segIdx < 0) {
         return;
       }
-      const currentTrimmed = rawText.trim();
+      const currentTrimmed = rawMarkdown.trim();
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
       // Pressing Enter on an empty list item exits the list into a fresh paragraph block below
@@ -5487,8 +5526,9 @@ export class MarkdownArtifactViewerComponent
         return;
       }
 
-      const before = rawText.slice(0, caret.start).trim();
-      const after = rawText.slice(caret.end).trim();
+      const mdRange = this.mapVisibleRangeToMarkdownRange(rawMarkdown, caret.start, caret.end, true);
+      const before = rawMarkdown.slice(0, mdRange.start).trim();
+      const after = rawMarkdown.slice(mdRange.end).trim();
       if (items[itemIndex]) {
         items[itemIndex].Text = before;
       }
@@ -5528,7 +5568,7 @@ export class MarkdownArtifactViewerComponent
       segIdx >= 0
     ) {
       event.preventDefault();
-      const currentTrimmed = rawText.trim();
+      const currentTrimmed = rawMarkdown.trim();
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
       if (items.length <= 1) {
@@ -5546,7 +5586,10 @@ export class MarkdownArtifactViewerComponent
       }
       const prevText = items[itemIndex - 1].Text.trim();
       const joiner = prevText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
-      const seamOffset = prevText.length + joiner.length;
+      const seamOffset = this.mapMarkdownOffsetToVisibleOffset(
+        `${prevText}${joiner}${currentTrimmed}`,
+        prevText.length + joiner.length,
+      );
       items[itemIndex - 1].Text = `${prevText}${joiner}${currentTrimmed}`;
       items.splice(itemIndex, 1);
       this.renumberListItems(items);
@@ -5576,7 +5619,7 @@ export class MarkdownArtifactViewerComponent
           return;
         }
       }
-      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawText.length) {
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawVisibleText.length) {
         if (itemIndex + 1 < items.length) {
           event.preventDefault();
           this.FocusEditableSegment(seg.SegmentID, 'start', itemIndex + 1);
@@ -5655,7 +5698,7 @@ export class MarkdownArtifactViewerComponent
 
   public CommitEditableCallout(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
-    const nextBody = (el?.textContent ?? '').trim();
+    const nextBody = this.ExtractMarkdownFromEditableElement(el).trim();
     const parsed = this.GetParsedCallout(seg);
     if (nextBody === parsed.BodyText) {
       return;
@@ -5943,12 +5986,26 @@ export class MarkdownArtifactViewerComponent
     if (!sel) {
       return;
     }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let currentOffset = 0;
+    let targetNode: Node | null = null;
+    let targetNodeOffset = 0;
+    let node = walker.nextNode();
+    while (node) {
+      const len = node.textContent?.length ?? 0;
+      if (targetOffset <= currentOffset + len) {
+        targetNode = node;
+        targetNodeOffset = Math.max(0, targetOffset - currentOffset);
+        break;
+      }
+      currentOffset += len;
+      targetNode = node;
+      targetNodeOffset = len;
+      node = walker.nextNode();
+    }
     const range = document.createRange();
-    const firstTextNode = el.firstChild;
-    if (firstTextNode && firstTextNode.nodeType === Node.TEXT_NODE) {
-      const nodeLen = firstTextNode.textContent?.length ?? 0;
-      const clamped = Math.min(nodeLen, targetOffset);
-      range.setStart(firstTextNode, clamped);
+    if (targetNode) {
+      range.setStart(targetNode, targetNodeOffset);
       range.collapse(true);
     } else {
       range.selectNodeContents(el);
@@ -6147,7 +6204,7 @@ export class MarkdownArtifactViewerComponent
     if (seg.BlockKind === 'heading') {
       this.CommitEditableHeading(seg, { target: el } as unknown as Event);
     } else if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
-      const text = (el.textContent ?? '').trim();
+      const text = this.ExtractMarkdownFromEditableElement(el).trim();
       if (text && text !== seg.RawMarkdown.trim()) {
         this.CommitEditableParagraph(seg, { target: el } as unknown as Event);
       }
@@ -6291,6 +6348,425 @@ export class MarkdownArtifactViewerComponent
     this.insertMarkdownAtTargetSegment(prefix);
   }
 
+  /**
+   * Renders inline Markdown (`**bold**`, `*italic*`, `` `code` ``, `***both***`) as sanitized WYSIWYG HTML
+   * for `contenteditable` surfaces while preserving newlines as `<br>`.
+   */
+  public RenderInlineEditableHtml(markdownText: string): string {
+    if (!markdownText) {
+      return '';
+    }
+    const tokens = this.tokenizeInlineMarkdown(markdownText);
+    return tokens
+      .map((tok) => {
+        const escaped = EscapeHtml(tok.content);
+        switch (tok.kind) {
+          case 'code':
+            return `<code>${escaped}</code>`;
+          case 'bold_italic':
+            return `<strong><em>${escaped}</em></strong>`;
+          case 'bold':
+            return `<strong>${escaped}</strong>`;
+          case 'italic':
+            return `<em>${escaped}</em>`;
+          default:
+            return escaped.replace(/\n/g, '<br>');
+        }
+      })
+      .join('');
+  }
+
+  /**
+   * Serializes a WYSIWYG `contenteditable` element's DOM tree (`<strong>`, `<b>`, `<em>`, `<i>`, `<code>`, `<br>`)
+   * back into Markdown text (`**bold**`, `*italic*`, `` `code` ``). Falls back directly to `el.textContent`
+   * when running in headless mocks without child nodes.
+   */
+  public ExtractMarkdownFromEditableElement(el: HTMLElement | null): string {
+    if (!el) {
+      return '';
+    }
+    if (!el.childNodes || el.childNodes.length === 0) {
+      return el.textContent ?? '';
+    }
+    const out: string[] = [];
+    const serializeNode = (node: Node): void => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        out.push((node.textContent ?? '').replace(/\u00a0/g, ' '));
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      const elm = node as HTMLElement;
+      const tag = (elm.tagName || '').toUpperCase();
+      if (tag === 'BR') {
+        out.push('\n');
+        return;
+      }
+
+      const prevLen = out.length;
+      if (elm.childNodes && elm.childNodes.length > 0) {
+        elm.childNodes.forEach((child) => serializeNode(child));
+      } else if (elm.textContent) {
+        out.push(elm.textContent.replace(/\u00a0/g, ' '));
+      }
+      const inner = out.splice(prevLen).join('');
+
+      const fontWeight = elm.style?.fontWeight ?? '';
+      const numericWeight = Number.parseInt(fontWeight, 10);
+      const isBold =
+        tag === 'STRONG' ||
+        tag === 'B' ||
+        fontWeight.toLowerCase() === 'bold' ||
+        (!Number.isNaN(numericWeight) && numericWeight >= 600);
+      const isItalic =
+        tag === 'EM' ||
+        tag === 'I' ||
+        (elm.style?.fontStyle ?? '').toLowerCase() === 'italic';
+
+      const splitWhitespace = (raw: string): { lead: string; core: string; trail: string } => {
+        const leadMatch = /^(\s*)/.exec(raw);
+        const lead = leadMatch ? leadMatch[1] : '';
+        const trailMatch = /(\s*)$/.exec(raw.slice(lead.length));
+        const trail = trailMatch ? trailMatch[1] : '';
+        const core = raw.slice(lead.length, raw.length - trail.length);
+        return { lead, core, trail };
+      };
+
+      if (tag === 'CODE') {
+        const { lead, core, trail } = splitWhitespace(inner);
+        if (core.length > 0) {
+          const cleanCore = core.startsWith('`') && core.endsWith('`') && core.length > 2 ? core.slice(1, -1) : core;
+          out.push(`${lead}\`${cleanCore}\`${trail}`);
+        } else {
+          out.push(inner);
+        }
+        return;
+      }
+
+      if (isBold || isItalic) {
+        const { lead, core, trail } = splitWhitespace(inner);
+        if (core.length === 0) {
+          out.push(inner);
+          return;
+        }
+        if (isBold && isItalic) {
+          if (core.startsWith('***') && core.endsWith('***') && core.length > 6) {
+            out.push(`${lead}${core}${trail}`);
+          } else if (core.startsWith('**') && core.endsWith('**') && core.length > 4) {
+            out.push(`${lead}***${core.slice(2, -2)}***${trail}`);
+          } else if (core.startsWith('*') && core.endsWith('*') && core.length > 2) {
+            out.push(`${lead}***${core.slice(1, -1)}***${trail}`);
+          } else {
+            out.push(`${lead}***${core}***${trail}`);
+          }
+          return;
+        }
+        if (isBold) {
+          if (
+            (core.startsWith('**') && core.endsWith('**') && core.length > 4) ||
+            (core.startsWith('__') && core.endsWith('__') && core.length > 4)
+          ) {
+            out.push(`${lead}${core}${trail}`);
+          } else {
+            out.push(`${lead}**${core}**${trail}`);
+          }
+          return;
+        }
+        if (
+          core.startsWith('*') &&
+          !core.startsWith('**') &&
+          core.endsWith('*') &&
+          !core.endsWith('**') &&
+          core.length > 2
+        ) {
+          out.push(`${lead}${core}${trail}`);
+        } else {
+          out.push(`${lead}*${core}*${trail}`);
+        }
+        return;
+      }
+
+      if ((tag === 'DIV' || tag === 'P') && out.length > 0) {
+        const prev = out[out.length - 1] ?? '';
+        if (prev.length > 0 && !prev.endsWith('\n')) {
+          out.push('\n');
+        }
+      }
+      out.push(inner);
+    };
+
+    el.childNodes.forEach((child) => serializeNode(child));
+    return out.join('');
+  }
+
+  private tokenizeInlineMarkdown(markdown: string): DocsInlineToken[] {
+    const tokens: DocsInlineToken[] = [];
+    const len = markdown.length;
+    let i = 0;
+    let visCursor = 0;
+    let textStartMd = 0;
+    let textStartVis = 0;
+
+    const flushPlainText = (endMd: number): void => {
+      if (endMd > textStartMd) {
+        const chunk = markdown.slice(textStartMd, endMd);
+        tokens.push({
+          kind: 'text',
+          mdStart: textStartMd,
+          mdEnd: endMd,
+          visStart: textStartVis,
+          visEnd: textStartVis + chunk.length,
+          markerLen: 0,
+          content: chunk,
+        });
+      }
+    };
+
+    const findCloseOnSameLine = (startPos: number, delim: string): number => {
+      const lineBreak = markdown.indexOf('\n', startPos);
+      const limit = lineBreak >= 0 ? lineBreak : len;
+      let idx = startPos;
+      while (idx + delim.length <= limit) {
+        if (markdown.startsWith(delim, idx)) {
+          return idx;
+        }
+        idx++;
+      }
+      return -1;
+    };
+
+    while (i < len) {
+      let matched = false;
+      const ch = markdown[i];
+
+      if (ch === '`') {
+        const closeIdx = findCloseOnSameLine(i + 1, '`');
+        if (closeIdx > i + 1) {
+          const content = markdown.slice(i + 1, closeIdx);
+          flushPlainText(i);
+          tokens.push({
+            kind: 'code',
+            mdStart: i,
+            mdEnd: closeIdx + 1,
+            visStart: visCursor,
+            visEnd: visCursor + content.length,
+            markerLen: 1,
+            content,
+          });
+          visCursor += content.length;
+          i = closeIdx + 1;
+          textStartMd = i;
+          textStartVis = visCursor;
+          matched = true;
+        }
+      } else if (markdown.startsWith('***', i)) {
+        const closeIdx = findCloseOnSameLine(i + 3, '***');
+        if (closeIdx > i + 3) {
+          const content = markdown.slice(i + 3, closeIdx);
+          if (content.trim().length > 0) {
+            flushPlainText(i);
+            tokens.push({
+              kind: 'bold_italic',
+              mdStart: i,
+              mdEnd: closeIdx + 3,
+              visStart: visCursor,
+              visEnd: visCursor + content.length,
+              markerLen: 3,
+              content,
+            });
+            visCursor += content.length;
+            i = closeIdx + 3;
+            textStartMd = i;
+            textStartVis = visCursor;
+            matched = true;
+          }
+        }
+      } else if (markdown.startsWith('**', i)) {
+        const closeIdx = findCloseOnSameLine(i + 2, '**');
+        if (closeIdx > i + 2) {
+          const content = markdown.slice(i + 2, closeIdx);
+          if (content.trim().length > 0) {
+            flushPlainText(i);
+            tokens.push({
+              kind: 'bold',
+              mdStart: i,
+              mdEnd: closeIdx + 2,
+              visStart: visCursor,
+              visEnd: visCursor + content.length,
+              markerLen: 2,
+              content,
+            });
+            visCursor += content.length;
+            i = closeIdx + 2;
+            textStartMd = i;
+            textStartVis = visCursor;
+            matched = true;
+          }
+        }
+      } else if (markdown.startsWith('__', i) && (i === 0 || !/[A-Za-z0-9_]/.test(markdown[i - 1]))) {
+        const closeIdx = findCloseOnSameLine(i + 2, '__');
+        if (
+          closeIdx > i + 2 &&
+          (closeIdx + 2 >= len || !/[A-Za-z0-9_]/.test(markdown[closeIdx + 2]))
+        ) {
+          const content = markdown.slice(i + 2, closeIdx);
+          if (content.trim().length > 0) {
+            flushPlainText(i);
+            tokens.push({
+              kind: 'bold',
+              mdStart: i,
+              mdEnd: closeIdx + 2,
+              visStart: visCursor,
+              visEnd: visCursor + content.length,
+              markerLen: 2,
+              content,
+            });
+            visCursor += content.length;
+            i = closeIdx + 2;
+            textStartMd = i;
+            textStartVis = visCursor;
+            matched = true;
+          }
+        }
+      } else if (ch === '*' && markdown[i + 1] !== '*' && i + 1 < len && !/\s/.test(markdown[i + 1])) {
+        const lineBreak = markdown.indexOf('\n', i + 1);
+        const limit = lineBreak >= 0 ? lineBreak : len;
+        let search = i + 1;
+        let closeIdx = -1;
+        while (search < limit) {
+          if (
+            markdown[search] === '*' &&
+            markdown[search - 1] !== '*' &&
+            markdown[search + 1] !== '*' &&
+            !/\s/.test(markdown[search - 1])
+          ) {
+            closeIdx = search;
+            break;
+          }
+          search++;
+        }
+        if (closeIdx > i + 1) {
+          const content = markdown.slice(i + 1, closeIdx);
+          flushPlainText(i);
+          tokens.push({
+            kind: 'italic',
+            mdStart: i,
+            mdEnd: closeIdx + 1,
+            visStart: visCursor,
+            visEnd: visCursor + content.length,
+            markerLen: 1,
+            content,
+          });
+          visCursor += content.length;
+          i = closeIdx + 1;
+          textStartMd = i;
+          textStartVis = visCursor;
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        i++;
+        visCursor++;
+      }
+    }
+
+    flushPlainText(len);
+    return tokens;
+  }
+
+  private mapVisibleOffsetToMarkdownOffset(
+    markdown: string,
+    visibleOffset: number,
+    boundarySide: 'start' | 'end' | 'caret' = 'caret',
+  ): number {
+    const tokens = this.tokenizeInlineMarkdown(markdown);
+    if (tokens.length === 0) {
+      return 0;
+    }
+    const clampedVis = Math.max(0, Math.min(tokens[tokens.length - 1].visEnd, visibleOffset));
+    for (const tok of tokens) {
+      if (tok.kind === 'text') {
+        if (clampedVis >= tok.visStart && clampedVis <= tok.visEnd) {
+          return tok.mdStart + (clampedVis - tok.visStart);
+        }
+        continue;
+      }
+      if (clampedVis > tok.visStart && clampedVis < tok.visEnd) {
+        return tok.mdStart + tok.markerLen + (clampedVis - tok.visStart);
+      }
+      if (clampedVis === tok.visStart && boundarySide !== 'end') {
+        return boundarySide === 'start' ? tok.mdStart : tok.mdStart;
+      }
+      if (clampedVis === tok.visEnd) {
+        return boundarySide === 'end' ? tok.mdEnd : tok.mdEnd;
+      }
+    }
+    return markdown.length;
+  }
+
+  private mapVisibleRangeToMarkdownRange(
+    markdown: string,
+    rawStart: number,
+    rawEnd: number,
+    isSplitCaret = false,
+  ): { start: number; end: number } {
+    const tokens = this.tokenizeInlineMarkdown(markdown);
+    if (tokens.length === 0) {
+      return { start: 0, end: 0 };
+    }
+    const totalVis = tokens[tokens.length - 1].visEnd;
+    const visStart = Math.max(0, Math.min(totalVis, Math.min(rawStart, rawEnd)));
+    const visEnd = Math.max(visStart, Math.min(totalVis, Math.max(rawStart, rawEnd)));
+
+    if (!isSplitCaret) {
+      // If selection spans a single inline-formatted token or stays inside it, map to its inner text so bold/italic toggle works cleanly
+      for (const tok of tokens) {
+        if (tok.kind !== 'text' && visStart >= tok.visStart && visEnd <= tok.visEnd && visStart < visEnd) {
+          return {
+            start: tok.mdStart + tok.markerLen + (visStart - tok.visStart),
+            end: tok.mdStart + tok.markerLen + (visEnd - tok.visStart),
+          };
+        }
+      }
+      return {
+        start: this.mapVisibleOffsetToMarkdownOffset(markdown, visStart, 'start'),
+        end: this.mapVisibleOffsetToMarkdownOffset(markdown, visEnd, 'end'),
+      };
+    }
+
+    return {
+      start: this.mapVisibleOffsetToMarkdownOffset(markdown, visStart, 'caret'),
+      end: this.mapVisibleOffsetToMarkdownOffset(markdown, visEnd, 'caret'),
+    };
+  }
+
+  private mapMarkdownOffsetToVisibleOffset(markdown: string, mdOffset: number): number {
+    const clampedMd = Math.max(0, Math.min(markdown.length, mdOffset));
+    const tokens = this.tokenizeInlineMarkdown(markdown);
+    for (const tok of tokens) {
+      if (clampedMd < tok.mdStart) {
+        return tok.visStart;
+      }
+      if (clampedMd <= tok.mdEnd) {
+        if (tok.kind === 'text') {
+          return tok.visStart + (clampedMd - tok.mdStart);
+        }
+        const contentStart = tok.mdStart + tok.markerLen;
+        const contentEnd = tok.mdEnd - tok.markerLen;
+        if (clampedMd <= contentStart) {
+          return tok.visStart;
+        }
+        if (clampedMd >= contentEnd) {
+          return tok.visEnd;
+        }
+        return tok.visStart + (clampedMd - contentStart);
+      }
+    }
+    return tokens.length > 0 ? tokens[tokens.length - 1].visEnd : 0;
+  }
+
   private resolveFormattingTargetSegmentIndex(): number {
     const snapshotSegId = this.lastSelectionSnapshot?.segmentId;
     if (snapshotSegId) {
@@ -6303,19 +6779,22 @@ export class MarkdownArtifactViewerComponent
   }
 
   private resolveSelectionOffsetsForText(
-    currentText: string,
+    currentMarkdown: string,
     el: HTMLElement | null,
     snapshotMatchesTarget: boolean,
   ): { start: number; end: number } {
+    const tokens = this.tokenizeInlineMarkdown(currentMarkdown);
+    const totalVis = tokens.length > 0 ? tokens[tokens.length - 1].visEnd : currentMarkdown.length;
+
     if (el) {
       const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
       if (typeof testEl.selectionStart === 'number') {
-        const start = Math.max(0, Math.min(currentText.length, testEl.selectionStart));
+        const start = Math.max(0, Math.min(totalVis, testEl.selectionStart));
         const end =
           typeof testEl.selectionEnd === 'number'
-            ? Math.max(start, Math.min(currentText.length, testEl.selectionEnd))
+            ? Math.max(start, Math.min(totalVis, testEl.selectionEnd))
             : start;
-        return { start, end };
+        return this.mapVisibleRangeToMarkdownRange(currentMarkdown, start, end);
       }
       if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
         const sel = window.getSelection();
@@ -6323,32 +6802,36 @@ export class MarkdownArtifactViewerComponent
           const range = sel.getRangeAt(0);
           if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
             const caret = this.getCaretCharacterOffsetWithin(el);
-            return {
-              start: Math.max(0, Math.min(currentText.length, caret.start)),
-              end: Math.max(0, Math.min(currentText.length, caret.end)),
-            };
+            return this.mapVisibleRangeToMarkdownRange(currentMarkdown, caret.start, caret.end);
           }
         }
       }
     }
 
     if (snapshotMatchesTarget && this.lastSelectionSnapshot) {
-      const start = Math.max(0, Math.min(currentText.length, this.lastSelectionSnapshot.start));
-      const end = Math.max(start, Math.min(currentText.length, this.lastSelectionSnapshot.end));
-      return { start, end };
+      return this.mapVisibleRangeToMarkdownRange(
+        currentMarkdown,
+        this.lastSelectionSnapshot.start,
+        this.lastSelectionSnapshot.end,
+      );
     }
 
     if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
       const selectedStr = window.getSelection()?.toString() ?? '';
       if (selectedStr.length > 0) {
-        const foundIdx = currentText.indexOf(selectedStr);
-        if (foundIdx >= 0) {
-          return { start: foundIdx, end: foundIdx + selectedStr.length };
+        const visibleText = tokens.map((t) => t.content).join('');
+        const foundVisIdx = visibleText.indexOf(selectedStr);
+        if (foundVisIdx >= 0) {
+          return this.mapVisibleRangeToMarkdownRange(
+            currentMarkdown,
+            foundVisIdx,
+            foundVisIdx + selectedStr.length,
+          );
         }
       }
     }
 
-    return { start: currentText.length, end: currentText.length };
+    return { start: currentMarkdown.length, end: currentMarkdown.length };
   }
 
   private applyInlineWrapToText(
@@ -6404,8 +6887,15 @@ export class MarkdownArtifactViewerComponent
       };
     }
 
-    // Toggle off if markers are included inside the selected text
+    // Toggle off if markers are included inside the selected text (avoid misclassifying '**bold**' as single-* italic)
+    const boldMismatchForItalic =
+      prefix === '*' &&
+      suffix === '*' &&
+      selected.startsWith('**') &&
+      selected.endsWith('**') &&
+      !(selected.startsWith('***') && selected.endsWith('***') && selected.length > 6);
     if (
+      !boldMismatchForItalic &&
       selected.length > prefix.length + suffix.length &&
       selected.startsWith(prefix) &&
       selected.endsWith(suffix)
@@ -6419,7 +6909,16 @@ export class MarkdownArtifactViewerComponent
     }
 
     // Toggle off if markers immediately wrap the selected text
+    const flankingBoldMismatchForItalic =
+      prefix === '*' &&
+      suffix === '*' &&
+      start >= 2 &&
+      end + 2 <= text.length &&
+      text.slice(start - 2, start) === '**' &&
+      text.slice(end, end + 2) === '**' &&
+      !(start >= 3 && end + 3 <= text.length && text.slice(start - 3, start) === '***' && text.slice(end, end + 3) === '***');
     if (
+      !flankingBoldMismatchForItalic &&
       start >= prefix.length &&
       end + suffix.length <= text.length &&
       text.slice(start - prefix.length, start) === prefix &&
@@ -6446,8 +6945,8 @@ export class MarkdownArtifactViewerComponent
     seg: DocumentRenderSegment,
     segIdx: number,
     nextBlockMarkdown: string,
-    selectStart: number,
-    selectEnd: number,
+    visibleSelectStart: number,
+    visibleSelectEnd: number,
     coords?: {
       listItemIndex?: number;
       tableRowIndex?: number;
@@ -6462,14 +6961,14 @@ export class MarkdownArtifactViewerComponent
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
     blocks[segIdx] = nextBlockMarkdown;
     this.applyBlockFlowTransaction(blocks);
-    this.restoreInlineSelectionAfterTransaction(segIdx, selectStart, selectEnd, coords);
+    this.restoreInlineSelectionAfterTransaction(segIdx, visibleSelectStart, visibleSelectEnd, coords);
   }
 
   private applyInlineFormattingToSegment(
     segIdx: number,
     prefix: string,
     suffix: string,
-    liveTextOverride?: string,
+    liveMarkdownOverride?: string,
   ): void {
     const seg = this.DocumentSegments[segIdx];
     if (!seg || seg.Kind !== 'markdown') {
@@ -6487,17 +6986,19 @@ export class MarkdownArtifactViewerComponent
       const coords = { listItemIndex: itemIdx };
       const el = this.findEditableElementForSegment(seg, coords);
       const currentText =
-        liveTextOverride !== undefined
-          ? liveTextOverride
+        liveMarkdownOverride !== undefined
+          ? liveMarkdownOverride
           : el
-            ? (el.textContent ?? '').replace(/\n+/g, ' ')
+            ? this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ')
             : items[itemIdx].Text;
       const snapshotMatches = Boolean(snapshot && (snapshot.listItemIndex ?? itemIdx) === itemIdx);
       const { start, end } = this.resolveSelectionOffsetsForText(currentText, el, snapshotMatches);
       const wrapped = this.applyInlineWrapToText(currentText, start, end, prefix, suffix);
       items[itemIdx] = { ...items[itemIdx], Text: wrapped.nextText };
       const nextMd = this.serializeParsedListItems(items);
-      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, wrapped.selectStart, wrapped.selectEnd, coords);
+      const visStart = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectStart);
+      const visEnd = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectEnd);
+      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd, coords);
       return;
     }
 
@@ -6520,10 +7021,10 @@ export class MarkdownArtifactViewerComponent
       const el = this.findEditableElementForSegment(seg, coords);
       const fallbackCellText = isHeader ? (parsed.Headers[colIdx] ?? '') : (parsed.Rows[rowIdx]?.[colIdx] ?? '');
       const currentText =
-        liveTextOverride !== undefined
-          ? liveTextOverride
+        liveMarkdownOverride !== undefined
+          ? liveMarkdownOverride
           : el
-            ? (el.textContent ?? '').replace(/\|/g, '/')
+            ? this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/')
             : fallbackCellText;
       const snapshotMatches = Boolean(
         snapshot && snapshot.tableColIndex === colIdx && Boolean(snapshot.isTableHeader) === isHeader && (isHeader || snapshot.tableRowIndex === rowIdx),
@@ -6537,44 +7038,63 @@ export class MarkdownArtifactViewerComponent
         parsed.Rows[rowIdx].splice(colIdx, 1, sanitizedCellText);
       }
       const nextMd = this.serializeParsedTable(parsed.Headers, parsed.Rows);
-      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, wrapped.selectStart, wrapped.selectEnd, coords);
+      const visStart = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectStart);
+      const visEnd = this.mapMarkdownOffsetToVisibleOffset(sanitizedCellText, wrapped.selectEnd);
+      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd, coords);
       return;
     }
 
     if (seg.BlockKind === 'heading') {
       const el = this.findEditableElementForSegment(seg);
       const currentText =
-        liveTextOverride !== undefined
-          ? liveTextOverride.replace(/\n+/g, ' ')
+        liveMarkdownOverride !== undefined
+          ? liveMarkdownOverride.replace(/\n+/g, ' ')
           : el
-            ? (el.textContent ?? '').replace(/\n+/g, ' ')
+            ? this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ')
             : seg.HeadingText ?? this.GetEditableHeadingText(seg);
       const { start, end } = this.resolveSelectionOffsetsForText(currentText, el, Boolean(snapshot));
       const wrapped = this.applyInlineWrapToText(currentText, start, end, prefix, suffix);
+      const cleanWrapped = wrapped.nextText.replace(/\n+/g, ' ').trim();
       const level = Math.max(1, Math.min(6, seg.HeadingLevel ?? 1));
-      const nextMd = `${'#'.repeat(level)} ${wrapped.nextText.replace(/\n+/g, ' ').trim()}`;
-      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, wrapped.selectStart, wrapped.selectEnd);
+      const nextMd = `${'#'.repeat(level)} ${cleanWrapped}`;
+      const visStart = this.mapMarkdownOffsetToVisibleOffset(cleanWrapped, wrapped.selectStart);
+      const visEnd = this.mapMarkdownOffsetToVisibleOffset(cleanWrapped, wrapped.selectEnd);
+      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd);
       return;
     }
 
     if (seg.BlockKind === 'callout') {
       const parsed = this.GetParsedCallout(seg);
       const el = this.findEditableElementForSegment(seg);
-      const currentText = liveTextOverride !== undefined ? liveTextOverride : el ? (el.textContent ?? '') : parsed.BodyText;
+      const currentText =
+        liveMarkdownOverride !== undefined
+          ? liveMarkdownOverride
+          : el
+            ? this.ExtractMarkdownFromEditableElement(el)
+            : parsed.BodyText;
       const { start, end } = this.resolveSelectionOffsetsForText(currentText, el, Boolean(snapshot));
       const wrapped = this.applyInlineWrapToText(currentText, start, end, prefix, suffix);
       const bodyLines = wrapped.nextText.split('\n').map((l) => `> ${l}`);
       const nextMd = [`> [!${parsed.CalloutType}]`, ...bodyLines].join('\n');
-      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, wrapped.selectStart, wrapped.selectEnd);
+      const visStart = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectStart);
+      const visEnd = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectEnd);
+      this.commitFormattedSegmentMarkdown(seg, segIdx, nextMd, visStart, visEnd);
       return;
     }
 
     // Default: paragraph / plain markdown block
     const el = this.findEditableElementForSegment(seg);
-    const currentText = liveTextOverride !== undefined ? liveTextOverride : el ? (el.textContent ?? '') : seg.RawMarkdown.trim();
+    const currentText =
+      liveMarkdownOverride !== undefined
+        ? liveMarkdownOverride
+        : el
+          ? this.ExtractMarkdownFromEditableElement(el)
+          : seg.RawMarkdown.trim();
     const { start, end } = this.resolveSelectionOffsetsForText(currentText, el, Boolean(snapshot));
     const wrapped = this.applyInlineWrapToText(currentText, start, end, prefix, suffix);
-    this.commitFormattedSegmentMarkdown(seg, segIdx, wrapped.nextText, wrapped.selectStart, wrapped.selectEnd);
+    const visStart = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectStart);
+    const visEnd = this.mapMarkdownOffsetToVisibleOffset(wrapped.nextText, wrapped.selectEnd);
+    this.commitFormattedSegmentMarkdown(seg, segIdx, wrapped.nextText, visStart, visEnd);
   }
 
   private applyBlockLevelFormattingToSegment(segIdx: number, prefix: string): boolean {
@@ -6586,16 +7106,20 @@ export class MarkdownArtifactViewerComponent
     const extractPlainText = (): string => {
       const el = this.findEditableElementForSegment(seg);
       if (seg.BlockKind === 'heading') {
-        return (el?.textContent ?? seg.HeadingText ?? this.GetEditableHeadingText(seg)).replace(/\n+/g, ' ').trim();
+        const raw = el
+          ? this.ExtractMarkdownFromEditableElement(el)
+          : (seg.HeadingText ?? this.GetEditableHeadingText(seg));
+        return raw.replace(/\n+/g, ' ').trim();
       }
       if (seg.BlockKind === 'callout') {
-        return (el?.textContent ?? this.GetParsedCallout(seg).BodyText).trim();
+        const raw = el ? this.ExtractMarkdownFromEditableElement(el) : this.GetParsedCallout(seg).BodyText;
+        return raw.trim();
       }
       if (seg.BlockKind === 'list') {
         const items = this.GetParsedListItems(seg);
         return items.map((i) => i.Text).join(' ').trim();
       }
-      return (el?.textContent ?? seg.RawMarkdown).trim();
+      return (el ? this.ExtractMarkdownFromEditableElement(el) : seg.RawMarkdown).trim();
     };
 
     const headingMatch = /^(#{1,3})\s+$/.exec(prefix);
