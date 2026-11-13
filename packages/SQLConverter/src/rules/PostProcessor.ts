@@ -427,8 +427,10 @@ function fixLongIndexNames(sql: string): string {
     return `${keyword}"${shortName}"${rest}`;
   };
   return sql
-    .replace(/(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi, shorten)
-    .replace(/(DROP\s+INDEX\s+IF\s+EXISTS\s+(?:[\w$]+\.)?)"([^"]+)"(\s*;)/gi, shorten);
+    .replace(/(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi,
+      (m: string, keyword: string, name: string, rest: string) => shorten(m, keyword, name, rest))
+    .replace(/(DROP\s+INDEX\s+IF\s+EXISTS\s+(?:[\w$]+\.)?)"([^"]+)"(\s*;)/gi,
+      (m: string, keyword: string, name: string, rest: string) => shorten(m, keyword, name, rest));
 }
 
 /** Fix lines starting with backslash inside INSERT string literals */

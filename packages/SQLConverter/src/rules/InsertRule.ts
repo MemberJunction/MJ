@@ -107,11 +107,28 @@ function topLevelOnly(text: string): string {
  * a DELETE that only reads a CTE — is returned unchanged. Runs on T-SQL, before identifier
  * conversion.
  */
+/** The run of whole lines at the start of `sql` that are blank or hold only a `--` comment. */
+function leadingBlankAndCommentLines(sql: string): string {
+  let end = 0;
+  while (end < sql.length) {
+    const newline = sql.indexOf('\n', end);
+    if (newline < 0) break;
+    const line = sql.slice(end, newline).replace(/^[ \t]+/, '');
+    if (line !== '' && !line.startsWith('--')) break;
+    end = newline + 1;
+  }
+  return sql.slice(0, end);
+}
+
 export function RewriteDeleteFromCte(sql: string): string {
-  const head = sql.match(/^((?:[ \t]*(?:--[^\n]*)?\n)*\s*);?\s*WITH\s+(\w+)\s+AS\s*\(/i);
+  // Two steps, not one regex: blank/comment lines, then `;? WITH name AS (`. A single pattern with
+  // a repeated line group followed by `\s*` backtracks polynomially on long whitespace runs.
+  const lead = leadingBlankAndCommentLines(sql);
+  const head = sql.slice(lead.length).match(/^(\s*)(?:;\s*)?WITH\s+(\w+)\s+AS\s*\(/i);
   if (!head) return sql;
+  const prefix = lead + head[1];
   const cteName = head[2];
-  const open = head[0].length - 1;
+  const open = lead.length + head[0].length - 1;
   const close = matchingParen(sql, open);
   if (close < 0) return sql;
   // The DELETE runs to the first top-level `;` (or the end of the batch); anything after it is
@@ -139,7 +156,7 @@ export function RewriteDeleteFromCte(sql: string): string {
   const newBody = `${body.slice(0, selectAt)} ${alias ? `${alias}.` : ''}ctid AS mj_ctid,${body.slice(selectAt)}`;
   const where = tail[2].replace(/^WHERE\s+/i, '').trim();
   const predicate = where ? ` WHERE ${where}` : '';
-  return `${head[1]}WITH ${cteName} AS (${newBody}) DELETE FROM ${from[1]} WHERE ctid IN (SELECT mj_ctid FROM ${cteName}${predicate});${rest}`;
+  return `${prefix}WITH ${cteName} AS (${newBody}) DELETE FROM ${from[1]} WHERE ctid IN (SELECT mj_ctid FROM ${cteName}${predicate});${rest}`;
 }
 
 export class InsertRule implements IConversionRule {

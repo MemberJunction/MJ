@@ -571,7 +571,7 @@ export function ExtractCatalogViews(tsql: string, coreSchema: string = '__mj'): 
   const keptBatches: string[] = [];
   const pgViews: string[] = [];
   const unhandled: UnhandledStatement[] = [];
-  for (const batch of tsql.split(/^\s*GO\s*;?\s*$/im)) {
+  for (const batch of tsql.split(/^[ \t]*GO[ \t]*(?:;[ \t]*)?\r?$/im)) {
     const code = StripComments(batch);
     const m = code.match(CREATE_VIEW_NAME);
     if (m) {

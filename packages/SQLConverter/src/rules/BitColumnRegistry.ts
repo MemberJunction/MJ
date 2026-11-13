@@ -11,6 +11,8 @@
  * Keys are lower-cased table name → (lower-cased column name → PostgreSQL type), the shape
  * `TableColumns` uses.
  */
+import { StripComments } from './ExpressionHelpers.js';
+
 export type TableColumnRegistry = Map<string, Map<string, string>>;
 
 /** The bare, lower-cased table name of a T-SQL object reference (`[sch].[Tbl]`, `sch.Tbl`, `"Tbl"`). */
@@ -64,17 +66,12 @@ function addColumn(into: TableColumnRegistry, table: string, column: string): vo
   cols.set(column.toLowerCase(), 'BOOLEAN');
 }
 
-/** Removes `--` line comments and block comments so commented-out DDL is not read. */
-function stripComments(sql: string): string {
-  return sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, '');
-}
-
 /**
  * Collects the BIT columns a T-SQL script declares — `CREATE TABLE` columns and `ALTER TABLE … ADD`
  * columns — into `into` (created when omitted) and returns it.
  */
 export function CollectTSQLBitColumns(sql: string, into: TableColumnRegistry = new Map()): TableColumnRegistry {
-  const text = stripComments(sql);
+  const text = StripComments(sql);
   const createTable = /\bCREATE\s+TABLE\s+([^\s(]+)\s*\(/gi;
   let m: RegExpExecArray | null;
   while ((m = createTable.exec(text)) !== null) {

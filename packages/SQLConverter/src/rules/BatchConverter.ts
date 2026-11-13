@@ -346,6 +346,15 @@ function countSkippedExecBlocks(output: string): number {
   return output.split('\n').filter(line => line.startsWith(GAP_MARKER_EXEC_SKIPPED)).length;
 }
 
+/** True when `lines` hold only blanks and comments, the last comment being a `-- Save` line. */
+function endsWithSaveAnnouncement(lines: string[]): boolean {
+  if (!lines.every(isBlankOrComment)) return false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() !== '') return SAVE_MARKER.test(lines[i]);
+  }
+  return false;
+}
+
 /** Split SQL on GO batch separators */
 function splitOnGo(sql: string): string[] {
   const batches: string[] = [];
@@ -355,6 +364,9 @@ function splitOnGo(sql: string): string[] {
   for (const line of lines) {
     const stripped = line.trim().toUpperCase();
     if (stripped === 'GO' || /^GO\s*(--.*)?$/i.test(stripped)) {
+      // Older mj-sync logs put a `GO` between a `-- Save` line and its block. Keep that
+      // comment-only batch with the next one, so the save stays above the block it announces.
+      if (endsWithSaveAnnouncement(currentBatch)) continue;
       const batch = currentBatch.join('\n').trim();
       if (batch.length > 0) batches.push(batch);
       currentBatch = [];

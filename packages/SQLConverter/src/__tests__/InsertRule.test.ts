@@ -354,6 +354,12 @@ describe('InsertRule — DELETE through a CTE (issue #3166)', () => {
     );
   });
 
+  it('keeps leading blank and comment lines above the rewritten delete', () => {
+    const out = convert('-- dedup\n\n  -- second note\n;WITH d AS (SELECT ID, ROW_NUMBER() OVER (PARTITION BY Name ORDER BY ID) AS rn FROM [__mj].[Foo]) DELETE FROM d WHERE rn > 1;');
+    expect(out).toContain('-- dedup\n\n  -- second note\nWITH d AS (SELECT ctid AS mj_ctid,');
+    expect(out).toContain('DELETE FROM __mj."Foo" WHERE ctid IN (SELECT mj_ctid FROM d WHERE rn > 1);');
+  });
+
   it('qualifies ctid with the table alias', () => {
     const out = convert('WITH d AS (SELECT f.ID, ROW_NUMBER() OVER (PARTITION BY f.Name ORDER BY f.ID) AS rn FROM [__mj].[Foo] f) DELETE FROM d WHERE rn > 1');
     expect(out).toContain('SELECT f.ctid AS mj_ctid,');
