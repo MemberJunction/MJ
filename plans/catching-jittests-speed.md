@@ -112,4 +112,6 @@
 
 ## Follow-up found by the first Hydrogen run (2026-11-13)
 
-The sandbox build used `turbo run build --filter=<pkg>...`. Turbo reads `<pkg>...` as the package and its dependents, the reverse of pnpm. For `@memberjunction/core` at `373f180` that selected 157 packages. With the full install the build passed but compiled most of the workspace. With the filtered install (Task 6) it failed on packages that had no `node_modules` (#3831, base build, `export-engine`). Fix `95ef909f8a`: the build filter is `--filter=...<pkg>`, the package and its dependencies, which is the same closure the install covers.
+The sandbox build used `turbo run build --filter=<pkg>...`. Turbo treats the workspace root as a dependency of every package, and the root's `package.json` depends on `@memberjunction/cli`, `integration-test-suite` and `server-bootstrap-lite`. So `@memberjunction/core...` at `373f180` selected 157 packages, not 3. With the full install the build passed but compiled half of the workspace. With the filtered install (Task 6) it failed on packages that had no `node_modules` (#3831, base build).
+
+A first fix (`95ef909f8a`, `--filter=...<pkg>`) was wrong: that form is the package and its dependents, 311 packages. The correct filter is the exact name, `--filter=<pkg>`: turbo then runs the package's build and the builds it depends on through `^build` (3 tasks for core), which is the closure the filtered install covers.

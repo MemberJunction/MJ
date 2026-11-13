@@ -240,12 +240,12 @@ describe('VitestCatchTarget.BuildPackages', () => {
     expect(calls[0].Command.join(' ')).toContain('--summarize');
     expect(readdirSync(join(work, 'turbo-summaries', 'head'))).toEqual(['abc.json']);
   });
-  it('builds each package with its dependencies (turbo ...pkg) and excludes the packages the settings name', async () => {
+  it('names each package under test exactly, so turbo adds only the builds they depend on, and excludes the packages the settings name', async () => {
     const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head');
     const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work } as never;
     await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/a2aserver']);
-    expect(calls[0].Command.join(' ')).toContain('--filter=...@memberjunction/a2aserver --filter=!@memberjunction/cli');
+    expect(calls[0].Command.join(' ')).toContain('--filter=@memberjunction/a2aserver --filter=!@memberjunction/cli');
   });
   it('limits turbo to one task per sandbox cpu, so parallel compilers stay under the memory cap', async () => {
     const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head');
