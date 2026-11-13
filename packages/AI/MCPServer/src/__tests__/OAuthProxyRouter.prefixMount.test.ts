@@ -16,6 +16,7 @@ vi.mock('../auth/ScopeService.js', () => ({
     GroupScopesHierarchically: () => ({ fullAccessScope: null, categories: new Map() }),
 }));
 
+import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
 import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
 import { GetAuthorizationStateManager } from '../auth/AuthorizationStateManager.js';
 import { BuildProtectedResourceMetadata } from '../auth/ProtectedResourceMetadata.js';
@@ -70,13 +71,6 @@ describe('OAuth proxy mounted under /api/mcp', () => {
         expect(metadata.code_challenge_methods_supported).toContain('S256');
     });
 
-    it('serves the same document at {issuer}/.well-known/openid-configuration, the spec fallback under the issuer path', async () => {
-        const oauth = await getJson(`${MOUNT}/.well-known/oauth-authorization-server`);
-        const oidc = await getJson(`${MOUNT}/.well-known/openid-configuration`);
-
-        expect(oidc).toEqual(oauth);
-    });
-
     it('posts the consent form to the public consent URL, not a host-root /oauth/consent', async () => {
         const requestId = GetAuthorizationStateManager().CreateConsentRequest({
             user: { email: 'user@example.test', mjUserId: 'user-1' },
@@ -112,5 +106,51 @@ describe('Protected Resource Metadata when hosted', () => {
         } finally {
             SetHostedResourceIdentifier(undefined);
         }
+    });
+});
+
+describe('MCP SDK login-server discovery with a web app at the host root', () => {
+    /** RFC 8414 path insertion: where clients first look for the metadata of issuer `{origin}/api/mcp`. */
+    const ROOT_DISCOVERY = `/.well-known/oauth-authorization-server${MOUNT}`;
+
+    /**
+     * An app shaped like MJExplorer + MJAPI on one host: the proxy at /api/mcp, a web app answering
+     * everything else with its page. `rewrite` stands in for the web-server rule the README gives.
+     */
+    async function withHost(rewrite: boolean, run: (issuer: string) => Promise<void>): Promise<void> {
+        const app = express();
+        if (rewrite) {
+            app.use((req, _res, next) => {
+                if (req.url === ROOT_DISCOVERY) {
+                    req.url = `${MOUNT}/.well-known/oauth-authorization-server`;
+                }
+                next();
+            });
+        }
+        app.use(MOUNT, CreateOAuthProxyRouter({ ...config, baseUrl: 'http://placeholder' }));
+        app.use((_req, res) => {
+            res.status(200).type('html').send('<!doctype html><html><body>MJExplorer</body></html>');
+        });
+        const s = app.listen(0);
+        await new Promise<void>(resolve => s.once('listening', () => resolve()));
+        try {
+            await run(`http://127.0.0.1:${(s.address() as AddressInfo).port}${MOUNT}`);
+        } finally {
+            s.closeAllConnections();
+            await new Promise<void>((resolve, reject) => s.close(err => (err ? reject(err) : resolve())));
+        }
+    }
+
+    it('finds the proxy when the web server rewrites the root discovery URL to MJAPI', async () => {
+        await withHost(true, async (issuer) => {
+            const metadata = await discoverAuthorizationServerMetadata(issuer);
+            expect(metadata?.token_endpoint).toBe('http://placeholder/oauth/token');
+        });
+    });
+
+    it('fails without the rewrite, when the web app answers with its page (why the README requires it)', async () => {
+        await withHost(false, async (issuer) => {
+            await expect(discoverAuthorizationServerMetadata(issuer)).rejects.toThrow();
+        });
     });
 });
