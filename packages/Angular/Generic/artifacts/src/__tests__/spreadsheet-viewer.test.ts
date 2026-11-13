@@ -478,6 +478,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
             Role: 'User',
             Message: 'Verify Q4 margin assumption here.',
             CreatedAt: '2026-11-12T15:00:00Z',
+            Mentions: [],
           },
         ],
       };
@@ -497,6 +498,7 @@ describe('SpreadsheetArtifactViewerComponent — Multi-Select, Drag Selection & 
             Role: 'User',
             Message: 'Should these two columns use YoY growth?',
             CreatedAt: '2026-11-12T15:05:00Z',
+            Mentions: [],
           },
         ],
       };
