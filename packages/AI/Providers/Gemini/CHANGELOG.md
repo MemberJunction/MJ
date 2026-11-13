@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-gemini
 
+## 6.2.2
+
+### Patch Changes
+
+- df5f168: Every Gemini request now opens with a fixed user turn ("Proceed with the task described in the system instructions.") and a short model turn, unless the conversation already opens with that turn. Gemini's implicit cache reuses a previous request only when the new request repeats it past the system instruction into the first `contents` turn; a match on the system instruction alone is not reused. An agent loop's first and second calls began with different turns (the first call's only turn is per-turn state that the second replaces), so the second call never hit the cache. Measured on Gemini 3.8 Flash with a ~20k-token system instruction: 0 of 8 second calls hit without the fixed turn, 7 of 8 with it, each caching all but the last ~2,050 tokens of the previous request. In Skip, second calls went from 0% to 76–84% cached. A user turn of only empty text is dropped (as an empty model turn already was), so a request whose only user message is empty never ends on the anchor's model turn, which Gemini rejects. Vertex AI shares this code.
+- 157ead0: Consecutive user text messages are no longer combined into one Gemini turn: they are kept apart by a short model turn (`GEMINI_USER_TURN_SEPARATOR_TEXT`, "OK"). Gemini's implicit cache reuses a previous request only when the new request repeats it, and a user turn that grows from one request to the next is never reused. An agent on the envelope path keeps action results, retries and runtime state as user messages, so every request was the system prompt plus one changing turn and nothing after the system prompt was cached. Measured on Gemini 3.8 Flash, the separated form caches everything up to about 2,050 tokens before the end of the previous request. Function-response turns are unchanged: they still follow the model turn that made the calls. Vertex AI shares this code.
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

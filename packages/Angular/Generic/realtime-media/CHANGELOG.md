@@ -1,5 +1,13 @@
 # @memberjunction/ng-realtime-media
 
+## 6.2.2
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@6.2.2
+- @memberjunction/ai@6.2.2
+- @memberjunction/ai-realtime-client@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

@@ -1,5 +1,20 @@
 # @memberjunction/ai-engine-base
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+- Updated dependencies [a96cd31]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/templates-base-types@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

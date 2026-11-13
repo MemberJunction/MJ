@@ -1,5 +1,41 @@
 # @memberjunction/ng-bootstrap
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [24e088b]
+- Updated dependencies [7110d1b]
+- Updated dependencies [a96cd31]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/ng-explorer-core@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/feature-pipelines@6.2.2
+  - @memberjunction/tag-engine-base@6.2.2
+  - @memberjunction/ai-vectors-memory@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/ng-auth-services@6.2.2
+  - @memberjunction/ng-core-entity-forms@6.2.2
+  - @memberjunction/ng-dashboards@6.2.2
+  - @memberjunction/ng-explorer-settings@6.2.2
+  - @memberjunction/ng-shared@6.2.2
+  - @memberjunction/ng-artifacts@6.2.2
+  - @memberjunction/ng-clustering@6.2.2
+  - @memberjunction/ng-conversations@6.2.2
+  - @memberjunction/ng-dashboard-viewer@6.2.2
+  - @memberjunction/ng-entity-action-ux@6.2.2
+  - @memberjunction/ng-entity-viewer@6.2.2
+  - @memberjunction/ng-file-storage@6.2.2
+  - @memberjunction/communication-types@6.2.2
+  - @memberjunction/entity-communications-base@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/rubrics-base@6.2.2
+  - @memberjunction/ai-realtime-client@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

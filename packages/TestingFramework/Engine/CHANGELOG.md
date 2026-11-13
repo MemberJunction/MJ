@@ -1,5 +1,37 @@
 # @memberjunction/testing-engine
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [650b0c4]
+- Updated dependencies [414a6ff]
+- Updated dependencies [1cd06b6]
+- Updated dependencies [df8561a]
+- Updated dependencies [857a993]
+- Updated dependencies [d6ed1a0]
+- Updated dependencies [8883311]
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [c8204fd]
+- Updated dependencies [7110d1b]
+- Updated dependencies [718912c]
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-agents@6.2.2
+  - @memberjunction/ai-prompts@6.2.2
+  - @memberjunction/core@6.2.2
+  - @memberjunction/credentials@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/rubrics@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/component-registry-client-sdk@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/rubrics-base@6.2.2
+  - @memberjunction/testing-engine-base@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

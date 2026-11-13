@@ -1,5 +1,18 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [24e088b]
+  - @memberjunction/ng-explorer-core@6.2.2
+  - @memberjunction/ng-core-entity-forms@6.2.2
+  - @memberjunction/ng-explorer-settings@6.2.2
+  - @memberjunction/ng-link-directives@6.2.2
+  - @memberjunction/ng-shared@6.2.2
+  - @memberjunction/ng-workspace-initializer@6.2.2
+  - @memberjunction/ng-container-directives@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

@@ -1,5 +1,26 @@
 # @memberjunction/ng-query-viewer
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/ng-base-types@6.2.2
+  - @memberjunction/ng-code-editor@6.2.2
+  - @memberjunction/ng-export-service@6.2.2
+  - @memberjunction/ng-notifications@6.2.2
+  - @memberjunction/ng-shared-generic@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/excel-addin@6.2.2
+  - @memberjunction/ng-markdown@6.2.2
+  - @memberjunction/ng-ui-components@6.2.2
+  - @memberjunction/ng-pagination@6.2.2
+  - @memberjunction/export-engine@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

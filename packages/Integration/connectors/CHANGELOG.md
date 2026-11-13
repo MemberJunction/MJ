@@ -1,5 +1,18 @@
 # @memberjunction/integration-connectors
 
+## 6.2.2
+
+### Patch Changes
+
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/external-data-sources@6.2.2
+  - @memberjunction/integration-engine@6.2.2
+  - @memberjunction/integration-engine-base@6.2.2
+  - @memberjunction/core-entities@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

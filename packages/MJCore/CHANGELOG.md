@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 6.2.2
+
+### Patch Changes
+
+- 47303ff: Two component metadata fixes:
+  - **ApexCharts chart-ref lint rule.** `check-chart-ref-management` reset its cached state on every AST node, so it re-ran its whole walk node by node. In a component that exports a chart it also threw on every node. It now runs once per lint, and also covers arrow-function components.
+  - **DataGrid row-click guidance.** The DataGrid spec's example called `OpenEntityRecord` from `onRowClick` while `entityName` was set and cancelled only afterwards, so a component that followed it opened the record twice. The example and the `entityName`, `entityPrimaryKeys` and `rowClick` descriptions now show the two correct patterns: let the grid open the record, or cancel first and open it yourself.
+- 215696a: A peer server's cache event no longer leaves an engine holding encrypted field values. Server caches store encrypted fields as ciphertext and only the cache-read path decrypts them, but `BaseEngine` applied a peer's `set` or `row_delta` rows without decrypting whenever they carried a newer version than the engine held. With two or more servers on one Redis, `CredentialEngine` then held `Values` as `$ENC$…` and `GetCredential` returned empty values as a success, until that server's next save of the credential. An engine now reloads instead of applying a payload that carries ciphertext on an encrypted field; the reload reads the same slot and decrypts it. In a three-process reproduction on MJ 6.2.1, 20 of 20 targeted trials, 3 of 20 runs of a two-saves-then-read pattern and 8 of 20 key rotations left a server holding ciphertext; with the fix, none did. `CredentialEngine` also stops reading unparseable `Values` as `{}`: it throws `CredentialValuesUnreadableError` (with `StillEncrypted` set for ciphertext), and its message no longer quotes the start of the stored value.
+- 7110d1b: Fix PostgreSQL upgrades from 6.1.x to 6.2 failing in `V202611012253__v6.2.x__Metadata_Sync` with `FK_QueryField_SourceEntityField` (#6557). The migration now restores the 27 virtual EntityField rows that `R__RefreshMetadata` removes at the end of a 6.1.x run.
+  - @memberjunction/global@6.2.2
+  - @memberjunction/sql-dialect@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

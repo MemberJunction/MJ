@@ -1,5 +1,7 @@
 # @memberjunction/predictive-studio-core
 
+## 6.2.2
+
 ## 6.2.1
 
 ## 6.2.0

@@ -1,5 +1,14 @@
 # @memberjunction/sql-parser
 
+## 6.2.2
+
+### Patch Changes
+
+- ce47382: Test SQL and ad-hoc SQL no longer refuse valid read-only statements as "not a safe read-only statement".
+  - `StrictFragmentValidator.ValidateReadOnlyStatement` accepts a set operation (`UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT`) whose branches are all read-only SELECTs. Every branch is still read and screened, a branch that is a `SELECT … INTO` is still refused, and the WHERE / ORDER BY fragment validators still refuse any set operation.
+  - On SQL Server, valid syntax node-sql-parser's TransactSQL grammar cannot read is parsed through a strict-only rewrite that keeps every relation and subquery in place: `STRING_AGG(…) WITHIN GROUP (ORDER BY …)`, `INTERSECT`, `EXCEPT`, `TRY_CAST`, `COUNT_BIG(*)`, `RANGE` window frames, `LIKE … ESCAPE`, `TOP … PERCENT WITH TIES` / `TOP (n) WITH TIES`, and a leading `;`. On SQL Server and PostgreSQL, `RANGE` window frames and `OFFSET n ROW[S]` / `FETCH FIRST|NEXT [n] ROW[S] ONLY|WITH TIES` with a literal count are read the same way. The database still runs the original text, and `SQLParser`'s own output is unchanged.
+  - @memberjunction/sql-dialect@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

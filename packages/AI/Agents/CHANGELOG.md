@@ -1,5 +1,73 @@
 # @memberjunction/ai-agents
 
+## 6.2.2
+
+### Patch Changes
+
+- 650b0c4: The note that tells a model its refused completion's payload change was not applied is now right in two cases it got wrong. It is decided from the step the model sent, read before validation, so a subclass that turns a Chat step into a Success in place (to validate a reply as a completion) no longer has an already-applied change reported as discarded, which made the model send it again and duplicated array elements. On the envelope path the note now quotes the discarded change as JSON, since the envelope response is not kept in the history and the model could not otherwise see what it is asked to resend. The native note is unchanged: the `complete_task` call is in the history.
+- 414a6ff: A refused completion's payload change is now held instead of discarded. Since 6.2, a completion refused by Success validation (minimum executions, `FinalPayloadValidation`, a self-check) had its `payloadChangeRequest` thrown away and the model was asked to send it again. Models answer a refusal with the correction, not the whole change, so the next completion was validated against a payload that had lost the rest of it and was refused again for fields it had already sent. Now the change is held: the next prompt sees the payload with it applied, the next completion is applied on top of it, and both are committed when a completion is accepted. Held changes are dropped if the run ends without an accepted completion, so the final payload still never contains an unaccepted change. A resent change identical to a held one (key order aside) is not applied twice. The refusal tells the model the change is held and to send only corrections. The step's `OutputData` records `payloadChangeHeld` (previously `payloadChangeDiscarded`). Integration check NTL14 is updated for this.
+- 1cd06b6: Agent responses can no longer write to `Object.prototype`: `__proto__`, `constructor` and `prototype` keys are dropped when an agent's JSON reply is parsed and when PayloadManager applies a payload change request, merges or clones a payload.
+- df8561a: Payload change requests can now address nested values by path, and `allowedPaths` (`PayloadSelfWritePaths`) can now permit writes inside array elements.
+  - **Path keys.** A bucket key such as `"meta.title"`, `"dependencies[2].code"` or `"dependencies.2.code"` used to be written as a literal top-level key named after the whole path, with no error, leaving the target unchanged. `ApplyAgentChangeRequest` now resolves these keys against the payload.
+    - In `updateElements`, `newElements` and `removeElements`, a path key changes only the value it names. A `newElements` path that already holds a value is treated as an update, with a warning.
+    - In `replaceElements`, a path key replaces exactly the value it names, not the whole top-level property. Missing parent objects are created.
+    - A path that can't be written (an index out of range, or a step through a string) is refused as a blocked operation with a warning.
+    - A key the payload already holds as a literal property name keeps its literal meaning.
+    - This also makes the dot-paths that `TransformChangeRequestPaths` produces apply to the right place.
+  - **Permissions inside arrays.** An element merge used to check `allowedPaths` against the bare field name (`code`), and an update into an existing object or array first required `update` permission on the container itself. Together these meant no pattern could permit writing one field of an array element.
+    - Permissions are now checked against the full path (`dependencies.2.code`), on each value actually written.
+    - `allowedPaths: ["dependencies.*.code"]` lets a change write each element's code and nothing else.
+    - Deleting or replacing an element still accepts `update` permission on the array, as before.
+    - A delete that is refused keeps the element unchanged.
+    - A `"__DELETE__"` value in `updateElements` is now checked too: it needs `delete` or `update` on the key, or `update` on the object holding it.
+  - **Pattern fixes.** `[*]` / `[n]` in a pattern (`dependencies[*].code`) now match as documented; they never matched before. A `**` pattern (`dependencies.**`) now spans nested segments; its `.*` was rewritten by the single-`*` rule. No shipped agent metadata uses either form.
+  - Appends through `newElements` are still not checked against `allowedPaths`, as before.
+
+- 857a993: Template data an agent subclass adds to the prompt params after calling `super.preparePromptParams()` reaches the prompt again. Since the trailing runtime-state layout (6.2), `preparePromptParams` built the trailing `<mj-runtime-state>` message itself, and when the specialization was relocated it pre-rendered the child prompt there and cached the render for the prompt runner. Data a subclass added afterwards was never rendered, with no error. The trailing message is now built after the hook returns, from the final params, so the rendered text is the same when nothing changed and the cache layout is unaffected. A subclass's own changes to the outgoing messages are kept, with the trailing message still last.
+- d6ed1a0: Agent-local tools (`BaseAgent.GetAgentTools`) now have a run-scoped circuit breaker, like Actions. Before, the action breaker covered only the action dispatch path, so a driver tool that kept failing (an `edit_file` whose old text never matches) ran again on every turn until the run hit its iteration limit.
+
+  The tool breaker uses the same rules and thresholds as the action breaker:
+  - **Identical arguments.** A call whose arguments already failed `IDENTICAL_FAILURE_THRESHOLD` (2) times is refused without running.
+  - **Attempt budget.** After `ACTION_FAILURE_BUDGET` (5) consecutive failures with any arguments, the tool is refused for the rest of the run.
+
+  How it works:
+  - A failure is an error result, a thrown error, or a payload change that was refused.
+  - A success clears the tool's record.
+  - Arguments are compared after `normalizeActionParams`.
+  - A refused call is still logged as a failed `Tool` step, and the model gets an error result saying why.
+
+  Opting out:
+  - An agent type with `UsesActionCircuitBreaker === false` is exempt.
+  - A single tool can opt out with the new `AgentToolDefinition.UsesCircuitBreaker: false`, for a tool whose error result is an expected answer the model should be free to ask again.
+
+- a96cd31: A Loop agent's relocated specialization now renders with the same native tool-calling flags as the system prompt. The agent pre-renders a relocated child prompt into the trailing runtime-state message before a model is selected, so it rendered without `_NATIVE_TOOL_CALLING` / `_NATIVE_CONTROL_FLOW`, which the prompt runner sets from the selected model's tool-calling decision: a child prompt worded for the native or envelope path got the envelope wording while the system prompt got the native one. `AIPromptParams` gains an optional `OnTemplateDataFinalized` callback that the runner calls once the flags are set and before the prompt renders; the agent uses it to render the trailing message again and swaps it in when the text changed (keeping the first build if the re-render fails). A failover attempt whose decision differs still re-renders only the system prompt.
+- Updated dependencies [8883311]
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+- Updated dependencies [718912c]
+- Updated dependencies [ce47382]
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-prompts@6.2.2
+  - @memberjunction/core@6.2.2
+  - @memberjunction/generic-database-provider@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-reranker@6.2.2
+  - @memberjunction/ai-vector-dupe@6.2.2
+  - @memberjunction/ai-vector-sync@6.2.2
+  - @memberjunction/rubrics@6.2.2
+  - @memberjunction/search-engine@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/actions@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/storage@6.2.2
+  - @memberjunction/templates@6.2.2
+  - @memberjunction/context-crush@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

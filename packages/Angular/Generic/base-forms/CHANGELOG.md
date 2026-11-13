@@ -1,5 +1,32 @@
 # @memberjunction/ng-base-forms
 
+## 6.2.2
+
+### Patch Changes
+
+- 24e088b: Fix browser tab hang when navigating between entity records in an IS-A hierarchy (e.g. clicking the IS-A descendant badge or parent badge in the form toolbar). `ComponentCacheManager` now includes the entity discriminator in the cache key for `RecordResource` and `Records` tabs. Previously, because parent and child entities in an IS-A hierarchy share the exact same primary key (`recordId`), `ComponentCacheManager` dropped the entity discriminator and returned the detached parent component when asked for the child component. The tab container's reload check detected `existingEntity !== newEntity` and repeatedly reloaded, causing an infinite synchronous reload loop that froze the browser tab. Also adds a cycle guard to `MjFormToolbarComponent.ChildChain`.
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [7110d1b]
+  - @memberjunction/core@6.2.2
+  - @memberjunction/ng-base-types@6.2.2
+  - @memberjunction/ng-code-editor@6.2.2
+  - @memberjunction/ng-entity-viewer@6.2.2
+  - @memberjunction/ng-file-storage@6.2.2
+  - @memberjunction/ng-list-management@6.2.2
+  - @memberjunction/ng-notifications@6.2.2
+  - @memberjunction/ng-react@6.2.2
+  - @memberjunction/ng-record-changes@6.2.2
+  - @memberjunction/ng-record-clone@6.2.2
+  - @memberjunction/ng-record-tags@6.2.2
+  - @memberjunction/ng-shared-generic@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/interactive-component-types@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/ng-markdown@6.2.2
+  - @memberjunction/ng-ui-components@6.2.2
+  - @memberjunction/global@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

@@ -1,5 +1,107 @@
 # @memberjunction/integration-test-suite
 
+## 6.2.2
+
+### Patch Changes
+
+- 414a6ff: A refused completion's payload change is now held instead of discarded. Since 6.2, a completion refused by Success validation (minimum executions, `FinalPayloadValidation`, a self-check) had its `payloadChangeRequest` thrown away and the model was asked to send it again. Models answer a refusal with the correction, not the whole change, so the next completion was validated against a payload that had lost the rest of it and was refused again for fields it had already sent. Now the change is held: the next prompt sees the payload with it applied, the next completion is applied on top of it, and both are committed when a completion is accepted. Held changes are dropped if the run ends without an accepted completion, so the final payload still never contains an unaccepted change. A resent change identical to a held one (key order aside) is not applied twice. The refusal tells the model the change is held and to send only corrections. The step's `OutputData` records `payloadChangeHeld` (previously `payloadChangeDiscarded`). Integration check NTL14 is updated for this.
+- Updated dependencies [650b0c4]
+- Updated dependencies [414a6ff]
+- Updated dependencies [1cd06b6]
+- Updated dependencies [df8561a]
+- Updated dependencies [857a993]
+- Updated dependencies [d6ed1a0]
+- Updated dependencies [8883311]
+- Updated dependencies [47303ff]
+- Updated dependencies [215696a]
+- Updated dependencies [c8204fd]
+- Updated dependencies [df5f168]
+- Updated dependencies [157ead0]
+- Updated dependencies [7110d1b]
+- Updated dependencies [718912c]
+- Updated dependencies [ce47382]
+- Updated dependencies [a96cd31]
+  - @memberjunction/ai-agents@6.2.2
+  - @memberjunction/ai-prompts@6.2.2
+  - @memberjunction/core@6.2.2
+  - @memberjunction/credentials@6.2.2
+  - @memberjunction/ai-gemini@6.2.2
+  - @memberjunction/generic-database-provider@6.2.2
+  - @memberjunction/ai-core-plus@6.2.2
+  - @memberjunction/ai-agent-harness@6.2.2
+  - @memberjunction/predictive-studio@6.2.2
+  - @memberjunction/video-studio@6.2.2
+  - @memberjunction/record-set-processor@6.2.2
+  - @memberjunction/scheduling-engine@6.2.2
+  - @memberjunction/server-bootstrap-lite@6.2.2
+  - @memberjunction/task-graph@6.2.2
+  - @memberjunction/telephony-adapters@6.2.2
+  - @memberjunction/testing-engine@6.2.2
+  - @memberjunction/feature-pipelines-engine@6.2.2
+  - @memberjunction/ai-vector-dupe@6.2.2
+  - @memberjunction/codegen-lib@6.2.2
+  - @memberjunction/content-autotagging@6.2.2
+  - @memberjunction/content-pipeline@6.2.2
+  - @memberjunction/livekit-room-server@6.2.2
+  - @memberjunction/core-entities-server@6.2.2
+  - @memberjunction/rubrics@6.2.2
+  - @memberjunction/search-engine@6.2.2
+  - @memberjunction/ai-engine-base@6.2.2
+  - @memberjunction/aiengine@6.2.2
+  - @memberjunction/feature-pipelines@6.2.2
+  - @memberjunction/predictive-studio-truth-suite@6.2.2
+  - @memberjunction/ai-bridge-base@6.2.2
+  - @memberjunction/ai-bridge-server@6.2.2
+  - @memberjunction/ai-vectordb@6.2.2
+  - @memberjunction/api-keys@6.2.2
+  - @memberjunction/actions-base@6.2.2
+  - @memberjunction/actions@6.2.2
+  - @memberjunction/auth-providers@6.2.2
+  - @memberjunction/communication-types@6.2.2
+  - @memberjunction/communication-engine@6.2.2
+  - @memberjunction/notifications@6.2.2
+  - @memberjunction/communication-ms-graph@6.2.2
+  - @memberjunction/communication-expo-push@6.2.2
+  - @memberjunction/communication-gmail@6.2.2
+  - @memberjunction/communication-sendgrid@6.2.2
+  - @memberjunction/communication-twilio@6.2.2
+  - @memberjunction/content-pipeline-base@6.2.2
+  - @memberjunction/conversations-runtime@6.2.2
+  - @memberjunction/diagnostics-server@6.2.2
+  - @memberjunction/encryption@6.2.2
+  - @memberjunction/external-data-sources@6.2.2
+  - @memberjunction/graphql-dataprovider@6.2.2
+  - @memberjunction/core-entities@6.2.2
+  - @memberjunction/queue@6.2.2
+  - @memberjunction/storage@6.2.2
+  - @memberjunction/metadata-sync@6.2.2
+  - @memberjunction/open-app-engine@6.2.2
+  - @memberjunction/postgresql-dataprovider@6.2.2
+  - @memberjunction/query-processor@6.2.2
+  - @memberjunction/record-set-processor-base@6.2.2
+  - @memberjunction/redis-provider@6.2.2
+  - @memberjunction/rubrics-base@6.2.2
+  - @memberjunction/sqlserver-dataprovider@6.2.2
+  - @memberjunction/templates-base-types@6.2.2
+  - @memberjunction/templates@6.2.2
+  - @memberjunction/testing-engine-base@6.2.2
+  - @memberjunction/testing-integration@6.2.2
+  - @memberjunction/unit-testing@6.2.2
+  - @memberjunction/work-queue-engine@6.2.2
+  - @memberjunction/work-queue-server@6.2.2
+  - @memberjunction/ai-anthropic@6.2.2
+  - @memberjunction/ai-openai@6.2.2
+  - @memberjunction/ai-openrouter@6.2.2
+  - @memberjunction/ai@6.2.2
+  - @memberjunction/predictive-studio-core@6.2.2
+  - @memberjunction/ai-cloudflare@6.2.2
+  - @memberjunction/ai-inception@6.2.2
+  - @memberjunction/ai-systemone@6.2.2
+  - @memberjunction/video-studio-core@6.2.2
+  - @memberjunction/diagnostics@6.2.2
+  - @memberjunction/global@6.2.2
+  - @memberjunction/work-queue-core@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes

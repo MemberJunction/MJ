@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-betty-bot
 
+## 6.2.2
+
+### Patch Changes
+
+- @memberjunction/ai@6.2.2
+- @memberjunction/global@6.2.2
+- @memberjunction/network-utils@6.2.2
+
 ## 6.2.1
 
 ### Patch Changes
