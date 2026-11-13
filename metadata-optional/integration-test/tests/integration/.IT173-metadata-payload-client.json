@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT173 - Metadata Dataset Rows Reach Clients Once",
+    "Description": "A GraphQL client session reads the MJ_Metadata dataset after the server has built its own metadata from the same cached rows. The server's assembly must work on copies, or every client receives each entity's children twice. MP1 entity rows carry no nested EntityFields, EntityPermissions, EntityRelationships, EntitySettings, EntityOrganicKeys, EntityAlternateBaseViews or EntityUniqueKeys; MP2 entity field rows carry no nested EntityFieldValues or EntityFieldPermissions; MP3 application rows carry no nested ApplicationEntities or ApplicationSettings. Non-mutating.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Each MJ_Metadata row reaches a client once, in its own item, with nothing nested."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "metadata-payload-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F88F741D-A2E4-437A-A084-008E77F69CBB"
+  }
+}

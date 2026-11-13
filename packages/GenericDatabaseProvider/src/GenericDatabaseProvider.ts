@@ -9418,24 +9418,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                // ProviderInternalScaffolding — for the MJ_Metadata dataset ONLY. Those rows are
-                // consumed by this provider's own assembly steps, which mutate them in place by
-                // design: PostProcessEntityMetadata sorts the entity array and attaches child
-                // collections onto each entity/field row, and GetAllMetadata's Applications
-                // assembly writes ApplicationEntities/ApplicationSettings onto Application rows.
-                // Freezing them makes metadata bootstrap throw and the process starts blind.
-                //
-                // Every OTHER dataset is served to arbitrary consumers (BaseEngine.Load hands
-                // item.Results — these very arrays — to every engine subclass), so those slots
-                // must stay under the defensive deep-freeze like any RunView result.
-                const isMetadataScaffolding = datasetName === ProviderBase._mjMetadataDatasetName;
-                const rowsForCache = isMetadataScaffolding
-                    ? itemData
-                    : provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName));
+                // Every dataset's slots — MJ_Metadata's included — hold rows that later readers are
+                // served (BaseEngine.Load hands item.Results to every engine subclass; the GraphQL
+                // dataset resolver hands MJ_Metadata to every client), so they are frozen like any
+                // RunView result. The metadata assembly copies the rows it writes to.
                 await cache.SetRunViewResult(
-                    uncachedFingerprints[i], syntheticParams, rowsForCache, maxUpdatedAt,
-                    undefined, undefined, this, undefined,
-                    isMetadataScaffolding ? { ProviderInternalScaffolding: true } : undefined
+                    uncachedFingerprints[i], syntheticParams,
+                    provider.PrepareRowsForCacheStorage(itemData, provider.EntityByName(entityName)), maxUpdatedAt,
+                    undefined, undefined, this
                 );
             }
 

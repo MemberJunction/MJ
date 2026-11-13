@@ -913,3 +913,85 @@ describe('ProviderBase — a snapshot saved with query metadata, restored withou
         }
     });
 });
+
+/**
+ * The metadata assembly attaches child collections (fields, permissions, relationships, field
+ * values, application entities, …) to the rows it builds from. The dataset's own rows are the ones
+ * the dataset cache holds and serves to every later reader — on a server, every client's metadata
+ * request — so the assembly must work on copies: rows edited in place would send each entity's
+ * children a second time, nested inside the entity rows, with every response.
+ */
+describe('ProviderBase — the metadata assembly leaves the dataset rows as read', () => {
+    const NESTED_ENTITY_KEYS = ['EntityFields', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys', 'EntityAlternateBaseViews', 'EntityUniqueKeys'];
+
+    function providerWithApplications(): PartialRefreshProvider {
+        const provider = new PartialRefreshProvider(new InProcessStore());
+        provider.rows.Entities = [
+            { ID: 'e2', Name: 'Zeta Entity', SchemaName: 'dbo', BaseView: 'vwZeta', BaseTable: 'Zeta' },
+            { ID: 'e1', Name: 'Alpha Entity', SchemaName: 'dbo', BaseView: 'vwAlpha', BaseTable: 'Alpha' },
+        ];
+        provider.rows.EntityFields = [
+            { ID: 'f1', EntityID: 'e1', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
+            { ID: 'f2', EntityID: 'e2', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 },
+        ];
+        provider.rows.EntityFieldValues = [{ ID: 'v1', EntityFieldID: 'f1', Value: 'A' }];
+        provider.rows.Applications = [{ ID: 'a1', Name: 'App' }];
+        provider.rows.ApplicationEntities = [{ ID: 'ae1', ApplicationID: 'a1', EntityID: 'e1' }];
+        return provider;
+    }
+
+    it('attaches nothing to the entity, field and application rows it read, and keeps their order', async () => {
+        const provider = providerWithApplications();
+        await provider.Config(queryMetadataConfig(false));
+        try {
+            expect(provider.Entities.map(e => e.Name)).toEqual(['Alpha Entity', 'Zeta Entity']); // built sorted
+            expect(provider.Entities.find(e => e.ID === 'e1')?.Fields).toHaveLength(1);
+            expect(provider.rows.Entities.map(e => e.ID)).toEqual(['e2', 'e1']); // the rows keep their order
+            for (const row of provider.rows.Entities) {
+                for (const key of NESTED_ENTITY_KEYS) {
+                    expect(row, `entity row ${String(row.Name)} carries ${key}`).not.toHaveProperty(key);
+                }
+            }
+            for (const row of provider.rows.EntityFields) {
+                expect(row).not.toHaveProperty('EntityFieldValues');
+            }
+            expect(provider.rows.Applications[0]).not.toHaveProperty('ApplicationEntities');
+            expect(provider.rows.Applications[0]).not.toHaveProperty('ApplicationSettings');
+        } finally {
+            provider['CancelPendingMetadataMemberRefresh']();
+        }
+    });
+
+    it('builds the metadata from frozen dataset rows, as the dataset cache holds them', async () => {
+        const provider = providerWithApplications();
+        for (const rows of Object.values(provider.rows)) {
+            rows.forEach(row => Object.freeze(row));
+            Object.freeze(rows);
+        }
+        const loaded = await provider.Config(queryMetadataConfig(false));
+        try {
+            expect(provider.LastMetadataLoadError).toBeNull();
+            expect(loaded).toBe(true);
+            expect(provider.Entities).toHaveLength(2);
+            expect(provider.Applications[0]?.ApplicationEntities).toHaveLength(1);
+        } finally {
+            provider['CancelPendingMetadataMemberRefresh']();
+        }
+    });
+
+    it('builds the saved-query metadata from frozen dataset rows too, when it loads it', async () => {
+        const provider = providerWithApplications();
+        for (const rows of Object.values(provider.rows)) {
+            rows.forEach(row => Object.freeze(row));
+            Object.freeze(rows);
+        }
+        await provider.Config(queryMetadataConfig(true));
+        try {
+            expect(provider.LastMetadataLoadError).toBeNull();
+            expect(provider.Queries).toHaveLength(1);
+            expect(provider.Queries[0].Fields).toHaveLength(1);
+        } finally {
+            provider['CancelPendingMetadataMemberRefresh']();
+        }
+    });
+});

@@ -422,10 +422,9 @@ export interface CacheWriteOptions {
      * a single owner, and it would break owners that legitimately use those rows as scratch
      * space.
      *
-     * The motivating case is metadata bootstrap: `GetDatasetByName` caches each dataset item
-     * through this cache, and `PostProcessEntityMetadata` then hydrates a graph by sorting the
-     * row array in place and attaching child collections onto each entity/field row. Freezing
-     * those rows makes `GetAllMetadata()` throw and the process boots with no metadata at all.
+     * A dataset item is never such a slot: the rows a dataset read caches are served to later
+     * readers (engines; on a server, every client's metadata request). The metadata assembly,
+     * which attaches child collections to rows, therefore works on copies of them.
      *
      * **Do not set this to avoid fixing a mutation.** If the rows reach anything other than
      * the writing provider, the correct fix is for the mutator to copy first. Defaults to
@@ -3153,12 +3152,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
         // builder, supplying only entity + the item's WhereClause — and every shipped item has a
         // NULL WhereClause, so without this segment a dataset item emits the identical fingerprint
-        // to a plain unfiltered read of the same entity and the two silently share one slot. That
-        // is not merely a stale-data risk: the MJ_Metadata dataset writes its rows with
-        // `ProviderInternalScaffolding` (deliberately UNFROZEN, because bootstrap rearranges them
-        // in place), so the shared slot hands ordinary callers unprotected rows for the hottest
-        // entities in the process — and, in the other direction, an ordinary read repopulating an
-        // evicted slot stores it FROZEN and the next metadata refresh throws.
+        // to a plain unfiltered read of the same entity and the two silently share one slot.
         //
         // Dataset items may also project columns (`DatasetItem.Columns`), where a RunView slot is
         // always the full field set — so the two are not interchangeable in shape either.

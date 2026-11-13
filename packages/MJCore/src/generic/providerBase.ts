@@ -7080,11 +7080,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     await this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName, itemFilters);
                 }
 
-                // got the results, let's build our response in the format we need
-                const simpleMetadata: any = {};
-                for (let r of d.Results) {
-                    simpleMetadata[r.Code] = r.Results
-                }
+                // got the results, let's build our response in the format we need. The assembly
+                // below attaches child collections to rows, so it works on copies of those rows:
+                // the dataset's own rows stay exactly as read (see metadataAssemblyInput).
+                const simpleMetadata: any = ProviderBase.metadataAssemblyInput(d);
 
                 // Post Process Entities because there's some special handling of the sub-objects
                 simpleMetadata.AllEntities = this.PostProcessEntityMetadata(
@@ -7127,6 +7126,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogError(e);
             this._lastMetadataLoadError = e instanceof Error ? e : new Error(String(e));
         }
+    }
+
+    /**
+     * The MJ_Metadata item codes whose rows the metadata assembly writes to: entity rows get their
+     * fields, permissions, relationships, settings, organic keys, alternate views and unique keys;
+     * field rows their values and field permissions; organic keys their related entities;
+     * applications their entities and settings. The entity array is also sorted.
+     */
+    private static readonly _assemblyWrittenItemCodes: ReadonlySet<string> =
+        new Set(['Entities', 'EntityFields', 'EntityOrganicKeys', 'Applications']);
+
+    /**
+     * The MJ_Metadata rows keyed by item code, as {@link GetAllMetadata} assembles them: the items
+     * the assembly writes to are shallow copies (a new array of new row objects), the rest are the
+     * dataset's own arrays. The dataset's rows are the ones the dataset cache holds and serves to
+     * every later reader — on a server, every client's metadata request — so writing child
+     * collections onto them would send each entity's fields, permissions and relationships a second
+     * time, nested inside the entity rows, with every response.
+     */
+    private static metadataAssemblyInput(dataset: DatasetResultType): Record<string, unknown[]> {
+        const input: Record<string, unknown[]> = {};
+        for (const item of dataset.Results ?? []) {
+            const rows: unknown[] = Array.isArray(item.Results) ? item.Results : [];
+            input[item.Code] = ProviderBase._assemblyWrittenItemCodes.has(item.Code)
+                ? rows.map(row => ({ ...(row as Record<string, unknown>) }))
+                : rows;
+        }
+        return input;
     }
 
     /** Logs a failed metadata download and keeps it for {@link LastMetadataLoadError}. */
