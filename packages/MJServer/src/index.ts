@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed, SetTypedQueryDriftMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
+import { MJGlobal, MJEventType, IndexByUUID, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { ResolveOriginSessionId } from './requestSessionContext.js';
@@ -35,6 +35,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
+import { ArtifactCollaborationServer, RedisYjsRoomRelay } from './collaboration/index.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions, userEmailMap } from './config.js';
 import { DescribeUserEmailMap } from './auth/loginEmailResolution.js';
@@ -43,7 +44,7 @@ import { BuildPostgreSQLConnectionConfig, DescribeReadOnlyLoginOverreach, Postgr
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
-import { requireSystemUserDirective, publicDirective } from './directives/index.js';
+import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -98,7 +99,8 @@ import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
-import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import { CronExpressionHelper, SchedulingEngine } from '@memberjunction/scheduling-engine';
+import { EventLoopStallMonitor } from './eventLoopStallMonitor.js';
 import {
   MJCompanyIntegrationEntity,
   MJIntegrationEntity,
@@ -119,7 +121,8 @@ import {
   GetCorsOwningServerExtensionRoots,
 } from '@memberjunction/server-extensions-core';
 import { CreateIsolatedProvider } from './isolatedProvider.js';
-import { ResolveConfiguredPrincipal } from './auth/principals.js';
+import { ResolveConfiguredPrincipal, ResolveServerPrincipal, ValidateProvisioningPrincipals } from './auth/principals.js';
+import type { ProvisioningPrincipalSetting } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -197,7 +200,7 @@ export * from './auth/actingContextResolver.js';
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom, ResolveServerPrincipal } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -274,6 +277,8 @@ export * from './resolvers/FeedbackResolver.js';
 export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
+export * from './resolvers/DocumentCollaborationResolver.js';
+export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
 export * from './rest/MediaAccessKeys.js';
@@ -371,6 +376,21 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
+/**
+ * Labels for the background work executing in THIS process — the suspects named when the event
+ * loop stalls (MJ #5510). Agent runs come from the run watchdog, which tracks every run it guards;
+ * scheduled jobs from the scheduling engine's in-flight set, named where the engine has the job.
+ */
+function describeBackgroundWorkInFlight(): string[] {
+  const agentRuns = AgentRunWatchdog.Instance.TrackedRunIDs.map((id) => `agent run ${id}`);
+  const engine = SchedulingEngine.Instance;
+  const jobsByID = IndexByUUID(engine.ScheduledJobs);
+  const jobs = engine.InflightJobIDs.map((id) => {
+    const job = jobsByID.Get(id);
+    return job ? `scheduled job "${job.Name}" (${id})` : `scheduled job ${id}`;
+  });
+  return [...agentRuns, ...jobs];
+}
 
 /**
  * Replicate handoff-offer updates across server instances over Redis.
@@ -555,6 +575,7 @@ const setupComplete$ = new ReplaySubject(1);
     await WireEntityInvalidationFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
+    ArtifactCollaborationServer.Instance.SetRoomRelay(new RedisYjsRoomRelay(sharedCache));
     const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
     startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
@@ -638,14 +659,14 @@ const setupComplete$ = new ReplaySubject(1);
     await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
-    const sysUser = UserCache.Instance.GetSystemUser();
-    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    const startupUser = ResolveServerPrincipal('PostgreSQL startup') ?? undefined;
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
+    await StartupManagerImport.Instance.Startup(false, startupUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -745,7 +766,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (PostgreSQL)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenPgProvider,
@@ -853,6 +877,7 @@ const setupComplete$ = new ReplaySubject(1);
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -905,7 +930,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (SQL Server)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenProvider,
@@ -956,6 +984,8 @@ const setupComplete$ = new ReplaySubject(1);
       }
     }
   }
+
+  ArtifactCollaborationServer.Instance.SetDataSources(dataSources);
 
   // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
   // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
@@ -1253,7 +1283,7 @@ const setupComplete$ = new ReplaySubject(1);
     resolvers: allResolvers,
     validate: false,
     scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
-    emitSchemaFile: websiteRunFromPackage !== 1,
+    emitSchemaFile: process.env.MJ_EMIT_SCHEMA_GQL === '1' && websiteRunFromPackage !== 1,
     pubSub,
   });
   const buildMs = performance.now() - tBuild;
@@ -1282,8 +1312,7 @@ const setupComplete$ = new ReplaySubject(1);
 
   const tTransform = performance.now();
   schema = ApplyRootVariablesLoggingMiddleware(schema);
-  schema = requireSystemUserDirective.transformer(schema);
-  schema = publicDirective.transformer(schema);
+  schema = ApplyBuiltInDirectivesTransformer(schema);
 
   // Apply middleware-contributed schema transformers (after built-in directive transformers)
   for (const transformer of mwSchemaTransformers) {
@@ -1325,6 +1354,9 @@ const setupComplete$ = new ReplaySubject(1);
       return;
     }
     if (RealtimeProxyServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
+      return;
+    }
+    if (ArtifactCollaborationServer.Instance.TryHandleUpgrade(request, socket, head as Buffer)) {
       return;
     }
     let pathname = graphqlRootPath;
@@ -1461,7 +1493,18 @@ const setupComplete$ = new ReplaySubject(1);
 
   // Health check — before every middleware contribution and the auth middleware, so cloud platform
   // probes never generate auth noise. Every core route mounts under MJAPI_BASE_PATH (see apiRoot.ts).
-  MountHealthcheckRoute(app);
+  //
+  // The body carries the latest event-loop sample (MJ #5510) so a probe or poller can tell a server
+  // that just stalled from one that is fine. It cannot answer DURING a stall — nothing on a blocked
+  // loop can — so a timed-out probe is itself the stall signal.
+  const eventLoopMonitor = configInfo.eventLoopMonitor.enabled
+    ? new EventLoopStallMonitor({
+        SampleIntervalMs: configInfo.eventLoopMonitor.sampleIntervalMs,
+        WarnThresholdMs: configInfo.eventLoopMonitor.warnThresholdMs,
+        GetInFlightWork: describeBackgroundWorkInFlight,
+      })
+    : null;
+  MountHealthcheckRoute(app, eventLoopMonitor);
 
   // Apply middleware-contributed pre-auth handlers (after compression, before routes)
   for (const mw of mwPreAuth) {
@@ -1669,7 +1712,11 @@ const setupComplete$ = new ReplaySubject(1);
   // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
   // routes upgrades by path. No-op when no media routes registered (telephony off).
   InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
-    return RejectUpgradeWhileStarting(startup, socket) || RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+    return (
+      RejectUpgradeWhileStarting(startup, socket) ||
+      RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head) ||
+      ArtifactCollaborationServer.Instance.TryHandleUpgrade(req, socket, head)
+    );
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1833,6 +1880,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Watch for event-loop stalls (MJ #5510). Started after boot so the synchronous work of startup
+  // itself is not reported as a stall; stopped by the gracefulShutdown drain below.
+  if (eventLoopMonitor) {
+    eventLoopMonitor.Start();
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'EventLoopStallMonitor',
+      Shutdown: () => eventLoopMonitor.Stop(),
+    });
+  }
 
   const resumeUser = UserCache.Instance.GetSystemUser();
 
@@ -2061,15 +2118,31 @@ async function ProcessPromoteColumnsPendingWork(
   }
 }
 
+/**
+ * Logs an error at startup for each provisioning setting that resolves to a non-Owner user, so the
+ * misconfiguration surfaces at boot rather than at the first new user's login.
+ */
+function validateProvisioningPrincipals(): void {
+  const settings: ProvisioningPrincipalSetting[] = [
+    { Setting: 'userHandling.contextUserForNewUserCreation', Candidate: configInfo.userHandling?.contextUserForNewUserCreation },
+  ];
+  // Unset, the magic-link setting falls back to the one above, already checked.
+  const magicLinkCandidate = configInfo.magicLink?.contextUserForProvisioning;
+  if (magicLinkCandidate) {
+    settings.push({ Setting: 'magicLink.contextUserForProvisioning', Candidate: magicLinkCandidate });
+  }
+  ValidateProvisioningPrincipals(settings);
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
 
   // Get system user for server-side operations — needed to read the queue itself
-  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  const systemUser = ResolveServerPrincipal('RSU pending work');
   if (!systemUser) {
-    console.warn(`[RSU] No system user found — cannot process pending work`);
+    console.warn(`[RSU] No active system user or Owner — cannot process pending work`);
     return;
   }
 
@@ -2580,7 +2653,15 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
 // session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
 // public-widget session mint remains the long-term replacement.
 export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
-export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export type {
+  MagicLinkJWTClaims,
+  CreateMagicLinkInviteParams,
+  CreateMagicLinkInviteBaseParams,
+  CreateEmailMagicLinkInviteParams,
+  CreateAnonymousMagicLinkInviteParams,
+  CreateMagicLinkInviteResult,
+  MintableMagicLinkInviteKind,
+} from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';

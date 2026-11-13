@@ -29,6 +29,13 @@ export {
 } from './crudSprocFieldRules.js';
 export { ResolveDbPlatformFromEnv, resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
 export { UserCache } from './UserCache.js';
+export {
+    GetServerPrincipal,
+    ResolveServerPrincipalFrom,
+    LowestActiveById,
+    NormalizePrincipalValue,
+} from './serverPrincipal.js';
+export type { ServerPrincipalCandidate, ServerPrincipalReason, ServerPrincipalResolution } from './serverPrincipal.js';
 export { ClientClauseScreen, IsClientClauseScreeningProvider } from './clientClauseScreen.js';
 export type { ClientClauseText, ClientViewClauseSet, EntityBaseViewAllowList, ClientClauseScreeningProvider, StatementReads, StatementRelation } from './clientClauseScreen.js';
 export {

@@ -224,7 +224,11 @@ SELECT
   -- both expression renders go through fnSafePGGetExpr (see section 1): a relation
   -- dropped by CodeGen's own concurrent regeneration must yield NULL for that one
   -- column, not abort the statement and with it the run.
-  __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) AS "DefaultValue",
+  -- A STORED generated column has no default: pg_attrdef holds its generation expression,
+  -- which belongs in ComputedColumnDefinition only (as on SQL Server). Reporting it as the
+  -- default wrote it into EntityField.DefaultValue (255 chars) and failed the refresh (#6511).
+  CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL
+       ELSE __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) END AS "DefaultValue",
   CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN __mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid) ELSE NULL END AS "ComputedColumnDefinition",
   COALESCE(col_description(src_cls.oid, a.attnum::integer), col_description(bt_cls.oid, bt_a.attnum::integer)) AS "Description",
   col_description(src_cls.oid, a.attnum::integer) AS "ViewColumnDescription",

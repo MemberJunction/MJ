@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JSONValidator } from '../JSONValidator';
 import { ValidationErrorType } from '../ValidationTypes';
 
@@ -248,6 +248,26 @@ describe('JSONValidator', () => {
         { 'b:number': 2 },
       ]);
       expect(clean).toEqual([{ a: 1 }, { b: 2 }]);
+    });
+
+    it('keeps keys that clean to the same name unchanged instead of overwriting one (#4827)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const clean = validator.cleanValidationSyntax<Record<string, unknown>>({
+        'Is it urgent?': 'yes',
+        'Is it urgent': 'no',
+        'name?': 'John',
+      });
+      expect(clean).toEqual({ 'Is it urgent?': 'yes', 'Is it urgent': 'no', name: 'John' });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('Is it urgent');
+      warn.mockRestore();
+    });
+
+    it('does not warn when no keys collide', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      validator.cleanValidationSyntax({ 'a?': 1, 'b*': 2 });
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
 
     it('should pass primitives and null through unchanged', () => {

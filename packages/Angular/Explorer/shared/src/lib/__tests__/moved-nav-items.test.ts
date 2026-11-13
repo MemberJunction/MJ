@@ -68,6 +68,12 @@ const DASHBOARDS = application('A0000000-0000-4000-8000-00000000000D', 'Dashboar
   navItem('Categories', 'DashboardsCategoriesResource'),
 ]);
 const LIBRARY_MOVE: MovedNavItem = { FromApplication: 'Data Explorer', FromNavItem: 'Dashboards', ToApplication: 'Dashboards', ToNavItem: 'Library' };
+const CHAT_TASKS_MOVE: MovedNavItem = { FromApplication: 'Chat', FromNavItem: 'Tasks', ToApplication: 'Chat', ToNavItem: 'Agent Activity' };
+const CHAT = application('7A873E1A-692E-43FA-97F8-57D8161A985C', 'Chat', [
+  navItem('Conversations', 'ChatConversationsResource', true),
+  navItem('Collections', 'ChatCollectionsResource'),
+  navItem('Agent Activity', 'ChatTasksResource'),
+]);
 
 /** A Data Explorer that still lists the Dashboards nav item. */
 const dataExplorerWithDashboards = (): BaseApplication =>
@@ -180,6 +186,13 @@ describe('FindMovedNavItem', () => {
     expect(FindMovedNavItem(applicationName, navItemName)).toEqual(LIBRARY_MOVE);
   });
 
+  it.each([
+    ['Chat', 'Tasks'],
+    ['chat ', ' tasks '],
+  ])('returns the Agent Activity move for %j and %j', (applicationName, navItemName) => {
+    expect(FindMovedNavItem(applicationName, navItemName)).toEqual(CHAT_TASKS_MOVE);
+  });
+
   it('returns null for an application and nav item that did not move', () => {
     expect(FindMovedNavItem('Data Explorer', 'Queries')).toBeNull();
     expect(FindMovedNavItem('Dashboards', 'Dashboards')).toBeNull();
@@ -238,6 +251,18 @@ describe('NavigationService.SwitchToApp for a moved nav item', () => {
     expect(tab?.applicationId).toBe(DASHBOARDS.ID);
     expect(tab?.configuration['navItemName']).toBe('Library');
     expect(tab?.configuration['queryParams']).toEqual({ lib: 'favorites' });
+  });
+
+  it("retargets Chat's legacy Tasks nav item to Agent Activity while preserving query params", async () => {
+    const { service, manager, setActiveApp } = createService([CHAT]);
+
+    await service.SwitchToApp(CHAT.ID, 'Tasks', { taskId: 'task-42' });
+
+    expect(setActiveApp.mock.calls).toEqual([[CHAT.ID]]);
+    const tab = activeTab(manager);
+    expect(tab?.applicationId).toBe(CHAT.ID);
+    expect(tab?.configuration['navItemName']).toBe('Agent Activity');
+    expect(tab?.configuration['queryParams']).toEqual({ taskId: 'task-42' });
   });
 
   it('stays on Data Explorer when the user has no Dashboards app', async () => {

@@ -1,4 +1,5 @@
 import { MJGlobal } from './Global';
+import { StampClassName } from './ClassUtils';
 
 /**
  * Options bag accepted by `RegisterClassEx`. Use this when you want named
@@ -24,6 +25,16 @@ export interface RegisterClassOptions {
      * Common shapes include `{ entity, slot, sortKey }` for form-panel slots.
      */
     metadata?: Record<string, unknown>;
+    /**
+     * Optional unminified class name stamped onto the constructor to survive
+     * production minification/bundling.
+     */
+    className?: string;
+    /**
+     * Optional unminified base class name stamped onto baseClass to survive
+     * production minification/bundling.
+     */
+    baseClassName?: string;
 }
 
 /**
@@ -91,6 +102,12 @@ export function RegisterClass(
  */
 export function RegisterClassEx(baseClass: unknown, options: RegisterClassOptions = {}): (constructor: Function) => void {
     return function (constructor: Function) {
+        if (options.className) {
+            StampClassName(constructor, options.className);
+        }
+        if (options.baseClassName) {
+            StampClassName(baseClass, options.baseClassName);
+        }
         MJGlobal.Instance.ClassFactory.Register(
             baseClass,
             constructor,

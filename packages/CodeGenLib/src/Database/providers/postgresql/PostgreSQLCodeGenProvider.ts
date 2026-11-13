@@ -20,6 +20,7 @@ import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
     UserCache,
+    GetServerPrincipal,
 } from '@memberjunction/generic-database-provider';
 import {
     POSTGRESQL_PROCEDURE_PARAM_LIMIT,
@@ -93,10 +94,9 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const conn = new PostgreSQLCodeGenConnection(pool);
 
         await UserCache.Instance.Refresh(provider);
-        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
-        const currentUser = userMatch ?? UserCache.Users[0];
+        const currentUser = GetServerPrincipal();
         if (!currentUser) {
-            throw new Error('No users found in PostgreSQL. Ensure vwUsers has at least one user.');
+            throw new Error('No active system user or Owner found in PostgreSQL; CodeGen needs one to run as.');
         }
 
         // Run MJ startup with the same 'task' entry-point default as the SQL Server path
@@ -1345,12 +1345,17 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     )
     SELECT
         a.${pgDialect.QuoteIdentifier(primaryKey)} AS "RootID",
-        (SELECT MAX(depth) FROM cte_ancestors)::INTEGER AS "Depth",
-        (SELECT path FROM cte_ancestors ORDER BY depth DESC LIMIT 1)::TEXT AS "Path",
-        (NOT EXISTS (SELECT 1 FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id))::BOOLEAN AS "IsLeaf",
-        (SELECT COUNT(1)::INTEGER FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id) AS "ChildCount"
+        a.depth::INTEGER AS "Depth",
+        a.path::TEXT AS "Path",
+        (ch.child_count = 0)::BOOLEAN AS "IsLeaf",
+        ch.child_count AS "ChildCount"
     FROM
         cte_ancestors a
+    CROSS JOIN LATERAL (
+        SELECT COUNT(1)::INTEGER AS child_count
+        FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+        WHERE ${pgDialect.QuoteIdentifier(fieldName)} = p_record_id
+    ) ch
     WHERE
         a.${pgDialect.QuoteIdentifier(fieldName)} IS NULL OR p_parent_id IS NULL
     ORDER BY
