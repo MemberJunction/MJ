@@ -220,6 +220,31 @@ Options:
 - **D. One package per PR.** Pro: half the sessions. Con: a bug in the second package is lost.
 - **Choice: A first (round 8: #4450, #3831, #4418, 5 USD cap), because it needs no code and tests the largest part.** C is next if the catch on #4450 and #3831 stays.
 
+## N18. Round 8 result (low thinking), the judge prompt cache, and the settings to keep
+
+Round 8 ran the smaller plan with low thinking and the type check.
+
+| PR | Round 7 USD (medium) | Round 8 USD (low) | Round 7 result | Round 8 result |
+|---|---|---|---|---|
+| #3831 | 0.99 (round 3) | 0.47 | 3 reported, matched | 7 tests, all pass on both revisions |
+| #4418 | 2.29 | 1.39 | 3 reported, not matched | 4 weak catches, 0 reported |
+| #4450 | 1.98 | 1.77 | 3 reported, matched | 12 weak catches, all judged Low, 0 reported |
+
+Low thinking is about 35% cheaper and loses both stable catches. No type errors remained, so the loss is test quality, not validity.
+
+- **A. Low thinking.** Pro: cheapest. Con: 0 reported catches in three PRs. Rejected.
+- **B. Medium thinking (keep).** Pro: keeps the #3831 and #4450 catches in every run. Con: about 2 USD for a PR that changes two packages.
+- **Choice: B.**
+
+Judge prompt cache (cost task D, commit 06a3ef1cbb, merged): the judge input now starts with the part that is the same for all catches of a run (intent, diff, PR title and summary); the Anthropic judge marks the end of that part for the provider cache. Options were (1) this, same prompt content, no new validation; (2) one combined judge call per run, larger saving but a new prompt to validate. Chosen: (1). Measured by judging the stored #4450 run of round 7 again: Opus judge 0.435 USD before, 0.286 USD after (39 559 of 94 228 input tokens read from the cache); 2 reported and 12 Low, against 3 reported and 10 Low before. The saving is smaller than expected because the test source, not the diff, is the larger part of each call.
+
+Settings to keep for Hydrogen (file content): `GeneratorEffort: medium`, `Limits.RisksPerSession: 5`, `Limits.PackagesPerPR: 2`, `Limits.TestsPerPackage: 3`, `Limits.RisksPerPackage: 2`, `Judges.Staged: true` (default). Expected cost: about 0.7 USD for a PR that changes one package and about 1.9 USD for two packages. The code defaults are not changed; this is a settings file for the Hydrogen generator.
+
+Cuts that remain, each with a cost in catches or work that the user must weigh:
+- One package per PR: about half the cost of a multi-package PR; a bug in the second package is lost.
+- A cheaper first judge than Opus: not validated; the stored data only shows that an Opus Low is never reported.
+- Shorter test source in the judge input (12 000 characters now): changes what the judge sees.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -234,3 +259,5 @@ Options:
 | M | Match checks, rounds 1 and 3 to 5 (no model spend) | 0.00 | 26.26 |
 | 6 | Validation, candidate A: #4253, #4418, #4450, #4290 (stopped at the cap) | 11.36 | 37.62 |
 | 7 | Smaller plan (N16 B): #4418, #4450, #4290, #3644, #5729 | 10.34 | 47.96 |
+| 8 | Smaller plan, low thinking: #3831, #4418, #4450 | 3.63 | 51.59 |
+| J | Judge-only rerun of the stored #4450 run (prompt cache check) | 0.34 | 51.93 |
