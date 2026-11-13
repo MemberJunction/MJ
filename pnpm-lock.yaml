@@ -1339,6 +1339,9 @@ importers:
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.3.0-edge.0
         version: link:../../ServerBootstrapLite
+      '@memberjunction/server-extensions-core':
+        specifier: 6.3.0-edge.0
+        version: link:../../ServerExtensionsCore
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.3.0-edge.0
         version: link:../../SQLServerDataProvider

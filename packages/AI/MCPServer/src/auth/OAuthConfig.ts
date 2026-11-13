@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-server/auth/OAuthConfig
  */
 
-import { mcpServerAuth, mcpServerSettings } from '../config.js';
+import { McpServerAuth, McpServerSettings } from '../config.js';
 import type { AuthMode } from './types.js';
 
 /**
@@ -16,12 +16,29 @@ import type { AuthMode } from './types.js';
  * @returns The configured auth mode ('apiKey', 'oauth', 'both', or 'none')
  */
 export function GetAuthMode(): AuthMode {
-  return mcpServerAuth?.mode ?? 'apiKey';
+  return McpServerAuth?.mode ?? 'apiKey';
 }
 
 /** @deprecated Use {@link GetAuthMode}. */
 export function getAuthMode(): AuthMode {
   return GetAuthMode();
+}
+
+/** Set when the MCP routes are mounted inside MJAPI; see {@link SetHostedResourceIdentifier}. */
+let hostedResourceIdentifier: string | undefined;
+
+/**
+ * Records the public URL of the MCP endpoint when it is mounted inside MJAPI (`MCPServerExtension`).
+ * {@link GetResourceIdentifier} returns it unless `mcpServerSettings.auth.resourceIdentifier` is
+ * configured. Pass `undefined` to clear it.
+ *
+ * @param url - absolute URL with no trailing slash, e.g. `https://example.com/api/mcp`
+ */
+export function SetHostedResourceIdentifier(url: string | undefined): void {
+  if (url !== undefined && (!/^https?:\/\//.test(url) || url.endsWith('/'))) {
+    throw new Error(`Hosted MCP resource identifier must be an absolute http(s) URL with no trailing slash: ${url}`);
+  }
+  hostedResourceIdentifier = url;
 }
 
 /**
@@ -34,13 +51,25 @@ export function getAuthMode(): AuthMode {
  * @returns The resource identifier URL (e.g., "http://localhost:3100")
  */
 export function GetResourceIdentifier(): string {
-  // Return configured or auto-generated value
-  if (mcpServerAuth?.resourceIdentifier) {
-    return mcpServerAuth.resourceIdentifier;
+  // An explicitly configured value always wins. Read it from the raw settings: `mcpServerAuth` has
+  // the auto-generated localhost value filled in, so it can't tell configured from defaulted.
+  const configured = McpServerSettings?.auth?.resourceIdentifier;
+  if (configured) {
+    return configured;
+  }
+
+  // Mounted inside MJAPI: the public URL of the MCP endpoint (e.g. https://host/api/mcp)
+  if (hostedResourceIdentifier) {
+    return hostedResourceIdentifier;
+  }
+
+  // Return the auto-generated value
+  if (McpServerAuth?.resourceIdentifier) {
+    return McpServerAuth.resourceIdentifier;
   }
 
   // Fallback to auto-generated (should already be set by resolveAuthSettings)
-  const port = mcpServerSettings?.port ?? 3100;
+  const port = McpServerSettings?.port ?? 3100;
   return `http://localhost:${port}`;
 }
 
@@ -58,8 +87,8 @@ export function getResourceIdentifier(): string {
  */
 export function getTokenAudience(): string {
   // Use tokenAudience if configured, otherwise fall back to resourceIdentifier
-  if (mcpServerAuth?.tokenAudience) {
-    return mcpServerAuth.tokenAudience;
+  if (McpServerAuth?.tokenAudience) {
+    return McpServerAuth.tokenAudience;
   }
   return GetResourceIdentifier();
 }
@@ -73,8 +102,8 @@ export function getTokenAudience(): string {
  * @returns Array of OAuth scope strings
  */
 export function GetScopes(): string[] {
-  if (mcpServerAuth?.scopes && mcpServerAuth.scopes.length > 0) {
-    return mcpServerAuth.scopes;
+  if (McpServerAuth?.scopes && McpServerAuth.scopes.length > 0) {
+    return McpServerAuth.scopes;
   }
   // Default to standard OIDC scopes
   return ['openid', 'profile', 'email'];
@@ -189,7 +218,7 @@ export function ValidateOAuthConfig(hasProviders: boolean): OAuthConfigValidatio
   }
 
   // Check resource identifier for OAuth modes
-  if (IsOAuthEnabled() && !mcpServerAuth?.resourceIdentifier && !mcpServerAuth?.autoResourceIdentifier) {
+  if (IsOAuthEnabled() && !McpServerAuth?.resourceIdentifier && !McpServerAuth?.autoResourceIdentifier) {
     result.warnings.push(
       'No resourceIdentifier configured and autoResourceIdentifier is disabled. ' +
       'OAuth audience validation may fail.'
