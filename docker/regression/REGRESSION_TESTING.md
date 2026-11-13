@@ -63,6 +63,8 @@ mj test regression build
 mj test regression up
 #    Only some tests: mj test regression up --test "T001 - Login Smoke" (repeatable;
 #    sets TEST_NAMES, a comma-separated list of exact names, for the test runner)
+#    Harvest a run's replay scripts before you run tests again on the same stack: the
+#    test runner pushes the test files at start, which replaces a script not yet pulled.
 
 # 4. Check results — see "Output Structure" below for what gets generated
 ls docker/regression/test-results/latest/
