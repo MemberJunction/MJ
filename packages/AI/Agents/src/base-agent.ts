@@ -3001,7 +3001,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -21795,8 +21795,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
@@ -21854,8 +21854,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
@@ -21931,6 +21931,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -22024,7 +22037,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -23229,17 +23242,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);

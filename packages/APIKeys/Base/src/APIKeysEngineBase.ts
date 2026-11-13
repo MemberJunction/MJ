@@ -13,7 +13,7 @@ import {
     MJAPIScopeEntity
 } from "@memberjunction/core-entities";
 import { RegisterForStartup } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { IsBrowser, UUIDsEqual } from "@memberjunction/global";
 
 /**
  * UI configuration for API Scopes.
@@ -79,7 +79,7 @@ export function parseAPIScopeUIConfig(scope: MJAPIScopeEntity): APIScopeUIConfig
  * const entityScope = scopes.find(s => s.FullPath === 'entity:read');
  * ```
  */
-@RegisterForStartup()
+@RegisterForStartup({ deferred: IsBrowser() })
 export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
     // Cached entity arrays
     private _scopes: MJAPIScopeEntity[] = [];
