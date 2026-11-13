@@ -1,11 +1,11 @@
 import { existsSync, lstatSync, realpathSync, rmSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { Sandbox, SandboxMount, SandboxRunResult } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
 import type { Settings } from '../settings';
 import { ParseVitestOutput } from '../target/VitestReport';
 import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from '../target/JitReporter';
-import { EnsureMountPoint, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
+import { EnsureMountPoint, ReadTypeCheck, TYPE_CHECK_TIMEOUT_MS, TypeCheckCommand, UnsafePathError, ViteTmpfs } from '../target/VitestCatchTarget';
 import { PurgeNonRegularEntries } from '../target/JitFolder';
 import { RedactTail } from '../sandbox/Redaction';
 import { ApplyMutantEdits, CopyPackageForMutant, ValidateMutantEdits } from './Mutant';
@@ -20,7 +20,10 @@ const ROOT = '/work';
 /** A mutant prepared on the host: the scratch package copy and the patch that produced it. */
 interface PreparedMutant { Scratch: string; Patch: string; }
 
-/** The agent's only way to execute anything: one vitest file on base, or on base + mutant, inside the sandbox (§8.3). */
+/**
+ * The agent's only way to execute anything: one vitest file on base, or on base + mutant, inside the sandbox (§8.3).
+ * A base run that passes is then type-checked like job 2 does; type errors in the file turn it into a CompileError.
+ */
 export class RunTestTool {
     /** The most recent mutant run: its edits, patch, and the failure it caused (null unless the test failed). */
     public LastMutant: LastMutantRecord | null = null;
@@ -44,7 +47,29 @@ export class RunTestTool {
         }
         const out = this.toOutput(r, input);
         if (input.Mutant && mutant) this.LastMutant = { Edits: input.Mutant.Edits, Patch: mutant.Patch, Failure: out.Status === 'Fail' ? out.Failure : null };
-        return out;
+        if (input.Mutant || out.Status !== 'Pass') return out;
+        const errors = await this.typeErrors(input.File);
+        return errors === null ? out : { ...out, Status: 'CompileError', Error: errors };
+    }
+
+    /**
+     * Type-checks one jit file in the sandbox with the package's compiler options and returns its redacted tsc lines
+     * (at most 2000 characters), or null when it has none or the check could not run.
+     */
+    private async typeErrors(file: string): Promise<string | null> {
+        const pkg = this.o.PackageRelDir; const jitDir = this.jitDir();
+        const rel = file.slice(pkg.length + 1);
+        const command = TypeCheckCommand(`${ROOT}/${pkg}`, [rel], `tsconfig.${basename(file, '.jit.test.ts')}.json`);
+        let r: SandboxRunResult;
+        try {
+            r = await this.o.Sandbox.Run({
+                Mounts: [{ Host: this.o.BaseRootDir, Container: ROOT, Mode: 'ro' }, { Host: join(this.o.BaseRootDir, jitDir), Container: `${ROOT}/${jitDir}`, Mode: 'rw' }],
+                Tmpfs: [], WorkDir: `${ROOT}/${pkg}`, Command: ['sh', '-c', command], TimeoutMs: TYPE_CHECK_TIMEOUT_MS, Env: { HOME: '/tmp', CI: '1' },
+            });
+        } catch { return null; } finally { PurgeNonRegularEntries(join(this.o.BaseRootDir, jitDir)); }
+        const checked = ReadTypeCheck(r, [rel], 2000);
+        const errors = checked.SetupFailed ? null : checked.Errors[0];
+        return errors === null ? null : RedactTail(errors);
     }
 
     /**

@@ -190,16 +190,10 @@ export class VitestCatchTarget extends BaseCatchTarget {
     public async TypeCheck(revision: PreparedRevision, tests: CandidateTest[]): Promise<Map<string, string | null>> {
         const out = new Map<string, string | null>(tests.map((t) => [t.ID, null]));
         for (const g of this.groups(tests)) {
-            const config = `${JIT_SUBDIR}/tsconfig.jit.json`;
-            const json = JSON.stringify({ extends: '../../../tsconfig.json', compilerOptions: { noEmit: true, composite: false, incremental: false, declaration: false, declarationMap: false }, include: g.Files.map((f) => `./${f.slice(JIT_SUBDIR.length + 1)}`), exclude: [] });
-            const cmd = `cd ${sq(`${CONTAINER_ROOT}/${g.Dir}`)} && printf '%s' ${sq(json)} > ${config} && npx tsc --noEmit --pretty false -p ${config} 2>&1; rc=$?; rm -f ${config}; exit $rc`;
-            const r = await this.inSandbox(revision, 'ro', ['sh', '-c', cmd], 10 * 60_000, {}, [], [g.Dir]);
-            for (const [i, t] of g.Tests.entries()) {
-                const lines = r.Stdout.split('\n').filter((l) => l.startsWith(g.Files[i]));
-                if (lines.length) out.set(t.ID, lines.join('\n').slice(0, 4000));
-            }
+            const r = await this.inSandbox(revision, 'ro', ['sh', '-c', TypeCheckCommand(`${CONTAINER_ROOT}/${g.Dir}`, g.Files, 'tsconfig.jit.json')], TYPE_CHECK_TIMEOUT_MS, {}, [], [g.Dir]);
+            const checked = ReadTypeCheck(r, g.Files, 4000);
             // tsc failed before checking any file (config or setup error): every test in the package fails type-check.
-            if (r.ExitCode !== 0 && !/^\S.*\(\d+,\d+\): error TS/m.test(r.Stdout)) for (const t of g.Tests) out.set(t.ID, `tsc failed: ${SandboxEvidence(r)}`);
+            for (const [i, t] of g.Tests.entries()) out.set(t.ID, checked.SetupFailed ? `tsc failed: ${SandboxEvidence(r)}` : checked.Errors[i]);
         }
         return out;
     }
@@ -358,6 +352,30 @@ export function EnsureMountPoint(root: string, rel: string): void {
     const parent = rel.split('/').slice(0, -1).join('/');
     SafeDir(root, parent, false);
     SafeDir(root, rel, true);
+}
+
+/** Time limit of one type-check run in the sandbox. */
+export const TYPE_CHECK_TIMEOUT_MS = 10 * 60_000;
+
+/**
+ * The `sh -c` command that type-checks `files` (paths relative to the package folder, inside the jit folder) with the
+ * package's own compiler options. The package tsconfig usually excludes tests, so a throwaway tsconfig named `configName`
+ * in the jit folder extends it and includes only these files; the command removes it afterwards.
+ */
+export function TypeCheckCommand(containerPackageDir: string, files: string[], configName: string): string {
+    const config = `${JIT_SUBDIR}/${configName}`;
+    const json = JSON.stringify({ extends: '../../../tsconfig.json', compilerOptions: { noEmit: true, composite: false, incremental: false, declaration: false, declarationMap: false }, include: files.map((f) => `./${f.slice(JIT_SUBDIR.length + 1)}`), exclude: [] });
+    return `cd ${sq(containerPackageDir)} && printf '%s' ${sq(json)} > ${sq(config)} && npx tsc --noEmit --pretty false -p ${sq(config)} 2>&1; rc=$?; rm -f ${sq(config)}; exit $rc`;
+}
+
+/**
+ * The result of a {@link TypeCheckCommand} run. `Errors[i]` holds the tsc lines of `files[i]` (cut at `maxChars`), or null
+ * when it has none. `SetupFailed` is true when tsc exited non-zero without a per-file error (a config or setup error).
+ */
+export function ReadTypeCheck(r: SandboxRunResult, files: string[], maxChars: number): { SetupFailed: boolean; Errors: (string | null)[] } {
+    const lines = r.Stdout.split('\n');
+    const errors = files.map((f) => { const own = lines.filter((l) => l.startsWith(f)); return own.length ? own.join('\n').slice(0, maxChars) : null; });
+    return { SetupFailed: r.ExitCode !== 0 && !/^\S.*\(\d+,\d+\): error TS/m.test(r.Stdout), Errors: errors };
 }
 
 /** Exit code and the redacted tail of stderr (stdout when stderr is empty) of a sandbox run. */
