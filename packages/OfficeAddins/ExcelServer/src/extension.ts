@@ -35,7 +35,7 @@ import {
     ServerExtensionInitContext,
     ServerExtensionPhase,
 } from '@memberjunction/server-extensions-core';
-import { EXCEL_WORKBOOK_CONTRACT_VERSION } from '@memberjunction/excel-addin';
+import { BuildExcelCustomFunctionsMetadata, EXCEL_WORKBOOK_CONTRACT_VERSION } from '@memberjunction/excel-addin';
 import { BuildExcelAddinManifest } from './manifest-builder';
 import { EXCEL_ADDIN_PATHS, EXCEL_CONNECT_ROUTE, ExcelAddinRuntime } from './runtime';
 import { ExcelAddinSettings, ParseExcelAddinSettings } from './settings';
@@ -107,6 +107,10 @@ export function CreateExcelAddinRouter(options: ExcelAddinRouterOptions): Router
     });
     // Excel caches add-in pages hard; no-cache makes it revalidate, so a host's upgrade reaches people.
     router.use(express.static(options.WebRoot, { index: false, setHeaders: res => res.setHeader('Cache-Control', 'no-cache') }));
+    router.get(EXCEL_ADDIN_PATHS.FunctionsJson, (_req, res) => {
+        res.setHeader('Cache-Control', 'no-cache');
+        res.json(BuildExcelCustomFunctionsMetadata());
+    });
     return router;
 }
 

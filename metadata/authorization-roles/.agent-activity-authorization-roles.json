@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Agent Activity: View All Users",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "A8D41E6B-74C9-43F2-910E-6B5A3829D4F1"
+    }
+  }
+]

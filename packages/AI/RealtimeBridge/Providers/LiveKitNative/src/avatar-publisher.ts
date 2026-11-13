@@ -24,7 +24,6 @@
 
 import {
     AdtsHeader,
-    AgentAvatarAudioOnlyAttributes,
     AvccToAnnexB,
     ReadFmp4Fragment,
     ReadFmp4Init,
@@ -78,8 +77,6 @@ export interface AvatarVideoOutlet {
     Capture(frame: AvatarVideoFrame): void;
     /** Takes the camera track down. */
     Unpublish(): Promise<void>;
-    /** Sets the bot's participant attributes. */
-    SetAttributes(attributes: Record<string, string>): Promise<void>;
 }
 
 /** Creates the two decoders (tests pass fakes). */
@@ -512,7 +509,8 @@ export class AvatarPublisher {
     // ── Audio only ──────────────────────────────────────────────────────────────
 
     /**
-     * Takes the avatar down: no more frames, the camera track unpublished, the bot's attribute set, the engine told. The
+     * Takes the avatar down: no more frames, the camera track unpublished, the engine told (the server then marks the bot
+     * audio-only in the room; the bot's token cannot change its own attributes). The
      * voice decoder keeps the agent audible unless it is the one that failed.
      */
     private fallBack(reason: NativeAvatarFailure, failed?: 'video' | 'audio'): void {
@@ -531,9 +529,6 @@ export class AvatarPublisher {
         if (this.publishing === 'yes') {
             void this.options.Video.Unpublish().catch((err: unknown) => LogError(`[AvatarPublisher] unpublishing the avatar failed: ${err instanceof Error ? err.message : String(err)}`));
         }
-        void this.options.Video.SetAttributes(AgentAvatarAudioOnlyAttributes(reason)).catch((err: unknown) =>
-            LogError(`[AvatarPublisher] setting the bot's avatar attribute failed: ${err instanceof Error ? err.message : String(err)}`),
-        );
         LogStatus(`[AvatarPublisher] the avatar is taken down (${reason}); the agent goes on audio only.`);
         this.options.OnStatus({ state: 'audio-only', reason });
     }

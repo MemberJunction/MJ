@@ -33,7 +33,7 @@ module.exports = {
     metadataCacheRefreshInterval: 0,     // or METADATA_CACHE_REFRESH_INTERVAL=0
     connectionPool: { min: 0 },          // no sessions held open while idle
   },
-  scheduledJobs: { enabled: false },     // only if you do not use scheduled jobs (see the table)
+  scheduledJobs: { enabled: false },     // only if you use no scheduled jobs; otherwise set the 15-minute jobs inactive (see the table)
   agentSessions: {
     janitor: { enabled: false },         // or MJ_SESSION_JANITOR_ENABLED=false
     bridgeReconciler: { enabled: false },// or MJ_BRIDGE_RECONCILER_ENABLED=false
@@ -70,7 +70,7 @@ Only turn off what you do not need. The table below says what each switch costs.
 | Loop | What it does | Default | Switch | What you lose with it off |
 |---|---|---|---|---|
 | Metadata refresh | Checks whether metadata changed in the database | every 3 min | `databaseSettings.metadataCacheRefreshInterval: 0` / `METADATA_CACHE_REFRESH_INTERVAL=0` | Metadata changed by another process (CodeGen, a migration, another MJAPI without Redis) is not seen until restart |
-| Scheduled jobs | Polls for due jobs and runs them | polls only while active jobs exist, as often as their schedules need. The shipped metadata includes the **User Routine Dispatcher (every minute)**, the Agent Memory Manager and the Feature Pipeline Version Steward (every 15 min) | `scheduledJobs.enabled: false`, or set the jobs you don't need to inactive | No scheduled job runs on this instance, user routines included. If you rely on any, keep it on and make the busy jobs less frequent instead: a job that runs every minute keeps the database awake by itself |
+| Scheduled jobs | Polls for due jobs and runs them | wakes only when a job is due, and at least every `scheduledJobs.routineIndexRefreshMinutes` (default 60). The shipped metadata includes the **User Routine Dispatcher**, which runs only when a user routine is due or needs its first run time, and the Agent Memory Manager and Feature Pipeline Version Steward (every 15 min) | `scheduledJobs.enabled: false`, or set the jobs you don't need to inactive | No scheduled job runs on this instance, user routines included. Scheduled jobs do not have to be off for the database to pause when no routine is due, but the two 15-minute jobs still wake it: set them inactive if you do not need them. A routine due while the database is paused starts about a minute late (the database's resume time) |
 | Task graph dispatcher | Claims pending durable-workflow tasks | every 5s (SQL Server) | `MJ_DISABLE_TASK_GRAPH_DISPATCHER=1` | Durable workflows (task graphs) submitted by agents never execute on this instance |
 | AI Agent Session janitor | Closes stale agent sessions, enforces the voice-session time cap, rebuilds lost realtime recordings | every 60s | `agentSessions.janitor.enabled: false` / `MJ_SESSION_JANITOR_ENABLED=false`; interval `sweepIntervalMs` / `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS` | Startup recovery and the shutdown drain still close this instance's own sessions. Lost: closing stale sessions of instances that never come back, the voice-session cap, recording recovery. Keep it on if you use realtime/voice agents |
 | Realtime bridge reconciler | Closes realtime bridges an earlier boot of this instance left open | every 10 min | `agentSessions.bridgeReconciler.enabled: false` / `MJ_BRIDGE_RECONCILER_ENABLED=false`; interval `sweepIntervalMs` / `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS` | The pass at startup still runs. Lost: catching a bridge orphaned mid-life (rare) before the next restart |

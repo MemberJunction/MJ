@@ -6,14 +6,9 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
-import { AreClassesRelated, GetRootClass, IsRootClass } from './ClassUtils';
+import { AreClassesRelated, GetClassName, GetRootClass, IsRootClass } from './ClassUtils';
 import { ClassRequiresSubclass } from './RequiresSubclass';
 import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
-
-/**
- * Type for constructor functions that have a name property
- */
-type NamedClass = { name: string };
 
 /**
  * Data structure to track the class registrations
@@ -156,7 +151,7 @@ export class ClassFactory {
      * Returns true if any loader successfully loaded the requested class.
      */
     private async tryLazyLoad(baseClass: unknown, key: string): Promise<boolean> {
-        const baseClassName = (baseClass as NamedClass).name;
+        const baseClassName = GetClassName(baseClass);
         for (const loader of this._lazyLoaders) {
             const loaded = await loader(baseClassName, key);
             if (loaded) {
@@ -231,8 +226,8 @@ export class ClassFactory {
      */
     public Register(baseClass: unknown, subClass: unknown, key: string | null = null, priority: number = 0, skipNullKeyWarning: boolean = false, autoRegisterWithRootClass: boolean = false, metadata?: Record<string, unknown>): void {
         if (baseClass && subClass) {
-            const baseClassName = (baseClass as NamedClass).name;
-            const subClassName = (subClass as NamedClass).name;
+            const baseClassName = GetClassName(baseClass);
+            const subClassName = GetClassName(subClass);
 
             if (key === undefined || key === null && !skipNullKeyWarning) {
                 console.warn(`ClassFactory.GetAllRegistrations: Registration for base class ${baseClassName} has no key set. This is not recommended and may lead to unintended behavior when trying to match registrations. Please set a key for this registration.`)
@@ -240,11 +235,11 @@ export class ClassFactory {
 
             // Get the root class for this registration
             const rootClass = GetRootClass(baseClass);
-            const rootClassName = (rootClass as NamedClass).name;
+            const rootClassName = GetClassName(rootClass);
 
             // Determine which class to actually register against
             const effectiveBaseClass = autoRegisterWithRootClass ? rootClass : baseClass;
-            const effectiveBaseClassName = (effectiveBaseClass as NamedClass).name;
+            const effectiveBaseClassName = GetClassName(effectiveBaseClass);
 
             // Log if we're auto-registering with root class
             if (autoRegisterWithRootClass && effectiveBaseClass !== baseClass) {
@@ -337,7 +332,7 @@ export class ClassFactory {
     }
 
     private indexRegistration(reg: ClassRegistration): void {
-        const effectiveBaseClassName = (reg.BaseClass as NamedClass | undefined)?.name;
+        const effectiveBaseClassName = reg.BaseClass ? GetClassName(reg.BaseClass) : undefined;
         if (effectiveBaseClassName) {
             let baseBucket = this._byBaseClass.get(effectiveBaseClassName);
             if (!baseBucket) {
@@ -357,7 +352,7 @@ export class ClassFactory {
             }
         }
 
-        const rootClassName = (reg.RootClass as NamedClass | undefined)?.name;
+        const rootClassName = reg.RootClass ? GetClassName(reg.RootClass) : undefined;
         if (rootClassName) {
             let rootBucket = this._byRootClass.get(rootClassName);
             if (!rootBucket) {
@@ -382,14 +377,14 @@ export class ClassFactory {
             return false;
         }
         const parent: unknown = Object.getPrototypeOf(subClass);
-        if (typeof parent === 'function' && (parent as NamedClass).name === subClassName) {
+        if (typeof parent === 'function' && GetClassName(parent) === subClassName) {
             return false;
         }
         const source = Function.prototype.toString.call(subClass);
         return registrations.some(r =>
             r.SubClass !== subClass &&
             typeof r.SubClass === 'function' &&
-            (r.SubClass as NamedClass).name === subClassName &&
+            GetClassName(r.SubClass) === subClassName &&
             Function.prototype.toString.call(r.SubClass) === source
         );
     }
@@ -435,7 +430,7 @@ export class ClassFactory {
         if (unrelated.length === 0) {
             return;
         }
-        const names = unrelated.map(r => (r.SubClass as NamedClass)?.name ?? 'Anonymous').join(', ');
+        const names = unrelated.map(r => r.SubClass ? GetClassName(r.SubClass) : 'Anonymous').join(', ');
         console.warn(
             `*** ClassFactory.Register: ${subClassName} is registering for base class ${effectiveBaseClassName} ` +
             `with key '${key}', which is already registered by unrelated class(es): ${names}. These are not in the ` +
@@ -577,7 +572,7 @@ export class ClassFactory {
      * @returns e.g. `ClassFactory: no registration found for base class 'X' with key 'Y'. Registered keys for 'X': 'A', 'B'.`
      */
     public DescribeMissingRegistration(baseClass: unknown, key: string | null | undefined): string {
-        const baseClassName = (baseClass as NamedClass).name;
+        const baseClassName = GetClassName(baseClass);
         const known = this.GetAllRegistrations(baseClass)
             .map(r => r.Key)
             .filter((k): k is string => k != null);
@@ -596,7 +591,7 @@ export class ClassFactory {
      * factory actually knows about.
      */
     private describeResolutionFailure(baseClass: unknown, key: string | null, requiresSubclass: boolean): string {
-        const baseClassName = (baseClass as NamedClass).name;
+        const baseClassName = GetClassName(baseClass);
         return (
             this.DescribeMissingRegistration(baseClass, key) + ' ' +
             `RequiresSubclass=${requiresSubclass}. ` +
@@ -627,7 +622,7 @@ export class ClassFactory {
         // Capping keeps the signal — you still learn which base is falling back, with examples —
         // while bounding the output. Marker-bearing bases are never capped: those are hard errors.
         if (!requiresSubclass) {
-            const baseName = (baseClass as NamedClass).name;
+            const baseName = GetClassName(baseClass);
             const seen = (this._fallbackCountByBase.get(baseName) ?? 0) + 1;
             this._fallbackCountByBase.set(baseName, seen);
             if (seen === ClassFactory.MAX_FALLBACK_REPORTS_PER_BASE + 1) {
@@ -639,7 +634,7 @@ export class ClassFactory {
             }
         }
 
-        const logKey = `${(baseClass as NamedClass).name}|${key == null ? '' : key.trim().toLowerCase()}`;
+        const logKey = `${GetClassName(baseClass)}|${key == null ? '' : key.trim().toLowerCase()}`;
         if (this._reportedResolutionFailures.has(logKey)) return;
         this._reportedResolutionFailures.add(logKey);
 
@@ -662,7 +657,7 @@ export class ClassFactory {
             return [];
         }
         this.ensureIndexes();
-        const baseClassName = (baseClass as { name: string }).name;
+        const baseClassName = GetClassName(baseClass);
         if (key === undefined || key === null) {
             const bucket = this._byBaseClass.get(baseClassName);
             return bucket ? [...bucket] : [];
@@ -683,7 +678,7 @@ export class ClassFactory {
     public GetAllRegistrationsByKeyPrefix(baseClass: unknown, keyPrefix: string): ClassRegistration[] {
         if (!baseClass || keyPrefix == null) return [];
         this.ensureIndexes();
-        const baseClassName = (baseClass as { name: string }).name;
+        const baseClassName = GetClassName(baseClass);
         const bucket = this._byBaseClass.get(baseClassName);
         if (!bucket) return [];
         const needle = keyPrefix.trim().toLowerCase();
@@ -698,7 +693,7 @@ export class ClassFactory {
     public GetAllRegistrationsByKeyPattern(baseClass: unknown, pattern: RegExp): ClassRegistration[] {
         if (!baseClass || !pattern) return [];
         this.ensureIndexes();
-        const baseClassName = (baseClass as { name: string }).name;
+        const baseClassName = GetClassName(baseClass);
         const bucket = this._byBaseClass.get(baseClassName);
         if (!bucket) return [];
         return bucket.filter(r => r.Key != null && pattern.test(r.Key.trim()));
@@ -719,7 +714,7 @@ export class ClassFactory {
     ): ClassRegistration[] {
         if (!baseClass || typeof predicate !== 'function') return [];
         this.ensureIndexes();
-        const baseClassName = (baseClass as { name: string }).name;
+        const baseClassName = GetClassName(baseClass);
         const bucket = this._byBaseClass.get(baseClassName);
         if (!bucket) return [];
         return bucket.filter(r => predicate(r.Metadata, r));
@@ -733,7 +728,7 @@ export class ClassFactory {
         this.ensureIndexes();
 
         // Memoized fast path — avoids re-filtering the entire registration list on every call.
-        const cacheKey = `${(baseClass as { name: string }).name}|${key == null ? '' : key.trim().toLowerCase()}`;
+        const cacheKey = `${GetClassName(baseClass)}|${key == null ? '' : key.trim().toLowerCase()}`;
         const cached = this._registrationCache.get(cacheKey);
         if (cached !== undefined) return cached; // includes cached `null` (no-registration) results
 
@@ -747,7 +742,7 @@ export class ClassFactory {
      * per-base/key index and returns the highest-priority (last-registered on ties).
      */
     private resolveRegistration(baseClass: unknown, key?: string | null): ClassRegistration | null {
-        const baseClassName = (baseClass as { name: string }).name;
+        const baseClassName = GetClassName(baseClass);
         const matches = key === undefined || key === null
             ? this._byBaseClass.get(baseClassName)
             : this._byBaseAndKey.get(`${baseClassName}|${key.trim().toLowerCase()}`);
@@ -782,7 +777,7 @@ export class ClassFactory {
             return [];
         }
         this.ensureIndexes();
-        const rootClassName = (rootClass as { name: string }).name;
+        const rootClassName = GetClassName(rootClass);
         const bucket = this._byRootClass.get(rootClassName);
         if (!bucket) {
             return [];

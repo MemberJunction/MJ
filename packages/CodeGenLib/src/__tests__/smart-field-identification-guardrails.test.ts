@@ -36,6 +36,9 @@ class TestableManageMetadata extends ManageMetadataBase {
       this.applyNameFieldUpdates(sql, fields, result, entityName ? { Name: entityName } : undefined);
       return sql;
    }
+   public winner(fields: Array<Record<string, unknown>>, ranked: string[] = []): Record<string, unknown> | null {
+      return this.selectNameFieldWinner(fields, ranked);
+   }
    public runDefaultInViewUpdates(fields: Array<Record<string, unknown>>, result: SmartFieldIdentificationResult): string[] {
       const sql: string[] = [];
       this.applyDefaultInViewUpdates(sql, fields, result);
@@ -234,13 +237,49 @@ describe('SmartFieldIdentification guardrails', () => {
          expect(sql[0]).toContain('IsNameField = 0');
       });
 
-      it('never clears a pinned loser (AutoUpdateIsNameField = 0)', () => {
+      it('a pinned flag wins and the auto-flagged field beside it is cleared; the pin is never touched (#6554)', () => {
          const fields = [
             { ID: 'f-n', Name: 'Name', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
             { ID: 'f-pin', Name: 'LegacyName', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: false },
          ];
          const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
-         expect(sql).toHaveLength(0); // winner Name already set; pinned LegacyName untouched
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain('SET IsNameField = 0');
+         expect(sql[0]).toContain("WHERE ID = 'f-n'");
+         expect(sql.join('\n')).not.toContain('f-pin');
+      });
+
+      it('a pinned INELIGIBLE (virtual) flag wins over an eligible AI candidate: nothing is set (#6554)', () => {
+         const fields = [
+            { ID: 'f-first', Name: 'FirstName', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, IsNameField: false, AutoUpdateIsNameField: true },
+            { ID: 'f-fl', Name: 'FirstLast', Type: 'nvarchar', Length: 202, IsPrimaryKey: false, IsVirtual: true, AllowUpdateAPI: false, IsNameField: true, AutoUpdateIsNameField: false },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['FirstName'] }), 'Employees');
+         expect(sql.join('\n')).not.toContain('SET IsNameField = 1');
+         expect(sql).toHaveLength(0);
+      });
+
+      it('repairs the two-flag state: pinned ineligible field kept, auto-flagged second field cleared (#6554)', () => {
+         const fields = [
+            { ID: 'f-first', Name: 'FirstName', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+            { ID: 'f-fl', Name: 'FirstLast', Type: 'nvarchar', Length: 202, IsPrimaryKey: false, IsVirtual: true, AllowUpdateAPI: false, IsNameField: true, AutoUpdateIsNameField: false },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: ['FirstName'] }), 'Employees');
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain('SET IsNameField = 0');
+         expect(sql[0]).toContain("WHERE ID = 'f-first'");
+      });
+
+      it('with two pinned flags, the literal Name wins and neither pin is touched', () => {
+         const fields = [
+            { ID: 'f-code', Name: 'Code', Type: 'nvarchar', Length: 40, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: false },
+            { ID: 'f-n', Name: 'Name', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: false },
+            { ID: 'f-title', Name: 'Title', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, IsNameField: true, AutoUpdateIsNameField: true },
+         ];
+         const sql = mm.runNameFieldUpdates(fields, emptyResult({ nameFields: [] }));
+         expect(sql).toHaveLength(1);
+         expect(sql[0]).toContain("WHERE ID = 'f-title'");
+         expect(mm.winner(fields)?.Name).toBe('Name');
       });
 
       it('clears a stale ineligible flag even when no eligible winner exists', () => {

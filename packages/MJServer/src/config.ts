@@ -187,6 +187,26 @@ const scheduledJobsSchema = z.object({
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+  /**
+   * Longest the scheduler sleeps when nothing is due, and how often it re-reads the user routine
+   * index (#6217). Without Redis, a routine saved on another server reaches this one only through
+   * that re-read, and a scheduled job added or moved earlier without a cache event only at the next
+   * wake, so this bounds how late such a change applies. Minimum 1.
+   */
+  routineIndexRefreshMinutes: z.number().min(1).optional().default(60),
+});
+
+/**
+ * Event-loop stall monitor (MJ #5510). MJAPI serves HTTP, WebSockets, scheduled jobs and agent runs
+ * from one event loop, so a synchronous phase of background work stalls every interactive user.
+ * When a sampling window's worst event-loop delay reaches `warnThresholdMs`, one warning is logged
+ * with the lag, the heap and the agent runs / scheduled jobs in flight; `/healthcheck` reports the
+ * latest window's lag (not the heap: `/healthcheck` is unauthenticated).
+ */
+const eventLoopMonitorSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+  warnThresholdMs: z.number().optional().default(1000),
+  sampleIntervalMs: z.number().optional().default(5000),
 });
 
 /**
@@ -1004,6 +1024,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  eventLoopMonitor: eventLoopMonitorSchema.optional().default({}),
   notifications: notificationsSchema.optional().default({}),
   agentSessions: AgentSessionsSchema.optional().default({}),
   agentRunWatchdog: AgentRunWatchdogSchema.optional().default({}),
@@ -1089,6 +1110,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type EventLoopMonitorConfig = z.infer<typeof eventLoopMonitorSchema>;
 export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type { WorkQueueConfig } from './services/workQueueConfig.js';
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
@@ -1219,7 +1241,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     maxConcurrentJobs: 5,
     defaultLockTimeout: 600000,
-    staleLockCleanupInterval: 300000
+    staleLockCleanupInterval: 300000,
+    routineIndexRefreshMinutes: 60
+  },
+
+  // Event-loop stall monitor defaults (MJ #5510) — on; warns on a >=1s stall, 5s sampling window
+  eventLoopMonitor: {
+    enabled: true,
+    warnThresholdMs: 1000,
+    sampleIntervalMs: 5000
   },
 
   // Background sweeps that query the database on a timer (session janitor, bridge and conversation-
