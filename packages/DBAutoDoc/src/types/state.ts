@@ -159,6 +159,11 @@ export interface ColumnDefinition {
   dataType: string;
   isNullable: boolean;
   isPrimaryKey: boolean;
+  /**
+   * `'discovery'` when key discovery, not the database catalog, set `isPrimaryKey`. A re-apply
+   * changes only these flags, and a table with an unmarked (declared) key gets no discovered one.
+   */
+  primaryKeySource?: 'discovery';  // case-violation-ok-legacy-back-compat: camelCase to match the rest of this exported interface
   isForeignKey: boolean;
   foreignKeyReferences?: ForeignKeyReference;
   /**

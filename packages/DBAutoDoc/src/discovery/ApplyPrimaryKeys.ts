@@ -7,12 +7,15 @@
  * kept its columns flagged because pruning only changed its status. This applies ONE candidate per
  * table and clears the flags of the table's other candidates' columns, so a re-apply after pruning
  * or after an LLM decision unflags what lost. When no candidate survives, every candidate column is
- * unflagged. Columns no candidate names are never touched, so a key declared in the catalog is left
- * alone.
+ * unflagged.
+ *
+ * A table whose key was declared in the catalog gets no discovered key and loses none of its flags,
+ * so a candidate (in practice an LLM proposal) is never flagged on top of the declared key. Flags
+ * set here carry `primaryKeySource: 'discovery'`; see {@link HasDeclaredPrimaryKey}.
  */
 
 import { PKCandidate } from '../types/discovery.js';
-import { DatabaseDocumentation } from '../types/state.js';
+import { ColumnDefinition, DatabaseDocumentation, TableDefinition } from '../types/state.js';
 
 export interface ApplyPrimaryKeysResult {
   /** Tables that received a key. */
@@ -32,20 +35,44 @@ export function ApplyBestPrimaryKeys(state: DatabaseDocumentation, candidates: P
   const result: ApplyPrimaryKeysResult = { TablesFlagged: 0, ColumnsCleared: 0 };
   for (const group of groupByTable(candidates).values()) {
     const table = state.schemas.find((s) => s.name === group[0].schemaName)?.tables.find((t) => t.name === group[0].tableName);
-    if (!table) continue;
+    if (!table || HasDeclaredPrimaryKey(table, group)) continue;
     const best = pickBest(group.filter((c) => survives(c, minimumConfidence)));
-    const winning = new Set(best?.columnNames ?? []);
-    const named = new Set(group.flatMap((c) => c.columnNames));
-    for (const column of table.columns) {
-      if (named.has(column.name) && !winning.has(column.name) && column.isPrimaryKey) {
-        column.isPrimaryKey = false;
-        result.ColumnsCleared++;
-      }
-      if (winning.has(column.name)) column.isPrimaryKey = true;
-    }
+    result.ColumnsCleared += applyTableKey(table, best, group);
     if (best) result.TablesFlagged++;
   }
   return result;
+}
+
+/**
+ * True when the table has a key declared in the catalog. A flagged column counts as declared unless
+ * discovery set it: it carries `primaryKeySource: 'discovery'`, or (for state files written before
+ * the marker existed) one of the table's candidates names it.
+ */
+export function HasDeclaredPrimaryKey(table: TableDefinition, tableCandidates: PKCandidate[]): boolean {
+  const named = new Set(tableCandidates.flatMap((c) => c.columnNames));
+  return table.columns.some((c) => c.isPrimaryKey && c.primaryKeySource !== 'discovery' && !named.has(c.name));
+}
+
+/** Flags the winning candidate's columns and unflags the other candidates'; returns how many were unflagged. */
+function applyTableKey(table: TableDefinition, best: PKCandidate | undefined, group: PKCandidate[]): number {
+  const winning = new Set(best?.columnNames ?? []);
+  const named = new Set(group.flatMap((c) => c.columnNames));
+  let cleared = 0;
+  for (const column of table.columns) {
+    if (winning.has(column.name)) {
+      markDiscovered(column, true);
+    } else if (named.has(column.name) && column.isPrimaryKey) {
+      markDiscovered(column, false);
+      cleared++;
+    }
+  }
+  return cleared;
+}
+
+function markDiscovered(column: ColumnDefinition, isKey: boolean): void {
+  column.isPrimaryKey = isKey;
+  if (isKey) column.primaryKeySource = 'discovery';
+  else delete column.primaryKeySource;
 }
 
 function groupByTable(candidates: PKCandidate[]): Map<string, PKCandidate[]> {
