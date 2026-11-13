@@ -127,9 +127,12 @@ export class MCPServerExtension extends BaseServerExtension {
         return 'pre-auth';
     }
 
-    public async Initialize(contextOrApp: ServerExtensionInitContext | Application, config?: ServerExtensionConfig): Promise<ExtensionInitResult> {
+    // One declared parameter, on purpose: ServerExtensionLoader picks the call form by
+    // `Initialize.length`, and two or more gets the legacy (app, config) form, which carries no
+    // public URL or base path.
+    public async Initialize(contextOrApp: ServerExtensionInitContext | Application): Promise<ExtensionInitResult> {
         try {
-            const context = requireContext(contextOrApp, config);
+            const context = requireContext(contextOrApp);
             // Dynamic import, as in auth/TokenValidator.ts: @memberjunction/server reads process.env when
             // first evaluated, and the standalone server (which also loads this module) must load its .env
             // first. Inside MJAPI the module is already loaded, so this costs nothing.
@@ -188,8 +191,8 @@ function warnAboutHostedSettings(config: ServerExtensionConfig, mount: MCPMount)
 }
 
 /** MCP needs the modern context: the legacy `(app, config)` form carries no public URL or base path. */
-function requireContext(contextOrApp: ServerExtensionInitContext | Application, config?: ServerExtensionConfig): ServerExtensionInitContext {
-    if (typeof contextOrApp === 'function' || config !== undefined) {
+function requireContext(contextOrApp: ServerExtensionInitContext | Application): ServerExtensionInitContext {
+    if (typeof contextOrApp === 'function') {
         throw new Error('MCPServerExtension requires the context form of Initialize (MJServer 6.x passes it)');
     }
     return contextOrApp;

@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import express from 'express';
 import type { RequestHandler } from 'express';
+import { ServerExtensionLoader } from '@memberjunction/server-extensions-core';
 import type { ServerExtensionInitContext } from '@memberjunction/server-extensions-core';
 
 const fakes = vi.hoisted(() => ({
@@ -110,5 +111,17 @@ describe('MCPServerExtension.Initialize', () => {
 
         expect(result).toMatchObject({ Success: false, Message: 'System user not found' });
         expect(GetResourceIdentifier()).toBe('http://localhost:3100');
+    });
+});
+
+describe('MCPServerExtension through MJAPI\'s ServerExtensionLoader', () => {
+    it('REGRESSION: is handed the context form, so it loads (the loader picks the form by Initialize.length)', async () => {
+        const loader = new ServerExtensionLoader();
+        await loader.LoadExtensions(express(), [
+            { Enabled: true, DriverClass: 'MCPServerExtension', RootPath: '/api/mcp', OwnsCORS: true, Settings: {} },
+        ], { phase: 'pre-auth', publicUrl: 'http://localhost:4000/', apiRootPath: '/api' });
+
+        expect(loader.ExtensionCount).toBe(1);
+        expect(GetResourceIdentifier()).toBe('http://localhost:4000/api/mcp');
     });
 });

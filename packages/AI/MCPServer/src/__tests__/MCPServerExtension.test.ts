@@ -87,10 +87,7 @@ describe('MCPServerExtension', () => {
     it('fails to load, without mounting anything, on the legacy (app, config) form', async () => {
         const use = vi.fn();
         const app = Object.assign(() => undefined, { use });
-        const result = await new MCPServerExtension().Initialize(
-            app as unknown as Application,
-            { Enabled: true, DriverClass: 'MCPServerExtension', RootPath: '/mcp', Settings: {} },
-        );
+        const result = await new MCPServerExtension().Initialize(app as unknown as Application);
         expect(result.Success).toBe(false);
         expect(result.Message).toMatch(/context form/);
         expect(use).not.toHaveBeenCalled();
