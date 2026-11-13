@@ -10,7 +10,9 @@ import {
   OnChanges,
   SimpleChanges,
   DoCheck,
-  TemplateRef
+  TemplateRef,
+  ViewChild,
+  ElementRef
 } from '@angular/core';
 import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -416,6 +418,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get isLastMessage(): boolean {
     return this.IsLastMessage;
   } // Whether this is the last message in the conversation
+
+  /**
+   * True when this is the most recent message in the timeline (or standalone usage).
+   * Defaults to true so standalone usages never unexpectedly auto-collapse.
+   */
+  @Input() public IsLatestMessage: boolean = true;
+
+  /** Hysteresis threshold (px): only collapse when rendered .message-text exceeds this height. */
+  private static readonly COLLAPSE_TRIGGER_HEIGHT_PX = 220;
+
+  private _isLongMessage = false;
+  private _isTextExpanded = false;
+  private _lastMessageIdForCollapse: string | null = null;
+  private _lastMeasuredDisplayMessage: string | null = null;
+  private _lastMeasuredStatus: string | null = null;
+  private _messageTextElRef?: ElementRef<HTMLElement>;
+  private _messageTextResizeObserver: ResizeObserver | null = null;
+
+  @ViewChild('messageTextEl')
+  private set messageTextEl(ref: ElementRef<HTMLElement> | undefined) {
+    if (this._messageTextElRef === ref) {
+      return;
+    }
+    this._messageTextElRef = ref;
+    this.disconnectMessageTextResizeObserver();
+    if (ref?.nativeElement) {
+      this.measureMessageTextHeight();
+      this.observeMessageTextResize(ref.nativeElement);
+    }
+  }
+  private get messageTextEl(): ElementRef<HTMLElement> | undefined {
+    return this._messageTextElRef;
+  }
   @Input() public Attachments: MessageAttachment[] = [];
 
   /** @deprecated Use {@link Attachments}. */
@@ -1060,6 +1095,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this._stableIsInProgressAIMessage = this.IsAIMessage && currentStatus === 'In-Progress';
     this._stableDisplayMessage = this.computeDisplayMessage();
 
+    const currentMessageId = this.message.ID ?? null;
+    if (currentMessageId !== this._lastMessageIdForCollapse) {
+      this._lastMessageIdForCollapse = currentMessageId;
+      this._isTextExpanded = false;
+      this._isLongMessage = false;
+      this._lastMeasuredDisplayMessage = null;
+      this._lastMeasuredStatus = null;
+    }
+
+    if (
+      this._messageTextElRef?.nativeElement &&
+      (this._lastMeasuredDisplayMessage !== this._stableDisplayMessage ||
+        this._lastMeasuredStatus !== (currentStatus ?? null))
+    ) {
+      this.measureMessageTextHeight();
+    }
+
     // Nothing in flight means nothing to watch — restart the clock so a run that begins later is
     // measured from when it began, not from when this component was created.
     const inFlight = this.isLivenessInFlight();
@@ -1199,15 +1251,78 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this._loadTime = Date.now();
     }
     this.startElapsedTimeUpdater();
+    this.measureMessageTextHeight();
     this.cdRef.detectChanges();
   }
 
   ngOnDestroy() {
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
+    this.disconnectMessageTextResizeObserver();
     if (this._taskGraphSub) {
       this._taskGraphSub.unsubscribe();
       this._taskGraphSub = null;
+    }
+  }
+
+  /** True when this settled, non-latest message exceeds the collapse height threshold. */
+  public get CanCollapseText(): boolean {
+    return !this.IsLatestMessage
+      && !this.IsStreaming
+      && this.MessageStatus !== 'In-Progress'
+      && !this.IsHandedOffTargetJoining
+      && !this.isEditing
+      && this._isLongMessage;
+  }
+
+  /** True when the message text is currently clipped to its collapsed max-height. */
+  public get IsTextCollapsed(): boolean {
+    return this.CanCollapseText && !this._isTextExpanded;
+  }
+
+  /** True when the Show more / Show less toggle button should be rendered. */
+  public get ShowCollapseToggle(): boolean {
+    return this.CanCollapseText;
+  }
+
+  /** Toggles between collapsed and expanded presentation for a long non-latest message. */
+  public ToggleTextExpanded(): void {
+    this._isTextExpanded = !this._isTextExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  private measureMessageTextHeight(): boolean {
+    const el = this._messageTextElRef?.nativeElement;
+    if (!el) {
+      return false;
+    }
+    this._lastMeasuredDisplayMessage = this._stableDisplayMessage ?? this.displayMessage;
+    this._lastMeasuredStatus = this.message?.Status ?? null;
+    const nextIsLong = el.scrollHeight > MessageItemComponent.COLLAPSE_TRIGGER_HEIGHT_PX;
+    if (nextIsLong !== this._isLongMessage) {
+      this._isLongMessage = nextIsLong;
+      this.cdRef.markForCheck();
+      return true;
+    }
+    return false;
+  }
+
+  private observeMessageTextResize(el: HTMLElement): void {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    this._messageTextResizeObserver = new ResizeObserver(() => {
+      if (this.measureMessageTextHeight()) {
+        this.cdRef.detectChanges();
+      }
+    });
+    this._messageTextResizeObserver.observe(el);
+  }
+
+  private disconnectMessageTextResizeObserver(): void {
+    if (this._messageTextResizeObserver) {
+      this._messageTextResizeObserver.disconnect();
+      this._messageTextResizeObserver = null;
     }
   }
 

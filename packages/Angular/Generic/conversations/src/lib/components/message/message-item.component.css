@@ -788,6 +788,55 @@
   color: var(--mj-text-primary);
   line-height: 1.5;
   word-wrap: break-word;
+  position: relative;
+}
+
+.message-text.collapsed {
+  max-height: 160px;
+  overflow: hidden;
+}
+
+.message-text.collapsed::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--mj-bg-surface));
+}
+
+.message-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: var(--mj-radius-full);
+  border: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.message-collapse-toggle:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.message-collapse-toggle:focus-visible {
+  outline: 2px solid var(--mj-focus-ring);
+  outline-offset: 2px;
+}
+
+.message-collapse-toggle i {
+  font-size: 10px;
 }
 
 /* Remove extra margin from markdown paragraphs */
