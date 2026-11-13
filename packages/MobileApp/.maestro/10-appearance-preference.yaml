@@ -1,0 +1,30 @@
+# Appearance preference round-trip (P0 preference sync).
+#
+# Cycles the Appearance row on the profile screen until it reads "Dark", then waits past the
+# UserInfoEngine debounce so the choice reaches `MJ: User Settings`. Pair with a server-side
+# read (or relaunch the app after changing the setting server-side) to prove both directions.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Ask an agent anything, or pick up where you left off."
+    timeout: 30000
+
+- openLink: "mjmobile://profile"
+- extendedWaitUntil:
+    visible: "Profile & settings"
+    timeout: 20000
+
+# Rows expose "<label>, <value>" as one accessible name, so match on that. The row cycles
+# System -> Light -> Dark; at most two taps reach Dark from any start.
+- repeat:
+    while:
+      notVisible: "Appearance, Dark"
+    commands:
+      - tapOn: "Appearance, .*"
+- assertVisible: "Appearance, Dark"
+# UserInfoEngine.SetSettingDebounced flushes after a short delay; give it room before any
+# server-side read.
+- waitForAnimationToEnd:
+    timeout: 4000

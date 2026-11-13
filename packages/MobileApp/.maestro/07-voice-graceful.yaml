@@ -32,8 +32,8 @@ appId: org.memberjunction.mobile
 #   • a device that can capture audio (the iOS Simulator passes the host mic through; hardware
 #     works; a `-no-audio` Android emulator has no input device);
 #   • the SDP broker reachable AT THE URL THE SERVER HANDS THE CLIENT. The server builds that from
-#     `MJAPI_PUBLIC_URL` / `GRAPHQL_BASE_URL`, which locally is `http://localhost:4001`. On an
-#     Android emulator `localhost` is the EMULATOR, so `adb reverse tcp:4001 tcp:4001` is required
+#     `MJAPI_PUBLIC_URL` / `GRAPHQL_BASE_URL`, which locally is `http://localhost:4000`. On an
+#     Android emulator `localhost` is the EMULATOR, so `adb reverse tcp:4000 tcp:4000` is required
 #     or the handshake never completes and this assertion correctly fails. Android also negotiates
 #     noticeably slower than iOS under swiftshader, hence the generous timeout.
 #

@@ -2,7 +2,7 @@
 
 These tests exercise the mobile app's **real** data/service layer
 (`src/data/services/*`) against a **live MJAPI** (GraphQL at
-`http://localhost:4001/graphql`). Unlike the unit suite (`src/__tests__/*.test.ts`),
+`http://localhost:4000/graphql`). Unlike the unit suite (`src/__tests__/*.test.ts`),
 which mocks `@memberjunction/core`, these boot the actual
 `GraphQLDataProvider` and hit the backend + database.
 
@@ -19,7 +19,7 @@ returns `false` (no boot attempted) when there is no token. So:
 
 ## Running
 
-1. Ensure MJAPI is running locally (GraphQL on `localhost:4001`) against a
+1. Ensure MJAPI is running locally (GraphQL on `localhost:4000`) against a
    freshly-migrated 5.44 DB with seed data.
 2. Mint a JWT for the test user (`da-robot-tester@bluecypress.io`).
 3. Run:

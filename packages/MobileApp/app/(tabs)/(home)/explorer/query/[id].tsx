@@ -42,9 +42,9 @@ export default function QueryRunScreen() {
 
             {loading && !result ? (
                 <View style={styles.loadingBlock}><ActivityIndicator color={Colors.brand} /><Text style={styles.loadingText}>Running query…</Text></View>
-            ) : result && !result.Success ? (
+            ) : result && !result.success ? (
                 <View style={styles.loadingBlock}>
-                    <Text style={styles.errorText}>{result.ErrorMessage}</Text>
+                    <Text style={styles.errorText}>{result.errorMessage}</Text>
                     <Pressable onPress={() => void run()}><Text style={styles.retry}>Try again</Text></Pressable>
                 </View>
             ) : result && result.Rows.length === 0 ? (
@@ -66,7 +66,7 @@ export default function QueryRunScreen() {
                 </ScrollView>
             ) : null}
 
-            {result?.Success ? (
+            {result?.success ? (
                 <View style={styles.askBar}>
                     <Pressable style={styles.askBtn} onPress={() => router.push('/new-conversation')}>
                         <View style={styles.askAv}><Text style={styles.askAvText}>S</Text></View>
