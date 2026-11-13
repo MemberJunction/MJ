@@ -1,50 +1,50 @@
 {
-  "Timestamp": "2026-11-13T13:27:28.181Z",
+  "Timestamp": "2026-11-13T14:15:06.938Z",
   "Database": "MJ_Demo_20261106",
   "Primitives": {
-    "ClassFactoryAndObjectCacheMs": 3.36,
-    "EntityHydrateAndFlsMs": 9.1,
+    "ClassFactoryAndObjectCacheMs": 3.31,
+    "EntityHydrateAndFlsMs": 9.8,
     "LocalCacheWritesAndStatsMs": 1,
-    "TemplateRenderSimpleMs": 37.24,
-    "ActionSnapshotAndEngineLookupMs": 4.44,
-    "PayloadApplyAndDeepDiffMs": 4.88,
+    "TemplateRenderSimpleMs": 36.46,
+    "ActionSnapshotAndEngineLookupMs": 4.66,
+    "PayloadApplyAndDeepDiffMs": 4.94,
     "DatestampsOnlyEntityCount": 25,
     "DatestampsOnlyEntitiesBySchema": {
       "__mj": 25
     },
-    "DatestampsOnly10SavesMs": 35.07,
-    "ApplyRowChanges50On5000RowsMs": 26.65,
-    "BaseEnginePKMap100DeltasMs": 0.24,
-    "BaseEngineLinearScan100DeltasMs": 19.14,
-    "BaseEnginePKMapSpeedupRatio": 79.8,
-    "GetEntityObjectDefault500Ms": 3.81,
-    "GetEntityObjectSkipNewRecord500Ms": 1.18,
-    "UserByEmail10kLookupsMs": 1.18,
-    "UserByEmailLinear10kLookupsMs": 49.33,
-    "UserByEmailSpeedupRatio": 41.8,
-    "NarrowSearchRunView10CallsMs": 40.89,
-    "WideSearchRunView10CallsMs": 117.28,
+    "DatestampsOnly10SavesMs": 36.63,
+    "ApplyRowChanges50On5000RowsMs": 26.4,
+    "BaseEnginePKMap100DeltasMs": 0.19,
+    "BaseEngineLinearScan100DeltasMs": 19.7,
+    "BaseEnginePKMapSpeedupRatio": 103.7,
+    "GetEntityObjectDefault500Ms": 3.9,
+    "GetEntityObjectSkipNewRecord500Ms": 1.25,
+    "UserByEmail10kLookupsMs": 1.24,
+    "UserByEmailLinear10kLookupsMs": 48.53,
+    "UserByEmailSpeedupRatio": 39.1,
+    "NarrowSearchRunView10CallsMs": 36.62,
+    "WideSearchRunView10CallsMs": 101.23,
     "NarrowSearchReturnedColumns": 2,
     "WideSearchReturnedColumns": 37,
     "CanCountFromBaseTableEntityCount": 707,
     "RecordChangesCountTargetsBaseTable": true,
     "RecordChangesCountSql": "SELECT COUNT(*) AS [TotalRowCount] FROM [__mj].[RecordChange] WHERE (Status = 'Complete')",
     "TwoTierL1ZeroCloneIdentity": true,
-    "TwoTierL1200Reads50DeltasMs": 1.56,
-    "FrozenRowWireSerialize5000x20Ms": 3.45,
-    "UncachedJsonStringify5000x20Ms": 16.31,
-    "FrozenRowWireSpeedupRatio": 4.73
+    "TwoTierL1200Reads50DeltasMs": 1.2,
+    "FrozenRowWireSerialize5000x20Ms": 4.19,
+    "UncachedJsonStringify5000x20Ms": 17.85,
+    "FrozenRowWireSpeedupRatio": 4.26
   },
-  "PrimitivesTotalMs": 60.02,
+  "PrimitivesTotalMs": 60.17,
   "DeterministicAgentRuns": [
     {
       "Label": "PB7: Sage (4-turn deterministic)",
       "AgentName": "Sage",
       "Mode": "deterministic-testllm",
-      "RootRunId": "9A9CF6D4-C914-43FD-ACC2-8F9F88654EAB",
-      "WallTimeMs": 694.36,
-      "LlmPromptExecutionMs": 175,
-      "FrameworkOverheadMs": 519.36,
+      "RootRunId": "99B35F71-2B7C-4E79-970C-9199FF2AF4A4",
+      "WallTimeMs": 712.45,
+      "LlmPromptExecutionMs": 181,
+      "FrameworkOverheadMs": 531.45,
       "TotalRunsInTree": 1,
       "TotalStepsInTree": 8,
       "PromptSteps": 4,
@@ -53,21 +53,21 @@
       "PayloadAtStartBytes": 15675,
       "PayloadAtEndBytes": 31349,
       "InputDataBytes": 3247,
-      "OutputDataBytes": 2600,
-      "TotalStepStorageBytes": 52871,
+      "OutputDataBytes": 2601,
+      "TotalStepStorageBytes": 52872,
       "PayloadAtStartPointerSteps": 6,
       "PayloadAtEndPointerSteps": 5,
-      "UnDeduplicatedPayloadBytesEstimate": 225296,
+      "UnDeduplicatedPayloadBytesEstimate": 225297,
       "StorageSavingsPercent": 76.5
     },
     {
       "Label": "PB8: Query Builder + Query Strategist (deterministic)",
       "AgentName": "Query Builder",
       "Mode": "deterministic-testllm",
-      "RootRunId": "B850DBF7-D962-4FCC-9A52-C46426708196",
-      "WallTimeMs": 502.42,
-      "LlmPromptExecutionMs": 162,
-      "FrameworkOverheadMs": 340.42,
+      "RootRunId": "260B8A2F-43B3-43F7-BFB0-661E3C93F0FA",
+      "WallTimeMs": 507.16,
+      "LlmPromptExecutionMs": 166,
+      "FrameworkOverheadMs": 341.16,
       "TotalRunsInTree": 2,
       "TotalStepsInTree": 10,
       "PromptSteps": 4,
@@ -87,10 +87,10 @@
       "Label": "PB9: Research Agent + Report Writer (deterministic)",
       "AgentName": "Research Agent",
       "Mode": "deterministic-testllm",
-      "RootRunId": "2F7C679D-99C5-4876-802C-B5B01D4F003A",
-      "WallTimeMs": 221.28,
-      "LlmPromptExecutionMs": 122,
-      "FrameworkOverheadMs": 99.28,
+      "RootRunId": "8F2A69AA-CE3B-4F23-A312-2B682D4950FC",
+      "WallTimeMs": 215.45,
+      "LlmPromptExecutionMs": 120,
+      "FrameworkOverheadMs": 95.45,
       "TotalRunsInTree": 2,
       "TotalStepsInTree": 6,
       "PromptSteps": 3,
@@ -117,8 +117,8 @@
       "Wave3": "—",
       "PreWave4": 433.97,
       "Wave4Baseline": 165.43,
-      "Current": 170.24,
-      "DeltaVsBaselinePercent": 2.9,
+      "Current": 167.89,
+      "DeltaVsBaselinePercent": 1.5,
       "Status": "PASS"
     },
     {
@@ -129,8 +129,8 @@
       "Wave3": 727.45,
       "PreWave4": 691.47,
       "Wave4Baseline": 811.1,
-      "Current": 959.06,
-      "DeltaVsBaselinePercent": 18.2,
+      "Current": 968.06,
+      "DeltaVsBaselinePercent": 19.4,
       "Status": "PASS"
     },
     {
@@ -141,8 +141,8 @@
       "Wave3": 66.04,
       "PreWave4": 69.68,
       "Wave4Baseline": 57.32,
-      "Current": 60.02,
-      "DeltaVsBaselinePercent": 4.7,
+      "Current": 60.17,
+      "DeltaVsBaselinePercent": 5,
       "Status": "PASS"
     },
     {
@@ -153,8 +153,8 @@
       "Wave3": 3.01,
       "PreWave4": 2.38,
       "Wave4Baseline": 3.48,
-      "Current": 3.36,
-      "DeltaVsBaselinePercent": -3.4,
+      "Current": 3.31,
+      "DeltaVsBaselinePercent": -4.9,
       "Status": "PASS"
     },
     {
@@ -165,8 +165,8 @@
       "Wave3": 18.3,
       "PreWave4": 18.95,
       "Wave4Baseline": 8.7,
-      "Current": 9.1,
-      "DeltaVsBaselinePercent": 4.6,
+      "Current": 9.8,
+      "DeltaVsBaselinePercent": 12.6,
       "Status": "PASS"
     },
     {
@@ -189,8 +189,8 @@
       "Wave3": 30.88,
       "PreWave4": 34.48,
       "Wave4Baseline": 35.05,
-      "Current": 37.24,
-      "DeltaVsBaselinePercent": 6.2,
+      "Current": 36.46,
+      "DeltaVsBaselinePercent": 4,
       "Status": "PASS"
     },
     {
@@ -201,8 +201,8 @@
       "Wave3": 8.7,
       "PreWave4": 7.77,
       "Wave4Baseline": 4.32,
-      "Current": 4.44,
-      "DeltaVsBaselinePercent": 2.8,
+      "Current": 4.66,
+      "DeltaVsBaselinePercent": 7.9,
       "Status": "PASS"
     },
     {
@@ -213,8 +213,8 @@
       "Wave3": 4.43,
       "PreWave4": 5.36,
       "Wave4Baseline": 4.75,
-      "Current": 4.88,
-      "DeltaVsBaselinePercent": 2.7,
+      "Current": 4.94,
+      "DeltaVsBaselinePercent": 4,
       "Status": "PASS"
     },
     {
@@ -225,8 +225,8 @@
       "Wave3": "—",
       "PreWave4": 32.39,
       "Wave4Baseline": 35.94,
-      "Current": 35.07,
-      "DeltaVsBaselinePercent": -2.4,
+      "Current": 36.63,
+      "DeltaVsBaselinePercent": 1.9,
       "Status": "PASS"
     },
     {
@@ -237,8 +237,8 @@
       "Wave3": "—",
       "PreWave4": 60.89,
       "Wave4Baseline": 28.32,
-      "Current": 26.65,
-      "DeltaVsBaselinePercent": -5.9,
+      "Current": 26.4,
+      "DeltaVsBaselinePercent": -6.8,
       "Status": "PASS"
     },
     {
@@ -249,8 +249,8 @@
       "Wave3": "—",
       "PreWave4": 69.84,
       "Wave4Baseline": 0.19,
-      "Current": 0.24,
-      "DeltaVsBaselinePercent": 26.3,
+      "Current": 0.19,
+      "DeltaVsBaselinePercent": 0,
       "Status": "PASS"
     },
     {
@@ -261,8 +261,8 @@
       "Wave3": "—",
       "PreWave4": 2.85,
       "Wave4Baseline": 1.21,
-      "Current": 1.18,
-      "DeltaVsBaselinePercent": -2.5,
+      "Current": 1.25,
+      "DeltaVsBaselinePercent": 3.3,
       "Status": "PASS"
     },
     {
@@ -273,8 +273,8 @@
       "Wave3": "—",
       "PreWave4": 44.66,
       "Wave4Baseline": 1.13,
-      "Current": 1.18,
-      "DeltaVsBaselinePercent": 4.4,
+      "Current": 1.24,
+      "DeltaVsBaselinePercent": 9.7,
       "Status": "PASS"
     },
     {
@@ -285,8 +285,8 @@
       "Wave3": "—",
       "PreWave4": 105.1,
       "Wave4Baseline": 36.76,
-      "Current": 40.89,
-      "DeltaVsBaselinePercent": 11.2,
+      "Current": 36.62,
+      "DeltaVsBaselinePercent": -0.4,
       "Status": "PASS"
     },
     {
@@ -297,9 +297,9 @@
       "Wave3": "—",
       "PreWave4": 32.18,
       "Wave4Baseline": 1.59,
-      "Current": 1.56,
-      "DeltaVsBaselinePercent": -1.9,
-      "Status": "PASS"
+      "Current": 1.2,
+      "DeltaVsBaselinePercent": -24.5,
+      "Status": "IMPROVED"
     },
     {
       "Metric": "PB17 FrozenRow WeakMap Wire (5k x 20)",
@@ -309,9 +309,9 @@
       "Wave3": "—",
       "PreWave4": 15.86,
       "Wave4Baseline": 3.96,
-      "Current": 3.45,
-      "DeltaVsBaselinePercent": -12.9,
-      "Status": "IMPROVED"
+      "Current": 4.19,
+      "DeltaVsBaselinePercent": 5.8,
+      "Status": "PASS"
     },
     {
       "Metric": "PB7 Sage 4-Turn Step Storage",
@@ -321,7 +321,7 @@
       "Wave3": 52699,
       "PreWave4": 84218,
       "Wave4Baseline": 52871,
-      "Current": 52871,
+      "Current": 52872,
       "DeltaVsBaselinePercent": 0,
       "Status": "PASS"
     },
@@ -354,8 +354,8 @@
       "Unit": "x",
       "PreWave4": "2.62x",
       "Wave4Baseline": "1.00x",
-      "Current": "1.03x",
-      "DeltaVsBaselinePercent": 3,
+      "Current": "1.01x",
+      "DeltaVsBaselinePercent": 1,
       "Status": "PASS"
     },
     {
@@ -365,8 +365,8 @@
       "Wave3": "0.90x",
       "PreWave4": "0.85x",
       "Wave4Baseline": "1.00x",
-      "Current": "1.18x",
-      "DeltaVsBaselinePercent": 18,
+      "Current": "1.19x",
+      "DeltaVsBaselinePercent": 19,
       "Status": "PASS"
     },
     {
@@ -392,7 +392,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "104.1x",
-      "Current": "79.8x",
+      "Current": "103.7x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     },
@@ -401,7 +401,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "43.4x",
-      "Current": "41.8x",
+      "Current": "39.1x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     },
@@ -410,7 +410,7 @@
       "Unit": "x",
       "PreWave4": "1.0",
       "Wave4Baseline": "4.9x",
-      "Current": "4.73x",
+      "Current": "4.26x",
       "DeltaVsBaselinePercent": null,
       "Status": "PASS"
     }

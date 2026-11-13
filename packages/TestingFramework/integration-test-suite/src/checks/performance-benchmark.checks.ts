@@ -474,16 +474,17 @@ async function runDeterministicScriptedAgent(
     const llm = new TestLLM();
     const restore = RegisterTestLLM(llm, [...CHAT_DRIVER_CLASSES]);
     try {
+        const scriptedDelayMs = process.env.GITHUB_ACTIONS === 'true' ? 200 : 35;
         llm.Reset();
         llm.SetDefaultOutcome({
             kind: 'succeed',
             content: JSON.stringify({ taskComplete: true, message: `${label} fallback completion` }),
-            delayMS: 35,
+            delayMS: scriptedDelayMs,
         });
         const outcomes: TestLLMOutcome[] = scriptedReplies.map((reply) => ({
             kind: 'succeed',
             content: JSON.stringify(reply),
-            delayMS: 35,
+            delayMS: scriptedDelayMs,
         }));
         llm.Script(...outcomes);
 
@@ -1927,6 +1928,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     const prefix = `${cat}:`;
                     return [...l2Store.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
                 },
+                GetIndexGroupKeys: async (): Promise<string[]> => [],
                 ApplyRunViewRowDelta: async (fp: string, rawDeltaJson: string): Promise<boolean> => {
                     const fk = fullKey(fp, 'RunViewCache');
                     let h = l2HashStore.get(fk);
@@ -2109,7 +2111,8 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     MinFrozenRowWireSpeedupRatio: number;
                     MaxPB7StepStorageBytesLocal: number;
                     MaxPB7StepStorageBytesCI: number;
-                    MinPB7StartPointers: number;
+                    MinPB7StartPointersLocal: number;
+                    MinPB7StartPointersCI: number;
                     MinPB7EndPointersLocal: number;
                     MinPB7EndPointersCI: number;
                     MinPB7StorageSavingsPercentLocal: number;
@@ -2120,9 +2123,12 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     MinPB8StartPointersCI: number;
                     MinPB8EndPointersLocal: number;
                     MinPB8EndPointersCI: number;
-                    MaxPB9StepStorageBytes: number;
-                    MinPB9StartPointers: number;
-                    MinPB9EndPointers: number;
+                    MaxPB9StepStorageBytesLocal: number;
+                    MaxPB9StepStorageBytesCI: number;
+                    MinPB9StartPointersLocal: number;
+                    MinPB9StartPointersCI: number;
+                    MinPB9EndPointersLocal: number;
+                    MinPB9EndPointersCI: number;
                 };
             };
 
@@ -2392,11 +2398,15 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             const pb9Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Research Agent');
 
             const maxPB7Bytes = isCIProfile ? gates.MaxPB7StepStorageBytesCI : gates.MaxPB7StepStorageBytesLocal;
+            const minPB7StartPointers = isCIProfile ? gates.MinPB7StartPointersCI : gates.MinPB7StartPointersLocal;
             const minPB7EndPointers = isCIProfile ? gates.MinPB7EndPointersCI : gates.MinPB7EndPointersLocal;
             const minPB7Savings = isCIProfile ? gates.MinPB7StorageSavingsPercentCI : gates.MinPB7StorageSavingsPercentLocal;
             const maxPB8Bytes = isCIProfile ? gates.MaxPB8StepStorageBytesCI : gates.MaxPB8StepStorageBytesLocal;
             const minPB8StartPointers = isCIProfile ? gates.MinPB8StartPointersCI : gates.MinPB8StartPointersLocal;
             const minPB8EndPointers = isCIProfile ? gates.MinPB8EndPointersCI : gates.MinPB8EndPointersLocal;
+            const maxPB9Bytes = isCIProfile ? gates.MaxPB9StepStorageBytesCI : gates.MaxPB9StepStorageBytesLocal;
+            const minPB9StartPointers = isCIProfile ? gates.MinPB9StartPointersCI : gates.MinPB9StartPointersLocal;
+            const minPB9EndPointers = isCIProfile ? gates.MinPB9EndPointersCI : gates.MinPB9EndPointersLocal;
             const pb7BaseBytes =
                 activeBaseline.DeterministicAgentRuns.find((r) => r.AgentName === 'Sage')?.TotalStepStorageBytes ?? 52871;
             const pb8BaseBytes =
@@ -2443,7 +2453,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     Wave4Baseline: pb9BaseBytes,
                     Current: pb9Run.TotalStepStorageBytes,
                     DeltaVsBaselinePercent: Number((((pb9Run.TotalStepStorageBytes - pb9BaseBytes) / pb9BaseBytes) * 100).toFixed(1)),
-                    Status: pb9Run.TotalStepStorageBytes <= gates.MaxPB9StepStorageBytes ? 'PASS' : 'FAIL',
+                    Status: pb9Run.TotalStepStorageBytes <= maxPB9Bytes ? 'PASS' : 'FAIL',
                 });
             }
 
@@ -2590,9 +2600,9 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     `PB18 regression: PB7 Sage step storage (${pb7Run.TotalStepStorageBytes} B) exceeded ${maxPB7Bytes} B ceiling`
                 );
                 Assert(
-                    pb7Run.PayloadAtStartPointerSteps >= gates.MinPB7StartPointers &&
+                    pb7Run.PayloadAtStartPointerSteps >= minPB7StartPointers &&
                         pb7Run.PayloadAtEndPointerSteps >= minPB7EndPointers,
-                    `PB18 regression: PB7 Sage pointer steps (${pb7Run.PayloadAtStartPointerSteps}/${pb7Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB7StartPointers}/${minPB7EndPointers})`
+                    `PB18 regression: PB7 Sage pointer steps (${pb7Run.PayloadAtStartPointerSteps}/${pb7Run.PayloadAtEndPointerSteps}) fell below (${minPB7StartPointers}/${minPB7EndPointers})`
                 );
                 Assert(
                     pb7Run.StorageSavingsPercent >= minPB7Savings,
@@ -2612,13 +2622,13 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             }
             if (pb9Run) {
                 Assert(
-                    pb9Run.TotalStepStorageBytes <= gates.MaxPB9StepStorageBytes,
-                    `PB18 regression: PB9 Research Agent step storage (${pb9Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB9StepStorageBytes} B ceiling`
+                    pb9Run.TotalStepStorageBytes <= maxPB9Bytes,
+                    `PB18 regression: PB9 Research Agent step storage (${pb9Run.TotalStepStorageBytes} B) exceeded ${maxPB9Bytes} B ceiling`
                 );
                 Assert(
-                    pb9Run.PayloadAtStartPointerSteps >= gates.MinPB9StartPointers &&
-                        pb9Run.PayloadAtEndPointerSteps >= gates.MinPB9EndPointers,
-                    `PB18 regression: PB9 Research Agent pointer steps (${pb9Run.PayloadAtStartPointerSteps}/${pb9Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB9StartPointers}/${gates.MinPB9EndPointers})`
+                    pb9Run.PayloadAtStartPointerSteps >= minPB9StartPointers &&
+                        pb9Run.PayloadAtEndPointerSteps >= minPB9EndPointers,
+                    `PB18 regression: PB9 Research Agent pointer steps (${pb9Run.PayloadAtStartPointerSteps}/${pb9Run.PayloadAtEndPointerSteps}) fell below (${minPB9StartPointers}/${minPB9EndPointers})`
                 );
             }
 
