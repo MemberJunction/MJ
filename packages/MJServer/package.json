@@ -100,6 +100,7 @@
     "@memberjunction/generic-database-provider": "6.3.0-edge.0",
     "@memberjunction/global": "6.3.0-edge.0",
     "@memberjunction/graphql-dataprovider": "6.3.0-edge.0",
+    "@memberjunction/health": "6.3.0-edge.0",
     "@memberjunction/integration-engine": "6.3.0-edge.0",
     "@memberjunction/integration-engine-base": "6.3.0-edge.0",
     "@memberjunction/integration-progress-artifacts": "6.3.0-edge.0",
@@ -173,6 +174,9 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
+    "lib0": "^0.2.99",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.24",
     "zod": "^3.25.0",
     "@memberjunction/theme-engine": "6.3.0-edge.0"
   },

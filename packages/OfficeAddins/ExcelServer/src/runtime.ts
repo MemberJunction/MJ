@@ -18,6 +18,8 @@ export const EXCEL_CONNECT_ROUTE = '/office/connect';
 export const EXCEL_ADDIN_PATHS = {
     Manifest: '/manifest.xml',
     Config: '/config.json',
+    FunctionsJson: '/functions.json',
+    FunctionsScript: '/functions.js',
     Taskpane: '/taskpane.html',
     ConnectStart: '/connect.html',
     Connected: '/connected.html',

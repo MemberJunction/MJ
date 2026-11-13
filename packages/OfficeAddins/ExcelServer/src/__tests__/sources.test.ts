@@ -6,6 +6,7 @@ import {
     DataTypeForSQLType,
     ExcelSourceError,
     ResolveSingleWorkbookSource,
+    ResolveViewByNameOrId,
     ResolveWorkbookSources,
 } from '../sources';
 
@@ -228,5 +229,80 @@ describe('data types', () => {
         expect(DataTypeForSQLType('datetimeoffset')).toBe('DateTime');
         expect(DataTypeForSQLType('')).toBe('Text');
         expect(DataTypeForSQLType(undefined)).toBe('Text');
+    });
+});
+
+describe('ResolveViewByNameOrId — =MJ.VIEW resolution', () => {
+    function makeEntity(id: string = ENTITY_ID): EntityInfo {
+        const entity = Object.create(EntityInfo.prototype) as EntityInfo;
+        const fields = [firstName, joinDate, updated, photo];
+        Object.assign(entity, {
+            ID: id,
+            Name: 'MJ: People',
+            DisplayName: 'People',
+            IncludeInAPI: true,
+            Status: 'Active',
+            GetUserPermisions: () => ({ CanRead: true }),
+        });
+        Object.defineProperty(entity, 'Fields', { get: () => fields });
+        return entity;
+    }
+
+    it('resolves a saved view by view Name on the target entity', async () => {
+        const entity = makeEntity();
+        const view = viewStub({
+            Columns: [
+                column('FirstName', firstName, { orderIndex: 0 }),
+                column('JoinDate', joinDate, { orderIndex: 1 }),
+            ],
+        });
+        Object.assign(view, { EntityID: ENTITY_ID });
+        const runViewSpy = vi.fn(async () => ({
+            Success: true,
+            Results: [{ ID: VIEW_ID, Name: 'Active Members', EntityID: ENTITY_ID, UserID: user.ID, IsShared: true }],
+        }));
+        const provider = Object.assign(providerWith(view), {
+            Entities: [entity],
+            RunView: runViewSpy,
+        }) as unknown as IMetadataProvider;
+
+        const resolved = await ResolveViewByNameOrId(entity, 'Active Members', provider, user);
+        expect(runViewSpy).toHaveBeenCalledTimes(1);
+        expect(resolved).toMatchObject({
+            Kind: 'View',
+            ID: VIEW_ID,
+            Name: 'Active Members',
+            EntityName: 'MJ: People',
+        });
+        expect(resolved.Columns.map(c => c.Name)).toEqual(['FirstName', 'JoinDate']);
+    });
+
+    it('refuses a view UUID that belongs to a different entity', async () => {
+        const entity = makeEntity();
+        const otherEntityId = '99999999-2F3A-4B5C-9D0E-1F2A3B4C5D6E';
+        const mismatchedView = viewStub({
+            Columns: [column('FirstName', firstName, { orderIndex: 0 })],
+        });
+        Object.assign(mismatchedView, { EntityID: otherEntityId });
+        const provider = Object.assign(providerWith(mismatchedView), {
+            Entities: [entity],
+        }) as unknown as IMetadataProvider;
+
+        await expect(ResolveViewByNameOrId(entity, VIEW_ID, provider, user))
+            .rejects.toThrow(/does not belong to entity/);
+    });
+
+    it('falls back to the entity\'s default columns when viewNameOrId is (Default) or omitted', async () => {
+        const entity = makeEntity();
+        const provider = Object.assign(providerWith(viewStub()), {
+            Entities: [entity],
+        }) as unknown as IMetadataProvider;
+
+        const fromDefault = await ResolveViewByNameOrId(entity, '(Default)', provider, user);
+        expect(fromDefault.Kind).toBe('Entity');
+        expect(fromDefault.Columns.map(c => c.Name)).toEqual(['FirstName', 'JoinDate']);
+
+        const fromEmpty = await ResolveViewByNameOrId(entity, undefined, provider, user);
+        expect(fromEmpty.Kind).toBe('Entity');
     });
 });

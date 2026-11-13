@@ -25,6 +25,7 @@ import { CreateRealtimeVerifyRouter, REALTIME_VERIFY_MOUNT_PATH, RealtimeSession
 import { CreateAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { AssertLocalDevAuthAllowed, IsLocalDevAuthEnabled, RegisterLocalDevAuthProvider } from './auth/localDevAuth.js';
 import type { StartupLogger } from './logging/StartupLogger.js';
+import { EventLoopStallMonitor, BuildHealthcheckPayload } from './eventLoopStallMonitor.js';
 
 type RouteLog = Pick<StartupLogger, 'LogIf'>;
 
@@ -41,9 +42,9 @@ export interface CoreAuthenticatedRouters {
  * meet the auth middleware. These answer once the server is ready; before that the startup gate
  * (`startupGate.ts`) answers the same paths (503 with the phase, and 200 for liveness).
  */
-export function MountHealthcheckRoute(app: Application): void {
+export function MountHealthcheckRoute(app: Application, eventLoopMonitor?: EventLoopStallMonitor | null): void {
     app.get(ApiRoute('/healthcheck'), cors<cors.CorsRequest>(), (_req, res) => {
-        res.status(200).json({ status: 'ok' });
+        res.status(200).json(BuildHealthcheckPayload(eventLoopMonitor?.GetSnapshot() ?? null));
     });
     app.get(ApiRoute('/healthcheck/live'), cors<cors.CorsRequest>(), (_req, res) => {
         res.status(200).json({ status: 'alive' });

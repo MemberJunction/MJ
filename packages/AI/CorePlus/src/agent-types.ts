@@ -1287,6 +1287,7 @@ export interface AgentPostRunCompactionConfig {
  *   agent: myFlowAgent,
  *   conversationMessages: messages,
  *   agentTypeParams: {
+ *     executionMode: 'inRun',       // startAtStep and skipSteps are honoured only in-run
  *     startAtStep: someStepEntity,  // Start at a specific step
  *     skipSteps: [stepToSkip]       // Skip certain steps
  *   }
@@ -2089,7 +2090,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * type-specific configuration that doesn't belong in the general ExecuteAgentParams.
      *
      * Examples:
-     * - Flow agents: FlowAgentExecuteParams with startAtStep, skipSteps
+     * - Flow agents: FlowAgentExecuteParams with executionMode, startAtStep, skipSteps. A Flow run
+     *   on the task-graph dispatcher (the default for a top-level run) refuses startAtStep and a
+     *   non-empty skipSteps; set executionMode to 'inRun' to use them.
      * - Loop agents: Could define LoopAgentExecuteParams with custom iteration controls
      *
      * The type is determined by the TAgentTypeParams generic parameter.
@@ -2103,6 +2106,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      *   agent: myFlowAgent,
      *   conversationMessages: messages,
      *   agentTypeParams: {
+     *     executionMode: 'inRun',
      *     startAtStep: AIEngine.Instance.GetAgentSteps(agentId).find(s => s.Name === 'Approval'),
      *     skipSteps: [debugStep, testStep]
      *   }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock dependencies before importing the module under test
@@ -131,6 +131,7 @@ vi.mock('@memberjunction/core', () => {
         },
         // Mirrors the real predicate: a row is free when the event carries the live entity, or
         // when the server put `recordData` on the payload because the entity is allowlisted.
+        EntityPermissionType: { Read: 'Read', Create: 'Create', Update: 'Update', Delete: 'Delete' },
         EntityEventRowIsFree: (event: { baseEntity?: unknown; payload?: { recordData?: string } }) =>
             !!event?.baseEntity || !!event?.payload?.recordData,
         ResolveEntityEventRow: async (event: { baseEntity?: { GetAll(): unknown }; payload?: { recordData?: string } }) => {
@@ -259,7 +260,8 @@ import {
     BuildUpdatedAdditionalDataForFolderInheritance,
 } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
-import { UserInfo } from '@memberjunction/core';
+import type { MJProjectEntity } from '../generated/entity_subclasses';
+import { UserInfo, type IMetadataProvider } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1028,6 +1030,40 @@ describe('ConversationEngine', () => {
         });
     });
 
+    describe('CanWriteAnyProject / CanManageProject', () => {
+        /** Answers UserExemptFromRowLevelSecurity for MJ: Projects as given, per permission type. */
+        function folderPermissions(exempt: Partial<Record<'Create' | 'Update' | 'Delete', boolean>>) {
+            const projects = { UserExemptFromRowLevelSecurity: (_u: unknown, type: 'Create' | 'Update' | 'Delete') => !!exempt[type] };
+            vi.spyOn(engine, 'ProviderToUse', 'get').mockReturnValue({
+                EntityByName: (name: string) => (name === 'MJ: Projects' ? projects : undefined),
+            } as unknown as IMetadataProvider);
+        }
+        const me = { ID: 'user-1' } as unknown as UserInfo;
+        const folder = (owner: string | null) => ({ ID: 'p1', OwnerUserID: owner }) as unknown as MJProjectEntity;
+
+        afterEach(() => vi.restoreAllMocks());
+
+        it('answers from the unfiltered grant for the asked write', () => {
+            folderPermissions({ Create: true });
+            expect(engine.CanWriteAnyProject(me, 'Create')).toBe(true);
+            expect(engine.CanWriteAnyProject(me, 'Update')).toBe(false);
+            expect(engine.CanWriteAnyProject(null, 'Create')).toBe(false);
+        });
+
+        it('lets a row-filtered user manage only folders they own', () => {
+            folderPermissions({});
+            expect(engine.CanManageProject(folder('USER-1'), me)).toBe(true);
+            expect(engine.CanManageProject(folder(null), me)).toBe(false);
+            expect(engine.CanManageProject(folder('user-2'), me)).toBe(false);
+        });
+
+        it('lets a user with unfiltered folder updates manage any folder', () => {
+            folderPermissions({ Update: true });
+            expect(engine.CanManageProject(folder(null), me)).toBe(true);
+            expect(engine.CanManageProject(folder('user-2'), me)).toBe(true);
+        });
+    });
+
     describe('Move and pin need Edit access', () => {
         it('does not pin a conversation shared at View level, and says why', async () => {
             await loadWithGrants();
@@ -1690,6 +1726,37 @@ describe('ConversationEngine', () => {
 
                 expect(unseenChild['ParentID']).toBeNull();
                 expect(unseenChild['Save']).toHaveBeenCalled();
+            });
+
+            it('leaves a subfolder another user owns in place when it refuses the move, and still deletes', async () => {
+                // A row-filtered owner cannot move someone else's subfolder; the server's folder delete moves it.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1', ParentID: null })] });
+                await engine.LoadProjects('env-1', contextUser);
+                const othersChild = createMockProject({
+                    ID: 'p9', ParentID: 'p1', OwnerUserID: 'user-2',
+                    Save: vi.fn().mockResolvedValue(false),
+                    LatestResult: { Success: false, CompleteMessage: 'Record not found or access denied for MJ: Projects' },
+                });
+                runViewResultQueue.push({ Success: true, Results: [othersChild] });
+                const folder = engine.Projects[0] as unknown as { Delete: ReturnType<typeof vi.fn> };
+
+                await engine.DeleteProject('p1', contextUser);
+
+                expect(othersChild['ParentID']).toBe('p1');
+                expect(folder.Delete).toHaveBeenCalled();
+            });
+
+            it('still stops when a subfolder the caller owns refuses the move', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1', ParentID: null })] });
+                await engine.LoadProjects('env-1', contextUser);
+                const ownChild = createMockProject({
+                    ID: 'p8', ParentID: 'p1', OwnerUserID: 'user-1',
+                    Save: vi.fn().mockResolvedValue(false),
+                    LatestResult: { Success: false, CompleteMessage: 'cycle' },
+                });
+                runViewResultQueue.push({ Success: true, Results: [ownChild] });
+
+                await expect(engine.DeleteProject('p1', contextUser)).rejects.toThrow('cycle');
             });
 
             it('does not let the entity\'s own MaxRows truncate a completeness-critical read', async () => {

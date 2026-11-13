@@ -10,7 +10,7 @@
  */
 
 import { GetGlobalObjectStore, GlobalObjectStore } from '@memberjunction/global';
-import type { RunViewResult } from './interfaces';
+import type { IMetadataProvider, RunViewResult } from './interfaces';
 import type { RunViewParams } from '../views/runView';
 import type { UserInfo } from './securityInfo';
 import type { BaseEntity } from './baseEntity';
@@ -22,7 +22,8 @@ import type { BaseEntity } from './baseEntity';
  */
 export type PreRunViewHook = (
   params: RunViewParams,
-  contextUser: UserInfo | undefined
+  contextUser: UserInfo | undefined,
+  provider?: IMetadataProvider
 ) => RunViewParams | Promise<RunViewParams>;
 
 /**
@@ -37,7 +38,8 @@ export type PreRunViewHook = (
 export type PostRunViewHook = (
   params: RunViewParams,
   results: RunViewResult,
-  contextUser: UserInfo | undefined
+  contextUser: UserInfo | undefined,
+  provider?: IMetadataProvider
 ) => RunViewResult | Promise<RunViewResult>;
 
 /**

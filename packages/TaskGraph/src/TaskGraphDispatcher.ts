@@ -60,7 +60,7 @@ import {
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, UserInfo } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -2059,6 +2059,23 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Makes visible that an Agent task runs with no parent run (#4623).
+     *
+     * The spawned agent gets no `parentRun`, so a Flow agent in it takes the top-level default and
+     * dispatches its own graph: the task then completes when that graph is scheduled, not when its
+     * work is done. That is expected for a graph a person, a schedule or MCP submitted, and a defect
+     * for one an agent run submitted whose run ID was not recorded. Logged, not refused: routing is
+     * unchanged.
+     */
+    private warnAgentTaskWithoutSubmittingRun(task: MJTaskEntity): void {
+        LogWarning(
+            `[TaskGraphDispatcher] Agent task ${task.ID} ('${task.Name}'): graph parent ${task.ParentID} has no ` +
+            `submitting agent run, so the agent runs with no parent run. A Flow agent there takes the ` +
+            `top-level default and dispatches its own steps, completing this task before that work runs.`,
+        );
+    }
+
+    /**
      * How deep the continuation chain already is, read from the graph's parent metadata, plus
      * the resolved `ExecutionUser` of the user who submitted the graph.
      *
@@ -2076,12 +2093,14 @@ export class TaskGraphDispatcher implements IShutdownable {
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
         let parentAgentHierarchy: string[] | undefined = undefined;
+        let parentRead = false;
         // The parent's stored envelope. Every child carries its own copy too, so a parent that cannot
         // be read still leaves the node constrained by its own row.
         let parentEnvelopeColumn: string | null = null;
         let recordsTaint = true;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
+            parentRead = true;
             const parent = prehydrated.parentTask ?? null;
             const meta = (prehydrated.parentMetadata && typeof prehydrated.parentMetadata.reinvokeDepth === 'number')
                 ? prehydrated.parentMetadata
@@ -2099,6 +2118,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!(await parent.Load(task.ParentID))) {
                     LogError(`[TaskGraphDispatcher] Task ${task.ID}: parent ${task.ParentID} could not be loaded; running at depth 0 with no invocation data/context.`);
                 } else {
+                    parentRead = true;
                     const meta = ParseTaskGraphParentMetadata(parent.InputPayload);
                     depth = meta.reinvokeDepth + 1;
                     submittingAgentRunID = parent.AgentRunID;
@@ -2113,6 +2133,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // submit-time cap still guards the next hop. Logged, because it also blanks `data.*`.
                 LogError(`[TaskGraphDispatcher] Task ${task.ID}: reading parent ${task.ParentID} failed; running at depth 0 with no invocation data/context: ${e instanceof Error ? e.message : String(e)}`);
             }
+        }
+
+        if (parentRead && !submittingAgentRunID && task.StepType === 'Agent') {
+            this.warnAgentTaskWithoutSubmittingRun(task);
         }
 
         const security = ResolveStoredNodeSecurity(parentEnvelopeColumn, task.SecurityEnvelope);

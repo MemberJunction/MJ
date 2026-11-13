@@ -19,8 +19,8 @@ import type { RedisOptions } from 'ioredis';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import { ILocalStorageProvider, LogStatus, LogError } from '@memberjunction/core';
-import type { CacheChangedEvent, LocalStorageWriteOptions } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import type { CacheChangedEvent, CacheRowDeltaPayload, CachedRunViewData, LocalStorageWriteOptions } from '@memberjunction/core';
+import { MJGlobal, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Configuration options for the Redis local storage provider.
@@ -183,7 +183,19 @@ export interface RedisProviderConfig {
      * @default 'full' (every change carries its value — the behaviour before modes existed)
      */
     defaultPublishMode?: CachePublishMode;
+
+    /**
+     * When true, stores RunViewCache entries as per-row Redis HASH structures rather than monolithic strings.
+     * This enables differential row updates and low network overhead.
+     * @default false
+     */
+    useHashForRunViewSlots?: boolean;
 }
+
+/**
+ * Extended write options supporting primary key fields metadata.
+ */
+export type ExtendedWriteOptions = LocalStorageWriteOptions & { PrimaryKeyFields?: string[] };
 
 /** How much a cache write publishes. See {@link RedisProviderConfig.publishModes}. */
 export type CachePublishMode = 'full' | 'notice' | 'none';
@@ -374,6 +386,111 @@ export class KeyLockLostError extends Error {
         this.name = 'KeyLockLostError';
     }
 }
+
+/**
+ * Ensures a cluster-wide epoch UUID exists, returning the stored or newly created UUID.
+ * @internal
+ */
+const ENSURE_CLUSTER_EPOCH_SCRIPT = `
+local v = redis.call('GET', KEYS[1])
+if not v then
+  redis.call('SET', KEYS[1], ARGV[1])
+  return ARGV[1]
+end
+return v
+`;
+
+/**
+ * Atomically increments sequence key and appends an entry to a Redis stream with sequence ID.
+ * @internal
+ */
+const APPEND_SEQUENCED_STREAM_SCRIPT = `
+local seq = redis.call('INCR', KEYS[1])
+redis.call('XADD', KEYS[2], 'MAXLEN', '~', ARGV[1], tostring(seq) .. '-0', 'seq', tostring(seq), 'payload', ARGV[2])
+return seq
+`;
+
+/**
+ * Reads a RunView slot, inspecting whether it is stored as string or hash and returning its content.
+ * @internal
+ */
+const GET_RUNVIEW_SLOT_SCRIPT = `
+local t = redis.call('TYPE', KEYS[1])
+local typeStr = type(t) == 'table' and t.ok or t
+if typeStr == 'string' then
+  local val = redis.call('GET', KEYS[1])
+  return { 's', val }
+elseif typeStr == 'hash' then
+  local val = redis.call('HGETALL', KEYS[1])
+  return { 'h', val }
+else
+  return nil
+end
+`;
+
+/**
+ * Atomically applies row delta (upserts and deletes) to a RunView HASH cache slot.
+ * @internal
+ */
+const APPLY_RUNVIEW_ROW_DELTA_SCRIPT = `
+local fullKey = KEYS[1]
+if redis.call('HEXISTS', fullKey, '__meta__') == 0 then
+  return 0
+end
+local metaRaw = redis.call('HGET', fullKey, '__meta__')
+if not metaRaw then
+  return 0
+end
+local meta = cjson.decode(metaRaw)
+local p = cjson.decode(ARGV[1])
+local ttl = tonumber(ARGV[2])
+
+if p.metaUpdates then
+  if p.metaUpdates.maxUpdatedAt then meta.maxUpdatedAt = p.metaUpdates.maxUpdatedAt end
+  if p.metaUpdates.lastVerifiedAt then meta.lastVerifiedAt = p.metaUpdates.lastVerifiedAt end
+  if p.metaUpdates.totalRowCount then meta.totalRowCount = p.metaUpdates.totalRowCount end
+  if p.metaUpdates.schemaHash then meta.schemaHash = p.metaUpdates.schemaHash end
+end
+
+if not meta.rowOrder then
+  meta.rowOrder = {}
+end
+
+if p.delKeys and #p.delKeys > 0 then
+  for i = 1, #p.delKeys do
+    local k = p.delKeys[i]
+    redis.call('HDEL', fullKey, k)
+    local newOrder = {}
+    for j = 1, #meta.rowOrder do
+      if meta.rowOrder[j] ~= k then
+        newOrder[#newOrder + 1] = meta.rowOrder[j]
+      end
+    end
+    meta.rowOrder = newOrder
+  end
+end
+
+if p.upserts and #p.upserts > 0 then
+  for i = 1, #p.upserts do
+    local item = p.upserts[i]
+    local k = item.k
+    local v = item.v
+    local exists = redis.call('HEXISTS', fullKey, k)
+    if exists == 0 then
+      meta.rowOrder[#meta.rowOrder + 1] = k
+    end
+    redis.call('HSET', fullKey, k, v)
+  end
+end
+
+redis.call('HSET', fullKey, '__meta__', cjson.encode(meta))
+
+if ttl and ttl > 0 then
+  redis.call('EXPIRE', fullKey, ttl)
+end
+
+return 1
+`;
 
 /**
  * Escapes the glob metacharacters Redis `MATCH` understands, so a literal prefix or category can
@@ -979,8 +1096,16 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (this.shouldFailFast) {
             return null; // a miss: the caller refetches from the source of truth
         }
+        const cat = category ?? DEFAULT_CATEGORY;
+        if (
+            this._config.useHashForRunViewSlots === true &&
+            cat === 'RunViewCache' &&
+            typeof (this._client as unknown as { hset?: unknown }).hset === 'function'
+        ) {
+            return this.getRunViewHashItem<T>(key);
+        }
         try {
-            const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
+            const redisKey = this.buildKey(key, cat);
             const raw = await this.withReadTimeout('GET', this._client.get(redisKey));
             if (raw === null) return null;
             try {
@@ -1097,13 +1222,22 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * await provider.SetItem('Users|…', { results }, 'RunViewCache', { TTLSeconds: 600, IndexGroup: 'Users' });
      * ```
      */
-    public async SetItem<T>(key: string, value: T, category?: string, options?: number | LocalStorageWriteOptions): Promise<void> {
+    public async SetItem<T>(key: string, value: T, category?: string, options?: number | ExtendedWriteOptions): Promise<void> {
         if (this.shouldFailFast) {
             this.noteMutationWhileDisconnected();
             return;
         }
+        const cat = category ?? DEFAULT_CATEGORY;
+        if (
+            this._config.useHashForRunViewSlots === true &&
+            cat === 'RunViewCache' &&
+            typeof (this._client as unknown as { hset?: unknown }).hset === 'function' &&
+            this.canStoreAsRunViewHash(value, options)
+        ) {
+            await this.setRunViewHashItem(key, value, options);
+            return;
+        }
         try {
-            const cat = category ?? DEFAULT_CATEGORY;
             const redisKey = this.buildKey(key, cat);
 
             // Serialize once. We need the string for both the Redis SET and (optionally)
@@ -1669,6 +1803,507 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Gets the key prefix used for this Redis keyspace (without trailing colon).
+     */
+    public get KeyPrefix(): string {
+        return this._keyPrefix;
+    }
+
+    /**
+     * Exposes the underlying Redis client for direct command execution.
+     */
+    public get RawClient(): Redis {
+        return this._client;
+    }
+
+    /**
+     * Ensures a cluster-wide epoch UUID exists in Redis across all replicas sharing this keyspace.
+     */
+    public async EnsureClusterEpochId(epochKeySuffix?: string): Promise<string> {
+        const epochKey = `${this._keyPrefix}:${epochKeySuffix ?? '__invalidation_epoch__'}`;
+        if (this.shouldFailFast) {
+            return randomUUID();
+        }
+        const newUuid = randomUUID();
+        try {
+            const res = await this._client.eval(ENSURE_CLUSTER_EPOCH_SCRIPT, 1, epochKey, newUuid);
+            if (typeof res === 'string' && res.length > 0) {
+                return res;
+            }
+        } catch {
+            // Graceful fallback to SET NX + GET if eval fails or is not supported
+            try {
+                await this._client.set(epochKey, newUuid, 'NX');
+                const existing = await this._client.get(epochKey);
+                if (existing) return existing;
+            } catch {
+                // ignore
+            }
+        }
+        return newUuid;
+    }
+
+    /**
+     * Atomically increments sequence key and appends an entry to a Redis stream with sequence ID.
+     */
+    public async AppendSequencedStreamEntry(
+        seqKeySuffix: string,
+        streamKeySuffix: string,
+        maxLen: number,
+        payloadJson: string
+    ): Promise<number> {
+        const seqKey = `${this._keyPrefix}:${seqKeySuffix}`;
+        const streamKey = `${this._keyPrefix}:${streamKeySuffix}`;
+
+        try {
+            const res = await this._client.eval(
+                APPEND_SEQUENCED_STREAM_SCRIPT,
+                2,
+                seqKey,
+                streamKey,
+                String(maxLen),
+                payloadJson
+            );
+            if (typeof res === 'number') {
+                return res;
+            }
+            if (typeof res === 'string') {
+                const parsed = parseInt(res, 10);
+                if (!isNaN(parsed)) return parsed;
+            }
+        } catch {
+            // Fallback if eval fails
+        }
+
+        const seq = await this._client.incr(seqKey);
+        const clientWithStreams = this._client as unknown as {
+            xadd?: (key: string, ...args: (string | number)[]) => Promise<string>;
+        };
+        if (typeof clientWithStreams.xadd === 'function') {
+            await clientWithStreams.xadd(streamKey, 'MAXLEN', '~', maxLen, `${seq}-0`, 'seq', String(seq), 'payload', payloadJson);
+        }
+        return Number(seq);
+    }
+
+    /**
+     * Reads sequenced stream entries since a given sequence ID.
+     */
+    public async ReadSequencedStreamSince(
+        streamKeySuffix: string,
+        sinceSequence: number,
+        maxCount?: number
+    ): Promise<{ CurrentSequence: number; Entries: Array<{ Sequence: number; PayloadJson: string }> }> {
+        const streamKey = `${this._keyPrefix}:${streamKeySuffix}`;
+        const count = maxCount ?? 5000;
+        const clientWithStreams = this._client as unknown as {
+            xrange?: (key: string, start: string, end: string, countFlag?: string, countVal?: number) => Promise<unknown[]>;
+            xrevrange?: (key: string, end: string, start: string, countFlag?: string, countVal?: number) => Promise<unknown[]>;
+        };
+
+        if (typeof clientWithStreams.xrange !== 'function') {
+            return { CurrentSequence: sinceSequence, Entries: [] };
+        }
+
+        try {
+            let currentSequence = sinceSequence;
+            if (typeof clientWithStreams.xrevrange === 'function') {
+                const tail = await clientWithStreams.xrevrange(streamKey, '+', '-', 'COUNT', 1);
+                if (Array.isArray(tail) && tail.length > 0) {
+                    const tailTuple = tail[0] as [string, unknown];
+                    const tailSeq = this.parseStreamEntrySeq(tailTuple);
+                    if (tailSeq !== null) {
+                        currentSequence = Math.max(currentSequence, tailSeq);
+                    }
+                }
+            }
+
+            const startId = `${sinceSequence + 1}-0`;
+            const rawEntries = await clientWithStreams.xrange(streamKey, startId, '+', 'COUNT', count);
+            const entries: Array<{ Sequence: number; PayloadJson: string }> = [];
+
+            if (Array.isArray(rawEntries)) {
+                for (const item of rawEntries) {
+                    const tuple = item as [string, unknown];
+                    const seq = this.parseStreamEntrySeq(tuple);
+                    const payload = this.parseStreamEntryPayload(tuple);
+                    if (seq !== null) {
+                        entries.push({ Sequence: seq, PayloadJson: payload });
+                        currentSequence = Math.max(currentSequence, seq);
+                    }
+                }
+            }
+
+            return { CurrentSequence: currentSequence, Entries: entries };
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis ReadSequencedStreamSince failed for stream "${streamKey}": ${(err as Error).message}`);
+            }
+            return { CurrentSequence: sinceSequence, Entries: [] };
+        }
+    }
+
+    private parseStreamEntrySeq(tuple: [string, unknown]): number | null {
+        if (!tuple) return null;
+        const [id, rawFields] = tuple;
+        if (Array.isArray(rawFields)) {
+            for (let i = 0; i < rawFields.length; i += 2) {
+                if (rawFields[i] === 'seq') {
+                    const parsed = parseInt(String(rawFields[i + 1]), 10);
+                    if (!isNaN(parsed)) return parsed;
+                }
+            }
+        } else if (typeof rawFields === 'object' && rawFields !== null) {
+            const record = rawFields as Record<string, unknown>;
+            if (record.seq !== undefined) {
+                const parsed = parseInt(String(record.seq), 10);
+                if (!isNaN(parsed)) return parsed;
+            }
+        }
+        if (typeof id === 'string') {
+            const dashIdx = id.indexOf('-');
+            const idPrefix = dashIdx >= 0 ? id.substring(0, dashIdx) : id;
+            const parsed = parseInt(idPrefix, 10);
+            if (!isNaN(parsed)) return parsed;
+        }
+        return null;
+    }
+
+    private parseStreamEntryPayload(tuple: [string, unknown]): string {
+        if (!tuple) return '';
+        const [, rawFields] = tuple;
+        if (Array.isArray(rawFields)) {
+            for (let i = 0; i < rawFields.length; i += 2) {
+                if (rawFields[i] === 'payload') {
+                    return String(rawFields[i + 1]);
+                }
+            }
+        } else if (typeof rawFields === 'object' && rawFields !== null) {
+            const record = rawFields as Record<string, unknown>;
+            if (record.payload !== undefined) {
+                return String(record.payload);
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Applies a row delta (upserts and deletes) to a RunView HASH slot atomically in Redis.
+     */
+    public async ApplyRunViewRowDelta<T = unknown>(
+        fingerprint: string,
+        deltaPayloadJson: string,
+        _updatedSlotValue: T,
+        options?: ExtendedWriteOptions
+    ): Promise<boolean> {
+        if (!this._config.useHashForRunViewSlots || typeof (this._client as unknown as { hset?: unknown }).hset !== 'function') {
+            return false;
+        }
+        if (this.shouldFailFast) {
+            return false;
+        }
+
+        let delta: CacheRowDeltaPayload;
+        try {
+            delta = JSON.parse(deltaPayloadJson) as CacheRowDeltaPayload;
+        } catch {
+            return false;
+        }
+
+        const pkFields = delta.primaryKeyFields;
+        if (!Array.isArray(pkFields) || pkFields.length === 0) {
+            return false;
+        }
+
+        const delKeys: string[] = [];
+        if (Array.isArray(delta.deletedPrimaryKeys)) {
+            for (const pkRec of delta.deletedPrimaryKeys) {
+                const comp = pkFields.map(f => NormalizeUUID(String(pkRec[f]))).join('\u001f');
+                delKeys.push(`r:${comp}`);
+            }
+        }
+
+        const upserts: Array<{ k: string; v: string }> = [];
+        if (Array.isArray(delta.upsertedRows)) {
+            for (const row of delta.upsertedRows) {
+                const comp = pkFields.map(f => NormalizeUUID(String(row[f]))).join('\u001f');
+                upserts.push({ k: `r:${comp}`, v: JSON.stringify(row) });
+            }
+        }
+
+        const metaUpdates: Record<string, unknown> = {
+            maxUpdatedAt: delta.maxUpdatedAt,
+            lastVerifiedAt: Date.now(),
+            totalRowCount: delta.totalRowCount,
+        };
+        if (delta.schemaHash !== undefined) {
+            metaUpdates.schemaHash = delta.schemaHash;
+        }
+
+        const { ttlSeconds, group } = this.resolveWriteOptions(options, 'RunViewCache');
+        const luaPayload = JSON.stringify({
+            delKeys,
+            upserts,
+            metaUpdates,
+        });
+
+        const cat = 'RunViewCache';
+        const redisKey = this.buildKey(fingerprint, cat);
+
+        try {
+            const res = await this._client.eval(
+                APPLY_RUNVIEW_ROW_DELTA_SCRIPT,
+                1,
+                redisKey,
+                luaPayload,
+                String(ttlSeconds)
+            );
+
+            if (Number(res) === 1) {
+                if (group) {
+                    await this._client.eval(ADD_TO_GROUP_SCRIPT, 1, this.buildGroupSetKey(cat, group), fingerprint, ttlSeconds);
+                }
+                this.publishChange(fingerprint, cat, 'row_delta', deltaPayloadJson);
+                return true;
+            }
+            return false;
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis ApplyRunViewRowDelta failed for "${fingerprint}": ${(err as Error).message}`);
+            }
+            return false;
+        }
+    }
+
+    private canStoreAsRunViewHash(value: unknown, options?: number | ExtendedWriteOptions): boolean {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+        const envelope = value as Record<string, unknown>;
+        if (!Array.isArray(envelope.results)) {
+            return false;
+        }
+        const results = envelope.results;
+        const writeOpts = typeof options === 'object' && options !== null ? options : undefined;
+        let pkFields: string[] | undefined = writeOpts?.PrimaryKeyFields && writeOpts.PrimaryKeyFields.length > 0 ? writeOpts.PrimaryKeyFields : undefined;
+        if (!pkFields) {
+            if (results.length > 0) {
+                const allHaveId = results.every(r => typeof r === 'object' && r !== null && (r as Record<string, unknown>)['ID'] !== undefined && (r as Record<string, unknown>)['ID'] !== null);
+                if (allHaveId) {
+                    pkFields = ['ID'];
+                }
+            }
+        }
+        if (!pkFields || pkFields.length === 0) {
+            return false;
+        }
+        return results.every(row => {
+            if (typeof row !== 'object' || row === null) return false;
+            const rec = row as Record<string, unknown>;
+            return pkFields!.every(f => rec[f] !== undefined && rec[f] !== null);
+        });
+    }
+
+    private async setRunViewHashItem<T>(key: string, value: T, options?: number | ExtendedWriteOptions): Promise<void> {
+        try {
+            const cat = 'RunViewCache';
+            const redisKey = this.buildKey(key, cat);
+            const envelope = value as Record<string, unknown>;
+            const results = envelope.results as Array<Record<string, unknown>>;
+            const writeOpts = typeof options === 'object' && options !== null ? options : undefined;
+            const pkFields: string[] = writeOpts?.PrimaryKeyFields && writeOpts.PrimaryKeyFields.length > 0 ? writeOpts.PrimaryKeyFields : ['ID'];
+
+            const rowOrder: string[] = [];
+            const rowFieldPairs: string[] = [];
+            for (const row of results) {
+                const compositePk = pkFields.map(f => NormalizeUUID(String(row[f]))).join('\u001f');
+                const rowKey = `r:${compositePk}`;
+                rowOrder.push(rowKey);
+                rowFieldPairs.push(rowKey, JSON.stringify(row));
+            }
+
+            const meta: Record<string, unknown> = {
+                v: 1,
+                primaryKeyFields: pkFields,
+                rowOrder,
+                maxUpdatedAt: envelope.maxUpdatedAt ?? '',
+            };
+            if (envelope.cachedAt !== undefined) meta.cachedAt = envelope.cachedAt;
+            if (envelope.lastVerifiedAt !== undefined) meta.lastVerifiedAt = envelope.lastVerifiedAt;
+            if (envelope.totalRowCount !== undefined) meta.totalRowCount = envelope.totalRowCount;
+            if (envelope.schemaHash !== undefined) meta.schemaHash = envelope.schemaHash;
+            if (envelope.schemaStamp !== undefined) meta.schemaStamp = envelope.schemaStamp;
+            if (envelope.providerInternalScaffolding !== undefined) meta.providerInternalScaffolding = envelope.providerInternalScaffolding;
+            if (envelope.aggregates !== undefined) meta.aggregates = envelope.aggregates;
+            else if (envelope.aggregateResults !== undefined) meta.aggregates = envelope.aggregateResults;
+
+            const metaJson = JSON.stringify(meta);
+            const { ttlSeconds, group } = this.resolveWriteOptions(options, cat);
+
+            const pipeline = this._client.pipeline();
+            const pipeWithHash = pipeline as unknown as {
+                del: (k: string) => unknown;
+                hset: (k: string, ...args: (string | number)[]) => unknown;
+                expire: (k: string, seconds: number) => unknown;
+                eval: (script: string, numKeys: number, ...args: (string | number)[]) => unknown;
+            };
+
+            pipeWithHash.del(redisKey);
+
+            const CHUNK_SIZE = 1000 * 2;
+            if (rowFieldPairs.length === 0) {
+                pipeWithHash.hset(redisKey, '__meta__', metaJson);
+            } else {
+                const firstChunk = rowFieldPairs.slice(0, CHUNK_SIZE);
+                pipeWithHash.hset(redisKey, '__meta__', metaJson, ...firstChunk);
+                for (let i = CHUNK_SIZE; i < rowFieldPairs.length; i += CHUNK_SIZE) {
+                    const nextChunk = rowFieldPairs.slice(i, i + CHUNK_SIZE);
+                    pipeWithHash.hset(redisKey, ...nextChunk);
+                }
+            }
+
+            if (ttlSeconds > 0) {
+                pipeWithHash.expire(redisKey, ttlSeconds);
+            }
+            if (group) {
+                pipeWithHash.eval(ADD_TO_GROUP_SCRIPT, 1, this.buildGroupSetKey(cat, group), key, ttlSeconds);
+            }
+
+            this.logPipelineErrors(await pipeline.exec(), `SetItem (Hash) "${key}"`);
+
+            const rowDeltaPayload = writeOpts?.pubSubAction === 'row_delta' && typeof writeOpts.pubSubData === 'string' ? writeOpts.pubSubData : null;
+            const pubAction: CacheChangedEvent['Action'] = rowDeltaPayload !== null ? 'row_delta' : 'set';
+            const pubPayload = rowDeltaPayload ?? JSON.stringify(value);
+            this.publishChange(key, cat, pubAction, pubPayload);
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis SetItem (Hash) failed for key "${key}": ${(err as Error).message}`);
+            }
+        }
+    }
+
+    private async getRunViewHashItem<T>(key: string): Promise<T | null> {
+        const cat = 'RunViewCache';
+        const redisKey = this.buildKey(key, cat);
+        try {
+            const raw = await this.withReadTimeout('GetItem(Hash)', this._client.eval(GET_RUNVIEW_SLOT_SCRIPT, 1, redisKey));
+            if (raw === null || raw === undefined) {
+                return null;
+            }
+            if (Array.isArray(raw) && raw.length >= 2) {
+                const typeFlag = raw[0];
+                const content = raw[1];
+                if (typeFlag === 's' && typeof content === 'string') {
+                    try {
+                        return JSON.parse(content) as T;
+                    } catch {
+                        return null;
+                    }
+                }
+                if (typeFlag === 'h') {
+                    return this.reconstructRunViewFromHash<T>(content);
+                }
+            }
+            const strVal = await this._client.get(redisKey);
+            if (strVal !== null) {
+                return JSON.parse(strVal) as T;
+            }
+            return null;
+        } catch (err) {
+            if (err instanceof RedisReadTimeoutError) {
+                this.noteReadTimeout(err);
+                return null;
+            }
+            try {
+                const strVal = await this._client.get(redisKey);
+                if (strVal !== null) {
+                    return JSON.parse(strVal) as T;
+                }
+                const clientWithHash = this._client as unknown as { hgetall?: (k: string) => Promise<Record<string, string> | string[]> };
+                if (typeof clientWithHash.hgetall === 'function') {
+                    const hashData = await clientWithHash.hgetall(redisKey);
+                    if (hashData) {
+                        return this.reconstructRunViewFromHash<T>(hashData);
+                    }
+                }
+            } catch {
+                // ignore fallback error
+            }
+            if (this._enableLogging) {
+                LogError(`Redis GetItem (Hash) failed for key "${key}": ${(err as Error).message}`);
+            }
+            return null;
+        }
+    }
+
+    private reconstructRunViewFromHash<T>(hashData: unknown): T | null {
+        if (!hashData) return null;
+        const hashRecord = new Map<string, string>();
+        if (Array.isArray(hashData)) {
+            for (let i = 0; i < hashData.length; i += 2) {
+                hashRecord.set(String(hashData[i]), String(hashData[i + 1]));
+            }
+        } else if (typeof hashData === 'object') {
+            for (const [k, v] of Object.entries(hashData as Record<string, unknown>)) {
+                hashRecord.set(k, String(v));
+            }
+        }
+
+        const metaStr = hashRecord.get('__meta__');
+        if (!metaStr) {
+            return null;
+        }
+
+        let meta: Record<string, unknown>;
+        try {
+            meta = JSON.parse(metaStr) as Record<string, unknown>;
+        } catch {
+            return null;
+        }
+
+        const results: unknown[] = [];
+        const visited = new Set<string>();
+
+        if (Array.isArray(meta.rowOrder)) {
+            for (const rKey of meta.rowOrder as string[]) {
+                visited.add(rKey);
+                const rowStr = hashRecord.get(rKey);
+                if (rowStr !== undefined) {
+                    try {
+                        results.push(JSON.parse(rowStr));
+                    } catch {
+                        // ignore corrupt row
+                    }
+                }
+            }
+        }
+
+        for (const [k, v] of hashRecord.entries()) {
+            if (k.startsWith('r:') && !visited.has(k)) {
+                try {
+                    results.push(JSON.parse(v));
+                } catch {
+                    // ignore corrupt row
+                }
+            }
+        }
+
+        const reconstructed: Record<string, unknown> = {
+            results,
+            maxUpdatedAt: (meta.maxUpdatedAt as string) ?? '',
+        };
+        if (meta.totalRowCount !== undefined) reconstructed.totalRowCount = meta.totalRowCount;
+        if (meta.schemaHash !== undefined) reconstructed.schemaHash = meta.schemaHash;
+        if (meta.schemaStamp !== undefined) reconstructed.schemaStamp = meta.schemaStamp;
+        if (meta.providerInternalScaffolding !== undefined) reconstructed.providerInternalScaffolding = meta.providerInternalScaffolding;
+        if (meta.cachedAt !== undefined) reconstructed.cachedAt = meta.cachedAt;
+        if (meta.lastVerifiedAt !== undefined) reconstructed.lastVerifiedAt = meta.lastVerifiedAt;
+        if (meta.aggregates !== undefined) reconstructed.aggregateResults = meta.aggregates;
+        else if (meta.aggregateResults !== undefined) reconstructed.aggregateResults = meta.aggregateResults;
+
+        return reconstructed as T;
     }
 
     // ========================================================================

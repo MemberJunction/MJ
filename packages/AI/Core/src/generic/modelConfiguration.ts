@@ -418,6 +418,16 @@ export interface LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never

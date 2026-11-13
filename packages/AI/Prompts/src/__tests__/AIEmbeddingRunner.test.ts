@@ -701,6 +701,54 @@ describe('AIEmbeddingRunner', () => {
       expect(lastRun()?.PromptID).toBe(PROMPT_ID);
     });
 
+    /** Adds an active Embedding prompt with no model bindings, as the carrier prompts ship. */
+    const addEmbeddingPrompt = (id: string, name: string, atFront = false): void => {
+      const prompt = { ...h.state.prompts[0], ID: id, Name: name };
+      if (atFront) {
+        h.state.prompts.unshift(prompt);
+      } else {
+        h.state.prompts.push(prompt);
+      }
+    };
+
+    it("prefers 'Content Embedding' when no prompt is named, whatever order the prompts loaded in (#4923)", async () => {
+      const contentID = 'E0000000-0000-0000-0000-0000000000C1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000A1', 'Another Embedding', true);
+      addEmbeddingPrompt(contentID, 'Content Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(contentID);
+    });
+
+    it('without Content Embedding, falls back to the first active Embedding prompt by name', async () => {
+      const alphaID = 'E0000000-0000-0000-0000-0000000000A1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000Z1', 'Zeta Embedding', true);
+      addEmbeddingPrompt(alphaID, 'Alpha Embedding');
+
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(alphaID);
+    });
+
+    it('books the run under the prompt named by PromptName (#4923)', async () => {
+      const carrierID = 'E0000000-0000-0000-0000-0000000000V1';
+      addEmbeddingPrompt('E0000000-0000-0000-0000-0000000000C1', 'Content Embedding');
+      addEmbeddingPrompt(carrierID, 'Vector Sync Embedding');
+
+      const result = await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'Vector Sync Embedding' });
+      expect(result.Success).toBe(true);
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(carrierID);
+      expect(lastRun()?.ModelID).toBe(MODEL_1_ID);
+    });
+
+    it('falls back as if no prompt were named when PromptName is unknown', async () => {
+      await runner.RunEmbedding({ Texts: ['x'], ContextUser: mockUser, ModelID: MODEL_1_ID, PromptName: 'No Such Prompt' });
+      await runner.WaitForPendingPromptRunSaves();
+      expect(lastRun()?.PromptID).toBe(PROMPT_ID);
+    });
+
     it('with no Embedding prompt, a pinned call runs under an unsaved stand-in and writes no row', async () => {
       h.state.prompts = [];
 

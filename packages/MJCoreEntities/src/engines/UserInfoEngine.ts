@@ -9,7 +9,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { Observable } from 'rxjs';
 
 /**
@@ -1385,6 +1385,11 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     // Calculate starting sequence based on existing apps
     const maxExistingSequence = this._userApplications.filter((ua) => UUIDsEqual(ua.UserID, userId)).reduce((max, ua) => Math.max(max, ua.Sequence), -1);
 
+    // Saves that failed, kept until the database is re-read: the server's own new-user provisioning
+    // may have created the same rows a moment earlier (the unique key on UserID + ApplicationID then
+    // refuses ours), and that is not an error.
+    const failed: Array<{ App: ApplicationInfo; Detail: string }> = [];
+
     for (const [index, appInfo] of defaultApps.entries()) {
       try {
         const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications', contextUser);
@@ -1400,14 +1405,63 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
           createdUserApps.push(userApp);
           console.log(`UserInfoEngine.CreateDefaultApplications: Created UserApplication for ${appInfo.Name}`);
         } else {
-          console.error(`UserInfoEngine.CreateDefaultApplications: Failed to create for ${appInfo.Name}:`, userApp.LatestResult);
+          failed.push({ App: appInfo, Detail: userApp.LatestResult?.CompleteMessage ?? 'unknown error' });
         }
       } catch (error) {
-        console.error(`UserInfoEngine.CreateDefaultApplications: Error for ${appInfo.Name}:`, error instanceof Error ? error.message : String(error));
+        failed.push({ App: appInfo, Detail: error instanceof Error ? error.message : String(error) });
       }
     }
 
+    if (failed.length > 0) {
+      createdUserApps.push(...(await this.reconcileFailedDefaultApplications(userId, failed, contextUser)));
+    }
+
     return createdUserApps;
+  }
+
+  /**
+   * After some default-app saves failed, re-reads the user's rows from the database (bypassing the
+   * cache) and keeps the ones that now exist — created by the server's new-user provisioning in the
+   * same window. Only an app that is still missing is reported as an error.
+   *
+   * @returns The database rows that stand in for the failed saves.
+   */
+  private async reconcileFailedDefaultApplications(
+    userId: string,
+    failed: ReadonlyArray<{ App: ApplicationInfo; Detail: string }>,
+    contextUser?: UserInfo,
+  ): Promise<MJUserApplicationEntity[]> {
+    let existing: MJUserApplicationEntity[] = [];
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const result = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+      existing = result.Success ? result.Results : [];
+    } catch (error) {
+      console.error('UserInfoEngine.CreateDefaultApplications: re-reading UserApplications failed:', error instanceof Error ? error.message : String(error));
+    }
+
+    const existingByApp = IndexByUUID(existing, (ua) => ua.ApplicationID);
+    const cachedIds = new UUIDSet(this._userApplications.map((ua) => ua.ID));
+    const recovered: MJUserApplicationEntity[] = [];
+    for (const { App, Detail } of failed) {
+      const row = existingByApp.Get(App.ID);
+      if (!row) {
+        console.error(`UserInfoEngine.CreateDefaultApplications: Failed to create for ${App.Name}: ${Detail}`);
+        continue;
+      }
+      if (!cachedIds.Has(row.ID)) {
+        this._userApplications.push(row);
+        cachedIds.Add(row.ID);
+      }
+      recovered.push(row);
+      LogStatus(`UserInfoEngine.CreateDefaultApplications: ${App.Name} was already created for this user (by the server); keeping that row`);
+    }
+    return recovered;
   }
 
   /**

@@ -397,6 +397,26 @@
                   "lastModified": "2026-03-14T01:24:29.735Z",
                   "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6907EC0-02D6-48B5-B11B-34FE13764621"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Explore Database Schema",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E066FBBC-4268-4845-9E70-E64370E880DB"
+                }
               }
             ],
             "MJ: AI Agent Rubrics": [

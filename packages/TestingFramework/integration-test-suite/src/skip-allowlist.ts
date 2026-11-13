@@ -87,6 +87,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'
     },
     {
+        CheckId: 'metadata-consistency.MC9',
+        Gate: 'credentials',
+        Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'
+    },
+    {
         CheckId: 'layered-base-views.LBV2',
         Gate: 'credentials',
         Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'
@@ -207,6 +212,12 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
     },
     {
         CheckId: 'encrypted-read-client.ER4',
+        Gate: 'credentials',
+        Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
+            + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'
+    },
+    {
+        CheckId: 'record-change-snapshot.RCS4',
         Gate: 'credentials',
         Reason: 'Needs a base encryption key (MJ_BASE_ENCRYPTION_KEY) in the process that writes MJ: Credentials.Values — '
             + 'MJAPI for the client bundle, the test process for the server bundle; a lane without one cannot create the encrypted fixture.'

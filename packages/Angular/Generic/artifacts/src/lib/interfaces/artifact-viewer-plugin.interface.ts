@@ -56,7 +56,10 @@ export interface IArtifactViewerPluginPreviewStatics {
    * can omit it (the resolver skips them).
    *
    * @param artifactTypeName The artifact type name (e.g., 'Image', 'Video', 'Audio').
-   * @param contentType      The MIME type (e.g., 'image/png', 'video/mp4').
+   * @param contentType      The version's MIME type (e.g., 'image/png', 'video/mp4'). May be
+   *   undefined: older versions carry none, and agent payload versions carry their artifact type's
+   *   `ContentType` only when it is concrete (a wildcard type such as `image/*` leaves it empty).
+   *   Match on `artifactTypeName` too rather than on `contentType` alone.
    * @returns true if this plugin's preview can render the artifact.
    */
   CanHandlePreview?(artifactTypeName: string, contentType?: string): boolean;
@@ -87,6 +90,10 @@ export interface IArtifactViewerComponent {
  * a compact, read-only representation (e.g. a thumbnail `<img>`, a mini `<video>`/`<audio>`
  * player) suitable for embedding inside a conversation message card. Unlike full viewers,
  * previews have NO toolbar, feedback, tabs, or download chrome.
+ *
+ * Interaction: the message card wraps the preview in a click target that opens the full viewer.
+ * A preview with its own interactive controls (play, seek, links) must call
+ * `event.stopPropagation()` in those controls' handlers so using them does not also open the viewer.
  */
 export interface IArtifactPreviewComponent {
   artifactVersion: MJArtifactVersionEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub

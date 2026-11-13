@@ -1,6 +1,7 @@
 import { FieldMapper, MapperKind, getDirective, mapSchema } from '@graphql-tools/utils';
+import { GraphQLFieldResolver, defaultFieldResolver } from 'graphql';
 import { AuthorizationError, Directive } from 'type-graphql';
-import { DirectiveBuilder } from '../types.js';
+import { AppContext, DirectiveBuilder } from '../types.js';
 
 const DIRECTIVE_NAME = 'RequireSystemUser';
 
@@ -14,16 +15,24 @@ export const RequireSystemUserDirective: DirectiveBuilder = {
   transformer: (schema) => {
     const fieldMapper: FieldMapper = (fieldConfig) => {
       const directive = getDirective(schema, fieldConfig, DIRECTIVE_NAME)?.[0];
+      if (!directive) {
+        return fieldConfig;
+      }
+      const { resolve = defaultFieldResolver } = fieldConfig;
+      const directiveResolver: GraphQLFieldResolver<unknown, AppContext> = (
+        source,
+        args,
+        context,
+        info
+      ) => {
+        if (!context?.userPayload?.isSystemUser) {
+          throw new AuthorizationError('Operation not permitted for this user');
+        }
+        return resolve(source, args, context, info);
+      };
       return {
         ...fieldConfig,
-        resolve: (source, args, context, info) => {
-          if (directive) {
-            if (!context.userPayload.isSystemUser) {
-              throw new AuthorizationError('Operation not permitted for this user');
-            }
-          }
-          return fieldConfig.resolve(source, args, context, info);
-        },
+        resolve: directiveResolver,
       };
     };
     return mapSchema(schema, { [MapperKind.OBJECT_FIELD]: fieldMapper });
