@@ -2258,6 +2258,92 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.SetEditingStyle('simple');
     expect(viewer.IsSimpleNoteMode).toBe(true);
   });
+
+  it('wraps selected text in-place for Bold/Italic toolbar buttons and Cmd/Ctrl+B/I shortcuts instead of inserting a new block below, and converts active blocks in-place for Format Ribbon block buttons', () => {
+    // 1. Selecting text in a paragraph wraps it in-place and toggles off on second click
+    const viewer = createEditableDocsViewer('Hello world\n\nSecond paragraph');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    const para0 = viewer.DocumentSegments[0];
+    viewer.OnSegmentSurfaceFocus(para0);
+    viewer.CaptureSelectionSnapshot({
+      segmentId: para0.SegmentID,
+      start: 6,
+      end: 11,
+    });
+
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Hello **world**');
+
+    // Toggle Bold off on the now-wrapped selection (snapshot was automatically updated to offsets 8..13)
+    viewer.InsertFormattingSnippet('**', '**');
+    expect(viewer.DocumentSegments).toHaveLength(2);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Hello world');
+
+    // 2. Selecting text inside a list item (matching user screenshot) formats that item in-place without adding a '**text**' block below
+    const listViewer = createEditableDocsViewer(
+      '## Key Notes\n\n- Collaborative real-time editing powered by Yjs CRDTs\n- Viewer-scoped Row-Level and Field-Level Security on live blocks',
+    );
+    expect(listViewer.DocumentSegments).toHaveLength(2);
+    const listSeg = listViewer.DocumentSegments[1];
+    expect(listSeg.BlockKind).toBe('list');
+    listViewer.OnListItemFocus(listSeg, 0);
+    // Select 'ative' in 'Collaborative' (offsets 8..13)
+    listViewer.CaptureSelectionSnapshot({
+      segmentId: listSeg.SegmentID,
+      listItemIndex: 0,
+      start: 8,
+      end: 13,
+    });
+
+    listViewer.InsertFormattingSnippet('**', '**');
+    expect(listViewer.DocumentSegments).toHaveLength(2);
+    const updatedItems = listViewer.GetParsedListItems(listViewer.DocumentSegments[1]);
+    expect(updatedItems[0].Text).toBe('Collabor**ative** real-time editing powered by Yjs CRDTs');
+
+    // 3. Keyboard shortcuts Cmd+I / Ctrl+B work in-place on editable paragraph and list item elements
+    const paraEl = makeMockEditableElement('Quick emphasis test', 6, 14); // 'emphasis'
+    const italicShortcut = makeKeyEvent('i', paraEl, { metaKey: true });
+    viewer.OnEditableBlockKeydown(viewer.DocumentSegments[0], italicShortcut.event);
+    expect(italicShortcut.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Quick *emphasis* test');
+
+    const listEl = makeMockEditableElement('First bullet item', 6, 12); // 'bullet'
+    const boldShortcut = makeKeyEvent('b', listEl, { ctrlKey: true });
+    listViewer.OnListItemKeydown(listViewer.DocumentSegments[1], 1, boldShortcut.event);
+    expect(boldShortcut.prevented()).toBe(true);
+    expect(listViewer.GetParsedListItems(listViewer.DocumentSegments[1])[1].Text).toBe('First **bullet** item');
+
+    // 4. Block-level Format Ribbon buttons (H2, List, Checklist, Callout) convert the active block in-place while preserving text
+    const blockViewer = createEditableDocsViewer('Release Readiness Notes');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    blockViewer.OnSegmentSurfaceFocus(blockViewer.DocumentSegments[0]);
+
+    blockViewer.InsertFormattingSnippet('## ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('## Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('- [ ] ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('list');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('- [ ] Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('- ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('- Release Readiness Notes');
+
+    // Second click on Bullet List returns single-item bullet list to a plain paragraph
+    blockViewer.InsertFormattingSnippet('- ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('paragraph');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('Release Readiness Notes');
+
+    blockViewer.InsertFormattingSnippet('> [!NOTE]\n> ', '');
+    expect(blockViewer.DocumentSegments).toHaveLength(1);
+    expect(blockViewer.DocumentSegments[0].BlockKind).toBe('callout');
+    expect(blockViewer.DocumentSegments[0].RawMarkdown).toBe('> [!NOTE]\n> Release Readiness Notes');
+  });
 });
 
 
