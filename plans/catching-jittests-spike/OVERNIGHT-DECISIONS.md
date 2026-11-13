@@ -40,9 +40,62 @@ Measured on the host: cold `pnpm fetch` 62 s, warm fetch 5 s, copying a 3.4 GB s
 - **C. Leave it as it is.** Pro: no change, isolation kept. Con: 62 s per run stays.
 - **Choice: C.**
 
+## N6. Risks per package after the analyzer fix
+
+The analyzer fix raised the risk notes from Named 5 / Adjacent 5 / Missed 18 to Named 10 / Adjacent 15 / Missed 5. For #5906 and #5513 the note that names the bug is at rank 4 in its package.
+
+- **A. Keep 3 risks per package.** Pro: cheapest; fewest sessions. Con: the two rank-4 notes never reach the generator.
+- **B. 5 risks per package.** Pro: every note that names a bug in the tuning slice is used. Con: up to two more sessions per package, about 0.40 USD each with Hydrogen.
+- **Choice: B for round 1.** Cost task B (N10) makes the extra risks cheaper. If wrong: about 0.80 USD per PR for sessions that report nothing.
+
+## N7. Sandbox size for backtest rounds
+
+- **A. Default 3 CPUs / 6 GB.** Pro: matches a GitHub runner. Con: slow installs and builds on a 16-core host.
+- **B. 6 CPUs / 12 GB in the round settings only.** Pro: shorter prepare and build stages. Con: stage times are not the runner's times.
+- **Choice: B**, in the round settings file only; the default stays 3 / 6.
+
+## N8. Docker Desktop stopped after a killed round
+
+I stopped a round during a 311-package build and the Docker engine did not come back.
+
+- **A. Wait for the user.** Pro: no action on the host. Con: the night's testing stops.
+- **B. Restart Docker Desktop and start the four database containers that were running before.** Pro: testing goes on. Con: the containers were down for some minutes.
+- **Choice: B.** The containers `mj-sqlserver`, `mj-repro-pg`, `pg-check-17` and `pg-repro-616` run again.
+
+## N9. Model after round 1 (user decision, 2026-11-13)
+
+Round 1 cost 2.22 to 3.40 USD per PR with `gemini-4-hydrogen`. The user asked whether to reduce cost in the harness or go back to `gemini-3.8-flash`.
+
+- **A. Keep Hydrogen, change the harness.** Pro: all sessions complete, 2 of 5 PRs reported catches. Con: code changes and measuring rounds.
+- **B. Back to Flash.** Pro: no code change, about 45% cheaper. Con: half of its sessions stopped on the token limit.
+- **C. Back to Sonnet.** Pro: cheapest measured (0.85 USD per PR). Con: 0 of 30 known bugs matched in the first run.
+- **Choice: A, by the user** ("Keep the Model fix the harness").
+
+## N10. Which harness changes, and in which order
+
+Cost of one Hydrogen PR (#5897): generator 2.80 USD = new input 1.19 + output 0.95 + cached input 0.65; judges about 0.50; analyzer 0.04.
+Stored results of 220 judged catches: when the Opus judge said Low (198 times), the catch was never reported and the median was never Medium or High. GPT-5.1 said High 166 times; Argon said Low 209 times.
+
+- **A. Staged judges: the first bucket judge (Opus) runs first; Low ends the panel.** Pro: two of three judge calls saved on about 90% of weak catches; no reported catch lost in 220. Con: a Low / High / High vote would now be Low, where the median was High; never seen so far.
+- **B. Generator thinking level (`GeneratorEffort`).** Pro: output is 34% of the generator cost; one setting. Con: effect on catch quality unknown; must be measured.
+- **C. Several risks in one session (`Limits.RisksPerSession`).** Pro: the package is read once, not once per risk. Con: risks run one after the other, so the generate stage takes longer; one long session spends more cached input per turn.
+- **D. Hint to batch read calls in one reply.** Pro: fewer turns. Con: the model may not follow it.
+- **E. Fewer risks per package.** Pro: about 30% saving. Con: loses the rank-4 notes (N6).
+- **F. Shared cached prompt start across sessions.** Pro: the diff is paid once at the full price. Con: about 0.10 USD per PR; needs staggered session starts. Not worth it now.
+- **Choice: A, B, D first (cost task A), then C (cost task B). E and F not done.** Each is a setting, so a round can switch it. If wrong: a round shows fewer catches and the setting goes back.
+
+## N11. Round 2 configuration
+
+Round 1 result after the match check: 2 of 5 PRs have a reported catch that is the known bug (#3831, #5906); #5897, #4450 and #5513 did not match.
+
+- **A. One change per round.** Pro: each saving and each quality change has one cause. Con: three rounds of about an hour.
+- **B. All changes in one round on three round 1 PRs (#3831, #5906, #5513): thinking level low, 5 risks in one session, staged judges, read hint.** Pro: the largest saving is known after one round; the token counts still show the share of each change (output for the thinking level, new input for the shared session, judge usage for staging). Con: if the two matched catches are lost, the cause is not known and a second round must separate the changes.
+- **Choice: B.** If wrong: one more round of about 6 USD.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
 |---|---|---|---|
 | 0 | Hydrogen #5897 (first run) + one failed #3831 attempt | 3.42 | 3.42 |
 | A1 | Analyzer only, 30 tuning bug PRs, Sonnet | 2.65 | 6.07 |
+| 1 | Hydrogen, new pipeline: #3831, #5906, #4450, #5513 | 10.09 | 16.16 |
