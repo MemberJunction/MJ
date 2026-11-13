@@ -53,9 +53,9 @@
 | **PB16 Narrow Search RunView (10 calls)** | `ms` | — | — | — | 105.1 | 36.76 | **36.84** | +0.2% | **PASS** |
 | **PB17 TwoTier L1 CoW (200 reads + 50 deltas)** | `ms` | — | — | — | 32.18 | 1.59 | **1.36** | -14.5% | **IMPROVED** |
 | **PB17 FrozenRow WeakMap Wire (5k x 20)** | `ms` | — | — | — | 15.86 | 3.96 | **4.19** | +5.8% | **PASS** |
-| **PB7 Sage 4-Turn Step Storage** | `bytes` | 179831 | 52774 | 35660 | 84218 | 52871 | **52871** | 0% | **PASS** |
-| **PB8 Query Builder + Strategist Storage** | `bytes` | 172499 | 119464 | 25667 | 126565 | 126565 | **126263** | -0.2% | **PASS** |
-| **PB9 Research Agent + Writer Storage** | `bytes` | 157183 | 103911 | 38268 | 104158 | 104158 | **104158** | 0% | **PASS** |
+| **PB7 Sage 4-Turn Step Storage** | `bytes` | 179831 | 52774 | 52699 | 84218 | 52871 | **52871** | 0% | **PASS** |
+| **PB8 Query Builder + Strategist Storage** | `bytes` | 172499 | 119464 | 119588 | 126565 | 126565 | **126263** | -0.2% | **PASS** |
+| **PB9 Research Agent + Writer Storage** | `bytes` | 157183 | 103911 | 104050 | 104158 | 104158 | **104158** | 0% | **PASS** |
 | **PB16 Narrow Search SQL Columns Projected** | `cols` | — | — | — | 37 | 2 | **2** | 0% | **PASS** |
 | **PB16 MJ: Record Changes Count Targets Base Table** | `bool` | — | — | — | false | true | **true** | — | **PASS** |
 | **PB15 BaseEngine PKMap vs Linear Speedup Ratio** | `x` | — | — | — | 1.0 | 104.1x | **107.6x** | — | **PASS** |
