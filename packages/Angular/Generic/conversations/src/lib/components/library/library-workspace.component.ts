@@ -115,6 +115,7 @@ const SETTING_SURFACE_MODE = 'Library.SurfaceMode';
 const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
 const SETTING_LEFT_RAIL_COLLAPSED = 'MJ.Library.LeftRailCollapsed';
+const SETTING_ITEM_VIEW_MODE = 'MJ.Library.ItemViewMode';
 
 const VERSION_SUMMARY_FIELDS: string[] = [
   'ID',
@@ -177,6 +178,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public NavigatorSection: LibraryNavigatorSection = 'all';
   public ListStyle: LibraryListStyle = 'cards';
   public LeftRailCollapsed = false;
+  public PreferredItemViewMode: 'split' | 'full' = 'split';
 
   // Selection & Studio state
   public SelectedCollectionId: string | null = null;
@@ -726,6 +728,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         this.ActiveArtifactId = this.FilteredItems[0].Id;
         this.ActiveVersionNumber = undefined;
       }
+      this.PreferredItemViewMode = 'split';
+      this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'split');
       this.SwitchSurfaceMode('navigator', true);
       return;
     }
@@ -778,18 +782,22 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.ActiveArtifactId = artifactId;
     this.ActiveVersionNumber = options?.versionNumber;
 
-    if (options?.forceNavigatorSplit) {
+    const openInFullCanvas = options?.forceNavigatorSplit
+      ? false
+      : options?.fullCanvas !== undefined
+        ? options.fullCanvas
+        : this.PreferredItemViewMode === 'full';
+
+    if (openInFullCanvas) {
+      this.FullCanvasOriginMode = this.SurfaceMode;
+      this.IsFullCanvasOpen = true;
+    } else {
       this.IsFullCanvasOpen = false;
       this.SurfaceMode = 'navigator';
       if (this.NavigatorSection === 'drive') {
         this.NavigatorSection = 'all';
         this.SelectedDriveId = null;
       }
-    } else if (options?.fullCanvas ?? this.SurfaceMode === 'hub') {
-      this.FullCanvasOriginMode = this.SurfaceMode;
-      this.IsFullCanvasOpen = true;
-    } else {
-      this.IsFullCanvasOpen = false;
     }
 
     this.emitWorkspaceState();
@@ -800,6 +808,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.IsFullCanvasOpen = false;
     if (this.FullCanvasOriginMode === 'hub') {
       this.ActiveArtifactId = null;
+      this.ActiveVersionNumber = undefined;
     }
     this.SurfaceMode = this.FullCanvasOriginMode;
     this.emitWorkspaceState();
@@ -810,6 +819,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     if (!this.ActiveArtifactId) return;
     this.IsFullCanvasOpen = false;
     this.SurfaceMode = 'navigator';
+    this.PreferredItemViewMode = 'split';
+    this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'split');
     if (this.NavigatorSection === 'drive') {
       this.NavigatorSection = 'all';
       this.SelectedDriveId = null;
@@ -822,6 +833,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     this.ActiveArtifactId = null;
     this.ActiveVersionNumber = undefined;
     this.IsFullCanvasOpen = false;
+    this.SurfaceMode = 'hub';
+    this.saveSettingSafe(SETTING_SURFACE_MODE, 'hub');
     this.emitWorkspaceState();
     this.cdr.detectChanges();
   }
@@ -833,6 +846,8 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } else {
       this.FullCanvasOriginMode = this.SurfaceMode;
       this.IsFullCanvasOpen = true;
+      this.PreferredItemViewMode = 'full';
+      this.saveSettingSafe(SETTING_ITEM_VIEW_MODE, 'full');
       this.emitWorkspaceState();
       this.cdr.detectChanges();
     }
@@ -2605,14 +2620,22 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       this.ActiveArtifactId = null;
       this.ActiveVersionNumber = undefined;
       this.IsFullCanvasOpen = false;
+      if (params.mode !== 'navigator' && this.SurfaceMode === 'navigator') {
+        this.SurfaceMode = 'hub';
+      }
     }
   }
 
   private restoreUserPreferences(): void {
     const mode = UserInfoEngine.Instance.GetSetting(SETTING_SURFACE_MODE);
     if (mode === 'hub' || mode === 'navigator') {
-      this.SurfaceMode = mode;
       this.preferredSurfaceMode = mode;
+      // Only keep Navigator/Split active on startup if an artifact is already open
+      this.SurfaceMode = mode === 'navigator' && !this.ActiveArtifactId ? 'hub' : mode;
+    }
+    const itemViewMode = UserInfoEngine.Instance.GetSetting(SETTING_ITEM_VIEW_MODE);
+    if (itemViewMode === 'full' || itemViewMode === 'split') {
+      this.PreferredItemViewMode = itemViewMode;
     }
     const listStyle = UserInfoEngine.Instance.GetSetting(SETTING_LIST_STYLE);
     if (listStyle === 'cards' || listStyle === 'list') {

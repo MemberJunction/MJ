@@ -336,17 +336,19 @@
                 <i class="fa-solid fa-list"></i>
                 <span>List</span>
               </button>
-              <button
-                type="button"
-                class="layout-switch-btn"
-                [class.active]="UnifiedLayout === 'split'"
-                (click)="SetUnifiedLayout('split')"
-                title="Split Studio view"
-                data-testid="layout-switch-split"
-              >
-                <i class="fa-solid fa-table-columns"></i>
-                <span>Split</span>
-              </button>
+              @if (ActiveArtifactId && UnifiedScope !== 'drive') {
+                <button
+                  type="button"
+                  class="layout-switch-btn"
+                  [class.active]="UnifiedLayout === 'split'"
+                  (click)="SetUnifiedLayout('split')"
+                  title="Split Studio view"
+                  data-testid="layout-switch-split"
+                >
+                  <i class="fa-solid fa-table-columns"></i>
+                  <span>Split</span>
+                </button>
+              }
             </div>
 
             <mj-refresh-button [Loading]="IsLoading" (Clicked)="ReloadWorkspaceData()"></mj-refresh-button>
@@ -1029,14 +1031,14 @@
               loading="lazy"
             />
           } @else if (item.PreviewSnapshot; as snap) {
-            @switch (snap.kind) {
+            @switch (snap.Kind) {
               @case ('doc') {
                 <div class="mini-doc-sheet mini-live-doc" aria-hidden="true">
                   <div class="mini-live-title">{{ snap.Heading || item.Name }}</div>
-                  @for (line of snap.Lines.slice(0, 3); track $index) {
-                    <div class="mini-live-line">{{ line }}</div>
+                  @if (snap.Excerpt) {
+                    <div class="mini-live-line">{{ snap.Excerpt }}</div>
                   }
-                  @if (snap.HasTable || snap.HasCode) {
+                  @if (snap.Callout) {
                     <div class="mini-doc-live-pill"></div>
                   }
                 </div>
@@ -1059,17 +1061,19 @@
               }
               @case ('slides') {
                 <div class="mini-slide-stage mini-live-slide" aria-hidden="true">
-                  <div class="mini-live-slide-title">{{ snap.Title || item.Name }}</div>
-                  @if (snap.Subtitle) {
-                    <div class="mini-live-slide-sub">{{ snap.Subtitle }}</div>
+                  <div class="mini-live-slide-title">{{ snap.SlideTitle || item.Name }}</div>
+                  @if (snap.LeftMetric) {
+                    <div class="mini-live-slide-sub">{{ snap.LeftMetric }}</div>
                   }
-                  <div class="mini-live-slide-count">{{ snap.SlideCount }} slides</div>
+                  @if (snap.RightMetric) {
+                    <div class="mini-live-slide-count">{{ snap.RightMetric }}</div>
+                  }
                 </div>
               }
               @case ('whiteboard') {
                 <div class="mini-generic-glyph mini-live-wb" aria-hidden="true">
                   <i [class]="item.Icon"></i>
-                  <span class="mini-live-wb-meta">{{ snap.NodeCount }} nodes</span>
+                  <span class="mini-live-wb-meta">{{ snap.Nodes.length }} nodes</span>
                 </div>
               }
             }

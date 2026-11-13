@@ -659,6 +659,7 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
       NavigatorSection: 'all',
       ListStyle: 'cards',
       LeftRailCollapsed: false,
+      PreferredItemViewMode: 'split',
       SelectedCollectionId: null,
       SelectedDriveId: null,
       DriveFolderPrefix: '',
@@ -784,22 +785,36 @@ describe('LibraryWorkspaceComponent — unified Hub + Navigator + Studio state t
     expect(component.SurfaceMode).toBe('hub');
     expect(component.HubTab).toBe('overview');
 
-    // Clicking a card in Hub opens Full-Canvas Studio
+    // Clicking an item defaults to Split View while remembering preference
     component.OpenArtifactStudio('item-doc-1');
-    expect(component.IsFullCanvasOpen).toBe(true);
-    expect(component.FullCanvasOriginMode).toBe('hub');
+    expect(component.IsFullCanvasOpen).toBe(false);
+    expect(component.SurfaceMode).toBe('navigator');
+    expect(component.UnifiedLayout).toBe('split');
     expect(component.ActiveItem?.Name).toBe('Product Roadmap 2026');
 
-    // Clicking "Split Navigator" docks into Power Navigator alongside the left tree & item list
+    // Closing Split Studio clears ActiveArtifactId and returns cleanly to Grid/List browse layout
+    component.CloseSplitStudio();
+    expect(component.ActiveArtifactId).toBeNull();
+    expect(component.SurfaceMode).toBe('hub');
+    expect(component.UnifiedLayout).toBe('grid');
+
+    // Explicit Full-Canvas open from Hub works and remembers Full-Canvas preference on maximize
+    component.OpenArtifactStudio('item-doc-1', { fullCanvas: true });
+    expect(component.IsFullCanvasOpen).toBe(true);
+    expect(component.FullCanvasOriginMode).toBe('hub');
+
+    // Clicking "Split View" docks into Split beside the item list
     component.SwitchFullCanvasToSplitNavigator();
     expect(component.IsFullCanvasOpen).toBe(false);
     expect(component.SurfaceMode).toBe('navigator');
     expect(component.ActiveArtifactId).toBe('item-doc-1');
+    expect(component.PreferredItemViewMode).toBe('split');
 
-    // Maximizing from Split Navigator and returning restores Split Navigator
+    // Maximizing from Split and returning restores Split View (and records full preference)
     component.ToggleStudioMaximize();
     expect(component.IsFullCanvasOpen).toBe(true);
     expect(component.FullCanvasOriginMode).toBe('navigator');
+    expect(component.PreferredItemViewMode).toBe('full');
     component.ExitFullCanvasToOrigin();
     expect(component.IsFullCanvasOpen).toBe(false);
     expect(component.SurfaceMode).toBe('navigator');
