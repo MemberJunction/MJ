@@ -5435,6 +5435,17 @@ export class MarkdownArtifactViewerComponent
    * Focuses the editable DOM surface for `segmentId` (or a specific list item inside it)
    * and places the DOM selection caret at `'start'`, `'end'`, or a specific character offset.
    */
+  public FocusEditableSegment(
+    segmentId: string,
+    position: 'start' | 'end' | number = 'start',
+    listItemIndex?: number,
+  ): void {
+    this.focusEditableSegment(segmentId, position, listItemIndex);
+  }
+
+  /**
+   * @deprecated Use {@link FocusEditableSegment} instead.
+   */
   public focusEditableSegment(
     segmentId: string,
     position: 'start' | 'end' | number = 'start',
