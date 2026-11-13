@@ -5,6 +5,8 @@
  */
 
 import { CachedColumnStats, TableStatsCache } from '../types/discovery.js';
+import { SchemaDefinition } from '../types/state.js';
+import { BuildCachedColumnStats } from './ColumnStatsBuilder.js';
 
 export class ColumnStatsCache {
   private tableCache: Map<string, TableStatsCache> = new Map();
@@ -349,10 +351,51 @@ export class ColumnStatsCache {
   }
 
   /**
-   * Merge cached stats into schema column definitions
-   * Replaces separate columnStatistics cache with embedded stats
+   * Seed the cache from the statistics the sampling pass left on each column, so discovery does not
+   * query the database again for numbers it already has. Columns without statistics, and columns
+   * already in the cache, are left alone. Returns the number of columns seeded.
    */
-  public MergeIntoSchemas(schemas: import('../types/state.js').SchemaDefinition[]): void {
+  public SeedFromSchemas(schemas: SchemaDefinition[]): number {
+    let seeded = 0;
+    for (const schema of schemas) {
+      for (const table of schema.tables) {
+        for (const column of table.columns) {
+          const s = column.statistics;
+          if (!s || !Number.isFinite(s.totalRows) || !Number.isFinite(s.distinctCount) || !Number.isFinite(s.nullCount)) {
+            continue;
+          }
+          if (this.hasColumnStats(schema.name, table.name, column.name)) {
+            continue;
+          }
+          this.setColumnStats(BuildCachedColumnStats({
+            SchemaName: schema.name,
+            TableName: table.name,
+            ColumnName: column.name,
+            DataType: column.dataType,
+            TotalRows: s.totalRows,
+            NullCount: s.nullCount,
+            DistinctCount: s.distinctCount,
+            SampleValues: s.sampleValues ?? [],
+            MinValue: s.minValue ?? s.min,
+            MaxValue: s.maxValue ?? s.max,
+            AvgLength: s.avgLength,
+            ValueDistribution: s.valueDistribution,
+            QueryTimeMs: s.queryTimeMs ?? 0
+          }));
+          seeded++;
+        }
+      }
+    }
+    return seeded;
+  }
+
+  /**
+   * Write the cache back onto the schema's columns. A column the sampling pass already measured keeps
+   * every field sampling recorded (its counts, percentages, numeric and length statistics) and gains
+   * what only discovery computes, such as the data pattern; a column sampling did not cover gets the
+   * cache's record in full.
+   */
+  public MergeIntoSchemas(schemas: SchemaDefinition[]): void {
     for (const schema of schemas) {
       for (const table of schema.tables) {
         const cacheKey = `${schema.name}.${table.name}`;
@@ -364,7 +407,6 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          // Merge cached stats into column.statistics
           column.statistics = {
             totalRows: cachedStats.totalRows,
             distinctCount: cachedStats.distinctCount,
@@ -378,7 +420,8 @@ export class ColumnStatsCache {
             maxValue: cachedStats.maxValue,
             avgLength: cachedStats.avgLength,
             computedAt: cachedStats.computedAt,
-            queryTimeMs: cachedStats.queryTimeMs
+            queryTimeMs: cachedStats.queryTimeMs,
+            ...column.statistics
           };
         }
       }

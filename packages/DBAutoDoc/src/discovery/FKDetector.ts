@@ -9,6 +9,7 @@ import { SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/st
 import { FKCandidate, FKEvidence, PKCandidate } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
+import { BuildCachedColumnStats } from './ColumnStatsBuilder.js';
 
 export class FKDetector {
   constructor(
@@ -16,6 +17,43 @@ export class FKDetector {
     private config: RelationshipDiscoveryConfig,
     private statsCache?: ColumnStatsCache
   ) {}
+
+  /**
+   * Row, null and distinct counts for a column: from the discovery cache when the sampling pass or
+   * PK detection already measured it, otherwise one query, whose result is cached for the next lookup.
+   */
+  private async columnCounts(
+    schemaName: string,
+    tableName: string,
+    columnName: string,
+    dataType: string
+  ): Promise<{ totalRows: number; nullCount: number; distinctCount: number }> {
+    const cached = this.statsCache?.getColumnStats(schemaName, tableName, columnName);
+    if (cached) {
+      return cached;
+    }
+    const stats = await this.driver.getColumnStatisticsForDiscovery(
+      schemaName,
+      tableName,
+      columnName,
+      dataType,
+      this.config.sampling.maxRowsPerTable
+    );
+    this.statsCache?.setColumnStats(BuildCachedColumnStats({
+      SchemaName: schemaName,
+      TableName: tableName,
+      ColumnName: columnName,
+      DataType: dataType,
+      TotalRows: stats.totalRows,
+      NullCount: stats.nullCount,
+      DistinctCount: stats.distinctCount,
+      SampleValues: stats.sampleValues,
+      MinValue: stats.minValue,
+      MaxValue: stats.maxValue,
+      AvgLength: stats.avgLength
+    }));
+    return stats;
+  }
 
   /**
    * Returns the list of FK-eligible column names for a table.
@@ -426,21 +464,9 @@ export class FKDetector {
       return null;
     }
 
-    // Get column statistics for cardinality analysis
-    const sourceStats = await this.driver.getColumnStatisticsForDiscovery(
-      sourceSchema,
-      sourceTable,
-      sourceColumn.name,
-      sourceColumn.dataType,
-      this.config.sampling.maxRowsPerTable
-    );
-    const targetStats = await this.driver.getColumnStatisticsForDiscovery(
-      targetSchema,
-      targetTable,
-      targetColumn,
-      targetColumnDef.type,
-      this.config.sampling.maxRowsPerTable
-    );
+    // Column counts for cardinality analysis (cached when already measured)
+    const sourceStats = await this.columnCounts(sourceSchema, sourceTable, sourceColumn.name, sourceColumn.dataType);
+    const targetStats = await this.columnCounts(targetSchema, targetTable, targetColumn, targetColumnDef.type);
 
     // Calculate cardinality ratio (should be many:one for FK)
     const cardinalityRatio = targetStats.distinctCount > 0
