@@ -2066,6 +2066,22 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             const baselinePath = path.resolve(currentDir, '../../benchmark-logs/wave4-baseline.json');
             Assert(fs.existsSync(baselinePath), `PB18: expected committed baseline file at ${baselinePath}`);
 
+            type BaselineProfileShape = {
+                Runner?: string;
+                PrimitivesTotalMs: number;
+                AggregatePrimitivesAndWave4Ms?: number;
+                AggregateAgentFrameworkOverheadMs?: number;
+                Primitives: Record<string, number | boolean>;
+                DeterministicAgentRuns: Array<{
+                    AgentName: string;
+                    FrameworkOverheadMs?: number;
+                    TotalStepStorageBytes: number;
+                    PayloadAtStartPointerSteps: number;
+                    PayloadAtEndPointerSteps: number;
+                    StorageSavingsPercent: number;
+                }>;
+            };
+
             const baselineDoc = JSON.parse(fs.readFileSync(baselinePath, 'utf8')) as {
                 HistoricalWaves: {
                     PreWave1: Record<string, number>;
@@ -2073,33 +2089,37 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     Wave3: Record<string, number>;
                     PreWave4: Record<string, number | boolean | string>;
                 };
-                Baseline: {
-                    PrimitivesTotalMs: number;
-                    Primitives: Record<string, number | boolean>;
-                    DeterministicAgentRuns: Array<{
-                        AgentName: string;
-                        TotalStepStorageBytes: number;
-                        PayloadAtStartPointerSteps: number;
-                        PayloadAtEndPointerSteps: number;
-                        StorageSavingsPercent: number;
-                    }>;
-                };
+                Baseline: BaselineProfileShape;
+                CIBaseline?: BaselineProfileShape;
                 Gates: {
                     MaxTimingRegressionPercentWarn: number;
-                    MaxTimingRegressionMultiplierFailCI: number;
+                    MaxTimingRegressionMultiplierFail: number;
+                    MinAbsoluteTimingDeltaMsWarn: number;
+                    MinAbsoluteTimingDeltaMsFailLocal: number;
+                    MinAbsoluteTimingDeltaMsFailCI: number;
+                    MaxAggregatePrimitivesMultiplierWarn: number;
+                    MaxAggregatePrimitivesMultiplierFail: number;
+                    MaxAggregateAgentFrameworkMultiplierWarn: number;
+                    MaxAggregateAgentFrameworkMultiplierFail: number;
                     MinDatestampsOnlyEntities: number;
                     ExpectedNarrowSearchColumns: number;
                     MinCanCountFromBaseTableEntities: number;
                     MinBaseEnginePKMapSpeedupRatio: number;
                     MinUserByEmailSpeedupRatio: number;
                     MinFrozenRowWireSpeedupRatio: number;
-                    MaxPB7StepStorageBytes: number;
+                    MaxPB7StepStorageBytesLocal: number;
+                    MaxPB7StepStorageBytesCI: number;
                     MinPB7StartPointers: number;
-                    MinPB7EndPointers: number;
-                    MinPB7StorageSavingsPercent: number;
-                    MaxPB8StepStorageBytes: number;
-                    MinPB8StartPointers: number;
-                    MinPB8EndPointers: number;
+                    MinPB7EndPointersLocal: number;
+                    MinPB7EndPointersCI: number;
+                    MinPB7StorageSavingsPercentLocal: number;
+                    MinPB7StorageSavingsPercentCI: number;
+                    MaxPB8StepStorageBytesLocal: number;
+                    MaxPB8StepStorageBytesCI: number;
+                    MinPB8StartPointersLocal: number;
+                    MinPB8StartPointersCI: number;
+                    MinPB8EndPointersLocal: number;
+                    MinPB8EndPointersCI: number;
                     MaxPB9StepStorageBytes: number;
                     MinPB9StartPointers: number;
                     MinPB9EndPointers: number;
@@ -2117,11 +2137,34 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     (p.PayloadApplyAndDeepDiffMs ?? 0)
                 ).toFixed(2)
             );
+            const aggregatePrimitivesMs = Number(
+                (
+                    primitivesTotalMs +
+                    (p.DatestampsOnly10SavesMs ?? 0) +
+                    (p.ApplyRowChanges50On5000RowsMs ?? 0) +
+                    (p.BaseEnginePKMap100DeltasMs ?? 0) +
+                    (p.GetEntityObjectSkipNewRecord500Ms ?? 0) +
+                    (p.UserByEmail10kLookupsMs ?? 0) +
+                    (p.NarrowSearchRunView10CallsMs ?? 0) +
+                    (p.TwoTierL1200Reads50DeltasMs ?? 0) +
+                    (p.FrozenRowWireSerialize5000x20Ms ?? 0)
+                ).toFixed(2)
+            );
+            const aggregateAgentFrameworkMs = Number(
+                fx.DeterministicAgentRuns.reduce((sum, r) => sum + (r.FrameworkOverheadMs ?? 0), 0).toFixed(2)
+            );
+
+            const isCIProfile =
+                (process.env.GITHUB_ACTIONS === 'true' || process.env.MJ_PERF_PROFILE === 'ci') &&
+                process.env.MJ_PERF_PROFILE !== 'local' &&
+                !!baselineDoc.CIBaseline;
+            const activeBaseline = isCIProfile && baselineDoc.CIBaseline ? baselineDoc.CIBaseline : baselineDoc.Baseline;
 
             const hw = baselineDoc.HistoricalWaves;
-            const baseP = baselineDoc.Baseline.Primitives;
+            const baseP = activeBaseline.Primitives;
             const gates = baselineDoc.Gates;
             const strictTiming = process.env.MJ_PERF_STRICT_TIMING === '1';
+            const minFailDeltaMs = isCIProfile ? gates.MinAbsoluteTimingDeltaMsFailCI : gates.MinAbsoluteTimingDeltaMsFailLocal;
 
             const computeTimingRow = (
                 metric: string,
@@ -2131,16 +2174,22 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 preW1?: number,
                 w2?: number,
                 w3?: number,
-                preW4?: number
+                preW4?: number,
+                customWarnMultiplier?: number,
+                customFailMultiplier?: number
             ): BaselineComparisonRow => {
                 const cur = currentVal ?? 0;
                 const deltaPct = baseVal > 0 ? Number((((cur - baseVal) / baseVal) * 100).toFixed(1)) : 0;
+                const failMultiplier = customFailMultiplier ?? gates.MaxTimingRegressionMultiplierFail;
+                const warnPct = customWarnMultiplier
+                    ? Number(((customWarnMultiplier - 1) * 100).toFixed(1))
+                    : gates.MaxTimingRegressionPercentWarn;
                 let status: BaselineComparisonRow['Status'] = 'PASS';
                 if (deltaPct <= -10) {
                     status = 'IMPROVED';
-                } else if (cur > baseVal * gates.MaxTimingRegressionMultiplierFailCI && cur - baseVal > 25) {
+                } else if (cur > baseVal * failMultiplier && cur - baseVal > minFailDeltaMs) {
                     status = 'FAIL';
-                } else if (deltaPct > gates.MaxTimingRegressionPercentWarn && cur - baseVal > 5) {
+                } else if (deltaPct > warnPct && cur - baseVal > gates.MinAbsoluteTimingDeltaMsWarn) {
                     status = strictTiming ? 'FAIL' : 'WARN';
                 }
                 return {
@@ -2157,12 +2206,39 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                 };
             };
 
+            const baseAggPrimitivesMs = activeBaseline.AggregatePrimitivesAndWave4Ms ?? 165.43;
+            const baseAggAgentFrameworkMs = activeBaseline.AggregateAgentFrameworkOverheadMs ?? 811.1;
+
             const rows: BaselineComparisonRow[] = [
+                computeTimingRow(
+                    'Aggregate Suite: Core/Cache/SQL Primitives (PB1–PB6, PB13, PB15–PB17)',
+                    'ms',
+                    aggregatePrimitivesMs,
+                    baseAggPrimitivesMs,
+                    undefined,
+                    undefined,
+                    undefined,
+                    Number(hw.PreWave4.AggregatePrimitivesAndWave4Ms),
+                    gates.MaxAggregatePrimitivesMultiplierWarn,
+                    gates.MaxAggregatePrimitivesMultiplierFail
+                ),
+                computeTimingRow(
+                    'Aggregate Suite: Deterministic Agent Framework Overhead (PB7–PB9)',
+                    'ms',
+                    aggregateAgentFrameworkMs,
+                    baseAggAgentFrameworkMs,
+                    undefined,
+                    hw.Wave2.AggregateAgentFrameworkOverheadMs,
+                    hw.Wave3.AggregateAgentFrameworkOverheadMs,
+                    Number(hw.PreWave4.AggregateAgentFrameworkOverheadMs),
+                    gates.MaxAggregateAgentFrameworkMultiplierWarn,
+                    gates.MaxAggregateAgentFrameworkMultiplierFail
+                ),
                 computeTimingRow(
                     'PB1–PB6 Primitives Total CPU',
                     'ms',
                     primitivesTotalMs,
-                    baselineDoc.Baseline.PrimitivesTotalMs,
+                    activeBaseline.PrimitivesTotalMs,
                     hw.PreWave1.PrimitivesTotalMs,
                     hw.Wave2.PrimitivesTotalMs,
                     hw.Wave3.PrimitivesTotalMs,
@@ -2315,6 +2391,19 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             const pb8Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Query Builder');
             const pb9Run = fx.DeterministicAgentRuns.find((r) => r.AgentName === 'Research Agent');
 
+            const maxPB7Bytes = isCIProfile ? gates.MaxPB7StepStorageBytesCI : gates.MaxPB7StepStorageBytesLocal;
+            const minPB7EndPointers = isCIProfile ? gates.MinPB7EndPointersCI : gates.MinPB7EndPointersLocal;
+            const minPB7Savings = isCIProfile ? gates.MinPB7StorageSavingsPercentCI : gates.MinPB7StorageSavingsPercentLocal;
+            const maxPB8Bytes = isCIProfile ? gates.MaxPB8StepStorageBytesCI : gates.MaxPB8StepStorageBytesLocal;
+            const minPB8StartPointers = isCIProfile ? gates.MinPB8StartPointersCI : gates.MinPB8StartPointersLocal;
+            const minPB8EndPointers = isCIProfile ? gates.MinPB8EndPointersCI : gates.MinPB8EndPointersLocal;
+            const pb7BaseBytes =
+                activeBaseline.DeterministicAgentRuns.find((r) => r.AgentName === 'Sage')?.TotalStepStorageBytes ?? 52871;
+            const pb8BaseBytes =
+                activeBaseline.DeterministicAgentRuns.find((r) => r.AgentName === 'Query Builder')?.TotalStepStorageBytes ?? 126263;
+            const pb9BaseBytes =
+                activeBaseline.DeterministicAgentRuns.find((r) => r.AgentName === 'Research Agent')?.TotalStepStorageBytes ?? 104158;
+
             if (pb7Run) {
                 rows.push({
                     Metric: 'PB7 Sage 4-Turn Step Storage',
@@ -2323,10 +2412,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     Wave2: hw.Wave2.PB7StorageBytes,
                     Wave3: hw.Wave3.PB7StorageBytes,
                     PreWave4: Number(hw.PreWave4.PB7StorageBytes),
-                    Wave4Baseline: 52871,
+                    Wave4Baseline: pb7BaseBytes,
                     Current: pb7Run.TotalStepStorageBytes,
-                    DeltaVsBaselinePercent: Number((((pb7Run.TotalStepStorageBytes - 52871) / 52871) * 100).toFixed(1)),
-                    Status: pb7Run.TotalStepStorageBytes <= gates.MaxPB7StepStorageBytes ? 'PASS' : 'FAIL',
+                    DeltaVsBaselinePercent: Number((((pb7Run.TotalStepStorageBytes - pb7BaseBytes) / pb7BaseBytes) * 100).toFixed(1)),
+                    Status: pb7Run.TotalStepStorageBytes <= maxPB7Bytes ? 'PASS' : 'FAIL',
                 });
             }
             if (pb8Run) {
@@ -2337,10 +2426,10 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     Wave2: hw.Wave2.PB8StorageBytes,
                     Wave3: hw.Wave3.PB8StorageBytes,
                     PreWave4: Number(hw.PreWave4.PB8StorageBytes),
-                    Wave4Baseline: 126565,
+                    Wave4Baseline: pb8BaseBytes,
                     Current: pb8Run.TotalStepStorageBytes,
-                    DeltaVsBaselinePercent: Number((((pb8Run.TotalStepStorageBytes - 126565) / 126565) * 100).toFixed(1)),
-                    Status: pb8Run.TotalStepStorageBytes <= gates.MaxPB8StepStorageBytes ? 'PASS' : 'FAIL',
+                    DeltaVsBaselinePercent: Number((((pb8Run.TotalStepStorageBytes - pb8BaseBytes) / pb8BaseBytes) * 100).toFixed(1)),
+                    Status: pb8Run.TotalStepStorageBytes <= maxPB8Bytes ? 'PASS' : 'FAIL',
                 });
             }
             if (pb9Run) {
@@ -2351,15 +2440,55 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
                     Wave2: hw.Wave2.PB9StorageBytes,
                     Wave3: hw.Wave3.PB9StorageBytes,
                     PreWave4: Number(hw.PreWave4.PB9StorageBytes),
-                    Wave4Baseline: 104158,
+                    Wave4Baseline: pb9BaseBytes,
                     Current: pb9Run.TotalStepStorageBytes,
-                    DeltaVsBaselinePercent: Number((((pb9Run.TotalStepStorageBytes - 104158) / 104158) * 100).toFixed(1)),
+                    DeltaVsBaselinePercent: Number((((pb9Run.TotalStepStorageBytes - pb9BaseBytes) / pb9BaseBytes) * 100).toFixed(1)),
                     Status: pb9Run.TotalStepStorageBytes <= gates.MaxPB9StepStorageBytes ? 'PASS' : 'FAIL',
                 });
             }
 
-            // Structural invariant rows
+            // Relative Aggregate Slowness Factors & Structural Invariant rows
+            const aggPrimFactor = Number((aggregatePrimitivesMs / Math.max(1, baseAggPrimitivesMs)).toFixed(2));
+            const aggAgentFactor = Number((aggregateAgentFrameworkMs / Math.max(1, baseAggAgentFrameworkMs)).toFixed(2));
             rows.push(
+                {
+                    Metric: 'Aggregate Primitives Slowness Factor (vs Baseline)',
+                    Unit: 'x',
+                    PreWave4: `${Number((Number(hw.PreWave4.AggregatePrimitivesAndWave4Ms) / 165.43).toFixed(2))}x`,
+                    Wave4Baseline: '1.00x',
+                    Current: `${aggPrimFactor}x`,
+                    DeltaVsBaselinePercent: Number(((aggPrimFactor - 1) * 100).toFixed(1)),
+                    Status:
+                        aggPrimFactor > gates.MaxAggregatePrimitivesMultiplierFail
+                            ? 'FAIL'
+                            : aggPrimFactor > gates.MaxAggregatePrimitivesMultiplierWarn
+                              ? strictTiming
+                                  ? 'FAIL'
+                                  : 'WARN'
+                              : aggPrimFactor <= 0.9
+                                ? 'IMPROVED'
+                                : 'PASS',
+                },
+                {
+                    Metric: 'Aggregate Agent Framework Slowness Factor (vs Baseline)',
+                    Unit: 'x',
+                    Wave2: '0.97x',
+                    Wave3: '0.90x',
+                    PreWave4: '0.85x',
+                    Wave4Baseline: '1.00x',
+                    Current: `${aggAgentFactor}x`,
+                    DeltaVsBaselinePercent: Number(((aggAgentFactor - 1) * 100).toFixed(1)),
+                    Status:
+                        aggAgentFactor > gates.MaxAggregateAgentFrameworkMultiplierFail
+                            ? 'FAIL'
+                            : aggAgentFactor > gates.MaxAggregateAgentFrameworkMultiplierWarn
+                              ? strictTiming
+                                  ? 'FAIL'
+                                  : 'WARN'
+                              : aggAgentFactor <= 0.9
+                                ? 'IMPROVED'
+                                : 'PASS',
+                },
                 {
                     Metric: 'PB16 Narrow Search SQL Columns Projected',
                     Unit: 'cols',
@@ -2413,7 +2542,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             for (const r of rows) {
                 if (r.Status === 'WARN') {
                     console.warn(
-                        `::warning title=IT128 Performance Variance::${r.Metric}: current=${r.Current}${r.Unit} vs baseline=${r.Wave4Baseline}${r.Unit} (${r.DeltaVsBaselinePercent}%)`
+                        `::warning title=IT128 Performance Variance (${activeBaseline.Runner ?? 'default'})::${r.Metric}: current=${r.Current}${r.Unit} vs baseline=${r.Wave4Baseline}${r.Unit} (${r.DeltaVsBaselinePercent}%)`
                     );
                 }
             }
@@ -2457,28 +2586,28 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
 
             if (pb7Run) {
                 Assert(
-                    pb7Run.TotalStepStorageBytes <= gates.MaxPB7StepStorageBytes,
-                    `PB18 regression: PB7 Sage step storage (${pb7Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB7StepStorageBytes} B ceiling`
+                    pb7Run.TotalStepStorageBytes <= maxPB7Bytes,
+                    `PB18 regression: PB7 Sage step storage (${pb7Run.TotalStepStorageBytes} B) exceeded ${maxPB7Bytes} B ceiling`
                 );
                 Assert(
                     pb7Run.PayloadAtStartPointerSteps >= gates.MinPB7StartPointers &&
-                        pb7Run.PayloadAtEndPointerSteps >= gates.MinPB7EndPointers,
-                    `PB18 regression: PB7 Sage pointer steps (${pb7Run.PayloadAtStartPointerSteps}/${pb7Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB7StartPointers}/${gates.MinPB7EndPointers})`
+                        pb7Run.PayloadAtEndPointerSteps >= minPB7EndPointers,
+                    `PB18 regression: PB7 Sage pointer steps (${pb7Run.PayloadAtStartPointerSteps}/${pb7Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB7StartPointers}/${minPB7EndPointers})`
                 );
                 Assert(
-                    pb7Run.StorageSavingsPercent >= gates.MinPB7StorageSavingsPercent,
-                    `PB18 regression: PB7 Sage storage dedup savings (${pb7Run.StorageSavingsPercent}%) fell below ${gates.MinPB7StorageSavingsPercent}%`
+                    pb7Run.StorageSavingsPercent >= minPB7Savings,
+                    `PB18 regression: PB7 Sage storage dedup savings (${pb7Run.StorageSavingsPercent}%) fell below ${minPB7Savings}%`
                 );
             }
             if (pb8Run) {
                 Assert(
-                    pb8Run.TotalStepStorageBytes <= gates.MaxPB8StepStorageBytes,
-                    `PB18 regression: PB8 Query Builder step storage (${pb8Run.TotalStepStorageBytes} B) exceeded ${gates.MaxPB8StepStorageBytes} B ceiling`
+                    pb8Run.TotalStepStorageBytes <= maxPB8Bytes,
+                    `PB18 regression: PB8 Query Builder step storage (${pb8Run.TotalStepStorageBytes} B) exceeded ${maxPB8Bytes} B ceiling`
                 );
                 Assert(
-                    pb8Run.PayloadAtStartPointerSteps >= gates.MinPB8StartPointers &&
-                        pb8Run.PayloadAtEndPointerSteps >= gates.MinPB8EndPointers,
-                    `PB18 regression: PB8 Query Builder pointer steps (${pb8Run.PayloadAtStartPointerSteps}/${pb8Run.PayloadAtEndPointerSteps}) fell below (${gates.MinPB8StartPointers}/${gates.MinPB8EndPointers})`
+                    pb8Run.PayloadAtStartPointerSteps >= minPB8StartPointers &&
+                        pb8Run.PayloadAtEndPointerSteps >= minPB8EndPointers,
+                    `PB18 regression: PB8 Query Builder pointer steps (${pb8Run.PayloadAtStartPointerSteps}/${pb8Run.PayloadAtEndPointerSteps}) fell below (${minPB8StartPointers}/${minPB8EndPointers})`
                 );
             }
             if (pb9Run) {
@@ -2501,7 +2630,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             );
 
             console.log(
-                `      → PB18 Baseline Comparison & Regression Gate: ${rows.length} metrics verified against wave4-baseline.json (0 failures, ${rows.filter((r) => r.Status === 'WARN').length} variance warnings)`
+                `      → PB18 Baseline Comparison & Regression Gate [${activeBaseline.Runner ?? 'default'}]: ${rows.length} metrics verified (aggPrimFactor=${aggPrimFactor}x, aggAgentFactor=${aggAgentFactor}x, 0 failures, ${rows.filter((r) => r.Status === 'WARN').length} variance warnings)`
             );
         },
     },
