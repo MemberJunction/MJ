@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t156-morecheese-competition-entry-form.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,open-apps",
@@ -49,5 +50,9 @@
   },
   "primaryKey": {
     "ID": "EE88DA19-190D-40CF-9136-C8B4C94BA439"
+  },
+  "sync": {
+    "lastModified": "2026-11-13T15:37:29.249Z",
+    "checksum": "ed689f3e73bb2281aba43385e50babd6ce3d2ae768baad0b5878eccb2989782a"
   }
 }

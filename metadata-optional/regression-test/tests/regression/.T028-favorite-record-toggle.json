@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t028-favorite-a-record.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,favorite",
@@ -51,7 +52,7 @@
     "ID": "A8244B8D-52B4-4027-AB59-128C336AB8FD"
   },
   "sync": {
-    "lastModified": "2026-11-13T08:35:59.955Z",
-    "checksum": "382f1ad62692139d77c425958c01083346b15a019e6ec96193111a430723e4fc"
+    "lastModified": "2026-11-13T15:37:29.168Z",
+    "checksum": "11b33337b3bc81b739a0cdc4ba737d49a3fcd9640628cb3bfd444ea066224735"
   }
 }

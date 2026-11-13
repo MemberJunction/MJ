@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.7,
         "url-match": 0.3
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t042-events-record-change-history-drawer.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,version-history",
@@ -51,7 +52,7 @@
     "ID": "F3D7B167-ECCB-4FCB-A7FF-819613629D1A"
   },
   "sync": {
-    "lastModified": "2026-11-13T08:36:00.259Z",
-    "checksum": "30044406a0d4464a87677cfb920eb253ad3da275528baddc496df5406ac50704"
+    "lastModified": "2026-11-13T15:37:29.223Z",
+    "checksum": "17f2491941afdfc3616648648298c3df5af84ee2d02ab2d2f29972c2d4e7c497"
   }
 }

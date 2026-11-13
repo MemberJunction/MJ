@@ -34,7 +34,8 @@
       "scoringWeights": {
         "goal-completion": 0.6,
         "step-count": 0.4
-      }
+      },
+      "ReplayScript": "@file:regression/scripts/t157-people-form-morecheese-membership-section.json"
     },
     "Status": "Active",
     "Tags": "P2,regression,open-apps,related",
@@ -49,5 +50,9 @@
   },
   "primaryKey": {
     "ID": "1C476FA9-84B9-4D5F-82A4-62C8A5B25D7F"
+  },
+  "sync": {
+    "lastModified": "2026-11-13T15:37:29.217Z",
+    "checksum": "f71fa35d622815e17b7fc77ea1ce692a1c64ca950aa00d6662172097e3c98d68"
   }
 }

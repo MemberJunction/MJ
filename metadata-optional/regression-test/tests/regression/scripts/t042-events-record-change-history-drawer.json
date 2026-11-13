@@ -1,0 +1,354 @@
+{
+  "TestId": "F3D7B167-ECCB-4FCB-A7FF-819613629D1A",
+  "AppBuildHash": "",
+  "AppVersion": "",
+  "GoalHash": "ff19b4a9",
+  "RecordedAt": "2026-11-13T15:30:17.137Z",
+  "Viewport": {
+    "Width": 1280,
+    "Height": 720
+  },
+  "Variables": [
+    "authUsername",
+    "authPassword"
+  ],
+  "Steps": [
+    {
+      "Instruction": "I need to navigate to the Committees: Meetings entity. I can navigate directly via URL http://localhost:4200/app/data-explorer/Data?entity=Committees:%20Meetings to reach it fast and reliably.",
+      "UrlBefore": "http://localhost:4200/",
+      "Action": {
+        "Method": "navigate",
+        "Url": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "We are on the Meetings grid. Now we need to click a meeting row, which will open the row preview/panel, and then click 'Open Full Record'. Let's click the first meeting row.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "row",
+          "Name": "Membership & Outreach Committee — Q2 2021 meeting\nApr 20, 2021\nApr 21, 2021\nInPerson\nCompleted",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[2]/div[4]/mj-view-workspace[1]/div[1]/div[2]/mj-entity-viewer[1]/div[1]/div[1]/div[3]/mj-grid-view-renderer[1]/mj-entity-data-grid[1]/div[1]/div[2]/ag-grid-angular[1]/div[3]/div[1]/div[2]/div[3]/div[1]/div[2]/div[1]/div[1]",
+          "BoundingBox": {
+            "XMin": 282,
+            "YMin": 406,
+            "XMax": 982,
+            "YMax": 446
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      }
+    },
+    {
+      "Instruction": "The preview panel for the meeting record is open. Now I need to click 'Open Full Record' (Index 74) to view the full form.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Open Full Record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[1]/div[1]/mj-data-explorer-resource[1]/div[1]/mj-data-explorer-dashboard[1]/div[1]/div[3]/mj-entity-record-detail-panel[1]/div[1]/div[3]/button[1]",
+          "BoundingBox": {
+            "XMin": 906,
+            "YMin": 664,
+            "XMax": 1265,
+            "YMax": 704
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/Data?entity=Committees: Meetings"
+      },
+      "Postcondition": {
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The full record form is open. Now I need to click the Record Changes history button (the clock icon with badge 'v4' or index 16 '4 version(s) tracked') to open the Record Changes timeline drawer.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "4 version(s) tracked",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 128,
+            "YMin": 156,
+            "XMax": 177,
+            "YMax": 189
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The Record Changes History drawer is open, displaying filter pills ('All', 'Updates 3', 'Snapshots 1'). We have arrived at the first checkpoint 'history-filter-pills'. To satisfy checkpoint 1, I will ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Updates\n3",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 999,
+            "YMin": 383,
+            "XMax": 1118,
+            "YMax": 413
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The Record Changes History drawer is open, displaying filter pills ('All', 'Updates 3', 'Snapshots 1'). We have arrived at the first checkpoint 'history-filter-pills'. To satisfy checkpoint 1, I will ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "All",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 929,
+            "YMin": 383,
+            "XMax": 991,
+            "YMax": 413
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "I will fulfill the 'history-filter-pills' checkpoint by setting checkpointReached to 'history-filter-pills', clicking the 'Updates 3' pill to narrow the timeline, and then clicking 'All' to restore th",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Updates\n3",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[2]/button[2]",
+          "BoundingBox": {
+            "XMin": 999,
+            "YMin": 383,
+            "XMax": 1118,
+            "YMax": 413
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "I will fulfill the 'history-filter-pills' checkpoint by setting checkpointReached to 'history-filter-pills', clicking the 'Updates 3' pill to narrow the timeline, and then clicking 'All' to restore th",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "All",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[2]/button[1]",
+          "BoundingBox": {
+            "XMin": 929,
+            "YMin": 383,
+            "XMax": 991,
+            "YMax": 413
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false
+      }
+    },
+    {
+      "Instruction": "We need to work on checkpoint (2) 'restore-preview'. Let's expand one of the change entries by clicking on its arrow or row to see if a Restore action/button appears, or hover/click to open restore pr",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "div",
+          "Name": "Update by %authUsername% on November 13, 2026 at 3:28 PM UTC",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[3]/div[1]/div[2]",
+          "BoundingBox": {
+            "XMin": 580,
+            "YMin": 476,
+            "XMax": 1256,
+            "YMax": 546
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "I will scroll down further in the Record Changes History drawer to see all options or expand the SNAPSHOT entry to find a Restore action button.",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "div",
+          "Name": "Snapshot by %authUsername% on November 13, 2026 at 9:44 AM UTC",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[3]/div[1]/div[5]",
+          "BoundingBox": {
+            "XMin": 580,
+            "YMin": 618,
+            "XMax": 1256,
+            "YMax": 688
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "In the interactive elements list, indices 42 and 43 appeared: [42] button 'Render this historical version's field values directly inside the form' and [43] button 'Restore the entire record to its sta",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Restore the entire record to its state at this version",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[3]/div[1]/div[5]/div[2]/div[1]/button[2]",
+          "BoundingBox": {
+            "XMin": 1029,
+            "YMin": 709,
+            "XMax": 1245,
+            "YMax": 736
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The Cancel button was obstructed by the floating chat bubble in previous steps. I will click the 'X' icon at the top right of the modal (around X=966, Y=47) or press Escape to close the Restore previe",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "keypress",
+        "Key": "Escape"
+      },
+      "Precondition": {
+        "WaitForTarget": false,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The restore preview modal was closed by the Escape key press. Now I need to re-open the Record Changes drawer by clicking the history (clock) button (Index 16), then click the button/icon to open the ",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "4 version(s) tracked",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-form-toolbar[1]/div[1]/div[1]/button[3]",
+          "BoundingBox": {
+            "XMin": 128,
+            "YMin": 156,
+            "XMax": 177,
+            "YMax": 189
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    },
+    {
+      "Instruction": "The Record Changes History drawer is open. Near the top right of the drawer there is a '+ Label' button (or 'Create a version label snapshot for this record' button, index 32) in the Version Labels ar",
+      "UrlBefore": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Action": {
+        "Method": "click",
+        "Button": "left",
+        "ClickCount": 1,
+        "Target": {
+          "Role": "button",
+          "Name": "Create a version label snapshot for this record",
+          "Selector": "xpath=/html/body[1]/app-root[1]/mj-explorer-app[1]/div[1]/mj-shell[1]/div[1]/mj-tab-container[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div[1]/section[2]/div[1]/div[1]/div[1]/mj-record-resource[1]/mj-single-record[1]/mj-entity-form-host[1]/gen-mjbizappscommitteesmeeting-form[1]/mj-record-form-container[1]/mj-record-changes[1]/mj-slide-panel[1]/div[2]/div[3]/div[1]/div[1]/div[2]/button[3]",
+          "BoundingBox": {
+            "XMin": 1174,
+            "YMin": 89,
+            "XMax": 1256,
+            "YMax": 115
+          }
+        }
+      },
+      "Precondition": {
+        "WaitForTarget": true,
+        "ReadyBeacon": false,
+        "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}"
+      }
+    }
+  ],
+  "GoalPostconditions": [
+    {
+      "Kind": "url",
+      "UrlPattern": "http://localhost:4200/app/data-explorer/record/Committees:%20Meetings/ID%7C{uuid}",
+      "Description": "final URL of the passing run"
+    }
+  ]
+}
