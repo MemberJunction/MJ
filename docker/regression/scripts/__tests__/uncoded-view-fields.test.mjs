@@ -2,24 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { CollectIdentifiers, FieldsWithoutCode, PackageScopes } = require('../lib/uncoded-view-fields.cjs');
+const { CollectTypeFields, FieldsNotInType, PackageScopes } = require('../lib/uncoded-view-fields.cjs');
 
-describe('CollectIdentifiers', () => {
-    it('adds every identifier in the text to the set', () => {
-        const ids = CollectIdentifiers('get MeetingID() { return this.Get("Name_2"); } $x', new Set(['Old']));
-        expect([...ids].sort()).toEqual(['$x', 'Get', 'MeetingID', 'Name_2', 'Old', 'get', 'return', 'this'].sort());
-    });
-});
-
-describe('FieldsWithoutCode', () => {
-    it('returns the fields whose name is not an identifier in the app code', () => {
+describe('FieldsNotInType', () => {
+    it('returns the fields that the GraphQL type of their entity does not define, even when the name is in other code', () => {
+        const code = [
+            '__decorate([(0, type_graphql_1.Field)()], mjBizAppsCommitteesMeeting_.prototype, "Committee", void 0);',
+            '__decorate([(0, type_graphql_1.Field)()], mjBizAppsCommitteesMeeting_.prototype, "_mj__CreatedAt", void 0);',
+            'const health = { AgendaItemCount: 0 };',
+        ].join('\n');
+        const meeting = { Entity: 'Committees: Meetings', ClassName: 'mjBizAppsCommitteesMeeting' };
         const fields = [
-            { Entity: 'Committees: Meetings', Field: 'Committee' },
-            { Entity: 'Committees: Meetings', Field: 'MeetingDurationMinutes' },
+            { ...meeting, Field: 'Committee' },
+            { ...meeting, Field: '__mj_CreatedAt' },
+            { ...meeting, Field: 'AgendaItemCount' },
+            { Entity: 'Other: Things', ClassName: 'otherThing', Field: 'Anything' },
         ];
-        expect(FieldsWithoutCode(fields, new Set(['Committee', 'MeetingDuration']))).toEqual([
-            { Entity: 'Committees: Meetings', Field: 'MeetingDurationMinutes' },
-        ]);
+        expect(FieldsNotInType(fields, CollectTypeFields(code))).toEqual([{ ...meeting, Field: 'AgendaItemCount' }]);
     });
 });
 
