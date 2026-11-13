@@ -906,16 +906,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.ShowArtifactIndicator;
   }
 
+  private _appContext: Record<string, unknown> | null = null;
+
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
-  @Input() AppContext: Record<string, unknown> | null = null;
+  @Input()
+  set AppContext(value: AppContextSnapshot | Record<string, unknown> | null) {
+    this._appContext = value as Record<string, unknown> | null;
+  }
+  get AppContext(): Record<string, unknown> | null {
+    return this._appContext;
+  }
 
   /** @deprecated Use {@link AppContext}. */
-  @Input() set appContext(value: Record<string, unknown> | null) {
+  @Input() set appContext(value: AppContextSnapshot | Record<string, unknown> | null) {
     this.AppContext = value;
   }
   /** @deprecated Use {@link AppContext}. */
   get appContext(): Record<string, unknown> | null {
-    return this.AppContext;
+    return this._appContext;
   }
 
   /**

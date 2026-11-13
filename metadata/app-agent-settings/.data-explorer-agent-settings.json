@@ -28,6 +28,147 @@
             "Tone": "warm and helpful",
             "SpeakingStyle": "concise, plain language"
           }
+        },
+        "BrowserExtension": {
+          "BrandSlug": "mj-copilot",
+          "ExtensionName": "MemberJunction Agent",
+          "ShortName": "MJ Agent",
+          "Description": "Enterprise AI Browser Agent with multi-app context braiding, zero-blip voice continuity, and guided admin playbooks.",
+          "Version": "6.2.0",
+          "AssistantDisplayName": "MJ Agent",
+          "AgentTabLabel": "Agent",
+          "SidePanelHeaderTitle": "MemberJunction Agent",
+          "DefaultServerUrl": "http://localhost:4000/graphql",
+          "DefaultAuthProvider": "msal",
+          "KeyboardShortcut": "Ctrl+Shift+M",
+          "FirefoxExtensionID": "mj-copilot@memberjunction.org",
+          "SafariBundleIdentifier": "org.memberjunction.copilot.extension",
+          "SupportedBrowsers": [
+            "chrome",
+            "edge",
+            "firefox",
+            "safari"
+          ],
+          "DefaultControlBackend": "content-script",
+          "AllowDebuggerCDP": true,
+          "BrandKitID": "@lookup:MJ: Brand Kits.Name=MemberJunction",
+          "BlockedDomains": [
+            "*.1password.com",
+            "*.lastpass.com",
+            "*.bitwarden.com",
+            "*.dashlane.com"
+          ],
+          "HostPermissions": [
+            "<all_urls>"
+          ],
+          "ExternallyConnectableMatches": [
+            "https://*.memberjunction.com/*",
+            "http://localhost:*/*"
+          ],
+          "ContextRules": [
+            {
+              "Key": "common.organization.by-domain",
+              "SourceApp": "@mj-biz-apps/common",
+              "Name": "Organization by Website Domain",
+              "Priority": 100,
+              "IsActive": true,
+              "UrlMatch": {
+                "IncludePatterns": [
+                  "*://*/*"
+                ],
+                "ExcludePatterns": [
+                  "*://*.linkedin.com/in/*"
+                ]
+              },
+              "Extractor": {
+                "DriverClass": "StandardPageExtractor",
+                "Selectors": {
+                  "HostnameRoot": {
+                    "Source": "hostname-root",
+                    "Expression": "hostname"
+                  },
+                  "OrgTitle": {
+                    "Source": "meta",
+                    "Expression": "og:site_name"
+                  }
+                }
+              },
+              "EntityResolution": {
+                "EntityName": "MJ_BizApps_Common: Organizations",
+                "FilterTemplate": "Website LIKE '%{{HostnameRoot}}%'",
+                "FallbackFilterTemplate": "Name = '{{OrgTitle}}'",
+                "MaxRows": 5
+              },
+              "CandidateFieldMapping": {
+                "OrgTitle": "Name",
+                "HostnameRoot": "Website"
+              }
+            },
+            {
+              "Key": "common.person.linkedin",
+              "SourceApp": "@mj-biz-apps/common",
+              "Name": "Person by LinkedIn Profile URL",
+              "Priority": 10,
+              "IsActive": true,
+              "UrlMatch": {
+                "IncludePatterns": [
+                  "*://*.linkedin.com/in/*"
+                ]
+              },
+              "Extractor": {
+                "DriverClass": "LinkedInPageExtractor"
+              },
+              "EntityResolution": {
+                "EntityName": "MJ_BizApps_Common: People",
+                "FilterTemplate": "LinkedInURL LIKE '%/in/{{LinkedInHandle}}%'",
+                "FallbackFilterTemplate": "FullName = '{{FullName}}'",
+                "MaxRows": 5
+              },
+              "CandidateFieldMapping": {
+                "FullName": "FullName",
+                "Headline": "Title",
+                "Location": "Location"
+              }
+            }
+          ],
+          "EntityFacets": [
+            {
+              "Key": "sales.active-deals",
+              "AnchorEntityName": "MJ_BizApps_Common: Organizations",
+              "ApplicationName": "CRM / Sales",
+              "Title": "Active Opportunities & Deals",
+              "IconClass": "fa-solid fa-handshake",
+              "Sequence": 10,
+              "Query": {
+                "EntityName": "Deals",
+                "FilterTemplate": "AccountID = '{{AnchorRecordID}}'",
+                "OrderBy": "__mj_UpdatedAt DESC",
+                "MaxRows": 10
+              },
+              "Surface": {
+                "Renderer": "entity-cards",
+                "EmptyStateBehavior": "show-quick-create"
+              }
+            },
+            {
+              "Key": "tasks.open-followups",
+              "AnchorEntityName": "MJ_BizApps_Common: Organizations",
+              "ApplicationName": "Tasks & Actions",
+              "Title": "Open Follow-Up Tasks",
+              "IconClass": "fa-solid fa-list-check",
+              "Sequence": 20,
+              "Query": {
+                "EntityName": "MJ: Tasks",
+                "FilterTemplate": "ParentID = '{{AnchorRecordID}}'",
+                "OrderBy": "DueAt ASC",
+                "MaxRows": 10
+              },
+              "Surface": {
+                "Renderer": "entity-cards",
+                "EmptyStateBehavior": "hide"
+              }
+            }
+          ]
         }
       }
     },

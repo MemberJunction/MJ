@@ -191,5 +191,28 @@
       "lastModified": "2026-10-13T19:00:05.405Z",
       "checksum": "18b4ea3abd0bb89739af27b754b412579da736a81fe6b125b4b441746f397027"
     }
+  },
+  {
+    "fields": {
+      "Name": "LocalBrowser",
+      "Description": "Drives and coaches across the user's real browser tabs from the MemberJunction Browser Extension Side Panel (chrome.sidePanel). Supports Dual-Mode execution ('content-script' default with shared INTERACTIVITYPROBE DOM grounding and Shadow-DOM Coach-Mark Spotlights; optional 'debugger-cdp' and 'auto' escalation), multi-app entity context braiding, and model-blind secret vault capture. Opt-in per agent or app (DefaultAvailability 'opt-in', MaxExposure 'pixels').",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "LocalBrowserChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Local Browser",
+        "GroupName": "Browser",
+        "Icon": "fa-solid fa-compass",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "8D4B7A21-5E19-4C8A-9B32-6F1C9E04D872"
+    },
+    "sync": {
+      "lastModified": "2026-11-08T16:20:00.000Z",
+      "checksum": "f4c12b9a841e65c7d0b3a2918e54f6c09d781234a5b6c7d8e9f0123456789abc"
+    }
   }
 ]

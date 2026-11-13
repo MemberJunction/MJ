@@ -7011,6 +7011,49 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/browser-extension:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../../AI/CorePlus
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../../../BrowserExtension/Core
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0
+        version: link:../base-types
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.2.0
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/charts:
     dependencies:
       '@angular/cdk':
@@ -10651,6 +10694,219 @@ importers:
       tsc-alias:
         specifier: ^1.8.15
         version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Builder:
+    dependencies:
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../Core
+      '@memberjunction/browser-extension-host':
+        specifier: 6.2.0
+        version: link:../Host
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0
+        version: link:../../ThemeEngine
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      playwright:
+        specifier: ^1.51.0
+        version: 1.58.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Core:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0
+        version: link:../../AI/Core
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../AI/CorePlus
+      '@memberjunction/ai-realtime-client':
+        specifier: 6.2.0
+        version: link:../../AI/RealtimeClient
+      '@memberjunction/computer-use':
+        specifier: 6.2.0
+        version: link:../../AI/ComputerUse
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../MJGlobal
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0
+        version: link:../../RealtimeRuntime
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0
+        version: link:../../ThemeEngine
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/BrowserExtension/Host:
+    dependencies:
+      '@angular/animations':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/cdk':
+        specifier: 21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/common':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/core':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/localize':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(@angular/compiler@21.2.22)
+      '@angular/platform-browser':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/platform-browser-dynamic':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/compiler@21.2.22)(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
+      '@memberjunction/ai-agent-client':
+        specifier: 6.2.0
+        version: link:../../AI/AgentsClient
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0
+        version: link:../../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.2.0
+        version: link:../../AI/BaseAIEngine
+      '@memberjunction/ai-realtime-client':
+        specifier: 6.2.0
+        version: link:../../AI/RealtimeClient
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.2.0
+        version: link:../../AI/Vectors/Memory
+      '@memberjunction/browser-extension-core':
+        specifier: 6.2.0
+        version: link:../Core
+      '@memberjunction/computer-use':
+        specifier: 6.2.0
+        version: link:../../AI/ComputerUse
+      '@memberjunction/conversations-runtime':
+        specifier: 6.2.0
+        version: link:../../ConversationsRuntime
+      '@memberjunction/core':
+        specifier: 6.2.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.2.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.2.0
+        version: link:../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.2.0
+        version: link:../../GraphQLDataProvider
+      '@memberjunction/ng-agent-client':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/agent-client
+      '@memberjunction/ng-artifacts':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/artifacts
+      '@memberjunction/ng-base-types':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/base-types
+      '@memberjunction/ng-browser-extension':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/browser-extension
+      '@memberjunction/ng-conversations':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/conversations
+      '@memberjunction/ng-notifications':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/notifications
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.2.0
+        version: link:../../Angular/Generic/ui-components
+      '@memberjunction/realtime-runtime':
+        specifier: 6.2.0
+        version: link:../../RealtimeRuntime
+      '@memberjunction/theme-engine':
+        specifier: 6.2.0
+        version: link:../../ThemeEngine
+      ag-grid-angular:
+        specifier: ^35.0.1
+        version: 35.0.1(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      ag-grid-community:
+        specifier: ^35.0.1
+        version: 35.0.1
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+      zone.js:
+        specifier: ^0.16.0
+        version: 0.16.0
+    devDependencies:
+      '@angular-devkit/build-angular':
+        specifier: 21.2.23
+        version: 21.2.23(1139b1f1ad04c64c163c3f402691d59d)
+      '@angular/cli':
+        specifier: 21.2.23
+        version: 21.2.23(@types/node@24.10.11)(chokidar@5.0.0)
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      sass:
+        specifier: ^1.97.3
+        version: 1.97.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -48640,7 +48896,7 @@ snapshots:
 
   mutation-server-protocol@0.4.1:
     dependencies:
-      zod: 4.3.6
+      zod: 4.6.7
 
   mutation-testing-elements@3.7.3: {}
 

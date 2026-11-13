@@ -5,6 +5,23 @@
   "description": "MemberJunction: Computer Use - Vision-to-Action engine for driving web browsers via LLM reasoning over screenshots. MJ-independent base layer.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser-probe": {
+      "types": "./dist/browser-probe/index.d.ts",
+      "default": "./dist/browser-probe/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "browser-probe": [
+        "dist/browser-probe/index.d.ts"
+      ]
+    }
+  },
   "files": [
     "/dist"
   ],
