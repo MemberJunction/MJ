@@ -418,6 +418,8 @@ export interface DocsPermissionEntry {
               class="mj-docs-slash-input"
               placeholder="Filter commands (e.g., entity-view, saved-query, whiteboard, table)…"
               [(ngModel)]="SlashSearchQuery"
+              (ngModelChange)="SlashMenuHighlightIndex = 0"
+              (keydown)="OnSlashMenuKeydown($event)"
               data-testid="slash-search-input"
             />
             <button type="button" class="mj-docs-btn" (click)="CloseSlashMenu()">
@@ -425,11 +427,13 @@ export interface DocsPermissionEntry {
             </button>
           </div>
           <div class="mj-docs-slash-popover__list">
-            @for (cmd of FilteredSlashCommands; track cmd.Command) {
+            @for (cmd of FilteredSlashCommands; track cmd.Command; let cmdIdx = $index) {
               <button
                 type="button"
                 class="mj-docs-slash-item"
+                [class.mj-docs-slash-item--active]="cmdIdx === SlashMenuHighlightIndex"
                 [attr.data-testid]="'slash-item-' + cmd.Command.slice(1)"
+                (mouseenter)="SlashMenuHighlightIndex = cmdIdx"
                 (click)="ExecuteSlashCommand(cmd)"
               >
                 <div class="mj-docs-slash-item__icon">
@@ -748,8 +752,9 @@ export interface DocsPermissionEntry {
                                   class="mj-docs-editable-surface mj-docs-editable-heading__text"
                                   contenteditable="true"
                                   role="textbox"
+                                  data-placeholder="Heading title (press Enter for paragraph below)…"
                                   [attr.data-testid]="'editable-heading-' + seg.SegmentID"
-                                  [textContent]="seg.HeadingText || GetEditableHeadingText(seg)"
+                                  [textContent]="seg.HeadingText ?? GetEditableHeadingText(seg)"
                                   (input)="OnEditableBlockInput(seg, $event)"
                                   (blur)="CommitEditableHeading(seg, $event)"
                                   (keydown)="OnEditableBlockKeydown(seg, $event)"
@@ -848,6 +853,7 @@ export interface DocsPermissionEntry {
                                         [class.mj-docs-editable-list__text--checked]="item.Checked"
                                         contenteditable="true"
                                         role="textbox"
+                                        data-placeholder="List item (press Enter for next, or Enter when empty to exit)…"
                                         [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
                                         [textContent]="item.Text"
                                         (input)="OnEditableBlockInput(seg, $event)"
@@ -891,6 +897,7 @@ export interface DocsPermissionEntry {
                                     class="mj-docs-editable-surface mj-docs-editable-callout__body"
                                     contenteditable="true"
                                     role="textbox"
+                                    data-placeholder="Callout details (press Enter for paragraph below)…"
                                     [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
                                     [textContent]="callout.BodyText"
                                     (input)="OnEditableBlockInput(seg, $event)"
@@ -920,9 +927,11 @@ export interface DocsPermissionEntry {
                                     class="mj-docs-editable-surface mj-docs-editable-code__pre"
                                     contenteditable="true"
                                     role="textbox"
+                                    data-placeholder="Code snippet…"
                                     [attr.data-testid]="'editable-code-body-' + seg.SegmentID"
                                     [textContent]="codeBlock.Code"
                                     (blur)="CommitEditableCodeBlock(seg, $event)"
+                                    (keydown)="OnEditableBlockKeydown(seg, $event)"
                                   ></pre>
                                 </div>
                               }
@@ -933,6 +942,7 @@ export interface DocsPermissionEntry {
                                 contenteditable="true"
                                 role="textbox"
                                 aria-multiline="true"
+                                data-placeholder="Type text, '/' for commands, '#' for heading, or '-' for list…"
                                 [attr.data-testid]="'editable-paragraph-' + seg.SegmentID"
                                 [textContent]="seg.RawMarkdown"
                                 (input)="OnEditableBlockInput(seg, $event)"
@@ -1500,6 +1510,22 @@ export interface DocsPermissionEntry {
                   </div>
                 }
               </div>
+
+              @if (IsInteractiveCanvasMode) {
+                <div
+                  class="mj-docs-trailing-flow-zone"
+                  role="button"
+                  tabindex="0"
+                  data-testid="docs-trailing-flow-zone"
+                  (click)="AppendOrFocusTrailingParagraph()"
+                  (keydown.enter)="AppendOrFocusTrailingParagraph()"
+                >
+                  <span class="mj-docs-trailing-flow-zone__hint">
+                    <i class="fas fa-plus"></i>
+                    <span>Click or press Enter to continue writing, or type <kbd>/</kbd> for commands…</span>
+                  </span>
+                </div>
+              }
             </div>
           }
         </main>
@@ -2391,9 +2417,10 @@ export interface DocsPermissionEntry {
         color: var(--mj-text-primary);
       }
 
-      .mj-docs-slash-item:hover {
+      .mj-docs-slash-item:hover,
+      .mj-docs-slash-item--active {
         background: var(--mj-bg-surface-hover);
-        border-color: var(--mj-border-default);
+        border-color: var(--mj-brand-primary);
       }
 
       .mj-docs-slash-item__icon {
@@ -2603,9 +2630,41 @@ export interface DocsPermissionEntry {
         min-height: 22px;
       }
 
+      .mj-docs-editable-surface:empty::before {
+        content: attr(data-placeholder);
+        color: var(--mj-text-muted);
+        pointer-events: none;
+        font-weight: 400;
+      }
+
       .mj-docs-editable-surface:focus {
         background: var(--mj-bg-surface-hover);
         box-shadow: 0 0 0 1px var(--mj-brand-primary);
+      }
+
+      .mj-docs-trailing-flow-zone {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border: 1px dashed var(--mj-border-default);
+        border-radius: 8px;
+        color: var(--mj-text-muted);
+        font-size: 12px;
+        cursor: text;
+        transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+      }
+
+      .mj-docs-trailing-flow-zone:hover,
+      .mj-docs-trailing-flow-zone:focus {
+        outline: none;
+        border-color: var(--mj-brand-primary);
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-docs-trailing-flow-zone__hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
       }
 
       .mj-docs-editable-heading {
@@ -3989,6 +4048,7 @@ export class MarkdownArtifactViewerComponent
   private readonly importExportService = inject(DocumentImportExportService);
   private readonly notificationService = inject(MJNotificationService, { optional: true });
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly hostElement = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
 
   public MarkdownContent = '';
   private initialLoadedMarkdown = '';
@@ -4021,10 +4081,12 @@ export class MarkdownArtifactViewerComponent
   public ShowPermissionsModal = false;
   public ShowSlashMenu = false;
   public SlashSearchQuery = '';
+  public SlashMenuHighlightIndex = 0;
   public ActiveSlashTargetSegmentID: string | null = null;
   public ExpandedOleBlockID: string | null = null;
   public StatusBannerMessage = '';
   public IsSavingVersion = false;
+  private draftSegmentCounter = 0;
 
   // Parsed state
   public DocumentSegments: DocumentRenderSegment[] = [];
@@ -4203,7 +4265,14 @@ export class MarkdownArtifactViewerComponent
       if (!this.artifactVersion?.ArtifactID) {
         this.HasEditPermission = !this.readonly;
       }
-      this.session?.SetCanEdit(this.hasPermissionToEdit);
+      const canEditNow = this.hasPermissionToEdit;
+      this.session?.SetCanEdit(canEditNow);
+      if (!this.readonly && canEditNow && this.ViewMode === 'preview') {
+        this.ViewMode = 'edit';
+      }
+      if (this.session && this.CollaborationStatus !== 'revoked') {
+        this.CollaborationStatus = this.session.Status;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -4234,6 +4303,8 @@ export class MarkdownArtifactViewerComponent
     this.ViewMode = mode;
     if (mode === 'diff') {
       this.RecomputeDiff();
+    } else if ((mode === 'edit' || mode === 'suggest') && this.DocumentSegments.length === 0) {
+      this.DocumentSegments = [this.createDraftParagraphSegment(1)];
     }
     this.cdr.markForCheck();
   }
@@ -4273,12 +4344,14 @@ export class MarkdownArtifactViewerComponent
     this.ShowSlashMenu = !this.ShowSlashMenu;
     if (this.ShowSlashMenu) {
       this.SlashSearchQuery = '';
+      this.SlashMenuHighlightIndex = 0;
     }
     this.cdr.markForCheck();
   }
 
   public CloseSlashMenu(): void {
     this.ShowSlashMenu = false;
+    this.SlashMenuHighlightIndex = 0;
     this.ActiveSlashTargetSegmentID = null;
     this.cdr.markForCheck();
   }
@@ -4290,22 +4363,97 @@ export class MarkdownArtifactViewerComponent
     this.ActiveSlashTargetSegmentID = seg.SegmentID;
     this.SelectedAnchorKey = seg.SegmentID;
     this.SlashSearchQuery = '';
+    this.SlashMenuHighlightIndex = 0;
     this.ShowSlashMenu = true;
     this.cdr.markForCheck();
   }
 
   /**
+   * Handles keyboard navigation (`ArrowDown`, `ArrowUp`, `Enter`, `Escape`) inside the `/` Slash Command Palette.
+   */
+  public OnSlashMenuKeydown(event: KeyboardEvent): void {
+    const cmds = this.FilteredSlashCommands;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.CloseSlashMenu();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (cmds.length > 0) {
+        this.SlashMenuHighlightIndex = (this.SlashMenuHighlightIndex + 1) % cmds.length;
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (cmds.length > 0) {
+        this.SlashMenuHighlightIndex = (this.SlashMenuHighlightIndex - 1 + cmds.length) % cmds.length;
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+    if (event.key === 'Enter' && cmds.length > 0) {
+      event.preventDefault();
+      const chosen = cmds[this.SlashMenuHighlightIndex] ?? cmds[0];
+      if (chosen) {
+        this.ExecuteSlashCommand(chosen);
+      }
+    }
+  }
+
+  /**
+   * Focuses the trailing empty paragraph block at the bottom of the document canvas,
+   * or appends a new empty paragraph block and focuses it immediately.
+   */
+  public AppendOrFocusTrailingParagraph(): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    if (this.DocumentSegments.length > 0) {
+      const lastIdx = this.DocumentSegments.length - 1;
+      const lastSeg = this.DocumentSegments[lastIdx];
+      if (
+        lastSeg.Kind === 'markdown' &&
+        (lastSeg.BlockKind === 'paragraph' || !lastSeg.BlockKind) &&
+        lastSeg.RawMarkdown.trim().length === 0
+      ) {
+        this.focusEditableSegment(lastSeg.SegmentID, 'start');
+        return;
+      }
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    blocks.push('');
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: blocks.length - 1, position: 'start' });
+  }
+
+  /**
    * Handles live input inside an in-place `contenteditable` block (`Edit` / `Suggest` modes),
-   * opening the `/` Slash Command Palette when `/` is typed at the start of a block or after whitespace.
+   * supporting instant Markdown prefix auto-formatting (`# `, `- `, `1. `, `[] `, `> `, ```` ``` ````)
+   * and opening the `/` Slash Command Palette when `/` is typed at the start of a block or after whitespace.
    */
   public OnEditableBlockInput(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
     const text = el?.textContent ?? '';
     const trimmed = text.trim();
+
+    // Instant Markdown prefix auto-turn-into on paragraph blocks in Edit mode
+    if (
+      this.CanUserEdit &&
+      this.ViewMode === 'edit' &&
+      (seg.BlockKind === 'paragraph' || !seg.BlockKind)
+    ) {
+      if (this.tryApplyInstantMarkdownAutoTurn(seg, text)) {
+        return;
+      }
+    }
+
     if (trimmed === '/' || /(?:^|\s)\/$/.test(text)) {
       this.ActiveSlashTargetSegmentID = seg.SegmentID;
       this.SelectedAnchorKey = seg.SegmentID;
       this.SlashSearchQuery = '';
+      this.SlashMenuHighlightIndex = 0;
       this.ShowSlashMenu = true;
       this.cdr.markForCheck();
       return;
@@ -4314,9 +4462,13 @@ export class MarkdownArtifactViewerComponent
       this.ActiveSlashTargetSegmentID = seg.SegmentID;
       this.SelectedAnchorKey = seg.SegmentID;
       this.SlashSearchQuery = trimmed.slice(1);
+      this.SlashMenuHighlightIndex = 0;
       this.ShowSlashMenu = true;
       this.cdr.markForCheck();
       return;
+    }
+    if (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID && !trimmed.startsWith('/')) {
+      this.CloseSlashMenu();
     }
 
     // Live word-level suggestion tracking while typing in Suggest Mode
@@ -4337,20 +4489,287 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
-  public OnEditableBlockKeydown(seg: DocumentRenderSegment, event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.ShowSlashMenu) {
-      event.preventDefault();
-      this.CloseSlashMenu();
-      return;
+  /**
+   * Detects Markdown block prefixes typed at the start of a paragraph block (`# `, `## `, `- `, `1. `, `[] `, `> `, ```` ``` ````)
+   * and immediately transforms the block in place while preserving focus and caret continuity.
+   */
+  private tryApplyInstantMarkdownAutoTurn(seg: DocumentRenderSegment, rawText: string): boolean {
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (segIdx < 0) {
+      return false;
     }
+    const normalized = rawText.replace(/\u00a0/g, ' ');
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+    // 1. Heading prefix: "# ", "## ", "### ", "#### "
+    const headingMatch = /^(#{1,4})[ \t](.*)$/s.exec(normalized);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const rest = headingMatch[2].replace(/\n+/g, ' ').trim();
+      blocks[segIdx] = `${'#'.repeat(level)} ${rest}`;
+      this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'end' });
+      return true;
+    }
+
+    // 2. Task checklist prefix: "[] ", "[ ] ", "[x] ", "- [ ] ", "- [x] "
+    const taskMatch = /^(?:[-*][ \t]+)?\[([ xX]?)\][ \t](.*)$/s.exec(normalized);
+    if (taskMatch) {
+      const checked = taskMatch[1].toLowerCase() === 'x';
+      const rest = taskMatch[2].replace(/\n+/g, ' ').trim();
+      blocks[segIdx] = `- [${checked ? 'x' : ' '}] ${rest}`;
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: segIdx,
+        position: 'end',
+        listItemIndex: 0,
+      });
+      return true;
+    }
+
+    // 3. Unordered bullet list prefix: "- " or "* "
+    const bulletMatch = /^[-*][ \t](.*)$/s.exec(normalized);
+    if (bulletMatch) {
+      const rest = bulletMatch[1].replace(/\n+/g, ' ').trim();
+      blocks[segIdx] = `- ${rest}`;
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: segIdx,
+        position: 'end',
+        listItemIndex: 0,
+      });
+      return true;
+    }
+
+    // 4. Ordered numbered list prefix: "1. "
+    const orderedMatch = /^1\.[ \t](.*)$/s.exec(normalized);
+    if (orderedMatch) {
+      const rest = orderedMatch[1].replace(/\n+/g, ' ').trim();
+      blocks[segIdx] = `1. ${rest}`;
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: segIdx,
+        position: 'end',
+        listItemIndex: 0,
+      });
+      return true;
+    }
+
+    // 5. Callout prefix: "> "
+    const calloutMatch = /^>[ \t](.*)$/s.exec(normalized);
+    if (calloutMatch) {
+      const rest = calloutMatch[1].trim();
+      blocks[segIdx] = `> [!NOTE]\n> ${rest}`;
+      this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'end' });
+      return true;
+    }
+
+    // 6. Code block prefix: "``` " or "```ts "
+    const codeMatch = /^```([a-zA-Z0-9_-]*)[ \t\n](.*)$/s.exec(normalized);
+    if (codeMatch) {
+      const lang = codeMatch[1].trim() || 'typescript';
+      const rest = codeMatch[2];
+      blocks[segIdx] = ['```' + lang, rest, '```'].join('\n');
+      this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'end' });
+      return true;
+    }
+
+    return false;
+  }
+
+  public OnEditableBlockKeydown(seg: DocumentRenderSegment, event: KeyboardEvent): void {
+    // 1. Slash menu keyboard navigation when open
+    if (this.ShowSlashMenu) {
+      if (
+        event.key === 'Escape' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'Enter'
+      ) {
+        this.OnSlashMenuKeydown(event);
+        return;
+      }
+    }
+
     if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
       this.ActiveSlashTargetSegmentID = seg.SegmentID;
       this.SelectedAnchorKey = seg.SegmentID;
+      return;
+    }
+
+    if (!this.CanUserEdit || this.ViewMode !== 'edit') {
+      return;
+    }
+
+    const el = event.target as HTMLElement | null;
+    const rawText = el?.textContent ?? '';
+    const caret = this.getCaretCharacterOffsetWithin(el);
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (segIdx < 0) {
+      return;
+    }
+
+    // 2. Enter key -> split block or transition smoothly to a new paragraph block below
+    if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+      if (seg.BlockKind === 'heading') {
+        event.preventDefault();
+        const level = seg.HeadingLevel ?? 1;
+        const cleanFull = rawText.replace(/\n+/g, ' ');
+        const before = cleanFull.slice(0, caret.start).trim();
+        const after = cleanFull.slice(caret.end).trim();
+        const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+        if (caret.start === 0 && before.length === 0 && after.length > 0) {
+          blocks[segIdx] = `${'#'.repeat(level)} ${after}`;
+          blocks.splice(segIdx, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        } else {
+          blocks[segIdx] = `${'#'.repeat(level)} ${before}`;
+          blocks.splice(segIdx + 1, 0, after);
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
+        }
+        return;
+      }
+
+      if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
+        event.preventDefault();
+        const before = rawText.slice(0, caret.start);
+        const after = rawText.slice(caret.end);
+        const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+        if (rawText.trim().length === 0) {
+          this.focusEditableSegment(seg.SegmentID, 'start');
+          return;
+        }
+        if (caret.start === 0 && before.trim().length === 0 && after.trim().length > 0) {
+          blocks[segIdx] = after.trim();
+          blocks.splice(segIdx, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        } else {
+          blocks[segIdx] = before.trim();
+          blocks.splice(segIdx + 1, 0, after.trim());
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
+        }
+        return;
+      }
+
+      if (seg.BlockKind === 'callout') {
+        event.preventDefault();
+        const parsed = this.GetParsedCallout(seg);
+        const bodyText = rawText.trim();
+        const bodyLines = bodyText.split('\n').map((l) => `> ${l}`);
+        const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+        blocks[segIdx] = [`> [!${parsed.CalloutType}]`, ...bodyLines].join('\n');
+        blocks.splice(segIdx + 1, 0, '');
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
+        return;
+      }
+    }
+
+    // 3. Backspace at caret offset 0 -> demote heading/callout, delete empty block, or merge into preceding block
+    if (
+      event.key === 'Backspace' &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      caret.collapsed &&
+      caret.start === 0
+    ) {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+      if (seg.BlockKind === 'heading') {
+        event.preventDefault();
+        blocks[segIdx] = rawText.replace(/\n+/g, ' ').trim();
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        return;
+      }
+
+      if (seg.BlockKind === 'callout') {
+        event.preventDefault();
+        blocks[segIdx] = rawText.trim();
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        return;
+      }
+
+      if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
+        if (rawText.trim().length === 0) {
+          if (this.DocumentSegments.length > 1) {
+            event.preventDefault();
+            blocks.splice(segIdx, 1);
+            const targetIdx = Math.max(0, segIdx - 1);
+            this.applyBlockFlowTransaction(blocks, { segmentIndex: targetIdx, position: 'end' });
+          }
+          return;
+        }
+
+        if (segIdx > 0) {
+          const prevSeg = this.DocumentSegments[segIdx - 1];
+          if (
+            prevSeg.Kind === 'markdown' &&
+            (prevSeg.BlockKind === 'paragraph' || !prevSeg.BlockKind || prevSeg.BlockKind === 'heading')
+          ) {
+            event.preventDefault();
+            const currentTrimmed = rawText.trim();
+            if (prevSeg.RawMarkdown.trim().length === 0 && prevSeg.BlockKind !== 'heading') {
+              blocks[segIdx] = currentTrimmed;
+              blocks.splice(segIdx - 1, 1);
+              this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx - 1, position: 0 });
+              return;
+            }
+            if (prevSeg.BlockKind === 'heading') {
+              const level = prevSeg.HeadingLevel ?? 1;
+              const prevHeadingText = (prevSeg.HeadingText ?? this.GetEditableHeadingText(prevSeg)).trim();
+              const joiner = prevHeadingText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
+              const seamOffset = prevHeadingText.length + joiner.length;
+              blocks[segIdx - 1] = `${'#'.repeat(level)} ${prevHeadingText}${joiner}${currentTrimmed}`;
+              blocks.splice(segIdx, 1);
+              this.applyBlockFlowTransaction(blocks, {
+                segmentIndex: segIdx - 1,
+                position: seamOffset,
+              });
+              return;
+            }
+            const prevParaText = prevSeg.RawMarkdown.trim();
+            const joiner = prevParaText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
+            const seamOffset = prevParaText.length + joiner.length;
+            blocks[segIdx - 1] = `${prevParaText}${joiner}${currentTrimmed}`;
+            blocks.splice(segIdx, 1);
+            this.applyBlockFlowTransaction(blocks, {
+              segmentIndex: segIdx - 1,
+              position: seamOffset,
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // 4. Cross-block ArrowUp / ArrowLeft at start and ArrowDown / ArrowRight at end
+    if (
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      caret.collapsed
+    ) {
+      if ((event.key === 'ArrowUp' || event.key === 'ArrowLeft') && caret.start === 0) {
+        const prevIdx = this.findAdjacentEditableSegmentIndex(seg.SegmentID, -1);
+        if (prevIdx >= 0) {
+          event.preventDefault();
+          this.flushElementBeforeNavigation(seg, el);
+          this.focusEditableSegment(this.DocumentSegments[prevIdx].SegmentID, 'end');
+        }
+        return;
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawText.length) {
+        const nextIdx = this.findAdjacentEditableSegmentIndex(seg.SegmentID, 1);
+        if (nextIdx >= 0) {
+          event.preventDefault();
+          this.flushElementBeforeNavigation(seg, el);
+          this.focusEditableSegment(this.DocumentSegments[nextIdx].SegmentID, 'start');
+        }
+      }
     }
   }
 
   public GetEditableHeadingText(seg: DocumentRenderSegment): string {
-    return seg.RawMarkdown.replace(/^#{1,6}\s+/, '').trim();
+    return seg.RawMarkdown.replace(/^#{1,6}(?:\s+|$)/, '').trim();
   }
 
   public CycleHeadingLevel(seg: DocumentRenderSegment): void {
@@ -4359,7 +4778,7 @@ export class MarkdownArtifactViewerComponent
     }
     const currentLevel = seg.HeadingLevel ?? 1;
     const nextLevel = currentLevel >= 4 ? 1 : currentLevel + 1;
-    const text = seg.HeadingText || this.GetEditableHeadingText(seg);
+    const text = seg.HeadingText ?? this.GetEditableHeadingText(seg);
     const nextMd = `${'#'.repeat(nextLevel)} ${text}`;
     this.ApplyInPlaceSegmentChange(seg, nextMd, `Changed heading level to H${nextLevel}`);
   }
@@ -4367,7 +4786,7 @@ export class MarkdownArtifactViewerComponent
   public CommitEditableHeading(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
     const rawText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
-    if (!rawText || rawText === '/') {
+    if (rawText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
       return;
     }
     const level = seg.HeadingLevel ?? 1;
@@ -4380,7 +4799,18 @@ export class MarkdownArtifactViewerComponent
   public CommitEditableParagraph(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
     const nextText = (el?.textContent ?? '').trim();
-    if (!nextText || nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
+    if (nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
+      return;
+    }
+    if (!nextText) {
+      if (seg.RawMarkdown.trim().length > 0 && this.CanUserEdit && this.ViewMode === 'edit') {
+        const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+        if (segIdx >= 0) {
+          const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+          blocks[segIdx] = '';
+          this.applyBlockFlowTransaction(blocks);
+        }
+      }
       return;
     }
     if (nextText !== seg.RawMarkdown.trim()) {
@@ -4493,7 +4923,7 @@ export class MarkdownArtifactViewerComponent
       const bulletChar = trimmed[0];
       if (
         (bulletChar === '-' || bulletChar === '*' || bulletChar === '+') &&
-        (trimmed[1] === ' ' || trimmed[1] === '\t')
+        (trimmed.length === 1 || trimmed[1] === ' ' || trimmed[1] === '\t')
       ) {
         const afterBullet = trimmed.slice(2).trimStart();
         if (
@@ -4519,7 +4949,11 @@ export class MarkdownArtifactViewerComponent
       while (dEnd < trimmed.length && trimmed.charCodeAt(dEnd) >= 48 && trimmed.charCodeAt(dEnd) <= 57) {
         dEnd++;
       }
-      if (dEnd > 0 && trimmed[dEnd] === '.' && (trimmed[dEnd + 1] === ' ' || trimmed[dEnd + 1] === '\t')) {
+      if (
+        dEnd > 0 &&
+        trimmed[dEnd] === '.' &&
+        (dEnd + 1 === trimmed.length || trimmed[dEnd + 1] === ' ' || trimmed[dEnd + 1] === '\t')
+      ) {
         return {
           Index: idx,
           IsTask: false,
@@ -4535,6 +4969,18 @@ export class MarkdownArtifactViewerComponent
         Text: line.trim(),
       };
     });
+  }
+
+  private renumberListItems(
+    items: Array<{ Index: number; IsTask: boolean; Checked: boolean; OrderedPrefix?: string; Text: string }>,
+  ): void {
+    let orderedCounter = 1;
+    for (let i = 0; i < items.length; i++) {
+      items[i].Index = i;
+      if (items[i].OrderedPrefix) {
+        items[i].OrderedPrefix = `${orderedCounter++}.`;
+      }
+    }
   }
 
   private serializeParsedListItems(
@@ -4583,38 +5029,163 @@ export class MarkdownArtifactViewerComponent
   }
 
   public OnListItemKeydown(seg: DocumentRenderSegment, itemIndex: number, event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (this.ShowSlashMenu) {
+      this.OnEditableBlockKeydown(seg, event);
+      return;
+    }
+
+    const el = event.target as HTMLElement | null;
+    const rawText = (el?.textContent ?? '').replace(/\n+/g, ' ');
+    const caret = this.getCaretCharacterOffsetWithin(el);
+    const items = this.GetParsedListItems(seg);
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+
+    if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       event.preventDefault();
-      const el = event.target as HTMLElement | null;
-      const currentText = (el?.textContent ?? '').replace(/\n+/g, ' ').trim();
-      const items = this.GetParsedListItems(seg);
-      if (items[itemIndex]) {
-        items[itemIndex].Text = currentText;
+      if (!this.CanUserEdit || segIdx < 0) {
+        return;
       }
-      const template = items[itemIndex] ?? { IsTask: false, Checked: false, Text: 'New item' };
+      const currentTrimmed = rawText.trim();
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+      // Pressing Enter on an empty list item exits the list into a fresh paragraph block below
+      if (currentTrimmed.length === 0 && this.ViewMode === 'edit') {
+        items.splice(itemIndex, 1);
+        this.renumberListItems(items);
+        if (items.length === 0) {
+          blocks[segIdx] = '';
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        } else {
+          blocks[segIdx] = this.serializeParsedListItems(items);
+          blocks.splice(segIdx + 1, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
+        }
+        return;
+      }
+
+      const before = rawText.slice(0, caret.start).trim();
+      const after = rawText.slice(caret.end).trim();
+      if (items[itemIndex]) {
+        items[itemIndex].Text = before;
+      }
+      const template = items[itemIndex] ?? { IsTask: false, Checked: false, Text: '' };
       items.splice(itemIndex + 1, 0, {
         Index: itemIndex + 1,
         IsTask: template.IsTask,
         Checked: false,
-        OrderedPrefix: template.OrderedPrefix ? `${items.length + 1}.` : undefined,
-        Text: 'New item',
+        OrderedPrefix: template.OrderedPrefix ? `${itemIndex + 2}.` : undefined,
+        Text: after,
       });
-      this.ApplyInPlaceSegmentChange(seg, this.serializeParsedListItems(items), 'Inserted list item');
+      this.renumberListItems(items);
+      const nextListMd = this.serializeParsedListItems(items);
+      if (this.ViewMode === 'edit') {
+        blocks[segIdx] = nextListMd;
+        this.applyBlockFlowTransaction(blocks, {
+          segmentIndex: segIdx,
+          position: 'start',
+          listItemIndex: itemIndex + 1,
+        });
+      } else {
+        this.ApplyInPlaceSegmentChange(seg, nextListMd, 'Inserted list item');
+      }
       return;
     }
+
+    // Backspace at offset 0 of a list item -> convert single-item list to paragraph or merge into previous item
+    if (
+      event.key === 'Backspace' &&
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      caret.collapsed &&
+      caret.start === 0 &&
+      this.CanUserEdit &&
+      this.ViewMode === 'edit' &&
+      segIdx >= 0
+    ) {
+      event.preventDefault();
+      const currentTrimmed = rawText.trim();
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+
+      if (items.length <= 1) {
+        blocks[segIdx] = currentTrimmed;
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        return;
+      }
+      if (itemIndex === 0) {
+        items.splice(0, 1);
+        this.renumberListItems(items);
+        blocks[segIdx] = this.serializeParsedListItems(items);
+        blocks.splice(segIdx, 0, currentTrimmed);
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        return;
+      }
+      const prevText = items[itemIndex - 1].Text.trim();
+      const joiner = prevText.length > 0 && currentTrimmed.length > 0 ? ' ' : '';
+      const seamOffset = prevText.length + joiner.length;
+      items[itemIndex - 1].Text = `${prevText}${joiner}${currentTrimmed}`;
+      items.splice(itemIndex, 1);
+      this.renumberListItems(items);
+      blocks[segIdx] = this.serializeParsedListItems(items);
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: segIdx,
+        position: seamOffset,
+        listItemIndex: itemIndex - 1,
+      });
+      return;
+    }
+
+    // ArrowUp / ArrowDown across list items and adjacent blocks
+    if (
+      !event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      caret.collapsed &&
+      this.CanUserEdit &&
+      this.ViewMode === 'edit'
+    ) {
+      if ((event.key === 'ArrowUp' || event.key === 'ArrowLeft') && caret.start === 0) {
+        if (itemIndex > 0) {
+          event.preventDefault();
+          this.focusEditableSegment(seg.SegmentID, 'end', itemIndex - 1);
+          return;
+        }
+      }
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowRight') && caret.end >= rawText.length) {
+        if (itemIndex + 1 < items.length) {
+          event.preventDefault();
+          this.focusEditableSegment(seg.SegmentID, 'start', itemIndex + 1);
+          return;
+        }
+      }
+    }
+
     this.OnEditableBlockKeydown(seg, event);
   }
 
   public AddListItem(seg: DocumentRenderSegment): void {
     const items = this.GetParsedListItems(seg);
     const first = items[0];
+    const newIndex = items.length;
     items.push({
-      Index: items.length,
+      Index: newIndex,
       IsTask: first?.IsTask ?? false,
       Checked: false,
-      OrderedPrefix: first?.OrderedPrefix ? `${items.length + 1}.` : undefined,
-      Text: first?.IsTask ? 'New action item' : 'New list item',
+      OrderedPrefix: first?.OrderedPrefix ? `${newIndex + 1}.` : undefined,
+      Text: '',
     });
+    const segIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    if (this.ViewMode === 'edit' && segIdx >= 0) {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      blocks[segIdx] = this.serializeParsedListItems(items);
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: segIdx,
+        position: 'start',
+        listItemIndex: newIndex,
+      });
+      return;
+    }
     this.ApplyInPlaceSegmentChange(seg, this.serializeParsedListItems(items), 'Added list item');
   }
 
@@ -4638,13 +5209,13 @@ export class MarkdownArtifactViewerComponent
           const trailingFirst = first.slice(closeBracketIdx + 1).trim();
           const restFirst = trailingFirst ? [trailingFirst] : [];
           const body = [...restFirst, ...lines.slice(1)].join('\n').trim();
-          return { CalloutType: rawTag, BodyText: body || 'Callout details…' };
+          return { CalloutType: rawTag, BodyText: body };
         }
       }
     }
     return {
       CalloutType: 'NOTE',
-      BodyText: lines.join('\n').trim() || 'Callout details…',
+      BodyText: lines.join('\n').trim(),
     };
   }
 
@@ -4661,9 +5232,6 @@ export class MarkdownArtifactViewerComponent
   public CommitEditableCallout(seg: DocumentRenderSegment, event: Event): void {
     const el = event.target as HTMLElement | null;
     const nextBody = (el?.textContent ?? '').trim();
-    if (!nextBody) {
-      return;
-    }
     const parsed = this.GetParsedCallout(seg);
     if (nextBody === parsed.BodyText) {
       return;
@@ -4733,10 +5301,276 @@ export class MarkdownArtifactViewerComponent
    * Replaces a single segment's Markdown in the document and broadcasts the minimal diff via Yjs.
    */
   public ReplaceSegmentMarkdown(seg: DocumentRenderSegment, nextBlockMarkdown: string): void {
-    const updatedSegments = this.DocumentSegments.map((s) =>
-      s.SegmentID === seg.SegmentID ? nextBlockMarkdown : s.RawMarkdown,
-    );
+    const updatedSegments = this.DocumentSegments
+      .map((s) => (s.SegmentID === seg.SegmentID ? nextBlockMarkdown : s.RawMarkdown))
+      .filter((md) => md.trim().length > 0);
     this.OnMarkdownChanged(updatedSegments.join('\n\n'));
+  }
+
+  /**
+   * Creates an in-memory empty draft paragraph segment so newly inserted paragraphs (`Enter` after a heading
+   * or paragraph, or clicking the trailing canvas flow zone) render immediately as editable DOM blocks.
+   */
+  private createDraftParagraphSegment(startLine: number): DocumentRenderSegment {
+    const id = `paragraph-draft-${++this.draftSegmentCounter}`;
+    return {
+      SegmentID: id,
+      Kind: 'markdown',
+      BlockKind: 'paragraph',
+      StartLine: startLine,
+      EndLine: startLine,
+      RawMarkdown: '',
+    };
+  }
+
+  /**
+   * Applies a block-level flow transaction (splitting, merging, inserting, or auto-converting blocks),
+   * preserving any empty draft paragraph segments in `DocumentSegments` while keeping `MarkdownContent`
+   * and the Yjs collaboration session clean, then focuses the target segment and places the caret.
+   */
+  private applyBlockFlowTransaction(
+    nextBlockMarkdowns: string[],
+    focusSpec?: {
+      segmentIndex: number;
+      position?: 'start' | 'end' | number;
+      listItemIndex?: number;
+    },
+  ): void {
+    const nonEmptyBlocks = nextBlockMarkdowns.filter((md) => md.trim().length > 0);
+    const nextMarkdown = nonEmptyBlocks.join('\n\n');
+    this.MarkdownContent = nextMarkdown;
+    this.refreshParsedStructure();
+    if (this.session) {
+      this.session.SetContent(this.MarkdownContent);
+    }
+
+    if (nextBlockMarkdowns.some((md) => md.trim().length === 0)) {
+      const parsedNonEmpty = [...this.DocumentSegments];
+      const merged: DocumentRenderSegment[] = [];
+      let parsedCursor = 0;
+      for (let i = 0; i < nextBlockMarkdowns.length; i++) {
+        if (nextBlockMarkdowns[i].trim().length === 0) {
+          const prevLine = merged[merged.length - 1]?.EndLine ?? 0;
+          merged.push(this.createDraftParagraphSegment(prevLine + 1));
+        } else if (parsedCursor < parsedNonEmpty.length) {
+          merged.push(parsedNonEmpty[parsedCursor++]);
+        }
+      }
+      while (parsedCursor < parsedNonEmpty.length) {
+        merged.push(parsedNonEmpty[parsedCursor++]);
+      }
+      this.DocumentSegments = merged;
+    }
+
+    if (this.DocumentSegments.length === 0 && this.IsInteractiveCanvasMode) {
+      this.DocumentSegments = [this.createDraftParagraphSegment(1)];
+    }
+
+    this.cdr.markForCheck();
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Ignore if view is not yet attached in headless unit tests
+    }
+
+    if (focusSpec) {
+      const clampedIdx = Math.max(
+        0,
+        Math.min(this.DocumentSegments.length - 1, focusSpec.segmentIndex),
+      );
+      const targetSeg = this.DocumentSegments[clampedIdx];
+      if (targetSeg) {
+        this.SelectedAnchorKey = targetSeg.SegmentID;
+        this.focusEditableSegment(
+          targetSeg.SegmentID,
+          focusSpec.position ?? 'start',
+          focusSpec.listItemIndex,
+        );
+      }
+    }
+  }
+
+  /**
+   * Reads the current character selection/caret offsets inside a `contenteditable` element.
+   * Supports an explicit `selectionStart` / `selectionEnd` property override on `el` for headless unit tests.
+   */
+  private getCaretCharacterOffsetWithin(
+    el: HTMLElement | null,
+  ): { start: number; end: number; collapsed: boolean } {
+    if (!el) {
+      return { start: 0, end: 0, collapsed: true };
+    }
+    const totalLen = (el.textContent ?? '').length;
+    const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
+    if (typeof testEl.selectionStart === 'number') {
+      const start = Math.max(0, Math.min(totalLen, testEl.selectionStart));
+      const end =
+        typeof testEl.selectionEnd === 'number'
+          ? Math.max(start, Math.min(totalLen, testEl.selectionEnd))
+          : start;
+      return { start, end, collapsed: start === end };
+    }
+    if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
+          const preStart = range.cloneRange();
+          preStart.selectNodeContents(el);
+          preStart.setEnd(range.startContainer, range.startOffset);
+          const start = preStart.toString().length;
+
+          const preEnd = range.cloneRange();
+          preEnd.selectNodeContents(el);
+          preEnd.setEnd(range.endContainer, range.endOffset);
+          const end = preEnd.toString().length;
+          return { start, end, collapsed: range.collapsed };
+        }
+      }
+    }
+    return { start: totalLen, end: totalLen, collapsed: true };
+  }
+
+  /**
+   * Focuses the editable DOM surface for `segmentId` (or a specific list item inside it)
+   * and places the DOM selection caret at `'start'`, `'end'`, or a specific character offset.
+   */
+  public focusEditableSegment(
+    segmentId: string,
+    position: 'start' | 'end' | number = 'start',
+    listItemIndex?: number,
+  ): void {
+    this.SelectedAnchorKey = segmentId;
+    const attemptFocus = (): boolean => {
+      const root: ParentNode | null =
+        this.PrintableCanvas?.nativeElement ??
+        this.hostElement?.nativeElement ??
+        (typeof document !== 'undefined' ? document : null);
+      if (!root) {
+        return false;
+      }
+      let targetEl: HTMLElement | null = null;
+      if (listItemIndex !== undefined) {
+        targetEl = root.querySelector<HTMLElement>(
+          `[data-testid="list-item-text-${segmentId}-${listItemIndex}"]`,
+        );
+      }
+      if (!targetEl) {
+        targetEl =
+          root.querySelector<HTMLElement>(`[data-testid="editable-heading-${segmentId}"]`) ??
+          root.querySelector<HTMLElement>(`[data-testid="editable-paragraph-${segmentId}"]`) ??
+          root.querySelector<HTMLElement>(`[data-testid="editable-callout-body-${segmentId}"]`) ??
+          root.querySelector<HTMLElement>(`[data-testid="editable-code-body-${segmentId}"]`);
+      }
+      if (!targetEl) {
+        const listItems = root.querySelectorAll<HTMLElement>(
+          `[data-testid^="list-item-text-${segmentId}-"]`,
+        );
+        if (listItems.length > 0) {
+          targetEl =
+            position === 'end' ? listItems[listItems.length - 1] : listItems[0];
+        }
+      }
+      if (!targetEl) {
+        targetEl = root.querySelector<HTMLElement>(
+          `[data-testid="table-header-${segmentId}-0"]`,
+        );
+      }
+      if (!targetEl) {
+        return false;
+      }
+      targetEl.focus();
+      this.placeCaretInEditableElement(targetEl, position);
+      return true;
+    };
+
+    if (!attemptFocus() && typeof queueMicrotask === 'function') {
+      queueMicrotask(() => {
+        attemptFocus();
+      });
+    }
+  }
+
+  private placeCaretInEditableElement(
+    el: HTMLElement,
+    position: 'start' | 'end' | number,
+  ): void {
+    const textLen = (el.textContent ?? '').length;
+    const targetOffset =
+      position === 'start'
+        ? 0
+        : position === 'end'
+          ? textLen
+          : Math.max(0, Math.min(textLen, position));
+    const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
+    testEl.selectionStart = targetOffset;
+    testEl.selectionEnd = targetOffset;
+
+    if (
+      typeof document === 'undefined' ||
+      typeof window === 'undefined' ||
+      typeof window.getSelection !== 'function'
+    ) {
+      return;
+    }
+    const sel = window.getSelection();
+    if (!sel) {
+      return;
+    }
+    const range = document.createRange();
+    const firstTextNode = el.firstChild;
+    if (firstTextNode && firstTextNode.nodeType === Node.TEXT_NODE) {
+      const nodeLen = firstTextNode.textContent?.length ?? 0;
+      const clamped = Math.min(nodeLen, targetOffset);
+      range.setStart(firstTextNode, clamped);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(position === 'start' || targetOffset === 0);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  private findAdjacentEditableSegmentIndex(
+    currentSegmentId: string,
+    direction: -1 | 1,
+  ): number {
+    const startIdx = this.DocumentSegments.findIndex((s) => s.SegmentID === currentSegmentId);
+    if (startIdx < 0) {
+      return -1;
+    }
+    let idx = startIdx + direction;
+    while (idx >= 0 && idx < this.DocumentSegments.length) {
+      const candidate = this.DocumentSegments[idx];
+      if (
+        candidate.Kind === 'markdown' &&
+        !this.IsSegmentHiddenByCollapsedHeading(candidate)
+      ) {
+        return idx;
+      }
+      idx += direction;
+    }
+    return -1;
+  }
+
+  private flushElementBeforeNavigation(
+    seg: DocumentRenderSegment,
+    el: HTMLElement | null,
+  ): void {
+    if (!el) {
+      return;
+    }
+    if (seg.BlockKind === 'heading') {
+      this.CommitEditableHeading(seg, { target: el } as unknown as Event);
+    } else if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
+      const text = (el.textContent ?? '').trim();
+      if (text && text !== seg.RawMarkdown.trim()) {
+        this.CommitEditableParagraph(seg, { target: el } as unknown as Event);
+      }
+    } else if (seg.BlockKind === 'callout') {
+      this.CommitEditableCallout(seg, { target: el } as unknown as Event);
+    }
   }
 
   /**
@@ -4864,20 +5698,35 @@ export class MarkdownArtifactViewerComponent
       if (idx >= 0) {
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
         const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
+        const trimmedSnippet = snippet.replace(/\n+$/, '');
+        let focusIdx = idx;
         if (cleanedTarget.length === 0) {
-          blocks[idx] = snippet.trim();
+          blocks[idx] = trimmedSnippet;
         } else {
           blocks[idx] = cleanedTarget;
-          blocks.splice(idx + 1, 0, snippet.trim());
+          blocks.splice(idx + 1, 0, trimmedSnippet);
+          focusIdx = idx + 1;
         }
-        this.OnMarkdownChanged(blocks.join('\n\n'));
+        this.applyBlockFlowTransaction(blocks, {
+          segmentIndex: focusIdx,
+          position: 'end',
+        });
         return;
       }
     }
 
     const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/[A-Za-z0-9_-]*$/, '');
+    const trimmedSnippet = snippet.replace(/\n+$/, '');
+    if (trimmedSnippet.trim().length === 0) {
+      this.AppendOrFocusTrailingParagraph();
+      return;
+    }
     const sep = cleanedBase.endsWith('\n') || cleanedBase.length === 0 ? '' : '\n\n';
     this.OnMarkdownChanged(`${cleanedBase}${sep}${snippet}`);
+    if (this.DocumentSegments.length > 0) {
+      const lastSeg = this.DocumentSegments[this.DocumentSegments.length - 1];
+      this.focusEditableSegment(lastSeg.SegmentID, 'end');
+    }
   }
 
   /**
@@ -4885,8 +5734,9 @@ export class MarkdownArtifactViewerComponent
    */
   public ExecuteSlashCommand(cmd: DocumentSlashCommand): void {
     this.ShowSlashMenu = false;
+    this.SlashMenuHighlightIndex = 0;
 
-    if (cmd.Snippet) {
+    if (cmd.Snippet !== undefined) {
       this.insertMarkdownAtTargetSegment(cmd.Snippet);
       return;
     }
