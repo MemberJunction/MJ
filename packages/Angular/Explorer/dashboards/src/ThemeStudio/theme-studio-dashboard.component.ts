@@ -41,6 +41,7 @@ import {
   emitOverlayCss,
   emitScopedCustomCss,
   MJ_DEFAULT_SEEDS,
+  SanitizeThemeSeeds,
   ThemeSeeds,
 } from '@memberjunction/theme-engine';
 import {
@@ -132,7 +133,7 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
   }
 
   public readonly FontOptions: { label: string; value: string }[] = [
-    { label: 'Inter (default)', value: MJ_DEFAULT_SEEDS.fontFamily! },
+    { label: 'Montserrat (default)', value: MJ_DEFAULT_SEEDS.fontFamily! },
     { label: 'Georgia (serif)', value: "'Georgia', 'Times New Roman', serif" },
     { label: 'Trebuchet', value: "'Trebuchet MS', Verdana, sans-serif" },
     { label: 'System UI', value: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" },
@@ -1529,7 +1530,8 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
     this.CurrentThemeId = entity.ID;
     this.CurrentName = entity.Name;
     try {
-      this.Seeds = { ...MJ_DEFAULT_SEEDS, ...(JSON.parse(entity.Seeds) as ThemeSeeds) };
+      const parsed = JSON.parse(entity.Seeds) as ThemeSeeds;
+      this.Seeds = { ...MJ_DEFAULT_SEEDS, ...(SanitizeThemeSeeds(parsed) ?? parsed) };
     } catch {
       this.Seeds = { ...MJ_DEFAULT_SEEDS };
     }
@@ -1831,7 +1833,8 @@ export class ThemeStudioDashboardComponent extends BaseDashboard implements Afte
       }
       let seeds: ThemeSeeds;
       try {
-        seeds = { ...MJ_DEFAULT_SEEDS, ...(JSON.parse(entity.Seeds) as ThemeSeeds) };
+        const parsed = JSON.parse(entity.Seeds) as ThemeSeeds;
+        seeds = { ...MJ_DEFAULT_SEEDS, ...(SanitizeThemeSeeds(parsed) ?? parsed) };
       } catch {
         seeds = { ...MJ_DEFAULT_SEEDS };
       }

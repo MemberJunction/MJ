@@ -262,3 +262,20 @@ describe('first-paint brand overlay restore', () => {
     expect(body).toMatch(/^\s*this\.themeService\.RestorePersistedBrandOverlay\(\);/m);
   });
 });
+
+describe('global stylesheet and typography contract (WS4)', () => {
+  const stylesScss = readFileSync(fileURLToPath(new URL('../lib/styles.scss', import.meta.url)), 'utf8');
+  const typographyScss = readFileSync(fileURLToPath(new URL('../lib/styles/_typography.scss', import.meta.url)), 'utf8');
+
+  it('imports Font Awesome Free 6.7.2 from npm in styles.scss', () => {
+    expect(stylesScss).toContain("@import '@fortawesome/fontawesome-free/css/all.min.css';");
+  });
+
+  it('imports card-grid styles alongside the other ng-ui-components primitives', () => {
+    expect(stylesScss).toContain("@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';");
+  });
+
+  it('binds headings to --mj-font-family-display with --mj-font-family fallback', () => {
+    expect(typographyScss).toContain('var(--mj-font-family-display, var(--mj-font-family, "Montserrat", sans-serif))');
+  });
+});

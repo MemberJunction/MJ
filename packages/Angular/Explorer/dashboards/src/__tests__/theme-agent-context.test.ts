@@ -79,6 +79,7 @@ describe('buildThemeStudioAgentContext', () => {
         expect(ctx['OverrideTokenCount']).toBe(2);
         expect(ctx['HasCustomCss']).toBe(true);
         expect((ctx['Seeds'] as Record<string, unknown>)['Primary']).toBe('#0076b6');
+        expect((ctx['Seeds'] as Record<string, unknown>)['FontFamilyDisplay']).toBeNull();
         // shape only — the raw override/custom-css bodies must never be published
         expect(JSON.stringify(ctx)).not.toContain('--mj-');
     });
@@ -131,5 +132,19 @@ describe('resolveThemeByIDOrName', () => {
         expect(empty.ok).toBe(false);
         const nonString = ResolveThemeByIDOrName(themes, 42);
         expect(nonString.ok).toBe(false);
+    });
+});
+
+describe('dashboard stylesheet typography contract (WS4)', () => {
+    it('uses var(--mj-font-family) instead of hardcoded Inter in Communication and Credentials dashboards', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const commCss = readFileSync(join(__dirname, '../Communication/communication-dashboard.component.css'), 'utf8');
+        const credCss = readFileSync(join(__dirname, '../Credentials/credentials-dashboard.component.css'), 'utf8');
+
+        expect(commCss).not.toContain("'Inter'");
+        expect(commCss).toContain('var(--mj-font-family)');
+        expect(credCss).not.toContain("'Inter'");
+        expect(credCss).toContain('var(--mj-font-family)');
     });
 });

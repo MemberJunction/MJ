@@ -111,6 +111,7 @@ export function BuildThemeStudioAgentContext(state: ThemeStudioAgentState): Reco
             Radius: state.Seeds.radius ?? null,
             Depth: state.Seeds.depth ?? null,
             FontFamily: state.Seeds.fontFamily ?? null,
+            FontFamilyDisplay: state.Seeds.fontFamilyDisplay ?? null,
         },
         VizPaletteOverridden: !!state.Seeds.vizPalette && state.Seeds.vizPalette.length > 0,
         OverrideTokenCount: state.OverrideTokenCount,

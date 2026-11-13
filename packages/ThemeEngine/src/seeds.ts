@@ -32,8 +32,10 @@ export interface ThemeSeeds {
    * strength. 1 reproduces MJ's brand shadows. Default 1.
    */
   depth?: number;
-  /** Type (audit G1): body font stack -> --mj-font-family. Default MJ Inter stack. */
+  /** Type (audit G1): body font stack -> --mj-font-family. Default MJ Montserrat stack. */
   fontFamily?: string;
+  /** Display / heading font stack -> --mj-font-family-display. Defaults to `fontFamily`. */
+  fontFamilyDisplay?: string;
   /** Monospace font stack -> --mj-font-family-mono. */
   fontFamilyMono?: string;
   /**
@@ -46,8 +48,25 @@ export interface ThemeSeeds {
 /** Seeds with every optional field resolved to its default. */
 export type ResolvedSeeds = Required<Omit<ThemeSeeds, 'vizPalette'>> & Pick<ThemeSeeds, 'vizPalette'>;
 
-const MJ_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const MJ_FONT = "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 const MJ_FONT_MONO = "'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace";
+
+/**
+ * Legacy default font stack from before the Montserrat retoken. Saved `MJ: Themes` rows
+ * that serialized `MJ_DEFAULT_SEEDS` verbatim without picking a custom font stored this
+ * string; normalizing it to `MJ_FONT` upgrades persisted themes seamlessly at load.
+ */
+export const MJ_LEGACY_INTER_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+
+function normalizeDefaultFont(fontStack: string | undefined): string | undefined {
+  if (!fontStack) {
+    return fontStack;
+  }
+  if (fontStack === MJ_LEGACY_INTER_FONT || fontStack.replace(/"/g, "'").trim() === MJ_LEGACY_INTER_FONT) {
+    return MJ_FONT;
+  }
+  return fontStack;
+}
 
 /**
  * Seeds that, when derived, reproduce MJ's own default theme within tolerance.
@@ -62,12 +81,15 @@ export const MJ_DEFAULT_SEEDS: ThemeSeeds = {
   radius: 8,
   depth: 1,
   fontFamily: MJ_FONT,
+  fontFamilyDisplay: MJ_FONT,
   fontFamilyMono: MJ_FONT_MONO,
 };
 
 /** Fill in seed defaults. */
 export function ResolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
   const accent = seeds.accent ?? seeds.primary;
+  const fontFamily = normalizeDefaultFont(seeds.fontFamily) ?? MJ_FONT;
+  const fontFamilyDisplay = normalizeDefaultFont(seeds.fontFamilyDisplay) ?? fontFamily;
   return {
     primary: seeds.primary,
     accent,
@@ -76,7 +98,8 @@ export function ResolveSeeds(seeds: ThemeSeeds): ResolvedSeeds {
     vibrancy: seeds.vibrancy ?? 1,
     radius: seeds.radius ?? 8,
     depth: seeds.depth ?? 1,
-    fontFamily: seeds.fontFamily ?? MJ_FONT,
+    fontFamily,
+    fontFamilyDisplay,
     fontFamilyMono: seeds.fontFamilyMono ?? MJ_FONT_MONO,
     vizPalette: seeds.vizPalette,
   };
@@ -116,7 +139,8 @@ export function SanitizeThemeSeeds(value: unknown): ThemeSeeds | null {
   set('vibrancy', num(v['vibrancy'], 0, 3));
   set('radius', num(v['radius'], 0, 64));
   set('depth', num(v['depth'], 0, 2));
-  set('fontFamily', font(v['fontFamily']));
+  set('fontFamily', normalizeDefaultFont(font(v['fontFamily'])));
+  set('fontFamilyDisplay', normalizeDefaultFont(font(v['fontFamilyDisplay'])));
   set('fontFamilyMono', font(v['fontFamilyMono']));
   if (Array.isArray(v['vizPalette'])) {
     const palette = v['vizPalette'].map(hex).filter((c): c is string => !!c).slice(0, 24);

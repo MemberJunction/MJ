@@ -101,7 +101,17 @@ describe('derived extras', () => {
     expect(t.overlayVars['--mj-shadow-brand-sm']).toContain('rgba(');
     expect(t.overlayVars['--mj-radius-md']).toBe('8px');
     expect(t.overlayVars['--mj-radius-sm']).toBe('4px');
-    expect(t.overlayVars['--mj-font-family']).toContain('Inter');
+    expect(t.overlayVars['--mj-font-family']).toContain('Montserrat');
+    expect(t.overlayVars['--mj-font-family-display']).toBe(t.overlayVars['--mj-font-family']);
+  });
+
+  it('allows overriding fontFamilyDisplay independently of fontFamily', () => {
+    const custom = derive({
+      ...MJ_DEFAULT_SEEDS,
+      fontFamilyDisplay: "'Space Grotesk', 'Montserrat', sans-serif",
+    });
+    expect(custom.overlayVars['--mj-font-family']).toContain('Montserrat');
+    expect(custom.overlayVars['--mj-font-family-display']).toBe("'Space Grotesk', 'Montserrat', sans-serif");
   });
 
   it('respects the shape (radius) seed', () => {

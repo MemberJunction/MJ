@@ -108,4 +108,14 @@ describe('MJCardGridComponent & MJCardComponent DOM Tests', () => {
         expect(host.maximizedCard).toBeNull();
         expect(cards[1].classList.contains('mj-card--maximized')).toBe(false);
     });
+
+    it('keeps card-grid styles in card-grid.scss with semantic tokens only and no duplicated TS copy', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const scss = readFileSync(join(__dirname, 'card-grid.scss'), 'utf8');
+        const tsSource = readFileSync(join(__dirname, 'card-grid.component.ts'), 'utf8');
+
+        expect(scss).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\brgba?\(/);
+        expect(tsSource).not.toContain('CARD_GRID_CSS');
+    });
 });
