@@ -1,4 +1,5 @@
 import { GetConsensus } from '@memberjunction/rubrics';
+import { ANTHROPIC_CACHE_BREAKPOINT } from '@memberjunction/ai-anthropic';
 import { UNTRUSTED_OPEN, UNTRUSTED_CLOSE } from '../analyzer/ChangeAnalyzer';
 import { JUDGE_ERROR_PREFIX } from './SafeChat';
 import { NeutraliseMarkers } from '../sandbox/Redaction';
@@ -12,22 +13,25 @@ export const BUCKET_SCORE: Record<Bucket, number> = { High: 1, Medium: 0, Low: -
 export interface PanelResult { TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null; Usage: TokenUsage[]; }
 
 /**
- * §9.2 judge input for one weak catch. PR title, summary, test source and head failure go in one untrusted block;
- * markers are removed from every free-text field.
+ * §9.2 judge input for one weak catch. The run-constant part (intent, diff, PR title and summary) comes first and the
+ * per-catch part (boosts, risk, mutant, test, head failure) after it. PR title and summary form one untrusted block,
+ * test source and head failure another; markers are removed from every free-text field. With `markCachePrefix`, the
+ * Anthropic cache marker sits between the two parts; the text is otherwise the same.
  */
-export function BuildJudgeInput(c: CatchContext): string {
+export function BuildJudgeInput(c: CatchContext, markCachePrefix = false): string {
     const h = c.Head[0]?.Failure;
     const diff = c.Analysis.ChangedFiles.flatMap((f) => f.Hunks).map((x) => `--- ${x.Path}\n${x.Lines.join('\n')}`).join('\n');
-    return [
+    const shared = [
         `Intent: ${c.Analysis.IntentType}`,
+        `Diff:\n${NeutraliseMarkers(diff).slice(0, 40_000)}`,
+        [UNTRUSTED_OPEN, `PR title: ${NeutraliseMarkers(c.Analysis.Title)}`, `PR summary: ${NeutraliseMarkers(c.Analysis.Summary)}`, UNTRUSTED_CLOSE].join('\n'),
+    ].join('\n\n');
+    const perCatch = [
         `Boosts that fired: ${c.Boosts.join(', ') || 'none'}`,
         c.Test.RiskText ? `Risk: ${NeutraliseMarkers(c.Test.RiskText)}` : '',
         c.Test.Mutant ? `Mutant (a deliberate bug that this test detects):\n${NeutraliseMarkers(c.Test.Mutant.Patch).slice(0, 3000)}` : '',
-        `Diff:\n${NeutraliseMarkers(diff).slice(0, 40_000)}`,
         [
             UNTRUSTED_OPEN,
-            `PR title: ${NeutraliseMarkers(c.Analysis.Title)}`,
-            `PR summary: ${NeutraliseMarkers(c.Analysis.Summary)}`,
             `Test:\n${NeutraliseMarkers(c.Test.Source).slice(0, 12_000)}`,
             `Failure on the PR: ${NeutraliseMarkers(h?.Message)}`,
             `Expected: ${NeutraliseMarkers(h?.Expected)}`,
@@ -35,6 +39,7 @@ export function BuildJudgeInput(c: CatchContext): string {
             UNTRUSTED_CLOSE,
         ].join('\n'),
     ].filter(Boolean).join('\n\n');
+    return `${shared}\n\n${markCachePrefix ? ANTHROPIC_CACHE_BREAKPOINT : ''}${perCatch}`;
 }
 
 /** Maps a median bucket score back to a bucket: ≥ 0.5 High, ≤ −0.5 Low, otherwise Medium. */
