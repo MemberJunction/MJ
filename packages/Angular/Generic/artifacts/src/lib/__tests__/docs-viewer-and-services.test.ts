@@ -2380,6 +2380,98 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     viewer.InsertFormattingSnippet('*', '*');
     expect(viewer.DocumentSegments[0].RawMarkdown).toBe('Collaborative and *italic* and `code`');
   });
+
+  it('creates new bullets and paragraphs below current text on Enter and avoids poisoning real DOM nodes with selectionStart', () => {
+    // 1. Pressing Enter at the end of a bullet item appends the new bullet below
+    const listViewer = createEditableDocsViewer('- First item\n- Second item');
+    const listSeg = listViewer.DocumentSegments[0];
+    const atEnd = makeMockEditableElement('Second item', 'Second item'.length);
+    const enterAtEnd = makeKeyEvent('Enter', atEnd);
+    listViewer.OnListItemKeydown(listSeg, 1, enterAtEnd.event);
+    expect(enterAtEnd.prevented()).toBe(true);
+    expect(listViewer.DocumentSegments[0].RawMarkdown).toBe('- First item\n- Second item\n- ');
+
+    // Safeguard: even if a non-empty bullet target reports selectionStart=0 on Enter,
+    // it appends the new bullet below instead of pushing the existing item down.
+    const safeViewer = createEditableDocsViewer('- First\n- Bullet text');
+    const safeSeg = safeViewer.DocumentSegments[0];
+    const staleZeroTarget = makeMockEditableElement('Bullet text', 0, 0);
+    const enterWithStaleZero = makeKeyEvent('Enter', staleZeroTarget);
+    safeViewer.OnListItemKeydown(safeSeg, 1, enterWithStaleZero.event);
+    expect(enterWithStaleZero.prevented()).toBe(true);
+    expect(safeViewer.DocumentSegments[0].RawMarkdown).toBe('- First\n- Bullet text\n- ');
+
+    // 2. Pressing Enter at the end of a paragraph creates an empty draft paragraph below,
+    //    and subsequent CommitEditableHeading / CommitEditableParagraph blur commits preserve it.
+    const docViewer = createEditableDocsViewer('## Heading\n\nBody paragraph');
+    const bodyEl = makeMockEditableElement('Body paragraph', 'Body paragraph'.length);
+    const enterPara = makeKeyEvent('Enter', bodyEl);
+    docViewer.OnEditableBlockKeydown(docViewer.DocumentSegments[1], enterPara.event);
+    expect(enterPara.prevented()).toBe(true);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[2].BlockKind).toBe('paragraph');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+    expect(docViewer.DocumentSegments[2].SegmentID.startsWith('paragraph-draft-')).toBe(true);
+
+    docViewer.CommitEditableHeading(docViewer.DocumentSegments[0], {
+      target: makeMockEditableElement('Heading Renamed'),
+    } as unknown as Event);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[0].RawMarkdown).toBe('## Heading Renamed');
+    expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body paragraph');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+
+    docViewer.CommitEditableParagraph(docViewer.DocumentSegments[1], {
+      target: makeMockEditableElement('Body edited'),
+    } as unknown as Event);
+    expect(docViewer.DocumentSegments.length).toBe(3);
+    expect(docViewer.DocumentSegments[1].RawMarkdown).toBe('Body edited');
+    expect(docViewer.DocumentSegments[2].RawMarkdown).toBe('');
+
+    // 3. Real DOM nodes (instanceof Node) must have stale selectionStart/selectionEnd expandos
+    //    stripped on focus so window.getSelection() is never shadowed by a frozen 0 offset.
+    const globalWithNode = globalThis as unknown as { Node?: unknown };
+    const originalNode = globalWithNode.Node;
+    class FakeDomNode {
+      public textContent = 'Focused bullet';
+      public selectionStart: number | undefined = 0;
+      public selectionEnd: number | undefined = 0;
+      public focused = false;
+      public focus(): void {
+        this.focused = true;
+      }
+    }
+    const viewerInternal = listViewer as unknown as {
+      hostElement?: {
+        nativeElement?: {
+          querySelector: (selector: string) => HTMLElement | null;
+          querySelectorAll: (selector: string) => HTMLElement[];
+        };
+      };
+    };
+    const originalHostElement = viewerInternal.hostElement;
+    try {
+      globalWithNode.Node = FakeDomNode;
+      const domNode = new FakeDomNode();
+      const targetSegId = listViewer.DocumentSegments[0].SegmentID;
+      viewerInternal.hostElement = {
+        nativeElement: {
+          querySelector: (selector: string): HTMLElement | null =>
+            selector === `[data-testid="list-item-text-${targetSegId}-0"]`
+              ? (domNode as unknown as HTMLElement)
+              : null,
+          querySelectorAll: (): HTMLElement[] => [],
+        },
+      };
+      listViewer.FocusEditableSegment(targetSegId, 'start', 0);
+      expect(domNode.focused).toBe(true);
+      expect('selectionStart' in domNode).toBe(false);
+      expect('selectionEnd' in domNode).toBe(false);
+    } finally {
+      globalWithNode.Node = originalNode;
+      viewerInternal.hostElement = originalHostElement;
+    }
+  });
 });
 
 

@@ -4261,6 +4261,7 @@ export class MarkdownArtifactViewerComponent
   public StatusBannerMessage = '';
   public IsSavingVersion = false;
   private draftSegmentCounter = 0;
+  private isApplyingBlockTransaction = false;
 
   // Parsed state
   public DocumentSegments: DocumentRenderSegment[] = [];
@@ -4614,15 +4615,7 @@ export class MarkdownArtifactViewerComponent
       return;
     }
 
-    const preStart = range.cloneRange();
-    preStart.selectNodeContents(editableEl);
-    preStart.setEnd(range.startContainer, range.startOffset);
-    const start = preStart.toString().length;
-
-    const preEnd = range.cloneRange();
-    preEnd.selectNodeContents(editableEl);
-    preEnd.setEnd(range.endContainer, range.endOffset);
-    const end = Math.max(start, preEnd.toString().length);
+    const { start, end } = this.getCaretCharacterOffsetWithin(editableEl);
 
     const snapshot: DocsSelectionSnapshot = { segmentId, start, end };
     const testId = editableEl.getAttribute('data-testid') ?? '';
@@ -4671,6 +4664,7 @@ export class MarkdownArtifactViewerComponent
     }
     const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
     const insertIdx = idx >= 0 ? idx + 1 : blocks.length;
     blocks.splice(insertIdx, 0, '');
     this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'start' });
@@ -4682,6 +4676,7 @@ export class MarkdownArtifactViewerComponent
     }
     const targetIdx = this.resolveActiveSegmentIndex();
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
     const headingMd = `${'#'.repeat(Math.max(1, Math.min(4, level)))} `;
     if (
       targetIdx >= 0 &&
@@ -4828,11 +4823,21 @@ export class MarkdownArtifactViewerComponent
         (lastSeg.BlockKind === 'paragraph' || !lastSeg.BlockKind) &&
         lastSeg.RawMarkdown.trim().length === 0
       ) {
-        this.FocusEditableSegment(lastSeg.SegmentID, 'start');
-        return;
+        const root: ParentNode | null =
+          this.PrintableCanvas?.nativeElement ??
+          this.hostElement?.nativeElement ??
+          (typeof document !== 'undefined' ? document : null);
+        const lastEl = root?.querySelector<HTMLElement>(
+          `[data-testid="editable-paragraph-${lastSeg.SegmentID}"]`,
+        );
+        if (!lastEl || !this.isDomNode(lastEl) || this.ExtractMarkdownFromEditableElement(lastEl).trim().length === 0) {
+          this.FocusEditableSegment(lastSeg.SegmentID, 'start');
+          return;
+        }
       }
     }
     const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
     blocks.push('');
     this.applyBlockFlowTransaction(blocks, { segmentIndex: blocks.length - 1, position: 'start' });
   }
@@ -5222,6 +5227,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableHeading(seg: DocumentRenderSegment, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const rawText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
     if (rawText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
@@ -5235,6 +5243,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableParagraph(seg: DocumentRenderSegment, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextText = this.ExtractMarkdownFromEditableElement(el).trim();
     if (nextText === '/' || (this.ShowSlashMenu && this.ActiveSlashTargetSegmentID === seg.SegmentID)) {
@@ -5291,6 +5302,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateTableHeaderCell(seg: DocumentRenderSegment, colIndex: number, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextVal = this.ExtractMarkdownFromEditableElement(el).replace(/\|/g, '/').trim();
     const parsed = this.GetParsedTable(seg);
@@ -5306,6 +5320,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateTableBodyCell(seg: DocumentRenderSegment, rowIndex: number, colIndex: number, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     if (!Number.isInteger(rowIndex) || rowIndex < 0 || !Number.isInteger(colIndex) || colIndex < 0) {
       return;
     }
@@ -5452,6 +5469,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public UpdateListItemText(seg: DocumentRenderSegment, itemIndex: number, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
     const items = this.GetParsedListItems(seg);
@@ -5508,6 +5528,7 @@ export class MarkdownArtifactViewerComponent
       if (!this.CanUserEdit || segIdx < 0) {
         return;
       }
+      this.syncPeerListItemsFromDom(seg, items, itemIndex);
       const currentTrimmed = rawMarkdown.trim();
       const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
@@ -5518,6 +5539,16 @@ export class MarkdownArtifactViewerComponent
         if (items.length === 0) {
           blocks[segIdx] = '';
           this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+        } else if (itemIndex > 0 && itemIndex < items.length) {
+          const leadingMd = this.serializeParsedListItems(items.slice(0, itemIndex));
+          const trailingItems = items.slice(itemIndex).map((item, idx) => ({
+            ...item,
+            Index: idx,
+          }));
+          this.renumberListItems(trailingItems);
+          const trailingMd = this.serializeParsedListItems(trailingItems);
+          blocks.splice(segIdx, 1, leadingMd, '', trailingMd);
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
         } else {
           blocks[segIdx] = this.serializeParsedListItems(items);
           blocks.splice(segIdx + 1, 0, '');
@@ -5529,17 +5560,31 @@ export class MarkdownArtifactViewerComponent
       const mdRange = this.mapVisibleRangeToMarkdownRange(rawMarkdown, caret.start, caret.end, true);
       const before = rawMarkdown.slice(0, mdRange.start).trim();
       const after = rawMarkdown.slice(mdRange.end).trim();
-      if (items[itemIndex]) {
-        items[itemIndex].Text = before;
-      }
       const template = items[itemIndex] ?? { IsTask: false, Checked: false, Text: '' };
-      items.splice(itemIndex + 1, 0, {
-        Index: itemIndex + 1,
-        IsTask: template.IsTask,
-        Checked: false,
-        OrderedPrefix: template.OrderedPrefix ? `${itemIndex + 2}.` : undefined,
-        Text: after,
-      });
+      if (caret.start === 0 && before.length === 0 && after.length > 0) {
+        // Keep current item text in place and insert the new empty bullet BELOW, matching paragraph/heading Enter behavior
+        if (items[itemIndex]) {
+          items[itemIndex].Text = after;
+        }
+        items.splice(itemIndex + 1, 0, {
+          Index: itemIndex + 1,
+          IsTask: template.IsTask,
+          Checked: false,
+          OrderedPrefix: template.OrderedPrefix ? `${itemIndex + 2}.` : undefined,
+          Text: '',
+        });
+      } else {
+        if (items[itemIndex]) {
+          items[itemIndex].Text = before;
+        }
+        items.splice(itemIndex + 1, 0, {
+          Index: itemIndex + 1,
+          IsTask: template.IsTask,
+          Checked: false,
+          OrderedPrefix: template.OrderedPrefix ? `${itemIndex + 2}.` : undefined,
+          Text: after,
+        });
+      }
       this.renumberListItems(items);
       const nextListMd = this.serializeParsedListItems(items);
       if (this.ViewMode === 'edit') {
@@ -5697,6 +5742,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableCallout(seg: DocumentRenderSegment, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextBody = this.ExtractMarkdownFromEditableElement(el).trim();
     const parsed = this.GetParsedCallout(seg);
@@ -5729,6 +5777,9 @@ export class MarkdownArtifactViewerComponent
   }
 
   public CommitEditableCodeBlock(seg: DocumentRenderSegment, event: Event): void {
+    if (this.isApplyingBlockTransaction) {
+      return;
+    }
     const el = event.target as HTMLElement | null;
     const nextCode = el?.textContent ?? '';
     const parsed = this.GetParsedCodeBlock(seg);
@@ -5765,13 +5816,232 @@ export class MarkdownArtifactViewerComponent
   }
 
   /**
-   * Replaces a single segment's Markdown in the document and broadcasts the minimal diff via Yjs.
+   * Replaces a single segment's Markdown in the document and broadcasts the minimal diff via Yjs,
+   * preserving any other empty draft paragraph placeholders already present in `DocumentSegments`.
    */
   public ReplaceSegmentMarkdown(seg: DocumentRenderSegment, nextBlockMarkdown: string): void {
-    const updatedSegments = this.DocumentSegments
-      .map((s) => (s.SegmentID === seg.SegmentID ? nextBlockMarkdown : s.RawMarkdown))
-      .filter((md) => md.trim().length > 0);
-    this.OnMarkdownChanged(updatedSegments.join('\n\n'));
+    const previousSegments = this.DocumentSegments;
+    const nextBlockMarkdowns = previousSegments.map((s) =>
+      s.SegmentID === seg.SegmentID ? nextBlockMarkdown : s.RawMarkdown,
+    );
+    const hasPreservedEmptyDrafts =
+      this.ViewMode === 'edit' &&
+      previousSegments.some((s) => s.SegmentID !== seg.SegmentID && s.RawMarkdown.trim().length === 0);
+
+    const preservedBlocks: string[] = [];
+    const preservedPrevSegments: DocumentRenderSegment[] = [];
+    for (let i = 0; i < nextBlockMarkdowns.length; i++) {
+      const md = nextBlockMarkdowns[i];
+      const prevSeg = previousSegments[i];
+      if (md.trim().length > 0) {
+        preservedBlocks.push(md);
+        preservedPrevSegments.push(prevSeg);
+      } else if (hasPreservedEmptyDrafts && prevSeg && prevSeg.SegmentID !== seg.SegmentID) {
+        preservedBlocks.push('');
+        preservedPrevSegments.push(prevSeg);
+      }
+    }
+
+    const nonEmptyJoined = preservedBlocks.filter((md) => md.trim().length > 0).join('\n\n');
+    this.OnMarkdownChanged(nonEmptyJoined);
+    if (hasPreservedEmptyDrafts) {
+      this.preserveEmptyDraftSegments(preservedBlocks, preservedPrevSegments);
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Returns `true` when `el` is a live browser DOM `Node` rather than a headless unit-test mock object.
+   */
+  private isDomNode(el: HTMLElement | null): el is HTMLElement {
+    return Boolean(el && typeof Node !== 'undefined' && el instanceof Node);
+  }
+
+  private getEditableCanvasRoot(): ParentNode | null {
+    return (
+      this.PrintableCanvas?.nativeElement ??
+      this.hostElement?.nativeElement ??
+      (typeof document !== 'undefined' ? document : null)
+    );
+  }
+
+  private preserveEmptyDraftSegments(
+    blockMarkdowns: string[],
+    previousSegments: DocumentRenderSegment[] = [],
+  ): void {
+    if (!blockMarkdowns.some((md) => md.trim().length === 0)) {
+      return;
+    }
+    const parsedNonEmpty = [...this.DocumentSegments];
+    const merged: DocumentRenderSegment[] = [];
+    let parsedCursor = 0;
+    for (let i = 0; i < blockMarkdowns.length; i++) {
+      if (blockMarkdowns[i].trim().length === 0) {
+        const prevLine = merged[merged.length - 1]?.EndLine ?? 0;
+        const existingDraft = previousSegments[i];
+        if (existingDraft && existingDraft.RawMarkdown.trim().length === 0) {
+          merged.push({
+            ...existingDraft,
+            StartLine: prevLine + 1,
+            EndLine: prevLine + 1,
+          });
+        } else {
+          merged.push(this.createDraftParagraphSegment(prevLine + 1));
+        }
+      } else if (parsedCursor < parsedNonEmpty.length) {
+        merged.push(parsedNonEmpty[parsedCursor++]);
+      }
+    }
+    while (parsedCursor < parsedNonEmpty.length) {
+      merged.push(parsedNonEmpty[parsedCursor++]);
+    }
+    this.DocumentSegments = merged;
+  }
+
+  private syncPeerListItemsFromDom(
+    seg: DocumentRenderSegment,
+    items: Array<{ Index: number; IsTask: boolean; Checked: boolean; OrderedPrefix?: string; Text: string }>,
+    skipItemIndex?: number,
+  ): void {
+    const root = this.getEditableCanvasRoot();
+    if (!root) {
+      return;
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (i === skipItemIndex) {
+        continue;
+      }
+      const peerEl = root.querySelector<HTMLElement>(
+        `[data-testid="list-item-text-${seg.SegmentID}-${i}"]`,
+      );
+      if (peerEl && this.isDomNode(peerEl)) {
+        const domText = this.ExtractMarkdownFromEditableElement(peerEl).replace(/\n+/g, ' ').trim();
+        if (domText !== items[i].Text) {
+          items[i].Text = domText;
+        }
+      }
+    }
+  }
+
+  private syncDirtySegmentsFromDomIntoBlocks(blocks: string[]): void {
+    const root = this.getEditableCanvasRoot();
+    if (!root) {
+      return;
+    }
+    for (let i = 0; i < this.DocumentSegments.length; i++) {
+      const seg = this.DocumentSegments[i];
+      if (seg.Kind !== 'markdown') {
+        continue;
+      }
+      if (seg.BlockKind === 'heading') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-heading-${seg.SegmentID}"]`);
+        if (el && this.isDomNode(el)) {
+          const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
+          const modelText = (seg.HeadingText ?? this.GetEditableHeadingText(seg)).trim();
+          if (domText !== modelText) {
+            const level = seg.HeadingLevel ?? 1;
+            blocks[i] = `${'#'.repeat(level)} ${domText}`;
+          }
+        }
+      } else if (seg.BlockKind === 'list') {
+        const items = this.GetParsedListItems(seg);
+        let changed = false;
+        for (let idx = 0; idx < items.length; idx++) {
+          const el = root.querySelector<HTMLElement>(
+            `[data-testid="list-item-text-${seg.SegmentID}-${idx}"]`,
+          );
+          if (el && this.isDomNode(el)) {
+            const domText = this.ExtractMarkdownFromEditableElement(el).replace(/\n+/g, ' ').trim();
+            if (domText !== items[idx].Text) {
+              items[idx].Text = domText;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          blocks[i] = this.serializeParsedListItems(items);
+        }
+      } else if (seg.BlockKind === 'callout') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-callout-body-${seg.SegmentID}"]`);
+        if (el && this.isDomNode(el)) {
+          const domBody = this.ExtractMarkdownFromEditableElement(el).trim();
+          const parsed = this.GetParsedCallout(seg);
+          if (domBody !== parsed.BodyText) {
+            blocks[i] = [`> [!${parsed.CalloutType}]`, ...domBody.split('\n').map((l) => `> ${l}`)].join('\n');
+          }
+        }
+      } else if (seg.BlockKind === 'paragraph' || !seg.BlockKind) {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-paragraph-${seg.SegmentID}"]`);
+        if (el && this.isDomNode(el)) {
+          const domText = this.ExtractMarkdownFromEditableElement(el).trim();
+          if (domText !== seg.RawMarkdown.trim()) {
+            blocks[i] = domText;
+          }
+        }
+      }
+    }
+  }
+
+  private syncRenderedEditableSurfacesWithModel(): void {
+    const root = this.getEditableCanvasRoot();
+    if (!root) {
+      return;
+    }
+    const syncSurface = (el: HTMLElement | null, expectedMarkdown: string): void => {
+      if (!el || !this.isDomNode(el)) {
+        return;
+      }
+      const expectedHtml = this.RenderInlineEditableHtml(expectedMarkdown);
+      if (el.innerHTML !== expectedHtml) {
+        el.innerHTML = expectedHtml;
+      }
+    };
+
+    for (const seg of this.DocumentSegments) {
+      if (seg.Kind !== 'markdown') {
+        continue;
+      }
+      if (seg.BlockKind === 'heading') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-heading-${seg.SegmentID}"]`);
+        syncSurface(el, seg.HeadingText ?? this.GetEditableHeadingText(seg));
+      } else if (seg.BlockKind === 'list') {
+        const items = this.GetParsedListItems(seg);
+        for (const item of items) {
+          const el = root.querySelector<HTMLElement>(
+            `[data-testid="list-item-text-${seg.SegmentID}-${item.Index}"]`,
+          );
+          syncSurface(el, item.Text);
+        }
+      } else if (seg.BlockKind === 'callout') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-callout-body-${seg.SegmentID}"]`);
+        syncSurface(el, this.GetParsedCallout(seg).BodyText);
+      } else if (seg.BlockKind === 'table') {
+        const parsed = this.GetParsedTable(seg);
+        parsed.Headers.forEach((hdr, cIdx) => {
+          const el = root.querySelector<HTMLElement>(
+            `[data-testid="table-header-${seg.SegmentID}-${cIdx}"]`,
+          );
+          syncSurface(el, hdr);
+        });
+        parsed.Rows.forEach((row, rIdx) => {
+          row.forEach((cell, cIdx) => {
+            const el = root.querySelector<HTMLElement>(
+              `[data-testid="table-cell-${seg.SegmentID}-${rIdx}-${cIdx}"]`,
+            );
+            syncSurface(el, cell);
+          });
+        });
+      } else if (seg.BlockKind === 'code') {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-code-body-${seg.SegmentID}"]`);
+        const expectedCode = this.GetParsedCodeBlock(seg).Code;
+        if (el && this.isDomNode(el) && el.textContent !== expectedCode) {
+          el.textContent = expectedCode;
+        }
+      } else {
+        const el = root.querySelector<HTMLElement>(`[data-testid="editable-paragraph-${seg.SegmentID}"]`);
+        syncSurface(el, seg.RawMarkdown);
+      }
+    }
   }
 
   /**
@@ -5803,64 +6073,57 @@ export class MarkdownArtifactViewerComponent
       listItemIndex?: number;
     },
   ): void {
-    const nonEmptyBlocks = nextBlockMarkdowns.filter((md) => md.trim().length > 0);
-    const nextMarkdown = nonEmptyBlocks.join('\n\n');
-    this.MarkdownContent = nextMarkdown;
-    this.refreshParsedStructure();
-    if (this.session) {
-      this.session.SetContent(this.MarkdownContent);
-    }
+    this.isApplyingBlockTransaction = true;
+    try {
+      const nonEmptyBlocks = nextBlockMarkdowns.filter((md) => md.trim().length > 0);
+      const nextMarkdown = nonEmptyBlocks.join('\n\n');
+      this.MarkdownContent = nextMarkdown;
+      this.refreshParsedStructure();
+      if (this.session) {
+        this.session.SetContent(this.MarkdownContent);
+      }
 
-    if (nextBlockMarkdowns.some((md) => md.trim().length === 0)) {
-      const parsedNonEmpty = [...this.DocumentSegments];
-      const merged: DocumentRenderSegment[] = [];
-      let parsedCursor = 0;
-      for (let i = 0; i < nextBlockMarkdowns.length; i++) {
-        if (nextBlockMarkdowns[i].trim().length === 0) {
-          const prevLine = merged[merged.length - 1]?.EndLine ?? 0;
-          merged.push(this.createDraftParagraphSegment(prevLine + 1));
-        } else if (parsedCursor < parsedNonEmpty.length) {
-          merged.push(parsedNonEmpty[parsedCursor++]);
+      this.preserveEmptyDraftSegments(nextBlockMarkdowns);
+
+      if (this.DocumentSegments.length === 0 && this.IsInteractiveCanvasMode) {
+        this.DocumentSegments = [this.createDraftParagraphSegment(1)];
+      }
+
+      this.cdr.markForCheck();
+      try {
+        this.cdr.detectChanges();
+      } catch {
+        // Ignore if view is not yet attached in headless unit tests
+      }
+
+      // Ensure reused DOM nodes match model HTML even if Angular memoized the pre-edit [innerHTML]
+      this.syncRenderedEditableSurfacesWithModel();
+
+      if (focusSpec) {
+        const clampedIdx = Math.max(
+          0,
+          Math.min(this.DocumentSegments.length - 1, focusSpec.segmentIndex),
+        );
+        const targetSeg = this.DocumentSegments[clampedIdx];
+        if (targetSeg) {
+          this.SelectedAnchorKey = targetSeg.SegmentID;
+          this.lastFocusedSegmentId = targetSeg.SegmentID;
+          this.FocusEditableSegment(
+            targetSeg.SegmentID,
+            focusSpec.position ?? 'start',
+            focusSpec.listItemIndex,
+          );
         }
       }
-      while (parsedCursor < parsedNonEmpty.length) {
-        merged.push(parsedNonEmpty[parsedCursor++]);
-      }
-      this.DocumentSegments = merged;
-    }
-
-    if (this.DocumentSegments.length === 0 && this.IsInteractiveCanvasMode) {
-      this.DocumentSegments = [this.createDraftParagraphSegment(1)];
-    }
-
-    this.cdr.markForCheck();
-    try {
-      this.cdr.detectChanges();
-    } catch {
-      // Ignore if view is not yet attached in headless unit tests
-    }
-
-    if (focusSpec) {
-      const clampedIdx = Math.max(
-        0,
-        Math.min(this.DocumentSegments.length - 1, focusSpec.segmentIndex),
-      );
-      const targetSeg = this.DocumentSegments[clampedIdx];
-      if (targetSeg) {
-        this.SelectedAnchorKey = targetSeg.SegmentID;
-        this.lastFocusedSegmentId = targetSeg.SegmentID;
-        this.FocusEditableSegment(
-          targetSeg.SegmentID,
-          focusSpec.position ?? 'start',
-          focusSpec.listItemIndex,
-        );
-      }
+    } finally {
+      this.isApplyingBlockTransaction = false;
     }
   }
 
   /**
    * Reads the current character selection/caret offsets inside a `contenteditable` element.
-   * Supports an explicit `selectionStart` / `selectionEnd` property override on `el` for headless unit tests.
+   * Always prefers live `window.getSelection()` for real DOM nodes and falls back to `selectionStart`/`selectionEnd`
+   * only on headless unit-test mock elements.
    */
   private getCaretCharacterOffsetWithin(
     el: HTMLElement | null,
@@ -5869,32 +6132,45 @@ export class MarkdownArtifactViewerComponent
       return { start: 0, end: 0, collapsed: true };
     }
     const totalLen = (el.textContent ?? '').length;
+    if (
+      this.isDomNode(el) &&
+      typeof window !== 'undefined' &&
+      typeof window.getSelection === 'function'
+    ) {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
+          const measureOffset = (container: Node, offset: number): number => {
+            const pre = range.cloneRange();
+            pre.selectNodeContents(el);
+            pre.setEnd(container, offset);
+            let charCount = pre.toString().length;
+            if (typeof pre.cloneContents === 'function') {
+              const frag = pre.cloneContents();
+              if (typeof frag.querySelectorAll === 'function') {
+                charCount += frag.querySelectorAll('br').length;
+              }
+            }
+            return charCount;
+          };
+          const start = measureOffset(range.startContainer, range.startOffset);
+          const end = range.collapsed
+            ? start
+            : Math.max(start, measureOffset(range.endContainer, range.endOffset));
+          return { start, end, collapsed: range.collapsed };
+        }
+      }
+      return { start: totalLen, end: totalLen, collapsed: true };
+    }
     const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
-    if (typeof testEl.selectionStart === 'number') {
+    if (!this.isDomNode(el) && typeof testEl.selectionStart === 'number') {
       const start = Math.max(0, Math.min(totalLen, testEl.selectionStart));
       const end =
         typeof testEl.selectionEnd === 'number'
           ? Math.max(start, Math.min(totalLen, testEl.selectionEnd))
           : start;
       return { start, end, collapsed: start === end };
-    }
-    if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (el.contains(range.startContainer) && el.contains(range.endContainer)) {
-          const preStart = range.cloneRange();
-          preStart.selectNodeContents(el);
-          preStart.setEnd(range.startContainer, range.startOffset);
-          const start = preStart.toString().length;
-
-          const preEnd = range.cloneRange();
-          preEnd.selectNodeContents(el);
-          preEnd.setEnd(range.endContainer, range.endOffset);
-          const end = preEnd.toString().length;
-          return { start, end, collapsed: range.collapsed };
-        }
-      }
     }
     return { start: totalLen, end: totalLen, collapsed: true };
   }
@@ -5911,10 +6187,7 @@ export class MarkdownArtifactViewerComponent
     this.SelectedAnchorKey = segmentId;
     this.lastFocusedSegmentId = segmentId;
     const attemptFocus = (): boolean => {
-      const root: ParentNode | null =
-        this.PrintableCanvas?.nativeElement ??
-        this.hostElement?.nativeElement ??
-        (typeof document !== 'undefined' ? document : null);
+      const root = this.getEditableCanvasRoot();
       if (!root) {
         return false;
       }
@@ -5950,6 +6223,7 @@ export class MarkdownArtifactViewerComponent
       }
       targetEl.focus();
       this.placeCaretInEditableElement(targetEl, position);
+      this.CaptureSelectionSnapshot();
       return true;
     };
 
@@ -5972,8 +6246,13 @@ export class MarkdownArtifactViewerComponent
           ? textLen
           : Math.max(0, Math.min(textLen, position));
     const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
-    testEl.selectionStart = targetOffset;
-    testEl.selectionEnd = targetOffset;
+    if (this.isDomNode(el)) {
+      delete testEl.selectionStart;
+      delete testEl.selectionEnd;
+    } else {
+      testEl.selectionStart = targetOffset;
+      testEl.selectionEnd = targetOffset;
+    }
 
     if (
       typeof document === 'undefined' ||
@@ -6030,8 +6309,13 @@ export class MarkdownArtifactViewerComponent
     }
 
     const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
-    testEl.selectionStart = clampedStart;
-    testEl.selectionEnd = clampedEnd;
+    if (this.isDomNode(el)) {
+      delete testEl.selectionStart;
+      delete testEl.selectionEnd;
+    } else {
+      testEl.selectionStart = clampedStart;
+      testEl.selectionEnd = clampedEnd;
+    }
 
     if (
       typeof document === 'undefined' ||
@@ -6787,16 +7071,11 @@ export class MarkdownArtifactViewerComponent
     const totalVis = tokens.length > 0 ? tokens[tokens.length - 1].visEnd : currentMarkdown.length;
 
     if (el) {
-      const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
-      if (typeof testEl.selectionStart === 'number') {
-        const start = Math.max(0, Math.min(totalVis, testEl.selectionStart));
-        const end =
-          typeof testEl.selectionEnd === 'number'
-            ? Math.max(start, Math.min(totalVis, testEl.selectionEnd))
-            : start;
-        return this.mapVisibleRangeToMarkdownRange(currentMarkdown, start, end);
-      }
-      if (typeof window !== 'undefined' && typeof window.getSelection === 'function') {
+      if (
+        this.isDomNode(el) &&
+        typeof window !== 'undefined' &&
+        typeof window.getSelection === 'function'
+      ) {
         const sel = window.getSelection();
         if (sel && sel.rangeCount > 0) {
           const range = sel.getRangeAt(0);
@@ -6805,6 +7084,15 @@ export class MarkdownArtifactViewerComponent
             return this.mapVisibleRangeToMarkdownRange(currentMarkdown, caret.start, caret.end);
           }
         }
+      }
+      const testEl = el as HTMLElement & { selectionStart?: number; selectionEnd?: number };
+      if (!this.isDomNode(el) && typeof testEl.selectionStart === 'number') {
+        const start = Math.max(0, Math.min(totalVis, testEl.selectionStart));
+        const end =
+          typeof testEl.selectionEnd === 'number'
+            ? Math.max(start, Math.min(totalVis, testEl.selectionEnd))
+            : start;
+        return this.mapVisibleRangeToMarkdownRange(currentMarkdown, start, end);
       }
     }
 
