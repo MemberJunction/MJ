@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT174 - List Refresh From Source",
+    "Description": "Live proof of refreshing a list from its source, deterministic (no model calls). LR1: saving a User View stamps its DefinitionFingerprint. LR2: linking a list to the view fills it straight away, takes the view's fingerprint and writes a List Refreshed audit row. LR3: Refresh automatically creates an active User Routine that runs the refresh action. LR4: after the view's filter changes, preview and refresh apply nothing and return SOURCE_CHANGED, and the routine is paused with a List Source Changed audit row. LR5: approving stores the new fingerprint, resumes the routine and refreshes. LR6: turning Refresh automatically off disables the routine. LR7: deleting the list deletes its routine. The bundle creates and tears down its own throwaway view and list.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A changed source stops refreshes and pauses the routine until the owner approves; linking and approving fill the list; the routine follows Refresh automatically and the list's lifetime."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "list-refresh"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7231C0F1-F0C2-4A2D-87BF-0D3D937D339C"
+  }
+}

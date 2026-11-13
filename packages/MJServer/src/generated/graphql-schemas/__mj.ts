@@ -69239,6 +69239,28 @@ export class MJList_ {
     @Field(() => Boolean, {nullable: true, description: "When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView."}) 
     UseSnapshot?: boolean;
         
+    @Field({nullable: true, description: "Optional ID of the saved query this list is refreshed from. A list has at most one source: this or SourceViewID."}) 
+    @MaxLength(36)
+    SourceQueryID?: string;
+        
+    @Field({nullable: true, description: "JSON object of the parameter values the source query runs with, keyed by parameter name. NULL when the query takes no parameters."}) 
+    SourceQueryParameters?: string;
+        
+    @Field({nullable: true, description: "Name of the source query's result column that holds the primary key of the list's entity. Required when SourceQueryID is set."}) 
+    @MaxLength(255)
+    SourceQueryKeyField?: string;
+        
+    @Field({nullable: true, description: "Definition fingerprint of the source query or view at the time the list was linked, or when the owner last approved a change to the source. A refresh compares it with the source's current DefinitionFingerprint and stops when they differ. NULL until the next successful refresh fills it."}) 
+    @MaxLength(100)
+    SourceFingerprint?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, the list refreshes from its source on a schedule through the User Routine in RefreshRoutineID. When 0 (default), it refreshes only when someone runs a refresh."}) 
+    AutoRefresh?: boolean;
+        
+    @Field({nullable: true, description: "The User Routine that refreshes this list on a schedule. Created when AutoRefresh is first turned on, and disabled (not deleted) when it is turned off, so its run history stays."}) 
+    @MaxLength(36)
+    RefreshRoutineID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -69262,6 +69284,14 @@ export class MJList_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     LastRefreshedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SourceQuery?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RefreshRoutine?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -69315,6 +69345,24 @@ export class CreateMJListInput {
     @Field(() => Boolean, { nullable: true })
     UseSnapshot?: boolean;
 
+    @Field({ nullable: true })
+    SourceQueryID: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryParameters: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryKeyField: string | null;
+
+    @Field({ nullable: true })
+    SourceFingerprint: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRefresh?: boolean;
+
+    @Field({ nullable: true })
+    RefreshRoutineID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -69366,6 +69414,24 @@ export class UpdateMJListInput {
 
     @Field(() => Boolean, { nullable: true })
     UseSnapshot?: boolean;
+
+    @Field({ nullable: true })
+    SourceQueryID?: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryParameters?: string | null;
+
+    @Field({ nullable: true })
+    SourceQueryKeyField?: string | null;
+
+    @Field({ nullable: true })
+    SourceFingerprint?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoRefresh?: boolean;
+
+    @Field({ nullable: true })
+    RefreshRoutineID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -80211,6 +80277,10 @@ export class MJQuery_ {
     @Field({nullable: true, description: "Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions."}) 
     ExtractionMessage?: string;
         
+    @Field({nullable: true, description: "Hash of this query's current definition: its SQL, template flag, external source, dialect SQL and parameter contract. Stamped on every save. A list linked to this query compares it with List.SourceFingerprint before each refresh. NULL until the query is next saved or checked."}) 
+    @MaxLength(100)
+    DefinitionFingerprint?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -80340,6 +80410,9 @@ export class CreateMJQueryInput {
     @Field({ nullable: true })
     ExtractionMessage: string | null;
 
+    @Field({ nullable: true })
+    DefinitionFingerprint: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -80448,6 +80521,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     ExtractionMessage?: string | null;
+
+    @Field({ nullable: true })
+    DefinitionFingerprint?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -105779,6 +105855,10 @@ export class MJUserView_ {
     @MaxLength(100)
     ApprovedFingerprint?: string;
         
+    @Field({nullable: true, description: "Hash of this view's current definition: its entity, filters and alternate base view. Stamped on every save. A list linked to this view compares it with List.SourceFingerprint before each refresh. NULL until the view is next saved or checked."}) 
+    @MaxLength(100)
+    DefinitionFingerprint?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     UserName?: string;
@@ -105897,6 +105977,9 @@ export class CreateMJUserViewInput {
     @Field({ nullable: true })
     ApprovedFingerprint: string | null;
 
+    @Field({ nullable: true })
+    DefinitionFingerprint: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -105990,6 +106073,9 @@ export class UpdateMJUserViewInput {
 
     @Field({ nullable: true })
     ApprovedFingerprint?: string | null;
+
+    @Field({ nullable: true })
+    DefinitionFingerprint?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

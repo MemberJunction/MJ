@@ -1,0 +1,81 @@
+@if (Visible) {
+  <mj-dialog [Visible]="true" [Width]="620" Title="Link a source" (Close)="OnCancel()">
+    <div class="lsd-body">
+      @if (IsLoading) {
+        <mj-loading text="Loading views and queries..." size="small"></mj-loading>
+      } @else {
+        <p class="lsd-intro">
+          Choose the view or query this list refreshes from. It must return records of the list's type, {{ EntityName }}.
+        </p>
+
+        <div class="lsd-kinds" role="radiogroup" aria-label="Source kind">
+          <label class="lsd-kind" [class.lsd-kind--on]="Kind === 'view'">
+            <input type="radio" name="lsd-kind" [checked]="Kind === 'view'" (change)="OnKindChange('view')">
+            <i class="fa-solid fa-filter"></i> Saved view
+          </label>
+          <label class="lsd-kind" [class.lsd-kind--on]="Kind === 'query'">
+            <input type="radio" name="lsd-kind" [checked]="Kind === 'query'" (change)="OnKindChange('query')">
+            <i class="fa-solid fa-database"></i> Query
+          </label>
+        </div>
+
+        @if (Kind === 'view') {
+          <label class="lsd-field">
+            <span class="lsd-label">View</span>
+            <mj-combobox [Data]="Views" TextField="Name" ValueField="ID" [ValuePrimitive]="true"
+                         Placeholder="Choose a view" [(ngModel)]="SelectedViewID"></mj-combobox>
+            @if (Views.length === 0) {
+              <span class="lsd-help">There are no saved views on {{ EntityName }} that you can see.</span>
+            }
+          </label>
+        } @else {
+          <label class="lsd-field">
+            <span class="lsd-label">Query</span>
+            <mj-combobox [Data]="Queries" TextField="Name" ValueField="ID" [ValuePrimitive]="true"
+                         Placeholder="Choose an approved query" [ngModel]="SelectedQueryID"
+                         (ngModelChange)="OnQueryChange($event)"></mj-combobox>
+          </label>
+
+          @if (SelectedQueryID) {
+            <label class="lsd-field">
+              <span class="lsd-label">Key column</span>
+              <mj-dropdown [Data]="Fields" TextField="Name" ValueField="Name" [ValuePrimitive]="true"
+                           Placeholder="Choose the column with the record key" [(ngModel)]="KeyField"></mj-dropdown>
+              <span class="lsd-help">The query column that holds each {{ EntityName }} record's key.</span>
+            </label>
+
+            @if (Parameters.length > 0) {
+              <fieldset class="lsd-params">
+                <legend class="lsd-label">Parameters</legend>
+                @for (p of Parameters; track p.Name) {
+                  <label class="lsd-field">
+                    <span>{{ p.Name }} @if (p.IsRequired) { <span class="lsd-required" aria-label="required">*</span> }</span>
+                    <input class="mj-input" type="text" [(ngModel)]="ParameterValues[p.Name]"
+                           [placeholder]="p.SampleValue ?? ''" [attr.aria-required]="p.IsRequired">
+                    @if (p.Description) { <span class="lsd-help">{{ p.Description }}</span> }
+                  </label>
+                }
+              </fieldset>
+            }
+          }
+        }
+
+        <mj-alert Variant="info">
+          Saving fills the list right away from the new source, adding the records it returns. Nothing is removed.
+          Each refresh then checks that the source hasn't changed since you linked it.
+        </mj-alert>
+      }
+
+      @if (ErrorMessage) {
+        <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
+      }
+    </div>
+
+    <mj-dialog-actions>
+      <button mjButton variant="primary" [disabled]="!CanSave" (click)="OnSave()">
+        @if (IsSaving) { <i class="fa-solid fa-spinner fa-spin"></i> } Link and fill
+      </button>
+      <button mjButton variant="outline" (click)="OnCancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

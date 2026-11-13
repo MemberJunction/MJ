@@ -37,6 +37,7 @@ import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.che
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
+import { ListRefreshChecks } from '../checks/list-refresh.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
 import { ChiefOfStaffChecks } from '../checks/chief-of-staff.checks';
@@ -199,6 +200,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
         ['lists', ListsChecks, 3],
+        ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT174)
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 18],
         ['chief-of-staff', ChiefOfStaffChecks, 8], // COS1-COS8 ownership guards, run-now, policy cache, email approval-before-transport (IT157)
@@ -430,6 +432,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'jsontype-live-sync': 9,
         'jsontype-live-sync-client': 9,
         'layered-base-views': 6,
+        'list-refresh': 7,
         'lists': 3,
         'livekit-room': 1,
         'materialized-entity-read': 2,
@@ -609,7 +612,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(242);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(243);
     });
 });
 

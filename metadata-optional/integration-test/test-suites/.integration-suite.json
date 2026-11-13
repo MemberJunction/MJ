@@ -175,6 +175,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT174 - List Refresh From Source",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "079BA540-54B1-4F76-8EBC-22F9E90A741E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT21 - Open-App Metadata Teardown",
             "Sequence": 15,
             "Status": "Active"

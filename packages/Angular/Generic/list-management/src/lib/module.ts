@@ -9,7 +9,12 @@ import {
   MJDialogActionsComponent,
   MJDropdownComponent,
   MJEmptyStateComponent,
-  MJAlertComponent
+  MJAlertComponent,
+  MJSwitchComponent,
+  MjSlidePanelComponent,
+  MJStatBadgeComponent,
+  MJFilterChipComponent,
+  MJComboboxComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction imports
@@ -28,6 +33,10 @@ import { ListStatsComponent } from './components/list-stats/list-stats.component
 import { ListsSharedWithMeComponent } from './components/shared-with-me/shared-with-me.component';
 import { SaveViewAsListDialogComponent } from './components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 import { TagChipsComponent } from './components/tag-chips/tag-chips.component';
+import { ListSourceReviewComponent } from './components/list-source-review/list-source-review.component';
+import { ListRefreshHistoryComponent } from './components/list-refresh-history/list-refresh-history.component';
+import { ListSourceRefreshPanelComponent } from './components/list-source-refresh-panel/list-source-refresh-panel.component';
+import { ListLinkSourceDialogComponent } from './components/list-link-source-dialog/list-link-source-dialog.component';
 
 // Services
 import { ListManagementService } from './services/list-management.service';
@@ -38,6 +47,10 @@ import { ListSharingService } from './services/list-sharing.service';
  */
 @NgModule({
   declarations: [
+    ListSourceReviewComponent,
+    ListRefreshHistoryComponent,
+    ListSourceRefreshPanelComponent,
+    ListLinkSourceDialogComponent,
     AudienceSourcePickerComponent,
     AudienceSourceSummaryComponent,
     ListAuditLogComponent,
@@ -59,10 +72,19 @@ import { ListSharingService } from './services/list-sharing.service';
     MJDropdownComponent,
     MJEmptyStateComponent,
     MJAlertComponent,
+    MJSwitchComponent,
+    MjSlidePanelComponent,
+    MJStatBadgeComponent,
+    MJFilterChipComponent,
+    MJComboboxComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],
   exports: [
+    ListSourceReviewComponent,
+    ListRefreshHistoryComponent,
+    ListSourceRefreshPanelComponent,
+    ListLinkSourceDialogComponent,
     AudienceSourcePickerComponent,
     AudienceSourceSummaryComponent,
     ListAuditLogComponent,

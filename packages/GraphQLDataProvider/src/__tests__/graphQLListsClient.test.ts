@@ -191,6 +191,106 @@ describe('GraphQLListsClient', () => {
     });
   });
 
+  describe('RefreshFromSource', () => {
+    it('sends a null mode when none is given, so the list\'s own RefreshMode applies', async () => {
+      const { provider, calls } = makeProvider({
+        RefreshListFromSource: { Success: true, ResultCode: 'SUCCESS', Message: 'ok', AddedCount: 3, RemovedCount: 0, FailedCount: 0 },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const result = await client.RefreshFromSource({ ListId: 'list-1', ConfirmDrops: false });
+      expect(calls[0].variables).toEqual({ listId: 'list-1', mode: null, confirmDrops: false });
+      expect(result.Counts).toEqual({ Added: 3, Removed: 0, Failed: 0 });
+    });
+
+    it('parses the source change of a SOURCE_CHANGED reply, with its date', async () => {
+      const { provider, calls } = makeProvider({
+        RefreshListFromSource: {
+          Success: false, ResultCode: 'SOURCE_CHANGED', Message: 'changed', TargetListId: 'list-1',
+          SourceChange: {
+            SourceKind: 'view', SourceID: 'v-1', SourceName: 'Active members', ChangedAt: '2026-11-12T10:00:00.000Z',
+            LinkedFingerprint: 'fp-old', CurrentFingerprint: 'fp-new',
+          },
+        },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const result = await client.RefreshFromSource({ ListId: 'list-1', Mode: 'Sync', ConfirmDrops: true });
+      expect(calls[0].query).toContain('SourceChange');
+      expect(calls[0].variables.mode).toBe('Sync');
+      expect(result.ResultCode).toBe('SOURCE_CHANGED');
+      expect(result.SourceChange).toEqual({
+        SourceKind: 'view', SourceID: 'v-1', SourceName: 'Active members', ChangedAt: new Date('2026-11-12T10:00:00.000Z'),
+        LinkedFingerprint: 'fp-old', CurrentFingerprint: 'fp-new',
+      });
+    });
+  });
+
+  describe('PreviewRefresh / ApplyRefresh', () => {
+    const wireDelta = {
+      TargetListId: 'list-1', EntityName: 'Contacts', ToAdd: ['a'], ToRemove: ['c'], Unchanged: ['b'],
+      Counts: { Add: 1, Remove: 1, Unchanged: 1, SourceTotal: 2, TargetTotal: 2 }, Warnings: [], DeltaToken: 'tok',
+    };
+
+    it('sends the preview options and parses the delta', async () => {
+      const { provider, calls } = makeProvider({
+        PreviewListRefresh: { Success: true, ResultCode: 'SUCCESS', Message: 'ok', Delta: wireDelta, SourceChange: null },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const preview = await client.PreviewRefresh('list-1', { Mode: 'Sync', AcceptCurrentSource: true, Parameters: { Region: 'West' } });
+      expect(calls[0].variables).toEqual({ listId: 'list-1', mode: 'Sync', acceptCurrentSource: true, parametersJSON: '{"Region":"West"}' });
+      expect(preview.Delta?.ToRemove).toEqual(['c']);
+      expect(preview.SourceChange).toBeUndefined();
+    });
+
+    it('defaults to the list\'s mode and the approved source', async () => {
+      const { provider, calls } = makeProvider({
+        PreviewListRefresh: {
+          Success: false, ResultCode: 'SOURCE_CHANGED', Message: 'changed', Delta: null,
+          SourceChange: { SourceKind: 'query', SourceID: 'q', SourceName: 'Q', ChangedAt: null, LinkedFingerprint: 'a', CurrentFingerprint: 'b' },
+        },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const preview = await client.PreviewRefresh('list-1');
+      expect(calls[0].variables).toEqual({ listId: 'list-1', mode: null, acceptCurrentSource: false, parametersJSON: null });
+      expect(preview.Delta).toBeUndefined();
+      expect(preview.SourceChange?.ChangedAt).toBeNull();
+    });
+
+    it('applies a previewed delta through ApplyListRefresh', async () => {
+      const { provider, calls } = makeProvider({
+        ApplyListRefresh: { Success: true, ResultCode: 'SUCCESS', Message: 'ok', AddedCount: 1, RemovedCount: 1, FailedCount: 0 },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const result = await client.ApplyRefresh({ Delta: { ...wireDelta, Warnings: [] }, ConfirmDrops: true });
+      expect(calls[0].query).toContain('ApplyListRefresh(');
+      expect(calls[0].variables.input).toMatchObject({ TargetListId: 'list-1', ToRemove: ['c'], DeltaToken: 'tok', ConfirmDrops: true });
+      expect(result.Counts).toEqual({ Added: 1, Removed: 1, Failed: 0 });
+    });
+  });
+
+  describe('ApproveSource', () => {
+    it('sends the parameter values as JSON', async () => {
+      const { provider, calls } = makeProvider({
+        ApproveListSource: { Success: true, ResultCode: 'SUCCESS', Message: 'ok' },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const result = await client.ApproveSource({ ListId: 'list-1', ConfirmDrops: true, Parameters: { Since: '2026-01-01' } });
+      expect(calls[0].query).toContain('ApproveListSource(');
+      expect(calls[0].variables).toEqual({ listId: 'list-1', confirmDrops: true, parametersJSON: '{"Since":"2026-01-01"}' });
+      expect(result.Success).toBe(true);
+      expect(result.SourceChange).toBeUndefined();
+    });
+
+    it('sends null parameters when none are given', async () => {
+      const { provider, calls } = makeProvider({
+        ApproveListSource: { Success: false, ResultCode: 'PERMISSION_DENIED', Message: 'owner only' },
+      });
+      const client = new GraphQLListsClient(provider as unknown as never);
+      const result = await client.ApproveSource({ ListId: 'list-1', ConfirmDrops: false });
+      expect(calls[0].variables.parametersJSON).toBeNull();
+      expect(result.ResultCode).toBe('PERMISSION_DENIED');
+    });
+  });
+
   describe('ComposeLists', () => {
     it('serializes inputs + optional target', async () => {
       const { calls, provider } = makeProvider({ ComposeLists: emptyDeltaReply() });

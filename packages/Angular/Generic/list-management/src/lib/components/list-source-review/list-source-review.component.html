@@ -1,0 +1,166 @@
+@if (Loading) {
+  <div class="review-state">
+    <mj-loading text="Loading the source change..." size="medium"></mj-loading>
+  </div>
+} @else if (LoadError) {
+  <mj-alert Variant="error" Title="Couldn't load the source change" [Message]="LoadError"></mj-alert>
+} @else if (Summary) {
+  <div class="review">
+    <div class="review-banner">
+      <i class="fa-solid fa-triangle-exclamation review-banner__icon"></i>
+      <div class="review-banner__copy">
+        <div class="review-banner__title">
+          This list's source {{ SourceKindLabel.toLowerCase() }} changed, so scheduled refreshes are paused.
+        </div>
+        <div class="review-banner__detail">
+          @if (Diff?.ChangedBy) {
+            {{ Diff?.ChangedBy }} edited “{{ SourceName }}”
+            @if (Diff?.ChangedAt) { on {{ Diff?.ChangedAt | date: 'MMM d' }} at {{ Diff?.ChangedAt | date: 'h:mm a' }}}.
+          } @else {
+            “{{ SourceName }}” was edited after this list last approved it.
+          }
+          Review the change below, then approve it to resume refreshes.
+        </div>
+      </div>
+    </div>
+
+    <section class="review-card">
+      <header class="review-card__header">
+        <h3 class="review-card__title">Review source change</h3>
+        <button mjButton variant="outline" size="sm" class="review-open-source" (click)="OnOpenSource()">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Open {{ SourceKindLabel.toLowerCase() }}
+        </button>
+      </header>
+
+      <dl class="review-facts">
+        <div class="review-fact">
+          <dt>{{ SourceKindLabel }}</dt>
+          <dd class="review-fact__source">{{ SourceName }}</dd>
+        </div>
+        <div class="review-fact">
+          <dt>Changed by</dt>
+          <dd>
+            {{ Diff?.ChangedBy ?? 'Unknown' }}@if (Diff?.ChangedAt) {, {{ Diff?.ChangedAt | date: 'MMM d h:mm a' }}}
+          </dd>
+        </div>
+        <div class="review-fact">
+          <dt>Linked version</dt>
+          <dd class="review-fact__mono">
+            {{ ShortLinked }}@if (Diff?.ApprovedAt) { ({{ Diff?.ApprovedAt | date: 'MMM d' }})}
+          </dd>
+        </div>
+        <div class="review-fact">
+          <dt>Current version</dt>
+          <dd class="review-fact__mono">{{ ShortCurrent }}</dd>
+        </div>
+      </dl>
+
+      <h4 class="review-subtitle">{{ Summary.SourceKind === 'query' ? 'SQL changes' : 'Filter changes' }}</h4>
+      @if (!HasApprovedCopy) {
+        <div class="review-note">
+          <i class="fa-solid fa-circle-info"></i>
+          No copy of the approved version was found in Record Changes, so only the current definition is shown.
+        </div>
+      }
+      <div class="review-diff" role="table" aria-label="Source definition changes">
+        @for (line of DiffLines; track TrackLine($index, line)) {
+          <div class="review-diff__line"
+               role="row"
+               [class.review-diff__line--add]="line.Kind === 'add'"
+               [class.review-diff__line--remove]="line.Kind === 'remove'">
+            <span class="review-diff__num" role="cell">{{ line.OldNumber ?? '' }}</span>
+            <span class="review-diff__num" role="cell">{{ line.NewNumber ?? '' }}</span>
+            <span class="review-diff__marker" role="cell">{{ line.Kind === 'add' ? '+' : line.Kind === 'remove' ? '−' : '' }}</span>
+            <span class="review-diff__text" role="cell">{{ line.Text }}</span>
+          </div>
+        } @empty {
+          <div class="review-note">The definition is empty.</div>
+        }
+      </div>
+
+      @if (Parameters.length > 0) {
+        <h4 class="review-subtitle">Parameters</h4>
+        <p class="review-help">Pick the values this list refreshes with.</p>
+        <div class="review-params">
+          @for (p of Parameters; track p.Name) {
+            <label class="review-param">
+              <span class="review-param__label">
+                {{ p.Name }}@if (p.IsRequired) {<span class="review-param__required" title="Required">*</span>}
+              </span>
+              <input class="mj-input review-param__input"
+                     type="text"
+                     [disabled]="!IsOwner || Acting"
+                     [placeholder]="p.SampleValue ?? ''"
+                     [ngModel]="ParameterValues[p.Name]"
+                     (ngModelChange)="OnParameterChange(p.Name, $event)" />
+              @if (p.Description) {
+                <span class="review-param__help">{{ p.Description }}</span>
+              }
+            </label>
+          }
+        </div>
+      }
+
+      @if (IsOwner) {
+        <div class="review-preview">
+          <div class="review-preview__header">
+            <h4 class="review-subtitle">If you approve</h4>
+            <button mjButton variant="outline" size="sm" class="review-preview__run"
+                    [disabled]="Previewing || Acting || MissingRequiredParameters.length > 0"
+                    (click)="RunPreviewAsync()">
+              <i class="fa-solid fa-rotate"></i> {{ Preview ? 'Preview again' : 'Preview' }}
+            </button>
+          </div>
+          @if (Previewing) {
+            <mj-loading text="Previewing..." size="small"></mj-loading>
+          } @else if (PreviewError) {
+            <mj-alert Variant="error" [Message]="PreviewError"></mj-alert>
+          } @else if (Preview?.Delta) {
+            <p class="review-help">Preview {{ PreviewParameterSummary }}, run just now.</p>
+            <div class="review-preview__counts">
+              <span class="review-count review-count--add">+{{ PreviewAdd }}</span>
+              <span class="review-count__sep">/</span>
+              <span class="review-count review-count--remove">−{{ PreviewRemove }}</span>
+              <span class="review-count__result">→ {{ PreviewResultCount | number }} records</span>
+            </div>
+            @if (NeedsAcknowledgement) {
+              <label class="review-ack">
+                <input type="checkbox" class="mj-checkbox"
+                       [checked]="RemovalsAcknowledged"
+                       (change)="OnAcknowledge($any($event.target).checked)" />
+                <span>I've checked the removals. Remove {{ PreviewRemove | number }} records from this list.</span>
+              </label>
+            }
+          } @else if (MissingRequiredParameters.length > 0) {
+            <p class="review-help">Fill in {{ MissingRequiredParameters.join(', ') }} to preview.</p>
+          } @else {
+            <p class="review-help">Preview what approving would add and remove.</p>
+          }
+        </div>
+
+        @if (ActionError) {
+          <mj-alert Variant="error" [Message]="ActionError"></mj-alert>
+        }
+
+        <div class="review-actions">
+          <button mjButton variant="primary" class="review-approve" [disabled]="!CanApprove" (click)="OnApproveAsync()">
+            <i class="fa-solid fa-check"></i> Approve and resume refreshes
+          </button>
+          <button mjButton variant="secondary" class="review-keep-paused" [disabled]="Acting" (click)="OnKeepPaused()">
+            Keep paused
+          </button>
+          <span class="review-actions__spacer"></span>
+          <button mjButton variant="flat" class="review-unlink" [disabled]="Acting" (click)="OnUnlinkAsync()">
+            <i class="fa-solid fa-link-slash"></i> Unlink source and keep records
+          </button>
+        </div>
+        <p class="review-footnote">Your decision is saved to this list's audit log.</p>
+      } @else {
+        <div class="review-note review-readonly">
+          <i class="fa-solid fa-lock"></i>
+          Only the list's owner, {{ Summary.OwnerName }}, can approve this change.
+        </div>
+      }
+    </section>
+  </div>
+}

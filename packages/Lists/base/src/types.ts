@@ -163,7 +163,25 @@ export type ApplyResultCode =
   | 'PERMISSION_DENIED'
   | 'TARGET_NOT_FOUND'
   | 'PARTIAL_SUCCESS'
+  | 'SOURCE_CHANGED'
   | 'UNEXPECTED_ERROR';
+
+/**
+ * The source query or view of a list changed after the list was linked to it (or after its owner
+ * last approved it). A refresh that finds this applies nothing and returns `SOURCE_CHANGED` with
+ * these details, until the owner approves the new definition.
+ */
+export interface ListSourceChange {
+  SourceKind: 'view' | 'query';
+  SourceID: string;
+  SourceName: string;
+  /** When the source was last saved, if known. */
+  ChangedAt: Date | null;
+  /** The fingerprint the list was linked against or last approved. */
+  LinkedFingerprint: string;
+  /** The fingerprint of the source's definition now. */
+  CurrentFingerprint: string;
+}
 
 /**
  * Outcome of a mutating list operation. `Counts` reports what actually
@@ -179,6 +197,38 @@ export interface ApplyResult {
   TargetListId?: string;
   Counts?: { Added: number; Removed: number; Failed: number };
   Errors?: string[];
+  /** Set when `ResultCode` is `SOURCE_CHANGED`. */
+  SourceChange?: ListSourceChange;
+}
+
+/** Options for previewing a refresh of a list from its linked source. */
+export interface ListRefreshPreviewOptions {
+  /** Additive or Sync. Leave out to use the list's own `RefreshMode`. */
+  Mode?: ListRefreshMode | null;
+  /**
+   * Owner only: preview against the source's current definition even when it changed since it was
+   * approved, as approving it would. Without this a changed source returns `SOURCE_CHANGED`.
+   */
+  AcceptCurrentSource?: boolean;
+  /**
+   * With `AcceptCurrentSource`, for a query source: parameter values to preview with instead of the
+   * list's stored ones. Nothing is saved.
+   */
+  Parameters?: Record<string, unknown>;
+}
+
+/**
+ * What a refresh of a list from its source would change. Never mutates, and never pauses a
+ * routine. Apply the returned delta with `ApplyRefreshPreview`.
+ */
+export interface ListRefreshPreview {
+  Success: boolean;
+  ResultCode: ApplyResultCode;
+  Message: string;
+  /** Set on success. Its `DeltaToken` is what `ApplyRefreshPreview` accepts. */
+  Delta?: ListDelta;
+  /** Set when `ResultCode` is `SOURCE_CHANGED`. */
+  SourceChange?: ListSourceChange;
 }
 
 // ---------------------------------------------------------------------------
