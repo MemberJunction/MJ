@@ -164,6 +164,38 @@ Reported catch that is the known bug (match check), per PR:
 - **D. Round 1 settings.** Pro: the only run that caught #5906. Con: 2.41 USD; one run in five is not a property of the setting.
 - **Choice: A as the candidate.** Next: a validation round with A on six more PRs whose risk notes name the bug (#4253, #4418, #4290, #3644, #5729, #4450), then the match check. If A matches clearly fewer bugs there than the notes predict, the next check is B on the same six.
 
+## N16. Validation round result and the smaller session plan
+
+The validation round ran candidate A on PRs that change two or three packages. It stopped at the 10 USD cap after four of the six PRs (#3644 and #5729 did not run).
+
+| PR | Packages | USD | Reported | Match check |
+|---|---|---|---|---|
+| #4253 | 3 | 2.77 | 0 | not possible: the fix revision does not install |
+| #4418 | 2 | 2.34 | 2 (risk 5) | NOT matched |
+| #4450 | 2 | 2.08 | 2 (risk 1 and one diff-only test) | Matched |
+| #4290 | 3 | 4.19 | 2 (risk 4) | NOT matched |
+
+Mean 2.85 USD per PR. The 0.73 USD of round 3 holds only for a PR that changes one package. The cost follows the number of sessions: each package gets one diff-only session (5 tests) and one session per 5 risks, and each weak catch gets an Opus judge call.
+
+Stored data from the 17 Hydrogen runs of the night (rounds 1, 3, 4, 5 and validation):
+
+| Method | Sessions | USD | Tests | Reported | Reported and matched |
+|---|---|---|---|---|---|
+| Diff-only (DodgyDiff) | 25 | 8.92 | 114 | 3 | 3 |
+| Risk-based (IntentAware) | 43 | 18.43 | 120 | 14 | 5 |
+
+- Each matched risk-based catch came from risk 1 or risk 3 of its package, except the one-time #5906 catch (risk 4).
+- The two tests of one risk had the same result in almost all cases.
+- Each run with a matched diff-only report also had a matched risk-based report, except round 1 (before the type check).
+
+Options for the next cut:
+
+- **A. Stop the diff-only sessions.** Pro: about one third of the generator cost goes away. Con: its 3 reports were all correct (3 of 3), and per USD it gave as many matched reports as the risk-based method. Not chosen.
+- **B. Smaller plan with the current settings only: 2 packages per PR, 3 diff-only tests per package, the 2 top-ranked risks per package.** Pro: no code change; removes the sessions and risks that gave no matched catch in the stored data; fewer weak catches to judge. Con: a bug that only risk 3 or lower names is lost (one case in the stored data: #3831 risk 3, but risk 1 matched in the same run).
+- **C. One test per risk.** Pro: about half the risk-based tests. Con: in two of the #3831 runs only one of the two tests of risk 1 matched, so this can lose a catch. Not chosen.
+- **D. One Opus judge call for all weak catches of a run.** Pro: the diff is sent once (judge cost was 0.3 to 1.0 USD per PR in this round). Con: code change in the judge panel and a new prompt to validate. Kept as the next step if B is not enough.
+- **Choice: B.** Round 7 runs B on #4450, #4418, #4290, #3644 and #5729 with a 9 USD cap, then the match check. #4253 is left out because its match check cannot run.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -176,3 +208,4 @@ Reported catch that is the known bug (match check), per PR:
 | 4 | Hydrogen, thinking medium, one session per risk: #5906 (two attempts), #5513 | 2.83 | 22.36 |
 | 5 | Hydrogen, default thinking, shared session: #5906, #5513, #3831 | 3.90 | 26.26 |
 | M | Match checks, rounds 1 and 3 to 5 (no model spend) | 0.00 | 26.26 |
+| 6 | Validation, candidate A: #4253, #4418, #4450, #4290 (stopped at the cap) | 11.36 | 37.62 |
