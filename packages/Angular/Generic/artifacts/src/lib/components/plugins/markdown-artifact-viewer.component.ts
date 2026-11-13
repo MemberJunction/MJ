@@ -24,6 +24,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { PdfOrientation } from '@memberjunction/ng-react';
 import { Subscription } from 'rxjs';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { DocsVersionDiffComponent } from '../version-diff/docs-version-diff.component';
 import { EscapeHtml } from '../previews/office-preview.logic';
 import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
@@ -11323,7 +11324,12 @@ export class MarkdownArtifactViewerComponent
         return;
       }
 
-      const sentViaSocket = this.session?.RequestSaveVersion() ?? false;
+      const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+        'MarkdownArtifactViewerPlugin',
+        this.resolveCaptureRootElement(),
+      );
+
+      const sentViaSocket = this.session?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaSocket) {
         this.StatusBannerMessage = 'Saving collaborative document version…';
         return;
@@ -11332,7 +11338,12 @@ export class MarkdownArtifactViewerComponent
       const artifactId = this.artifactVersion?.ArtifactID;
       let savedVersionNumber: number;
       if (artifactId) {
-        const persisted = await this.persistDocumentVersionToProvider(artifactId, this.MarkdownContent);
+        const persisted = await this.persistDocumentVersionToProvider(
+          artifactId,
+          this.MarkdownContent,
+          CapturedThumbnailDataUrl,
+          Policy,
+        );
         if (!persisted.ok) {
           this.notifyError(persisted.errorMessage || 'Failed to save document version.');
           return;
@@ -11363,9 +11374,21 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return (
+      el.querySelector<HTMLElement>('.mj-docs-page') ??
+      el.querySelector<HTMLElement>('.mj-docs-canvas') ??
+      el
+    );
+  }
+
   private async persistDocumentVersionToProvider(
     artifactId: string,
     content: string,
+    capturedThumbnailDataUrl?: string | null,
+    policy?: import('@memberjunction/core-entities').ArtifactTypeThumbnailPolicy,
   ): Promise<{ ok: boolean; versionNumber: number; errorMessage?: string }> {
     const user = this.getSafeCurrentUser();
     const provider = this.getSafeProvider();
@@ -11382,6 +11405,7 @@ export class MarkdownArtifactViewerComponent
       content,
       true,
       provider,
+      capturedThumbnailDataUrl,
     );
     if (serverCommit.HandledByServer) {
       if (!serverCommit.Success) {
@@ -11434,8 +11458,12 @@ export class MarkdownArtifactViewerComponent
       const docConfig = BuildArtifactVersionConfigurationWithPreview(
         this.artifactVersion?.Configuration,
         content,
-        'MarkdownArtifactViewerComponent',
+        'MarkdownArtifactViewerPlugin',
         ver.Name,
+        {
+          Policy: policy,
+          CapturedThumbnailDataUrl: capturedThumbnailDataUrl,
+        },
       );
       if (docConfig) {
         ver.Configuration = docConfig;

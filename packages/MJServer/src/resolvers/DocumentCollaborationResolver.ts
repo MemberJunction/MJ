@@ -13,9 +13,13 @@ import {
     BuildArtifactVersionConfigurationWithPreview,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    IsValidThumbnailDataUrl,
     MJArtifactEntity,
+    MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJConversationDetailEntity,
+    ParseArtifactVersionConfiguration,
+    ResolveArtifactTypeThumbnailPolicy,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
@@ -450,7 +454,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('artifactId') artifactId: string,
         @Arg('content') content: string,
         @Arg('saveVersion', { nullable: true }) saveVersion: boolean = true,
-        @Ctx() context: AppContext
+        @Ctx() context: AppContext,
+        @Arg('thumbnailDataUrl', { nullable: true }) thumbnailDataUrl?: string
     ): Promise<CommitArtifactInlineEditResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
@@ -468,11 +473,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
+        const validCapturedThumbnail = IsValidThumbnailDataUrl(thumbnailDataUrl) ? thumbnailDataUrl : null;
         const applied = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
             artifactId,
             content,
             user,
-            saveVersion
+            saveVersion,
+            undefined,
+            { capturedThumbnailDataUrl: validCapturedThumbnail }
         );
         return {
             Success: applied.Success,
@@ -588,8 +596,12 @@ export class DocumentCollaborationResolver extends ResolverBase {
             const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
                 null,
                 initialContent,
-                null,
-                childArtifact.Name ?? null
+                artType.DriverClass ?? null,
+                childArtifact.Name ?? null,
+                {
+                    ArtifactType: artType,
+                    AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? []
+                }
             );
             if (enrichedConfig) {
                 version.Configuration = enrichedConfig;
@@ -1365,16 +1377,49 @@ export class DocumentCollaborationResolver extends ResolverBase {
         restoredVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
         restoredVer.ContentHash = sourceVersion.ContentHash;
         restoredVer.Content = sourceVersion.Content;
+        let restoreTypeEntity: MJArtifactTypeEntity | null = null;
+        let allRestoreTypes: ReadonlyArray<MJArtifactTypeEntity> = [];
+        try {
+            await ArtifactMetadataEngine.Instance.Config(false, user, provider);
+            allRestoreTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+            const artMetaRes = await rv.RunView<{ TypeID?: string | null }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(normalizedArtifactId)}'`,
+                    Fields: ['TypeID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const typeId = artMetaRes.Success ? artMetaRes.Results?.[0]?.TypeID : null;
+            if (typeId) {
+                restoreTypeEntity = allRestoreTypes.find((t) => UUIDsEqual(t.ID, typeId)) ?? null;
+            }
+        } catch {
+            // Fall back safely when unit-test mocks omit artifact type metadata
+        }
+        const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
+        const restorePolicy = ResolveArtifactTypeThumbnailPolicy(
+            restoreTypeEntity,
+            allRestoreTypes,
+            restoreTypeEntity?.DriverClass ?? null
+        );
         const enrichedRestoredConfig = BuildArtifactVersionConfigurationWithPreview(
             sourceVersion.Configuration,
             sourceVersion.Content,
-            null,
-            sourceVersion.Name ?? null
+            restoreTypeEntity?.DriverClass ?? null,
+            sourceVersion.Name ?? null,
+            {
+                Policy: restorePolicy,
+                ArtifactType: restoreTypeEntity,
+                AllArtifactTypes: allRestoreTypes,
+                CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null
+            }
         );
         if (enrichedRestoredConfig !== null && enrichedRestoredConfig !== undefined) {
             restoredVer.Configuration = enrichedRestoredConfig;
-        } else if (sourceVersion.Configuration !== null && sourceVersion.Configuration !== undefined) {
-            restoredVer.Configuration = sourceVersion.Configuration;
         }
 
         MarkTrustedServerRestoreSave(restoredVer);

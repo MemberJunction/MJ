@@ -342,6 +342,21 @@
               }
             </div>
 
+            @if (UnifiedScope !== 'drive') {
+              <button
+                type="button"
+                class="layout-switch-btn"
+                [class.active]="ShowCardThumbnails"
+                (click)="ToggleCardThumbnails()"
+                [attr.aria-pressed]="ShowCardThumbnails"
+                [title]="ShowCardThumbnails ? 'Hide card thumbnails (show icons)' : 'Show card thumbnails'"
+                data-testid="toggle-card-previews-btn"
+              >
+                <i [class]="ShowCardThumbnails ? 'fa-solid fa-image' : 'fa-solid fa-icons'"></i>
+                <span>{{ ShowCardThumbnails ? 'Previews' : 'Icons' }}</span>
+              </button>
+            }
+
             <mj-refresh-button [Loading]="IsLoading" (Clicked)="ReloadWorkspaceData()"></mj-refresh-button>
           </div>
         </div>
@@ -1006,7 +1021,11 @@
       >
         <!-- Visual Miniature Preview Header -->
         <div class="card-mini-preview" [attr.data-cat]="item.Category">
-          @if (item.ThumbnailDataUrl) {
+          @if (!ShowCardThumbnails || item.ThumbnailPolicyMode === 'Icon') {
+            <div class="mini-generic-glyph" aria-hidden="true">
+              <i [class]="item.Icon"></i>
+            </div>
+          } @else if (item.ThumbnailDataUrl) {
             <img
               class="card-thumb-img"
               [src]="item.ThumbnailDataUrl"

@@ -1,6 +1,7 @@
 import { CompositeKey } from '@memberjunction/core';
 import {
   ArtifactPreviewSnapshot,
+  type ArtifactTypeThumbnailMode,
   MJArtifactEntity,
   MJArtifactVersionEntity,
   MJCollectionEntity,
@@ -84,6 +85,7 @@ export interface LibraryItemSummary {
   ContentSnippet: string;
   PreviewSnapshot?: ArtifactPreviewSnapshot | null;
   ThumbnailDataUrl?: string | null;
+  ThumbnailPolicyMode?: ArtifactTypeThumbnailMode;
   UpdatedAt: Date;
   OwnerUserId: string;
   OwnerName: string;

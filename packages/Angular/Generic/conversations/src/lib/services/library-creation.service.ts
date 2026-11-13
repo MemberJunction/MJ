@@ -680,6 +680,10 @@ export class LibraryCreationService {
       params.Content,
       params.ArtifactType?.DriverClass ?? null,
       params.Title,
+      {
+        ArtifactType: params.ArtifactType ?? null,
+        AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? [],
+      },
     );
     if (initialConfig) {
       version.Configuration = initialConfig;

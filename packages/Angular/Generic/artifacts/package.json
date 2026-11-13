@@ -57,6 +57,7 @@
     "@memberjunction/ng-ui-components": "6.3.0-edge.0",
     "@memberjunction/video-studio-core": "6.3.0-edge.0",
     "docx": "^9.5.1",
+    "html-to-image": "^1.11.11",
     "lib0": "^0.2.99",
     "mammoth": "^1.8.0",
     "pdfjs-dist": "^4.10.38",

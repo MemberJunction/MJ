@@ -48,6 +48,7 @@ import {
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
@@ -5616,6 +5617,12 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return el.querySelector<HTMLElement>('.mj-sheets-grid-scroll') ?? el;
+  }
+
   public async SaveNewArtifactVersion(): Promise<void> {
     if (!this.CanEdit || this.IsSavingVersion || !this.HasUnsavedChanges) return;
     this.IsSavingVersion = true;
@@ -5625,7 +5632,12 @@ export class SpreadsheetArtifactViewerComponent
       const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
 
-      const sentViaWs = this.CollaborationSession?.RequestSaveVersion() ?? false;
+      const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+        'SpreadsheetArtifactViewerPlugin',
+        this.resolveCaptureRootElement(),
+      );
+
+      const sentViaWs = this.CollaborationSession?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaWs) {
         this.StatusBannerMessage = 'Saving collaborative workbook version…';
         return;
@@ -5652,6 +5664,7 @@ export class SpreadsheetArtifactViewerComponent
         serialized,
         true,
         md,
+        CapturedThumbnailDataUrl,
       );
       if (serverCommit.HandledByServer) {
         if (!serverCommit.Success) {
@@ -5699,8 +5712,12 @@ export class SpreadsheetArtifactViewerComponent
       const sheetConfig = BuildArtifactVersionConfigurationWithPreview(
         serialized,
         serialized,
-        'SpreadsheetArtifactViewerComponent',
+        'SpreadsheetArtifactViewerPlugin',
         ver.Name,
+        {
+          Policy,
+          CapturedThumbnailDataUrl,
+        },
       );
       if (sheetConfig) {
         ver.Configuration = sheetConfig;

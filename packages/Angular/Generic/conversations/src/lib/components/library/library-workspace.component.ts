@@ -23,6 +23,7 @@ import {
   MJCollectionPermissionEntity,
   MJEnvironmentEntityExtended,
   ParseArtifactVersionConfiguration,
+  ResolveArtifactTypeThumbnailPolicy,
   UserInfoEngine,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -117,6 +118,7 @@ const SETTING_LIST_STYLE = 'Library.ListStyle';
 const SETTING_STARRED_IDS = 'Library.StarredArtifactIDs';
 const SETTING_LEFT_RAIL_COLLAPSED = 'MJ.Library.LeftRailCollapsed';
 const SETTING_ITEM_VIEW_MODE = 'MJ.Library.ItemViewMode';
+const SETTING_SHOW_CARD_THUMBNAILS = 'Library/ShowCardThumbnails';
 
 const VERSION_SUMMARY_FIELDS: string[] = [
   'ID',
@@ -180,6 +182,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
   public ListStyle: LibraryListStyle = 'cards';
   public LeftRailCollapsed = false;
   public PreferredItemViewMode: 'split' | 'full' = 'split';
+  public ShowCardThumbnails = true;
 
   // Selection & Studio state
   public SelectedCollectionId: string | null = null;
@@ -1192,8 +1195,16 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     }
     const existing = this.AllItems[idx];
     const parsedConfig = ParseArtifactVersionConfiguration(event.Configuration);
-    const nextSnapshot = event.PreviewSnapshot ?? parsedConfig?.previewSnapshot ?? existing.PreviewSnapshot ?? null;
-    const nextThumb = event.ThumbnailDataUrl ?? parsedConfig?.thumbnailDataUrl ?? existing.ThumbnailDataUrl ?? null;
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const typeEntity = allTypes.find((t) => UUIDsEqual(t.ID, existing.TypeId)) ?? existing.TypeName;
+    const thumbPolicy = ResolveArtifactTypeThumbnailPolicy(typeEntity, allTypes, existing.DriverClass);
+    const allowPreview = thumbPolicy.Enabled && thumbPolicy.Mode === 'Rendered';
+    const nextSnapshot = allowPreview
+      ? event.PreviewSnapshot ?? parsedConfig?.previewSnapshot ?? existing.PreviewSnapshot ?? null
+      : null;
+    const nextThumb = allowPreview
+      ? event.ThumbnailDataUrl ?? parsedConfig?.thumbnailDataUrl ?? existing.ThumbnailDataUrl ?? null
+      : null;
     const updated: LibraryItemSummary = {
       ...existing,
       LatestVersionId: event.VersionID ?? existing.LatestVersionId,
@@ -1201,6 +1212,7 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
       VersionCount: Math.max(existing.VersionCount, event.VersionNumber),
       PreviewSnapshot: nextSnapshot,
       ThumbnailDataUrl: nextThumb,
+      ThumbnailPolicyMode: thumbPolicy.Mode,
       UpdatedAt: event.UpdatedAt,
     };
     this.AllItems = [
@@ -2418,6 +2430,13 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         .filter((c): c is MJCollectionEntity => !!c);
 
       const parsedConfig = ParseArtifactVersionConfiguration(latest?.Configuration);
+      const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+      const thumbPolicy = ResolveArtifactTypeThumbnailPolicy(
+        typeEntity ?? typeName,
+        allTypes.length > 0 ? allTypes : Array.from(typeById.values()),
+        driverClass,
+      );
+      const allowPreview = thumbPolicy.Enabled && thumbPolicy.Mode === 'Rendered';
 
       items.push({
         Id: art.ID,
@@ -2436,8 +2455,9 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         MimeType: latest?.MimeType ?? typeEntity?.ContentType ?? null,
         FileName: latest?.FileName ?? null,
         ContentSnippet: art.Description || latest?.Description || typeEntity?.Description || '',
-        PreviewSnapshot: parsedConfig?.previewSnapshot ?? null,
-        ThumbnailDataUrl: parsedConfig?.thumbnailDataUrl ?? null,
+        PreviewSnapshot: allowPreview ? parsedConfig?.previewSnapshot ?? null : null,
+        ThumbnailDataUrl: allowPreview ? parsedConfig?.thumbnailDataUrl ?? null : null,
+        ThumbnailPolicyMode: thumbPolicy.Mode,
         UpdatedAt: art.__mj_UpdatedAt instanceof Date ? art.__mj_UpdatedAt : new Date(art.__mj_UpdatedAt),
         OwnerUserId: art.UserID,
         OwnerName: art.User || (isOwner ? 'You' : 'Shared'),
@@ -2673,6 +2693,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
     } else if (railCollapsed === '0' || railCollapsed === 'false') {
       this.LeftRailCollapsed = false;
     }
+    const showThumbPref = UserInfoEngine.Instance.GetSetting(SETTING_SHOW_CARD_THUMBNAILS);
+    if (showThumbPref === 'false' || showThumbPref === '0') {
+      this.ShowCardThumbnails = false;
+    } else if (showThumbPref === 'true' || showThumbPref === '1') {
+      this.ShowCardThumbnails = true;
+    }
     const starredRaw = UserInfoEngine.Instance.GetSetting(SETTING_STARRED_IDS);
     if (starredRaw) {
       try {
@@ -2684,6 +2710,12 @@ export class LibraryWorkspaceComponent extends BaseAngularComponent implements O
         LogError(`LibraryWorkspaceComponent: failed to parse ${SETTING_STARRED_IDS}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
+  }
+
+  public ToggleCardThumbnails(): void {
+    this.ShowCardThumbnails = !this.ShowCardThumbnails;
+    this.saveSettingSafe(SETTING_SHOW_CARD_THUMBNAILS, this.ShowCardThumbnails ? 'true' : 'false');
+    this.cdr.detectChanges();
   }
 
   private saveSettingSafe(key: string, value: string): void {

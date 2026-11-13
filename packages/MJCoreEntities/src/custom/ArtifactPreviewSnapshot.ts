@@ -1,5 +1,212 @@
+import type {
+  MJArtifactTypeEntity,
+  MJArtifactTypeEntity_ArtifactTypeThumbnailMode,
+  MJArtifactTypeEntity_IArtifactTypeConfiguration,
+  MJArtifactTypeEntity_IArtifactTypeThumbnailConfiguration,
+} from '../generated/entities/__mj';
 import { SlideDeckEngine } from './SlideDeckEngine';
 import { SpreadsheetEngine } from './SpreadsheetEngine';
+
+/**
+ * Thumbnail capture / display mode derived directly from generated `MJArtifactTypeEntity` JSONType metadata.
+ */
+export type ArtifactTypeThumbnailMode = MJArtifactTypeEntity_ArtifactTypeThumbnailMode;
+
+/**
+ * Resolved per-artifact-type thumbnail policy after merging `ParentID` inheritance and safe defaults.
+ */
+export interface ArtifactTypeThumbnailPolicy {
+  Enabled: boolean;
+  Mode: ArtifactTypeThumbnailMode;
+  MaskLiveDataBlocks: boolean;
+}
+
+/**
+ * Lightweight structural input accepted by {@link ResolveArtifactTypeThumbnailPolicy}.
+ */
+export type ArtifactTypePolicyInput =
+  | Partial<
+      Pick<
+        MJArtifactTypeEntity,
+        'ID' | 'Name' | 'ParentID' | 'DriverClass' | 'Configuration' | 'ConfigurationObject'
+      >
+    >
+  | string
+  | null
+  | undefined;
+
+const DEFAULT_RENDERED_TYPE_NAMES = new Set<string>([
+  'markdown document',
+  'presentation',
+  'whiteboard',
+  'svg image',
+  'html',
+  'pdf',
+  'image',
+]);
+
+const DEFAULT_RENDERED_DRIVERS = new Set<string>([
+  'MarkdownArtifactViewerPlugin',
+  'SlideDeckArtifactViewerPlugin',
+  'WhiteboardArtifactViewerPlugin',
+  'SvgArtifactViewerPlugin',
+  'HtmlArtifactViewerPlugin',
+  'PdfArtifactViewerPlugin',
+  'ImageArtifactViewerPlugin',
+]);
+
+const DEFAULT_STRUCTURAL_TYPE_NAMES = new Set<string>(['excel spreadsheet']);
+const DEFAULT_STRUCTURAL_DRIVERS = new Set<string>(['SpreadsheetArtifactViewerPlugin']);
+
+const MAX_THUMBNAIL_DATA_URL_LENGTH = 250_000;
+const VALID_THUMBNAIL_DATA_URL_RE =
+  /^data:image\/(?:webp|jpeg|png|svg\+xml);base64,[A-Za-z0-9+/=]+$/i;
+
+/**
+ * Validates that a client-supplied or stored thumbnail string is a safe, bounded base64 `data:image/...` URI.
+ */
+export function IsValidThumbnailDataUrl(
+  value: unknown,
+  maxLength = MAX_THUMBNAIL_DATA_URL_LENGTH,
+): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= maxLength &&
+    VALID_THUMBNAIL_DATA_URL_RE.test(value)
+  );
+}
+
+function parseArtifactTypeThumbnailConfig(
+  typeObj: ArtifactTypePolicyInput,
+): MJArtifactTypeEntity_IArtifactTypeThumbnailConfiguration | null {
+  if (!typeObj || typeof typeObj === 'string') {
+    return null;
+  }
+  const typed = typeObj.ConfigurationObject;
+  if (typed && typeof typed === 'object' && typed.Thumbnail && typeof typed.Thumbnail === 'object') {
+    return typed.Thumbnail;
+  }
+  const raw = typeObj.Configuration;
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const cfg = parsed as MJArtifactTypeEntity_IArtifactTypeConfiguration;
+        if (cfg.Thumbnail && typeof cfg.Thumbnail === 'object') {
+          return cfg.Thumbnail;
+        }
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function resolveDefaultPolicyByNames(
+  typeName: string | null | undefined,
+  driverClass: string | null | undefined,
+): ArtifactTypeThumbnailPolicy {
+  const normName = (typeName ?? '').trim().toLowerCase();
+  const normDriver = (driverClass ?? '').trim();
+
+  if (DEFAULT_RENDERED_TYPE_NAMES.has(normName) || DEFAULT_RENDERED_DRIVERS.has(normDriver)) {
+    return { Enabled: true, Mode: 'Rendered', MaskLiveDataBlocks: true };
+  }
+  if (DEFAULT_STRUCTURAL_TYPE_NAMES.has(normName) || DEFAULT_STRUCTURAL_DRIVERS.has(normDriver)) {
+    return { Enabled: true, Mode: 'Structural', MaskLiveDataBlocks: true };
+  }
+  return { Enabled: false, Mode: 'Icon', MaskLiveDataBlocks: true };
+}
+
+/**
+ * Resolves the effective {@link ArtifactTypeThumbnailPolicy} for an artifact type,
+ * walking `ParentID` inheritance when `allTypes` is provided and falling back to safe
+ * defaults (fail-closed `'Icon'` for unknown/data/code types) when no `Configuration` is set.
+ */
+export function ResolveArtifactTypeThumbnailPolicy(
+  artifactTypeOrName?: ArtifactTypePolicyInput,
+  allTypes?: ReadonlyArray<Exclude<ArtifactTypePolicyInput, string | null | undefined>>,
+  driverClassHint?: string | null,
+): ArtifactTypeThumbnailPolicy {
+  let targetObj: Exclude<ArtifactTypePolicyInput, string | null | undefined> | null = null;
+  let resolvedName: string | null | undefined = null;
+  let resolvedDriver: string | null | undefined = driverClassHint;
+
+  if (typeof artifactTypeOrName === 'string') {
+    resolvedName = artifactTypeOrName;
+    if (allTypes) {
+      const needle = artifactTypeOrName.trim().toLowerCase();
+      targetObj =
+        allTypes.find((t) => (t.Name ?? '').trim().toLowerCase() === needle) ?? null;
+    }
+  } else if (artifactTypeOrName && typeof artifactTypeOrName === 'object') {
+    targetObj = artifactTypeOrName;
+    resolvedName = artifactTypeOrName.Name;
+    resolvedDriver = artifactTypeOrName.DriverClass ?? driverClassHint;
+  }
+
+  // Collect chain from leaf -> root parent so child overrides parent settings cleanly.
+  const chain: Array<Exclude<ArtifactTypePolicyInput, string | null | undefined>> = [];
+  if (targetObj) {
+    chain.push(targetObj);
+    if (allTypes && targetObj.ParentID) {
+      const byId = new Map<string, Exclude<ArtifactTypePolicyInput, string | null | undefined>>();
+      for (const item of allTypes) {
+        if (item.ID) {
+          byId.set(item.ID.trim().toLowerCase(), item);
+        }
+      }
+      const visited = new Set<string>();
+      if (targetObj.ID) {
+        visited.add(targetObj.ID.trim().toLowerCase());
+      }
+      let parentId: string | null | undefined = targetObj.ParentID;
+      while (parentId) {
+        const normParent = parentId.trim().toLowerCase();
+        if (visited.has(normParent)) break;
+        visited.add(normParent);
+        const parent = byId.get(normParent);
+        if (!parent) break;
+        chain.push(parent);
+        if (!resolvedDriver && parent.DriverClass) {
+          resolvedDriver = parent.DriverClass;
+        }
+        parentId = parent.ParentID;
+      }
+    }
+  }
+
+  const baseDefault = resolveDefaultPolicyByNames(resolvedName, resolvedDriver);
+  let enabled: boolean | undefined;
+  let mode: ArtifactTypeThumbnailMode | undefined;
+  let maskLiveDataBlocks: boolean | undefined;
+
+  for (const node of chain) {
+    const thumb = parseArtifactTypeThumbnailConfig(node);
+    if (!thumb) continue;
+    if (enabled === undefined && typeof thumb.Enabled === 'boolean') {
+      enabled = thumb.Enabled;
+    }
+    if (mode === undefined && (thumb.Mode === 'Rendered' || thumb.Mode === 'Structural' || thumb.Mode === 'Icon')) {
+      mode = thumb.Mode;
+    }
+    if (maskLiveDataBlocks === undefined && typeof thumb.MaskLiveDataBlocks === 'boolean') {
+      maskLiveDataBlocks = thumb.MaskLiveDataBlocks;
+    }
+  }
+
+  const effectiveMode: ArtifactTypeThumbnailMode = mode ?? baseDefault.Mode;
+  const effectiveEnabled =
+    enabled !== undefined ? enabled && effectiveMode !== 'Icon' : effectiveMode !== 'Icon' && baseDefault.Enabled;
+
+  return {
+    Enabled: effectiveEnabled,
+    Mode: effectiveEnabled ? effectiveMode : 'Icon',
+    MaskLiveDataBlocks: maskLiveDataBlocks ?? baseDefault.MaskLiveDataBlocks,
+  };
+}
 
 /**
  * Structured preview metadata stored inside `MJArtifactVersionEntity.Configuration.previewSnapshot`
@@ -125,10 +332,26 @@ function extractDocSnapshot(markdown: string, fallbackTitle?: string): ArtifactP
   let heading = '';
   const bodyLines: string[] = [];
   let callout = '';
+  let inFencedBlock = false;
+  let inDirectiveBlock = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (!line || line.startsWith('```') || line.startsWith(':::')) {
+    if (line.startsWith('```')) {
+      inFencedBlock = !inFencedBlock;
+      continue;
+    }
+    if (inFencedBlock) {
+      continue;
+    }
+    if (line.startsWith(':::')) {
+      inDirectiveBlock = line !== ':::' ? true : !inDirectiveBlock;
+      continue;
+    }
+    if (inDirectiveBlock) {
+      continue;
+    }
+    if (!line) {
       continue;
     }
     if (!heading && /^#{1,3}\s+/.test(line)) {
@@ -149,7 +372,7 @@ function extractDocSnapshot(markdown: string, fallbackTitle?: string): ArtifactP
       .replace(/^\d+\.\s+/, '')
       .replace(/[*_`]/g, '')
       .trim();
-    if (clean.length > 0 && !clean.startsWith('|') && !clean.startsWith('---')) {
+    if (clean.length > 0 && !clean.startsWith('|') && !clean.startsWith('---') && !clean.startsWith('{')) {
       bodyLines.push(clean);
       if (bodyLines.join(' ').length >= 130) {
         break;
@@ -362,20 +585,47 @@ export function BuildSvgThumbnailDataUrl(snapshot: ArtifactPreviewSnapshot | nul
 }
 
 /**
+ * Optional configuration passed to {@link BuildArtifactVersionConfigurationWithPreview}.
+ */
+export interface BuildArtifactVersionPreviewOptions {
+  /** Pre-resolved thumbnail policy (takes precedence over `ArtifactType`). */
+  Policy?: ArtifactTypeThumbnailPolicy;
+  /** Artifact type entity or type name used to resolve `ConfigurationObject.Thumbnail`. */
+  ArtifactType?: ArtifactTypePolicyInput;
+  /** Full ArtifactType catalog for resolving `ParentID` inheritance. */
+  AllArtifactTypes?: ReadonlyArray<Exclude<ArtifactTypePolicyInput, string | null | undefined>>;
+  /** Real rendered client capture (`data:image/webp|jpeg|png|svg+xml;base64,...`) when Mode is `'Rendered'`. */
+  CapturedThumbnailDataUrl?: string | null;
+}
+
+/**
  * Merges `previewSnapshot` and `thumbnailDataUrl` into an artifact version's `Configuration` JSON string,
- * preserving all existing configuration keys.
+ * preserving all unrelated configuration keys. When `stripExistingPreview` is true (e.g. type policy
+ * is `'Structural'` or `'Icon'`), any previously stored `previewSnapshot` and `thumbnailDataUrl`
+ * keys are removed.
  */
 export function MergeArtifactVersionPreviewConfig(
   rawConfig: string | null | undefined,
   snapshot: ArtifactPreviewSnapshot | null,
   thumbnailDataUrl?: string | null,
+  stripExistingPreview = false,
 ): string | null {
-  const existing = ParseArtifactVersionConfiguration(rawConfig) ?? {};
+  const existing = ParseArtifactVersionConfiguration(rawConfig);
+  if (stripExistingPreview) {
+    if (!existing) {
+      return rawConfig ?? null;
+    }
+    const cleaned: ArtifactVersionConfiguration = { ...existing };
+    delete cleaned.previewSnapshot;
+    delete cleaned.thumbnailDataUrl;
+    return Object.keys(cleaned).length > 0 ? JSON.stringify(cleaned) : null;
+  }
+
   if (!snapshot && !thumbnailDataUrl) {
     return rawConfig ?? null;
   }
   const merged: ArtifactVersionConfiguration = {
-    ...existing,
+    ...(existing ?? {}),
     ...(snapshot ? { previewSnapshot: snapshot } : {}),
     ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
   };
@@ -383,16 +633,39 @@ export function MergeArtifactVersionPreviewConfig(
 }
 
 /**
- * Convenience helper: derives `previewSnapshot` + base64 SVG `thumbnailDataUrl` from raw
- * `content` and merges them into `rawConfig`.
+ * Convenience helper: enforces the artifact type's {@link ArtifactTypeThumbnailPolicy} and merges
+ * either a validated rendered screenshot / fallback SVG (`Mode === 'Rendered'`) or strips preview
+ * metadata (`Mode === 'Structural' | 'Icon'`) inside `rawConfig`.
  */
 export function BuildArtifactVersionConfigurationWithPreview(
   rawConfig: string | null | undefined,
   content: string | null | undefined,
   driverClass?: string | null,
   fallbackTitle?: string | null,
+  options?: BuildArtifactVersionPreviewOptions,
 ): string | null {
-  const snapshot = BuildArtifactPreviewSnapshot(content, driverClass, fallbackTitle ?? undefined);
-  const thumbnailDataUrl = BuildSvgThumbnailDataUrl(snapshot);
-  return MergeArtifactVersionPreviewConfig(rawConfig, snapshot, thumbnailDataUrl);
+  const policy =
+    options?.Policy ??
+    ResolveArtifactTypeThumbnailPolicy(
+      options?.ArtifactType ?? null,
+      options?.AllArtifactTypes,
+      driverClass,
+    );
+
+  if (!policy.Enabled || policy.Mode !== 'Rendered') {
+    return MergeArtifactVersionPreviewConfig(rawConfig, null, null, true);
+  }
+
+  const effectiveDriver =
+    driverClass ??
+    (options?.ArtifactType && typeof options.ArtifactType === 'object'
+      ? options.ArtifactType.DriverClass
+      : null);
+
+  const snapshot = BuildArtifactPreviewSnapshot(content, effectiveDriver, fallbackTitle ?? undefined);
+  const capturedThumb = IsValidThumbnailDataUrl(options?.CapturedThumbnailDataUrl)
+    ? options.CapturedThumbnailDataUrl
+    : null;
+  const thumbnailDataUrl = capturedThumb ?? BuildSvgThumbnailDataUrl(snapshot);
+  return MergeArtifactVersionPreviewConfig(rawConfig, snapshot, thumbnailDataUrl, false);
 }

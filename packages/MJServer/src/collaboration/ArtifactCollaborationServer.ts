@@ -24,12 +24,17 @@ import {
 } from '@memberjunction/global';
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
+    ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
+    IsValidThumbnailDataUrl,
+    MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
+    ResolveArtifactTypeThumbnailPolicy,
     SlideDeckEngine,
     SpreadsheetEngine,
+    type ArtifactTypeThumbnailPolicy,
     type SlideDeckSpec,
     type SlideSpec,
     type SpreadsheetCellSpec,
@@ -286,6 +291,8 @@ export interface CollaborationControlFrame {
     payload?: string;
     message?: string;
     actorUserId?: string;
+    /** Optional client-captured rendered screenshot (`data:image/webp|jpeg|png|svg+xml;base64,...`) sent on `'save-version'`. */
+    thumbnailDataUrl?: string;
 }
 
 interface AuthenticatedUpgradeResult {
@@ -1150,9 +1157,58 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      * both before and after the version row and `meta` map are updated (`Blocker 2`).
      * Also reconciles any out-of-band `MJ: Artifact Versions` row written outside the room (`Item 5`).
      */
+    private async resolveArtifactTypeThumbnailPolicyForRoom(
+        provider: IMetadataProvider,
+        artifactId: string,
+        queryUser: UserInfo,
+        room: CollaborationRoom
+    ): Promise<{
+        TypeEntity: MJArtifactTypeEntity | null;
+        AllTypes: ReadonlyArray<MJArtifactTypeEntity>;
+        Policy: ArtifactTypeThumbnailPolicy;
+    }> {
+        let typeEntity: MJArtifactTypeEntity | null = null;
+        let allTypes: ReadonlyArray<MJArtifactTypeEntity> = [];
+        try {
+            await ArtifactMetadataEngine.Instance.Config(false, queryUser, provider);
+            allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+            const rv = RunView.FromMetadataProvider(provider);
+            const artRes = await rv.RunView<{ ID: string; TypeID?: string | null }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+                    Fields: ['ID', 'TypeID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                queryUser
+            );
+            const typeId = artRes.Success ? artRes.Results?.[0]?.TypeID : null;
+            if (typeId) {
+                typeEntity = allTypes.find((t) => UUIDsEqual(t.ID, typeId)) ?? null;
+            }
+        } catch {
+            // Fall back safely when unit-test mocks omit ArtifactMetadataEngine or MJ: Artifacts rows
+        }
+
+        let driverHint: string | null = typeEntity?.DriverClass ?? null;
+        if (!typeEntity && !driverHint) {
+            if (room.Doc.getMap('worksheetsById').size > 0) {
+                driverHint = 'SpreadsheetArtifactViewerPlugin';
+            } else if (room.Doc.getMap('slidesById').size > 0) {
+                driverHint = 'SlideDeckArtifactViewerPlugin';
+            }
+        }
+
+        const policy = ResolveArtifactTypeThumbnailPolicy(typeEntity, allTypes, driverHint);
+        return { TypeEntity: typeEntity, AllTypes: allTypes, Policy: policy };
+    }
+
     public async CompactRoomToArtifactVersion(
         artifactId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: { CapturedThumbnailDataUrl?: string | null }
     ): Promise<{ Saved: boolean; VersionID?: string; VersionNumber?: number }> {
         this.ensureShutdownRegistered();
         const provider = this.activeProvider();
@@ -1293,6 +1349,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             versionEntity.UserID = contextUser.ID;
             versionEntity.Content = currentContent;
             versionEntity.ContentHash = contentHash;
+            const { TypeEntity, AllTypes, Policy } = await this.resolveArtifactTypeThumbnailPolicyForRoom(
+                provider,
+                room.ArtifactID,
+                queryUser,
+                room
+            );
             const rawBaseConfig =
                 room.Doc.getMap('worksheetsById').size > 0
                     ? currentContent
@@ -1300,8 +1362,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
                 rawBaseConfig,
                 currentContent,
-                null,
-                latest?.Name ?? null
+                TypeEntity?.DriverClass ?? null,
+                latest?.Name ?? null,
+                {
+                    Policy,
+                    ArtifactType: TypeEntity,
+                    AllArtifactTypes: AllTypes,
+                    CapturedThumbnailDataUrl: options?.CapturedThumbnailDataUrl ?? null
+                }
             );
             if (enrichedConfig) {
                 versionEntity.Configuration = enrichedConfig;
@@ -1460,6 +1528,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             persistedVersionId?: string;
             persistedVersionNumber?: number;
             persistedContent?: string;
+            capturedThumbnailDataUrl?: string | null;
         }
     ): Promise<{
         Success: boolean;
@@ -1661,7 +1730,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
         if (saveVersion) {
             const preCompactVersionId = room.BaseVersionID;
-            const compacted = await this.CompactRoomToArtifactVersion(artifactId, user);
+            const compacted = await this.CompactRoomToArtifactVersion(artifactId, user, {
+                CapturedThumbnailDataUrl: options?.capturedThumbnailDataUrl ?? null
+            });
             if (isRestore) {
                 const effectiveVerId = compacted.VersionID ?? room.BaseVersionID ?? undefined;
                 const effectiveVerNum = compacted.VersionNumber ?? (room.BaseVersionNumber || undefined);
@@ -4573,7 +4644,12 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                             });
                             return;
                         }
-                        void this.CompactRoomToArtifactVersion(room.ArtifactID, conn.User);
+                        const validCapturedThumbnail = IsValidThumbnailDataUrl(control.thumbnailDataUrl)
+                            ? control.thumbnailDataUrl
+                            : null;
+                        void this.CompactRoomToArtifactVersion(room.ArtifactID, conn.User, {
+                            CapturedThumbnailDataUrl: validCapturedThumbnail
+                        });
                     }
                     break;
                 }

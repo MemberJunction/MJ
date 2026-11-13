@@ -21,7 +21,9 @@ import {
   MJConversationDetailEntity,
   MJConversationEntity,
   ParseArtifactVersionConfiguration,
+  ResolveArtifactTypeThumbnailPolicy,
   type ArtifactPreviewSnapshot,
+  type ArtifactTypeThumbnailPolicy,
   type ConversationScope,
 } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -1535,19 +1537,24 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       newVer.VersionNumber = nextVersionNum;
       newVer.Name = this.artifactVersion?.Name || this.Artifact.Name;
       newVer.Content = serializedContent;
-      const driverClass = this.Artifact.Type
-        ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type)?.DriverClass
-        : undefined;
-      const previewSnapshot = BuildArtifactPreviewSnapshot(
-        serializedContent,
-        driverClass,
-        newVer.Name,
-      );
-      const thumbnailDataUrl = BuildSvgThumbnailDataUrl(previewSnapshot);
-      const mergedConfig = MergeArtifactVersionPreviewConfig(
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const capturedThumb =
+        Policy.Enabled && Policy.Mode === 'Rendered'
+          ? await (this.PluginViewer?.PluginInstance?.CaptureRenderedThumbnail({
+              maskLiveDataBlocks: Policy.MaskLiveDataBlocks,
+            }) ?? Promise.resolve(null))
+          : null;
+      const mergedConfig = BuildArtifactVersionConfigurationWithPreview(
         this.artifactVersion?.Configuration,
-        previewSnapshot,
-        thumbnailDataUrl,
+        serializedContent,
+        TypeEntity?.DriverClass ?? null,
+        newVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: capturedThumb,
+        },
       );
       if (mergedConfig !== null) {
         newVer.Configuration = mergedConfig;
@@ -1581,6 +1588,26 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     }
   }
 
+  private resolveCurrentThumbnailPolicy(): {
+    TypeEntity: MJArtifactTypeEntity | null;
+    AllTypes: ReadonlyArray<MJArtifactTypeEntity>;
+    Policy: ArtifactTypeThumbnailPolicy;
+  } {
+    const allTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+    const typeEntity =
+      (this.Artifact?.TypeID
+        ? allTypes.find((t) => UUIDsEqual(t.ID, this.Artifact?.TypeID))
+        : undefined) ??
+      (this.Artifact?.Type ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type) : undefined) ??
+      null;
+    const policy = ResolveArtifactTypeThumbnailPolicy(
+      typeEntity ?? this.Artifact?.Type ?? null,
+      allTypes,
+      typeEntity?.DriverClass ?? null,
+    );
+    return { TypeEntity: typeEntity, AllTypes: allTypes, Policy: policy };
+  }
+
   private emitVersionSavedEvent(
     versionId: string | undefined,
     versionNumber: number,
@@ -1590,9 +1617,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     if (!this.Artifact?.ID) {
       return;
     }
-    const driverClass = this.Artifact.Type
-      ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type)?.DriverClass
-      : undefined;
+    const { TypeEntity, Policy } = this.resolveCurrentThumbnailPolicy();
+    if (!Policy.Enabled || Policy.Mode !== 'Rendered') {
+      const sanitizedConfig = MergeArtifactVersionPreviewConfig(rawConfig, null, null, true);
+      this.VersionSaved.emit({
+        ArtifactID: this.Artifact.ID,
+        VersionID: versionId,
+        VersionNumber: versionNumber,
+        Configuration: sanitizedConfig,
+        PreviewSnapshot: null,
+        ThumbnailDataUrl: null,
+        UpdatedAt: new Date(),
+      });
+      return;
+    }
+
+    const driverClass = TypeEntity?.DriverClass;
     const parsedConfig = ParseArtifactVersionConfiguration(rawConfig);
     const previewSnapshot =
       parsedConfig?.previewSnapshot ??
@@ -2169,19 +2209,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       restoredVer.Description = `Restored from v${versionNumber}`;
       restoredVer.Comments = `Restored from v${versionNumber}`;
       restoredVer.Content = sourceVersion.Content;
-      const restoreDriverClass = this.Artifact.Type
-        ? ArtifactMetadataEngine.Instance.FindArtifactType(this.Artifact.Type)?.DriverClass
-        : undefined;
+      const { TypeEntity, AllTypes, Policy } = this.resolveCurrentThumbnailPolicy();
+      const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
       const restoredConfig = BuildArtifactVersionConfigurationWithPreview(
         sourceVersion.Configuration,
         sourceVersion.Content,
-        restoreDriverClass,
+        TypeEntity?.DriverClass ?? null,
         restoredVer.Name,
+        {
+          Policy,
+          ArtifactType: TypeEntity,
+          AllArtifactTypes: AllTypes,
+          CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null,
+        },
       );
-      if (restoredConfig) {
+      if (restoredConfig !== null && restoredConfig !== undefined) {
         restoredVer.Configuration = restoredConfig;
-      } else if (sourceVersion.Configuration) {
-        restoredVer.Configuration = sourceVersion.Configuration;
       }
 
       const saved = await restoredVer.Save();

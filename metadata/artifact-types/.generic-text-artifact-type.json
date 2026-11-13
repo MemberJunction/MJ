@@ -10,14 +10,20 @@
       "Priority": 0,
       "DefaultDeliveryMode": "ToolsOnly",
       "SystemSupplied": true,
-      "Icon": "fa-solid fa-file-lines"
+      "Icon": "fa-solid fa-file-lines",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "FC28FC44-8B74-4F85-AFF2-FCA102CC01AC"
     },
     "sync": {
-      "lastModified": "2026-05-20T01:27:07.876Z",
-      "checksum": "0033168e54531f7d1912b3d6ee3df62435131ae952059184faffdd6e200cc72b"
+      "lastModified": "2026-11-13T23:26:26.360Z",
+      "checksum": "be6835f9d1ffbc30484316beec22b89ef7f595b05cba5b6b22712451b936ab86"
     }
   }
 ]

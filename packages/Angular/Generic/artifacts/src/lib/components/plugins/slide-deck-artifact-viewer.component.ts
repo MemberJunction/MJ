@@ -46,6 +46,7 @@ import {
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
 import {
   DocumentCollaborationService,
@@ -4318,13 +4319,27 @@ export class SlideDeckArtifactViewerComponent
     );
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return (
+      el.querySelector<HTMLElement>('.mj-slide-canvas-stage') ??
+      el.querySelector<HTMLElement>('.mj-slides-center-stage') ??
+      el
+    );
+  }
+
   public async OnSaveVersionCheckpoint(): Promise<void> {
     if (!this.IsEditable || !this.HasUnsavedChanges) {
       return;
     }
-    const sentOverWs = this.session?.RequestSaveVersion() ?? false;
+    const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+      'SlideDeckArtifactViewerPlugin',
+      this.resolveCaptureRootElement(),
+    );
+    const sentOverWs = this.session?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
     if (!sentOverWs) {
-      await this.saveArtifactVersionViaProvider();
+      await this.saveArtifactVersionViaProvider(CapturedThumbnailDataUrl, Policy);
     }
   }
 
@@ -5208,7 +5223,10 @@ export class SlideDeckArtifactViewerComponent
     }
   }
 
-  private async saveArtifactVersionViaProvider(): Promise<void> {
+  private async saveArtifactVersionViaProvider(
+    capturedThumbnailDataUrl?: string | null,
+    policy?: import('@memberjunction/core-entities').ArtifactTypeThumbnailPolicy,
+  ): Promise<void> {
     const serializedContent = SlideDeckEngine.Instance.SerializeDeckSpec(this.Deck);
     const artifactId = this.artifactVersion?.ArtifactID;
     if (!artifactId) {
@@ -5232,6 +5250,7 @@ export class SlideDeckArtifactViewerComponent
       serializedContent,
       true,
       provider,
+      capturedThumbnailDataUrl,
     );
     if (serverCommit.HandledByServer) {
       if (!serverCommit.Success) {
@@ -5277,8 +5296,12 @@ export class SlideDeckArtifactViewerComponent
       const deckConfig = BuildArtifactVersionConfigurationWithPreview(
         this.artifactVersion?.Configuration,
         serializedContent,
-        'SlideDeckArtifactViewerComponent',
+        'SlideDeckArtifactViewerPlugin',
         ver.Name,
+        {
+          Policy: policy,
+          CapturedThumbnailDataUrl: capturedThumbnailDataUrl,
+        },
       );
       if (deckConfig) {
         ver.Configuration = deckConfig;

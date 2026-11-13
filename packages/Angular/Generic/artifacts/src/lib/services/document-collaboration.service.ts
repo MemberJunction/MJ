@@ -93,8 +93,8 @@ const MINT_COLLABORATION_TICKET_MUTATION = `
 `;
 
 const COMMIT_ARTIFACT_INLINE_EDIT_MUTATION = `
-  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean) {
-    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion) {
+  mutation CommitArtifactInlineEdit($artifactId: String!, $content: String!, $saveVersion: Boolean, $thumbnailDataUrl: String) {
+    CommitArtifactInlineEdit(artifactId: $artifactId, content: $content, saveVersion: $saveVersion, thumbnailDataUrl: $thumbnailDataUrl) {
       Success
       VersionID
       VersionNumber
@@ -1641,13 +1641,19 @@ export class DocumentCollaborationSession {
    * Sends a `save-version` control frame (`MSG_CONTROL = 2`) to the collaboration server
    * to compact the active room into a new immutable `MJ: Artifact Versions` record.
    */
-  public RequestSaveVersion(): boolean {
+  public RequestSaveVersion(thumbnailDataUrl?: string | null): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.canEdit) {
       return false;
     }
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_CONTROL);
-    encoding.writeVarString(encoder, JSON.stringify({ action: 'save-version' }));
+    const framePayload: { action: 'save-version'; thumbnailDataUrl?: string } = {
+      action: 'save-version',
+    };
+    if (thumbnailDataUrl && thumbnailDataUrl.startsWith('data:image/')) {
+      framePayload.thumbnailDataUrl = thumbnailDataUrl;
+    }
+    encoding.writeVarString(encoder, JSON.stringify(framePayload));
     this.socket.send(encoding.toUint8Array(encoder));
     return true;
   }
@@ -3289,6 +3295,7 @@ export class DocumentCollaborationService implements OnDestroy {
     content: string,
     saveVersion = true,
     providerOverride?: IMetadataProvider | null,
+    thumbnailDataUrl?: string | null,
   ): Promise<{
     HandledByServer: boolean;
     Success: boolean;
@@ -3305,6 +3312,7 @@ export class DocumentCollaborationService implements OnDestroy {
         artifactId,
         content,
         saveVersion,
+        ...(thumbnailDataUrl ? { thumbnailDataUrl } : {}),
       });
       const payload = gqlRes?.CommitArtifactInlineEdit;
       if (!payload) {

@@ -10,14 +10,20 @@
       "Priority": 0,
       "DefaultDeliveryMode": "ToolsOnly",
       "SystemSupplied": true,
-      "Icon": "fa-solid fa-file-circle-question"
+      "Icon": "fa-solid fa-file-circle-question",
+      "Configuration": {
+        "Thumbnail": {
+          "Enabled": false,
+          "Mode": "Icon"
+        }
+      }
     },
     "primaryKey": {
       "ID": "48909B66-0019-4CC5-B94D-568FE36E09BB"
     },
     "sync": {
-      "lastModified": "2026-05-20T01:27:07.852Z",
-      "checksum": "04fd9f778cf21bf37b761107ca9b55a5780c836f0d71c350f54dd7312a857d5b"
+      "lastModified": "2026-11-13T23:26:26.350Z",
+      "checksum": "0de1fae05673075e7e6cf33e62f7bb093427aaff264a7e1f7ddb91e0e393ce06"
     }
   }
 ]
