@@ -48,6 +48,14 @@ function canScreenClauses(provider: IMetadataProvider | undefined): provider is 
   return !!provider && 'ScreenClientClause' in provider && typeof provider.ScreenClientClause === 'function';
 }
 
+/** The first candidate that is a string with non-whitespace content, or null. */
+function firstNonBlank(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) return candidate;
+  }
+  return null;
+}
+
 /**
  * Core list-operations engine. Pure-ish TypeScript: takes a `UserInfo` +
  * optional `IMetadataProvider` and talks to data exclusively through
@@ -869,10 +877,14 @@ export class ListOperations {
 
   /**
    * Parse the captured `SourceFilterSnapshot` and turn it into an ad-hoc
-   * `ListSource`. We prefer `customWhereClause` over `whereClause` because
-   * the custom form is the user-authored override; smart-filter clauses
-   * fall in last because they're AI-derived. Returns null if no usable
-   * clause is present (in which case the caller surfaces a clear error).
+   * `ListSource`. The filter is the view's `whereClause`, which is what a live
+   * view run applies: the view compiles its filter state or smart filter into
+   * `WhereClause` on save, unless it's a hand-written custom clause, which is
+   * stored there too. `customWhereClause` is the view's `CustomWhereClause`
+   * bit (true when that clause was hand-written), never filter text, so it
+   * plays no part here. `smartFilterWhereClause` is a fallback for a
+   * snapshot whose `whereClause` is empty. Returns null if no usable clause is
+   * present (in which case the caller surfaces a clear error).
    */
   private buildAdhocSourceFromSnapshot(list: MJListEntity): ListSource | null {
     if (!list.SourceFilterSnapshot) return null;
@@ -883,7 +895,6 @@ export class ListOperations {
 
     let parsed: {
       whereClause?: string | null;
-      customWhereClause?: string | null;
       smartFilterWhereClause?: string | null;
       alternateBaseView?: string | null;
     };
@@ -894,10 +905,9 @@ export class ListOperations {
       return null;
     }
 
-    const extraFilter =
-      parsed.customWhereClause ?? parsed.whereClause ?? parsed.smartFilterWhereClause ?? null;
+    const extraFilter = firstNonBlank(parsed.whereClause, parsed.smartFilterWhereClause);
     const altBaseView = parsed.alternateBaseView?.trim() || undefined;
-    if ((!extraFilter || extraFilter.trim().length === 0) && !altBaseView) return null;
+    if (!extraFilter && !altBaseView) return null;
 
     return {
       kind: 'adhoc',
