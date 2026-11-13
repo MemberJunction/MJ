@@ -10,8 +10,9 @@
  *                                        that the installed app packages use, then fails if a
  *                                        workspace @memberjunction package now also has a registry
  *                                        copy.
- *   node open-apps.cjs database          db-setup (database up). Applies the `mjCompat` changes that an
- *                                        entry names, then runs `--database-only` for each app.
+ *   node open-apps.cjs database          db-setup (database up). Runs `--database-only` for each app,
+ *                                        with the `mjCompat` changes that an entry names before and
+ *                                        after it.
  *   node open-apps.cjs check-duplicates  Only the duplicate check.
  *
  * Every install runs with `--non-interactive`. An empty list does nothing.
@@ -35,7 +36,7 @@ const CONFIG_PATH = 'mj.config.cjs';
 const PNPM_STORE = 'node_modules/.pnpm';
 const MJ_CORE_SCHEMA = '__mj';
 /** Database changes an entry can ask for, so an app built for an older MJ installs. */
-const MJ_COMPAT = ['legacy-conversation-type'];
+const MJ_COMPAT = ['legacy-conversation-type', 'drop-uncoded-view-fields'];
 
 /** Reads and checks the pinned list: an array of { repo, version, disableClientPackages?, mjCompat? }. */
 function readAppList() {
@@ -210,22 +211,44 @@ function checkDuplicates() {
     console.log(`No registry copies of the ${workspace.size} workspace @memberjunction packages.`);
 }
 
-/**
- * Applies the `mjCompat` changes that the entries name. `legacy-conversation-type` lets the
- * conversation procedures accept the `@Type` name that apps built before MJ 6.3 pass.
- */
-async function applyCompat(apps) {
-    const names = [...new Set(apps.flatMap((app) => app.mjCompat ?? []))];
-    if (!names.includes('legacy-conversation-type')) return;
+/** The `mjCompat` names that any entry lists. */
+function compatNames(apps) {
+    return new Set(apps.flatMap((app) => app.mjCompat ?? []));
+}
+
+/** Runs `work` with a database connection. */
+async function withPool(work) {
     const { connect } = require('./lib/db.cjs');
-    const { ApplyLegacyConversationType } = require('./lib/legacy-conversation-type.cjs');
     const pool = await connect();
     try {
-        const changed = await ApplyLegacyConversationType(pool, MJ_CORE_SCHEMA);
-        console.log(`mjCompat legacy-conversation-type: ${changed.length ? `added @Type to ${changed.join(', ')}` : 'not needed'}`);
+        return await work(pool);
     } finally {
         await pool.close();
     }
+}
+
+/**
+ * `mjCompat` changes before the apps' database step. `legacy-conversation-type` lets the
+ * conversation procedures accept the `@Type` name that apps built before MJ 6.3 pass.
+ */
+async function applyCompatBefore(apps) {
+    if (!compatNames(apps).has('legacy-conversation-type')) return;
+    const { ApplyLegacyConversationType } = require('./lib/legacy-conversation-type.cjs');
+    const changed = await withPool((pool) => ApplyLegacyConversationType(pool, MJ_CORE_SCHEMA));
+    console.log(`mjCompat legacy-conversation-type: ${changed.length ? `added @Type to ${changed.join(', ')}` : 'not needed'}`);
+}
+
+/**
+ * `mjCompat` changes after the apps' database step. `drop-uncoded-view-fields` removes the
+ * virtual fields of app entities that no installed app package defines.
+ */
+async function applyCompatAfter(apps) {
+    if (!compatNames(apps).has('drop-uncoded-view-fields')) return;
+    const { DropUncodedViewFields } = require('./lib/uncoded-view-fields.cjs');
+    const config = require(path.resolve(CONFIG_PATH));
+    const dropped = await withPool((pool) => DropUncodedViewFields(pool, MJ_CORE_SCHEMA, config, PNPM_STORE));
+    console.log(`mjCompat drop-uncoded-view-fields: removed ${dropped.length} field(s)`);
+    for (const field of dropped) console.log(`  ${field.Entity}.${field.Field}`);
 }
 
 async function main() {
@@ -249,8 +272,9 @@ async function main() {
         buildWorkspacePackagesUsedByApps(env);
         checkDuplicates();
     } else {
-        await applyCompat(apps);
+        await applyCompatBefore(apps);
         installAll(apps, '--database-only', env);
+        await applyCompatAfter(apps);
     }
 }
 

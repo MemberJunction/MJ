@@ -9,7 +9,8 @@
       "@mj-biz-apps/sonar-ng"
     ],
     "mjCompat": [
-      "legacy-conversation-type"
+      "legacy-conversation-type",
+      "drop-uncoded-view-fields"
     ]
   }
 ]
