@@ -3166,8 +3166,9 @@ WHERE p.prokind IN ('f', 'p')
             ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
-WITH fk_cache AS (
-   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema"
+WITH fk_all AS (
+   SELECT "column", "table", "schema_name", "referenced_table", "referenced_column", "referenced_schema",
+          COUNT(*) OVER (PARTITION BY "FK_NAME", "schema_name", "table") AS "ComponentCount"
    FROM ${qs(schema, 'vwForeignKeys')}
 ),
 -- "KeyColumnCount": a column of a composite primary key is not unique on its own (#4536)
@@ -3183,6 +3184,24 @@ uk_cache AS (
    FROM ${qs(schema, 'vwTableUniqueKeys')}
    WHERE "KeyColumnCount" = 1
      AND NOT "IsFiltered"
+),
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+fk_cache AS (
+   SELECT fk.*
+   FROM fk_all fk
+   WHERE fk."ComponentCount" = 1
+      OR EXISTS (
+            SELECT 1 FROM pk_cache pk
+            WHERE pk."SchemaName" = fk."referenced_schema" AND pk."TableName" = fk."referenced_table"
+              AND pk."ColumnName" = fk."referenced_column" AND pk."KeyColumnCount" = 1
+         )
+      OR EXISTS (
+            SELECT 1 FROM uk_cache uk
+            WHERE uk."SchemaName" = fk."referenced_schema" AND uk."TableName" = fk."referenced_table"
+              AND uk."ColumnName" = fk."referenced_column"
+         )
 ),
 max_sequences AS (
    SELECT
