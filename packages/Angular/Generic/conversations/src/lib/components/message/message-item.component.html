@@ -183,12 +183,22 @@
             <div class="skeleton skeleton--narrow"></div>
           </div>
         } @else {
-          <div class="message-text">
+          <div #messageTextEl class="message-text" [class.collapsed]="IsTextCollapsed">
             <mj-markdown [data]="displayMessage" [enableCollapsibleHeadings]="true" [OpenLinksInNewTab]="OpenLinksInNewTab" (ImageClicked)="OnMarkdownImageClicked($event)"></mj-markdown>
             @if (isMessageEdited) {
               <span class="edited-badge">(edited)</span>
             }
           </div>
+          @if (ShowCollapseToggle) {
+            <button
+              type="button"
+              class="message-collapse-toggle"
+              [attr.aria-expanded]="!IsTextCollapsed"
+              (click)="ToggleTextExpanded()">
+              <span>{{ IsTextCollapsed ? 'Show more' : 'Show less' }}</span>
+              <i class="fa-solid" [class.fa-chevron-down]="IsTextCollapsed" [class.fa-chevron-up]="!IsTextCollapsed" aria-hidden="true"></i>
+            </button>
+          }
         }
 
         @if (Handoff) {
