@@ -1,7 +1,7 @@
 import { PermissionConstrainedError } from '@memberjunction/core';
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal, IndexByUUID, UUIDSet } from "@memberjunction/global";
-import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, ApplyPlattCalibration, DecisionCalibrationEntry, ModelUsage, PlattCalibration, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -48,7 +48,7 @@ import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
-import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended, type DecisionAnsweringModel, type DecisionCalibrationKey } from "@memberjunction/ai-core-plus";
 import { IStartupSink, RegisterForStartup } from "@memberjunction/core";
 
 /**
@@ -2076,6 +2076,77 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             ParseVendorConfiguration(vendor?.Configuration)?.ModelDefaults,
             ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
+    }
+
+    /**
+     * Every Platt calibration declared for a decision model: its effective
+     * `ModelConfiguration.Decision.Calibrations` at the model layer (the model type's bag, then the
+     * model's own), or an empty list when the model is unknown or declares none (before the engine
+     * loads, every model is unknown).
+     * Consumers look a fit up with {@link FindDecisionCalibration}, which matches the use, the
+     * question and the exact resolved model.
+     *
+     * @param modelName The MJ decision model's name (`Jev`, `LLM Decision`), as the decision run
+     *   reports it. Matched case-insensitively, ignoring surrounding spaces.
+     */
+    public GetDecisionCalibrations(modelName: string): readonly DecisionCalibrationEntry[] {
+        const target = modelName?.trim().toLowerCase();
+        if (!target) {
+            return [];
+        }
+        let models: MJAIModelEntityExtended[];
+        try {
+            models = this.Models;
+        } catch (err: unknown) {
+            // A user who may not read AI Models gets no calibration, so every consumer treats the
+            // answer as unsure: the documented fail-safe, never a guess.
+            if (err instanceof PermissionConstrainedError) {
+                return [];
+            }
+            throw err;
+        }
+        const model = models.find(m => m.Name?.trim().toLowerCase() === target);
+        const calibrations = model ? this.GetEffectiveModelConfiguration(model.ID)?.Decision?.Calibrations : undefined;
+        return Array.isArray(calibrations) ? calibrations : [];
+    }
+
+    /**
+     * The calibration fitted for this use and question on the exact model that answered, or null when
+     * there is none, so the consumer treats the answer as unsure. The model's name selects its declared
+     * calibrations ({@link GetDecisionCalibrations}); the use, the question and the resolved model must
+     * then match one entry exactly, after trimming. A missing name or resolved model, or an entry whose
+     * `A` or `B` is not a finite number, matches nothing.
+     *
+     * @param key The decision use and the question within it.
+     * @param answeredBy The MJ decision model that answered and the exact model behind it.
+     */
+    public FindDecisionCalibration(key: DecisionCalibrationKey, answeredBy: DecisionAnsweringModel): PlattCalibration | null {
+        const modelName = answeredBy.ModelName?.trim();
+        const resolvedModel = answeredBy.ResolvedModel?.trim();
+        if (!modelName || !resolvedModel) {
+            return null;
+        }
+        const entry = this.GetDecisionCalibrations(modelName).find(c =>
+            c.Use?.trim() === key.Use &&
+            c.Question?.trim() === key.Question &&
+            c.ResolvedModel?.trim() === resolvedModel &&
+            Number.isFinite(c.A) &&
+            Number.isFinite(c.B)
+        );
+        return entry ? { A: entry.A, B: entry.B } : null;
+    }
+
+    /**
+     * A raw probability (a Likelihood, or a Choice's confidence) calibrated for the model that
+     * answered, or null when it has no calibration for this use and question.
+     *
+     * @param key The decision use and the question within it.
+     * @param probability The raw probability.
+     * @param answeredBy The MJ decision model that answered and the exact model behind it.
+     */
+    public CalibrateDecisionProbability(key: DecisionCalibrationKey, probability: number, answeredBy: DecisionAnsweringModel): number | null {
+        const calibration = this.FindDecisionCalibration(key, answeredBy);
+        return calibration ? ApplyPlattCalibration(probability, calibration) : null;
     }
 
     public get Prompts(): MJAIPromptEntityExtended[] {

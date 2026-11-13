@@ -7,7 +7,8 @@
  * (`@memberjunction/ai-core-plus`, conversation-routing-decision.test.ts). The component wiring is
  * pinned in message-input-decision-routing.test.ts.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
 import {
     BuildRoutingArtifactVersions,
@@ -111,7 +112,22 @@ function candidates(overrides: Partial<AgentTurnCandidates> = {}): AgentTurnCand
 const isKnown = (id: string) => !!findAgent(id);
 const ALWAYS = { ReplyMode: 'Always', AllowedAgentIDs: null } as const;
 
+/**
+ * The conversation-routing calibrations shipped on the Jev and LLM Decision AI models
+ * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngineBase.Instance` would serve them.
+ */
+const SHIPPED_ROUTING_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
+    'Jev': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 }],
+    'LLM Decision': [{ Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 }],
+};
+
 describe('decision routing', () => {
+    beforeEach(() => {
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(
+            (modelName: string) => Object.hasOwn(SHIPPED_ROUTING_CALIBRATIONS, modelName) ? SHIPPED_ROUTING_CALIBRATIONS[modelName] : []
+        );
+    });
+
     afterEach(() => {
         vi.useRealTimers();
     });

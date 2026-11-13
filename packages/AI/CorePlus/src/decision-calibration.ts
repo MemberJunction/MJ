@@ -1,6 +1,6 @@
 /**
- * @fileoverview Which calibration applies to a decision's answer: the one fitted on the exact model
- * that answered, or none.
+ * @fileoverview The keys a decision's calibration is looked up by: the use and question, and the
+ * exact model that answered.
  *
  * A decision model's raw probabilities are not calibrated, so a consumer that acts on a threshold
  * maps them through a calibration fitted per model on labelled data (`ApplyPlattCalibration` in
@@ -16,9 +16,15 @@
  * the chat model for `LLM Decision`). An answer from any other pair has no calibration, and the
  * consumer treats it as unsure.
  *
- * Shared by every consumer that acts on a calibrated threshold. Conversation routing uses it here
- * (`ROUTING_CONTINUES_CALIBRATION`); agent discovery in `@memberjunction/ai-agents` can key its table
- * the same way.
+ * Calibrations are data, not code: each is a `DecisionCalibrationEntry` in the answering model's
+ * `ModelConfiguration.Decision.Calibrations`, keyed by the decision use, the question and the
+ * resolved model. Look one up with `AIEngineBase.Instance.FindDecisionCalibration(key, answeredBy)` or
+ * `CalibrateDecisionProbability(key, probability, answeredBy)` (wrapped by the same names on
+ * `AIEngine` on the server). Fitting a new model, or refitting after a version bump, is a metadata
+ * change: the `fit-decision-calibration` rig in the integration test suite prints the entries.
+ *
+ * Shared by every consumer that acts on a calibrated threshold: conversation routing here, agent
+ * discovery and the memory note gate in `@memberjunction/ai-agents`, and duplicate detection.
  *
  * @module @memberjunction/ai-core-plus
  */
@@ -38,35 +44,12 @@ export interface DecisionAnsweringModel {
     ResolvedModel?: string | null;
 }
 
-/** One calibration, and the exact model it was fitted on. */
-export interface DecisionModelCalibration<TCalibration> {
-    /** The MJ decision model, as {@link DecisionAnsweringModel.ModelName} reports it. */
-    ModelName: string;
-    /** The exact model it was fitted on, as {@link DecisionAnsweringModel.ResolvedModel} reports it. */
-    ResolvedModel: string;
-    /** What to apply to that model's answers. */
-    Calibration: TCalibration;
-}
-
-/**
- * The calibration fitted on the model that answered, or null when there is none. Both names must
- * match one entry exactly, after trimming; a missing name matches nothing. The table is a list, not
- * an object keyed by name, so no model name can reach an inherited member such as `constructor`.
- *
- * @param calibrations The calibrations, each with the exact model it was fitted on.
- * @param answeredBy The model that answered.
- */
-export function FindDecisionCalibration<TCalibration>(
-    calibrations: readonly DecisionModelCalibration<TCalibration>[],
-    answeredBy: DecisionAnsweringModel
-): TCalibration | null {
-    const modelName = answeredBy.ModelName?.trim();
-    const resolvedModel = answeredBy.ResolvedModel?.trim();
-    if (!modelName || !resolvedModel) {
-        return null;
-    }
-    const entry = calibrations.find(c => c.ModelName === modelName && c.ResolvedModel === resolvedModel);
-    return entry ? entry.Calibration : null;
+/** Which fit to look up: the decision use and the question within it. */
+export interface DecisionCalibrationKey {
+    /** The decision use, such as `conversation-routing`. */
+    Use: string;
+    /** The question key within the use, such as `continues`. */
+    Question: string;
 }
 
 /**

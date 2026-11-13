@@ -61,6 +61,10 @@ interface SimpleAITools {
   // Generate vector embeddings for similarity calculations
   EmbedText: (params: SimpleEmbedTextParams) => Promise<SimpleEmbedTextResult>
   
+  // Answer typed questions (Likelihood / Choice / Score) with a fast decision model.
+  // Optional: guard with utilities.ai?.Decide. Never throws; check Success.
+  Decide?: (params: SimpleDecideParams) => Promise<SimpleDecideResult>
+  
   // Vector operations service for KNN, similarity scoring, etc.
   VectorService: SimpleVectorService
 }
@@ -86,6 +90,31 @@ interface SimpleExecutePromptParams {
   
   // Optional user context
   contextUser?: UserInfo;
+}
+```
+
+### SimpleDecideParams
+
+Parameters for answering typed questions with a decision model. The answers come back by question key
+in `SimpleDecideResult.Answers` (`Probability` for a Likelihood; `Value`, `Probabilities` and
+`Confidence` for a Choice or Score), along with `Success`, `ErrorMessage`, `ModelName` and `ResolvedModel`.
+
+```typescript
+interface SimpleDecideParams {
+  // What the questions are about: text, or an object sent as JSON
+  State: string | Record<string, unknown>;
+
+  // The questions by key, all answered in one call:
+  //   { Kind: 'Likelihood', Instructions }
+  //   { Kind: 'Choice', Instructions, Options: [{ Value, Description }] }   // 2-255 options
+  //   { Kind: 'Score', Instructions, Levels: string[] }                      // lowest level first
+  Questions: Record<string, SimpleDecisionQuestion>;
+
+  // The Decision prompt to run (default: 'Default Decision')
+  PromptName?: string;
+
+  // Server-side bound on the call, in milliseconds
+  TimeoutMS?: number;
 }
 ```
 

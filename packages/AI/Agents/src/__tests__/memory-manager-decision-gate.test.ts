@@ -17,6 +17,7 @@ import { MemoryManagerAgent } from '../memory-manager-agent';
 import { AgentDecisionService, type AgentDecisionAskParams } from '../AgentDecisionService';
 import * as MemoryNoteGate from '../memory-note-gate';
 import { FormatMemoryNoteExcerpt, MEMORY_NOTE_MAX_EXCERPT_CHARS } from '../memory-note-gate';
+import { ServeDecisionCalibrations, ShippedAgentCalibrations } from './helpers/shipped-decision-calibrations';
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -197,6 +198,8 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
     beforeEach(() => {
         agent = new TestMemoryManagerAgent();
+        // The engine serves the calibrations shipped in metadata/ai-models.
+        ServeDecisionCalibrations(ShippedAgentCalibrations);
     });
 
     afterEach(() => {
@@ -283,7 +286,7 @@ describe('MemoryManagerAgent - Decision Gate Integration', () => {
 
         expect(decisions.Calls).toHaveLength(9);
         expect(loggedLines('typesafe/jev-1.13-logged-once')).toEqual([
-            'Memory Manager: Jev (typesafe/jev-1.13-logged-once) has no memory-note calibration (MEMORY_NOTE_DECISION_CALIBRATION), so the decision gate falls back to the confidence filter for its batches'
+            "Memory Manager: Jev (typesafe/jev-1.13-logged-once) has no memory-note calibration (use 'memory-note-gate' in its ModelConfiguration.Decision.Calibrations), so the decision gate falls back to the confidence filter for its batches"
         ]);
     });
 

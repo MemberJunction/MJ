@@ -177,6 +177,37 @@ describe('GeminiDecision', () => {
     });
   });
 
+  describe('media', () => {
+    it('reads images, audio, video and PDFs', () => {
+      expect(new GeminiDecision(API_KEY).SupportedMediaTypes).toEqual(['image', 'audio', 'video', 'document']);
+    });
+
+    it('sends the state as a text block followed by one Content block per item', async () => {
+      const calls = fakeFetch(() => jsonResponse(RESPONSE));
+      const result = await new GeminiDecision(API_KEY).Decide(params({
+        State: 'Breakroom counter check before the 9 AM client meeting.',
+        Media: [
+          { Type: 'image', MimeType: 'image/jpeg', URI: 'https://storage.example.com/counter.jpg' },
+          { Type: 'document', MimeType: 'application/pdf', Data: 'JVBERi0xLjQ=' },
+        ],
+      }));
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(String(calls[0].Init?.body)).input).toEqual([
+        { type: 'text', text: 'Breakroom counter check before the 9 AM client meeting.' },
+        { type: 'image', mime_type: 'image/jpeg', uri: 'https://storage.example.com/counter.jpg' },
+        { type: 'document', mime_type: 'application/pdf', data: 'JVBERi0xLjQ=' },
+      ]);
+    });
+
+    it('sends an object state as JSON text in the first block when there is media', async () => {
+      const calls = fakeFetch(() => jsonResponse(RESPONSE));
+      await new GeminiDecision(API_KEY).Decide(params({ Media: [{ Type: 'audio', MimeType: 'audio/wav', Data: 'UklGRg==' }] }));
+
+      expect(JSON.parse(String(calls[0].Init?.body)).input[0]).toEqual({ type: 'text', text: JSON.stringify(STATE) });
+    });
+  });
+
   describe('the response', () => {
     it('maps every answer kind, leaves ResolvedModel undefined when Google omits model, and records usage', async () => {
       fakeFetch(() => jsonResponse(RESPONSE));

@@ -9,7 +9,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
          EmbeddingInputType,
          ApplyEmbeddingInputPrefix} from "@memberjunction/ai";
 import { SummarizeResult } from "@memberjunction/ai";
-import { AIModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, DecisionCalibrationEntry, PlattCalibration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
@@ -37,7 +37,7 @@ import { ReadStoredVector, SimpleVectorService, VectorInputEntry } from "@member
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, type DecisionAnsweringModel, type DecisionCalibrationKey } from "@memberjunction/ai-core-plus";
 
 
 /**
@@ -360,6 +360,30 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      */
     public GetEffectiveModelConfiguration(modelID: string, vendorModelVendorID?: string): AIModelConfiguration | null {
         return this.Base.GetEffectiveModelConfiguration(modelID, vendorModelVendorID);
+    }
+
+    /**
+     * Every Platt calibration declared for a decision model. See
+     * {@link AIEngineBase.GetDecisionCalibrations}.
+     */
+    public GetDecisionCalibrations(modelName: string): readonly DecisionCalibrationEntry[] {
+        return this.Base.GetDecisionCalibrations(modelName);
+    }
+
+    /**
+     * The calibration fitted for this use and question on the exact model that answered, or null. See
+     * {@link AIEngineBase.FindDecisionCalibration}.
+     */
+    public FindDecisionCalibration(key: DecisionCalibrationKey, answeredBy: DecisionAnsweringModel): PlattCalibration | null {
+        return this.Base.FindDecisionCalibration(key, answeredBy);
+    }
+
+    /**
+     * A raw probability calibrated for the model that answered, or null. See
+     * {@link AIEngineBase.CalibrateDecisionProbability}.
+     */
+    public CalibrateDecisionProbability(key: DecisionCalibrationKey, probability: number, answeredBy: DecisionAnsweringModel): number | null {
+        return this.Base.CalibrateDecisionProbability(key, probability, answeredBy);
     }
 
     // Modality helper methods - delegated from AIEngineBase

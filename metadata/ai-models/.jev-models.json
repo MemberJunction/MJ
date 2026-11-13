@@ -13,7 +13,49 @@
         "Decision": {
           "MaxChoiceOptions": 255,
           "MaxScoreLevels": 10,
-          "MaxStateTokens": 32000
+          "MaxStateTokens": 32000,
+          "Calibrations": [
+            {
+              "Use": "conversation-routing",
+              "Question": "continues",
+              "ResolvedModel": "typesafe/jev-1.13-20260917",
+              "A": 1.7757,
+              "B": -3.3506,
+              "FittedOn": "Phase 2 Decision Eval, conversation-routing cell 'production', 2026-09-29: 301 scored points (174 switch, 127 continue), 5 repeats, private corpus (corpus.jsonl SHA-256 08dd187af4318a93…). Out of fold: balanced accuracy 0.800 raw → 0.928 calibrated, ECE 0.226 → 0.041. Fitted at the corpus mix (42% continue)."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "agent",
+              "ResolvedModel": "typesafe/jev-1.13-20260917",
+              "A": 0.4412,
+              "B": 0.4571,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats; Choice confidence against whether it named the labelled agent (594 answers). At a calibrated 0.85: 21.7% coverage at 95.3% precision."
+            },
+            {
+              "Use": "agent-discovery",
+              "Question": "anyApplies",
+              "ResolvedModel": "typesafe/jev-1.13-20260917",
+              "A": 1.2469,
+              "B": 1.77,
+              "FittedOn": "Agent-discovery Decision Eval, 2026-09-29: 258 requests × 3 repeats; Likelihood against whether the request was meant for an agent (774 answers)."
+            },
+            {
+              "Use": "memory-note-gate",
+              "Question": "note",
+              "ResolvedModel": "typesafe/jev-1.13-20260917",
+              "A": 3.6391,
+              "B": -5.7059,
+              "FittedOn": "Memory-note gate measurement, 2026-09-29: 60 synthetic conversations, 337 candidate notes, 2 repeats. At a calibrated 0.6: durable notes kept at 96.1% precision, 95.4% recall; 6.2% of ephemeral notes kept."
+            },
+            {
+              "Use": "duplicate-detection",
+              "Question": "duplicate",
+              "ResolvedModel": "typesafe/jev-1.13-20260917",
+              "A": 2.5855,
+              "B": -4.4485,
+              "FittedOn": "Duplicate-check measurement, 2026-09-29: 160 labelled new MJ: Actions records (80 rewrites, 80 similar), 5 vector candidates each."
+            }
+          ]
         }
       }
     },

@@ -330,3 +330,101 @@ describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade
         expect(cfg?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 });
+
+describe('AIEngineBase.GetDecisionCalibrations — calibrations are model metadata', () => {
+    const DECISION_TYPE_ID = 'decision-type-id';
+    const JEV = 'jev-model-id';
+    const jevCalibration = { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (AIEngineBase as unknown as { _instance: unknown })._instance = undefined;
+        seedVendorTypes();
+        set('_modelTypes', [{ ID: DECISION_TYPE_ID, Name: 'Decision', ModelConfiguration: '{"Decision":{"MaxChoiceOptions":255}}' }]);
+        set('_vendors', []);
+        set('_models', [
+            { ID: JEV, Name: 'Jev', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: JSON.stringify({ Decision: { MaxScoreLevels: 10, Calibrations: [jevCalibration] } }), ModelVendors: [] },
+            { ID: 'plain-model-id', Name: 'Plain Decision', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: null, ModelVendors: [] },
+            { ID: 'bad-model-id', Name: 'Bad Decision', AIModelTypeID: DECISION_TYPE_ID, ModelConfiguration: '{"Decision":{"Calibrations":"not a list"}}', ModelVendors: [] },
+        ]);
+        set('_modelVendors', []);
+    });
+
+    it("returns the model's declared calibrations, found by name regardless of case and spacing", () => {
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Jev')).toEqual([jevCalibration]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('  jev ')).toEqual([jevCalibration]);
+    });
+
+    it('returns none for a model without calibrations, an unknown model, a blank name, or a malformed list', () => {
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Plain Decision')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('No Such Model')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('   ')).toEqual([]);
+        expect(AIEngineBase.Instance.GetDecisionCalibrations('Bad Decision')).toEqual([]);
+    });
+});
+
+describe('AIEngineBase.FindDecisionCalibration / CalibrateDecisionProbability — a fit applies only to the exact model it was fitted on', () => {
+    const ROUTING = { Use: 'conversation-routing', Question: 'continues' };
+    const ENTRIES: Record<string, { Use: string; Question: string; ResolvedModel: string; A: number; B: number }[]> = {
+        'Jev': [
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -3.3506 },
+            { Use: 'agent-discovery', Question: 'agent', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 0.4412, B: 0.4571 },
+        ],
+        'LLM Decision': [
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -2.911 },
+        ],
+    };
+    const engine = (): AIEngineBase => AIEngineBase.Instance;
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        (AIEngineBase as unknown as { _instance: unknown })._instance = undefined;
+        vi.spyOn(engine(), 'GetDecisionCalibrations').mockImplementation(
+            (modelName: string) => Object.hasOwn(ENTRIES, modelName) ? ENTRIES[modelName] : []
+        );
+    });
+
+    it('finds the fit for the use, the question and the exact resolved model, trimming both names', () => {
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' })).toEqual({ A: 1.7757, B: -3.3506 });
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: ' LLM Decision ', ResolvedModel: 'GPT-OSS-120B\n' })).toEqual({ A: 1.6508, B: -2.911 });
+    });
+
+    it('keeps each use and question apart', () => {
+        const jev = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
+        expect(engine().FindDecisionCalibration({ Use: 'agent-discovery', Question: 'agent' }, jev)).toEqual({ A: 0.4412, B: 0.4571 });
+        expect(engine().FindDecisionCalibration({ Use: 'agent-discovery', Question: 'anyApplies' }, jev)).toBeNull();
+        expect(engine().FindDecisionCalibration({ Use: 'memory-note-gate', Question: 'continues' }, jev)).toBeNull();
+    });
+
+    it('has none for the right decision model with a different model behind it', () => {
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' })).toBeNull();
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' })).toBeNull();
+        // One pair's names crossed with the other's
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev', ResolvedModel: 'GPT-OSS-120B' })).toBeNull();
+    });
+
+    it('has none when either name is missing or blank', () => {
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev' })).toBeNull();
+        expect(engine().FindDecisionCalibration(ROUTING, { ResolvedModel: 'typesafe/jev-1.13-20260917' })).toBeNull();
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev', ResolvedModel: '  ' })).toBeNull();
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: null, ResolvedModel: null })).toBeNull();
+    });
+
+    it('matches the resolved model exactly, so a near miss is uncalibrated rather than guessed', () => {
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'Jev', ResolvedModel: 'TypeSafe/jev-1.13-20260917' })).toBeNull();
+    });
+
+    it('ignores an entry whose A or B is not a finite number', () => {
+        vi.spyOn(engine(), 'GetDecisionCalibrations').mockReturnValue([
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'm', A: Number.NaN, B: 0 },
+            { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'm', A: 1, B: Number.POSITIVE_INFINITY },
+        ]);
+        expect(engine().FindDecisionCalibration(ROUTING, { ModelName: 'X', ResolvedModel: 'm' })).toBeNull();
+    });
+
+    it('applies the fit, or returns null without one', () => {
+        const jev = { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917' };
+        expect(engine().CalibrateDecisionProbability(ROUTING, 0.5, jev)).toBeCloseTo(1 / (1 + Math.exp(3.3506)), 10);
+        expect(engine().CalibrateDecisionProbability(ROUTING, 0.5, { ModelName: 'Jev', ResolvedModel: 'other' })).toBeNull();
+    });
+});

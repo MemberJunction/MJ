@@ -113,3 +113,28 @@ confidence.
 The agent's own uses ask with the prompt named by `decisionPromptName` (default `Default Decision`);
 the Memory Manager's gate always uses `Default Decision`. Each call is recorded as a run step, and its
 prompt run counts toward the run's cost and tokens.
+
+## Calibration
+
+A decision model's raw probabilities are not calibrated, so the uses that act on a threshold
+(discovery, the memory note gate, conversation routing, duplicate detection) map each answer through
+a Platt calibration fitted on labelled data. A fit holds only for the exact model it was fitted on.
+
+Fits are model metadata, not code. Each is an entry in the answering AI model's
+`ModelConfiguration.Decision.Calibrations`:
+
+```json
+{ "Use": "agent-discovery", "Question": "agent", "ResolvedModel": "typesafe/jev-1.13-20260917", "A": 0.4412, "B": 0.4571, "FittedOn": "…" }
+```
+
+| Use | Questions | Fitted on |
+|---|---|---|
+| `agent-discovery` | `agent` (the Choice's confidence), `anyApplies` | Jev 1.13, LLM Decision on GPT-OSS-120B |
+| `memory-note-gate` | `note` | Jev 1.13 |
+| `conversation-routing` | `continues` | Jev 1.13, LLM Decision on GPT-OSS-120B |
+| `duplicate-detection` | `duplicate` | Jev 1.13, LLM Decision on GPT-OSS-120B |
+
+An answer from any other model, including Jev at another version or a decision model with no entry
+for the use, is treated as unsure, and the use falls back as documented above. Fitting a new model,
+or refitting after a version bump, is a metadata change: run the `fit-decision-calibration` rig in the
+integration test suite over labelled runs and paste the entries it prints.

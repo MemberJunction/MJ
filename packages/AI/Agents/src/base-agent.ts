@@ -5419,8 +5419,8 @@ export class BaseAgent {
         BaseAgent._uncalibratedDiscoveryModelsWarned.add(model);
         LogErrorEx({
             message: `Decision discovery answered by ${model} suggests nothing: the model has no discovery calibration `
-                + '(DECISION_DISCOVERY_CALIBRATION), so its answers are treated as unsure. Fit one with the agent-discovery '
-                + 'Decision Eval, or check that the model was not renamed or moved to another version.',
+                + "(use 'agent-discovery' in its ModelConfiguration.Decision.Calibrations), so its answers are treated as unsure. "
+                + 'Fit one with the fit-decision-calibration rig, or check that the model was not renamed or moved to another version.',
             severity: 'warning',
             category: 'DecisionDiscovery',
         });

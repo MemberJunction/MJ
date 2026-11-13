@@ -5,7 +5,9 @@
  * whole discovery, runs the `semantic-search` baseline without a decision call, and skips what
  * production would not ask.
  */
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { EntitySearchResult, UserInfo } from '@memberjunction/core';
 import type { MJAIPromptRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { DecisionResult, type DecisionAnswer } from '@memberjunction/ai';
@@ -194,7 +196,28 @@ async function run(options: RunOptions = {}) {
     return { driver, result };
 }
 
+/**
+ * The agent-discovery calibrations shipped on the Jev and LLM Decision AI models
+ * (`ModelConfiguration.Decision.Calibrations`), served as `AIEngine.Instance` would serve them.
+ */
+const SHIPPED_DISCOVERY_CALIBRATIONS: Record<string, Array<{ Use: string; Question: string; ResolvedModel: string; A: number; B: number }>> = {
+    'Jev': [
+        { Use: 'agent-discovery', Question: 'agent', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 0.4412, B: 0.4571 },
+        { Use: 'agent-discovery', Question: 'anyApplies', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.2469, B: 1.77 },
+    ],
+    'LLM Decision': [
+        { Use: 'agent-discovery', Question: 'agent', ResolvedModel: 'GPT-OSS-120B', A: 1.4301, B: -0.0755 },
+        { Use: 'agent-discovery', Question: 'anyApplies', ResolvedModel: 'GPT-OSS-120B', A: 0.7114, B: 0.9073 },
+    ],
+};
+
 describe('DecisionEvalDriver — agent discovery', () => {
+    beforeEach(() => {
+        vi.spyOn(AIEngineBase.Instance, 'GetDecisionCalibrations').mockImplementation(
+            (modelName: string) => Object.hasOwn(SHIPPED_DISCOVERY_CALIBRATIONS, modelName) ? SHIPPED_DISCOVERY_CALIBRATIONS[modelName] : []
+        );
+    });
+
     describe('what it asks', () => {
         it("asks one decision over production's options for the run's user, with production's state and questions", async () => {
             const search = new FakeSearch();

@@ -105,6 +105,110 @@ export interface SimpleExecutePromptResult {
 }
 
 /**
+ * A yes/no question. The answer is the probability that the statement in `Instructions` is true.
+ */
+export interface SimpleLikelihoodQuestion {
+    Kind: 'Likelihood';
+    /** The statement or question, written for the model as a full sentence. */
+    Instructions: string;
+}
+
+/** One option of a {@link SimpleChoiceQuestion}. */
+export interface SimpleChoiceOption {
+    /** An identifier for code. The model never reads it. */
+    Value: string;
+    /** What this option means, written for the model. */
+    Description: string;
+}
+
+/** Pick exactly one of 2 to 255 options. */
+export interface SimpleChoiceQuestion {
+    Kind: 'Choice';
+    /** How to choose, written for the model as a full sentence. */
+    Instructions: string;
+    /** The options. `Value`s must be unique. */
+    Options: SimpleChoiceOption[];
+}
+
+/** Place the state on an ordered rubric, lowest level first. */
+export interface SimpleScoreQuestion {
+    Kind: 'Score';
+    /** What to score, written for the model as a full sentence. */
+    Instructions: string;
+    /** The rubric levels, lowest first, each a description the model reads. At least 2. */
+    Levels: string[];
+}
+
+/** One typed question for {@link SimpleAITools.Decide}. */
+export type SimpleDecisionQuestion = SimpleLikelihoodQuestion | SimpleChoiceQuestion | SimpleScoreQuestion;
+
+/** The answer to a {@link SimpleLikelihoodQuestion}. */
+export interface SimpleLikelihoodAnswer {
+    Kind: 'Likelihood';
+    /** The probability that the statement is true, 0 to 1. */
+    Probability: number;
+}
+
+/** The answer to a {@link SimpleChoiceQuestion}. */
+export interface SimpleChoiceAnswer {
+    Kind: 'Choice';
+    /** The chosen option's `Value`. */
+    Value: string;
+    /** The probability of every option, by `Value`, summing to 1. */
+    Probabilities: Record<string, number>;
+    /** How confident the model is in `Value`, 0 to 1. */
+    Confidence: number;
+}
+
+/** The answer to a {@link SimpleScoreQuestion}. */
+export interface SimpleScoreAnswer {
+    Kind: 'Score';
+    /** A continuous position from 0 (the first level) to `Levels.length - 1` (the last). */
+    Value: number;
+    /** The probability of every level, by level text, summing to 1. */
+    Probabilities: Record<string, number>;
+    /** How confident the model is in `Value`, 0 to 1. */
+    Confidence: number;
+}
+
+/** One answer from {@link SimpleAITools.Decide}. */
+export type SimpleDecisionAnswer = SimpleLikelihoodAnswer | SimpleChoiceAnswer | SimpleScoreAnswer;
+
+/** Parameters for {@link SimpleAITools.Decide}. */
+export interface SimpleDecideParams {
+    /**
+     * What the questions are about: text, or an object (sent as JSON). Keep it to what the questions
+     * need; decision models do worse on irrelevant state.
+     */
+    State: string | Record<string, unknown>;
+    /**
+     * The questions, keyed by a short label for code, all answered in one call. The model reads the
+     * instructions and descriptions, never the keys.
+     */
+    Questions: Record<string, SimpleDecisionQuestion>;
+    /** The Decision-typed prompt to run. Defaults to `Default Decision`. */
+    PromptName?: string;
+    /** Bounds the call on the server, in milliseconds. The server applies its default when unset. */
+    TimeoutMS?: number;
+}
+
+/** The result of {@link SimpleAITools.Decide}. It never throws: a failure is `Success: false`. */
+export interface SimpleDecideResult {
+    /** Whether the decision ran and every question was answered. */
+    Success: boolean;
+    /** Why it failed, when `Success` is false. */
+    ErrorMessage?: string;
+    /** The answers by question key. Empty on failure, so a component never acts on partial answers. */
+    Answers: Record<string, SimpleDecisionAnswer>;
+    /** The decision model that answered. */
+    ModelName?: string;
+    /** The exact model behind `ModelName`, as its driver reports it. */
+    ResolvedModel?: string;
+    /** Server-side execution time in milliseconds. */
+    ExecutionTimeMs?: number;
+}
+
+/**
  * 
  */
 export interface SimpleEmbedTextParams {
@@ -429,6 +533,18 @@ export interface SimpleAITools {
      * @returns 
      */
     EmbedText: (params: SimpleEmbedTextParams) => Promise<SimpleEmbedTextResult>
+
+    /**
+     * Answers typed questions about some state with a fast decision model, in one call of about
+     * 150-500 ms: a yes/no probability (`Likelihood`), one option of a list (`Choice`), or a position
+     * on an ordered rubric (`Score`), each with probabilities rather than generated text. Use it to
+     * classify, route, filter or score items interactively where an `ExecutePrompt` call would be too
+     * slow or too costly. It never throws: check `Success`.
+     *
+     * Optional: a host that cannot run decisions leaves it undefined, so guard the call
+     * (`utilities.ai?.Decide`).
+     */
+    Decide?: (params: SimpleDecideParams) => Promise<SimpleDecideResult>
 
     /**
      * Instance of the SimpleVectorService that can be used by Interactive Components
