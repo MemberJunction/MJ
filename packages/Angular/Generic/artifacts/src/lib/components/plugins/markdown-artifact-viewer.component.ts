@@ -45,6 +45,7 @@ import { DocumentImportExportService } from '../../services/document-import-expo
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
+export type DocsEditingStyle = 'simple' | 'blocks';
 
 export interface DocsEntityPickerOption {
   ID: string;
@@ -161,6 +162,29 @@ export interface DocsPermissionEntry {
           </div>
 
           @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
+            <div class="mj-docs-mode-group" role="group" aria-label="Editing Style">
+              <button
+                type="button"
+                class="mj-docs-mode-btn"
+                [class.mj-docs-mode-btn--active]="EditingStyle === 'simple'"
+                title="Simple Note Mode — Clean, continuous Mac Notes / TextEdit flow"
+                data-testid="editing-style-simple-btn"
+                (click)="SetEditingStyle('simple')"
+              >
+                <i class="fas fa-feather"></i> Simple
+              </button>
+              <button
+                type="button"
+                class="mj-docs-mode-btn"
+                [class.mj-docs-mode-btn--active]="EditingStyle === 'blocks'"
+                title="Advanced Block Studio — Show block handles, reorder arrows, and level badges"
+                data-testid="editing-style-blocks-btn"
+                (click)="SetEditingStyle('blocks')"
+              >
+                <i class="fas fa-cubes"></i> Blocks
+              </button>
+            </div>
+
             <button
               type="button"
               class="mj-docs-btn"
@@ -177,9 +201,22 @@ export interface DocsPermissionEntry {
 
             <button
               type="button"
+              class="mj-docs-btn"
+              title="Add Section Heading Below Current Line"
+              data-testid="quick-add-section-btn"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="InsertSectionHeadingBelow()"
+            >
+              <i class="fas fa-heading"></i>
+              <span>+ Section</span>
+            </button>
+
+            <button
+              type="button"
               class="mj-docs-btn mj-docs-btn--accent"
-              title="Insert Live View, Query, or Whiteboard (/)"
+              title="Insert Live View, Query, or Whiteboard Below Current Line (/)"
               data-testid="open-slash-menu-btn"
+              (mousedown)="OnToolbarActionMousedown($event)"
               (click)="ToggleSlashMenu()"
             >
               <i class="fas fa-plus"></i>
@@ -365,30 +402,34 @@ export interface DocsPermissionEntry {
           aria-label="Formatting Tools"
           data-testid="docs-format-ribbon"
         >
-          <button type="button" class="mj-docs-btn" title="Bold" (click)="InsertFormattingSnippet('**', '**')">
+          <button type="button" class="mj-docs-btn" title="Bold" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('**', '**')">
             <i class="fas fa-bold"></i>
           </button>
-          <button type="button" class="mj-docs-btn" title="Italic" (click)="InsertFormattingSnippet('*', '*')">
+          <button type="button" class="mj-docs-btn" title="Italic" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('*', '*')">
             <i class="fas fa-italic"></i>
           </button>
           <span class="mj-docs-ribbon-sep"></span>
-          <button type="button" class="mj-docs-btn" title="Heading 1" (click)="InsertFormattingSnippet('# ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 1" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('# ', '')">
             <strong>H1</strong>
           </button>
-          <button type="button" class="mj-docs-btn" title="Heading 2" (click)="InsertFormattingSnippet('## ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 2" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('## ', '')">
             <strong>H2</strong>
           </button>
-          <button type="button" class="mj-docs-btn" title="Heading 3" (click)="InsertFormattingSnippet('### ', '')">
+          <button type="button" class="mj-docs-btn" title="Heading 3" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('### ', '')">
             <strong>H3</strong>
           </button>
           <span class="mj-docs-ribbon-sep"></span>
-          <button type="button" class="mj-docs-btn" title="Task List" (click)="InsertFormattingSnippet('- [ ] ', '')">
+          <button type="button" class="mj-docs-btn" title="Bullet List" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- ', '')">
+            <i class="fas fa-list-ul"></i> List
+          </button>
+          <button type="button" class="mj-docs-btn" title="Task List" (mousedown)="OnToolbarActionMousedown($event)" (click)="InsertFormattingSnippet('- [ ] ', '')">
             <i class="fas fa-list-check"></i> Checklist
           </button>
           <button
             type="button"
             class="mj-docs-btn"
             title="Insert Table"
+            (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |\n', '')"
           >
             <i class="fas fa-table"></i> Table
@@ -397,6 +438,7 @@ export interface DocsPermissionEntry {
             type="button"
             class="mj-docs-btn"
             title="Callout Block"
+            (mousedown)="OnToolbarActionMousedown($event)"
             (click)="InsertFormattingSnippet('> [!NOTE]\n> ', '')"
           >
             <i class="fas fa-circle-info"></i> Callout
@@ -621,7 +663,12 @@ export interface DocsPermissionEntry {
             </div>
           } @else {
             <!-- Collaborative Rich Editor / Suggest / Preview Canvas -->
-            <div class="mj-docs-page" [class.mj-docs-page--interactive]="IsInteractiveCanvasMode">
+            <div
+              class="mj-docs-page"
+              [class.mj-docs-page--interactive]="IsInteractiveCanvasMode"
+              [class.mj-docs-page--simple]="IsSimpleNoteMode"
+              [class.mj-docs-page--blocks]="!IsSimpleNoteMode"
+            >
               @if (ViewMode === 'suggest' && CanUserEdit) {
                 <div class="mj-docs-suggest-banner" data-testid="docs-suggest-mode-banner">
                   <i class="fas fa-code-pull-request"></i>
@@ -649,12 +696,26 @@ export interface DocsPermissionEntry {
                 @for (seg of DocumentSegments; track seg.SegmentID) {
                   <div
                     class="mj-docs-segment"
-                    [class.mj-docs-segment--selected]="SelectedAnchorKey === seg.SegmentID"
+                    [class.mj-docs-segment--selected]="SelectedAnchorKey === seg.SegmentID && !IsSimpleNoteMode"
+                    [class.mj-docs-segment--simple]="IsSimpleNoteMode"
                     [attr.data-segment-id]="seg.SegmentID"
                     [hidden]="IsSegmentHiddenByCollapsedHeading(seg)"
+                    (focusin)="OnSegmentFocusIn(seg)"
                   >
-                    <!-- Hover Block Handle & Actions -->
-                    <div class="mj-docs-segment__gutter">
+                    @if (IsInteractiveCanvasMode && IsSimpleNoteMode) {
+                      <button
+                        type="button"
+                        class="mj-docs-simple-plus-btn"
+                        title="Add line or insert block below (/)"
+                        [attr.data-testid]="'simple-insert-below-btn-' + seg.SegmentID"
+                        (mousedown)="OnToolbarActionMousedown($event)"
+                        (click)="InsertParagraphBelowSegment(seg)"
+                      >
+                        +
+                      </button>
+                    }
+                    <!-- Hover Block Handle & Actions (Shown in Advanced Block Studio mode) -->
+                    <div class="mj-docs-segment__gutter" [hidden]="IsSimpleNoteMode">
                       @if (IsInteractiveCanvasMode) {
                         <button
                           type="button"
@@ -731,6 +792,7 @@ export interface DocsPermissionEntry {
                                 <button
                                   type="button"
                                   class="mj-docs-collapse-btn"
+                                  [hidden]="IsSimpleNoteMode && !IsHeadingCollapsed(seg)"
                                   [title]="IsHeadingCollapsed(seg) ? 'Expand section' : 'Collapse section'"
                                   [attr.data-testid]="'toggle-heading-collapse-' + seg.SegmentID"
                                   (click)="ToggleHeadingCollapse(seg)"
@@ -743,6 +805,7 @@ export interface DocsPermissionEntry {
                                 <button
                                   type="button"
                                   class="mj-docs-heading-level-pill"
+                                  [hidden]="IsSimpleNoteMode"
                                   title="Click to cycle heading level (H1–H4)"
                                   (click)="CycleHeadingLevel(seg)"
                                 >
@@ -777,7 +840,7 @@ export interface DocsPermissionEntry {
                                   class="mj-docs-editable-table-wrap"
                                   [attr.data-testid]="'editable-table-' + seg.SegmentID"
                                 >
-                                  <div class="mj-docs-editable-table__toolbar">
+                                  <div class="mj-docs-editable-table__toolbar" [hidden]="IsSimpleNoteMode">
                                     <span><i class="fas fa-table"></i> Interactive Table</span>
                                     <div class="mj-docs-editable-table__actions">
                                       <button
@@ -866,6 +929,7 @@ export interface DocsPermissionEntry {
                                 <button
                                   type="button"
                                   class="mj-docs-btn mj-docs-list-add-btn"
+                                  [hidden]="IsSimpleNoteMode"
                                   (click)="AddListItem(seg)"
                                 >
                                   <i class="fas fa-plus"></i> Add Item
@@ -2869,7 +2933,12 @@ export interface DocsPermissionEntry {
         gap: 12px;
       }
 
+      .mj-docs-page--simple .mj-docs-segments {
+        gap: 2px;
+      }
+
       .mj-docs-segment {
+        position: relative;
         display: flex;
         gap: 8px;
         padding: 6px 8px;
@@ -2877,10 +2946,55 @@ export interface DocsPermissionEntry {
         border-radius: 8px;
       }
 
-      .mj-docs-segment:hover,
-      .mj-docs-segment--selected {
+      .mj-docs-segment--simple {
+        padding: 2px 4px;
+        border-radius: 4px;
+        gap: 0;
+      }
+
+      .mj-docs-page--blocks .mj-docs-segment:hover,
+      .mj-docs-page--blocks .mj-docs-segment--selected {
         border-color: var(--mj-border-default);
         background: var(--mj-bg-surface-card);
+      }
+
+      .mj-docs-page--simple .mj-docs-editable-surface:focus {
+        background: transparent;
+        box-shadow: none;
+      }
+
+      .mj-docs-simple-plus-btn {
+        position: absolute;
+        left: -26px;
+        top: 4px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--mj-text-muted);
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.14s ease, background 0.14s ease, color 0.14s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .mj-docs-segment:hover .mj-docs-simple-plus-btn,
+      .mj-docs-segment:focus-within .mj-docs-simple-plus-btn {
+        opacity: 0.7;
+      }
+
+      .mj-docs-simple-plus-btn:hover {
+        opacity: 1 !important;
+        background: var(--mj-bg-surface-hover);
+        border-color: var(--mj-border-default);
+        color: var(--mj-brand-primary);
       }
 
       .mj-docs-segment__gutter {
@@ -4068,6 +4182,8 @@ export class MarkdownArtifactViewerComponent
 
   public ViewMode: DocsViewerMode = 'preview';
   private userExplicitlySelectedMode = false;
+  public EditingStyle: DocsEditingStyle = 'simple';
+  private lastFocusedSegmentId: string | null = null;
 
   /** @deprecated Use {@link ViewMode}. */
   public get viewMode(): DocsViewerMode {
@@ -4228,6 +4344,13 @@ export class MarkdownArtifactViewerComponent
     return this.CanUserEdit && (this.ViewMode === 'edit' || this.ViewMode === 'suggest');
   }
 
+  /**
+   * True when the canvas uses the clean Mac Notes / TextEdit continuous flow (`EditingStyle === 'simple'`).
+   */
+  public get IsSimpleNoteMode(): boolean {
+    return this.EditingStyle === 'simple';
+  }
+
   public get FilteredSlashCommands(): DocumentSlashCommand[] {
     return this.collabService.GetSlashCommands(this.SlashSearchQuery);
   }
@@ -4335,6 +4458,73 @@ export class MarkdownArtifactViewerComponent
   }
 
   private static readonly OUTLINE_PREF_SETTING_KEY = 'MJ.Docs.ShowOutlineRail';
+  private static readonly EDITING_STYLE_PREF_SETTING_KEY = 'MJ.Docs.EditingStyle';
+
+  public SetEditingStyle(style: DocsEditingStyle): void {
+    this.EditingStyle = style;
+    void UserInfoEngine.Instance.SetSettingDebounced(
+      MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY,
+      style,
+    );
+    this.cdr.markForCheck();
+  }
+
+  public OnSegmentFocusIn(seg: DocumentRenderSegment): void {
+    this.lastFocusedSegmentId = seg.SegmentID;
+    this.SelectedAnchorKey = seg.SegmentID;
+  }
+
+  public OnToolbarActionMousedown(event: MouseEvent): void {
+    event.preventDefault();
+  }
+
+  public InsertParagraphBelowSegment(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === seg.SegmentID);
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    const insertIdx = idx >= 0 ? idx + 1 : blocks.length;
+    blocks.splice(insertIdx, 0, '');
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'start' });
+  }
+
+  public InsertSectionHeadingBelow(level = 2): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const targetIdx = this.resolveActiveSegmentIndex();
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    const headingMd = `${'#'.repeat(Math.max(1, Math.min(4, level)))} `;
+    if (
+      targetIdx >= 0 &&
+      this.DocumentSegments[targetIdx]?.Kind === 'markdown' &&
+      (this.DocumentSegments[targetIdx]?.BlockKind === 'paragraph' ||
+        !this.DocumentSegments[targetIdx]?.BlockKind) &&
+      blocks[targetIdx]?.trim().length === 0
+    ) {
+      blocks[targetIdx] = headingMd;
+      this.applyBlockFlowTransaction(blocks, { segmentIndex: targetIdx, position: 'end' });
+      return;
+    }
+    const insertIdx = targetIdx >= 0 ? targetIdx + 1 : blocks.length;
+    blocks.splice(insertIdx, 0, headingMd);
+    this.applyBlockFlowTransaction(blocks, { segmentIndex: insertIdx, position: 'end' });
+  }
+
+  private resolveActiveSegmentIndex(): number {
+    const candidateId =
+      this.ActiveSlashTargetSegmentID ??
+      this.lastFocusedSegmentId ??
+      (this.SelectedAnchorKey !== 'doc-root' ? this.SelectedAnchorKey : null);
+    if (candidateId) {
+      const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === candidateId);
+      if (idx >= 0) {
+        return idx;
+      }
+    }
+    return this.DocumentSegments.length - 1;
+  }
 
   public ToggleOutlineRail(): void {
     this.ShowOutlineRail = !this.ShowOutlineRail;
@@ -4368,6 +4558,13 @@ export class MarkdownArtifactViewerComponent
   public ToggleSlashMenu(): void {
     this.ShowSlashMenu = !this.ShowSlashMenu;
     if (this.ShowSlashMenu) {
+      if (!this.ActiveSlashTargetSegmentID) {
+        const activeIdx = this.resolveActiveSegmentIndex();
+        if (activeIdx >= 0 && this.DocumentSegments[activeIdx]) {
+          this.ActiveSlashTargetSegmentID = this.DocumentSegments[activeIdx].SegmentID;
+          this.SelectedAnchorKey = this.DocumentSegments[activeIdx].SegmentID;
+        }
+      }
       this.SlashSearchQuery = '';
       this.SlashMenuHighlightIndex = 0;
     }
@@ -4630,7 +4827,7 @@ export class MarkdownArtifactViewerComponent
       return;
     }
 
-    // 2. Enter key -> split block or transition smoothly to a new paragraph block below
+    // 2. Enter key -> split block or transition smoothly to a new paragraph block BELOW (never above)
     if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
       if (seg.BlockKind === 'heading') {
         event.preventDefault();
@@ -4641,9 +4838,10 @@ export class MarkdownArtifactViewerComponent
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
         if (caret.start === 0 && before.length === 0 && after.length > 0) {
+          // Even if the caret was at the start of the heading, keep the heading intact and create a new paragraph BELOW it
           blocks[segIdx] = `${'#'.repeat(level)} ${after}`;
-          blocks.splice(segIdx, 0, '');
-          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+          blocks.splice(segIdx + 1, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
         } else {
           blocks[segIdx] = `${'#'.repeat(level)} ${before}`;
           blocks.splice(segIdx + 1, 0, after);
@@ -4659,13 +4857,16 @@ export class MarkdownArtifactViewerComponent
         const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
 
         if (rawText.trim().length === 0) {
-          this.FocusEditableSegment(seg.SegmentID, 'start');
+          // Pressing Enter on an empty paragraph creates or moves to the next line below cleanly
+          blocks.splice(segIdx + 1, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
           return;
         }
         if (caret.start === 0 && before.trim().length === 0 && after.trim().length > 0) {
+          // Keep current paragraph and insert new paragraph below unless user explicitly split mid-text
           blocks[segIdx] = after.trim();
-          blocks.splice(segIdx, 0, '');
-          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx, position: 'start' });
+          blocks.splice(segIdx + 1, 0, '');
+          this.applyBlockFlowTransaction(blocks, { segmentIndex: segIdx + 1, position: 'start' });
         } else {
           blocks[segIdx] = before.trim();
           blocks.splice(segIdx + 1, 0, after.trim());
@@ -5406,6 +5607,7 @@ export class MarkdownArtifactViewerComponent
       const targetSeg = this.DocumentSegments[clampedIdx];
       if (targetSeg) {
         this.SelectedAnchorKey = targetSeg.SegmentID;
+        this.lastFocusedSegmentId = targetSeg.SegmentID;
         this.FocusEditableSegment(
           targetSeg.SegmentID,
           focusSpec.position ?? 'start',
@@ -5466,6 +5668,7 @@ export class MarkdownArtifactViewerComponent
     listItemIndex?: number,
   ): void {
     this.SelectedAnchorKey = segmentId;
+    this.lastFocusedSegmentId = segmentId;
     const attemptFocus = (): boolean => {
       const root: ParentNode | null =
         this.PrintableCanvas?.nativeElement ??
@@ -5715,29 +5918,37 @@ export class MarkdownArtifactViewerComponent
   }
 
   private insertMarkdownAtTargetSegment(snippet: string): void {
-    const targetId = this.ActiveSlashTargetSegmentID;
+    const idx = this.resolveActiveSegmentIndex();
     this.ActiveSlashTargetSegmentID = null;
 
-    if (targetId) {
-      const idx = this.DocumentSegments.findIndex((s) => s.SegmentID === targetId);
-      if (idx >= 0) {
-        const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
-        const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
-        const trimmedSnippet = snippet.replace(/\n+$/, '');
-        let focusIdx = idx;
-        if (cleanedTarget.length === 0) {
-          blocks[idx] = trimmedSnippet;
-        } else {
+    if (idx >= 0 && idx < this.DocumentSegments.length) {
+      const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+      const cleanedTarget = blocks[idx].replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '').trim();
+      const trimmedSnippet = snippet.replace(/\n+$/, '');
+      if (trimmedSnippet.trim().length === 0) {
+        const nextIdx = cleanedTarget.length === 0 ? idx : idx + 1;
+        if (cleanedTarget.length > 0) {
           blocks[idx] = cleanedTarget;
-          blocks.splice(idx + 1, 0, trimmedSnippet);
-          focusIdx = idx + 1;
+          blocks.splice(nextIdx, 0, '');
+        } else {
+          blocks[idx] = '';
         }
-        this.applyBlockFlowTransaction(blocks, {
-          segmentIndex: focusIdx,
-          position: 'end',
-        });
+        this.applyBlockFlowTransaction(blocks, { segmentIndex: nextIdx, position: 'start' });
         return;
       }
+      let focusIdx = idx;
+      if (cleanedTarget.length === 0) {
+        blocks[idx] = trimmedSnippet;
+      } else {
+        blocks[idx] = cleanedTarget;
+        blocks.splice(idx + 1, 0, trimmedSnippet);
+        focusIdx = idx + 1;
+      }
+      this.applyBlockFlowTransaction(blocks, {
+        segmentIndex: focusIdx,
+        position: 'end',
+      });
+      return;
     }
 
     const cleanedBase = this.MarkdownContent.replace(/(?:^|\n)\/[A-Za-z0-9_-]*$/, '');
@@ -6439,6 +6650,12 @@ export class MarkdownArtifactViewerComponent
     );
     if (outlinePref === 'true' || outlinePref === 'false') {
       this.ShowOutlineRail = outlinePref === 'true';
+    }
+    const stylePref = UserInfoEngine.Instance.GetSetting(
+      MarkdownArtifactViewerComponent.EDITING_STYLE_PREF_SETTING_KEY,
+    );
+    if (stylePref === 'simple' || stylePref === 'blocks') {
+      this.EditingStyle = stylePref;
     }
 
     const raw = UserInfoEngine.Instance.GetSetting(this.getCollapsedBlocksUserSettingKey());

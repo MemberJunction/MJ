@@ -2223,6 +2223,41 @@ describe('MarkdownArtifactViewerComponent — Flow-First Continuous Block Transi
     expect(viewer.SelectedAnchorKey).toBe(viewer.DocumentSegments[1].SegmentID);
     viewer.ngOnDestroy();
   });
+
+  it('defaults to Simple Note Mode (EditingStyle === "simple"), supports switching to Advanced Block Mode ("blocks"), and always inserts new sections/blocks BELOW the active segment', () => {
+    const viewer = createEditableDocsViewer('# Amith Demo\n\nFirst section body.\n\n## Key Notes\n\nSecond section body.');
+    expect(viewer.EditingStyle).toBe('simple');
+    expect(viewer.IsSimpleNoteMode).toBe(true);
+    expect(viewer.DocumentSegments).toHaveLength(4);
+
+    // Focus the first heading ("# Amith Demo") and press Enter even with caret at offset 0 -> creates paragraph BELOW (index 1), never above
+    const firstSeg = viewer.DocumentSegments[0];
+    viewer.OnSegmentFocusIn(firstSeg);
+    const headingAtZero = makeMockEditableElement('Amith Demo', 0, 0);
+    const enterAtZero = makeKeyEvent('Enter', headingAtZero);
+    viewer.OnEditableBlockKeydown(firstSeg, enterAtZero.event);
+    expect(enterAtZero.prevented()).toBe(true);
+    expect(viewer.DocumentSegments[0].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[0].RawMarkdown).toBe('# Amith Demo');
+    expect(viewer.DocumentSegments[1].BlockKind).toBe('paragraph');
+    expect(viewer.DocumentSegments[1].RawMarkdown).toBe('');
+
+    // Focus "## Key Notes" (now index 3) and click "+ Section" (InsertSectionHeadingBelow) -> inserts new H2 BELOW "## Key Notes", never above
+    const keyNotesSeg = viewer.DocumentSegments.find((s) => s.RawMarkdown.includes('## Key Notes'))!;
+    const keyNotesIdx = viewer.DocumentSegments.findIndex((s) => s.SegmentID === keyNotesSeg.SegmentID);
+    viewer.OnSegmentFocusIn(keyNotesSeg);
+    viewer.InsertSectionHeadingBelow(2);
+    expect(viewer.DocumentSegments[keyNotesIdx].RawMarkdown).toBe('## Key Notes');
+    expect(viewer.DocumentSegments[keyNotesIdx + 1].BlockKind).toBe('heading');
+    expect(viewer.DocumentSegments[keyNotesIdx + 1].HeadingLevel).toBe(2);
+
+    // Toggle to Advanced Block Studio mode and back
+    viewer.SetEditingStyle('blocks');
+    expect(viewer.EditingStyle).toBe('blocks');
+    expect(viewer.IsSimpleNoteMode).toBe(false);
+    viewer.SetEditingStyle('simple');
+    expect(viewer.IsSimpleNoteMode).toBe(true);
+  });
 });
 
 
