@@ -170,7 +170,9 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             this.sessionId = conversationId;
         }
 
-        const topLevelModel = this.readString(raw, 'model');
+        const topLevelModel =
+            this.readString(raw, 'model') ??
+            this.readString(this.readObject(raw, 'init') ?? {}, 'model');
         if (topLevelModel) {
             this.reportedModel = topLevelModel;
         }
@@ -178,6 +180,54 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
         const eventType = this.readString(raw, 'type') ?? this.readString(raw, 'event');
 
         switch (eventType) {
+            case 'init': {
+                return null;
+            }
+            case 'step_update': {
+                const stepUpdate = this.readObject(raw, 'step_update');
+                if (!stepUpdate) {
+                    return null;
+                }
+                const stepConvId = this.readString(stepUpdate, 'conversation_id');
+                if (stepConvId) {
+                    this.sessionId = stepConvId;
+                }
+                const stepType = this.readString(stepUpdate, 'step_type');
+                const state = this.readString(stepUpdate, 'state');
+                const stepIndex = this.readNumber(stepUpdate, 'step_index') ?? 0;
+                const textDelta = this.readString(stepUpdate, 'text_delta');
+                if (stepType === 'agent_response' && textDelta) {
+                    return { Type: 'assistant-text', Text: textDelta };
+                }
+                if (stepType === 'tool') {
+                    const toolInfo = this.readObject(stepUpdate, 'tool_info');
+                    const toolName =
+                        this.readString(stepUpdate, 'tool_name') ??
+                        (toolInfo ? this.readString(toolInfo, 'name') : undefined) ??
+                        'tool';
+                    const toolCallId = `step-${stepIndex}-${toolName}`;
+                    if (state === 'ACTIVE') {
+                        const paramsObj = toolInfo ? this.readObject(toolInfo, 'parameters') : undefined;
+                        return {
+                            Type: 'tool-use-start',
+                            ToolCallId: toolCallId,
+                            ToolName: toolName,
+                            ArgumentsJson: paramsObj ? JSON.stringify(paramsObj) : undefined,
+                        };
+                    }
+                    if (state === 'DONE' || state === 'ERROR') {
+                        const output = toolInfo ? this.readString(toolInfo, 'output') ?? '' : '';
+                        return {
+                            Type: 'tool-result',
+                            ToolCallId: toolCallId,
+                            ToolName: toolName,
+                            Output: output,
+                            IsError: state === 'ERROR',
+                        };
+                    }
+                }
+                return null;
+            }
             case 'assistant':
             case 'text':
             case 'text_delta':
@@ -256,12 +306,19 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
             case 'turn_complete':
             case 'complete':
             case 'done': {
+                const resultObj = this.readObject(raw, 'result');
+                const resultConvId = resultObj ? this.readString(resultObj, 'conversation_id') : undefined;
+                if (resultConvId) {
+                    this.sessionId = resultConvId;
+                }
                 const usageObj =
-                    this.readObject(raw, 'usage_metadata') ?? this.readObject(raw, 'usage');
-                const terminal = this.buildTerminalFromResult(raw);
+                    this.readObject(raw, 'usage_metadata') ??
+                    this.readObject(raw, 'usage') ??
+                    (resultObj ? this.readObject(resultObj, 'usage_metadata') ?? this.readObject(resultObj, 'usage') : undefined);
+                const terminal = this.buildTerminalFromResult(raw, resultObj);
                 if (usageObj) {
                     this.pendingTerminal = terminal;
-                    return this.mapUsageObject(usageObj, raw);
+                    return this.mapUsageObject(usageObj, resultObj ?? raw);
                 }
                 return terminal;
             }
@@ -334,13 +391,25 @@ export class AntigravityCliAdapter extends BaseCliHarnessAdapter {
         };
     }
 
-    private buildTerminalFromResult(raw: HarnessCliRawEvent): HarnessTurnEvent {
+    private buildTerminalFromResult(
+        raw: HarnessCliRawEvent,
+        resultObj?: HarnessCliRawEvent,
+    ): HarnessTurnEvent {
         const text =
+            (resultObj
+                ? this.readString(resultObj, 'response') ?? this.readString(resultObj, 'text')
+                : undefined) ??
             this.readString(raw, 'result') ??
             this.readString(raw, 'response') ??
             this.readString(raw, 'text') ??
             '';
-        if (raw['is_error'] === true) {
+        const status = resultObj ? this.readString(resultObj, 'status') : undefined;
+        const trimmedText = text.trim();
+        const looksLikeJsonDecision = trimmedText.startsWith('{') && trimmedText.endsWith('}');
+        if (
+            !looksLikeJsonDecision &&
+            (raw['is_error'] === true || (status && status.toUpperCase() === 'ERROR'))
+        ) {
             return {
                 Type: 'session-error',
                 Error: text || 'Antigravity CLI reported a failed turn',
