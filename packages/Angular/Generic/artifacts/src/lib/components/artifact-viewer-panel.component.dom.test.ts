@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
+import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ArtifactFileService } from '../services/artifact-file.service';
+import { ArtifactIconService } from '../services/artifact-icon.service';
 import { renderComponentFixture, query, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
 
@@ -113,5 +115,134 @@ describe('ArtifactViewerPanelComponent (DOM)', () => {
     const out = capture(f.componentInstance.closed);
     (query(f, '.close-btn') as HTMLElement).click();
     expect(out.length).toBe(1);
+  });
+});
+
+// ─── Collection and link rows by version ID ─────────────────────────────────────────────────────
+
+interface VersionRow { ID: string; ArtifactID: string; VersionNumber: number; Name: string | null; Content: string; __mj_CreatedAt: Date }
+type LoadSeam = { loadArtifact: (targetVersionNumber?: number) => Promise<void> };
+type ReloadSeam = { loadCollectionAssociations: () => Promise<void>; loadLinksData: () => Promise<void> };
+
+interface ProviderOptions {
+  /** Fails a whole batch, as the API's clause screen does, when one filter in it reads the Artifact Versions base view. */
+  ScreenBaseViewReads?: boolean;
+  /** Rejects the batch that carries the collection and link queries. */
+  ThrowOnChildBatch?: boolean;
+}
+
+function versionRows(numbers: number[]): VersionRow[] {
+  return [...numbers]
+    .sort((a, b) => b - a)
+    .map((n) => ({ ID: `ver-${n}`, ArtifactID: 'a1', VersionNumber: n, Name: null, Content: '{}', __mj_CreatedAt: new Date('2026-10-01') }));
+}
+
+/**
+ * A provider whose RunViews returns `rows` for MJ: Artifact Versions and nothing else, and records
+ * every batch and every single RunView. GetEntityObject hands back load-only stubs for the artifact
+ * and its versions; any other record fails to load.
+ */
+function versionsProvider(rows: VersionRow[], options: ProviderOptions = {}): { Provider: IMetadataProvider; Batches: RunViewParams[][]; Singles: RunViewParams[] } {
+  const batches: RunViewParams[][] = [];
+  const singles: RunViewParams[] = [];
+  const toResult = (results: unknown[]): RunViewResult =>
+    ({ Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length }) as unknown as RunViewResult;
+  const refused = (): RunViewResult =>
+    ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: "Invalid ExtraFilter: entity 'MJ: Artifact Versions' is row-level-security filtered for you" }) as unknown as RunViewResult;
+  const readsVersionsBaseView = (p: RunViewParams) => /vwArtifactVersions/i.test(String(p.ExtraFilter ?? ''));
+  const fake = {
+    CurrentUser: { ID: 'test-user-id' },
+    Entities: [],
+    Roles: [],
+    EntityByName: () => undefined,
+    RunView: async (p: RunViewParams) => {
+      singles.push(p);
+      return options.ScreenBaseViewReads && readsVersionsBaseView(p) ? refused() : toResult([]);
+    },
+    RunViews: async (list: RunViewParams[]) => {
+      batches.push(list);
+      if (options.ScreenBaseViewReads && list.some(readsVersionsBaseView)) {
+        return list.map(refused);
+      }
+      if (options.ThrowOnChildBatch && list.some((p) => p.EntityName === 'MJ: Collection Artifacts')) {
+        throw new Error('network down');
+      }
+      return list.map((p) => toResult(p.EntityName === 'MJ: Artifact Versions' ? rows : []));
+    },
+    GetEntityObject: async (entityName: string) => {
+      if (entityName === 'MJ: Artifacts') {
+        return { ID: 'a1', Name: 'Q3 Report', Description: null, Type: null, Load: async () => true };
+      }
+      const version: Partial<VersionRow> & { Load: (id: string) => Promise<boolean> } = {
+        Load: async (id: string) => {
+          const row = rows.find((r) => r.ID === id);
+          if (row) Object.assign(version, row);
+          return !!row;
+        },
+      };
+      return version;
+    },
+  };
+  return { Provider: fake as unknown as IMetadataProvider, Batches: batches, Singles: singles };
+}
+
+async function renderLoaded(numbers: number[], options: ProviderOptions = {}) {
+  vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+  const { Provider, Batches, Singles } = versionsProvider(versionRows(numbers), options);
+  const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+    imports: CHILDREN,
+    declarations: [ArtifactViewerPanelComponent],
+    providers: [
+      { provide: MJNotificationService, useValue: {} },
+      { provide: ArtifactFileService, useValue: fileServiceStub },
+      { provide: ArtifactIconService, useValue: { getArtifactIcon: () => 'fa-file' } },
+    ],
+    inputs: { artifactId: 'a1', Provider, viewContext: 'collection' },
+  });
+  await (f.componentInstance as unknown as LoadSeam).loadArtifact();
+  f.detectChanges();
+  return { f, Batches, Singles };
+}
+
+describe('ArtifactViewerPanelComponent — collection and link rows by version ID', () => {
+  const ID_LIST = "ArtifactVersionID IN ('ver-3','ver-2','ver-1')";
+  /** The single reads keyed by version ID; the load also reads the selected version's attributes on its own. */
+  const childReads = (singles: RunViewParams[]) =>
+    singles.filter((p) => p.EntityName === 'MJ: Collection Artifacts' || p.EntityName === 'MJ: Conversation Detail Artifacts');
+
+  it('reads the version list alone, then the collection and link rows by the IDs it returned', async () => {
+    const { Batches } = await renderLoaded([1, 2, 3]);
+    expect(Batches[0].map((p) => p.EntityName)).toEqual(['MJ: Artifact Versions']);
+    expect(Batches[0][0].ExtraFilter).toBe("ArtifactID='a1'");
+    expect(Batches[1].map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(Batches[1].map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST]);
+    expect(Batches.length).toBe(2);
+  });
+
+  it('opens the artifact for a user whose read of Artifact Versions is row-filtered', async () => {
+    // The API refuses a client filter that reads the base view of a row-filtered entity, and the refusal fails the whole batch.
+    const { f, Batches, Singles } = await renderLoaded([1, 2, 3], { ScreenBaseViewReads: true });
+    expect(f.componentInstance.error).toBeNull();
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-3');
+    expect([...Batches.flat(), ...Singles].map((p) => String(p.ExtraFilter)).filter((filter) => /\bSELECT\b/i.test(filter))).toEqual([]);
+  });
+
+  it('reloads the collection and link rows by version ID', async () => {
+    const { f, Singles } = await renderLoaded([1, 2, 3]);
+    const reload = f.componentInstance as unknown as ReloadSeam;
+    expect(childReads(Singles)).toEqual([]);
+    await reload.loadCollectionAssociations();
+    await reload.loadLinksData();
+    expect(childReads(Singles).map((p) => p.EntityName)).toEqual(['MJ: Collection Artifacts', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(childReads(Singles).map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST, ID_LIST]);
+  });
+
+  it('still opens the artifact when the collection and link batch fails, and reads those rows one entity at a time', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { f, Singles } = await renderLoaded([1, 2, 3], { ThrowOnChildBatch: true });
+    expect(f.componentInstance.error).toBeNull();
+    expect(f.componentInstance.artifactVersion?.ID).toBe('ver-3');
+    expect(childReads(Singles).map((p) => p.EntityName).sort()).toEqual(['MJ: Collection Artifacts', 'MJ: Collection Artifacts', 'MJ: Conversation Detail Artifacts']);
+    expect(childReads(Singles).map((p) => p.ExtraFilter)).toEqual([ID_LIST, ID_LIST, ID_LIST]);
   });
 });
