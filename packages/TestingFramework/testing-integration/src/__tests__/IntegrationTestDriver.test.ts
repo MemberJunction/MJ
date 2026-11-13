@@ -10,16 +10,20 @@ interface FakeServerBootstrap {
     Pool: undefined;
     Db: { Schema: string };
 }
-const { mockServerClaimed, mockActiveBootstrap } = vi.hoisted(() => ({
+interface FakeClientBootstrap {
+    Storage: { SetCount: (_category: string) => number; ResetCounts: () => void };
+}
+const { mockServerClaimed, mockActiveBootstrap, mockActiveClientBootstrap } = vi.hoisted(() => ({
     mockServerClaimed: vi.fn(() => false),
     // Default null keeps the server branch resolving Metadata.Provider (unset in unit env), exactly
     // as before; tests that need a typed provider override this to inject one (#3251 guard).
     mockActiveBootstrap: vi.fn<() => FakeServerBootstrap | null>(() => null),
+    mockActiveClientBootstrap: vi.fn<() => FakeClientBootstrap | null>(() => null),
 }));
 vi.mock('../bootstrap', () => ({
     getActiveIntegrationStorage: () => ({ SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }),
     getActiveIntegrationBootstrap: () => mockActiveBootstrap(),
-    getActiveIntegrationClientBootstrap: () => null,
+    getActiveIntegrationClientBootstrap: () => mockActiveClientBootstrap(),
     BootstrapIntegrationServer: async () => { throw new Error('unit test must not self-bootstrap'); },
     get bootstrapIntegrationServer() { return this.BootstrapIntegrationServer; },
     bootstrapIntegrationClient: async () => { throw new Error('unit test must not self-bootstrap'); },
@@ -52,6 +56,7 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         delete process.env.RUN_AGENT_TESTS;
         mockServerClaimed.mockReturnValue(false);
         mockActiveBootstrap.mockReturnValue(null);
+        mockActiveClientBootstrap.mockReturnValue(null);
         const reg = IntegrationCheckRegistry.Instance;
         // A unique bundle prefix per concern keeps these isolated from the real bundles.
         reg.Register({ Id: 'unitpass.A', Name: 'A', Fn: async () => { /* pass */ } });
@@ -344,6 +349,27 @@ describe('IntegrationTestDriver bundle dispatch', () => {
         expect(listedDetails.SkipAllowed).toBe(true);
         expect(listedDetails.SkipGate).toBe('credentials');
         expect(listedDetails.SkipAllowReason).toBe('needs a vendor key');
+    });
+
+    it('a transport-scoped AllowedSkip allows the skip on that transport and leaves it unexpected on the other', async () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        reg.Register({ Id: 'unitclientskip.S', Name: 'clientSkipS', Fn: async () => SkipCheck('needs BeginTransaction') });
+        reg.AllowSkip({ CheckId: 'unitclientskip.S', Gate: 'not-applicable', Reason: 'server-only transaction leg', Transport: 'client' });
+        mockActiveClientBootstrap.mockReturnValue({
+            Storage: { SetCount: (_category: string) => 0, ResetCounts: () => { /* no-op */ } }
+        });
+        const driver = new IntegrationTestDriver();
+
+        const onClient = await driver.Execute(makeContext({ transport: 'client', checks: [{ type: 'unitclientskip' }] }));
+        expect(onClient.oracleResults.find(o => o.oracleType === 'unitclientskip.S')?.details).toMatchObject({
+            SkipAllowed: true,
+            SkipGate: 'not-applicable',
+        });
+
+        const onServer = await driver.Execute(makeContext({ transport: 'server', checks: [{ type: 'unitclientskip' }] }));
+        expect(onServer.oracleResults.find(o => o.oracleType === 'unitclientskip.S')?.details).toMatchObject({
+            SkipAllowed: false,
+        });
     });
 
     it('a whole-test tier gate is an allowed skip; an explicit requiresEnv gate is not', async () => {

@@ -1642,21 +1642,26 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Backstop alarm: this workflow's push run on `next` gates nothing, so a red one used to be
-  # visible only to whoever opened the Actions tab. Red opens (or comments on) one rolling issue
-  # for THIS workflow; green closes it. Logic and tests: .github/scripts/backstop-alarm.mjs.
-  # Push to `next` only: line branches (lts/**) and the scheduled lanes are not what the alarm's
-  # title describes. `cancelled` counts as red, as in test.yml: a push run here is never cancelled
-  # by concurrency, so a cancel means a timeout or a manual stop.
+  # Backstop alarm: neither `push` runs on `next` nor the `schedule` runs (`0 6 * * *` nightly,
+  # `30 6 * * 0` weekly) gate PR merges, so a red run used to be visible only to whoever opened the
+  # Actions tab. Each lane uses its own `--workflow` name (and therefore its own rolling issue label):
+  #   * push to `next`        -> "Integration Tier"
+  #   * nightly (`0 6 * * *`) -> "Integration Tier (Nightly)"
+  #   * weekly (`30 6 * * 0`) -> "Integration Tier (Weekly)"
+  # Isolating the three labels ensures a green daytime push (where mutation/cross-server/schema-rig
+  # lanes skip) can never auto-close an open nightly or weekly alarm. Logic and tests:
+  # .github/scripts/backstop-alarm.mjs.
   backstop-alarm:
     name: Backstop alarm
-    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, codegen-drift-ai]
-    if: always() && github.event_name == 'push' && github.ref_name == 'next'
+    needs: [changes, preflight, integration-sqlserver, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       issues: write
+    env:
+      ALARM_WORKFLOW: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 6 * * *' && 'Integration Tier (Nightly)' || 'Integration Tier (Weekly)') || 'Integration Tier' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v7
@@ -1669,7 +1674,7 @@ jobs:
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/scripts/backstop-alarm.mjs red --workflow "Integration Tier"
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "$ALARM_WORKFLOW"
 
       # A cleanup failure must never turn a green run red (that would file an alarm about the
       # alarm), so this step alone is continue-on-error; the script still logs ::error::.
@@ -1678,4 +1683,4 @@ jobs:
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node .github/scripts/backstop-alarm.mjs green --workflow "Integration Tier"
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "$ALARM_WORKFLOW"

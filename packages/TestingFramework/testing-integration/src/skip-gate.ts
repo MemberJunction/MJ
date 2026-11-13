@@ -26,6 +26,9 @@ export const INTEGRATION_TARGET_TYPE = 'Integration Check Bundle';
  */
 export type AllowedSkipGate = 'mutation' | 'credentials' | 'fixture' | 'not-applicable' | 'pending-ruling';
 
+/** Which execution transport an {@link AllowedSkip} applies to (`'server'` or `'client'`). */
+export type AllowedSkipTransport = 'server' | 'client';
+
 /** One allowlist entry: a check that may skip, the gate it waits on, and why. */
 export interface AllowedSkip {
     /**
@@ -36,6 +39,11 @@ export interface AllowedSkip {
     Gate: AllowedSkipGate;
     /** Why the skip is expected — printed next to the skip in the run's output. */
     Reason: string;
+    /**
+     * Optional transport scope. When set, allows the skip ONLY on that transport (`'server'` or
+     * `'client'`); a skip on the other transport stays unexpected and fails the skip gate.
+     */
+    Transport?: AllowedSkipTransport;
 }
 
 /** The `details` the driver writes on a skipped check's oracle result. */

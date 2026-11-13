@@ -1190,7 +1190,51 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
 });
 
 describe('skip allowlist', () => {
-    it('every allowlist entry names a registered check and gives a reason', () => {
+    const ALLOWLIST_TEST_LOCAL_PREFIXES = new Set(['regtest', 'bundleX', 'bundleY', 'lifecycletest', 'self-test']);
+
+    // Mutation-gated checks that call SkipCheck(...) directly inside their body without a
+    // SKIP_ALLOWLIST entry. On PRs (RUN_MUTATION_TESTS unset) the driver skips these at the
+    // mutation-tier gate and passes; on the nightly lane (RUN_MUTATION_TESTS=1) their body runs,
+    // so any secondary SkipCheck(...) they hit will FAIL the nightly unless the precondition is
+    // guaranteed in CI or the check is in SKIP_ALLOWLIST.
+    //
+    // Every check pinned below has been audited as a defensive guard against a corrupted fixture
+    // or a transport mismatch that the suite metadata already filters out. If a new
+    // RequiresMutation check calls SkipCheck(...), either:
+    //   1. Add an entry in skip-allowlist.ts (with a tracking issue if CI should satisfy it), OR
+    //   2. Confirm the precondition is guaranteed on nightly CI and paste the updated list below.
+    const EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS: string[] = [
+        'app-behavioral.AB1',
+        'app-behavioral.AB2',
+        'binary-fields.BF4',
+        'binary-fields.BF6',
+        'conversation-authorship-client.CA12',
+        'graph-runtime.GR6',
+        'livekit-room.LKR1',
+        'nested-transactions.NT9',
+        'permission-engine.PE11',
+        'permission-engine.PE12',
+        'permission-engine.PE13',
+        'realtime-session-guard.RSG1',
+        'realtime-session-guard.RSG2',
+        'server-cache.S29',
+        'server-cache.S31b',
+        'task-graph-security.TGS10',
+        'task-graph-security.TGS4',
+        'task-graph-security.TGS5',
+        'task-graph-security.TGS6',
+        'task-graph-security.TGS7',
+        'task-graph-security.TGS8',
+        'task-graph-security.TGS9',
+        'transaction-groups-batched.TGB1',
+        'transaction-groups-batched.TGB2',
+        'transaction-groups-batched.TGB3',
+        'transaction-groups-batched.TGB4',
+        'transaction-groups-batched.TGB5',
+        'user-elevation.UE4',
+    ];
+
+    it('every allowlist entry names a registered check, gives a reason, and uses a valid transport when scoped', () => {
         const reg = IntegrationCheckRegistry.Instance;
         const entries = reg.GetAllowedSkips();
         expect(entries.length).toBe(SKIP_ALLOWLIST.length);
@@ -1198,5 +1242,35 @@ describe('skip allowlist', () => {
         const stale = entries.filter(e => !reg.Get(e.CheckId) && !bundles.has(e.CheckId)).map(e => e.CheckId);
         expect(stale, `Allowlist entries for checks that are not registered: ${stale.join(', ')}`).toEqual([]);
         expect(entries.filter(e => e.Reason.trim().length < 20).map(e => e.CheckId)).toEqual([]);
+        const invalidTransports = entries
+            .filter(e => e.Transport !== undefined && e.Transport !== 'server' && e.Transport !== 'client')
+            .map(e => e.CheckId);
+        expect(invalidTransports).toEqual([]);
+    });
+
+    it('pins every RequiresMutation check whose body calls SkipCheck without a SKIP_ALLOWLIST entry (PR-vs-nightly asymmetry guard)', () => {
+        const reg = IntegrationCheckRegistry.Instance;
+        const actual: string[] = [];
+        for (const name of reg.GetBundleNames()) {
+            if (ALLOWLIST_TEST_LOCAL_PREFIXES.has(name)) {
+                continue;
+            }
+            for (const c of reg.GetBundle(name)) {
+                const bundleId = name;
+                const isAllowlisted = Boolean(reg.GetAllowedSkip(c.Id) || reg.GetAllowedSkip(bundleId));
+                if (c.RequiresMutation && !isAllowlisted && /\bSkipCheck\b/.test(c.Fn.toString())) {
+                    actual.push(c.Id);
+                }
+            }
+        }
+        actual.sort();
+        const pasteReady = actual.map(id => `        '${id}',`).join('\n');
+        expect(
+            actual,
+            `RequiresMutation checks calling SkipCheck() without a SKIP_ALLOWLIST entry changed.\n` +
+            `On PRs these skip at the mutation gate and stay green, but on nightly (RUN_MUTATION_TESTS=1) ` +
+            `any SkipCheck() they hit fails the run. Add a SKIP_ALLOWLIST entry or, if nightly CI satisfies ` +
+            `the precondition, paste over EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS:\n${pasteReady}`,
+        ).toEqual(EXPECTED_UNALLOWLISTED_MUTATION_SKIP_CHECKS);
     });
 });
