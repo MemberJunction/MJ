@@ -1761,11 +1761,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBrandKitAssetEntity,
-    MJBrandKitEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJBrandKitEntity,
     MJCalendarEventLinkEntity,
     MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
@@ -1965,11 +1965,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
     MJMagicLinkInviteEntity,
-    MJMagicLinkInviteRoleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
     MJMaterializedResultEntity,
     MJMaterializedResultQueryEntity,
@@ -2169,11 +2169,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ApolloSearchPeopleAction,
     CreateBusinessCentralJournalEntryAction,
     CreateJournalEntryAction,
-    CreateQuickBooksJournalEntryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
@@ -2373,11 +2373,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
     ClientContextChannelServer,
-    ClientOnlyChannelServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    ClientOnlyChannelServer,
     DataSnapshotToolLibrary,
     DocumentToolLibrary,
     DocxToolLibrary,
@@ -2577,11 +2577,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ComposeListsAction,
     ConditionalAction,
     ConfigureAgentUserPolicyAction,
-    CopyObjectAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CopyObjectAction,
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
@@ -2781,11 +2781,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     WorkQueueDiscardDeliveryServerOperation,
     WorkQueueGetBacklogServerOperation,
     WorkQueueGetSubscriptionStatsServerOperation,
-    WorkQueueListDeadLettersServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    WorkQueueListDeadLettersServerOperation,
     WorkQueueListPartitionsServerOperation,
     WorkQueueReplayDeadLetterServerOperation,
     WorkQueueValidateBindingsServerOperation,
