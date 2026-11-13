@@ -88,10 +88,13 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         // Example variables for the mutation
         const items = [];
         for (const pt of this.PendingTransactions) {
+            const oldValues = (pt.ExtraData as { oldValues?: { Key: string; Value: string | null }[] } | undefined)?.oldValues;
             items.push({
                 EntityName: pt.BaseEntity.EntityInfo.Name,
                 EntityObjectJSON: await this.serializeTransactionItemEntity(pt),
-                OperationType: pt.OperationType
+                OperationType: pt.OperationType,
+                // Present only on updates the caller did not exempt from the concurrency check.
+                ...(oldValues ? { OldValues: oldValues } : {})
             });
         }
         const vars = {
@@ -176,6 +179,9 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
         result.Type = serverResult.Type ?? (entity.IsSaved ? 'update' : 'create');
         result.Message = message ?? null;
         result.Errors = serverResult.Errors ?? [];
+        if (serverResult.ConcurrencyConflict) {
+            result.ConcurrencyConflict = serverResult.ConcurrencyConflict;
+        }
         result.StartedAt = new Date();
         result.EndedAt = new Date();
         entity.RegisterResultHistoryEntry(result);

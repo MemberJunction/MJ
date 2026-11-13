@@ -14,15 +14,67 @@ async function flush(): Promise<void> {
 function makeReviewSpec(
   overrides: Partial<VideoGenerationSpec> = {},
 ): VideoGenerationSpec {
-  return {
-    Title: 'Executive KPI Briefing',
+  const base: VideoGenerationSpec = {
+    SpecVersion: '1.0',
+    Status: 'Delivered',
+    Archetype: {
+      ArchetypeID: '11111111-1111-4111-8111-111111111111',
+      Name: 'KPI Briefing',
+    },
+    Film: {
+      OneSentence: 'Executive KPI Briefing',
+      Audience: 'Board of Directors',
+      Purpose: 'Quarterly Financial Briefing',
+      DurationSeconds: 15,
+      Formats: ['16:9'],
+    },
+    Style: {
+      Palette: [],
+      Typography: [],
+      Composition: 'Clean',
+      Pacing: { AvgSecondsBetweenChanges: 3, HoldRules: 'None' },
+      MotionRules: [],
+      Texture: 'Clean',
+      Keep: [],
+      Avoid: [],
+      References: [],
+    },
+    DataBindings: [],
+    Audio: {
+      Cues: [],
+      Captions: 'None',
+    },
+    Render: {
+      Renderer: 'HyperFrames',
+      RendererVersion: '0.9.0',
+      Fps: 30,
+      Seed: 42,
+      Quality: 'standard',
+    },
+    Interaction: {
+      Mode: 'Autonomous',
+      MaxRepairRounds: 3,
+    },
+    Deliverables: {
+      Formats: ['16:9'],
+      Poster: false,
+      ContactSheets: false,
+      Source: false,
+      Captions: false,
+    },
     Beats: [
       {
         Key: 'hook',
         Label: 'Hook',
         StartSeconds: 0,
         EndSeconds: 10,
+        EntryState: 'start',
+        ExitState: 'end',
+        Purpose: 'Hook viewer',
+        OnScreenText: [],
+        DataRefs: [],
         AssetRefs: ['bg-hero'],
+        LayoutNotes: {},
       },
     ],
     Assets: {
@@ -53,14 +105,16 @@ function makeReviewSpec(
     Review: {
       Gates: [
         {
-          Gate: 'AudioLoudnessGate',
+          Gate: 'G1',
           Status: 'Passed',
+          EvidenceRefs: [],
           Notes: '-14.2 LUFS within broadcast target',
           Timestamp: '2026-10-30T12:00:00Z',
         },
         {
-          Gate: 'SafeZoneCheck',
+          Gate: 'G2',
           Status: 'Failed',
+          EvidenceRefs: [],
           Notes: 'Lower-third subtitle clips 9:16 safe margin',
           Timestamp: '2026-10-30T12:01:00Z',
         },
@@ -108,6 +162,7 @@ function makeReviewSpec(
     },
     ...overrides,
   };
+  return base;
 }
 
 describe('VideoProductionReviewTabComponent (DOM)', () => {
@@ -128,13 +183,13 @@ describe('VideoProductionReviewTabComponent (DOM)', () => {
     const passedRow = gateRows[0] as HTMLElement;
     const passedBadge = passedRow.querySelector('.vp-status-badge') as HTMLElement | null;
     expect(passedBadge?.getAttribute('data-status')).toBe('Passed');
-    expect(passedRow.textContent).toContain('AudioLoudnessGate');
+    expect(passedRow.textContent).toContain('G1');
     expect(passedRow.textContent).toContain('-14.2 LUFS within broadcast target');
 
     const failedRow = gateRows[1] as HTMLElement;
     const failedBadge = failedRow.querySelector('.vp-status-badge') as HTMLElement | null;
     expect(failedBadge?.getAttribute('data-status')).toBe('Failed');
-    expect(failedRow.textContent).toContain('SafeZoneCheck');
+    expect(failedRow.textContent).toContain('G2');
   });
 
   it('renders critic rounds, timestamped defect rows with format glyphs, and rubric criterion scores', () => {

@@ -717,10 +717,30 @@ export const ServerCacheChecks: NamedCheck[] = [
             Assert(info!.TrustServerCacheCompletely === false,
                 `precondition: TrustServerCacheCompletely=false (got ${info!.TrustServerCacheCompletely})`);
 
+            const AUDIT_LOG_CACHE_KEY_PREFIX = 'MJ: Audit Logs|';
+            let auditLogCacheReads = 0;
+            const hadOwnGetItem = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItem');
+            const hadOwnGetItems = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItems');
+            const origGetItem = ctx.Storage.GetItem.bind(ctx.Storage);
+            const origGetItems = ctx.Storage.GetItems.bind(ctx.Storage);
+            ctx.Storage.GetItem = <T>(key: string, category?: string): Promise<T | null> => {
+                if (category === 'RunViewCache' && key.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX)) {
+                    auditLogCacheReads++;
+                }
+                return origGetItem<T>(key, category);
+            };
+            ctx.Storage.GetItems = <T>(keys: string[], category?: string): Promise<Map<string, T | null>> => {
+                if (category === 'RunViewCache' && keys.some((k) => k.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX))) {
+                    auditLogCacheReads++;
+                }
+                return origGetItems<T>(keys, category);
+            };
+
             const originalAllowCaching = info!.AllowCaching;
             info!.AllowCaching = true;
             try {
                 ctx.Storage.ResetCounts();
+                auditLogCacheReads = 0;
                 const first = await rv.RunView({
                     EntityName: 'MJ: Audit Logs',
                     ExtraFilter: "'tag-s25' <> 'never'",
@@ -737,9 +757,22 @@ export const ServerCacheChecks: NamedCheck[] = [
                     ResultType: 'simple'
                 }, ctx.User);
                 Assert(second.Success, `second failed: ${second.ErrorMessage}`);
-                AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0, 'Trust=0 entity must never write the server cache');
-                AssertEqual(ctx.Storage.GetCount('RunViewCache'), 0, 'Trust=0 entity must never read the server cache');
+                const auditLogCacheWrites = ctx.Storage.Writes.filter(
+                    (w) => w.Category === 'RunViewCache' && w.Key.startsWith(AUDIT_LOG_CACHE_KEY_PREFIX)
+                ).length;
+                AssertEqual(auditLogCacheWrites, 0, 'Trust=0 entity must never write the server cache');
+                AssertEqual(auditLogCacheReads, 0, 'Trust=0 entity must never read the server cache');
             } finally {
+                if (hadOwnGetItem) {
+                    ctx.Storage.GetItem = origGetItem;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItem');
+                }
+                if (hadOwnGetItems) {
+                    ctx.Storage.GetItems = origGetItems;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItems');
+                }
                 info!.AllowCaching = originalAllowCaching;
             }
         }
@@ -749,17 +782,52 @@ export const ServerCacheChecks: NamedCheck[] = [
         Name: 'S26: MJ: Record Changes is hardcoded cache-exempt (rows arrive via raw SQL)',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            ctx.Storage.ResetCounts();
-            const result = await rv.RunView({
-                EntityName: 'MJ: Record Changes',
-                ExtraFilter: "'tag-s26' <> 'never'",
-                Fields: ['ID'],
-                MaxRows: 5,
-                ResultType: 'simple'
-            }, ctx.User);
-            Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
-            AssertEqual(ctx.Storage.SetCount('RunViewCache') + ctx.Storage.GetCount('RunViewCache'), 0,
-                'Record Changes must never touch the cache regardless of its flags');
+            const RECORD_CHANGES_CACHE_KEY_PREFIX = 'MJ: Record Changes|';
+            let recordChangesCacheReads = 0;
+            const hadOwnGetItem = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItem');
+            const hadOwnGetItems = Object.prototype.hasOwnProperty.call(ctx.Storage, 'GetItems');
+            const origGetItem = ctx.Storage.GetItem.bind(ctx.Storage);
+            const origGetItems = ctx.Storage.GetItems.bind(ctx.Storage);
+            ctx.Storage.GetItem = <T>(key: string, category?: string): Promise<T | null> => {
+                if (category === 'RunViewCache' && key.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX)) {
+                    recordChangesCacheReads++;
+                }
+                return origGetItem<T>(key, category);
+            };
+            ctx.Storage.GetItems = <T>(keys: string[], category?: string): Promise<Map<string, T | null>> => {
+                if (category === 'RunViewCache' && keys.some((k) => k.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX))) {
+                    recordChangesCacheReads++;
+                }
+                return origGetItems<T>(keys, category);
+            };
+
+            try {
+                ctx.Storage.ResetCounts();
+                const result = await rv.RunView({
+                    EntityName: 'MJ: Record Changes',
+                    ExtraFilter: "'tag-s26' <> 'never'",
+                    Fields: ['ID'],
+                    MaxRows: 5,
+                    ResultType: 'simple'
+                }, ctx.User);
+                Assert(result.Success, `RunView failed: ${result.ErrorMessage}`);
+                const recordChangesCacheWrites = ctx.Storage.Writes.filter(
+                    (w) => w.Category === 'RunViewCache' && w.Key.startsWith(RECORD_CHANGES_CACHE_KEY_PREFIX)
+                ).length;
+                AssertEqual(recordChangesCacheWrites + recordChangesCacheReads, 0,
+                    'Record Changes must never touch the cache regardless of its flags');
+            } finally {
+                if (hadOwnGetItem) {
+                    ctx.Storage.GetItem = origGetItem;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItem');
+                }
+                if (hadOwnGetItems) {
+                    ctx.Storage.GetItems = origGetItems;
+                } else {
+                    Reflect.deleteProperty(ctx.Storage, 'GetItems');
+                }
+            }
         }
     },
     {

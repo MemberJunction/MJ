@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "Agent Activity: View All Users",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to switch the Agent Activity command center from personal and conversation-scoped workflows to the organization-wide All Users view. MJ: Tasks has no server-side RLS filter by default, so this authorization gates the Agent Activity UX scope toggle."
+    },
+    "primaryKey": {
+      "ID": "2C4219EE-1028-42C3-A85F-8530F711C201"
+    }
+  }
+]

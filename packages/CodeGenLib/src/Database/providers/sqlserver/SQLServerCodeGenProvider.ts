@@ -598,15 +598,18 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
-    FROM
-        [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    IF NOT UPDATE([${EntityInfo.UpdatedAtFieldName}])
+    BEGIN
+        UPDATE
+            [${entity.SchemaName}].[${entity.BaseTable}]
+        SET
+            ${EntityInfo.UpdatedAtFieldName} = GETUTCDATE()
+        FROM
+            [${entity.SchemaName}].[${entity.BaseTable}] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            ${entity.PrimaryKeys.map(k => `_organicTable.[${k.Name}] = I.[${k.Name}]`).join(' AND ')};
+    END
 END;
 GO`;
     }
@@ -871,12 +874,17 @@ RETURN
     )
     SELECT TOP 1
         a.[${primaryKey}] AS [RootID],
-        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
-        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
-        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
-        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+        a.[Depth] AS [Depth],
+        a.[Path] AS [Path],
+        CAST(CASE WHEN ch.[ChildCount] > 0 THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        ch.[ChildCount] AS [ChildCount]
     FROM
         CTE_Ancestors a
+    OUTER APPLY (
+        SELECT COUNT(1) AS [ChildCount]
+        FROM [${schemaName}].[${tableName}]
+        WHERE [${fieldName}] = @RecordID
+    ) ch
     WHERE
         a.[${fieldName}] IS NULL OR @ParentID IS NULL
     ORDER BY
@@ -2055,7 +2063,7 @@ IF OBJECT_ID('tempdb..#__mj__CodeGen__vwForeignKeys') IS NOT NULL DROP TABLE #__
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTablePrimaryKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTablePrimaryKeys;
 IF OBJECT_ID('tempdb..#__mj__CodeGen__vwTableUniqueKeys') IS NOT NULL DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
 
-SELECT [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
+SELECT FK_NAME, [column], [table], [schema_name], referenced_table, referenced_column, [referenced_schema]
 INTO #__mj__CodeGen__vwForeignKeys
 FROM [${schema}].[vwForeignKeys];
 
@@ -2072,6 +2080,27 @@ INTO #__mj__CodeGen__vwTableUniqueKeys
 FROM [${schema}].[vwTableUniqueKeys]
 WHERE KeyColumnCount = 1
   AND IsFiltered = 0;
+
+-- A column of a multi-column foreign key is a usable single-column reference only when the column
+-- it references is unique on its own. Joined alone, any other component matches many referenced
+-- rows and the base view's label join multiplies rows, so it gets no related entity.
+DELETE fk
+FROM #__mj__CodeGen__vwForeignKeys fk
+WHERE EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwForeignKeys sibling
+          WHERE sibling.FK_NAME = fk.FK_NAME AND sibling.[schema_name] = fk.[schema_name]
+            AND sibling.[table] = fk.[table] AND sibling.[column] <> fk.[column]
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTablePrimaryKeys pk
+          WHERE pk.SchemaName = fk.referenced_schema AND pk.TableName = fk.referenced_table
+            AND pk.ColumnName = fk.referenced_column AND pk.KeyColumnCount = 1
+      )
+  AND NOT EXISTS (
+          SELECT 1 FROM #__mj__CodeGen__vwTableUniqueKeys uk
+          WHERE uk.SchemaName = fk.referenced_schema AND uk.TableName = fk.referenced_table
+            AND uk.ColumnName = fk.referenced_column
+      );
 `;
     }
 
