@@ -129,6 +129,20 @@ Each result is one run of a model that does not repeat exactly, so one lost catc
 - **C. Go straight to 2 risks per session.** Pro: a middle setting. Con: a guess with no measurement of either end.
 - **Choice: B.** If #5906's catch returns, the shared session costs catches and the default stays at one risk per session (or 2 after one more check). If it does not return, the cause is the thinking level or run-to-run variation.
 
+## N14. Round 4 result and round 5
+
+Round 4 (thinking level medium, one session per risk, type check, staged judges):
+
+- #5513: 1.27 USD, 8 weak catches, 1 reported (Medium, from the rank-4 risk). First report on this PR in any round.
+- #5906: first attempt failed and lost 0.81 USD: a test was proved with a mutant in a file that the run record does not accept, and the whole run failed on save. Fixed (`run_test` refuses such a file; failing test first). Second attempt: 0.75 USD, 13 tests, all pass on both revisions.
+
+#5906 has now lost its catch in three runs with a lower thinking level (low shared, medium shared, medium per risk) and had 6 weak catches in the one run at the default level. So for #5906 the thinking level is the likely cause, not the shared session. #5513 points the other way (catch only with one session per risk). Each cell is one run.
+
+- **A. Stop here with medium thinking and one session per risk.** Pro: about 0.75 to 1.27 USD per PR. Con: loses #5906.
+- **B. Round 5 = default thinking + shared session + type check + staged judges, on the three PRs.** Pro: tests the one cheap configuration not yet run; it keeps full thinking and still saves the repeated reading. Con: about 3 to 4 USD and 45 minutes.
+- **C. Go back to round 1 settings plus type check and staged judges.** Pro: known to catch. Con: about 2 USD per PR; only the judge saving is kept.
+- **Choice: B.** After it, the three PRs have a result for each of the four combinations that matter, and the default is chosen from that table.
+
 ## Spend ledger for the night
 
 | Round | What | Model spend (USD) | Running total |
@@ -138,3 +152,4 @@ Each result is one run of a model that does not repeat exactly, so one lost catc
 | 1 | Hydrogen, new pipeline: #3831, #5906, #4450, #5513 | 10.09 | 16.16 |
 | 2 | Hydrogen, all cost changes, thinking low: #3831, #5906, #5513 | 1.18 | 17.34 |
 | 3 | Hydrogen, thinking medium, shared session, type check: #3831, #5906, #5513 | 2.19 | 19.53 |
+| 4 | Hydrogen, thinking medium, one session per risk: #5906 (two attempts), #5513 | 2.83 | 22.36 |
