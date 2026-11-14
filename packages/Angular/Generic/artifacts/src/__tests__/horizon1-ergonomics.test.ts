@@ -140,7 +140,6 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
     it('pastes rectangular TSV in a single atomic undoable batch and clears selected range', () => {
       const comp = createSheetsComponent();
-      comp.HasEditPermission = true;
       comp.readonly = false;
       comp.Workbook = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Test');
       const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(comp.Workbook);
@@ -194,7 +193,6 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
     it('reorders slides on filmstrip drag-drop and supports Reset/Pin via UserInfoEngine', () => {
       const comp = createSlidesComponent();
-      comp.HasEditPermission = true;
       comp.readonly = false;
       const deck = SlideDeckEngine.Instance.CreateDefaultDeck('Deck');
       const { Deck: d2 } = SlideDeckEngine.Instance.AddSlide(deck, { Title: 'Slide 2' });
@@ -213,7 +211,7 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       comp.OnSlideDrop(s3, fakeEvt);
       expect(comp.Deck.Slides[2].SlideID).toBe(s1);
 
-      const getSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(null);
+      const getSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS]);
@@ -244,7 +242,7 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
       });
       const comp = runInInjectionContext(injector, () => new SpreadsheetArtifactViewerComponent());
 
-      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(null);
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
       const setSettingSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => {});
 
       expect(comp.PinnedToolbarActions).toEqual([...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS]);
