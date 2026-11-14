@@ -7,6 +7,8 @@ import { MJArtifactVersionEntity, SlideDeckEngine } from '@memberjunction/core-e
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { SlideDeckArtifactViewerComponent } from './slide-deck-artifact-viewer.component';
+import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 
 @Component({
   standalone: true,
@@ -45,7 +47,12 @@ function makeSlideVersion(): MJArtifactVersionEntity {
 describe('SlideDeckArtifactViewerComponent DOM', () => {
   it('mounts read-only by default (B3) and renders the slide deck workspace', () => {
     const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
-      imports: [FormsModule, SlidePluginViewerStubComponent],
+      imports: [
+        FormsModule,
+        SlidePluginViewerStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
       declarations: [SlideDeckArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {
@@ -60,7 +67,12 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
 
   it('toggles filmstrip rail visibility via ToggleFilmstrip', () => {
     const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
-      imports: [FormsModule, SlidePluginViewerStubComponent],
+      imports: [
+        FormsModule,
+        SlidePluginViewerStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
       declarations: [SlideDeckArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {
@@ -77,7 +89,12 @@ describe('SlideDeckArtifactViewerComponent DOM', () => {
 
   it('wires ContentCommitted output on base viewer contract', () => {
     const f = renderComponentFixture(SlideDeckArtifactViewerComponent, {
-      imports: [FormsModule, SlidePluginViewerStubComponent],
+      imports: [
+        FormsModule,
+        SlidePluginViewerStubComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
+      ],
       declarations: [SlideDeckArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {

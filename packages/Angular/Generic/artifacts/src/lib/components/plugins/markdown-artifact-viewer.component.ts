@@ -362,15 +362,20 @@ interface DocsInlineToken {
                 Retry
               </button>
             }
-            @if (Collaborators.length > 0) {
+            @if (HumanCollaborators.length > 0) {
               <div class="mj-docs-avatar-stack">
-                @for (peer of Collaborators; track peer.ClientID) {
+                @for (peer of HumanCollaborators; track peer.ClientID) {
                   <span class="mj-docs-avatar" [title]="peer.Name + (peer.CanEdit ? ' (Editing)' : ' (Viewing)')">
                     {{ GetInitials(peer.Name) }}
                   </span>
                 }
               </div>
             }
+            <mj-artifact-agent-presence-bar
+              [Collaborators]="Collaborators"
+              ActiveDomain="document"
+              (JumpToAgentLocation)="JumpToAgentDocumentLocation($event)"
+            ></mj-artifact-agent-presence-bar>
           </div>
 
           <!-- Hidden File Input for .md / .docx Import -->
@@ -845,6 +850,13 @@ interface DocsInlineToken {
                     [hidden]="IsSegmentHiddenByCollapsedHeading(seg)"
                     (focusin)="OnSegmentFocusIn(seg)"
                   >
+                    @if (GetAgentForSegment(seg); as segAgent) {
+                      <mj-artifact-agent-region-indicator
+                        [Agent]="segAgent"
+                        [Compact]="true"
+                        (JumpToAgent)="JumpToAgentDocumentLocation($event)"
+                      ></mj-artifact-agent-region-indicator>
+                    }
                     @if (IsInteractiveCanvasMode && IsSimpleNoteMode) {
                       <button
                         type="button"
@@ -4765,6 +4777,65 @@ export class MarkdownArtifactViewerComponent
   private isComponentDestroyed = false;
   public CollaborationStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
+
+  public get HumanCollaborators(): CollaboratorPresence[] {
+    return this.Collaborators.filter((c) => c.IsAgent !== true);
+  }
+
+  public GetAgentForSegment(seg: DocumentRenderSegment): CollaboratorPresence | null {
+    for (const peer of this.Collaborators) {
+      if (peer.IsAgent !== true || peer.AgentPhase === 'exit') {
+        continue;
+      }
+      const loc = peer.AgentLocation;
+      if (!loc) {
+        if (peer.ActiveBlockID && peer.ActiveBlockID === seg.SegmentID) {
+          return peer;
+        }
+        continue;
+      }
+      if (loc.BlockID && (loc.BlockID === seg.SegmentID || loc.BlockID === seg.Descriptor?.BlockID)) {
+        return peer;
+      }
+      if (
+        loc.SectionHeading &&
+        seg.HeadingText &&
+        seg.HeadingText.trim().toLowerCase() === loc.SectionHeading.trim().toLowerCase()
+      ) {
+        return peer;
+      }
+      if (
+        typeof loc.StartLine === 'number' &&
+        loc.StartLine > 0 &&
+        seg.StartLine <= (loc.EndLine ?? loc.StartLine) &&
+        seg.EndLine >= loc.StartLine
+      ) {
+        return peer;
+      }
+    }
+    return null;
+  }
+
+  public JumpToAgentDocumentLocation(agent: CollaboratorPresence): void {
+    const match = this.DocumentSegments.find((seg) => this.GetAgentForSegment(seg) === agent)
+      ?? this.DocumentSegments.find((seg) => {
+        const loc = agent.AgentLocation;
+        return Boolean(
+          (loc?.BlockID && (loc.BlockID === seg.SegmentID || loc.BlockID === seg.Descriptor?.BlockID)) ||
+          (loc?.SectionHeading &&
+            seg.HeadingText &&
+            seg.HeadingText.trim().toLowerCase() === loc.SectionHeading.trim().toLowerCase()),
+        );
+      });
+    if (match) {
+      this.SelectedAnchorKey = match.SegmentID;
+      if (typeof document !== 'undefined') {
+        const el = document.querySelector<HTMLElement>(`.mj-docs-segment[data-segment-id="${match.SegmentID}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      this.cdr.markForCheck();
+    }
+  }
   public HasEditPermission = false;
   public CanUserShareArtifact = false;
   public CurrentUserEffectiveRoleLabel = 'Viewer';

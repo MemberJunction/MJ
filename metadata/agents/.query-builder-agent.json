@@ -38,7 +38,11 @@
             "enabled": true,
             "timeoutMs": 5000,
             "actionNames": [
-              "Search Query Catalog"
+              "Search Query Catalog",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -201,6 +205,46 @@
           "sync": {
             "lastModified": "2026-03-14T01:24:29.545Z",
             "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "15021DF3-622A-448D-870B-C18CF259943E"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE99E194-B41F-47C0-B89E-BD5C4D79A787"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2A1A6613-4FC8-4CC0-A800-B12AB90EA9C9"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8477D452-C25E-481B-9D87-BB3BD5DE6C24"
           }
         }
       ],

@@ -16,6 +16,11 @@ import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validation';
 import {
+    CreateLiveSheetHelperForProvider,
+    LiveSheetClientToolHelper,
+    type LiveSheetToolResult,
+} from '../shared/live-sheet-client-tool.helper';
+import {
     DEFAULT_QUERY_MAX_ROWS,
     QUERY_MAX_ROWS_HARD_CAP,
     DEFAULT_QUERY_PAGE_SIZE,
@@ -479,6 +484,42 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 },
                 Handler: async (params: Record<string, unknown>) => this.handlePageQueryResultsTool(params),
             },
+            {
+                Name: 'CreateLiveSheetFromQuery',
+                Description: 'Create a new collaborative Excel Spreadsheet artifact populated with a live-linked SavedQuery table backed by an Approved stored query (by NAME or ID). Returns ArtifactID, VersionID, SheetName, BoundingRange, and RowCount so it can be opened directly in the ArtifactWorkspace.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        title: { type: 'string', description: 'Optional spreadsheet artifact title' },
+                        sheetName: { type: 'string', description: 'Optional worksheet tab name (defaults to Query Data)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleCreateLiveSheetFromQueryTool(params),
+            },
+            {
+                Name: 'AppendQueryToLiveSheet',
+                Description: 'Append a live-linked SavedQuery table backed by an Approved stored query onto an existing collaborative Excel Spreadsheet artifact (creating the target worksheet tab if it does not exist yet). Returns updated VersionID, VersionNumber, SheetName, BoundingRange, and RowCount.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        artifactId: { type: 'string', description: 'Target Excel Spreadsheet artifact ID' },
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        sheetName: { type: 'string', description: 'Target worksheet tab name (created if missing)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                    },
+                    required: ['artifactId', 'query'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleAppendQueryToLiveSheetTool(params),
+            },
         ]);
     }
 
@@ -713,6 +754,107 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.publishAgentContext();
         }
         return { ...exec, PageNumber: pageNumber, PageSize: pageSize };
+    }
+
+    private prepareApprovedQuerySheetContext(params: Record<string, unknown>):
+        | {
+            ok: true;
+            query: MJQueryEntityExtended;
+            helper: LiveSheetClientToolHelper;
+            title?: string;
+            sheetName?: string;
+            tableTitle?: string;
+            anchorCell?: string;
+            maxRows?: number;
+            parameters?: Record<string, unknown>;
+          }
+        | { ok: false; result: LiveSheetToolResult } {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        const resolved = this.resolveRunnableQuery(raw);
+        if (!resolved.ok) {
+            return { ok: false, result: { Success: false, ErrorMessage: resolved.result.ErrorMessage } };
+        }
+        if (resolved.query.Status !== 'Approved') {
+            return {
+                ok: false,
+                result: {
+                    Success: false,
+                    ErrorMessage: `Query "${resolved.query.Name}" has Status="${resolved.query.Status}". Only Approved queries can populate a live sheet.`,
+                },
+            };
+        }
+        const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.metadata.CurrentUser);
+        if (!helper) {
+            return {
+                ok: false,
+                result: { Success: false, ErrorMessage: 'GraphQL provider or signed-in user context is unavailable.' },
+            };
+        }
+        const opt = (key: string): string | undefined => {
+            const v = params?.[key];
+            return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+        };
+        return {
+            ok: true,
+            query: resolved.query,
+            helper,
+            title: opt('title'),
+            sheetName: opt('sheetName'),
+            tableTitle: opt('tableTitle'),
+            anchorCell: opt('anchorCell'),
+            maxRows: typeof params?.['MaxRows'] === 'number'
+                ? NormalizeMaxRows(params['MaxRows'], DEFAULT_QUERY_MAX_ROWS)
+                : undefined,
+            parameters: NormalizeQueryParameters(params?.['Parameters']),
+        };
+    }
+
+    private async handleCreateLiveSheetFromQueryTool(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.CreateLiveSheetFromQuery({
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            Title: ctx.title,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
+    }
+
+    private async handleAppendQueryToLiveSheetTool(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+        const artifactVal = ValidateStringParam(params?.['artifactId'], 'artifactId');
+        if (!artifactVal.ok) {
+            return { Success: false, ErrorMessage: artifactVal.result.ErrorMessage };
+        }
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.AppendQueryToLiveSheet({
+            ArtifactID: artifactVal.value,
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
     }
 
     /**

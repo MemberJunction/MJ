@@ -494,10 +494,10 @@ export interface ResolvedSheetsToolbarItem {
             }
           </div>
 
-          @let activeCollabs = GetRemoteCollaborators();
-          @if (activeCollabs.length > 0) {
+          @let activeHumanCollabs = GetRemoteHumanCollaborators();
+          @if (activeHumanCollabs.length > 0) {
             <div class="mj-sheets-presence-strip" data-testid="sheets-presence-strip">
-              @for (collab of activeCollabs; track collab.ClientID) {
+              @for (collab of activeHumanCollabs; track collab.ClientID) {
                 <span
                   class="mj-sheets-presence-avatar"
                   [style.background]="collab.Color"
@@ -505,9 +505,6 @@ export interface ResolvedSheetsToolbarItem {
                   (click)="JumpToCollaboratorSelection(collab)"
                   [attr.data-testid]="'sheet-presence-avatar-' + collab.ClientID"
                 >
-                  @if (collab.IsAgent) {
-                    <i class="fa-solid fa-robot"></i>
-                  }
                   {{ GetInitials(collab.Name) }}
                   @if (collab.ActiveBlockID) {
                     <span class="mj-sheets-presence-range-tag">{{ collab.ActiveBlockID }}</span>
@@ -516,6 +513,11 @@ export interface ResolvedSheetsToolbarItem {
               }
             </div>
           }
+          <mj-artifact-agent-presence-bar
+            [Collaborators]="GetRemoteCollaborators()"
+            ActiveDomain="spreadsheet"
+            (JumpToAgentLocation)="JumpToCollaboratorSelection($event)"
+          ></mj-artifact-agent-presence-bar>
         </div>
       </div>
 
@@ -731,12 +733,16 @@ export interface ResolvedSheetsToolbarItem {
                             <span
                               class="mj-sheets-peer-cell-badge"
                               [style.background]="peerBadge.Color"
+                              [title]="peerBadge.ActionSummary || peerBadge.Name"
                               [attr.data-testid]="'sheet-peer-badge-' + addr"
                             >
                               @if (peerBadge.IsAgent) {
                                 <i class="fa-solid fa-robot"></i>
                               }
-                              {{ peerBadge.Name }}
+                              {{ peerBadge.AgentName || peerBadge.Name }}
+                              @if (peerBadge.ActingForUserName) {
+                                <span class="mj-sheets-peer-cell-actor">for {{ peerBadge.ActingForUserName }}</span>
+                              }
                             </span>
                           }
                           @if (InlineEditingAddress === addr && CanEdit) {
@@ -3613,8 +3619,14 @@ export class SpreadsheetArtifactViewerComponent
           void this.RefreshAllLiveData(false);
         }
 
-        // Compare changed cells on active sheet to surface synthetic agent selection
-        if (this.ActiveSheet && (!prevSheetId || prevSheetId === this.ActiveSheet.SheetID)) {
+        // Compare changed cells on active sheet to surface synthetic agent selection only when real Yjs agent awareness is not present
+        const hasRealAgentAwareness =
+          this.ConnectionStatus === 'connected' || this.Collaborators.some((c) => c.IsAgent);
+        if (
+          !hasRealAgentAwareness &&
+          this.ActiveSheet &&
+          (!prevSheetId || prevSheetId === this.ActiveSheet.SheetID)
+        ) {
           const changedAddresses: string[] = [];
           const currCells = this.ActiveSheet.Cells ?? {};
           const allAddresses = new Set([...Object.keys(prevCells), ...Object.keys(currCells)]);
@@ -6935,7 +6947,8 @@ export class SpreadsheetArtifactViewerComponent
     const remote = this.Collaborators.filter(
       (c) => localClientId === undefined || c.ClientID !== localClientId,
     );
-    if (this.SyntheticAgentPresence) {
+    const hasServerAgent = remote.some((c) => c.IsAgent === true);
+    if (this.SyntheticAgentPresence && !hasServerAgent) {
       const alreadyPresent = remote.some(
         (c) =>
           c.ClientID === this.SyntheticAgentPresence?.ClientID ||
@@ -6946,6 +6959,10 @@ export class SpreadsheetArtifactViewerComponent
       }
     }
     return remote;
+  }
+
+  public GetRemoteHumanCollaborators(): CollaboratorPresence[] {
+    return this.GetRemoteCollaborators().filter((c) => c.IsAgent !== true);
   }
 
   public ParseCollaboratorSheetRanges(activeBlockId: string | undefined): {
@@ -7022,12 +7039,21 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public JumpToCollaboratorSelection(collab: CollaboratorPresence): void {
-    const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
-    if (
-      parsed.SheetID &&
-      this.Workbook?.Worksheets?.some((w) => w.SheetID === parsed.SheetID)
-    ) {
-      this.Workbook.ActiveSheetID = parsed.SheetID;
+    const loc = collab.AgentLocation;
+    const targetBlock =
+      collab.ActiveBlockID ||
+      (loc?.Domain === 'spreadsheet' && loc.Range
+        ? `${loc.SheetID ?? loc.SheetName ?? ''}:${loc.Range}`.replace(/^:/, '')
+        : undefined);
+    const parsed = this.ParseCollaboratorSheetRanges(targetBlock);
+    const requestedSheet = parsed.SheetID || loc?.SheetID || loc?.SheetName || null;
+    if (requestedSheet && this.Workbook?.Worksheets) {
+      const matchedSheet = this.Workbook.Worksheets.find(
+        (w) => w.SheetID === requestedSheet || w.Name === requestedSheet,
+      );
+      if (matchedSheet) {
+        this.Workbook.ActiveSheetID = matchedSheet.SheetID;
+      }
     }
     if (parsed.Ranges.length > 0) {
       this.SelectedRanges = parsed.Ranges;

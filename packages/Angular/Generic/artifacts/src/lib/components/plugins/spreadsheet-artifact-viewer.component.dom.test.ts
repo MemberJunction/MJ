@@ -7,6 +7,7 @@ import { MJArtifactVersionEntity, SpreadsheetEngine } from '@memberjunction/core
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { SpreadsheetArtifactViewerComponent } from './spreadsheet-artifact-viewer.component';
+import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
 
 @Component({
   standalone: true,
@@ -55,7 +56,12 @@ function makeSheetVersion(): MJArtifactVersionEntity {
 describe('SpreadsheetArtifactViewerComponent DOM', () => {
   it('mounts read-only by default (B3) and renders the spreadsheet shell', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
+      imports: [
+        FormsModule,
+        SheetPluginViewerStubComponent,
+        XlsxPreviewStubComponent,
+        ArtifactAgentPresenceBarComponent,
+      ],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {
@@ -70,7 +76,12 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
 
   it('resolves ActiveCellAddress from ActiveRowIndex and ActiveColumnIndex', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
+      imports: [
+        FormsModule,
+        SheetPluginViewerStubComponent,
+        XlsxPreviewStubComponent,
+        ArtifactAgentPresenceBarComponent,
+      ],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {
@@ -88,7 +99,12 @@ describe('SpreadsheetArtifactViewerComponent DOM', () => {
 
   it('wires ContentCommitted output on base viewer contract', () => {
     const f = renderComponentFixture(SpreadsheetArtifactViewerComponent, {
-      imports: [FormsModule, SheetPluginViewerStubComponent, XlsxPreviewStubComponent],
+      imports: [
+        FormsModule,
+        SheetPluginViewerStubComponent,
+        XlsxPreviewStubComponent,
+        ArtifactAgentPresenceBarComponent,
+      ],
       declarations: [SpreadsheetArtifactViewerComponent],
       providers: [{ provide: MJNotificationService, useValue: { CreateSimpleNotification: vi.fn() } }],
       inputs: {

@@ -16,6 +16,27 @@
  * both server and client code paths (e.g. future in-browser inference).
  */
 
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+/**
+ * Optional execution context supplied by host callers (e.g. `ArtifactToolManager` or
+ * `GovernedArtifactService`) when invoking an artifact tool library on the server.
+ * Enables live data materialization (`RefreshLiveTables`, `EvaluateMjCustomFunctions`,
+ * `DocumentLiveBlockEngine`) under strict user permissions without breaking 3-arg subclasses.
+ */
+export interface ArtifactToolExecutionContext {
+    /** Authenticated human user on whose behalf the tool is executing (enforces RLS/FLS/Query perms). */
+    contextUser?: UserInfo;
+    /** Request-scoped metadata provider (preferred over falling back to global `Metadata.Provider`). */
+    provider?: IMetadataProvider;
+    /** Underlying `MJ: Artifacts` UUID (used for `=MJ.IMPORTRANGE` resolution and audit). */
+    artifactId?: string;
+    /** Active `MJ: AI Agent Runs` UUID when invoked inside an agent run. */
+    agentRunId?: string;
+    /** Display name of the agent invoking the tool. */
+    agentName?: string;
+}
+
 export interface ArtifactToolDefinition {
     name: string;
     description: string;
@@ -46,12 +67,13 @@ export abstract class BaseArtifactToolLibrary {
     public async InvokeTool(
         toolName: string,
         input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         if (toolName === 'get_full') {
             return this.getFull(artifactContent);
         }
-        return this.invokeSubclassTool(toolName, input, artifactContent);
+        return this.invokeSubclassTool(toolName, input, artifactContent, context);
     }
 
     /**
@@ -77,7 +99,8 @@ export abstract class BaseArtifactToolLibrary {
     protected async invokeSubclassTool(
         toolName: string,
         _input: Record<string, unknown>,
-        _artifactContent: string | Buffer
+        _artifactContent: string | Buffer,
+        _context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         return {
             success: false,

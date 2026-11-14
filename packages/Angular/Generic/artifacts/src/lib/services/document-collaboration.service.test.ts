@@ -1224,7 +1224,7 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     conflictService.ngOnDestroy();
   });
 
-  it('correctly sets IsAgent flag in GetCollaborators for isAgent boolean, role, and regex match on name', () => {
+  it('strictly sets IsAgent flag in GetCollaborators only when isAgent is true (anti-spoofing)', () => {
     const session = service.CreateSession('art-agent-test', '{}', {
       id: 'agent-1',
       name: 'Sheets AI Agent',
@@ -1235,24 +1235,24 @@ describe('DocumentCollaborationService — Round 2 Review (Blocker 1, Blocker 3,
     expect(collabs).toHaveLength(1);
     expect(collabs[0].IsAgent).toBe(true);
 
-    // Test with awareness state containing role === 'agent'
+    // Role hint alone without isAgent: true must NOT elevate to agent
     session.Awareness.setLocalStateField('user', {
       userId: 'agent-2',
       name: 'Worker 42',
       role: 'agent',
     });
     const roleCollabs = session.GetCollaborators();
-    expect(roleCollabs[0].IsAgent).toBe(true);
+    expect(roleCollabs[0].IsAgent).toBe(false);
 
-    // Test with awareness state matching /\bagent\b/i
+    // Name containing "Agent" without isAgent: true must NOT elevate to agent
     session.Awareness.setLocalStateField('user', {
       userId: 'agent-3',
       name: 'Agent Smith',
     });
     const nameCollabs = session.GetCollaborators();
-    expect(nameCollabs[0].IsAgent).toBe(true);
+    expect(nameCollabs[0].IsAgent).toBe(false);
 
-    // Test with regular human user
+    // Regular human user
     session.Awareness.setLocalStateField('user', {
       userId: 'human-1',
       name: 'Alice Developer',

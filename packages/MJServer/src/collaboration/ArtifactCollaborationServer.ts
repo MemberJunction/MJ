@@ -48,6 +48,12 @@ import { configInfo } from '../config.js';
 import { getUserPayload } from '../context.js';
 import type { DataSourceInfo } from '../types.js';
 import { InMemoryYjsRoomRelay, type IYjsRoomRelay, type YjsRelayMessage } from './YjsRoomRelay.js';
+import {
+    ARTIFACT_AGENT_PRESENCE_HOOK_KEY,
+    ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY,
+    type ArtifactAgentPresenceEvent,
+    type ArtifactLiveRoomSnapshot,
+} from '@memberjunction/ai-agents';
 
 /** Canonical WebSocket upgrade path for Yjs artifact collaboration rooms (relative to `MJAPI_BASE_PATH`). */
 export const ARTIFACT_COLLABORATION_WS_PATH = '/collaboration/yjs';
@@ -140,6 +146,41 @@ const MAX_IDLE_FLUSH_RETRIES = 3;
 const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
 const REALTIME_ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
 const MAX_LOGGED_ORIGIN_CHARS = 200;
+
+/** Reserved high Yjs clientID block for server-emitted AI agent awareness (browser clients cannot claim or spoof). */
+export const AGENT_AWARENESS_CLIENT_ID_BASE = 0x70000000;
+export const AGENT_AWARENESS_CLIENT_ID_MAX = 0x7fffffff;
+const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150;
+const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000;
+const DEFAULT_AGENT_PRESENCE_TTL_MS = 15_000;
+const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500;
+const AGENT_PRESENCE_PALETTE = [
+    '#6366f1',
+    '#8b5cf6',
+    '#06b6d4',
+    '#10b981',
+    '#f59e0b',
+    '#ec4899',
+];
+
+interface AgentRoomPresenceEntry {
+    ClientID: number;
+    Clock: number;
+    LastEvent: ArtifactAgentPresenceEvent;
+    LastBroadcastMs: number;
+    PendingWorkingEvent: ArtifactAgentPresenceEvent | null;
+    ThrottleTimer: ReturnType<typeof setTimeout> | null;
+    DecayTimer: ReturnType<typeof setTimeout> | null;
+    TtlTimer: ReturnType<typeof setTimeout> | null;
+    ExitGraceTimer: ReturnType<typeof setTimeout> | null;
+}
+
+interface DetachedAgentPresenceEntry {
+    RoomKey: string;
+    ArtifactID: string;
+    PresenceKey: string;
+    Entry: AgentRoomPresenceEntry;
+}
 
 /**
  * Pluggable atomic nonce replay store (e.g., backed by Redis `SET NX PX`) used to enforce
@@ -269,6 +310,10 @@ export interface CollaborationRoom {
         changes: { added: number[]; updated: number[]; removed: number[] },
         origin: unknown
     ) => void;
+    /** Server-owned awareness client IDs reserved for AI agents inside this room (`C3` anti-spoof). */
+    ProtectedAgentClientIDs: Set<number>;
+    /** Per-agent active awareness timers, clocks, and coalesced states inside this room. */
+    AgentPresenceEntries: Map<string, AgentRoomPresenceEntry>;
 }
 
 /**
@@ -445,6 +490,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private static readonly _inFlightCompactionVersionIds = new Set<string>();
     private readonly _pendingSyncWaiters = new Map<string, Set<PendingSyncWaiterEntry>>();
     private readonly _pendingUpgradesByArtifact = new Map<string, number>();
+    private readonly _detachedAgentPresence = new Map<string, DetachedAgentPresenceEntry>();
     private _relay: IYjsRoomRelay = new InMemoryYjsRoomRelay();
     private _dataSources: DataSourceInfo[] = [];
     private _providerOverride: IMetadataProvider | null = null;
@@ -456,6 +502,16 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
     private _ownedLiveMutationHook:
         | ((evt: RegisteredLiveMutationEvent) => Promise<RegisteredLiveMutationHookResult | void>)
         | null = null;
+    private _ownedLiveContentReaderHook:
+        | ((artifactId: string, contextUser?: UserInfo) => Promise<ArtifactLiveRoomSnapshot | null> | ArtifactLiveRoomSnapshot | null)
+        | null = null;
+    private _ownedAgentPresenceHook:
+        | ((evt: ArtifactAgentPresenceEvent) => Promise<void> | void)
+        | null = null;
+    private _agentPresenceThrottleMs: number = DEFAULT_AGENT_PRESENCE_THROTTLE_MS;
+    private _agentPresenceDecayMs: number = DEFAULT_AGENT_PRESENCE_DECAY_MS;
+    private _agentPresenceTtlMs: number = DEFAULT_AGENT_PRESENCE_TTL_MS;
+    private _agentPresenceExitGraceMs: number = DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _idleRoomTtlMs: number = DEFAULT_IDLE_ROOM_TTL_MS;
     private _heartbeatIntervalMs: number = DEFAULT_COLLABORATION_HEARTBEAT_MS;
@@ -583,6 +639,29 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
      */
     public SetIdleRoomTtlMs(ttlMs: number): void {
         this._idleRoomTtlMs = Math.max(10, ttlMs);
+    }
+
+    /**
+     * Configures AI agent presence awareness timings (throttle, working->settled decay, hard TTL, and exit grace).
+     */
+    public SetAgentPresenceTimings(options: {
+        throttleMs?: number;
+        decayMs?: number;
+        ttlMs?: number;
+        exitGraceMs?: number;
+    }): void {
+        if (typeof options.throttleMs === 'number') {
+            this._agentPresenceThrottleMs = Math.max(0, options.throttleMs);
+        }
+        if (typeof options.decayMs === 'number') {
+            this._agentPresenceDecayMs = Math.max(10, options.decayMs);
+        }
+        if (typeof options.ttlMs === 'number') {
+            this._agentPresenceTtlMs = Math.max(20, options.ttlMs);
+        }
+        if (typeof options.exitGraceMs === 'number') {
+            this._agentPresenceExitGraceMs = Math.max(0, options.exitGraceMs);
+        }
     }
 
     /**
@@ -2061,6 +2140,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         }
 
         this._rooms.clear();
+        for (const detached of this._detachedAgentPresence.values()) {
+            this.clearAgentPresenceTimers(detached.Entry);
+            detached.Entry.PendingWorkingEvent = null;
+        }
+        this._detachedAgentPresence.clear();
         this._tickets.clear();
         this._consumedTickets.clear();
         ArtifactCollaborationServer._inFlightCompactionVersionIds.clear();
@@ -2082,6 +2166,24 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             }
             this._ownedLiveMutationHook = null;
         }
+        if (this._ownedLiveContentReaderHook) {
+            const store = GetGlobalObjectStore();
+            if (store && store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY] === this._ownedLiveContentReaderHook) {
+                delete store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY];
+            }
+            this._ownedLiveContentReaderHook = null;
+        }
+        if (this._ownedAgentPresenceHook) {
+            const store = GetGlobalObjectStore();
+            if (store && store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY] === this._ownedAgentPresenceHook) {
+                delete store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY];
+            }
+            this._ownedAgentPresenceHook = null;
+        }
+        this._agentPresenceThrottleMs = DEFAULT_AGENT_PRESENCE_THROTTLE_MS;
+        this._agentPresenceDecayMs = DEFAULT_AGENT_PRESENCE_DECAY_MS;
+        this._agentPresenceTtlMs = DEFAULT_AGENT_PRESENCE_TTL_MS;
+        this._agentPresenceExitGraceMs = DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS;
         await this._relay.Shutdown();
     }
 
@@ -2993,8 +3095,420 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         store[ARTIFACT_LIVE_MUTATION_HOOK_KEY] = this._ownedLiveMutationHook;
     }
 
+    private ensureLiveContentReaderHookRegistered(): void {
+        if (this._shuttingDown) {
+            return;
+        }
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        const existingHook = store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY];
+        if (existingHook !== undefined && existingHook !== this._ownedLiveContentReaderHook) {
+            return;
+        }
+        if (!this._ownedLiveContentReaderHook) {
+            this._ownedLiveContentReaderHook = (artifactId: string): ArtifactLiveRoomSnapshot | null => {
+                if (this._shuttingDown || !artifactId) {
+                    return null;
+                }
+                const room = this._rooms.get(artifactId.trim().toLowerCase());
+                if (!room) {
+                    return null;
+                }
+                return {
+                    Content: this.extractRoomSerializedContent(room.Doc),
+                    VersionNumber: room.BaseVersionNumber,
+                    VersionID: room.BaseVersionID
+                };
+            };
+        }
+        store[ARTIFACT_LIVE_CONTENT_READER_HOOK_KEY] = this._ownedLiveContentReaderHook;
+    }
+
+    private ensureAgentPresenceHookRegistered(): void {
+        if (this._shuttingDown) {
+            return;
+        }
+        const store = GetGlobalObjectStore();
+        if (!store) {
+            return;
+        }
+        const existingHook = store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY];
+        if (existingHook !== undefined && existingHook !== this._ownedAgentPresenceHook) {
+            return;
+        }
+        if (!this._ownedAgentPresenceHook) {
+            this._ownedAgentPresenceHook = (evt: ArtifactAgentPresenceEvent): void => {
+                if (this._shuttingDown || !evt?.ArtifactID || !evt?.AgentPresenceKey) {
+                    return;
+                }
+                this.applyServerAgentPresenceEvent(evt);
+            };
+        }
+        store[ARTIFACT_AGENT_PRESENCE_HOOK_KEY] = this._ownedAgentPresenceHook;
+    }
+
+    private deriveAgentAwarenessClientId(agentPresenceKey: string): number {
+        const digest = createHash('sha256').update(agentPresenceKey, 'utf8').digest();
+        // Mask into [0x70000000, 0x7fffffff] (30 bits signed positive JS safe integer range)
+        const low28 = digest.readUInt32BE(0) & 0x0fffffff;
+        return AGENT_AWARENESS_CLIENT_ID_BASE + low28;
+    }
+
+    private pickAgentPresenceColor(agentPresenceKey: string): string {
+        const digest = createHash('sha256').update(agentPresenceKey, 'utf8').digest();
+        return AGENT_PRESENCE_PALETTE[digest[0] % AGENT_PRESENCE_PALETTE.length];
+    }
+
+    private clearAgentPresenceTimers(entry: AgentRoomPresenceEntry): void {
+        if (entry.ThrottleTimer) {
+            clearTimeout(entry.ThrottleTimer);
+            entry.ThrottleTimer = null;
+        }
+        if (entry.DecayTimer) {
+            clearTimeout(entry.DecayTimer);
+            entry.DecayTimer = null;
+        }
+        if (entry.TtlTimer) {
+            clearTimeout(entry.TtlTimer);
+            entry.TtlTimer = null;
+        }
+        if (entry.ExitGraceTimer) {
+            clearTimeout(entry.ExitGraceTimer);
+            entry.ExitGraceTimer = null;
+        }
+    }
+
+    private buildAgentAwarenessPayload(evt: ArtifactAgentPresenceEvent): Record<string, unknown> {
+        const color = this.pickAgentPresenceColor(evt.AgentPresenceKey);
+        return {
+            isAgent: true,
+            agentPresenceKey: evt.AgentPresenceKey,
+            agentPhase: evt.Phase,
+            agentLocation: evt.Location ?? undefined,
+            cursor: null,
+            user: {
+                userId: `agent:${evt.AgentPresenceKey}`,
+                userName: evt.AgentName,
+                name: evt.AgentName,
+                color,
+                canEdit: true,
+                isAgent: true,
+                agentPresenceKey: evt.AgentPresenceKey,
+                agentRunId: evt.AgentRunID ?? undefined,
+                agentName: evt.AgentName,
+                actingForUserId: evt.ActingForUserID,
+                actingForUserName: evt.ActingForUserName,
+                actingForUserEmail: evt.ActingForUserEmail ?? undefined,
+                agentPhase: evt.Phase,
+                toolName: evt.ToolName ?? undefined,
+                actionSummary: evt.ActionSummary ?? undefined,
+                agentLocation: evt.Location ?? undefined,
+                timestampMs: evt.TimestampMs
+            }
+        };
+    }
+
+    private buildDetachedPresenceKey(roomKey: string, presenceKey: string): string {
+        return `${roomKey}::${presenceKey}`;
+    }
+
+    private isAgentPresenceEntryActive(roomKey: string, presenceKey: string, entry: AgentRoomPresenceEntry): boolean {
+        const room = this._rooms.get(roomKey);
+        if (room && room.AgentPresenceEntries.get(presenceKey) === entry) {
+            return true;
+        }
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        return this._detachedAgentPresence.get(detachedKey)?.Entry === entry;
+    }
+
+    private encodeAgentAwarenessUpdate(clientId: number, clock: number, payloadJson: string): Uint8Array {
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder, 1);
+        encoding.writeVarUint(encoder, clientId);
+        encoding.writeVarUint(encoder, clock);
+        encoding.writeVarString(encoder, payloadJson);
+        return encoding.toUint8Array(encoder);
+    }
+
+    private publishAgentAwarenessRelay(artifactId: string, awarenessBytes: Uint8Array): void {
+        if (awarenessBytes.byteLength === 0) {
+            return;
+        }
+        void this._relay
+            .PublishToRoom({
+                ArtifactID: artifactId,
+                MessageType: 'awareness',
+                PayloadBase64: BytesToBase64(awarenessBytes)
+            })
+            .catch((err) => {
+                LogError(
+                    `ArtifactCollaborationServer agent awareness relay publish error for '${artifactId}': ${
+                        err instanceof Error ? err.message : String(err)
+                    }`
+                );
+            });
+    }
+
+    private adoptDetachedAgentPresenceForRoom(roomKey: string, room: CollaborationRoom): void {
+        for (const [detachedKey, detached] of Array.from(this._detachedAgentPresence.entries())) {
+            if (detached.RoomKey !== roomKey) {
+                continue;
+            }
+            this._detachedAgentPresence.delete(detachedKey);
+            room.ProtectedAgentClientIDs.add(detached.Entry.ClientID);
+            room.AgentPresenceEntries.set(detached.PresenceKey, detached.Entry);
+            if (detached.Entry.LastEvent.Phase !== 'exit') {
+                const awarenessBytes = this.encodeAgentAwarenessUpdate(
+                    detached.Entry.ClientID,
+                    detached.Entry.Clock,
+                    JSON.stringify(this.buildAgentAwarenessPayload(detached.Entry.LastEvent))
+                );
+                awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
+            }
+        }
+    }
+
+    private syncProtectedAgentClientIdsFromRelayAwareness(room: CollaborationRoom, awarenessBytes: Uint8Array): void {
+        try {
+            const decoder = decoding.createDecoder(awarenessBytes);
+            const count = decoding.readVarUint(decoder);
+            for (let i = 0; i < count; i++) {
+                const clientID = decoding.readVarUint(decoder);
+                decoding.readVarUint(decoder); // clock
+                const rawStateJson = decoding.readVarString(decoder);
+                if (clientID >= AGENT_AWARENESS_CLIENT_ID_BASE && clientID <= AGENT_AWARENESS_CLIENT_ID_MAX) {
+                    if (rawStateJson === 'null') {
+                        room.ProtectedAgentClientIDs.delete(clientID);
+                    } else {
+                        room.ProtectedAgentClientIDs.add(clientID);
+                    }
+                }
+            }
+        } catch {
+            // Ignore malformed awareness payload; applyAwarenessUpdate validates as needed
+        }
+    }
+
+    private broadcastAgentAwarenessEntry(
+        roomKey: string,
+        artifactId: string,
+        entry: AgentRoomPresenceEntry,
+        evt: ArtifactAgentPresenceEvent
+    ): void {
+        entry.Clock += 1;
+        entry.LastEvent = evt;
+        entry.LastBroadcastMs = Date.now();
+        const awarenessBytes = this.encodeAgentAwarenessUpdate(
+            entry.ClientID,
+            entry.Clock,
+            JSON.stringify(this.buildAgentAwarenessPayload(evt))
+        );
+        const room = this._rooms.get(roomKey);
+        if (room) {
+            room.ProtectedAgentClientIDs.add(entry.ClientID);
+            awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'agent-presence');
+            return;
+        }
+        // No local WebSocket room on this MJServer instance: relay directly so peer nodes deliver it to their viewers.
+        this.publishAgentAwarenessRelay(artifactId, awarenessBytes);
+    }
+
+    private removeServerAgentPresenceEntry(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        this.clearAgentPresenceTimers(entry);
+        entry.PendingWorkingEvent = null;
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        if (this._detachedAgentPresence.get(detachedKey)?.Entry === entry) {
+            this._detachedAgentPresence.delete(detachedKey);
+        }
+        const room = this._rooms.get(roomKey);
+        if (room) {
+            if (room.AgentPresenceEntries.get(presenceKey) === entry) {
+                room.AgentPresenceEntries.delete(presenceKey);
+            }
+            room.ProtectedAgentClientIDs.delete(entry.ClientID);
+            if (room.Awareness.getStates().has(entry.ClientID)) {
+                awarenessProtocol.removeAwarenessStates(room.Awareness, [entry.ClientID], 'agent-presence');
+                return;
+            }
+        }
+        entry.Clock += 1;
+        const removalBytes = this.encodeAgentAwarenessUpdate(entry.ClientID, entry.Clock, 'null');
+        this.publishAgentAwarenessRelay(artifactId, removalBytes);
+    }
+
+    private scheduleAgentHardTtl(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        if (entry.TtlTimer) {
+            clearTimeout(entry.TtlTimer);
+        }
+        entry.TtlTimer = setTimeout(() => {
+            entry.TtlTimer = null;
+            this.removeServerAgentPresenceEntry(roomKey, artifactId, presenceKey, entry);
+        }, this._agentPresenceTtlMs);
+        (entry.TtlTimer as { unref?: () => void }).unref?.();
+    }
+
+    private scheduleAgentWorkingDecay(
+        roomKey: string,
+        artifactId: string,
+        presenceKey: string,
+        entry: AgentRoomPresenceEntry
+    ): void {
+        if (entry.DecayTimer) {
+            clearTimeout(entry.DecayTimer);
+            entry.DecayTimer = null;
+        }
+        if (entry.LastEvent.Phase === 'working' || entry.LastEvent.Phase === 'enter') {
+            entry.DecayTimer = setTimeout(() => {
+                entry.DecayTimer = null;
+                if (!this.isAgentPresenceEntryActive(roomKey, presenceKey, entry)) {
+                    return;
+                }
+                const settledEvent: ArtifactAgentPresenceEvent = {
+                    ...entry.LastEvent,
+                    Phase: 'settled',
+                    TimestampMs: Date.now()
+                };
+                this.broadcastAgentAwarenessEntry(roomKey, artifactId, entry, settledEvent);
+            }, this._agentPresenceDecayMs);
+            (entry.DecayTimer as { unref?: () => void }).unref?.();
+        }
+    }
+
+    protected applyServerAgentPresenceEvent(evt: ArtifactAgentPresenceEvent): void {
+        const roomKey = evt.ArtifactID.trim().toLowerCase();
+        const presenceKey = evt.AgentPresenceKey.trim();
+        if (!roomKey || !presenceKey) {
+            return;
+        }
+
+        const room = this._rooms.get(roomKey);
+        const detachedKey = this.buildDetachedPresenceKey(roomKey, presenceKey);
+        let entry = room ? room.AgentPresenceEntries.get(presenceKey) : this._detachedAgentPresence.get(detachedKey)?.Entry;
+
+        if (!entry && room) {
+            const detached = this._detachedAgentPresence.get(detachedKey);
+            if (detached) {
+                this._detachedAgentPresence.delete(detachedKey);
+                entry = detached.Entry;
+                room.ProtectedAgentClientIDs.add(entry.ClientID);
+                room.AgentPresenceEntries.set(presenceKey, entry);
+            }
+        }
+
+        if (!entry) {
+            if (evt.Phase === 'exit') {
+                return;
+            }
+            const clientId = this.deriveAgentAwarenessClientId(presenceKey);
+            entry = {
+                ClientID: clientId,
+                Clock: 0,
+                LastEvent: evt,
+                LastBroadcastMs: 0,
+                PendingWorkingEvent: null,
+                ThrottleTimer: null,
+                DecayTimer: null,
+                TtlTimer: null,
+                ExitGraceTimer: null
+            };
+            if (room) {
+                room.ProtectedAgentClientIDs.add(clientId);
+                room.AgentPresenceEntries.set(presenceKey, entry);
+            } else {
+                this._detachedAgentPresence.set(detachedKey, {
+                    RoomKey: roomKey,
+                    ArtifactID: evt.ArtifactID,
+                    PresenceKey: presenceKey,
+                    Entry: entry
+                });
+            }
+        }
+
+        if (entry.ExitGraceTimer) {
+            clearTimeout(entry.ExitGraceTimer);
+            entry.ExitGraceTimer = null;
+        }
+
+        if (evt.Phase === 'exit') {
+            if (entry.ThrottleTimer) {
+                clearTimeout(entry.ThrottleTimer);
+                entry.ThrottleTimer = null;
+            }
+            entry.PendingWorkingEvent = null;
+            if (entry.DecayTimer) {
+                clearTimeout(entry.DecayTimer);
+                entry.DecayTimer = null;
+            }
+            if (entry.TtlTimer) {
+                clearTimeout(entry.TtlTimer);
+                entry.TtlTimer = null;
+            }
+            if (this._agentPresenceExitGraceMs <= 0) {
+                this.removeServerAgentPresenceEntry(roomKey, evt.ArtifactID, presenceKey, entry);
+                return;
+            }
+            const settledBeforeExit: ArtifactAgentPresenceEvent = {
+                ...entry.LastEvent,
+                Phase: 'settled',
+                TimestampMs: Date.now()
+            };
+            this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry, settledBeforeExit);
+            entry.ExitGraceTimer = setTimeout(() => {
+                entry!.ExitGraceTimer = null;
+                this.removeServerAgentPresenceEntry(roomKey, evt.ArtifactID, presenceKey, entry!);
+            }, this._agentPresenceExitGraceMs);
+            (entry.ExitGraceTimer as { unref?: () => void }).unref?.();
+            return;
+        }
+
+        this.scheduleAgentHardTtl(roomKey, evt.ArtifactID, presenceKey, entry);
+
+        if (evt.Phase === 'working' && this._agentPresenceThrottleMs > 0) {
+            const elapsed = Date.now() - entry.LastBroadcastMs;
+            if (elapsed < this._agentPresenceThrottleMs) {
+                entry.PendingWorkingEvent = evt;
+                if (!entry.ThrottleTimer) {
+                    const delay = Math.max(1, this._agentPresenceThrottleMs - elapsed);
+                    entry.ThrottleTimer = setTimeout(() => {
+                        entry!.ThrottleTimer = null;
+                        const pending = entry!.PendingWorkingEvent;
+                        entry!.PendingWorkingEvent = null;
+                        if (pending && this.isAgentPresenceEntryActive(roomKey, presenceKey, entry!)) {
+                            this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry!, pending);
+                            this.scheduleAgentWorkingDecay(roomKey, evt.ArtifactID, presenceKey, entry!);
+                        }
+                    }, delay);
+                    (entry.ThrottleTimer as { unref?: () => void }).unref?.();
+                }
+                return;
+            }
+        }
+
+        if (entry.ThrottleTimer) {
+            clearTimeout(entry.ThrottleTimer);
+            entry.ThrottleTimer = null;
+        }
+        entry.PendingWorkingEvent = null;
+        this.broadcastAgentAwarenessEntry(roomKey, evt.ArtifactID, entry, evt);
+        this.scheduleAgentWorkingDecay(roomKey, evt.ArtifactID, presenceKey, entry);
+    }
+
     private ensureGlobalMutationListenerRegistered(): void {
         this.ensureLiveMutationHookRegistered();
+        this.ensureLiveContentReaderHookRegistered();
+        this.ensureAgentPresenceHookRegistered();
         if (this._globalMutationSub) {
             return;
         }
@@ -3981,7 +4495,9 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             },
             AwarenessUpdateListener: (changes, origin) => {
                 this.onRoomAwarenessUpdate(room, changes, origin);
-            }
+            },
+            ProtectedAgentClientIDs: new Set<number>(),
+            AgentPresenceEntries: new Map<string, AgentRoomPresenceEntry>()
         };
 
         try {
@@ -3995,6 +4511,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             });
 
             this._rooms.set(key, room);
+            this.adoptDetachedAgentPresenceForRoom(key, room);
 
             const localHydrateClock = Y.decodeStateVector(Y.encodeStateVector(room.Doc)).get(room.Doc.clientID) ?? 0;
             if (overwriteStaleWorkingState) {
@@ -4913,7 +5430,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             const clock = decoding.readVarUint(decoder);
             const rawStateJson = decoding.readVarString(decoder);
 
-            if (clientID === room.Awareness.clientID) {
+            if (
+                clientID === room.Awareness.clientID ||
+                (clientID >= AGENT_AWARENESS_CLIENT_ID_BASE && clientID <= AGENT_AWARENESS_CLIENT_ID_MAX) ||
+                room.ProtectedAgentClientIDs.has(clientID)
+            ) {
                 continue;
             }
 
@@ -4935,21 +5456,50 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
                 accepted.push({ clientID, clock, stateJson: 'null' });
             } else if (typeof parsedState === 'object' && !Array.isArray(parsedState)) {
+                const {
+                    isAgent: _ignoredTopIsAgent,
+                    agentPresenceKey: _ignoredTopKey,
+                    agentName: _ignoredTopAgentName,
+                    agentRunId: _ignoredTopRunId,
+                    actingForUserId: _ignoredTopActingForId,
+                    actingForUserName: _ignoredTopActingForName,
+                    actingForUserEmail: _ignoredTopActingForEmail,
+                    agentPhase: _ignoredTopPhase,
+                    toolName: _ignoredTopTool,
+                    actionSummary: _ignoredTopSummary,
+                    agentLocation: _ignoredTopLocation,
+                    ...safeTopLevelState
+                } = parsedState;
                 const rawUser =
                     parsedState['user'] &&
                     typeof parsedState['user'] === 'object' &&
                     !Array.isArray(parsedState['user'])
                         ? (parsedState['user'] as Record<string, unknown>)
                         : {};
+                const {
+                    isAgent: _ignoredUserIsAgent,
+                    agentPresenceKey: _ignoredUserKey,
+                    agentName: _ignoredUserAgentName,
+                    agentRunId: _ignoredUserRunId,
+                    actingForUserId: _ignoredUserActingForId,
+                    actingForUserName: _ignoredUserActingForName,
+                    actingForUserEmail: _ignoredUserActingForEmail,
+                    agentPhase: _ignoredUserPhase,
+                    toolName: _ignoredUserTool,
+                    actionSummary: _ignoredUserSummary,
+                    agentLocation: _ignoredUserLocation,
+                    ...safeRawUser
+                } = rawUser;
                 const verifiedState: Record<string, unknown> = {
-                    ...parsedState,
+                    ...safeTopLevelState,
                     user: {
-                        ...rawUser,
+                        ...safeRawUser,
                         userId: conn.User.ID,
                         userName: conn.User.Name,
                         name: conn.User.Name,
                         email: conn.User.Email || undefined,
-                        canEdit: conn.CanEdit
+                        canEdit: conn.CanEdit,
+                        isAgent: false
                     }
                 };
                 conn.ControlledClientIDs.add(clientID);
@@ -5132,6 +5682,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         } else if (msg.MessageType === 'awareness' && msg.PayloadBase64) {
             const awarenessBytes = Base64ToBytes(msg.PayloadBase64);
             if (awarenessBytes.byteLength > 0) {
+                this.syncProtectedAgentClientIdsFromRelayAwareness(room, awarenessBytes);
                 awarenessProtocol.applyAwarenessUpdate(room.Awareness, awarenessBytes, 'relay');
             }
         } else if (msg.MessageType === 'permission-revoked') {
@@ -5382,6 +5933,11 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             clearTimeout(room.WorkingStateTimer);
             room.WorkingStateTimer = null;
         }
+        for (const entry of room.AgentPresenceEntries.values()) {
+            this.clearAgentPresenceTimers(entry);
+        }
+        room.AgentPresenceEntries.clear();
+        room.ProtectedAgentClientIDs.clear();
         if (room.UnsubscribeRelay) {
             try {
                 room.UnsubscribeRelay();

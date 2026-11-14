@@ -293,7 +293,7 @@ export interface ResolvedSlidesToolbarItem {
           </div>
 
           <div class="mj-slides-collaborators" data-testid="slides-collaborator-list">
-            @for (peer of Collaborators; track peer.ClientID) {
+            @for (peer of HumanCollaborators; track peer.ClientID) {
               <span
                 class="mj-slides-peer-avatar"
                 [title]="peer.Name + (peer.ActiveBlockID ? ' · ' + peer.ActiveBlockID : '')"
@@ -302,6 +302,11 @@ export interface ResolvedSlidesToolbarItem {
               </span>
             }
           </div>
+          <mj-artifact-agent-presence-bar
+            [Collaborators]="Collaborators"
+            ActiveDomain="slides"
+            (JumpToAgentLocation)="JumpToAgentSlideLocation($event)"
+          ></mj-artifact-agent-presence-bar>
 
           @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
@@ -673,6 +678,12 @@ export interface ResolvedSlidesToolbarItem {
             <!-- 16:9 Visual Slide Stage (used in Edit, Present, and Presenter View) -->
             <div class="mj-slides-stage-layout" [class.presenter-split]="WorkspaceMode === 'presenter'">
               <div class="mj-slides-canvas-wrapper">
+                @if (GetActiveSlideAgentPresence(); as slideAgent) {
+                  <mj-artifact-agent-region-indicator
+                    [Agent]="slideAgent"
+                    (JumpToAgent)="JumpToAgentSlideLocation($event)"
+                  ></mj-artifact-agent-region-indicator>
+                }
                 <section
                   class="mj-slide-canvas-stage"
                   [attr.data-layout]="DisplayedSlide.Layout"
@@ -736,6 +747,7 @@ export interface ResolvedSlidesToolbarItem {
                       <div
                         class="mj-slide-region-card"
                         [class.active-region]="FocusedRegionID === region.RegionID"
+                        [class.mj-slide-region--agent-active]="IsRegionEditedByAgent(region.RegionID)"
                         (click)="FocusedRegionID = region.RegionID"
                         [attr.data-region-kind]="region.Kind"
                         [attr.data-testid]="'slide-region-' + region.RegionID"
@@ -2091,6 +2103,10 @@ export interface ResolvedSlidesToolbarItem {
       .mj-slide-region-card.active-region {
         border-color: var(--deck-primary, var(--mj-brand-primary));
       }
+      .mj-slide-region-card.mj-slide-region--agent-active {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+      }
       .mj-slide-region-toolbar {
         display: flex;
         align-items: center;
@@ -2560,6 +2576,53 @@ export class SlideDeckArtifactViewerComponent
 
   public ConnectionStatus: CollaborationConnectionStatus = 'local';
   public Collaborators: CollaboratorPresence[] = [];
+
+  public get HumanCollaborators(): CollaboratorPresence[] {
+    return this.Collaborators.filter((c) => c.IsAgent !== true);
+  }
+
+  public GetActiveSlideAgentPresence(): CollaboratorPresence | null {
+    const activeSlideId = this.DisplayedSlide?.SlideID ?? this.ActiveSlideID;
+    const activeSlideIndex = this.Deck?.Slides?.findIndex((s) => s.SlideID === activeSlideId) ?? -1;
+    const activeSlideNumber = activeSlideIndex >= 0 ? activeSlideIndex + 1 : undefined;
+    for (const peer of this.Collaborators) {
+      if (peer.IsAgent !== true || peer.AgentPhase === 'exit') {
+        continue;
+      }
+      const loc = peer.AgentLocation;
+      if (loc?.SlideID && loc.SlideID === activeSlideId) {
+        return peer;
+      }
+      if (typeof loc?.SlideNumber === 'number' && activeSlideNumber === loc.SlideNumber) {
+        return peer;
+      }
+      if (!loc && peer.ActiveBlockID && peer.ActiveBlockID === activeSlideId) {
+        return peer;
+      }
+    }
+    return null;
+  }
+
+  public IsRegionEditedByAgent(regionId: string): boolean {
+    const slideAgent = this.GetActiveSlideAgentPresence();
+    return Boolean(slideAgent?.AgentLocation?.ElementID && slideAgent.AgentLocation.ElementID === regionId);
+  }
+
+  public JumpToAgentSlideLocation(agent: CollaboratorPresence): void {
+    const loc = agent.AgentLocation;
+    const slides = this.Deck?.Slides ?? [];
+    let target = loc?.SlideID ? slides.find((s) => s.SlideID === loc.SlideID) : undefined;
+    if (!target && typeof loc?.SlideNumber === 'number' && loc.SlideNumber >= 1) {
+      target = slides[loc.SlideNumber - 1];
+    }
+    if (target) {
+      this.SelectSlide(target.SlideID);
+      if (loc?.ElementID) {
+        this.FocusedRegionID = loc.ElementID;
+      }
+      this.cdr.markForCheck();
+    }
+  }
   public ResolvedPermissions: VerifiedArtifactPermissions | null = null;
   public AccessRevoked = false;
   public PermissionVerifyError = false;

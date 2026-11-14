@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView, DatabaseProviderBase } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
+import { ArtifactMetadataEngine, MJAIAgentRunStepEntity, MJAIAgentSessionEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams, type ActionRunScope } from '@memberjunction/actions-base';
@@ -4312,7 +4312,8 @@ export class RealtimeClientSessionService {
         const paused = result.agentRun?.Status === 'AwaitingFeedback';
         const payload = result.payload as Record<string, unknown> | null | undefined;
         const hasPayload = payload != null && Object.keys(payload).length > 0;
-        if (!result.success || paused || !hasPayload) {
+        const hasTouched = (result.touchedArtifacts?.length ?? 0) > 0;
+        if (!result.success || paused || (!hasPayload && !hasTouched)) {
             return undefined;
         }
         try {
@@ -4325,39 +4326,59 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * The DB-backed artifact-creation seam: runs `AgentRunner.ProcessAgentArtifacts` WITHOUT a
-     * conversation detail (the voice path has none — the artifact + version are created and the
-     * junction link is skipped), then loads the artifact header for its display name.
-     *
-     * Artifacts whose Visibility resolved to `System Only` (the agent's ArtifactCreationMode) are
-     * created but NOT surfaced to the overlay — matching how chat hides them from users.
-     *
-     * **Overridable seam** so tests can exercise {@link createDelegatedRunArtifacts}' eligibility
-     * guards without a DB.
-     *
-     * @param result The delegated agent execution result (payload + agentRun).
-     * @param contextUser The calling user.
-     * @param provider The request-scoped metadata provider.
-     * @returns The produced artifact descriptor(s), or `undefined`.
+     * The DB-backed artifact-creation seam: surfaces collaborative artifacts touched during the run
+     * (`result.touchedArtifacts`) plus any payload artifact created by `AgentRunner.ProcessAgentArtifacts`
+     * (without a conversation detail on voice paths).
      */
     protected async processRunArtifacts(
         result: ExecuteAgentResult,
         contextUser: UserInfo,
         provider: IMetadataProvider
     ): Promise<DelegatedRunArtifact[] | undefined> {
-        const runner = new AgentRunner(provider);
-        const info = await runner.ProcessAgentArtifacts(result, undefined, undefined, contextUser, provider);
-        if (!info) {
-            return undefined;
+        const collected: DelegatedRunArtifact[] = [];
+        const seen = new Set<string>();
+
+        if (result.touchedArtifacts?.length) {
+            for (const touched of result.touchedArtifacts) {
+                const artId = (touched.ArtifactID ?? '').trim();
+                if (!artId || seen.has(artId.toLowerCase())) continue;
+                seen.add(artId.toLowerCase());
+                const typeEntity = touched.ArtifactTypeName
+                    ? ArtifactMetadataEngine.Instance.FindArtifactType(touched.ArtifactTypeName)
+                    : undefined;
+                collected.push({
+                    ArtifactID: artId,
+                    ArtifactVersionID: touched.ArtifactVersionID ?? '',
+                    Name: touched.Name || 'Untitled Artifact',
+                    ArtifactTypeName: touched.ArtifactTypeName,
+                    DriverClass: touched.DriverClass ?? typeEntity?.DriverClass ?? undefined,
+                });
+            }
         }
-        const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
-        if (!(await artifact.Load(info.artifactId))) {
-            return undefined;
+
+        const payload = result.payload as Record<string, unknown> | null | undefined;
+        const hasPayload = payload != null && Object.keys(payload).length > 0;
+        if (hasPayload) {
+            const runner = new AgentRunner(provider);
+            const info = await runner.ProcessAgentArtifacts(result, undefined, undefined, contextUser, provider);
+            if (info && !seen.has(info.artifactId.toLowerCase())) {
+                const artifact = await provider.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+                if (await artifact.Load(info.artifactId) && artifact.Visibility !== 'System Only') {
+                    const typeName = artifact.Type ?? undefined;
+                    const typeEntity = typeName ? ArtifactMetadataEngine.Instance.FindArtifactType(typeName) : undefined;
+                    seen.add(info.artifactId.toLowerCase());
+                    collected.push({
+                        ArtifactID: info.artifactId,
+                        ArtifactVersionID: info.versionId,
+                        Name: artifact.Name,
+                        ArtifactTypeName: typeName,
+                        DriverClass: typeEntity?.DriverClass ?? undefined,
+                    });
+                }
+            }
         }
-        if (artifact.Visibility === 'System Only') {
-            return undefined; // created for system purposes, never user-surfaced
-        }
-        return [{ ArtifactID: info.artifactId, ArtifactVersionID: info.versionId, Name: artifact.Name }];
+
+        return collected.length > 0 ? collected : undefined;
     }
 
     /**
@@ -4756,7 +4777,11 @@ export class RealtimeClientSessionService {
             // (#5624). The arguments are model-written, so without them a Scoped Search here runs as a direct call
             // and searches whatever tenant and skill the model names.
             runParams.RunScope = this.directToolRunScope(input);
-            runParams.Context = { AgentID: target.ID, ActiveSkillIDs: [...(input.ActiveSkillIDs ?? [])] };
+            runParams.Context = {
+                AgentID: target.ID,
+                AgentName: target.Name,
+                ActiveSkillIDs: [...(input.ActiveSkillIDs ?? [])]
+            };
 
             let timerHandle: ReturnType<typeof setTimeout> | undefined;
             const timeoutPromise = new Promise<never>((_, reject) => {
@@ -4780,11 +4805,13 @@ export class RealtimeClientSessionService {
             });
 
             const outputText = result.Message || (result.Success ? 'Action completed successfully.' : 'Action failed.');
+            const actionArtifacts = this.extractDirectActionArtifacts(result.Params);
 
             return {
                 CallID: call.CallID,
                 Success: result.Success,
-                Output: outputText
+                Output: outputText,
+                ...(actionArtifacts ? { Artifacts: actionArtifacts } : {})
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -4794,6 +4821,27 @@ export class RealtimeClientSessionService {
                 Output: `Action '${action.Name}' failed: ${message}`
             };
         }
+    }
+
+    private extractDirectActionArtifacts(params?: ActionParam[]): DelegatedRunArtifact[] | undefined {
+        if (!params?.length) return undefined;
+        const readStr = (name: string): string | undefined => {
+            const match = params.find(p => p.Name.toLowerCase() === name.toLowerCase());
+            return typeof match?.Value === 'string' && match.Value.trim() ? match.Value.trim() : undefined;
+        };
+        const artifactId = readStr('ArtifactID');
+        if (!artifactId) return undefined;
+        const versionId = readStr('VersionID') ?? '';
+        const name = readStr('ArtifactName') ?? readStr('Title') ?? 'Untitled Artifact';
+        const typeName = readStr('ArtifactTypeName') ?? readStr('ArtifactType');
+        const driverClass = readStr('DriverClass');
+        return [{
+            ArtifactID: artifactId,
+            ArtifactVersionID: versionId,
+            Name: name,
+            ...(typeName ? { ArtifactTypeName: typeName } : {}),
+            ...(driverClass ? { DriverClass: driverClass } : {}),
+        }];
     }
 
     /**

@@ -54,7 +54,11 @@
               "Web Page Content",
               "URL Metadata Extractor",
               "Web Search",
-              "Preview Document"
+              "Preview Document",
+              "Create Governed Artifact",
+              "Inspect Governed Artifact",
+              "Mutate Governed Artifact",
+              "List Workspace Artifacts"
             ]
           }
         }
@@ -531,6 +535,46 @@
           "sync": {
             "lastModified": "2026-11-03T23:46:20.773Z",
             "checksum": "74ab806d6f221bda9360443ca3a310f4fd2c30ebcfe84a8f9f5b86967b98f0d4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D2AC0C24-0EEA-4355-AD3F-972870682DBF"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Inspect Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B91508F2-4456-4178-B1D8-C33A302FF167"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Mutate Governed Artifact",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "92CFA9CA-E688-48DD-BDCE-5F6C17FE31B0"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=List Workspace Artifacts",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "38FF5C60-CE87-4F63-88B9-91255BE3490F"
           }
         }
       ],

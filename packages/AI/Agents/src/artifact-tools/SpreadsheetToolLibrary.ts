@@ -1,7 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    ArtifactToolDefinition,
+    ArtifactToolExecutionContext,
+    ArtifactToolResult,
+    BaseArtifactToolLibrary
+} from '@memberjunction/ai-core-plus';
 import {
     CompileSafeUserRegex,
+    DocumentBlockExecutionResult,
     FormatCellAddress,
     IsSafeUserRegex,
     ParseCellAddress,
@@ -261,7 +267,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             {
                 name: 'upsert_live_table',
                 description:
-                    'Binds or updates an MJ EntityView or SavedQuery range table on a worksheet, with optional calculated formula columns.',
+                    'Binds or updates an MJ EntityView or SavedQuery range table on a worksheet (with optional extraFilter, fields, parameters, maxRows, and calculated formula columns), materializes live rows under the user permissions, and returns the resolved headers, rowCount, and boundingRange.',
                 inputSchema: {
                     type: 'object',
                     properties: {
@@ -270,15 +276,28 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         title: { type: 'string', description: 'Display title for the bound table.' },
                         sourceType: {
                             type: 'string',
-                            description: '"EntityView" or "SavedQuery".'
+                            description: '"EntityView" (or "view"/"entity") or "SavedQuery" (or "query").'
                         },
                         entityName: { type: 'string', description: 'Target EntityName when sourceType="EntityView".' },
                         viewId: { type: 'string', description: 'Optional saved User View ID.' },
                         viewName: { type: 'string', description: 'Optional saved User View Name.' },
+                        extraFilter: { type: 'string', description: 'Optional SQL filter clause for EntityView sources.' },
+                        fields: {
+                            type: 'array',
+                            description: 'Optional subset of field names to include.'
+                        },
                         queryId: { type: 'string', description: 'Target Saved Query ID when sourceType="SavedQuery".' },
                         queryName: {
                             type: 'string',
                             description: 'Target Saved Query Name when sourceType="SavedQuery".'
+                        },
+                        parameters: {
+                            type: 'object',
+                            description: 'Optional parameter map passed to the SavedQuery.'
+                        },
+                        maxRows: {
+                            type: 'number',
+                            description: 'Maximum rows to materialize (default 100).'
                         },
                         anchorCell: { type: 'string', description: 'Top-left A1 cell (default "A1").' },
                         calculatedColumns: {
@@ -289,6 +308,22 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         expectedRevisionHash: { type: 'string', description: 'Optional concurrency revision hash.' }
                     },
                     required: ['sourceType']
+                }
+            },
+            {
+                name: 'refresh_live_tables',
+                description:
+                    'Re-executes bound LiveTables and =MJ.* custom functions across the workbook under the current user permissions, updates worksheet cells and dependent formulas, and returns updated bounds and headers.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        tableId: {
+                            type: 'string',
+                            description: 'Optional TableID to refresh only one bound live table (defaults to all).'
+                        },
+                        expectedRevisionHash: { type: 'string', description: 'Optional concurrency revision hash.' }
+                    },
+                    required: []
                 }
             },
             {
@@ -433,7 +468,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
     protected override async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         let workbook: WorkbookSpec;
@@ -483,7 +519,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             case 'read_range':
                 return this.handleReadRange(workbook, input, getCurrentHash());
             case 'write_cells':
-                return this.handleWriteCells(workbook, input);
+                return this.handleWriteCells(workbook, input, context);
             case 'clear_range':
                 return this.handleClearRange(workbook, input);
             case 'insert_rows':
@@ -497,7 +533,9 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             case 'delete_sheet':
                 return this.handleDeleteSheet(workbook, input);
             case 'upsert_live_table':
-                return this.handleUpsertLiveTable(workbook, input);
+                return this.handleUpsertLiveTable(workbook, input, context);
+            case 'refresh_live_tables':
+                return this.handleRefreshLiveTables(workbook, input, context);
             case 'upsert_chart':
                 return this.handleUpsertChart(workbook, input);
             case 'embed_artifact':
@@ -657,10 +695,11 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         }
     }
 
-    private handleWriteCells(
+    private async handleWriteCells(
         workbook: WorkbookSpec,
-        input: Record<string, unknown>
-    ): ArtifactToolResult {
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const engine = SpreadsheetEngine.Instance;
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
@@ -673,6 +712,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
 
         const editCtx = this.extractCellEditContext(input);
         const updatedAddresses: string[] = [];
+        const mjFormulaCells: string[] = [];
         // Pre-validate protected ranges atomically before mutating any cell in the batch
         for (const item of rawCells) {
             if (!item || typeof item !== 'object') continue;
@@ -741,7 +781,30 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 editCtx
             );
             const p = ParseCellAddress(addr)!;
-            updatedAddresses.push(FormatCellAddress(p.row, p.col));
+            const formattedAddr = FormatCellAddress(p.row, p.col);
+            updatedAddresses.push(formattedAddr);
+            if (formula && /\bMJ\.(QUERY|VIEW|ENTITY|LOOKUP|IMPORTRANGE)\s*\(/i.test(formula)) {
+                mjFormulaCells.push(formattedAddr);
+            }
+        }
+
+        const spilledRanges: Array<{
+            formulaCell: string;
+            boundingRange: string;
+            headers: string[];
+            rowCount: number;
+        }> = [];
+        if (mjFormulaCells.length > 0 && context?.contextUser && context?.provider) {
+            await engine.EvaluateMjCustomFunctions(workbook, context.contextUser, context.provider, {
+                HostArtifactID: context.artifactId,
+                BypassCache: true
+            });
+            for (const formulaCell of mjFormulaCells) {
+                const summary = this.summarizeSpilledFormulaFootprint(sheet, formulaCell);
+                if (summary) {
+                    spilledRanges.push(summary);
+                }
+            }
         }
 
         engine.EvaluateWorkbook(workbook);
@@ -751,6 +814,7 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
 
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
+            sheetName: sheet.Name,
             updatedCells: updatedCells.map((c) => ({
                 address: c.Address,
                 rowId: c.RowID,
@@ -760,7 +824,8 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                 formulaStable: c.FormulaStable ?? null,
                 computedValue: c.ComputedValue ?? null,
                 displayValue: c.DisplayValue ?? ''
-            }))
+            })),
+            ...(spilledRanges.length > 0 ? { spilledRanges } : {})
         });
     }
 
@@ -923,15 +988,20 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleUpsertLiveTable(
+    private async handleUpsertLiveTable(
         workbook: WorkbookSpec,
-        input: Record<string, unknown>
-    ): ArtifactToolResult {
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const sheet = this.resolveSheet(workbook, input.sheet);
         if (!sheet) {
             return this.errorResult(`Worksheet '${String(input.sheet ?? '')}' not found.`);
         }
-        const sourceType = input.sourceType === 'SavedQuery' ? 'SavedQuery' : 'EntityView';
+        const rawSourceType = typeof input.sourceType === 'string' ? input.sourceType.trim().toLowerCase() : '';
+        const sourceType: SpreadsheetLiveTableSpec['SourceType'] =
+            rawSourceType === 'savedquery' || rawSourceType === 'query'
+                ? 'SavedQuery'
+                : 'EntityView';
         const tableId =
             typeof input.tableId === 'string' && input.tableId.trim()
                 ? input.tableId.trim()
@@ -948,6 +1018,13 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
                         : undefined
             }));
 
+        const rawParams =
+            input.parameters && typeof input.parameters === 'object' && !Array.isArray(input.parameters)
+                ? (input.parameters as Record<string, unknown>)
+                : input.queryParameters && typeof input.queryParameters === 'object' && !Array.isArray(input.queryParameters)
+                  ? (input.queryParameters as Record<string, unknown>)
+                  : undefined;
+
         const spec: SpreadsheetLiveTableSpec = {
             TableID: tableId,
             Title: String(input.title ?? input.entityName ?? input.queryName ?? 'Live Data Table'),
@@ -955,9 +1032,13 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             EntityName: typeof input.entityName === 'string' ? input.entityName : undefined,
             ViewID: typeof input.viewId === 'string' ? input.viewId : undefined,
             ViewName: typeof input.viewName === 'string' ? input.viewName : undefined,
+            ExtraFilter: typeof input.extraFilter === 'string' ? input.extraFilter : undefined,
+            Fields: Array.isArray(input.fields) ? input.fields.map(String) : undefined,
             QueryID: typeof input.queryId === 'string' ? input.queryId : undefined,
             QueryName: typeof input.queryName === 'string' ? input.queryName : undefined,
-            AnchorCell: typeof input.anchorCell === 'string' ? input.anchorCell : 'A1',
+            QueryParameters: rawParams,
+            MaxRows: typeof input.maxRows === 'number' && input.maxRows > 0 ? Math.trunc(input.maxRows) : undefined,
+            AnchorCell: typeof input.anchorCell === 'string' && input.anchorCell.trim() ? input.anchorCell.trim().toUpperCase() : 'A1',
             IncludeHeaders: true,
             Mode: 'Live',
             CalculatedColumns: calcCols
@@ -970,10 +1051,196 @@ export class SpreadsheetToolLibrary extends BaseArtifactToolLibrary {
             sheet.LiveTables.push(spec);
         }
 
+        let materializedSummary = this.buildUnmaterializedTableSummary(sheet, spec);
+        if (context?.contextUser && context?.provider) {
+            const engine = SpreadsheetEngine.Instance;
+            const refreshResults = await engine.RefreshLiveTables(workbook, context.contextUser, context.provider, {
+                TableID: spec.TableID
+            });
+            await engine.EvaluateMjCustomFunctions(workbook, context.contextUser, context.provider, {
+                HostArtifactID: context.artifactId,
+                BypassCache: true
+            });
+            engine.EvaluateWorkbook(workbook);
+            materializedSummary = this.summarizeMaterializedLiveTable(sheet, spec, refreshResults[spec.TableID]);
+        }
+
         return this.buildMutationSuccess(workbook, {
             sheetId: sheet.SheetID,
-            liveTable: spec
+            sheetName: sheet.Name,
+            tableId: spec.TableID,
+            anchorCell: spec.AnchorCell,
+            liveTable: spec,
+            ...materializedSummary
         });
+    }
+
+    private async handleRefreshLiveTables(
+        workbook: WorkbookSpec,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        if (!context?.contextUser || !context?.provider) {
+            return this.errorResult('refresh_live_tables requires an authenticated user and metadata provider context.');
+        }
+        const engine = SpreadsheetEngine.Instance;
+        const targetTableId =
+            typeof input.tableId === 'string' && input.tableId.trim() ? input.tableId.trim() : undefined;
+        const refreshResults = await engine.RefreshLiveTables(workbook, context.contextUser, context.provider, {
+            TableID: targetTableId
+        });
+        await engine.EvaluateMjCustomFunctions(workbook, context.contextUser, context.provider, {
+            HostArtifactID: context.artifactId,
+            BypassCache: true
+        });
+        engine.EvaluateWorkbook(workbook);
+
+        const tables: Array<Record<string, unknown>> = [];
+        for (const ws of workbook.Worksheets) {
+            for (const tbl of ws.LiveTables) {
+                if (targetTableId && tbl.TableID !== targetTableId) continue;
+                tables.push({
+                    tableId: tbl.TableID,
+                    sheetId: ws.SheetID,
+                    sheetName: ws.Name,
+                    anchorCell: tbl.AnchorCell,
+                    ...this.summarizeMaterializedLiveTable(ws, tbl, refreshResults[tbl.TableID])
+                });
+            }
+        }
+
+        return this.buildMutationSuccess(workbook, {
+            refreshedCount: tables.length,
+            tables
+        });
+    }
+
+    private buildUnmaterializedTableSummary(
+        sheet: WorksheetSpec,
+        spec: SpreadsheetLiveTableSpec
+    ): {
+        materialized: boolean;
+        headers: string[];
+        rowCount: number;
+        boundingRange: string;
+        dataRange: string | null;
+        sampleRows: Array<Record<string, string | number | boolean | null>>;
+    } {
+        return {
+            materialized: false,
+            headers: [],
+            rowCount: 0,
+            boundingRange: spec.AnchorCell || 'A1',
+            dataRange: null,
+            sampleRows: [],
+        };
+    }
+
+    private summarizeMaterializedLiveTable(
+        sheet: WorksheetSpec,
+        spec: SpreadsheetLiveTableSpec,
+        execRes?: DocumentBlockExecutionResult
+    ): {
+        materialized: boolean;
+        headers: string[];
+        rowCount: number;
+        boundingRange: string;
+        dataRange: string | null;
+        sampleRows: Array<Record<string, string | number | boolean | null>>;
+        refreshError?: string;
+    } {
+        if (!execRes || !execRes.Success || execRes.AccessDenied) {
+            return {
+                materialized: false,
+                headers: [],
+                rowCount: 0,
+                boundingRange: spec.AnchorCell || 'A1',
+                dataRange: null,
+                sampleRows: [],
+                refreshError: execRes?.ErrorMessage || spec.LastError || 'Failed to materialize live table.'
+            };
+        }
+        const anchor = ParseCellAddress(spec.AnchorCell || 'A1') ?? { row: 1, col: 1 };
+        const baseColumns =
+            execRes.Columns && execRes.Columns.length > 0
+                ? execRes.Columns.map((c) => c.DisplayName || c.Name)
+                : execRes.Rows[0]
+                  ? Object.keys(execRes.Rows[0])
+                  : [];
+        const calcHeaders = (spec.CalculatedColumns ?? []).map((cc) => cc.Header);
+        const headers = [...baseColumns, ...calcHeaders];
+        const totalCols = Math.max(1, headers.length);
+        const rowCount = execRes.Rows.length;
+        const headerOffset = spec.IncludeHeaders !== false ? 1 : 0;
+        const startAddr = FormatCellAddress(anchor.row, anchor.col);
+        const lastRow = anchor.row + headerOffset + Math.max(0, rowCount - (headerOffset === 0 ? 1 : 0)) - (rowCount === 0 && headerOffset > 0 ? 0 : 0);
+        const boundedLastRow = Math.max(anchor.row, anchor.row + headerOffset + rowCount - 1);
+        const endColAddr = FormatCellAddress(boundedLastRow, anchor.col + totalCols - 1);
+        const boundingRange = startAddr === endColAddr ? startAddr : `${startAddr}:${endColAddr}`;
+        let dataRange: string | null = null;
+        if (rowCount > 0) {
+            const firstDataRow = anchor.row + headerOffset;
+            const lastDataRow = firstDataRow + rowCount - 1;
+            dataRange = `${FormatCellAddress(firstDataRow, anchor.col)}:${FormatCellAddress(lastDataRow, anchor.col + totalCols - 1)}`;
+        }
+        const sampleRows = execRes.Rows.slice(0, 5).map((row) => {
+            const out: Record<string, string | number | boolean | null> = {};
+            for (const [k, v] of Object.entries(row)) {
+                if (v === null || v === undefined) {
+                    out[k] = null;
+                } else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                    out[k] = v;
+                } else {
+                    out[k] = String(v);
+                }
+            }
+            return out;
+        });
+        // Reconcile unused-param lint while keeping helper cohesive with future sheet-cell checks
+        void lastRow;
+        void sheet;
+        return {
+            materialized: true,
+            headers,
+            rowCount,
+            boundingRange,
+            dataRange,
+            sampleRows
+        };
+    }
+
+    private summarizeSpilledFormulaFootprint(
+        sheet: WorksheetSpec,
+        formulaCell: string
+    ): { formulaCell: string; boundingRange: string; headers: string[]; rowCount: number } | null {
+        const origin = ParseCellAddress(formulaCell);
+        if (!origin) return null;
+        let maxRow = origin.row;
+        let maxCol = origin.col;
+        for (const cell of Object.values(sheet.Cells)) {
+            if (cell.Address === formulaCell || cell.SpilledFrom === formulaCell) {
+                const pos = ParseCellAddress(cell.Address);
+                if (pos) {
+                    if (pos.row > maxRow) maxRow = pos.row;
+                    if (pos.col > maxCol) maxCol = pos.col;
+                }
+            }
+        }
+        const headers: string[] = [];
+        for (let c = origin.col; c <= maxCol; c++) {
+            const hdrCell = sheet.Cells[FormatCellAddress(origin.row, c)];
+            if (hdrCell) {
+                headers.push(hdrCell.DisplayValue || String(hdrCell.ComputedValue ?? hdrCell.RawValue ?? ''));
+            }
+        }
+        const startAddr = FormatCellAddress(origin.row, origin.col);
+        const endAddr = FormatCellAddress(maxRow, maxCol);
+        return {
+            formulaCell,
+            boundingRange: startAddr === endAddr ? startAddr : `${startAddr}:${endAddr}`,
+            headers,
+            rowCount: Math.max(0, maxRow - origin.row)
+        };
     }
 
     private handleUpsertChart(

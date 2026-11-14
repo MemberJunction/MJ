@@ -1,6 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult } from '@memberjunction/ai-core-plus';
+import {
+    BaseArtifactToolLibrary,
+    ArtifactToolDefinition,
+    ArtifactToolResult,
+    type ArtifactToolExecutionContext
+} from '@memberjunction/ai-core-plus';
 import {
     ArtifactEmbedMode,
     CompileSafeUserRegex,
@@ -367,10 +372,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     protected override async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
-        const result = await this.dispatchSubclassTool(toolName, contentStr, input);
+        const result = await this.dispatchSubclassTool(toolName, contentStr, input, context);
         if (result.success && result.data && typeof result.data === 'object') {
             const updatedContent = (result.data as { updatedContent?: unknown }).updatedContent;
             if (typeof updatedContent === 'string' && updatedContent !== contentStr) {
@@ -401,7 +407,8 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
     private async dispatchSubclassTool(
         toolName: string,
         contentStr: string,
-        input: Record<string, unknown>
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
 
         switch (toolName) {
@@ -426,7 +433,7 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
             case 'upsert_table':
                 return this.handleUpsertTable(contentStr, input);
             case 'insert_live_block':
-                return this.handleInsertLiveBlock(contentStr, input);
+                return this.handleInsertLiveBlock(contentStr, input, context);
             case 'embed_artifact_block':
                 return this.handleEmbedArtifactBlock(contentStr, input);
             case 'propose_suggestion':
@@ -1127,7 +1134,11 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         });
     }
 
-    private handleInsertLiveBlock(content: string, input: Record<string, unknown>): ArtifactToolResult {
+    private async handleInsertLiveBlock(
+        content: string,
+        input: Record<string, unknown>,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
         const kind = String(input.kind ?? '') as DocumentBlockKind;
         const blockId =
             typeof input.blockId === 'string' && input.blockId.trim()
@@ -1154,11 +1165,56 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         };
 
         const directive = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(spec);
-        return this.handleInsertBlockAfter(content, {
+        const insertResult = this.handleInsertBlockAfter(content, {
             afterBlockId: input.afterBlockId,
             markdown: directive,
             expectedRevisionHash: input.expectedRevisionHash
         });
+        if (!insertResult.success || !context?.contextUser || !context?.provider) {
+            return insertResult;
+        }
+        try {
+            const execRes = await DocumentLiveBlockEngine.Instance.ExecuteBlock(
+                spec,
+                context.contextUser,
+                context.provider
+            );
+            const dataObj =
+                insertResult.data && typeof insertResult.data === 'object'
+                    ? (insertResult.data as Record<string, unknown>)
+                    : {};
+            return {
+                ...insertResult,
+                data: {
+                    ...dataObj,
+                    liveValidation: {
+                        blockId: spec.BlockID,
+                        valid: Boolean(execRes.Success && !execRes.AccessDenied),
+                        rowCount: execRes.Rows.length,
+                        columns: execRes.Columns.map((c) => c.DisplayName || c.Name),
+                        validationError: execRes.ErrorMessage ?? null
+                    }
+                }
+            };
+        } catch (err) {
+            const dataObj =
+                insertResult.data && typeof insertResult.data === 'object'
+                    ? (insertResult.data as Record<string, unknown>)
+                    : {};
+            return {
+                ...insertResult,
+                data: {
+                    ...dataObj,
+                    liveValidation: {
+                        blockId: spec.BlockID,
+                        valid: false,
+                        rowCount: 0,
+                        columns: [],
+                        validationError: err instanceof Error ? err.message : String(err)
+                    }
+                }
+            };
+        }
     }
 
     private handleEmbedArtifactBlock(content: string, input: Record<string, unknown>): ArtifactToolResult {

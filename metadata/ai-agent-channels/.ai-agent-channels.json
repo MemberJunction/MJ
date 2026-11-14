@@ -191,5 +191,24 @@
       "lastModified": "2026-10-13T19:00:05.405Z",
       "checksum": "18b4ea3abd0bb89739af27b754b412579da736a81fe6b125b4b441746f397027"
     }
+  },
+  {
+    "fields": {
+      "Name": "ArtifactWorkspace",
+      "Description": "Multi-instance collaborative workspace channel for Docs (Markdown Document), Slides (Presentation), and Sheets (Excel Spreadsheet) during realtime sessions. Automatically opens delegated or newly created collaborative artifacts beside the call and exposes structural navigation and tab management verbs (open, focus, show_version, refresh, close).",
+      "ServerPluginClass": "ArtifactWorkspaceChannelServer",
+      "ClientPluginClass": "RealtimeArtifactWorkspaceChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "UIConfig": {
+        "DisplayName": "Workspace",
+        "GroupName": "Content",
+        "Icon": "fa-solid fa-file-lines",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "0AD99CD8-AC0D-4999-A31A-0FF8F46A0397"
+    }
   }
 ]

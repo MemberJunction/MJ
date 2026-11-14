@@ -13,6 +13,10 @@ import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo, 
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
+  CreateLiveSheetHelperForProvider,
+  type LiveSheetToolResult,
+} from '../shared/live-sheet-client-tool.helper';
+import {
   RecordSelectedEvent,
   RecordOpenedEvent,
   DataLoadedEvent,
@@ -1419,6 +1423,25 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         },
         async (params) => this.toolSetSort(params),
       ),
+      this.buildAgentTool(
+        'CreateLiveSheetFromView',
+        'Create a new collaborative Excel Spreadsheet artifact populated with a live-linked EntityView table from the currently open entity/saved view (or an explicitly named entity/view). Returns ArtifactID, VersionID, SheetName, BoundingRange, and RowCount so it can be opened directly in the ArtifactWorkspace.',
+        {
+          type: 'object',
+          properties: {
+            entityName: { type: 'string', description: 'Optional entity name (defaults to currently selected entity)' },
+            view: { type: 'string', description: 'Optional saved view name or ID (defaults to currently active view)' },
+            extraFilter: { type: 'string', description: 'Optional SQL ExtraFilter expression' },
+            fields: { type: 'array', items: { type: 'string' }, description: 'Optional subset of field names' },
+            title: { type: 'string', description: 'Optional spreadsheet artifact title' },
+            sheetName: { type: 'string', description: 'Optional worksheet tab name' },
+            tableTitle: { type: 'string', description: 'Optional live table title' },
+            maxRows: { type: 'number', description: 'Optional row limit' },
+            anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+          },
+        },
+        async (params) => this.toolCreateLiveSheetFromView(params),
+      ),
     ];
   }
 
@@ -1697,6 +1720,80 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
     this.goToEntityBrowser();
     return { Success: true, Data: { AtHomeLevel: true } };
+  }
+
+  /**
+   * Create a live EntityView-backed collaborative spreadsheet artifact from the active
+   * (or specified) entity/saved view so users and agents can explore live data together.
+   */
+  private async toolCreateLiveSheetFromView(params: Record<string, unknown>): Promise<LiveSheetToolResult> {
+    const opt = (key: string): string | undefined => {
+      const v = params[key];
+      return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+    };
+
+    const requestedEntity = opt('entityName');
+    const entity = requestedEntity
+      ? this.resolveEntityByName(requestedEntity)
+      : this.SelectedEntity;
+    if (!entity) {
+      return {
+        Success: false,
+        ErrorMessage: requestedEntity
+          ? this.entityNotFoundError(requestedEntity)
+          : 'No entity is selected and no entityName was provided.',
+      };
+    }
+
+    const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.metadata.CurrentUser);
+    if (!helper) {
+      return {
+        Success: false,
+        ErrorMessage: 'GraphQL provider or signed-in user context is unavailable.',
+      };
+    }
+
+    let resolvedView = (!requestedEntity || UUIDsEqual(entity.ID, this.SelectedEntity?.ID))
+      ? this.SelectedViewEntity
+      : null;
+
+    const requestedViewRaw = opt('view') ?? opt('viewId');
+    if (requestedViewRaw) {
+      const lowered = requestedViewRaw.toLowerCase();
+      const entityViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
+      const match =
+        entityViews.find((v) => UUIDsEqual(v.ID, requestedViewRaw)) ??
+        entityViews.find((v) => v.Name.toLowerCase() === lowered);
+      if (!match) {
+        return {
+          Success: false,
+          ErrorMessage: `No accessible saved view "${requestedViewRaw}" found for "${entity.Name}".`,
+        };
+      }
+      resolvedView = match;
+    }
+
+    const rawFields = params['fields'];
+    const fields = Array.isArray(rawFields)
+      ? rawFields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+      : undefined;
+    const rawMaxRows = params['maxRows'];
+    const maxRows = typeof rawMaxRows === 'number' && Number.isFinite(rawMaxRows) && rawMaxRows > 0
+      ? Math.min(Math.trunc(rawMaxRows), 5000)
+      : undefined;
+
+    return helper.CreateLiveSheetFromView({
+      EntityName: entity.Name,
+      ViewID: resolvedView?.ID,
+      ViewName: resolvedView?.Name,
+      ExtraFilter: opt('extraFilter'),
+      Fields: fields,
+      Title: opt('title'),
+      SheetName: opt('sheetName'),
+      TableTitle: opt('tableTitle'),
+      MaxRows: maxRows,
+      AnchorCell: opt('anchorCell'),
+    });
   }
 
   /**

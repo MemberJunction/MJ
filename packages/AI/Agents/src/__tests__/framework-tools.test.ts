@@ -76,6 +76,8 @@ describe('BuildFrameworkTools', () => {
         await toolNamed(tools, CONVERSATION_TOOL).Execute({ tool: 'getMessageBySequence', input: { sequence: 4 } }, context);
         expect(host.RunConversationTool).toHaveBeenCalledWith('getMessageBySequence', { sequence: 4 });
         expect((await toolNamed(tools, ARTIFACT_TOOL).Execute({ tool: 'get_full' }, context)).IsError).toBe(true);
+        await toolNamed(tools, ARTIFACT_TOOL).Execute({ tool: 'create_artifact', input: { title: 'Sheet 1', type: 'spreadsheet' } }, context);
+        expect(host.RunArtifactTool).toHaveBeenCalledWith('workspace', 'create_artifact', { title: 'Sheet 1', type: 'spreadsheet' });
     });
 
     it('ask_decisions hands the decisions and the current payload to the host', async () => {

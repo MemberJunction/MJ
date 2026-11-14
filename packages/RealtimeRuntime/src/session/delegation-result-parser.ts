@@ -18,6 +18,10 @@ export interface ParsedDelegationArtifact {
   ArtifactVersionID: string;
   /** The artifact's display name (used as the tab title). */
   Name: string;
+  /** Canonical `MJ: Artifact Types` Name when supplied by the server (e.g. `'Excel Spreadsheet'`, `'Presentation'`). */
+  ArtifactTypeName?: string;
+  /** Optional `DriverClass` from `MJ: Artifact Types` for synchronous client channel routing. */
+  DriverClass?: string;
 }
 
 /** The normalized shape a tool ResultJson parses into. */
@@ -44,6 +48,8 @@ interface RawDelegationArtifact {
   artifactId?: unknown;
   artifactVersionId?: unknown;
   name?: unknown;
+  artifactTypeName?: unknown;
+  driverClass?: unknown;
 }
 
 /**
@@ -88,7 +94,26 @@ function parseArtifacts(raw: unknown): ParsedDelegationArtifact[] | undefined {
       continue;
     }
     const name = typeof entry.name === 'string' && entry.name.trim().length > 0 ? entry.name.trim() : 'Artifact';
-    artifacts.push({ ArtifactID: artifactId, ArtifactVersionID: versionId, Name: name });
+    const artifactTypeName =
+      typeof entry.artifactTypeName === 'string' && entry.artifactTypeName.trim().length > 0
+        ? entry.artifactTypeName.trim()
+        : undefined;
+    const driverClass =
+      typeof entry.driverClass === 'string' && entry.driverClass.trim().length > 0
+        ? entry.driverClass.trim()
+        : undefined;
+    const parsedEntry: ParsedDelegationArtifact = {
+      ArtifactID: artifactId,
+      ArtifactVersionID: versionId,
+      Name: name,
+    };
+    if (artifactTypeName) {
+      parsedEntry.ArtifactTypeName = artifactTypeName;
+    }
+    if (driverClass) {
+      parsedEntry.DriverClass = driverClass;
+    }
+    artifacts.push(parsedEntry);
   }
   return artifacts.length > 0 ? artifacts : undefined;
 }

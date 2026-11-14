@@ -1,0 +1,104 @@
+import { describe, it, expect } from 'vitest';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import {
+    BaseArtifactToolLibrary,
+    type ArtifactToolDefinition,
+    type ArtifactToolExecutionContext,
+    type ArtifactToolResult,
+} from '../artifact-tool-library';
+import type { ExecuteAgentResult, GovernedRunArtifactSummary } from '../agent-types';
+
+class EchoContextToolLibrary extends BaseArtifactToolLibrary {
+    public LastContext: ArtifactToolExecutionContext | undefined;
+
+    protected override getSubclassToolList(): ArtifactToolDefinition[] {
+        return [
+            {
+                name: 'echo_ctx',
+                description: 'Echoes supplied execution context for testing',
+                inputSchema: { type: 'object', properties: {}, required: [] },
+            },
+        ];
+    }
+
+    protected override async invokeSubclassTool(
+        toolName: string,
+        _input: Record<string, unknown>,
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        this.LastContext = context;
+        if (toolName === 'echo_ctx') {
+            return {
+                success: true,
+                data: {
+                    contentLength: typeof artifactContent === 'string' ? artifactContent.length : artifactContent.byteLength,
+                    hasContextUser: Boolean(context?.contextUser),
+                    hasProvider: Boolean(context?.provider),
+                    artifactId: context?.artifactId ?? null,
+                    agentRunId: context?.agentRunId ?? null,
+                    agentName: context?.agentName ?? null,
+                },
+            };
+        }
+        return super.invokeSubclassTool(toolName, _input, artifactContent, context);
+    }
+}
+
+describe('BaseArtifactToolLibrary Execution Context & GovernedRunArtifactSummary', () => {
+    it('forwards optional ArtifactToolExecutionContext to subclasses while preserving 3-arg backwards compatibility', async () => {
+        const lib = new EchoContextToolLibrary();
+
+        const legacyResult = await lib.InvokeTool('echo_ctx', {}, 'hello');
+        expect(legacyResult.success).toBe(true);
+        expect(legacyResult.data).toEqual({
+            contentLength: 5,
+            hasContextUser: false,
+            hasProvider: false,
+            artifactId: null,
+            agentRunId: null,
+            agentName: null,
+        });
+
+        const fakeUser = { ID: 'user-1', Name: 'Amith', Email: 'amith@example.com' } as UserInfo;
+        const fakeProvider = {} as IMetadataProvider;
+        const ctx: ArtifactToolExecutionContext = {
+            contextUser: fakeUser,
+            provider: fakeProvider,
+            artifactId: 'art-123',
+            agentRunId: 'run-456',
+            agentName: 'Query Builder',
+        };
+
+        const ctxResult = await lib.InvokeTool('echo_ctx', {}, 'hello world', ctx);
+        expect(ctxResult.success).toBe(true);
+        expect(ctxResult.data).toEqual({
+            contentLength: 11,
+            hasContextUser: true,
+            hasProvider: true,
+            artifactId: 'art-123',
+            agentRunId: 'run-456',
+            agentName: 'Query Builder',
+        });
+        expect(lib.LastContext).toBe(ctx);
+    });
+
+    it('preserves touchedArtifacts typed GovernedRunArtifactSummary entries on ExecuteAgentResult', () => {
+        const summary: GovernedRunArtifactSummary = {
+            ArtifactID: '11111111-1111-4111-8111-111111111111',
+            ArtifactVersionID: '22222222-2222-4222-8222-222222222222',
+            VersionNumber: 1,
+            Name: 'Q4 Pipeline Workbook',
+            ArtifactTypeName: 'Excel Spreadsheet',
+            DriverClass: 'SpreadsheetArtifactViewerPlugin',
+            Operation: 'created',
+        };
+        const result: Partial<ExecuteAgentResult> = {
+            success: true,
+            touchedArtifacts: [summary],
+        };
+        expect(result.touchedArtifacts).toHaveLength(1);
+        expect(result.touchedArtifacts?.[0]?.ArtifactTypeName).toBe('Excel Spreadsheet');
+        expect(result.touchedArtifacts?.[0]?.Operation).toBe('created');
+    });
+});

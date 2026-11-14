@@ -90,4 +90,6 @@ export * from './lib/components/plugins/video-production/video-beat-strip.compon
 export * from './lib/components/plugins/video-production/video-production-storyboard-tab.component';
 export * from './lib/components/plugins/video-production/video-production-review-tab.component';
 export * from './lib/components/plugins/video-production/video-production-viewer.component';
+export * from './lib/components/presence/artifact-agent-presence-bar.component';
+export * from './lib/components/presence/artifact-agent-region-indicator.component';
 

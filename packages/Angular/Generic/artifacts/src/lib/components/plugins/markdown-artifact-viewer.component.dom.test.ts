@@ -6,6 +6,8 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { UserInfoEngine, type MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MarkdownArtifactViewerComponent } from './markdown-artifact-viewer.component';
+import { ArtifactAgentPresenceBarComponent } from '../presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from '../presence/artifact-agent-region-indicator.component';
 import { DocumentCollaborationService } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
 
@@ -302,6 +304,8 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
         FormsModule,
         StubMarkdownComponent,
         StubArtifactTypePluginViewerComponent,
+        ArtifactAgentPresenceBarComponent,
+        ArtifactAgentRegionIndicatorComponent,
       ],
       declarations: [MarkdownArtifactViewerComponent],
       providers: [DocumentCollaborationService, DocumentImportExportService],

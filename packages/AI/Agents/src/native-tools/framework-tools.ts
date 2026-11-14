@@ -139,25 +139,36 @@ function memoryTool(host: FrameworkToolHost): AgentToolDefinition {
     };
 }
 
+const WORKSPACE_ARTIFACT_TOOLS: ReadonlySet<string> = new Set([
+    'create_artifact',
+    'open_artifact',
+    'list_workspace_artifacts',
+]);
+
 function artifactTool(host: FrameworkToolHost): AgentToolDefinition {
     return {
         Name: ARTIFACT_TOOL,
-        Description: 'Run one artifact tool on an artifact listed in Available Artifacts, to explore or inspect it. '
-            + 'Call this with the artifact id (A, B, …), the tool name and its input; the result is returned to you on this turn.',
+        Description: 'Run one artifact or workspace tool (for example `create_artifact`, `open_artifact`, `list_workspace_artifacts`, or a domain tool like `upsert_live_table` / `write_cells` / `insert_block_after` / `add_slide` on an artifact in Available Artifacts). Call with `tool`, optional `artifactId` (A, B, … — required for domain tools, optional for workspace tools), and `input`.',
         InputSchema: {
             type: 'object',
             properties: {
-                artifactId: { type: 'string', description: 'The artifact id from Available Artifacts, such as "A".' },
-                tool: { type: 'string', description: 'The artifact tool to run, as listed under Artifact Tools.' },
+                artifactId: { type: 'string', description: 'The artifact alpha ID from Available Artifacts (such as "A"), or "workspace" / omitted for workspace-level tools like `create_artifact`.' },
+                tool: { type: 'string', description: 'The artifact or workspace tool to run, as listed under Artifact Tools.' },
                 input: { type: 'object', description: "The tool's input parameters." }
             },
-            required: ['artifactId', 'tool']
+            required: ['tool']
         },
         Execute: async (args) => {
-            if (typeof args.artifactId !== 'string' || typeof args.tool !== 'string') {
-                return fail('artifact_tool needs an artifactId and a tool name.');
+            if (typeof args.tool !== 'string' || !args.tool.trim()) {
+                return fail('artifact_tool needs a tool name.');
             }
-            return host.RunArtifactTool(args.artifactId, args.tool, isRecord(args.input) ? args.input : {});
+            const toolName = args.tool.trim();
+            const hasExplicitArtifactId = typeof args.artifactId === 'string' && args.artifactId.trim().length > 0;
+            if (!hasExplicitArtifactId && !WORKSPACE_ARTIFACT_TOOLS.has(toolName)) {
+                return fail('artifact_tool needs an artifactId for domain tools (or use a workspace tool: create_artifact, open_artifact, list_workspace_artifacts).');
+            }
+            const artifactId = hasExplicitArtifactId ? (args.artifactId as string).trim() : 'workspace';
+            return host.RunArtifactTool(artifactId, toolName, isRecord(args.input) ? args.input : {});
         }
     };
 }
