@@ -127,6 +127,17 @@
         <button
           type="button"
           mjButton
+          variant="secondary"
+          size="sm"
+          (click)="OpenSynthesizeDialog()"
+          data-testid="library-synthesize-btn"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+          Synthesize with AI
+        </button>
+        <button
+          type="button"
+          mjButton
           variant="primary"
           size="sm"
           (click)="OpenCreateBlankDialog('document')"
@@ -609,6 +620,21 @@
                         <div class="starter-desc">Import .docx, .xlsx, .csv, .pdf, media</div>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      class="starter-card"
+                      (click)="OpenSynthesizeDialog()"
+                      data-testid="hub-starter-synthesize"
+                    >
+                      <div class="starter-glyph tone-slide">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                      </div>
+                      <div class="starter-meta">
+                        <div class="starter-name">Synthesize with AI</div>
+                        <div class="starter-desc">Combine docs, sheets & charts into one output</div>
+                      </div>
+                    </button>
                   </div>
                 </section>
 
@@ -775,6 +801,19 @@
           New Collection
         </button>
       } @else if (NavigatorSection === 'collection' && SelectedCollectionNode; as colNode) {
+        @if (FilteredItems.length > 0) {
+          <button
+            type="button"
+            mjButton
+            variant="secondary"
+            size="sm"
+            (click)="OpenSynthesizeDialog()"
+            data-testid="collection-synthesize-btn"
+          >
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            Synthesize Collection
+          </button>
+        }
         @if (colNode.CanShare) {
           <button
             type="button"
@@ -1366,9 +1405,12 @@
   [InitialStarterKind]="CreateDialogStarter"
   [DefaultCollectionId]="SelectedCollectionId"
   [Collections]="CollectionTree"
+  [AvailableItems]="AllItems"
+  [DefaultSelectedArtifactIds]="DefaultSynthesisArtifactIds"
   [EnvironmentId]="EffectiveEnvironmentId"
   [CurrentUser]="EffectiveUser"
   (Created)="OnArtifactCreated($event)"
+  (Synthesized)="OnArtifactSynthesized($event)"
   (Cancelled)="IsCreateDialogOpen = false"
 ></mj-library-create-dialog>
 
