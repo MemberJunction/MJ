@@ -48,7 +48,7 @@ import {
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
-import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
+import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -332,16 +332,18 @@ export interface ResolvedSlidesToolbarItem {
               <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
               <span>{{ ActiveSlide.Locked ? 'Locked' : 'Lock' }}</span>
             </button>
-            <button
-              type="button"
-              class="mj-slides-tool-btn primary"
-              (click)="OpenAskAiForPresentation()"
-              title="Open slide-in AI Assistant for this slide"
-              data-testid="slides-ask-ai-quick-btn"
-            >
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>Ask AI</span>
-            </button>
+            @if (IsAiAssistantEnabled) {
+              <button
+                type="button"
+                class="mj-slides-tool-btn primary"
+                (click)="OpenAskAiForPresentation()"
+                title="Open slide-in AI Assistant for this slide"
+                data-testid="slides-ask-ai-quick-btn"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Ask AI</span>
+              </button>
+            }
           }
 
           @if (IsEditable) {
@@ -2508,6 +2510,7 @@ export class SlideDeckArtifactViewerComponent
   implements OnInit, OnChanges, OnDestroy
 {
   private static readonly USER_SETTING_PREFIX = 'MJ.Slides.WorkspaceState.';
+  public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
 
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
@@ -3349,7 +3352,7 @@ export class SlideDeckArtifactViewerComponent
         Placement: 'right',
         TestId: 'slides-ask-ai-btn',
         Active: false,
-        Visible: this.IsEditable,
+        Visible: ARTIFACT_AI_ASSISTANT_ENABLED && this.IsEditable,
       },
       {
         Key: 'lock-slide',
@@ -4665,6 +4668,9 @@ export class SlideDeckArtifactViewerComponent
   }
 
   public OpenAskAiForPresentation(): void {
+    if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+      return;
+    }
     const slide = this.ActiveSlide;
     const targetRegion =
       slide?.Regions.find((r) => r.RegionID === this.FocusedRegionID) ?? slide?.Regions[0];

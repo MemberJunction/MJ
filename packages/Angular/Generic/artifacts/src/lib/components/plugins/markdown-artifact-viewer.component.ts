@@ -47,7 +47,7 @@ import {
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
-import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
+import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
@@ -323,7 +323,7 @@ interface DocsInlineToken {
         </div>
 
         <div class="mj-docs-toolbar__right">
-          @if (CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
+          @if (IsAiAssistantEnabled && CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
             <button
               type="button"
               class="mj-docs-btn mj-docs-btn--accent"
@@ -4660,6 +4660,8 @@ export class MarkdownArtifactViewerComponent
   /** @deprecated Use {@link OpenEntityRecord}. */
   @Output() public openEntityRecord = this.OpenEntityRecord;
 
+  public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
+
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
@@ -5679,7 +5681,7 @@ export class MarkdownArtifactViewerComponent
         Placement: 'right',
         Category: 'writing',
         Order: 25,
-        Visible: canEdit,
+        Visible: ARTIFACT_AI_ASSISTANT_ENABLED && canEdit,
         Active: false,
         Accent: true,
         TestId: 'docs-ask-ai-btn',
@@ -8733,6 +8735,9 @@ export class MarkdownArtifactViewerComponent
     this.SlashMenuHighlightIndex = 0;
 
     if (cmd.Command === '/ai') {
+      if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+        return;
+      }
       let targetSeg =
         this.DocumentSegments.find((s) => s.SegmentID === this.ActiveSlashTargetSegmentID) ??
         this.DocumentSegments[0];
@@ -9483,6 +9488,9 @@ export class MarkdownArtifactViewerComponent
    * from the currently focused or `/ai`-invoked document segment.
    */
   public OpenAskAiAssistant(explicitSegment?: DocumentRenderSegment): void {
+    if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+      return;
+    }
     const targetSeg =
       explicitSegment ??
       this.DocumentSegments.find(

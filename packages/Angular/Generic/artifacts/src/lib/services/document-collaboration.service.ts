@@ -28,6 +28,7 @@ import {
   ComputeLineDiff as computeLineDiffFromUtil,
   type SequenceDiffOp,
 } from '../utils/line-diff';
+import { ARTIFACT_AI_ASSISTANT_ENABLED } from './artifact-ai-assistant-bridge';
 
 export type { SequenceDiffOp } from '../utils/line-diff';
 export type ArtifactEffectivePermissions = ResolvedArtifactPermissions;
@@ -3515,11 +3516,14 @@ export class DocumentCollaborationService implements OnDestroy {
    * Returns `/slash` commands filtered by an optional query string.
    */
   public GetSlashCommands(query = ''): DocumentSlashCommand[] {
+    const enabledCommands = ARTIFACT_AI_ASSISTANT_ENABLED
+      ? this.slashCommands
+      : this.slashCommands.filter((cmd) => cmd.Command !== '/ai');
     const trimmed = query.trim().toLowerCase().replace(/^\//, '');
     if (!trimmed) {
-      return [...this.slashCommands];
+      return [...enabledCommands];
     }
-    return this.slashCommands.filter(
+    return enabledCommands.filter(
       (cmd) =>
         cmd.Command.toLowerCase().includes(trimmed) ||
         cmd.Label.toLowerCase().includes(trimmed) ||

@@ -54,7 +54,7 @@ import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '.
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
-import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
+import { ARTIFACT_AI_ASSISTANT_ENABLED, RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
 import {
   DocumentCollaborationService,
@@ -281,16 +281,18 @@ export interface ResolvedSheetsToolbarItem {
               <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
               <span>{{ IsSelectedRangeProtected ? 'Protected' : 'Protect' }}</span>
             </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn mj-sheets-save-btn"
-              (click)="OpenAskAiForSpreadsheet()"
-              title="Open slide-in AI Assistant for this spreadsheet selection"
-              data-testid="sheets-ask-ai-quick-btn"
-            >
-              <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>Ask AI</span>
-            </button>
+            @if (IsAiAssistantEnabled) {
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-save-btn"
+                (click)="OpenAskAiForSpreadsheet()"
+                title="Open slide-in AI Assistant for this spreadsheet selection"
+                data-testid="sheets-ask-ai-quick-btn"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Ask AI</span>
+              </button>
+            }
           }
 
           @if (CanEdit) {
@@ -2715,6 +2717,7 @@ export class SpreadsheetArtifactViewerComponent
   extends BaseArtifactViewerPluginComponent
   implements OnInit, OnChanges, OnDestroy
 {
+  public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
   /**
    * Optional WebSocket URL (or base URL) override for `/collaboration/yjs` real-time Yjs room sync (§ 3.2).
    * When omitted, `DocumentCollaborationService` mints a single-use ticket via `GraphQLDataProvider`.
@@ -4358,7 +4361,7 @@ export class SpreadsheetArtifactViewerComponent
         Placement: 'right',
         TestId: 'sheets-ask-ai-btn',
         Active: false,
-        Visible: this.CanEdit,
+        Visible: ARTIFACT_AI_ASSISTANT_ENABLED && this.CanEdit,
       },
       {
         Key: 'run-ai-formulas',
@@ -5082,6 +5085,9 @@ export class SpreadsheetArtifactViewerComponent
    * worksheet and selected range values attached as context.
    */
   public OpenAskAiForSpreadsheet(): void {
+    if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+      return;
+    }
     const sheet = this.ActiveSheet;
     const rangeA1 = this.SelectedRange || this.ActiveCellAddress || 'A1';
     const rangeCells = sheet

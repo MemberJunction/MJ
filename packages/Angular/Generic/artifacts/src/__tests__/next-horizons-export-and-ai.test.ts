@@ -11,6 +11,7 @@ import { DocumentImportExportService } from '../lib/services/document-import-exp
 import { SlideDeckExportService } from '../lib/services/slide-deck-export.service';
 import { DocumentCollaborationService } from '../lib/services/document-collaboration.service';
 import {
+  ARTIFACT_AI_ASSISTANT_ENABLED,
   RegisterArtifactAiAssistantHandler,
   RequestArtifactAiAssistant,
   type ArtifactAskAiRequest,
@@ -209,18 +210,17 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
     expect(contentTypes).toContain('Extension="png"');
   });
 
-  it('exposes /ai slash command under AI Assistant without using the banned term', () => {
+  it('hides /ai slash command while inline Ask AI is turned off without using any Copilot branding', () => {
+    expect(ARTIFACT_AI_ASSISTANT_ENABLED).toBe(false);
     const cmds = collabService.GetSlashCommands('ai');
     const aiCmd = cmds.find((c) => c.Command === '/ai');
-    expect(aiCmd).toBeDefined();
-    expect(aiCmd?.Label).toBe('Ask AI');
-    expect(aiCmd?.Category).toBe('AI Assistant');
+    expect(aiCmd).toBeUndefined();
 
     const allCmdsJson = JSON.stringify(collabService.GetSlashCommands()).toLowerCase();
     expect(allCmdsJson).not.toContain('copilot');
   });
 
-  it('queues Ask AI requests until ng-conversations registers its handler and then delivers immediately', () => {
+  it('does not dispatch Ask AI requests while ARTIFACT_AI_ASSISTANT_ENABLED is false', () => {
     const received: ArtifactAskAiRequest[] = [];
     const req1: ArtifactAskAiRequest = {
       ArtifactID: 'art-1',
@@ -231,23 +231,11 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
       SuggestingModeDefault: true,
     };
 
-    const deliveredImmediately1 = RequestArtifactAiAssistant(req1);
-    expect(deliveredImmediately1).toBe(false);
-
     const unregister = RegisterArtifactAiAssistantHandler((req) => {
       received.push(req);
     });
-    expect(received).toHaveLength(1);
-    expect(received[0].ArtifactTitle).toBe('Q4 Plan');
-
-    const deliveredImmediately2 = RequestArtifactAiAssistant({
-      ...req1,
-      ArtifactKind: 'sheet',
-      ContextLabel: 'Summary!B2:D5',
-    });
-    expect(deliveredImmediately2).toBe(true);
-    expect(received).toHaveLength(2);
-    expect(received[1].ArtifactKind).toBe('sheet');
+    expect(RequestArtifactAiAssistant(req1)).toBe(false);
+    expect(received).toHaveLength(0);
 
     unregister();
   });

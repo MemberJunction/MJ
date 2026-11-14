@@ -137,8 +137,8 @@ describe('Next Horizons — Inline AI Overlay, Connected Drive Round-Trip Sync, 
         },
       };
 
-      const dispatched = RequestArtifactAiAssistant(req);
-      expect(dispatched).toBe(true);
+      expect(RequestArtifactAiAssistant(req)).toBe(false);
+      overlay.HandleArtifactAiRequest(req);
       expect(overlay.State).toBe('expanded');
       expect(overlay.ActiveArtifactAiRequest?.ArtifactTitle).toBe('Architecture Memo');
       expect(overlay.ArtifactAiSuggestingMode).toBe(true);

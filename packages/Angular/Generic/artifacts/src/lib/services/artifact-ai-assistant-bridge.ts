@@ -3,6 +3,12 @@ import { GetGlobalObjectStore } from '@memberjunction/global';
 const GLOBAL_STORE_BRIDGE_KEY = '___MJ_ARTIFACT_AI_ASSISTANT_BRIDGE__';
 
 /**
+ * Master toggle for the inline Docs / Slides / Sheets "Ask AI" toolbar button and `/ai` slash entry point.
+ * Temporarily turned off while the inline AI Assistant UX is redesigned for the next phase.
+ */
+export const ARTIFACT_AI_ASSISTANT_ENABLED = false;
+
+/**
  * Payload dispatched when a user invokes `/ai` or clicks "Ask AI" inside MJ Docs,
  * Slides, or Sheets so the slide-in AI Assistant opens with active editor context.
  */
@@ -81,6 +87,9 @@ export function RegisterArtifactAiAssistantHandler(handler: ArtifactAskAiHandler
  * slide-in AI Assistant widget (queuing briefly if the overlay mounts lazily).
  */
 export function RequestArtifactAiAssistant(request: ArtifactAskAiRequest): boolean {
+  if (!ARTIFACT_AI_ASSISTANT_ENABLED) {
+    return false;
+  }
   const bridge = getBridgeStore();
   if (bridge.Handler) {
     bridge.Handler(request);
