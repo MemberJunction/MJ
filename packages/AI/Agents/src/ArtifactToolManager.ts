@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { EscapeSQLString, GetGlobalObjectStore, IsValidUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GetGlobalObjectStore, IndexByUUID, IsValidUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
@@ -2689,14 +2689,14 @@ export class ArtifactToolManager {
     let resolvedEnvironmentId: string | null = null;
 
     if (requestedIdsRaw.length > 0) {
+      const entriesByArtifactId = IndexByUUID(
+        Array.from(this.artifacts.values()).filter((e): e is ArtifactEntry & { artifactId: string } => Boolean(e.artifactId)),
+        (e) => e.artifactId,
+      );
       for (const rawRef of requestedIdsRaw) {
         const ref = rawRef.trim();
         const byAlpha = this.artifacts.get(ref) ?? this.artifacts.get(ref.toUpperCase());
-        const matchedEntry =
-          byAlpha ??
-          Array.from(this.artifacts.values()).find(
-            (e) => Boolean(e.artifactId) && UUIDsEqual(e.artifactId!, ref),
-          );
+        const matchedEntry = byAlpha ?? entriesByArtifactId.Get(ref);
 
         if (matchedEntry) {
           if (matchedEntry.artifactId && this.contextUser && this.provider) {
@@ -2984,6 +2984,7 @@ export class ArtifactToolManager {
     const engine = ArtifactMetadataEngine.Instance;
     if (!engine.ArtifactTypes?.length) return [];
 
+    const typesById = IndexByUUID(engine.ArtifactTypes);
     const chain: BaseArtifactToolLibrary[] = [];
     const visited = new Set<string>();
     let current = engine.FindArtifactType(typeName);
@@ -2994,9 +2995,7 @@ export class ArtifactToolManager {
         const lib = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, className);
         if (lib) chain.push(lib);
       }
-      current = current.ParentID
-        ? engine.ArtifactTypes.find((t) => UUIDsEqual(t.ID, current!.ParentID!))
-        : undefined;
+      current = current.ParentID ? typesById.Get(current.ParentID) : undefined;
     }
     return chain;
   }

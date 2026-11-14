@@ -668,9 +668,23 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
             }
             const lines = seg.RawText.split('\n');
             for (const line of lines) {
-                const hm = /^(#{1,3})\s+(.+)$/.exec(line.trim());
-                if (hm) {
-                    sections.push(hm[2].trim());
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('#')) {
+                    let hashes = 0;
+                    while (hashes < trimmedLine.length && hashes < 4 && trimmedLine[hashes] === '#') {
+                        hashes++;
+                    }
+                    if (
+                        hashes >= 1 &&
+                        hashes <= 3 &&
+                        hashes < trimmedLine.length &&
+                        /\s/.test(trimmedLine[hashes])
+                    ) {
+                        const headingText = trimmedLine.slice(hashes + 1).trim();
+                        if (headingText) {
+                            sections.push(headingText);
+                        }
+                    }
                 }
             }
             const cleaned = seg.RawText.trim();
@@ -1147,8 +1161,20 @@ export class ArtifactSynthesisEngine extends BaseSingleton<ArtifactSynthesisEngi
 
     private stripJsonFence(raw: string): string {
         const trimmed = (raw ?? '').trim();
-        const fenceMatch = /^```(?:json|markdown|md)?\s*\n([\s\S]*?)\n```$/i.exec(trimmed);
-        return fenceMatch ? fenceMatch[1].trim() : trimmed;
+        if (!trimmed.startsWith('```') || !trimmed.endsWith('```')) {
+            return trimmed;
+        }
+        const firstNewline = trimmed.indexOf('\n');
+        const lastNewline = trimmed.lastIndexOf('\n');
+        if (firstNewline === -1 || lastNewline <= firstNewline) {
+            return trimmed;
+        }
+        const header = trimmed.slice(3, firstNewline).trim().toLowerCase();
+        const footer = trimmed.slice(lastNewline + 1).trim();
+        if ((header === '' || header === 'json' || header === 'markdown' || header === 'md') && footer === '```') {
+            return trimmed.slice(firstNewline + 1, lastNewline).trim();
+        }
+        return trimmed;
     }
 
     private toBulletSummary(summaryText: string): string {

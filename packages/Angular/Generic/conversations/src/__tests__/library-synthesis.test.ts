@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { EventEmitter, SimpleChange } from '@angular/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IMetadataProvider, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpProgress, UserInfo } from '@memberjunction/core';
-import { ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJArtifactEntity, ARTIFACT_SYNTHESIZE_FROM_SOURCES_KEY, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   LibraryCreationService,
   SynthesizeArtifactFromSourcesResult,
@@ -30,18 +30,23 @@ function makeItem(id: string, name: string, typeName: string, collectionIds: str
     Icon: 'fa-solid fa-file-lines',
     LatestVersionNumber: 1,
     LatestVersionId: `ver-${id}`,
+    VersionCount: 1,
     ContentMode: 'Text',
+    MimeType: null,
+    FileName: null,
+    ContentSnippet: '',
     UpdatedAt: new Date(),
-    CreatedAt: new Date(),
+    OwnerUserId: TEST_USER.ID,
+    OwnerName: TEST_USER.Name,
     CollectionIds: collectionIds,
     CollectionNames: [],
-    CanRead: true,
     CanEdit: true,
     CanDelete: false,
     CanShare: false,
     IsOwnedByCurrentUser: true,
     IsSharedWithMe: false,
     IsStarred: false,
+    ArtifactEntity: { ID: id, Name: name } as MJArtifactEntity,
   };
 }
 
@@ -146,13 +151,15 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
 
   it('LibraryCreateDialogComponent manages synthesize tab state, UserInfoEngine target preference, and submits SynthesizeArtifactFromSources', async () => {
     const dialog = Object.create(LibraryCreateDialogComponent.prototype) as LibraryCreateDialogComponent;
-    dialog.StarterTiles = [];
-    dialog.SynthesisTargetOptions = [
-      { Kind: 'presentation', Label: 'Presentation', Icon: 'fa-solid fa-person-chalkboard' },
-      { Kind: 'document', Label: 'Markdown Document', Icon: 'fa-solid fa-file-lines' },
-      { Kind: 'spreadsheet', Label: 'Excel Spreadsheet', Icon: 'fa-solid fa-table-cells' },
-    ];
-    dialog.SynthesisGoalPresets = [];
+    Object.assign(dialog, {
+      StarterTiles: [],
+      SynthesisTargetOptions: [
+        { Kind: 'presentation', Label: 'Presentation', Icon: 'fa-solid fa-person-chalkboard' },
+        { Kind: 'document', Label: 'Markdown Document', Icon: 'fa-solid fa-file-lines' },
+        { Kind: 'spreadsheet', Label: 'Excel Spreadsheet', Icon: 'fa-solid fa-table-cells' },
+      ],
+      SynthesisGoalPresets: [],
+    });
     dialog.SynthesisTargetKind = 'presentation';
     dialog.SynthesisGoal = 'Synthesize board KPIs';
     dialog.LinkChartsAndRanges = true;
@@ -185,14 +192,14 @@ describe('Library Multi-Artifact Synthesis UI & Service', () => {
     const internal = dialog as unknown as {
       creationService: {
         SynthesizeArtifactFromSources: typeof synthesizeSpy;
-        LoadEnabledArtifactTypes: () => Promise<[]>;
+        LoadEnabledArtifactTypes: () => Promise<readonly unknown[]>;
       };
       notifications: { CreateSimpleNotification: ReturnType<typeof vi.fn> };
       cdr: { detectChanges: ReturnType<typeof vi.fn> };
     };
     internal.creationService = {
       SynthesizeArtifactFromSources: synthesizeSpy,
-      LoadEnabledArtifactTypes: vi.fn(async () => []),
+      LoadEnabledArtifactTypes: vi.fn(async () => [] as readonly unknown[]),
     };
     internal.notifications = { CreateSimpleNotification: vi.fn() };
     internal.cdr = { detectChanges: vi.fn() };
