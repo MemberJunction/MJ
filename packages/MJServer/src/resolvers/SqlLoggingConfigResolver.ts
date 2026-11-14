@@ -446,9 +446,12 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     const fileName = input.fileName || `${SqlLoggingConfigResolver.LOG_FILE_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     const filePath = path.join(allowedDir, fileName);
 
-    // Validate file path is within allowed directory
+    // Validate file path is within allowed directory.
+    // SECURITY: a plain startsWith(allowedDir) admits sibling directories sharing the prefix
+    // (e.g. './logs/sql-evil' passes a './logs/sql' check); path.relative is the correct containment test.
     const resolvedPath = path.resolve(filePath);
-    if (!resolvedPath.startsWith(allowedDir)) {
+    const rel = path.relative(allowedDir, resolvedPath);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error('Invalid file path - must be within allowed log directory');
     }
 

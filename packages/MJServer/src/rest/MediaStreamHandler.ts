@@ -176,8 +176,10 @@ async function handleMediaRequest(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Never let CDNs or shared caches retain authorized media bytes.
+  // Never let CDNs or shared caches retain authorized media bytes, and never leak the
+  // token-bearing URL through the Referer header of subresources the media might trigger.
   res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Referrer-Policy', 'no-referrer');
 
   try {
     const source = await resolveFileBytesSource(fileId);
@@ -269,6 +271,30 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
 }
 
 /**
+ * SECURITY: whether a content type is safe to render inline on the API origin. `Files.ContentType`
+ * is caller-controlled at upload time, so serving e.g. `text/html` or `image/svg+xml` with
+ * `Content-Disposition: inline` lets an uploaded file run script on the API origin when its
+ * tokenized /media URL is opened in a browser (stored XSS). Only passive media types render
+ * inline; everything else — SVG included, because it can carry script — downloads as an attachment.
+ */
+function isInlineSafeContentType(contentType: string): boolean {
+  const normalized = (contentType.split(';')[0] ?? '').trim().toLowerCase();
+  if (normalized === 'image/svg+xml') {
+    return false;
+  }
+  if (normalized.startsWith('image/') || normalized.startsWith('video/') || normalized.startsWith('audio/')) {
+    return true;
+  }
+  return normalized === 'application/pdf' || normalized === 'text/plain';
+}
+
+/** Builds the Content-Disposition header: inline only for inline-safe types, else attachment. */
+function buildContentDisposition(contentType: string, fileName: string): string {
+  const disposition = isInlineSafeContentType(contentType) ? 'inline' : 'attachment';
+  return `${disposition}; filename="${encodeURIComponent(fileName)}"`;
+}
+
+/**
  * Streams the object honoring an HTTP `Range` request. Prefers true streaming
  * (`GetObjectStream`) for streaming-capable drivers; gracefully falls back to a
  * full buffered `GetObject` (slicing for Range) for drivers that don't.
@@ -293,9 +319,10 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
 
   const result = await source.driver.GetObjectStream({ fullPath: source.providerKey, Range: streamRange });
 
+  const effectiveContentType = result.ContentType ?? source.contentType;
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Content-Type', result.ContentType ?? source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Type', effectiveContentType);
+  res.setHeader('Content-Disposition', buildContentDisposition(effectiveContentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
@@ -329,7 +356,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
-  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('Content-Disposition', buildContentDisposition(source.contentType, source.fileName));
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {

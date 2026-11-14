@@ -14,14 +14,16 @@
  *    - `X-Forwarded-For` (if present) contains only loopback addresses.
  *    - `Host` header is `localhost`, `127.0.0.1`, or `::1`.
  *    - `Origin` / `Referer` headers (if present) resolve to `localhost`, `127.0.0.1`, or `::1`.
- *    - Socket remote address is loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) or local
- *      Docker bridge/host-gateway when no external `X-Forwarded-For` is present.
+ *    - Socket remote address is loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`). Local Docker
+ *      bridge/host-gateway source addresses are accepted ONLY when the operator explicitly opts
+ *      in with `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` and no external `X-Forwarded-For` is
+ *      present — the presence of `/.dockerenv` alone is never trusted, because a containerized
+ *      API published on 0.0.0.0 would otherwise accept dev-login from the network.
  *    Any request failing these checks is denied with `403 Forbidden` and logged.
  *
  * @module @memberjunction/server/auth/localDevAuth
  */
 
-import * as fs from 'node:fs';
 import { Router, json, type Request, type Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import {
@@ -106,14 +108,15 @@ export function IsLoopbackAddress(rawIp: string | undefined, allowDockerBridge: 
   return false;
 }
 
-function isRunningInsideContainer(env: NodeJS.ProcessEnv): boolean {
-  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'true') {
-    return true;
-  }
-  if (env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'false') {
-    return false;
-  }
-  return fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
+/**
+ * Whether the Docker bridge/host-gateway carve-outs in {@link IsLoopbackAddress} may apply.
+ *
+ * SECURITY: this is an explicit opt-in (`MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true`) — never inferred
+ * from container markers like `/.dockerenv`. Inferring it meant any containerized API published on
+ * 0.0.0.0 auto-trusted Docker bridge source IPs, so /auth/dev-login was reachable from the network.
+ */
+function isDockerBridgeExplicitlyAllowed(env: NodeJS.ProcessEnv): boolean {
+  return env.MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE === 'true';
 }
 
 /** Extracts the hostname (without port) from a raw HTTP `Host` header value. */
@@ -239,14 +242,15 @@ export function VerifyLocalhostRequest(
     }
   }
 
-  // 5. Inspect socket remote address (allow Docker local bridge ONLY when running in a container and no proxy header is present)
+  // 5. Inspect socket remote address (allow Docker local bridge ONLY when explicitly opted in via
+  //    MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true and no proxy header is present)
   const hasProxyHeader = Boolean(
     (xffValue && xffValue.trim().length > 0) ||
     (forwardedVal && forwardedVal.trim().length > 0) ||
     req.headers['x-real-ip'] ||
     req.headers['cf-connecting-ip']
   );
-  const allowDockerBridge = !hasProxyHeader && isRunningInsideContainer(env);
+  const allowDockerBridge = !hasProxyHeader && isDockerBridgeExplicitlyAllowed(env);
   const remoteAddress = req.socket?.remoteAddress || req.ip;
   if (!IsLoopbackAddress(remoteAddress, allowDockerBridge)) {
     return {

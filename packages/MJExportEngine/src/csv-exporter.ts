@@ -126,6 +126,15 @@ export class CSVExporter extends BaseExporter {
       return JSON.stringify(value);
     }
 
+    // SECURITY: neutralize CSV/formula injection. A stored string beginning with = + - @ (or a
+    // tab/CR) is interpreted as a formula by Excel/Sheets when the export is opened, so a value
+    // like "=HYPERLINK(...)" can compromise whoever opens the file. Prefixing a single quote makes
+    // the cell inert text. Applies to STRING values only — genuine numbers, dates, and booleans
+    // were already handled above and are never formulas.
+    if (typeof value === 'string' && /^[=+\-@\t\r]/.test(value)) {
+      return `'${value}`;
+    }
+
     return String(value);
   }
 }

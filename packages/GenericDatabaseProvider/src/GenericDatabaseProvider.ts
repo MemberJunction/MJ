@@ -8483,9 +8483,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
             const quotes = pk.NeedsQuotes ? "'" : '';
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
+            // SECURITY: an unquoted (numeric/boolean) key value is spliced into the SQL text raw, so a
+            // client-supplied composite-key string like "1 OR 1=1" must never pass through. Accept real
+            // numbers/booleans as-is; anything else must be a plain numeric literal.
+            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : this.renderUnquotedKeyLiteral(val.Value, pk.Name, entityInfo.Name);
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
         }).join(' AND ');
+    }
+
+    /**
+     * Renders a NON-quoted primary-key value (numeric/boolean column) as a SQL literal. A finite
+     * number or boolean is rendered directly; any other value must be a string whose trimmed form is
+     * a plain numeric literal, or the key is refused. This keeps attacker-controlled key strings from
+     * reaching SQL text unescaped (SQL injection hardening — see BuildPrimaryKeyWhereClause).
+     */
+    private renderUnquotedKeyLiteral(raw: unknown, fieldName: string, entityName: string): string {
+        if ((typeof raw === 'number' && Number.isFinite(raw)) || typeof raw === 'boolean') {
+            return String(raw);
+        }
+        const trimmed = String(raw).trim();
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+            return trimmed;
+        }
+        throw new Error(`Invalid value for non-quoted primary key ${fieldName} on entity ${entityName}: expected a numeric literal`);
     }
 
     /**
