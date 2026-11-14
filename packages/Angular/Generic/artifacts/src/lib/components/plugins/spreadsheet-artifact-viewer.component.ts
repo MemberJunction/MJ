@@ -111,6 +111,77 @@ export const DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS: readonly SheetsToolbarItemKe
   'add-chart',
 ];
 
+export const SHEETS_CHART_SERIES_COLORS: readonly string[] = [
+  'var(--mj-brand-primary, #3b82f6)',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+];
+
+export interface ActiveChartSeriesItem {
+  Index: number;
+  Name: string;
+  Values: number[];
+  Color: string;
+}
+
+export interface ChartCategoryTick {
+  Index: number;
+  X: number;
+  ShortLabel: string;
+  FullLabel: string;
+  Rotated: boolean;
+}
+
+export interface ChartBarRect {
+  Key: string;
+  SeriesIndex: number;
+  CategoryIndex: number;
+  SeriesName: string;
+  Category: string;
+  X: number;
+  Y: number;
+  Width: number;
+  Height: number;
+  Color: string;
+  Value: number;
+  FormattedValue: string;
+}
+
+export interface ChartLinePoint {
+  Index: number;
+  X: number;
+  Y: number;
+  LabelY: number;
+  Category: string;
+  Value: number;
+  FormattedValue: string;
+}
+
+export interface ChartLineSeriesItem {
+  SeriesIndex: number;
+  Name: string;
+  Color: string;
+  PolylinePoints: string;
+  AreaPath: string;
+  ShowPointLabels: boolean;
+  Points: ChartLinePoint[];
+}
+
+export interface ChartPieSlice {
+  Index: number;
+  Category: string;
+  ShortCategory: string;
+  RawValue: number;
+  FormattedValue: string;
+  PercentLabel: string;
+  Color: string;
+  Path: string;
+  IsFullCircle: boolean;
+}
+
 export interface ResolvedSheetsToolbarItem {
   Key: SheetsToolbarItemKey;
   Label: string;
@@ -929,53 +1000,236 @@ export interface ResolvedSheetsToolbarItem {
                               >
                                 <i class="fa-solid fa-share-from-square"></i> Embed in Slide/Doc
                               </button>
+                              @if (CanEdit) {
+                                <button
+                                  type="button"
+                                  class="mj-sheets-mini-btn"
+                                  (click)="RemoveRangeChart(chart)"
+                                  title="Remove chart"
+                                  [attr.data-testid]="'sheet-chart-remove-' + chart.ChartID"
+                                >
+                                  <i class="fa-solid fa-xmark"></i>
+                                </button>
+                              }
                             </div>
                           </div>
 
                           @if (dataset && dataset.Categories.length > 0 && dataset.Series.length > 0) {
+                            @if (dataset.Series.length > 1 && chart.ChartType !== 'pie') {
+                              <div class="mj-sheets-chart-series-bar">
+                                @for (s of dataset.Series; track s.Name; let sIdx = $index) {
+                                  <button
+                                    type="button"
+                                    class="mj-sheets-series-pill"
+                                    [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
+                                    (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
+                                  >
+                                    <span
+                                      class="mj-sheets-series-dot"
+                                      [style.background]="GetChartSeriesColor(sIdx)"
+                                    ></span>
+                                    <span>{{ s.Name }}</span>
+                                  </button>
+                                }
+                                <button
+                                  type="button"
+                                  class="mj-sheets-series-pill"
+                                  [class.active]="IsAllChartSeriesSelected(chart, dataset)"
+                                  (click)="SetChartSeriesSelection(chart.ChartID, 'all')"
+                                >
+                                  <span>All</span>
+                                </button>
+                              </div>
+                            } @else if (dataset.Series.length > 1 && chart.ChartType === 'pie') {
+                              <div class="mj-sheets-chart-series-bar">
+                                @for (s of dataset.Series; track s.Name; let sIdx = $index) {
+                                  <button
+                                    type="button"
+                                    class="mj-sheets-series-pill"
+                                    [class.active]="IsChartSeriesSelected(chart, dataset, sIdx)"
+                                    (click)="SetChartSeriesSelection(chart.ChartID, sIdx)"
+                                  >
+                                    <span
+                                      class="mj-sheets-series-dot"
+                                      [style.background]="GetChartSeriesColor(sIdx)"
+                                    ></span>
+                                    <span>{{ s.Name }}</span>
+                                  </button>
+                                }
+                              </div>
+                            }
+
                             <div
                               class="mj-sheets-chart-Stage"
                               [attr.data-testid]="'sheet-chart-svg-' + chart.ChartID"
                             >
-                              <svg viewBox="0 0 360 150" class="mj-sheets-chart-svg">
-                                @for (cat of dataset.Categories; track cat; let idx = $index) {
-                                  @let barVal = dataset.Series[0].Values[idx];
-                                  @let maxVal = GetChartMaxValue(dataset);
-                                  @let barHeight = maxVal > 0 ? (barVal / maxVal) * 100 : 0;
-                                  @let barWidth = 280 / dataset.Categories.length - 10;
-                                  @let xPos = 45 + idx * (280 / dataset.Categories.length);
-                                  @let yPos = 120 - barHeight;
-                                  <g>
-                                    <rect
-                                      [attr.x]="xPos"
-                                      [attr.y]="yPos"
-                                      [attr.width]="barWidth > 8 ? barWidth : 8"
-                                      [attr.height]="barHeight"
-                                      rx="3"
-                                      fill="var(--mj-brand-primary)"
-                                    />
-                                    <text
-                                      [attr.x]="xPos + (barWidth > 8 ? barWidth / 2 : 4)"
-                                      [attr.y]="yPos - 4"
-                                      text-anchor="middle"
-                                      font-size="9"
-                                      fill="var(--mj-text-primary)"
-                                      [attr.data-testid]="'sheet-chart-val-' + chart.ChartID + '-' + idx"
-                                    >
-                                      {{ barVal }}
+                              @let activeSeries = GetActiveChartSeries(chart, dataset);
+                              @let maxVal = GetChartMaxValueForSeries(activeSeries);
+                              <svg viewBox="0 0 380 180" class="mj-sheets-chart-svg">
+                                @if (chart.ChartType === 'pie') {
+                                  @let pieSlices = GetChartPieSlices(chart, dataset, activeSeries);
+                                  @if (pieSlices.length === 0) {
+                                    <text x="190" y="92" text-anchor="middle" font-size="11" fill="var(--mj-text-secondary)">
+                                      All values are 0 in this series.
                                     </text>
-                                    <text
-                                      [attr.x]="xPos + (barWidth > 8 ? barWidth / 2 : 4)"
-                                      y="136"
-                                      text-anchor="middle"
-                                      font-size="9"
-                                      fill="var(--mj-text-secondary)"
-                                    >
-                                      {{ cat }}
-                                    </text>
-                                  </g>
+                                  } @else {
+                                    @for (slice of pieSlices; track slice.Index) {
+                                      <g>
+                                        @if (slice.IsFullCircle) {
+                                          <circle cx="96" cy="90" r="62" [attr.fill]="slice.Color">
+                                            <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
+                                          </circle>
+                                        } @else {
+                                          <path [attr.d]="slice.Path" [attr.fill]="slice.Color" stroke="var(--mj-bg-surface)" stroke-width="1.5">
+                                            <title>{{ slice.Category }}: {{ slice.RawValue }} ({{ slice.PercentLabel }})</title>
+                                          </path>
+                                        }
+                                        @if (slice.Index < 7) {
+                                          <rect
+                                            x="174"
+                                            [attr.y]="22 + slice.Index * 21"
+                                            width="9"
+                                            height="9"
+                                            rx="2"
+                                            [attr.fill]="slice.Color"
+                                          />
+                                          <text
+                                            x="188"
+                                            [attr.y]="30 + slice.Index * 21"
+                                            font-size="9.5"
+                                            fill="var(--mj-text-primary)"
+                                          >
+                                            {{ slice.ShortCategory }} · {{ slice.PercentLabel }} ({{ slice.FormattedValue }})
+                                          </text>
+                                        }
+                                      </g>
+                                    }
+                                  }
+                                } @else {
+                                  <!-- Cartesian gridlines and Y-axis ticks -->
+                                  <line x1="44" y1="18" x2="366" y2="18" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
+                                  <line x1="44" y1="79" x2="366" y2="79" stroke="var(--mj-border-subtle)" stroke-dasharray="2,2" />
+                                  <line x1="44" y1="140" x2="366" y2="140" stroke="var(--mj-border-default)" />
+                                  <text x="40" y="21" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+                                    {{ FormatChartValue(maxVal) }}
+                                  </text>
+                                  <text x="40" y="82" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+                                    {{ FormatChartValue(maxVal / 2) }}
+                                  </text>
+                                  <text x="40" y="143" text-anchor="end" font-size="8.5" fill="var(--mj-text-secondary)">
+                                    0
+                                  </text>
+
+                                  @if (chart.ChartType === 'line' || chart.ChartType === 'area') {
+                                    @let lineSeries = GetChartLineSeries(dataset, activeSeries, maxVal);
+                                    @for (ls of lineSeries; track ls.SeriesIndex) {
+                                      <g>
+                                        @if (chart.ChartType === 'area' && ls.AreaPath) {
+                                          <path [attr.d]="ls.AreaPath" [attr.fill]="ls.Color" fill-opacity="0.2" />
+                                        }
+                                        @if (ls.PolylinePoints) {
+                                          <polyline
+                                            fill="none"
+                                            [attr.stroke]="ls.Color"
+                                            stroke-width="2.2"
+                                            stroke-linejoin="round"
+                                            stroke-linecap="round"
+                                            [attr.points]="ls.PolylinePoints"
+                                          />
+                                        }
+                                        @for (pt of ls.Points; track pt.Index) {
+                                          <g>
+                                            <circle
+                                              [attr.cx]="pt.X"
+                                              [attr.cy]="pt.Y"
+                                              r="3.8"
+                                              [attr.fill]="ls.Color"
+                                              stroke="var(--mj-bg-surface)"
+                                              stroke-width="1.4"
+                                            >
+                                              <title>{{ pt.Category }} · {{ ls.Name }}: {{ pt.Value }}</title>
+                                            </circle>
+                                            @if (ls.ShowPointLabels) {
+                                              <text
+                                                [attr.x]="pt.X"
+                                                [attr.y]="pt.LabelY"
+                                                text-anchor="middle"
+                                                font-size="8.5"
+                                                fill="var(--mj-text-primary)"
+                                                [attr.data-testid]="ls.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + pt.Index : null"
+                                              >
+                                                {{ pt.FormattedValue }}
+                                              </text>
+                                            }
+                                          </g>
+                                        }
+                                      </g>
+                                    }
+                                    @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
+                                      <text
+                                        [attr.x]="xt.X"
+                                        y="153"
+                                        [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
+                                        [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
+                                        font-size="8.5"
+                                        fill="var(--mj-text-secondary)"
+                                      >
+                                        <title>{{ xt.FullLabel }}</title>
+                                        {{ xt.ShortLabel }}
+                                      </text>
+                                    }
+                                  } @else {
+                                    <!-- Bar Chart -->
+                                    @let bars = GetChartBarRects(chart, dataset, activeSeries, maxVal);
+                                    @for (bar of bars; track bar.Key) {
+                                      <g>
+                                        <rect
+                                          [attr.x]="bar.X"
+                                          [attr.y]="bar.Y"
+                                          [attr.width]="bar.Width"
+                                          [attr.height]="bar.Height"
+                                          rx="2.5"
+                                          [attr.fill]="bar.Color"
+                                        >
+                                          <title>{{ bar.Category }} · {{ bar.SeriesName }}: {{ bar.Value }}</title>
+                                        </rect>
+                                        @if (bars.length <= 12) {
+                                          <text
+                                            [attr.x]="bar.X + bar.Width / 2"
+                                            [attr.y]="bar.Y > 14 ? bar.Y - 3 : 12"
+                                            text-anchor="middle"
+                                            font-size="8.5"
+                                            fill="var(--mj-text-primary)"
+                                            [attr.data-testid]="bar.SeriesIndex === 0 ? 'sheet-chart-val-' + chart.ChartID + '-' + bar.CategoryIndex : null"
+                                          >
+                                            {{ bar.FormattedValue }}
+                                          </text>
+                                        }
+                                      </g>
+                                    }
+                                    @for (xt of GetChartCategoryTicks(dataset.Categories); track xt.Index) {
+                                      <text
+                                        [attr.x]="xt.X"
+                                        y="153"
+                                        [attr.text-anchor]="xt.Rotated ? 'end' : 'middle'"
+                                        [attr.transform]="xt.Rotated ? 'rotate(-20 ' + xt.X + ' 153)' : null"
+                                        font-size="8.5"
+                                        fill="var(--mj-text-secondary)"
+                                      >
+                                        <title>{{ xt.FullLabel }}</title>
+                                        {{ xt.ShortLabel }}
+                                      </text>
+                                    }
+                                  }
                                 }
                               </svg>
+                            </div>
+                          } @else {
+                            <div class="mj-sheets-chart-empty" data-testid="sheet-chart-empty-hint">
+                              <i class="fa-solid fa-circle-info"></i>
+                              <span>
+                                No numeric values found in <code>{{ chart.SourceRange }}</code>. Select a range containing at least one numeric column (e.g., Revenue or Units).
+                              </span>
                             </div>
                           }
                         </div>
@@ -2376,10 +2630,59 @@ export interface ResolvedSheetsToolbarItem {
 
       .mj-sheets-chart-svg {
         width: 100%;
-        height: 145px;
+        height: 180px;
         background: var(--mj-bg-surface);
         border-radius: 6px;
         border: 1px solid var(--mj-border-subtle);
+      }
+
+      .mj-sheets-chart-series-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .mj-sheets-series-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        font-size: 11px;
+        border-radius: 999px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-secondary);
+        cursor: pointer;
+      }
+
+      .mj-sheets-series-pill.active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-text-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+      }
+
+      .mj-sheets-series-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .mj-sheets-chart-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 110px;
+        padding: 12px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--mj-text-secondary);
+        background: var(--mj-bg-surface);
+        border-radius: 6px;
+        border: 1px dashed var(--mj-border-default);
       }
 
       .mj-sheets-ole-host {
@@ -5289,11 +5592,103 @@ export class SpreadsheetArtifactViewerComponent
   // Range Charts (§ 6.3, Accept #5)
   // ---------------------------------------------------------------------------
 
+  public SelectedChartSeriesByChartID: Record<string, number | 'all'> = {};
+
+  private hasCellDisplayValue(cellAddr: string): boolean {
+    const cell = this.ActiveSheet?.Cells?.[cellAddr];
+    if (!cell) return false;
+    const raw = cell.ComputedValue ?? cell.RawValue;
+    return raw !== null && raw !== undefined && String(raw).trim() !== '';
+  }
+
+  private detectContiguousRangeForChart(anchorAddress: string): string {
+    const cells = this.ActiveSheet?.Cells;
+    if (!cells) {
+      return 'A1:B5';
+    }
+    const anchor = ParseCellAddress(anchorAddress) ?? { col: 1, row: 1 };
+    let minCol = anchor.col;
+    let maxCol = anchor.col;
+    let minRow = anchor.row;
+    let maxRow = anchor.row;
+
+    if (this.hasCellDisplayValue(FormatCellAddress(anchor.row, anchor.col))) {
+      // Expand bounds across contiguous populated rows/columns around the active cell
+      let changed = true;
+      while (changed) {
+        changed = false;
+        if (minRow > 1) {
+          for (let c = minCol; c <= maxCol; c++) {
+            if (this.hasCellDisplayValue(FormatCellAddress(minRow - 1, c))) {
+              minRow--;
+              changed = true;
+              break;
+            }
+          }
+        }
+        for (let c = minCol; c <= maxCol; c++) {
+          if (this.hasCellDisplayValue(FormatCellAddress(maxRow + 1, c))) {
+            maxRow++;
+            changed = true;
+            break;
+          }
+        }
+        if (minCol > 1) {
+          for (let r = minRow; r <= maxRow; r++) {
+            if (this.hasCellDisplayValue(FormatCellAddress(r, minCol - 1))) {
+              minCol--;
+              changed = true;
+              break;
+            }
+          }
+        }
+        for (let r = minRow; r <= maxRow; r++) {
+          if (this.hasCellDisplayValue(FormatCellAddress(r, maxCol + 1))) {
+            maxCol++;
+            changed = true;
+            break;
+          }
+        }
+      }
+      if (maxCol > minCol || maxRow > minRow) {
+        return `${FormatCellAddress(minRow, minCol)}:${FormatCellAddress(maxRow, maxCol)}`;
+      }
+    }
+
+    // Fallback: scan all populated cells on the active sheet
+    let foundAny = false;
+    let sheetMinCol = Number.MAX_SAFE_INTEGER;
+    let sheetMaxCol = 0;
+    let sheetMinRow = Number.MAX_SAFE_INTEGER;
+    let sheetMaxRow = 0;
+    for (const addr of Object.keys(cells)) {
+      if (!this.hasCellDisplayValue(addr)) continue;
+      const parsed = ParseCellAddress(addr);
+      if (!parsed) continue;
+      foundAny = true;
+      if (parsed.col < sheetMinCol) sheetMinCol = parsed.col;
+      if (parsed.col > sheetMaxCol) sheetMaxCol = parsed.col;
+      if (parsed.row < sheetMinRow) sheetMinRow = parsed.row;
+      if (parsed.row > sheetMaxRow) sheetMaxRow = parsed.row;
+    }
+    if (foundAny && (sheetMaxCol > sheetMinCol || sheetMaxRow > sheetMinRow)) {
+      return `${FormatCellAddress(sheetMinRow, sheetMinCol)}:${FormatCellAddress(sheetMaxRow, sheetMaxCol)}`;
+    }
+    return 'A1:B5';
+  }
+
   public AddRangeChartFromSelection(): void {
     if (!this.CanEdit) return;
-    const range = this.SelectedRange.includes(':') ? this.SelectedRange : 'A1:B5';
+    const range = this.SelectedRange.includes(':')
+      ? this.SelectedRange
+      : this.detectContiguousRangeForChart(this.ActiveCellAddress || 'A1');
+    const existingIds = new Set((this.ActiveSheet.Charts ?? []).map((c) => c.ChartID));
+    let nextNum = (this.ActiveSheet.Charts?.length ?? 0) + 1;
+    while (existingIds.has(`chart-${nextNum}`)) {
+      nextNum++;
+    }
     const chartSpec: SpreadsheetChartSpec = {
-      ChartID: `chart-${(this.ActiveSheet.Charts?.length ?? 0) + 1}`,
+      ChartID: `chart-${nextNum}`,
       Title: `${this.ActiveSheet.Name} (${range})`,
       ChartType: 'bar',
       SheetID: this.ActiveSheet.SheetID,
@@ -5310,12 +5705,109 @@ export class SpreadsheetArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public RemoveRangeChart(chart: SpreadsheetChartSpec): void {
+    if (!this.CanEdit || !this.ActiveSheet.Charts) return;
+    this.ActiveSheet.Charts = this.ActiveSheet.Charts.filter((c) => c.ChartID !== chart.ChartID);
+    delete this.SelectedChartSeriesByChartID[chart.ChartID];
+    this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.cdr.markForCheck();
+  }
+
   public GetChartDataset(chart: SpreadsheetChartSpec): SpreadsheetChartDataset | null {
     return SpreadsheetEngine.Instance.ExtractChartDataset(
       this.Workbook,
       chart.SheetID || this.ActiveSheet.SheetID,
       chart.ChartID || chart.SourceRange,
     );
+  }
+
+  public GetChartSeriesColor(index: number): string {
+    return SHEETS_CHART_SERIES_COLORS[index % SHEETS_CHART_SERIES_COLORS.length];
+  }
+
+  private getResolvedSeriesMode(
+    chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+  ): number | 'all' {
+    const explicit = this.SelectedChartSeriesByChartID[chart.ChartID];
+    if (chart.ChartType === 'pie') {
+      if (typeof explicit === 'number' && dataset.Series[explicit]) {
+        return explicit;
+      }
+      return 0;
+    }
+    if (explicit === 'all') {
+      return 'all';
+    }
+    if (typeof explicit === 'number' && dataset.Series[explicit]) {
+      return explicit;
+    }
+    if (dataset.Series.length <= 1) {
+      return 0;
+    }
+    // When series differ by >20x in magnitude (e.g., Revenue ~1.3M vs Units ~850),
+    // default to the primary series so the chart stays readable; user can click pills to switch/compare.
+    const seriesMaxes = dataset.Series.map((s) =>
+      s.Values.reduce((acc, v) => (Math.abs(v) > acc ? Math.abs(v) : acc), 0),
+    ).filter((m) => m > 0);
+    if (seriesMaxes.length >= 2) {
+      const biggest = Math.max(...seriesMaxes);
+      const smallest = Math.min(...seriesMaxes);
+      if (biggest / smallest > 20) {
+        return 0;
+      }
+    }
+    return 'all';
+  }
+
+  public IsChartSeriesSelected(
+    chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+    seriesIndex: number,
+  ): boolean {
+    const mode = this.getResolvedSeriesMode(chart, dataset);
+    return mode === seriesIndex;
+  }
+
+  public IsAllChartSeriesSelected(
+    chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+  ): boolean {
+    return this.getResolvedSeriesMode(chart, dataset) === 'all';
+  }
+
+  public SetChartSeriesSelection(chartId: string, selection: number | 'all'): void {
+    this.SelectedChartSeriesByChartID[chartId] = selection;
+    this.cdr.markForCheck();
+  }
+
+  public GetActiveChartSeries(
+    chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+  ): ActiveChartSeriesItem[] {
+    if (dataset.Series.length === 0) {
+      return [];
+    }
+    const mode = this.getResolvedSeriesMode(chart, dataset);
+    if (mode === 'all' && chart.ChartType !== 'pie') {
+      return dataset.Series.map((s, idx) => ({
+        Index: idx,
+        Name: s.Name,
+        Values: s.Values,
+        Color: this.GetChartSeriesColor(idx),
+      }));
+    }
+    const chosenIdx = typeof mode === 'number' && dataset.Series[mode] ? mode : 0;
+    const chosen = dataset.Series[chosenIdx];
+    return [
+      {
+        Index: chosenIdx,
+        Name: chosen.Name,
+        Values: chosen.Values,
+        Color: this.GetChartSeriesColor(chosenIdx),
+      },
+    ];
   }
 
   public GetChartMaxValue(dataset: SpreadsheetChartDataset): number {
@@ -5326,6 +5818,225 @@ export class SpreadsheetArtifactViewerComponent
       }
     }
     return max > 0 ? max : 1;
+  }
+
+  public GetChartMaxValueForSeries(seriesList: ActiveChartSeriesItem[]): number {
+    let max = 0;
+    for (const s of seriesList) {
+      for (const v of s.Values) {
+        if (v > max) max = v;
+      }
+    }
+    return max > 0 ? max : 1;
+  }
+
+  public FormatChartValue(value: number): string {
+    if (!Number.isFinite(value)) return '0';
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000_000) {
+      return `${(value / 1_000_000_000).toFixed(abs >= 10_000_000_000 ? 1 : 2).replace(/\.0+$/, '')}B`;
+    }
+    if (abs >= 1_000_000) {
+      return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 1 : 2).replace(/\.0+$/, '')}M`;
+    }
+    if (abs >= 1_000) {
+      return `${(value / 1_000).toFixed(abs >= 100_000 ? 0 : 1).replace(/\.0$/, '')}K`;
+    }
+    if (Number.isInteger(value)) {
+      return String(value);
+    }
+    return value.toFixed(1).replace(/\.0$/, '');
+  }
+
+  public GetChartCategoryTicks(categories: string[]): ChartCategoryTick[] {
+    const count = categories.length;
+    if (count === 0) return [];
+    const plotLeft = 48;
+    const plotRight = 362;
+    const plotWidth = plotRight - plotLeft;
+    const rotated = count >= 5;
+    const maxLen = count >= 8 ? 11 : count >= 5 ? 14 : 18;
+    return categories.map((cat, idx) => {
+      const slotWidth = plotWidth / count;
+      const x = plotLeft + slotWidth * idx + slotWidth / 2;
+      const shortLabel = cat.length > maxLen ? `${cat.slice(0, maxLen - 1)}…` : cat;
+      return {
+        Index: idx,
+        X: Math.round(x * 10) / 10,
+        ShortLabel: shortLabel,
+        FullLabel: cat,
+        Rotated: rotated,
+      };
+    });
+  }
+
+  public GetChartBarRects(
+    chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+    activeSeries: ActiveChartSeriesItem[],
+    maxVal: number,
+  ): ChartBarRect[] {
+    const categories = dataset.Categories;
+    const catCount = categories.length;
+    const seriesCount = activeSeries.length;
+    if (catCount === 0 || seriesCount === 0) return [];
+
+    const plotLeft = 48;
+    const plotRight = 362;
+    const plotTop = 18;
+    const plotBottom = 140;
+    const plotWidth = plotRight - plotLeft;
+    const plotHeight = plotBottom - plotTop;
+    const groupWidth = plotWidth / catCount;
+    const groupPadding = Math.min(10, groupWidth * 0.18);
+    const usableGroupWidth = Math.max(8, groupWidth - groupPadding * 2);
+    const barGap = seriesCount > 1 ? 2 : 0;
+    const barWidth = Math.max(4, (usableGroupWidth - barGap * (seriesCount - 1)) / seriesCount);
+
+    const rects: ChartBarRect[] = [];
+    for (let cIdx = 0; cIdx < catCount; cIdx++) {
+      const groupStartX = plotLeft + cIdx * groupWidth + groupPadding;
+      for (let sIdx = 0; sIdx < seriesCount; sIdx++) {
+        const s = activeSeries[sIdx];
+        const val = s.Values[cIdx] ?? 0;
+        const clamped = Math.max(0, val);
+        const height = maxVal > 0 ? (clamped / maxVal) * plotHeight : 0;
+        const x = groupStartX + sIdx * (barWidth + barGap);
+        const y = plotBottom - height;
+        rects.push({
+          Key: `${chart.ChartID}-${s.Index}-${cIdx}`,
+          SeriesIndex: sIdx,
+          CategoryIndex: cIdx,
+          SeriesName: s.Name,
+          Category: categories[cIdx],
+          X: Math.round(x * 10) / 10,
+          Y: Math.round(y * 10) / 10,
+          Width: Math.round(barWidth * 10) / 10,
+          Height: Math.round(height * 10) / 10,
+          Color: s.Color,
+          Value: val,
+          FormattedValue: this.FormatChartValue(val),
+        });
+      }
+    }
+    return rects;
+  }
+
+  public GetChartLineSeries(
+    dataset: SpreadsheetChartDataset,
+    activeSeries: ActiveChartSeriesItem[],
+    maxVal: number,
+  ): ChartLineSeriesItem[] {
+    const categories = dataset.Categories;
+    const catCount = categories.length;
+    if (catCount === 0 || activeSeries.length === 0) return [];
+
+    const plotLeft = 48;
+    const plotRight = 362;
+    const plotTop = 18;
+    const plotBottom = 140;
+    const plotWidth = plotRight - plotLeft;
+    const plotHeight = plotBottom - plotTop;
+    const slotWidth = plotWidth / catCount;
+
+    return activeSeries.map((s, sIdx) => {
+      const points: ChartLinePoint[] = categories.map((cat, idx) => {
+        const val = s.Values[idx] ?? 0;
+        const clamped = Math.max(0, val);
+        const ratio = maxVal > 0 ? clamped / maxVal : 0;
+        const x = plotLeft + slotWidth * idx + slotWidth / 2;
+        const y = plotBottom - ratio * plotHeight;
+        const labelY = y - 7 >= 12 ? y - 7 : y + 12;
+        return {
+          Index: idx,
+          X: Math.round(x * 10) / 10,
+          Y: Math.round(y * 10) / 10,
+          LabelY: Math.round(labelY * 10) / 10,
+          Category: cat,
+          Value: val,
+          FormattedValue: this.FormatChartValue(val),
+        };
+      });
+
+      const polylinePoints = points.map((p) => `${p.X},${p.Y}`).join(' ');
+      let areaPath = '';
+      if (points.length >= 2) {
+        const first = points[0];
+        const last = points[points.length - 1];
+        areaPath = `M ${first.X} ${plotBottom} ` +
+          points.map((p) => `L ${p.X} ${p.Y}`).join(' ') +
+          ` L ${last.X} ${plotBottom} Z`;
+      } else if (points.length === 1) {
+        const p = points[0];
+        areaPath = `M ${p.X - 12} ${plotBottom} L ${p.X - 12} ${p.Y} L ${p.X + 12} ${p.Y} L ${p.X + 12} ${plotBottom} Z`;
+      }
+
+      return {
+        SeriesIndex: sIdx,
+        Name: s.Name,
+        Color: s.Color,
+        PolylinePoints: polylinePoints,
+        AreaPath: areaPath,
+        ShowPointLabels: activeSeries.length === 1 && catCount <= 10,
+        Points: points,
+      };
+    });
+  }
+
+  public GetChartPieSlices(
+    _chart: SpreadsheetChartSpec,
+    dataset: SpreadsheetChartDataset,
+    activeSeries: ActiveChartSeriesItem[],
+  ): ChartPieSlice[] {
+    const targetSeries = activeSeries[0];
+    if (!targetSeries || dataset.Categories.length === 0) return [];
+
+    const positiveValues = dataset.Categories.map((cat, idx) => ({
+      Category: cat,
+      Value: Math.max(0, targetSeries.Values[idx] ?? 0),
+    }));
+    const total = positiveValues.reduce((sum, item) => sum + item.Value, 0);
+    if (total <= 0) return [];
+
+    const nonZeroCount = positiveValues.filter((item) => item.Value > 0).length;
+    const cx = 96;
+    const cy = 90;
+    const r = 62;
+    let currentAngle = -Math.PI / 2;
+
+    return positiveValues.map((item, idx) => {
+      const frac = item.Value / total;
+      const sweepAngle = frac * Math.PI * 2;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + sweepAngle;
+      currentAngle = endAngle;
+
+      const isFullCircle = nonZeroCount === 1 && item.Value > 0;
+      const x1 = cx + r * Math.cos(startAngle);
+      const y1 = cy + r * Math.sin(startAngle);
+      const x2 = cx + r * Math.cos(endAngle);
+      const y2 = cy + r * Math.sin(endAngle);
+      const largeArc = sweepAngle > Math.PI ? 1 : 0;
+      const path =
+        item.Value <= 0
+          ? ''
+          : `M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+
+      const shortCat =
+        item.Category.length > 15 ? `${item.Category.slice(0, 14)}…` : item.Category;
+
+      return {
+        Index: idx,
+        Category: item.Category,
+        ShortCategory: shortCat,
+        RawValue: item.Value,
+        FormattedValue: this.FormatChartValue(item.Value),
+        PercentLabel: `${Math.round(frac * 100)}%`,
+        Color: this.GetChartSeriesColor(idx),
+        Path: path,
+        IsFullCircle: isFullCircle,
+      };
+    });
   }
 
   public OnChartTypeChanged(chart: SpreadsheetChartSpec, nextType: SpreadsheetChartType): void {

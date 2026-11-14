@@ -10366,44 +10366,97 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const grid = this.ReadRange(workbook, sheet.SheetID, sourceRange);
         if (grid.length === 0 || grid[0].length === 0) return null;
 
-        // Determine if row 0 is headers
+        // Determine if row 0 is headers (has string text that isn't purely a formatted number)
         const firstRow = grid[0];
         const hasHeaderRow =
             grid.length > 1 &&
-            firstRow.slice(1).some((cell) => typeof (cell.ComputedValue ?? cell.RawValue) === 'string');
+            firstRow.some((cell) => {
+                const raw = cell?.ComputedValue ?? cell?.RawValue;
+                return typeof raw === 'string' && raw.trim() !== '' && parseChartNumericValue(raw) === null;
+            });
 
         const dataRows = hasHeaderRow ? grid.slice(1) : grid;
+        const colCount = firstRow.length;
+
+        const columnNumericCounts: number[] = [];
+        const columnNonEmptyCounts: number[] = [];
+        for (let c = 0; c < colCount; c++) {
+            let numCount = 0;
+            let nonEmptyCount = 0;
+            for (const row of dataRows) {
+                const raw = row[c]?.ComputedValue ?? row[c]?.RawValue;
+                if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+                    nonEmptyCount++;
+                    if (parseChartNumericValue(raw) !== null) {
+                        numCount++;
+                    }
+                }
+            }
+            columnNumericCounts.push(numCount);
+            columnNonEmptyCounts.push(nonEmptyCount);
+        }
+
+        // Identify numeric value columns vs non-numeric category/dimension columns.
+        // Column 0 defaults to category whenever > 1 columns exist unless all columns are purely numeric.
+        const numericColIndices: number[] = [];
+        const textColIndices: number[] = [];
+        for (let c = 0; c < colCount; c++) {
+            const nonEmpty = columnNonEmptyCounts[c];
+            const isNumericCol = nonEmpty > 0 && columnNumericCounts[c] >= Math.ceil(nonEmpty * 0.5);
+            if (isNumericCol && (colCount === 1 || c > 0)) {
+                numericColIndices.push(c);
+            } else {
+                textColIndices.push(c);
+            }
+        }
+
+        // If every column in range is numeric and colCount > 1 (e.g., B2:C5), treat all after col 0 as series,
+        // unless col 0 itself looks like an integer series with no non-numeric label columns; keep existing col-0 category contract.
+        const activeSeriesIndices =
+            numericColIndices.length > 0
+                ? numericColIndices
+                : colCount === 1
+                  ? [0]
+                  : [];
+        const categoryColIndices =
+            textColIndices.length > 0 ? textColIndices : colCount > 1 ? [0] : [];
+
         const categories: string[] = dataRows.map((r, idx) => {
-            const v = r[0]?.ComputedValue ?? r[0]?.RawValue;
-            return v !== null && v !== undefined && String(v).trim() !== '' ? String(v) : `Row ${idx + 1}`;
+            if (categoryColIndices.length === 0) {
+                return `Row ${idx + 1}`;
+            }
+            const parts = categoryColIndices
+                .map((cIdx) => {
+                    const v = r[cIdx]?.ComputedValue ?? r[cIdx]?.RawValue;
+                    return v !== null && v !== undefined ? String(v).trim() : '';
+                })
+                .filter((s) => s.length > 0);
+            return parts.length > 0 ? parts.join(' · ') : `Row ${idx + 1}`;
         });
 
-        const series: Array<{ Name: string; Values: number[] }> = [];
-        const colCount = firstRow.length;
-        for (let c = 1; c < colCount; c++) {
+        const series: Array<{ Name: string; Values: number[] }> = activeSeriesIndices.map((c) => {
             const headerCell = firstRow[c];
-            const sName = hasHeaderRow
-                ? String(headerCell?.ComputedValue ?? headerCell?.RawValue ?? `Series ${c}`)
-                : `Series ${c}`;
+            const rawHeader = headerCell?.ComputedValue ?? headerCell?.RawValue;
+            const sName =
+                hasHeaderRow && rawHeader !== null && rawHeader !== undefined && String(rawHeader).trim() !== ''
+                    ? String(rawHeader)
+                    : colCount === 1
+                      ? 'Value'
+                      : `Series ${c}`;
             const vals = dataRows.map((r) => {
                 const raw = r[c]?.ComputedValue ?? r[c]?.RawValue;
-                const num = Number(raw);
-                return Number.isNaN(num) ? 0 : num;
+                return parseChartNumericValue(raw) ?? 0;
             });
-            series.push({ Name: sName, Values: vals });
-        }
+            return { Name: sName, Values: vals };
+        });
 
-        // If only 1 column was selected, treat that column as values
-        if (colCount === 1) {
-            series.push({
-                Name: hasHeaderRow ? String(firstRow[0]?.ComputedValue ?? 'Value') : 'Value',
-                Values: dataRows.map((r) => Number(r[0]?.ComputedValue ?? r[0]?.RawValue) || 0)
-            });
-        }
-
-        const categoryColName = hasHeaderRow
-            ? String(firstRow[0]?.ComputedValue ?? firstRow[0]?.RawValue ?? 'Category')
-            : 'Category';
+        const categoryColName =
+            hasHeaderRow && categoryColIndices.length > 0
+                ? categoryColIndices
+                      .map((cIdx) => String(firstRow[cIdx]?.ComputedValue ?? firstRow[cIdx]?.RawValue ?? '').trim())
+                      .filter((s) => s.length > 0)
+                      .join(' · ') || 'Category'
+                : 'Category';
         const columns: DocumentBlockColumn[] = [
             { Name: categoryColName, DisplayName: categoryColName, Type: 'string' },
             ...series.map((s) => ({ Name: s.Name, DisplayName: s.Name, Type: 'number' }))
@@ -14704,6 +14757,26 @@ export function LoadSpreadsheetEngine(): void {
             return dataset;
         }
     );
+}
+
+function parseChartNumericValue(raw: unknown): number | null {
+    if (typeof raw === 'number') {
+        return Number.isFinite(raw) ? raw : null;
+    }
+    if (typeof raw !== 'string') {
+        return null;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return null;
+    }
+    // Strip currency symbols, thousands separators, and optional trailing percent sign
+    const normalized = trimmed.replace(/^[$€£¥+\s]+/, '').replace(/,/g, '').replace(/%$/, '');
+    if (!normalized || normalized === '-' || normalized === '.') {
+        return null;
+    }
+    const num = Number(normalized);
+    return Number.isFinite(num) ? num : null;
 }
 
 function computeStableAiInputHash(input: string): string {

@@ -387,4 +387,46 @@ describe('Next Horizons Core Engines (H2 §4.2, H3 §5.2b, H4 §6.1–6.3)', () 
             expect(toggled).toContain(`<!-- mj-lock: owner-only user=${ownerId} -->`);
         });
     });
+
+    describe('Live Range Charts Multi-Dimension & Formatted Numeric Extraction', () => {
+        it('separates leading text columns from numeric metric columns and parses formatted numbers', () => {
+            const wb = sheetEngine.CreateEmptyWorkbook('Sales Report', ['Regional Sales'], 12, 6);
+            const ws = wb.Worksheets[0];
+            sheetEngine.SetCell(wb, ws.SheetID, 'A1', { Value: 'Region' }, false);
+            sheetEngine.SetCell(wb, ws.SheetID, 'B1', { Value: 'Quarter' }, false);
+            sheetEngine.SetCell(wb, ws.SheetID, 'C1', { Value: 'Revenue' }, false);
+            sheetEngine.SetCell(wb, ws.SheetID, 'D1', { Value: 'Units Sold' }, false);
+
+            const sampleRows: Array<[string, string, number | string, number]> = [
+                ['North America', 'Q1', 1245000, 820],
+                ['North America', 'Q2', '$1,312,000', 875],
+                ['Europe', 'Q4', 987000, 640],
+                ['Europe', 'Q2', 1053001, 698],
+            ];
+            sampleRows.forEach(([region, q, rev, units], idx) => {
+                const row = idx + 2;
+                sheetEngine.SetCell(wb, ws.SheetID, `A${row}`, { Value: region }, false);
+                sheetEngine.SetCell(wb, ws.SheetID, `B${row}`, { Value: q }, false);
+                sheetEngine.SetCell(wb, ws.SheetID, `C${row}`, { Value: rev }, false);
+                sheetEngine.SetCell(wb, ws.SheetID, `D${row}`, { Value: units }, idx === sampleRows.length - 1);
+            });
+
+            const fullDataset = sheetEngine.ExtractChartDataset(wb, ws.SheetID, 'A1:D5');
+            expect(fullDataset).not.toBeNull();
+            expect(fullDataset?.Categories).toEqual([
+                'North America · Q1',
+                'North America · Q2',
+                'Europe · Q4',
+                'Europe · Q2',
+            ]);
+            // Non-numeric 'Quarter' column is excluded from series
+            expect(fullDataset?.Series.map((s) => s.Name)).toEqual(['Revenue', 'Units Sold']);
+            expect(fullDataset?.Series[0].Values).toEqual([1245000, 1312000, 987000, 1053001]);
+            expect(fullDataset?.Series[1].Values).toEqual([820, 875, 640, 698]);
+
+            // Text-only range yields empty series instead of misleading all-zero bars
+            const textOnly = sheetEngine.ExtractChartDataset(wb, ws.SheetID, 'A1:B5');
+            expect(textOnly?.Series).toEqual([]);
+        });
+    });
 });

@@ -1,15 +1,18 @@
+import '@angular/compiler';
 import { inflateRawSync } from 'node:zlib';
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import {
   DocumentLiveBlockEngine,
   SlideDeckEngine,
+  SpreadsheetEngine,
   type DocumentBlockSpec,
   type SlideDeckSpec,
 } from '@memberjunction/core-entities';
 import { DocumentImportExportService } from '../lib/services/document-import-export.service';
 import { SlideDeckExportService } from '../lib/services/slide-deck-export.service';
 import { DocumentCollaborationService } from '../lib/services/document-collaboration.service';
+import { SpreadsheetArtifactViewerComponent } from '../lib/components/plugins/spreadsheet-artifact-viewer.component';
 import {
   ARTIFACT_AI_ASSISTANT_ENABLED,
   RegisterArtifactAiAssistantHandler,
@@ -238,5 +241,77 @@ describe('Next Horizons Batch A–D: Native .docx/.pptx PNG Export & AI Assistan
     expect(received).toHaveLength(0);
 
     unregister();
+  });
+
+  it('auto-detects contiguous spreadsheet table ranges and renders bar, line, area, and pie geometry', () => {
+    const engine = SpreadsheetEngine.Instance;
+    const wb = engine.CreateEmptyWorkbook('Sales Report', ['Regional Sales'], 12, 6);
+    const sheet = wb.Worksheets[0];
+    engine.SetCell(wb, sheet.SheetID, 'A1', { Value: 'Region' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'B1', { Value: 'Quarter' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'C1', { Value: 'Revenue' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'D1', { Value: 'Units Sold' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'A2', { Value: 'North America' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'B2', { Value: 'Q1' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'C2', { Value: 1245000 }, false);
+    engine.SetCell(wb, sheet.SheetID, 'D2', { Value: 820 }, false);
+    engine.SetCell(wb, sheet.SheetID, 'A3', { Value: 'Europe' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'B3', { Value: 'Q2' }, false);
+    engine.SetCell(wb, sheet.SheetID, 'C3', { Value: 987000 }, false);
+    engine.SetCell(wb, sheet.SheetID, 'D3', { Value: 640 }, true);
+
+    const comp = Object.create(SpreadsheetArtifactViewerComponent.prototype) as SpreadsheetArtifactViewerComponent;
+    Object.assign(comp as object, {
+      Workbook: wb,
+      SelectedRange: 'A1',
+      ActiveRowIndex: 1,
+      ActiveColumnIndex: 1,
+      readonly: false,
+      FallbackXlsxBytes: null,
+      liveSyncUnavailable: false,
+      SourceJsonText: '',
+      SelectedChartSeriesByChartID: {},
+      cdr: { markForCheck: () => undefined },
+    });
+
+    comp.AddRangeChartFromSelection();
+    expect(sheet.Charts).toHaveLength(1);
+    const chart = sheet.Charts[0];
+    expect(chart.SourceRange).toBe('A1:D3');
+
+    const dataset = comp.GetChartDataset(chart);
+    expect(dataset).not.toBeNull();
+    // Revenue (~1.25M) vs Units Sold (~820) differ >20x, so default active series picks primary series cleanly
+    const defaultSeries = comp.GetActiveChartSeries(chart, dataset!);
+    expect(defaultSeries).toHaveLength(1);
+    expect(defaultSeries[0].Name).toBe('Revenue');
+
+    const maxVal = comp.GetChartMaxValueForSeries(defaultSeries);
+    expect(maxVal).toBe(1245000);
+
+    const bars = comp.GetChartBarRects(chart, dataset!, defaultSeries, maxVal);
+    expect(bars).toHaveLength(2);
+    expect(bars[0].Height).toBeGreaterThan(100);
+    expect(bars[0].FormattedValue).toBe('1.25M');
+
+    chart.ChartType = 'line';
+    const lines = comp.GetChartLineSeries(dataset!, defaultSeries, maxVal);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].PolylinePoints).toContain(',');
+    expect(lines[0].AreaPath).toContain('M ');
+
+    chart.ChartType = 'pie';
+    const slices = comp.GetChartPieSlices(chart, dataset!, defaultSeries);
+    expect(slices).toHaveLength(2);
+    expect(slices[0].Path).toContain('A 62 62');
+
+    // Switching series to Units Sold plots at 0..820 scale cleanly
+    comp.SetChartSeriesSelection(chart.ChartID, 1);
+    const unitSeries = comp.GetActiveChartSeries(chart, dataset!);
+    expect(unitSeries[0].Name).toBe('Units Sold');
+    expect(comp.GetChartMaxValueForSeries(unitSeries)).toBe(820);
+
+    comp.RemoveRangeChart(chart);
+    expect(sheet.Charts).toHaveLength(0);
   });
 });
