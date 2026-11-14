@@ -26,7 +26,7 @@ function summary(overrides: Partial<ListRefreshSummary> = {}): ListRefreshSummar
   return {
     ListID: 'list-1', ListName: 'Members', EntityName: 'Contacts', OwnerID: 'u1', OwnerName: 'Yuri Lee',
     SourceKind: 'view', SourceID: 'view-1', SourceName: 'Active members', RefreshMode: 'Sync', AutoRefresh: true,
-    UseSnapshot: false, LastRefreshedAt: null, LastRefreshedBy: null, Status: 'Scheduled',
+    UseSnapshot: false, LastRefreshedAt: new Date('2026-11-12T07:00:00Z'), LastRefreshedBy: 'Yuri Lee', Status: 'Scheduled',
     Routine: { ID: 'r1', Name: 'Refresh list: Members', Status: 'Active', CronExpression: '0 2 * * *', Timezone: 'America/New_York', NextRunAt: null, LastRunAt: null, LastRunStatus: null },
     ...overrides,
   };
@@ -87,6 +87,23 @@ describe('ListSourceRefreshPanelComponent (DOM)', () => {
     expect(text(f, '.srp-pill--ok')).toContain('Matches approved version');
     expect(text(f, '.srp-segmented__on')).toBe('Sync');
     expect(text(f, '.srp-schedule')).toContain('Daily at 2:00 am · America/New_York');
+  });
+
+  it('a linked list that was never filled says so instead of claiming it matches', async () => {
+    service.LoadSummaryAsync.mockResolvedValue(summary({ LastRefreshedAt: null, LastRefreshedBy: null }));
+    const f = await render();
+    expect(query(f, '.srp-pill--ok')).toBeNull();
+    expect(text(f, '.srp-source .srp-pill--warn')).toContain('Not refreshed yet');
+    expect(text(f, '.srp-help--warn')).toContain('or the first fill failed');
+    expect(text(f, '.srp-help--warn')).toContain('Refresh now');
+  });
+
+  it('flags a failed scheduled run', async () => {
+    const routine = summary().Routine!;
+    service.LoadSummaryAsync.mockResolvedValue(summary({ Status: 'Failed', Routine: { ...routine, LastRunStatus: 'Failed' } }));
+    const f = await render();
+    expect(text(f, '.srp-schedule .srp-pill--warn')).toBe('Last run failed');
+    expect(text(f, '.srp-help--warn')).toContain('The last scheduled refresh failed');
   });
 
   it('offers the owner to link a source when the list has none', async () => {

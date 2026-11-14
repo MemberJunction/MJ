@@ -32,6 +32,8 @@
               <span class="srp-pill srp-pill--warn"><i class="fa-solid fa-triangle-exclamation"></i> Source changed</span>
             } @else if (Summary.UseSnapshot) {
               <span class="srp-pill">Frozen snapshot</span>
+            } @else if (NeverRefreshed) {
+              <span class="srp-pill srp-pill--warn"><i class="fa-solid fa-circle-info"></i> Not refreshed yet</span>
             } @else {
               <span class="srp-pill srp-pill--ok"><i class="fa-solid fa-check"></i> Matches approved version</span>
             }
@@ -45,6 +47,11 @@
             </button>
           } @else if (Summary.UseSnapshot) {
             <p class="srp-help">Refreshes re-run the filter captured when this list was made, even if the view has changed since.</p>
+          } @else if (NeverRefreshed) {
+            <p class="srp-help srp-help--warn">
+              This list hasn't been filled from its {{ SourceKindLabel.toLowerCase() }} yet, or the first fill failed.
+              @if (CanEdit) { Use Refresh now to preview what it would add. }
+            </p>
           } @else {
             <p class="srp-help">Each refresh first checks that the {{ SourceKindLabel.toLowerCase() }}'s definition is unchanged since it was approved.</p>
           }
@@ -87,8 +94,15 @@
               <span>{{ ScheduleText }}</span>
               @if (RoutineIsPaused) {
                 <span class="srp-pill srp-pill--warn">Paused</span>
+              } @else if (LastRunFailed) {
+                <span class="srp-pill srp-pill--warn">Last run failed</span>
               }
             </div>
+            @if (LastRunFailed) {
+              <p class="srp-help srp-help--warn">
+                The last scheduled refresh failed{{ Summary.Routine?.LastRunAt ? ' on ' + (Summary.Routine?.LastRunAt | date: 'MMM d, h:mm a') : '' }}. Open the routine to see why.
+              </p>
+            }
             @if (Summary.Routine) {
               <p class="srp-help">
                 Runs as the User Routine

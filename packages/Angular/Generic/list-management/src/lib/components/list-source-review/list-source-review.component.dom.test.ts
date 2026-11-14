@@ -48,10 +48,10 @@ function preview(add: number, remove: number): ListRefreshPreview {
   };
 }
 
-function makeService(previewResult: ListRefreshPreview) {
+function makeService(previewResult: ListRefreshPreview, summary: ListRefreshSummary = SUMMARY) {
   return {
     Provider: null as unknown,
-    LoadSummaryAsync: vi.fn(async () => SUMMARY),
+    LoadSummaryAsync: vi.fn(async () => summary),
     LoadSourceDiffAsync: vi.fn(async () => DIFF),
     LoadSourceParametersAsync: vi.fn(async () => PARAMS),
     PreviewRefreshAsync: vi.fn(async () => previewResult),
@@ -65,8 +65,8 @@ const rows = (p: RunViewParams): Array<Record<string, string>> =>
     ? [{ ID: 'list-1', SourceFingerprint: '3f9a0000000000c21', SourceQueryParameters: '{"Region":"Northeast"}' }]
     : p.EntityName === 'MJ: Queries' ? [{ ID: 'query-1', DefinitionFingerprint: '8b07000000000e4d' }] : [];
 
-async function render(isOwner: boolean, previewResult: ListRefreshPreview = preview(6, 0)) {
-  const service = makeService(previewResult);
+async function render(isOwner: boolean, previewResult: ListRefreshPreview = preview(6, 0), summary: ListRefreshSummary = SUMMARY) {
+  const service = makeService(previewResult, summary);
   const confirm = { Confirm: vi.fn(async () => true) };
   const f = renderComponentFixture(ListSourceReviewComponent, {
     imports: [CommonModule, FormsModule, SharedGenericModule, MJButtonDirective, MJAlertComponent],
@@ -106,6 +106,22 @@ describe('ListSourceReviewComponent (DOM)', () => {
     expect(text(f, '.review-facts')).toContain('8b07…e4d');
   });
 
+  it('shows the linked version and its approval date with single spaces', async () => {
+    const { f } = await render(true);
+    expect(query(f, '.review-fact__mono')?.textContent?.trim()).toBe('3f9a…c21 (Oct 2)');
+  });
+
+  it('before the routine pauses, the banner says the list won\'t refresh until approved', async () => {
+    const { f } = await render(true);
+    expect(text(f, '.review-banner__title')).toBe("This list's source query changed, so it won't refresh until the change is approved.");
+  });
+
+  it('once the routine is paused, the banner says scheduled refreshes are paused', async () => {
+    const routine = { ID: 'r1', Name: 'Refresh list: Board candidates', Status: 'Paused' as const, CronExpression: '0 2 * * *', Timezone: 'UTC', NextRunAt: null, LastRunAt: null, LastRunStatus: null };
+    const paused = await render(true, preview(6, 0), { ...SUMMARY, Routine: routine });
+    expect(text(paused.f, '.review-banner__title')).toBe("This list's source query changed, so scheduled refreshes are paused.");
+  });
+
   it('renders a prefilled input for each parameter', async () => {
     const { f } = await render(true);
     const inputs = queryAll(f, '.review-param__input') as HTMLInputElement[];
@@ -117,6 +133,7 @@ describe('ListSourceReviewComponent (DOM)', () => {
   it('previews the approval with the parameter values', async () => {
     const { f, service } = await render(true);
     expect(service.PreviewRefreshAsync).toHaveBeenCalledWith('list-1', { AcceptCurrentSource: true, Parameters: { Region: 'Northeast' } });
+    expect(text(f, '.review-preview .review-help')).toBe('Previewed just now, with Region = Northeast.');
     expect(text(f, '.review-count--add')).toBe('+6');
     expect(text(f, '.review-count__result')).toContain('47');
   });

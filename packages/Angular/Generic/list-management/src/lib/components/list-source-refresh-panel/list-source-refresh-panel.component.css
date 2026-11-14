@@ -117,6 +117,10 @@
   line-height: 1.5;
 }
 
+.srp-help--warn {
+  color: var(--mj-status-warning-text);
+}
+
 .srp-muted {
   color: var(--mj-text-muted);
 }

@@ -130,6 +130,7 @@ export class ListOperations {
     target: DeltaTarget,
     sourceSet: ResolvedRecordSet,
     mode: ListRefreshMode,
+    sign: boolean = true,
   ): Promise<ListDelta> {
     if (target === 'new') {
       return await this.buildDelta({
@@ -142,6 +143,7 @@ export class ListOperations {
         tokenMode: mode,
         signatureRecordIds: sourceSet.RecordIds,
         targetTotal: 0,
+        sign,
       });
     }
 
@@ -171,6 +173,7 @@ export class ListOperations {
       tokenMode: mode,
       signatureRecordIds: sourceSet.RecordIds,
       targetTotal: targetIds.size,
+      sign,
     });
   }
 
@@ -268,8 +271,18 @@ export class ListOperations {
   ): Promise<ApplyResult> {
     const tokenResult = await this.verifyTokenForDelta(delta, opts.DeltaToken);
     if (!tokenResult.ok) return tokenResult.failure;
+    return this.applyCheckedDelta(delta, opts.ConfirmDrops);
+  }
 
-    if (delta.Counts.Remove > 0 && !opts.ConfirmDrops) {
+  /**
+   * Every guard of {@link ApplyDelta} except the token: the drop guard, the target check, the
+   * Editor permission check and target-drift detection, then the mutations. The token proves a
+   * delta came from this server; a delta computed and applied in the same server call (as
+   * {@link RefreshFromSource} does) never leaves it, so it comes here directly and needs no signing
+   * secret.
+   */
+  private async applyCheckedDelta(delta: ListDelta, confirmDrops: boolean): Promise<ApplyResult> {
+    if (delta.Counts.Remove > 0 && !confirmDrops) {
       return this.failure(
         'DROP_NOT_CONFIRMED',
         `Apply would remove ${delta.Counts.Remove} record(s). Pass ConfirmDrops: true to proceed.`,
@@ -391,11 +404,9 @@ export class ListOperations {
     if (!sourceSet.ok) return sourceSet.failure;
 
     const effectiveMode = mode ?? list.RefreshMode;
-    const delta = await this.computeDeltaFromSourceSet({ kind: 'list', listId }, sourceSet.records, effectiveMode);
-    const result = await this.ApplyDelta(delta, {
-      ConfirmDrops: opts.ConfirmDrops,
-      DeltaToken: delta.DeltaToken,
-    });
+    // Computed and applied in this one call, so the delta is never signed (see applyCheckedDelta).
+    const delta = await this.computeDeltaFromSourceSet({ kind: 'list', listId }, sourceSet.records, effectiveMode, false);
+    const result = await this.applyCheckedDelta(delta, opts.ConfirmDrops);
 
     if (result.Success) await this.afterRefreshApplied(list, definition, delta, result, effectiveMode);
     return result;
@@ -675,6 +686,8 @@ export class ListOperations {
     signatureRecordIds: string[];
     /** Size of the target as previewed (0 for a new list). */
     targetTotal: number;
+    /** False for a delta applied in the same server call: it carries an empty `DeltaToken`. */
+    sign?: boolean;
   }): Promise<ListDelta> {
     const counts: ListDeltaCounts = {
       Add: args.toAddIds.length,
@@ -684,17 +697,6 @@ export class ListOperations {
       // Not Unchanged + Remove: Additive mode keeps target-only records without listing them.
       TargetTotal: args.targetTotal,
     };
-    // ComputeSourceSignature and SignDeltaToken are async because Web
-    // Crypto's SubtleCrypto is async. Build them in sequence — the
-    // signature feeds the token payload.
-    const ssig = await ComputeSourceSignature(args.signatureRecordIds);
-    const payload: DeltaTokenPayload = {
-      v: 1,
-      tid: args.targetListId,
-      ssig,
-      m: args.tokenMode,
-      iat: Date.now(),
-    };
     return {
       TargetListId: args.targetListId,
       EntityName: args.entityName,
@@ -703,8 +705,21 @@ export class ListOperations {
       Unchanged: args.unchangedIds,
       Counts: counts,
       Warnings: args.warnings,
-      DeltaToken: await SignDeltaToken(payload),
+      DeltaToken: args.sign === false ? '' : await this.signDeltaAsync(args),
     };
+  }
+
+  private async signDeltaAsync(args: { targetListId: string | null; tokenMode: DeltaTokenMode; signatureRecordIds: string[] }): Promise<string> {
+    // The source signature feeds the token payload, so build them in sequence.
+    const ssig = await ComputeSourceSignature(args.signatureRecordIds);
+    const payload: DeltaTokenPayload = {
+      v: 1,
+      tid: args.targetListId,
+      ssig,
+      m: args.tokenMode,
+      iat: Date.now(),
+    };
+    return SignDeltaToken(payload);
   }
 
   private buildWarnings(

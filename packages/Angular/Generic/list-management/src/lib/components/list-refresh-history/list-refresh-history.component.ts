@@ -34,8 +34,9 @@ export function FilterHistory(entries: ListRefreshHistoryEntry[], filter: ListRe
 }
 
 /**
- * The record count after each refresh, oldest to newest, as a polyline in a 300×80 box. Null when
- * there are fewer than two refreshes with a count.
+ * The record count after each refresh, oldest to newest, as a step line in a 300×80 box: the count
+ * holds level until the next refresh, then jumps. Null when there are fewer than two refreshes with a
+ * count.
  */
 export function BuildRecordCountChart(entries: ListRefreshHistoryEntry[]): RecordCountChart | null {
   const points = entries
@@ -47,10 +48,12 @@ export function BuildRecordCountChart(entries: ListRefreshHistoryEntry[]): Recor
   const max = Math.max(...counts);
   const span = max - min || 1;
   const step = (CHART_WIDTH - CHART_PAD * 2) / (points.length - 1);
-  const coords = points.map((p, i) => {
-    const x = CHART_PAD + i * step;
-    const y = CHART_HEIGHT - CHART_PAD - ((p.RecordsAfter - min) / span) * (CHART_HEIGHT - CHART_PAD * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  const yOf = (count: number) => CHART_HEIGHT - CHART_PAD - ((count - min) / span) * (CHART_HEIGHT - CHART_PAD * 2);
+  const coords: string[] = [];
+  points.forEach((p, i) => {
+    const x = (CHART_PAD + i * step).toFixed(1);
+    if (i > 0) coords.push(`${x},${yOf(points[i - 1].RecordsAfter).toFixed(1)}`);
+    coords.push(`${x},${yOf(p.RecordsAfter).toFixed(1)}`);
   });
   return { Points: coords.join(' '), Min: min, Max: max, FirstAt: points[0].At, LastAt: points[points.length - 1].At };
 }

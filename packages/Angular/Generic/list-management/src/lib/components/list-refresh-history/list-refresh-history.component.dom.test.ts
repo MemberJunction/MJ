@@ -50,6 +50,11 @@ describe('history helpers', () => {
     expect(chart?.FirstAt.toISOString()).toBe('2026-11-10T20:30:00.000Z');
     expect(BuildRecordCountChart([ENTRIES[0]])).toBeNull();
   });
+
+  it('draws a step: the count holds level until the next refresh, then jumps', () => {
+    // 932 at the bottom (y 76), 936 at the top (y 4); the middle point is the corner of the step.
+    expect(BuildRecordCountChart(ENTRIES)?.Points).toBe('4.0,76.0 296.0,76.0 296.0,4.0');
+  });
 });
 
 describe('ListRefreshHistoryComponent (DOM)', () => {

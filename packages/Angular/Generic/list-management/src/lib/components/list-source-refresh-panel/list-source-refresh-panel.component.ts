@@ -93,6 +93,16 @@ export class ListSourceRefreshPanelComponent extends BaseAngularComponent {
     return !!this.Summary && LIST_REFRESH_ATTENTION_STATUSES.includes(this.Summary.Status) && this.Summary.Status !== 'Failed';
   }
 
+  /** Linked but never filled: the fill on link didn't run or failed, so it isn't known to match yet. */
+  public get NeverRefreshed(): boolean {
+    return this.HasSource && !!this.Summary && !this.Summary.UseSnapshot && !this.Summary.LastRefreshedAt;
+  }
+
+  /** The routine's last scheduled run failed. */
+  public get LastRunFailed(): boolean {
+    return this.Summary?.Status === 'Failed';
+  }
+
   public get SourceKindLabel(): string {
     return this.Summary?.SourceKind === 'query' ? 'Query' : 'View';
   }

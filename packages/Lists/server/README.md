@@ -196,6 +196,19 @@ Falls back to the env var `MJ_LIST_DELTA_SECRET` if no explicit call is
 made. Refuses to use a default secret — silent fallback would let a
 misconfigured server hand out forgeable tokens.
 
+Only operations that hand a delta to a person and take it back need the
+secret: `ComputeDelta`, `PreviewRefreshFromSource`, `ApplyDelta`,
+`ApplyRefreshPreview` and the operations built on them. `RefreshFromSource`
+(and so `ApproveListSource` and scheduled refreshes) computes and applies its
+delta in one server call and never signs it, so linking a list to a source
+and refreshing it automatically work without the secret. Set it on any server
+whose users preview refreshes — generate one with `openssl rand -hex 32` and
+put it in MJAPI's `.env`:
+
+```bash
+MJ_LIST_DELTA_SECRET=<64 hex characters>
+```
+
 ## Examples
 
 ### Save a view's current results as a new list with lineage

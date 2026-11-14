@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { formatDate } from '@angular/common';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, LOCALE_ID, Output, inject } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import type { MJListEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
@@ -43,6 +44,7 @@ export class ListSourceReviewComponent extends BaseAngularComponent {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly refreshService = inject(ListRefreshService);
   private readonly confirmService = inject(MJConfirmService);
+  private readonly locale = inject(LOCALE_ID);
 
   /** The list whose source changed. Required. */
   @Input()
@@ -113,6 +115,25 @@ export class ListSourceReviewComponent extends BaseAngularComponent {
 
   public get ShortLinked(): string {
     return ShortFingerprint(this.LinkedFingerprint);
+  }
+
+  /** The linked fingerprint, with the date it was approved when Record Changes has it. */
+  public get LinkedVersionLabel(): string {
+    const at = this.Diff?.ApprovedAt;
+    return at ? `${this.ShortLinked} (${formatDate(at, 'MMM d', this.locale)})` : this.ShortLinked;
+  }
+
+  /** Says the routine is paused only once it is; until then, that refreshes stop. */
+  public get BannerTitle(): string {
+    const kind = this.SourceKindLabel.toLowerCase();
+    return this.Summary?.Routine?.Status === 'Paused'
+      ? `This list's source ${kind} changed, so scheduled refreshes are paused.`
+      : `This list's source ${kind} changed, so it won't refresh until the change is approved.`;
+  }
+
+  public get PreviewCaption(): string {
+    const params = this.PreviewParameterSummary;
+    return params ? `Previewed just now, ${params}.` : 'Previewed just now.';
   }
 
   public get ShortCurrent(): string {

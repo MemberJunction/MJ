@@ -10,7 +10,7 @@
       <i class="fa-solid fa-triangle-exclamation review-banner__icon"></i>
       <div class="review-banner__copy">
         <div class="review-banner__title">
-          This list's source {{ SourceKindLabel.toLowerCase() }} changed, so scheduled refreshes are paused.
+          {{ BannerTitle }}
         </div>
         <div class="review-banner__detail">
           @if (Diff?.ChangedBy) {
@@ -46,7 +46,7 @@
         <div class="review-fact">
           <dt>Linked version</dt>
           <dd class="review-fact__mono">
-            {{ ShortLinked }}@if (Diff?.ApprovedAt) { ({{ Diff?.ApprovedAt | date: 'MMM d' }})}
+            {{ LinkedVersionLabel }}
           </dd>
         </div>
         <div class="review-fact">
@@ -116,7 +116,7 @@
           } @else if (PreviewError) {
             <mj-alert Variant="error" [Message]="PreviewError"></mj-alert>
           } @else if (Preview?.Delta) {
-            <p class="review-help">Preview {{ PreviewParameterSummary }}, run just now.</p>
+            <p class="review-help">{{ PreviewCaption }}</p>
             <div class="review-preview__counts">
               <span class="review-count review-count--add">+{{ PreviewAdd }}</span>
               <span class="review-count__sep">/</span>

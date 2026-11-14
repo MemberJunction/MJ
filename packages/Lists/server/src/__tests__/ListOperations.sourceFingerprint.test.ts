@@ -283,6 +283,27 @@ describe('RefreshFromSource — source fingerprint', () => {
   });
 });
 
+describe('RefreshFromSource — no delta-token secret', () => {
+  it('a refresh run inside the server needs no MJ_LIST_DELTA_SECRET; a preview for a person still does', async () => {
+    SetDeltaTokenSecret(undefined);
+    const saved = process.env.MJ_LIST_DELTA_SECRET;
+    delete process.env.MJ_LIST_DELTA_SECRET;
+    try {
+      const details = wireEntities(makeList());
+      wireRecords(['a'], ['a', 'b']);
+      const ops = new ListOperations(OWNER as never);
+
+      const refreshed = await ops.RefreshFromSource('list-1', undefined, { ConfirmDrops: false });
+      expect(refreshed.ResultCode).toBe('SUCCESS');
+      expect(details.map((d) => d.RecordID)).toEqual(['b']);
+
+      await expect(ops.PreviewRefreshFromSource('list-1')).rejects.toThrow(/MJ_LIST_DELTA_SECRET/);
+    } finally {
+      if (saved !== undefined) process.env.MJ_LIST_DELTA_SECRET = saved;
+    }
+  });
+});
+
 describe('RefreshFromSource — saved query source', () => {
   function queryList(overrides: Partial<MockList> = {}) {
     return makeList({

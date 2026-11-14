@@ -15,8 +15,8 @@
  * and one `MJ: Lists` row (tagged "(mj-integration-test — safe to delete)"), and deletes them, with any
  * members and the routine, afterwards. The checks are ordered: each builds on the state the last left.
  *
- * Refreshes sign a delta token. MJAPI reads its secret from MJ_LIST_DELTA_SECRET; when this headless
- * process has none, Setup installs a random one for the run and Teardown removes it.
+ * Previews sign a delta token (refreshes don't). MJAPI reads its secret from MJ_LIST_DELTA_SECRET; when
+ * this headless process has none, Setup installs a random one for the run and Teardown removes it.
  */
 import { RunView } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
