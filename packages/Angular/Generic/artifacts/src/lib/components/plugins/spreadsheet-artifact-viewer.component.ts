@@ -1,6 +1,9 @@
 import {
+  ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Input,
+  NgZone,
   OnInit,
   OnChanges,
   OnDestroy,
@@ -86,6 +89,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 @Component({
   selector: 'mj-spreadsheet-artifact-viewer',
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mj-sheets-shell" data-testid="mj-sheets-shell">
       <!-- Top Workbook Toolbar -->
@@ -587,7 +591,6 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                           [attr.data-address]="addr"
                           [attr.data-testid]="'sheet-cell-' + addr"
                           (mousedown)="OnCellMouseDown(row.Index, col.Index, $event)"
-                          (mouseenter)="OnCellMouseEnter(row.Index, col.Index)"
                           (mouseup)="OnCellMouseUp()"
                           (click)="OnCellClick(row.Index, col.Index, $event)"
                           (dblclick)="BeginInlineCellEdit(row.Index, col.Index)"
@@ -2457,6 +2460,8 @@ export class SpreadsheetArtifactViewerComponent
   @Input() public CollaborationWsUrl: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly ngZone = inject(NgZone, { optional: true });
+  private readonly hostEl = inject(ElementRef<HTMLElement>, { optional: true });
   private readonly collaborationService = inject(DocumentCollaborationService);
   private readonly artifactFileService = inject(ArtifactFileService, { optional: true });
   private readonly notificationService = inject(MJNotificationService, { optional: true });
@@ -2520,6 +2525,9 @@ export class SpreadsheetArtifactViewerComponent
   public LastSavedVersionNumber: number | null = null;
   public StatusBannerMessage = '';
   private lastSavedComparableJson = '';
+  private cachedUnsavedChanges: boolean | null = null;
+  private unsavedCacheClearScheduled = false;
+  private delegatedMouseOverCleanup: (() => void) | null = null;
 
   public EmbeddedArtifactVersions: Record<string, MJArtifactVersionEntity> = {};
   private lastTableResults: Record<string, DocumentBlockExecutionResult> = {};
@@ -2532,7 +2540,19 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.lastSavedComparableJson) {
       return false;
     }
-    return this.getComparableWorkbookJson(this.Workbook) !== this.lastSavedComparableJson;
+    if (this.cachedUnsavedChanges !== null) {
+      return this.cachedUnsavedChanges;
+    }
+    const dirty = this.getComparableWorkbookJson(this.Workbook) !== this.lastSavedComparableJson;
+    this.cachedUnsavedChanges = dirty;
+    if (!this.unsavedCacheClearScheduled) {
+      this.unsavedCacheClearScheduled = true;
+      queueMicrotask(() => {
+        this.cachedUnsavedChanges = null;
+        this.unsavedCacheClearScheduled = false;
+      });
+    }
+    return dirty;
   }
 
   private getComparableWorkbookJson(wb: WorkbookSpec): string {
@@ -2688,7 +2708,50 @@ export class SpreadsheetArtifactViewerComponent
   private isComponentDestroyed = false;
 
   public async ngOnInit(): Promise<void> {
+    this.bindDelegatedCellMouseOver();
     await this.initializeWorkbookSession();
+  }
+
+  /**
+   * Delegate cell hover outside Angular's zone so moving the pointer across
+   * hundreds of cells does not trigger change-detection ticks unless a drag
+   * range selection is actively in progress.
+   */
+  private bindDelegatedCellMouseOver(): void {
+    const host = this.hostEl?.nativeElement;
+    if (!host || this.delegatedMouseOverCleanup) {
+      return;
+    }
+    const onMouseOver = (event: MouseEvent): void => {
+      if (!this.IsDraggingSelection || !this.DragAnchorAddress) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const cellEl = target?.closest?.('td.mj-sheets-cell[data-address]') as HTMLElement | null;
+      const addr = cellEl?.getAttribute('data-address');
+      if (!addr) {
+        return;
+      }
+      const parsed = ParseCellAddress(addr);
+      if (!parsed) {
+        return;
+      }
+      if (this.ngZone) {
+        this.ngZone.run(() => this.OnCellMouseEnter(parsed.row, parsed.col));
+      } else {
+        this.OnCellMouseEnter(parsed.row, parsed.col);
+      }
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(() => {
+        host.addEventListener('mouseover', onMouseOver);
+      });
+    } else {
+      host.addEventListener('mouseover', onMouseOver);
+    }
+    this.delegatedMouseOverCleanup = () => {
+      host.removeEventListener('mouseover', onMouseOver);
+    };
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -2732,6 +2795,10 @@ export class SpreadsheetArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    if (this.delegatedMouseOverCleanup) {
+      this.delegatedMouseOverCleanup();
+      this.delegatedMouseOverCleanup = null;
+    }
     this.teardownSession();
   }
 
