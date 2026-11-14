@@ -289,8 +289,11 @@ export class EntitySubClassGeneratorBase {
       );
       this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
 
-      const schemaBarrel = BuildSchemaBarrel(schemas, 'schemas', '');
-      this.emitFile(path.join(directory, 'schemas.ts'), schemaBarrel, emit.writeIfChanged);
+      const schemaBarrelPath = path.join(directory, 'schemas.ts');
+      if (schemas.length > 0 || fs.existsSync(schemaBarrelPath)) {
+        const schemaBarrel = BuildSchemaBarrel(schemas, 'schemas', '');
+        this.emitFile(schemaBarrelPath, schemaBarrel, emit.writeIfChanged);
+      }
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

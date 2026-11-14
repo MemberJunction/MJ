@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-     
- 
+
 /**
  * zod schema definition for the entity MJ: AI Actions
  */

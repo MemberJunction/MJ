@@ -580,6 +580,33 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(monolithContent).toContain('export const ActionSchema = z.object({');
             expect(monolithContent).not.toContain("from '../schemas/");
         });
+
+        it('GenerateAllEntitySubClasses skips creating a brand-new empty schemas.ts when entities is empty', async () => {
+            const writeMock = vi.mocked(fs.writeFileSync);
+            const existsMock = vi.mocked(fs.existsSync);
+
+            writeMock.mockClear();
+            existsMock.mockImplementation((p) => !String(p).endsWith('schemas.ts'));
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('entity_subclasses.ts'))).toBe(true);
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(false);
+
+            // Restores overwrite behavior if schemas.ts already exists on disk (so orphaned exports get cleared)
+            writeMock.mockClear();
+            existsMock.mockReturnValue(true);
+            await generator.GenerateAllEntitySubClasses(
+                {} as Parameters<typeof generator.GenerateAllEntitySubClasses>[0],
+                [],
+                '/out',
+                true,
+            );
+            expect(writeMock.mock.calls.some((c) => String(c[0]).endsWith('schemas.ts'))).toBe(true);
+        });
     });
     describe('generated validators', () => {
         type FieldSpec = { Name: string; Type: string; AllowsNull?: boolean; IsPrimaryKey?: boolean };
