@@ -6,7 +6,7 @@
  * that. The per-field diff (`ChangesJSON`) records its SIZE instead, so a tracked update does not
  * carry the bytes twice more, and the change description stays readable.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DatabaseProviderBase } from '../generic/databaseProviderBase';
 import { EntityInfo, UserInfo } from '../index';
 
@@ -34,8 +34,9 @@ class ConcreteTestProvider extends DatabaseProviderBase {
         entityInfo: EntityInfo,
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
+        skipFullRecordJSON: boolean = false,
     ) {
-        return this.BuildRecordChangePayload(newData, oldData, '', entityInfo, type, user);
+        return this.BuildRecordChangePayload(newData, oldData, '', entityInfo, type, user, undefined, "'", undefined, skipFullRecordJSON);
     }
 }
 
@@ -113,5 +114,22 @@ describe('BuildRecordChangePayload and binary fields', () => {
         )!;
         expect(payload.fullRecordJSON).toContain(`"VectorBinary":"${FOUR}"`);
         expect(payload.changesJSON).toBe('');
+    });
+
+    it('when skipFullRecordJSON is true, skips EscapeQuotesInProperties and returns empty fullRecordJSON while keeping the diff', () => {
+        const spy = vi.spyOn(provider as unknown as { EscapeQuotesInProperties: () => unknown }, 'EscapeQuotesInProperties');
+        try {
+            const payload = provider.TestBuildRecordChangePayload(
+                { ID: 'r1', Name: 'Doc 2', VectorBinary: BIG, VectorJSON: '[0.1]' },
+                { ID: 'r1', Name: 'Doc 1', VectorBinary: THREE, VectorJSON: '[0.0]' },
+                entity, 'Update', user, true,
+            )!;
+            expect(payload.fullRecordJSON).toBe('');
+            expect(payload.changesJSON).toContain('Name');
+            expect(payload.changesDescription).toContain('Name');
+            expect(spy).not.toHaveBeenCalled();
+        } finally {
+            spy.mockRestore();
+        }
     });
 });
