@@ -137,12 +137,17 @@ because the client-transport suites need MJAPI running on the same database.
 
 Read the regenerated diff after CodeGen: append any `CodeGen_Run_*.sql` to the migration that caused it (after at least
 50 blank lines) or delete it if there was no DDL; restore `sync` blocks CodeGen writes back into `metadata/**/*.json`.
-After any tail regeneration, re-apply the tail's four `HAND EDIT`s: D4-72's three `EntityUniqueKey` guards and D4-80's
-pin (`[AutoUpdateRelatedEntityInfo] = 0` in the `MJ: Latest Feature Values.EntityID` `EntityField` insert), and delete
-CodeGen's "Set LLM-identified FKs for MJ: Latest Feature Values" block and any `MJ: Entities → MJ: Latest Feature Values`
-relationship it derives; then prove a clean build's `codegen --skipfiles` emits nothing — or only OF4-9's two
-`SubtypeSelector` UPDATEs (`MJ: Conversations`, `MJ: Comments`; next's defect: the file is deleted and its content
-pasted, D4-89) — and no `EntityRelationship` row names `MJ: Latest Feature Values` as its related entity.
+After any tail regeneration, re-apply the tail's five `HAND EDIT`s: D4-72's three `EntityUniqueKey` guards, D4-80's
+pin (`[AutoUpdateRelatedEntityInfo] = 0` in the `MJ: Latest Feature Values.EntityID` `EntityField` insert) and (5)
+D4-110's name-field pin (after the `EntityField` inserts, a guarded `UPDATE … SET [AutoUpdateIsNameField] = 0 WHERE
+[EntityID] = <MJ: ML Models> AND [Name] = N'<field>' AND [IsNameField] = 0` for each of the seven bounded-text columns
+CodeGen may pick as the name field: `TargetVariable`, `ProblemType`, `Status`, `ArtifactSha256`, `SnapshotHash`,
+`FeatureSchemaHash`, `ArtifactStatus`); delete CodeGen's "Set LLM-identified FKs for MJ: Latest Feature Values" block,
+any `MJ: Entities → MJ: Latest Feature Values` relationship it derives and any `SET IsNameField = 1` on an `MJ: ML Models`
+field; then prove a clean build's `codegen --skipfiles` emits nothing — or only OF4-9's two `SubtypeSelector` UPDATEs
+(`MJ: Conversations`, `MJ: Comments`; next's defect: the file is deleted and its content pasted, D4-89) — that no
+`EntityRelationship` row names `MJ: Latest Feature Values` as its related entity, that no `IsNameField` statement in the
+tail names `MJ: ML Models`, and that the seven rows read `AutoUpdateIsNameField = 0`.
 Never run `mj migrate`, `mj codegen` or `mj sync push` against a database you did not create.
 
 **Bootstrap facts measured at M1 (2026-11-10):**
@@ -3033,7 +3038,7 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611122025__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+(`V202611131725__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
 then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
@@ -9796,6 +9801,29 @@ for every touched seam. No placeholders. **Only then copy the plan into MJ** (`p
   `StoredRowReads` (`BypassCache`): a direct-SQL write is invisible to a cached read, and the pin check exists for exactly
   that write. The trainer's `RunViewEvaluationProtocolStore` stays as it is (training-time reads); the `MJ: Files` row
   stays cached (the artifact's content is verified by SHA-256 on load).
+- **D4-109 · A retime that moves this migration past next's migrations that touch its objects** (M4 start, controller
+  ruling; amended in its pass 2). At the M4 start next brought `V202611120915` (re-creates
+  `spDeleteEntityWithCoreDependencies` with the `Artifact.DelegateEntityID` clear), `V202611121645` (every `spUpdate*`
+  single-write, every `trgUpdate*` guarded by `IF NOT UPDATE([__mj_UpdatedAt])`, `spUpdateMLModel` and `trgUpdateMLModel`
+  among them) and `V202611122024`; ours was retimed after them, so it runs last. (a) The hand-written
+  `spDeleteEntityWithCoreDependencies` is next's newest body plus ours (a three-way merge over the previous base; a diff
+  of next's body against ours shows only PR 4's lines; the `Artifact.DelegateEntityID` entry and `UPDATE` are present).
+  (b) The CodeGen tail is regenerated from a clean bootstrap on the merged tree (§2.3), so `spUpdateMLModel` and the five
+  triggers of this migration's tables come out in next's single-write form with PR 4's columns; the getters of
+  `__mj.ts` are diffed against the views. (c) Both databases are rebuilt from clean: an in-place `mj migrate` applies
+  next's older scripts out of order after ours and leaves next's bodies (observed on the review database: the delete
+  procedure without D4-73's clears, `spUpdateMLModel` without PR 4's 14 columns). A retime past a next migration that
+  shares no object with ours is migrated in place (pass 2: `V202611131724`, ArtifactType only).
+- **D4-110 · `MJ: ML Models` gets no name field from CodeGen** (M4 start, controller ruling). The regeneration's LLM
+  decoration made `MJ: ML Models.TargetVariable` the name field (the entity has none flagged, and the analysis re-runs
+  whenever the entity gains fields); kept, every foreign key into `MLModel` gains a joined name column and the next
+  CodeGen run re-creates the views and procedures of Feature Values, ML Training Runs, ML Model Scoring Bindings and
+  this migration's tables. The statement is deleted from the tail, and HAND EDIT (5) pins `AutoUpdateIsNameField = 0`
+  (with `IsNameField` 0) on every bounded-text, non-virtual, non-FK column of `MJ: ML Models`, the candidates
+  `CodeGenLib`'s `isFieldEligibleForNameField` admits (`nvarchar`/`varchar`/`char`/`nchar`, length ≠ -1, not a primary
+  key): `TargetVariable`, `ProblemType`, `Status`, `ArtifactSha256`, `SnapshotHash`, `FeatureSchemaHash`,
+  `ArtifactStatus`. `applyNameFieldUpdates` emits `SET IsNameField = 1` only for a winner whose `AutoUpdateIsNameField`
+  is true, so no such statement can be emitted for the entity. Choosing a name field is OF4-17.
 
 #### Kickoff review (D-070)
 
@@ -9889,7 +9917,7 @@ All resolved; the defaults are implemented and the kickoff only confirms the fac
 The owner's ruling of 2026-11-10 (D4-69) removed OF4-1, OF4-2, OF4-4 and OF4-6: CI gains the sidecar pytest job at M1
 (Task M1.6), M5.4 drops `'Materialized'` from `ModeBadgeClass`, M4.3 deletes the grid's `@deprecated` aliases, and M3.4
 deletes `ProductionModelPromotionGate` and rewrites RD9 and the `ps-live-*` rigs, each with the test or rig it breaks
-updated as caller maintenance (§2.6). Eleven flags remain (OF4-12…OF4-15 added at M3), each decided out of scope with its
+updated as caller maintenance (§2.6). Twelve flags remain (OF4-12…OF4-15 added at M3, OF4-17 at M4's start), each decided out of scope with its
 default implemented:
 
 - **OF4-3 · `packages/Angular/Explorer/core-entity-forms/src/lib/custom/RecordProcesses/**` stays out of scope**
@@ -9968,6 +9996,10 @@ default implemented:
   the tier (recommended); a client-transport `mj test` does not load the server manifest; the subclass checks the
   provider it is constructed with. **Default, implemented:** the three lines stay; the harness's raw-mutation sidestep
   is refused (D4-107).
+- **OF4-17 · `MJ: ML Models` has no name field** (recorded at M4's start, D4-110). The entity has no `Name` column, and
+  HAND EDIT (5) keeps CodeGen from choosing one. Choosing one (a virtual pipeline-name field is the candidate) cascades
+  a joined name column into the Feature Values, ML Training Runs and ML Model Scoring Bindings views — outside PR 4.
+  **Default, implemented:** no name field.
 
 ## 10. PR description draft
 
@@ -10012,11 +10044,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611122025__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611131725__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->6<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->6<!-- /gen:checks -->
-- Head: <!-- gen:head -->cc938bb318<!-- /gen:head -->
+- Head: <!-- gen:head -->ec9109c060<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -11080,6 +11112,68 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   next's body plus ours and its tail is regenerated from clean. A retime that moves ours past next's migrations leaves
   the review database on next's bodies, so it is rebuilt from clean, not migrated in place. CodeGen's LLM decoration is
   not stable across regenerations (icons, categories, name fields): read every pass-2 emission before accepting a tail.
+
+### 2026-11-13 20:05 CST — Claude (Fable 5.1, M4 start, pass 2) — M4
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving`. The second merge commit `ec9109c060` (parents `4726b0d445`, next
+  `4570337d37`) and this commit `chore(ps): PR 4 M4 start (2) — merge next @4570337d37, retime, name-field pin, §9.1/§11`
+  on it, pushed at the after-merge push point (D-072). `[origin/ps/pr-4-honest-serving]`.
+- **Merge:** merged next @4570337d37, migration retimed V202611122025 → V202611131725. next's 22 commits past
+  `24c627cc1a` bring one migration, `V202611131724__v6.3.x__ArtifactType_Configuration` (ArtifactType only: no stop
+  term, no object shared with ours, `git merge-tree` → no conflict); no PS source. Merge without conflicts;
+  `pnpm install` → `Already up to date`. The retime tool (both `--env`s) updated both history rows
+  (`flyway (MJ_PS_PR4_claude|review): 202611122025 → 202611131725`, read back at rank 181 on each); the plan's two
+  live references and TruthSuite's `SERVING_MIGRATION` follow; `git grep V202611122025` outside the plan → nothing.
+- **In place (D4-109 (c), no shared object):** `mj migrate` on each database → `Applying 1 migration(s) older than the
+  database's newest applied migration … 202611131724`, `2 applied`. `sync push --dir=metadata --ci` on each →
+  `"created":0,"updated":63,"unchanged":16775,"deleted":0,…,"errorCount":0` (23 write-backs restored from the index).
+  `codegen --skipfiles` on each (both provisioned) wrote a `CodeGen_Run` (5154 / 5144 lines, deleted) holding only:
+  pstruth objects (1092 `[pstruth]` references; the `__mj` `EntityField` statements are `PS Truth: W9_EventRegistration`'s
+  `Person`/`PersonID`), OF4-9's two `SubtypeSelector` UPDATEs, and CodeGen's re-creation of next's `spUpdateArtifactType`
+  and `trgUpdateArtifactType` in the single-write form (next's migration ships them in the old form; next's MC9 below).
+  No statement names an ML Models field or this migration's tables. The two databases' `__mj` schemas: 16723 lines
+  each, `diff` empty; flyway 182 versioned rows each, identical.
+- **D4-110 and HAND EDIT (5):** the tail pins `AutoUpdateIsNameField = 0` (guarded: entity, field name,
+  `IsNameField = 0`) on the bounded-text columns of `MJ: ML Models` that `isFieldEligibleForNameField` admits. The
+  ruling named four; the code's type set is `nvarchar`/`varchar`/`char`/`nchar` (`isNameFieldTypeSafe`), so the three
+  `char(64)` hashes are eligible too, and all seven are pinned: `TargetVariable`, `ProblemType`, `Status`,
+  `ArtifactSha256`, `SnapshotHash`, `FeatureSchemaHash`, `ArtifactStatus`. Run by sqlcmd (the migration is already
+  applied on both): `MJ_PS_PR4_claude` 7 × `(1 row affected)`, `MJ_PS_PR4_review` 7 × `(1 row affected)`; each reads
+  `IsNameField 0, AutoUpdateIsNameField 0`; ML Models name fields 0 on both. §2.3 now lists five HAND EDITs; D4-109 and
+  D4-110 are in §9.1; OF4-17 in §9.4.
+- **Tool fix (plans repo `6883654`):** `MilestoneExit.CollectChanges`'s `Added` is the merge base's tree against the
+  index with `--diff-filter=A --no-renames` (+ untracked product paths, + new `package.json`s). The committed range had
+  listed the pre-`git mv` path and the index diff reported the move as `R`. New test: a committed add renamed by
+  `git mv` is listed at its new path only — red on the old code (`'migrations/v6/V202611111352__x.sql'` listed), green
+  after. Tools suite: `# tests 96` / `# pass 96` / `# fail 0` (95 + 1). Verified here: `pr-body.mjs` (no `--edit-pr`)
+  with HEAD still naming `V202611122025` wrote `V202611131725` into §10.
+- **Tests (on this tree, `MJ_PS_PR4_claude`):** root build `351 successful` / `322 successful`, no generated churn;
+  Core `37`/`482`; Engine `108`/`1520`; TruthSuite `21`/`126`; DB lane `5`/`53`; `check:guards`,
+  `check-migration-entityfield-sequence.mjs`, `check:codegen-tail` (`461 entities … 801 migration(s)`, OK) → 0.
+  `check:standards` → 1 error, next's own file: `migrations/v6/V202611131724__v6.3.x__ArtifactType_Configuration.sql:11
+  NVARCHAR column [Configuration] has no COLLATE clause` (next's commit `63066a0e63`). No Registry and Gate re-run: no
+  PS object changed.
+- **CI on `4726b0d445` (first CI on M3's code; the merge ref carried next `4570337d37`):** green — CodeQL, Check
+  Dependencies, CLAUDE.md gate, Lockfile Guard, Release Notes PR Gate, New package npm gate, No internal
+  peerDependencies, Exact version pins, UI design tokens, UI Sass trap; Integration Tier's sidecar pytest and CodeGen
+  drift gate. Red, all next's: Ensure migrations are valid (next's `V202611131724` newer than ours; fixed by this
+  retime) https://github.com/MemberJunction/MJ/actions/runs/43538833858; MJ standards (next's COLLATE above)
+  https://github.com/MemberJunction/MJ/actions/runs/43538833951; Unit Tests (next's
+  `ng-artifacts/src/__tests__/horizon1-ergonomics.test.ts` type errors; next's own run
+  https://github.com/MemberJunction/MJ/actions/runs/43532459384 fails identically)
+  https://github.com/MemberJunction/MJ/actions/runs/43538833723; Integration deterministic MC9 on `MJ: Artifact Types`
+  (next's own run https://github.com/MemberJunction/MJ/actions/runs/43532459534 fails identically)
+  https://github.com/MemberJunction/MJ/actions/runs/43538833899. PB18 (attempt 1: `PKMapDelta=31.25ms (3.5x)`) passed on
+  the re-run of that job (attempt 2: `PKMapDelta=1.26ms (43.2x vs linear 54.49ms)`, `27 metrics verified … 0 failures`);
+  attempt 2 failed `server-cache.S18: keyset page must not write the cache — expected 8, got 10`, which attempt 1 passed
+  on the same code (a process-wide `RunViewCache` set counter read around one RunView; PR 4 changes no source under
+  MJCore, MJServer or the providers).
+- **State left behind:** the owner's 7 untracked files; MJAPI :4041/:4049 stopped; sidecars `:64203` and `:64249`
+  running; both databases in place at `V202611131725` with the seven pins; the §10 `gen:head` change `--edit-pr` leaves
+  rides M4.1's first commit.
+- **Next step (exact):** M4, Task M4.1 Step 1.
+- **Gotchas / decisions:** D4-109 (c) as amended; D4-110 (seven columns, not four: `char` is a name-field type);
+  OF4-17. A database built before HAND EDIT (5) needs the seven UPDATEs by hand (the migration does not re-run).
 
 ## 12. Refresh log (append-only)
 

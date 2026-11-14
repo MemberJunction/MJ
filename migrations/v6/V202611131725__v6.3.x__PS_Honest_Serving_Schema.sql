@@ -924,17 +924,18 @@ GO
  * database built from scratch with this section appended emits nothing but the two SubtypeSelector
  * UPDATEs this section already carries (they are next's, OF4-9, kept as the first pass emitted them).
  * Do NOT edit by hand: if the DDL above changes, re-run CodeGen and replace this section.
- * Four hand edits, each marked "HAND EDIT" where it is, must be re-applied after any regeneration: the
+ * Five hand edits, each marked "HAND EDIT" where it is, must be re-applied after any regeneration: the
  * three EntityUniqueKey inserts for the training schema's existing constraints are guarded by ID or by
- * (EntityID, Name) (D4-72), and the MJ: Latest Feature Values EntityID field is inserted with
- * AutoUpdateRelatedEntityInfo = 0 (D4-80). Two generated blocks are deleted, not edited, whenever CodeGen
+ * (EntityID, Name) (D4-72); the MJ: Latest Feature Values EntityID field is inserted with
+ * AutoUpdateRelatedEntityInfo = 0 (D4-80); and (5) the seven bounded-text columns of MJ: ML Models that
+ * CodeGen may pick as the name field are set to AutoUpdateIsNameField = 0 (D4-110). Two generated blocks are deleted, not edited, whenever CodeGen
  * emits them (no marker): a "Set LLM-identified FKs" block for MJ: Latest Feature Values and an
  * MJ: Entities -> MJ: Latest Feature Values EntityRelationship derived from that FK (a relationship with no
  * FK behind it). The M4 start's regeneration emitted neither. One generated statement is deleted (no marker):
  * the LLM decoration's IsNameField = 1 on MJ: ML Models.TargetVariable. Kept, it gives every foreign key into
  * MLModel a joined name column, so CodeGen re-creates the base views and procedures of MJ: Feature Values,
  * MJ: ML Training Runs, MJ: ML Model Scoring Bindings and this migration's tables on the next run; ML Models
- * keeps no name field, as before this regeneration.
+ * keeps no name field, as before this regeneration, and HAND EDIT (5) keeps CodeGen from choosing one.
  * ===================================================================================== */
 
 /* SQL generated to create new entity MJ: ML Output Bindings */
@@ -8512,6 +8513,22 @@ GO
             GETUTCDATE()
          )
       END;
+
+/* HAND EDIT (5): the bounded-text columns of MJ: ML Models that CodeGen may pick as its name field, pinned */
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.TargetVariable the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'TargetVariable' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.ProblemType the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'ProblemType' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.Status the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'Status' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.ArtifactSha256 the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'ArtifactSha256' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.SnapshotHash the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'SnapshotHash' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.FeatureSchemaHash the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'FeatureSchemaHash' AND [IsNameField] = 0;
+-- HAND EDIT (5) (re-apply after any tail regeneration): AutoUpdateIsNameField = 0 so CodeGen's name-field pick never makes MJ: ML Models.ArtifactStatus the name field; a name field on ML Models adds a joined name column to every view with a foreign key into MLModel (D4-110)
+UPDATE [${flyway:defaultSchema}].[EntityField] SET [AutoUpdateIsNameField] = 0 WHERE [EntityID] = 'A3997636-011D-46E0-BC01-8B1E61E1087B' AND [Name] = N'ArtifactStatus' AND [IsNameField] = 0;
 
 /* SQL text to sync entity unique keys (9 added, 0 updated, 0 removed) */
 INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('048a01cf-a26d-49f5-aa86-82cfa1ff1ad0', '4D8B302C-7F68-4B55-9149-F512FB8D89C5', 'UX_MLModelPublishRecord_OnePublishPerRun', 'TrainingRunID', '([Kind]=''publish'' AND ([Purpose] IN (''publish'', ''adopt'')) AND [TrainingRunID] IS NOT NULL)');
