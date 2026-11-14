@@ -67,8 +67,8 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
             const conversationId = this.getStringParam(params, 'ConversationID');
             const versionComments = this.getStringParam(params, 'VersionComments');
 
-            const md = new Metadata();
-            const provider = Metadata.Provider;
+            const md = params.Provider ?? new Metadata();
+            const provider = params.Provider ?? Metadata.Provider;
 
             const perm = await ArtifactPermissionEngine.Instance.ResolvePermissions(
                 provider,
@@ -420,7 +420,7 @@ export class RefreshAndSnapshotArtifactAction extends BaseAction {
     }
 
     private async postSummaryToConversation(
-        md: Metadata,
+        md: IMetadataProvider | Metadata,
         contextUser: UserInfo,
         conversationId: string,
         artifactName: string,
