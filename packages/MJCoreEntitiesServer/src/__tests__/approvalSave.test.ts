@@ -38,6 +38,12 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public ApprovedByUserID: string | null = 'forged-user';
         public ApprovedAt: Date | null = new Date('2030-01-01T00:00:00.000Z');
         public ApprovedFingerprint: string | null = 'forged-fingerprint';
+        public DefinitionFingerprint: string | null = null;
+        /** The two fingerprints as last written, so Dirty can tell whether a stamp changed either. */
+        private written: { Approved: string | null; Definition: string | null } | null = null;
+        public get Dirty(): boolean {
+            return !this.written || this.written.Approved !== this.ApprovedFingerprint || this.written.Definition !== this.DefinitionFingerprint;
+        }
         public LatestResult = { CompleteMessage: '' };
         public RegisterResultHistoryEntry = vi.fn();
         public get PrimaryKey() { return { ToWhereClause: () => `ID='${this.ID}'`, ToString: () => `ID=${this.ID}` }; }
@@ -61,7 +67,9 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
                 ApprovedByUserID: this.ApprovedByUserID,
                 ApprovedAt: this.ApprovedAt,
                 ApprovedFingerprint: this.ApprovedFingerprint,
+                DefinitionFingerprint: this.DefinitionFingerprint,
             });
+            this.written = { Approved: this.ApprovedFingerprint, Definition: this.DefinitionFingerprint };
             saveOptions.push(options);
             return true;
         }
@@ -166,7 +174,7 @@ describe('MJDashboardEntityServer', () => {
     it('any other save writes the stored approval back over the client values', async () => {
         db.stored = { ApprovalStatus: 'Approved', ApprovedByUserID: 'original', ApprovedAt: '2026-09-01T10:00:00.000Z', ApprovedFingerprint: 'fp-d1' };
         expect(await create(MJDashboardEntityServer).Save()).toBe(true);
-        expect(writes).toEqual([{ ApprovedByUserID: 'original', ApprovedAt: new Date('2026-09-01T10:00:00.000Z'), ApprovedFingerprint: 'fp-d1' }]);
+        expect(writes).toEqual([{ ApprovedByUserID: 'original', ApprovedAt: new Date('2026-09-01T10:00:00.000Z'), ApprovedFingerprint: 'fp-d1', DefinitionFingerprint: null }]);
     });
 
     it('writes nothing when the stored approval cannot be read', async () => {
@@ -204,7 +212,32 @@ describe('MJUserViewEntityServer', () => {
         expect(saveOptions).toEqual([opts, opts]);
         expect(writes[0]).toMatchObject({ ApprovedByUserID: 'approver-1', ApprovedFingerprint: null });
         expect(view.WhereClause).toBe("Status='Active'");
-        expect(writes[1].ApprovedFingerprint).toBe(await ComputeUserViewFingerprintAsync(view));
+        const fingerprint = await ComputeUserViewFingerprintAsync(view);
+        expect(writes[1]).toMatchObject({ ApprovedFingerprint: fingerprint, DefinitionFingerprint: fingerprint });
+    });
+
+    it('a save that does not approve still stamps DefinitionFingerprint, and keeps the stored approval', async () => {
+        db.stored = { ApprovalStatus: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-v1' };
+        const view = create(MJUserViewEntityServer);
+        expect(await view.Save()).toBe(true);
+        expect(writes).toHaveLength(2);
+        expect(writes[1]).toMatchObject({ ApprovedFingerprint: 'fp-v1', DefinitionFingerprint: await ComputeUserViewFingerprintAsync(view) });
+    });
+
+    it('writes once when the stored DefinitionFingerprint is already current', async () => {
+        db.stored = { ApprovalStatus: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-v1' };
+        const view = create(MJUserViewEntityServer);
+        expect(await view.Save()).toBe(true);
+        writes.length = 0;
+        expect(await view.Save()).toBe(true);
+        expect(writes).toHaveLength(1);
+    });
+
+    it('a ReplayOnly save stamps nothing', async () => {
+        const view = create(MJUserViewEntityServer);
+        expect(await view.Save({ ReplayOnly: true } as EntitySaveOptions)).toBe(true);
+        expect(writes).toHaveLength(1);
+        expect(writes[0].DefinitionFingerprint).toBeNull();
     });
 
     it('catches and logs an exception during post-save fingerprint stamping without throwing from Save()', async () => {
@@ -233,7 +266,8 @@ describe('MJQueryEntityServer', () => {
         expect(saveOptions).toEqual([opts, opts]);
         expect(writes[0]).toMatchObject({ ApprovedByUserID: 'approver-1', ApprovedFingerprint: null });
         const rows = { SQLs: db.querySQLs as never[], Parameters: db.queryParameters as never[] };
-        expect(writes[1].ApprovedFingerprint).toBe(await ComputeQueryFingerprintAsync(query, rows));
+        const fingerprint = await ComputeQueryFingerprintAsync(query, rows);
+        expect(writes[1]).toMatchObject({ ApprovedFingerprint: fingerprint, DefinitionFingerprint: fingerprint });
         const definitionReads = db.views.filter(v => v.EntityName !== 'MJ: Queries');
         expect(definitionReads.map(v => [v.EntityName, v.ExtraFilter, v.BypassCache])).toEqual([
             ['MJ: Query SQLs', "QueryID='rec-1'", true],
@@ -241,10 +275,16 @@ describe('MJQueryEntityServer', () => {
         ]);
     });
 
-    it('a save that does not approve keeps the stored approval and reads no definition rows', async () => {
+    it('a save that does not approve keeps the stored approval and stamps DefinitionFingerprint from the stored rows', async () => {
         db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
-        expect(await create(MJQueryEntityServer).Save()).toBe(true);
-        expect(writes).toEqual([{ ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' }]);
-        expect(db.views.map(v => v.EntityName)).toEqual(['MJ: Queries']);
+        db.querySQLs = [{ SQLDialectID: 'D-1', SQL: 'SELECT 1 /* pg */' }];
+        const query = create(MJQueryEntityServer);
+        expect(await query.Save()).toBe(true);
+        const rows = { SQLs: db.querySQLs as never[], Parameters: db.queryParameters as never[] };
+        expect(writes).toEqual([
+            { ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1', DefinitionFingerprint: null },
+            { ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1', DefinitionFingerprint: await ComputeQueryFingerprintAsync(query, rows) },
+        ]);
+        expect(db.views.map(v => v.EntityName)).toEqual(['MJ: Queries', 'MJ: Query SQLs', 'MJ: Query Parameters']);
     });
 });

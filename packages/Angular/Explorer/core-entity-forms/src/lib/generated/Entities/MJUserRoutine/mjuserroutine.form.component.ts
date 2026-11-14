@@ -23,7 +23,8 @@ export class MJUserRoutineFormComponent extends BaseFormComponent {
             { sectionKey: 'executionHistory', sectionName: 'Execution History', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
+            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false }
         ]);
     }
 }

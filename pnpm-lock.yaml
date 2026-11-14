@@ -8739,6 +8739,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.3.0-edge.0
         version: link:../ui-components
+      diff:
+        specifier: 8.0.3
+        version: 8.0.3
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -13211,6 +13214,9 @@ importers:
       '@memberjunction/integration-pk-classifier':
         specifier: 6.3.0-edge.0
         version: link:../Integration/pk-classifier
+      '@memberjunction/lists':
+        specifier: 6.3.0-edge.0
+        version: link:../Lists/server
       '@memberjunction/predictive-studio-core':
         specifier: 6.3.0-edge.0
         version: link:../AI/PredictiveStudio/Core
@@ -17181,6 +17187,9 @@ importers:
       '@memberjunction/integration-schema-builder':
         specifier: 6.3.0-edge.0
         version: link:../../Integration/schema-builder
+      '@memberjunction/lists':
+        specifier: 6.3.0-edge.0
+        version: link:../../Lists/server
       '@memberjunction/livekit-room-server':
         specifier: 6.3.0-edge.0
         version: link:../../LiveKitRoomServer

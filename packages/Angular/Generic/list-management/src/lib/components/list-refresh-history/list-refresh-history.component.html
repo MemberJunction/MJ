@@ -1,0 +1,112 @@
+<div class="history">
+  @if (Chart) {
+    <section class="history-chart">
+      <header class="history-chart__header">
+        <h3 class="history-title">Record count since linked</h3>
+        <span class="history-chart__range">{{ Chart.FirstAt | date: 'MMM d' }} – {{ Chart.LastAt | date: 'MMM d' }}</span>
+      </header>
+      <div class="history-chart__body">
+        <div class="history-chart__axis">
+          <span>{{ Chart.Max | number }}</span>
+          <span>{{ Chart.Min | number }}</span>
+        </div>
+        <svg class="history-chart__svg" viewBox="0 0 300 80" preserveAspectRatio="none" role="img"
+             [attr.aria-label]="'Record count from ' + Chart.Min + ' to ' + Chart.Max">
+          <polyline class="history-chart__line" [attr.points]="Chart.Points"></polyline>
+        </svg>
+      </div>
+    </section>
+  }
+
+  <section class="history-table-card">
+    <header class="history-table-card__header">
+      <h3 class="history-title">Refreshes that changed this list</h3>
+      <div class="history-filters">
+        <mj-filter-chip class="history-filter history-filter--all" Label="All" [Count]="Entries.length"
+                        [Active]="Filter === 'all'" (Clicked)="OnFilter('all')"></mj-filter-chip>
+        <mj-filter-chip class="history-filter history-filter--refreshes" Label="Refreshes" [Count]="RefreshCount"
+                        [Active]="Filter === 'refreshes'" (Clicked)="OnFilter('refreshes')"></mj-filter-chip>
+        <mj-filter-chip class="history-filter history-filter--source" Label="Source changes" [Count]="SourceEventCount"
+                        [Active]="Filter === 'source'" (Clicked)="OnFilter('source')"></mj-filter-chip>
+      </div>
+    </header>
+
+    @if (Loading) {
+      <div class="history-state">
+        <mj-loading text="Loading refresh history..." size="medium"></mj-loading>
+      </div>
+    } @else if (ErrorMessage) {
+      <mj-alert Variant="error" Title="Couldn't load the refresh history" [Message]="ErrorMessage"></mj-alert>
+    } @else if (VisibleEntries.length === 0) {
+      <mj-empty-state class="history-empty" Icon="fa-solid fa-clock-rotate-left" Title="No refreshes yet"
+                      Message="Refreshes that change this list, and changes to its source, show up here."></mj-empty-state>
+    } @else {
+      <div class="history-table-wrap">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Result</th>
+              <th>By</th>
+              <th class="history-num">Changes</th>
+              <th class="history-num">Records after</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of VisibleEntries; track entry.ID) {
+              <tr class="history-row" tabindex="0"
+                  [class.history-row--selected]="SelectedEntry?.ID === entry.ID"
+                  (click)="OnSelect(entry)" (keydown.enter)="OnSelect(entry)">
+                <td class="history-when">{{ entry.At | date: 'MMM d, h:mm a' }}</td>
+                <td>
+                  <span class="history-result"
+                        [class.history-result--changed]="entry.Type === 'SourceChanged'"
+                        [class.history-result--approved]="entry.Type === 'SourceApproved'">{{ ResultLabel(entry) }}</span>
+                </td>
+                <td class="history-by">{{ entry.UserName }}</td>
+                <td class="history-num history-changes">
+                  @if (entry.Added !== null || entry.Removed !== null) {
+                    <span class="history-add">+{{ entry.Added ?? 0 }}</span> / <span class="history-remove">−{{ entry.Removed ?? 0 }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
+                <td class="history-num">{{ entry.RecordsAfter !== null ? (entry.RecordsAfter | number) : '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+    <p class="history-footnote">
+      One row per refresh that changed the list, plus source changes and approvals. Refreshes that changed nothing aren't logged.
+    </p>
+  </section>
+</div>
+
+@if (SelectedEntry; as entry) {
+  <mj-slide-panel [Title]="(entry.At | date: 'MMM d, h:mm a') ?? ''" [WidthPx]="420" [MinWidthPx]="320"
+                  (Closed)="OnCloseDetail()">
+    <div class="history-detail">
+      <div class="history-detail__result">{{ ResultLabel(entry) }}</div>
+      <dl class="history-detail__facts">
+        <div><dt>Mode</dt><dd>{{ entry.Mode ?? '—' }}</dd></div>
+        <div><dt>Run by</dt><dd>{{ entry.UserName }}</dd></div>
+        <div><dt>Source</dt><dd>{{ SourceLabel(entry) }}</dd></div>
+        <div><dt>Source version</dt><dd class="history-mono">{{ ShortFingerprint(entry.SourceFingerprint) }}</dd></div>
+        <div><dt>Records before</dt><dd>{{ entry.RecordsBefore !== null ? (entry.RecordsBefore | number) : '—' }}</dd></div>
+        <div><dt>Added</dt><dd class="history-add">{{ entry.Added !== null ? '+' + entry.Added : '—' }}</dd></div>
+        <div><dt>Removed</dt><dd class="history-remove">{{ entry.Removed !== null ? '−' + entry.Removed : '—' }}</dd></div>
+        <div><dt>Failed</dt><dd>{{ entry.Failed ?? '—' }}</dd></div>
+        <div><dt>Records after</dt><dd>{{ entry.RecordsAfter !== null ? (entry.RecordsAfter | number) : '—' }}</dd></div>
+      </dl>
+      @if (entry.Description) {
+        <p class="history-detail__description">{{ entry.Description }}</p>
+      }
+      <div class="history-detail__note">
+        <i class="fa-solid fa-circle-info"></i>
+        Per-record detail isn't kept; counts only.
+      </div>
+    </div>
+  </mj-slide-panel>
+}

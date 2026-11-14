@@ -1,0 +1,24 @@
+[
+  {
+    "fields": {
+      "Name": "List Source Changed",
+      "Description": "A refresh found that the list's source query or view changed since the list was linked, and stopped without applying anything. Emitted by ListOperations.RefreshFromSource.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "72BBC744-D0A8-4A4A-B584-912A89E76D85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Source Approved",
+      "Description": "The list's owner approved the current definition of its source query or view, so refreshes resume. Emitted by ListOperations.ApproveListSource.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "7AB6E858-A959-4709-A7F1-4C782623198F"
+    }
+  }
+]

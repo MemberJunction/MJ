@@ -6,8 +6,11 @@ import type {
   ListDelta,
   ListDeltaWarning,
   ListRefreshMode,
+  ListRefreshPreview,
+  ListRefreshPreviewOptions,
   ListShareSummary,
   ListSource,
+  ListSourceChange,
   MaterializeOptions,
   SetOpKind,
   SharePermissionLevel,
@@ -71,22 +74,57 @@ export class GraphQLListsClient {
       ${APPLY_RESULT_FRAGMENT}
     `;
     const result = await this.dataProvider.ExecuteGQL(mutation, {
-      input: {
-        TargetListId: args.Delta.TargetListId,
-        EntityName: args.Delta.EntityName,
-        ToAdd: args.Delta.ToAdd,
-        ToRemove: args.Delta.ToRemove,
-        Unchanged: args.Delta.Unchanged,
-        AddCount: args.Delta.Counts.Add,
-        RemoveCount: args.Delta.Counts.Remove,
-        UnchangedCount: args.Delta.Counts.Unchanged,
-        SourceTotal: args.Delta.Counts.SourceTotal,
-        TargetTotal: args.Delta.Counts.TargetTotal,
-        DeltaToken: args.Delta.DeltaToken,
-        ConfirmDrops: args.ConfirmDrops,
-      },
+      input: serializeApplyDeltaInput(args.Delta, args.ConfirmDrops),
     });
     return parseApplyResult(result?.ApplyListDelta);
+  }
+
+  /**
+   * Preview refreshing a list from its linked source, view or query. Never mutates. A changed
+   * source returns `SOURCE_CHANGED` with `SourceChange` set, unless the owner passes
+   * `AcceptCurrentSource` to preview what approving the change would apply.
+   */
+  public async PreviewRefresh(listId: string, options: ListRefreshPreviewOptions = {}): Promise<ListRefreshPreview> {
+    const query = gql`
+      query PreviewListRefresh($listId: String!, $mode: String, $acceptCurrentSource: Boolean, $parametersJSON: String) {
+        PreviewListRefresh(listId: $listId, mode: $mode, acceptCurrentSource: $acceptCurrentSource, parametersJSON: $parametersJSON) {
+          Success
+          ResultCode
+          Message
+          Delta {
+            ...ListDeltaFields
+          }
+          SourceChange {
+            ...SourceChangeFields
+          }
+        }
+      }
+      ${LIST_DELTA_FRAGMENT}
+      ${SOURCE_CHANGE_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(query, {
+      listId,
+      mode: options.Mode ?? null,
+      acceptCurrentSource: options.AcceptCurrentSource ?? false,
+      parametersJSON: options.Parameters ? JSON.stringify(options.Parameters) : null,
+    });
+    return parseRefreshPreview(result?.PreviewListRefresh);
+  }
+
+  /** Apply a delta from {@link PreviewRefresh}. The server re-checks the source and keeps the drop guard. */
+  public async ApplyRefresh(args: { Delta: ListDelta; ConfirmDrops: boolean }): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation ApplyListRefresh($input: ApplyDeltaInput!) {
+        ApplyListRefresh(input: $input) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      input: serializeApplyDeltaInput(args.Delta, args.ConfirmDrops),
+    });
+    return parseApplyResult(result?.ApplyListRefresh);
   }
 
   public async MaterializeFromView(viewId: string, options: MaterializeOptions): Promise<ApplyResult> {
@@ -125,13 +163,18 @@ export class GraphQLListsClient {
     return parseApplyResult(result?.AddViewResultsToList);
   }
 
+  /**
+   * Refresh a list from its linked source. Leave `Mode` out to use the list's own RefreshMode.
+   * When the source changed since it was approved, nothing is applied: the result is
+   * `SOURCE_CHANGED` with `SourceChange` set, until the owner calls {@link ApproveSource}.
+   */
   public async RefreshFromSource(args: {
     ListId: string;
-    Mode: ListRefreshMode;
+    Mode?: ListRefreshMode | null;
     ConfirmDrops: boolean;
   }): Promise<ApplyResult> {
     const mutation = gql`
-      mutation RefreshListFromSource($listId: String!, $mode: String!, $confirmDrops: Boolean!) {
+      mutation RefreshListFromSource($listId: String!, $mode: String, $confirmDrops: Boolean!) {
         RefreshListFromSource(listId: $listId, mode: $mode, confirmDrops: $confirmDrops) {
           ...ApplyResultFields
         }
@@ -140,10 +183,35 @@ export class GraphQLListsClient {
     `;
     const result = await this.dataProvider.ExecuteGQL(mutation, {
       listId: args.ListId,
-      mode: args.Mode,
+      mode: args.Mode ?? null,
       confirmDrops: args.ConfirmDrops,
     });
     return parseApplyResult(result?.RefreshListFromSource);
+  }
+
+  /**
+   * The list owner approves its source's current definition, and for a query source optionally
+   * new parameter values. A paused refresh routine resumes and the list refreshes right away.
+   */
+  public async ApproveSource(args: {
+    ListId: string;
+    ConfirmDrops: boolean;
+    Parameters?: Record<string, unknown>;
+  }): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation ApproveListSource($listId: String!, $confirmDrops: Boolean!, $parametersJSON: String) {
+        ApproveListSource(listId: $listId, confirmDrops: $confirmDrops, parametersJSON: $parametersJSON) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      listId: args.ListId,
+      confirmDrops: args.ConfirmDrops,
+      parametersJSON: args.Parameters ? JSON.stringify(args.Parameters) : null,
+    });
+    return parseApplyResult(result?.ApproveListSource);
   }
 
   public async ComposeLists(args: {
@@ -380,6 +448,17 @@ const LIST_DELTA_FRAGMENT = gql`
   }
 `;
 
+const SOURCE_CHANGE_FRAGMENT = gql`
+  fragment SourceChangeFields on ListSourceChangeType {
+    SourceKind
+    SourceID
+    SourceName
+    ChangedAt
+    LinkedFingerprint
+    CurrentFingerprint
+  }
+`;
+
 const APPLY_RESULT_FRAGMENT = gql`
   fragment ApplyResultFields on ApplyListResultType {
     Success
@@ -391,7 +470,11 @@ const APPLY_RESULT_FRAGMENT = gql`
     RemovedCount
     FailedCount
     Errors
+    SourceChange {
+      ...SourceChangeFields
+    }
   }
+  ${SOURCE_CHANGE_FRAGMENT}
 `;
 
 const SHARE_RESULT_FRAGMENT = gql`
@@ -514,6 +597,7 @@ function parseApplyResult(raw: unknown): ApplyResult {
     RemovedCount?: number | null;
     FailedCount?: number | null;
     Errors?: string[] | null;
+    SourceChange?: WireSourceChange | null;
   };
   return {
     Success: r.Success,
@@ -530,5 +614,64 @@ function parseApplyResult(raw: unknown): ApplyResult {
           }
         : undefined,
     Errors: r.Errors ?? undefined,
+    SourceChange: r.SourceChange ? parseSourceChange(r.SourceChange) : undefined,
+  };
+}
+
+function serializeApplyDeltaInput(delta: ListDelta, confirmDrops: boolean): Record<string, unknown> {
+  return {
+    TargetListId: delta.TargetListId,
+    EntityName: delta.EntityName,
+    ToAdd: delta.ToAdd,
+    ToRemove: delta.ToRemove,
+    Unchanged: delta.Unchanged,
+    AddCount: delta.Counts.Add,
+    RemoveCount: delta.Counts.Remove,
+    UnchangedCount: delta.Counts.Unchanged,
+    SourceTotal: delta.Counts.SourceTotal,
+    TargetTotal: delta.Counts.TargetTotal,
+    DeltaToken: delta.DeltaToken,
+    ConfirmDrops: confirmDrops,
+  };
+}
+
+function parseRefreshPreview(raw: unknown): ListRefreshPreview {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('GraphQLListsClient: empty/invalid PreviewListRefresh response from server');
+  }
+  const r = raw as {
+    Success: boolean;
+    ResultCode: string;
+    Message: string;
+    Delta?: unknown;
+    SourceChange?: WireSourceChange | null;
+  };
+  return {
+    Success: r.Success,
+    ResultCode: r.ResultCode as ListRefreshPreview['ResultCode'],
+    Message: r.Message,
+    Delta: r.Delta ? parseListDelta(r.Delta) : undefined,
+    SourceChange: r.SourceChange ? parseSourceChange(r.SourceChange) : undefined,
+  };
+}
+
+/** `ListSourceChange` as it arrives over the wire: the date is a string. */
+interface WireSourceChange {
+  SourceKind: ListSourceChange['SourceKind'];
+  SourceID: string;
+  SourceName: string;
+  ChangedAt?: string | null;
+  LinkedFingerprint: string;
+  CurrentFingerprint: string;
+}
+
+function parseSourceChange(c: WireSourceChange): ListSourceChange {
+  return {
+    SourceKind: c.SourceKind,
+    SourceID: c.SourceID,
+    SourceName: c.SourceName,
+    ChangedAt: c.ChangedAt ? new Date(c.ChangedAt) : null,
+    LinkedFingerprint: c.LinkedFingerprint,
+    CurrentFingerprint: c.CurrentFingerprint,
   };
 }

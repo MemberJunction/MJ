@@ -24,7 +24,9 @@ import {
   ListSourceInput,
   FromCoreApplyResult,
   FromCoreDelta,
+  FromCoreRefreshPreview,
   FromCoreWarning,
+  ParseSourceParameters,
   RebuildDeltaFromInput,
   ToCoreSource,
 } from '../resolvers/ListOperationsResolver.js';
@@ -146,6 +148,71 @@ describe('ListOperationsResolver — boundary converters', () => {
         Errors: ['failed record a'],
       };
       expect(FromCoreApplyResult(result).Errors).toEqual(['failed record a']);
+    });
+
+    it('carries the source change of a SOURCE_CHANGED result', () => {
+      const changedAt = new Date('2026-11-12T10:00:00Z');
+      const result: ApplyResult = {
+        Success: false,
+        ResultCode: 'SOURCE_CHANGED',
+        Message: 'changed',
+        TargetListId: 'list-1',
+        SourceChange: {
+          SourceKind: 'query', SourceID: 'q-1', SourceName: 'Lapsed members', ChangedAt: changedAt,
+          LinkedFingerprint: 'fp-old', CurrentFingerprint: 'fp-new',
+        },
+      };
+      expect(FromCoreApplyResult(result).SourceChange).toEqual({
+        SourceKind: 'query', SourceID: 'q-1', SourceName: 'Lapsed members', ChangedAt: changedAt,
+        LinkedFingerprint: 'fp-old', CurrentFingerprint: 'fp-new',
+      });
+    });
+
+    it('leaves SourceChange unset on any other result', () => {
+      expect(FromCoreApplyResult({ Success: true, ResultCode: 'SUCCESS', Message: 'OK' }).SourceChange).toBeUndefined();
+    });
+  });
+
+  describe('FromCoreRefreshPreview', () => {
+    it('converts the delta of a successful preview', () => {
+      const output = FromCoreRefreshPreview({
+        Success: true, ResultCode: 'SUCCESS', Message: 'ok',
+        Delta: {
+          TargetListId: 'list-1', EntityName: 'Contacts', ToAdd: ['a'], ToRemove: [], Unchanged: ['b'],
+          Counts: { Add: 1, Remove: 0, Unchanged: 1, SourceTotal: 2, TargetTotal: 1 }, Warnings: [], DeltaToken: 'tok',
+        },
+      });
+      expect(output.Delta?.ToAdd).toEqual(['a']);
+      expect(output.Delta?.DeltaToken).toBe('tok');
+      expect(output.SourceChange).toBeUndefined();
+    });
+
+    it('carries the source change of a SOURCE_CHANGED preview, with no delta', () => {
+      const output = FromCoreRefreshPreview({
+        Success: false, ResultCode: 'SOURCE_CHANGED', Message: 'changed',
+        SourceChange: { SourceKind: 'view', SourceID: 'v-1', SourceName: 'V', ChangedAt: null, LinkedFingerprint: 'a', CurrentFingerprint: 'b' },
+      });
+      expect(output.Delta).toBeUndefined();
+      expect(output.SourceChange?.CurrentFingerprint).toBe('b');
+    });
+  });
+
+  describe('ParseSourceParameters', () => {
+    it('reads a JSON object of parameter values', () => {
+      expect(ParseSourceParameters('{"Since":"2026-01-01","Limit":10}')).toEqual({ Since: '2026-01-01', Limit: 10 });
+    });
+
+    it('treats a missing or blank value as no parameters', () => {
+      expect(ParseSourceParameters(null)).toBeUndefined();
+      expect(ParseSourceParameters(undefined)).toBeUndefined();
+      expect(ParseSourceParameters('  ')).toBeUndefined();
+    });
+
+    it('rejects anything but a JSON object', () => {
+      expect(() => ParseSourceParameters('[1,2]')).toThrow(/JSON object/);
+      expect(() => ParseSourceParameters('42')).toThrow(/JSON object/);
+      expect(() => ParseSourceParameters('null')).toThrow(/JSON object/);
+      expect(() => ParseSourceParameters('{bad')).toThrow();
     });
   });
 
