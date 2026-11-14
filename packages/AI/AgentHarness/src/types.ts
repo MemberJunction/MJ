@@ -1,6 +1,68 @@
 import { MJAIAgentHarnessEntity } from '@memberjunction/core-entities';
 import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
 
+/** Sandbox execution provider kind. */
+export type HarnessSandboxProviderType = 'local' | 'docker' | 'cloud';
+
+/** Outbound network posture inside a cloud agent sandbox. */
+export type CloudNetworkAccess = 'none' | 'restricted' | 'egress';
+
+/** Waiting strategy while a remote cloud agent turn is executing. */
+export type CloudWaitMode = 'bounded-poll' | 'adaptive-wake';
+
+/** Normalized execution state of a remote cloud agent session or interaction. */
+export type CloudExecutionState = 'completed' | 'running' | 'failed' | 'cancelled';
+
+/**
+ * Cloud-specific runtime options when `sandbox.provider === 'cloud'`.
+ */
+export interface CloudSandboxOptions {
+    endpointUrl?: string;
+    region?: string;
+    projectId?: string;
+    environmentId?: string;
+    repositoryUrl?: string;
+    gitRef?: string;
+    gitBranch?: string;
+    networkAccess?: CloudNetworkAccess;
+    waitMode?: CloudWaitMode;
+    turnWaitBudgetMs?: number;
+    pollIntervalMs?: number;
+    mcpExternalServerUrl?: string;
+    extraHeaders?: Record<string, string>;
+}
+
+/**
+ * Normalized cloud workspace and execution settings attached to a provisioned `SandboxHandle`.
+ */
+export interface CloudSandboxMetadata {
+    Provider: 'cloud';
+    SessionKey: string;
+    EndpointUrl?: string;
+    Region?: string;
+    ProjectId?: string;
+    EnvironmentId?: string;
+    RepositoryUrl?: string;
+    GitRef?: string;
+    GitBranch?: string;
+    NetworkAccess: CloudNetworkAccess;
+    WaitMode: CloudWaitMode;
+    TurnWaitBudgetMs: number;
+    PollIntervalMs: number;
+    McpExternalServerUrl?: string;
+    ExtraHeaders?: Record<string, string>;
+}
+
+/**
+ * Additive cloud execution capability flags layered onto `AIAgentHarness.CapabilitySettings`.
+ */
+export interface HarnessCloudCapabilities {
+    /** Whether the adapter executes remotely over HTTP against a cloud agent service rather than spawning a local/container CLI process. */
+    SupportsCloudExecution?: boolean;
+    /** Whether the adapter supports detaching cleanly from an in-flight cloud session (`adaptive-wake`) and re-attaching on the next `AgentWake`. */
+    SupportsAsyncWakeHandoff?: boolean;
+}
+
 /**
  * What a harness adapter can do, mirrored from `AIAgentHarness.CapabilitySettings`.
  *
@@ -8,7 +70,8 @@ import { SandboxExecutor } from './sandbox/SandboxExecutor.js';
  * lockstep with the interface CodeGen emits from `IHarnessCapabilitySettings.ts`. Restating the
  * shape by hand is the value-list drift trap in a different costume.
  */
-export type HarnessCapabilities = NonNullable<MJAIAgentHarnessEntity['CapabilitySettingsObject']>;
+export type HarnessCapabilities = NonNullable<MJAIAgentHarnessEntity['CapabilitySettingsObject']> &
+    HarnessCloudCapabilities;
 
 /**
  * Everything an adapter needs to launch a harness session.
@@ -64,7 +127,18 @@ export interface HarnessSessionConfig {
     Model?: string;
     /** Aborts in-flight work; honoured mid-turn only when `CapabilitySettings.MidTurnCancellation`. */
     CancellationToken?: AbortSignal;
+    /** Optional system instructions supplied at session initialization. */
+    SystemPrompt?: string;
+    /** Cloud runtime configuration when `sandbox.provider === 'cloud'`. */
+    CloudOptions?: CloudSandboxOptions;
+    /** Normalized cloud metadata produced by `CloudSandboxProvider.Provision`. */
+    SandboxMetadata?: CloudSandboxMetadata;
+    /** When true, instructs a resumed cloud session to harvest an already-submitted background turn without posting a duplicate turn. */
+    ReattachPendingTurn?: boolean;
 }
+
+/** Alias for {@link HarnessSessionConfig} used by cloud session initialization callers. */
+export type HarnessSessionInit = HarnessSessionConfig;
 
 /**
  * Events an adapter emits while a turn is in flight.
@@ -77,16 +151,38 @@ export interface HarnessSessionConfig {
 export type HarnessTurnEvent =
     /** Streamed narration, surfaced to `onProgress` and never persisted as a step. */
     | { Type: 'assistant-text'; Text: string }
+    /** Streamed model reasoning/thinking tokens for live observability. */
+    | { Type: 'thinking-delta'; Text: string }
+    /** Structured tool invocation start emitted by CLI or cloud harnesses for live observability. */
+    | { Type: 'tool-use-start'; ToolCallId: string; ToolName: string; ArgumentsJson?: string }
+    /** Structured tool execution result emitted by CLI or cloud harnesses for live observability. */
+    | { Type: 'tool-result'; ToolCallId: string; ToolName?: string; Output: string; IsError?: boolean }
     /** Informational in-sandbox activity (file edit, shell command) for live view only. */
     | { Type: 'sandbox-activity'; Description: string }
     /** The harness wants to do something the posture gates; becomes an `MJ: AI Agent Requests` row. */
     | { Type: 'permission-request'; RequestId: string; Description: string; Command?: string }
     /** Token/cost usage for the turn. Without this the run cannot be accounted for — see below. */
-    | { Type: 'usage'; InputTokens: number; OutputTokens: number; CostUsd?: number }
+    | {
+          Type: 'usage';
+          InputTokens: number;
+          OutputTokens: number;
+          PromptTokens?: number;
+          CompletionTokens?: number;
+          ThinkingTokens?: number;
+          CostUsd?: number;
+      }
     /** The turn ended. `RawText` is expected to carry the Loop next-step JSON envelope. */
-    | { Type: 'turn-complete'; RawText: string }
+    | {
+          Type: 'turn-complete';
+          RawText: string;
+          CloudExecutionState?: CloudExecutionState;
+          AsyncWakePending?: boolean;
+          SessionId?: string;
+          ArtifactUrls?: string[];
+          PullRequestUrl?: string;
+      }
     /** The session failed. Terminal for the turn; the run decides whether to retry. */
-    | { Type: 'session-error'; Error: string };
+    | { Type: 'session-error'; Error: string; CloudExecutionState?: CloudExecutionState };
 
 /**
  * The accumulated outcome of one harness turn, assembled by {@link HarnessAgentBase} from the
@@ -98,6 +194,7 @@ export interface HarnessTurnResult {
     /** Summed usage for the turn. Zeros when the harness reports none — which is itself a finding. */
     InputTokens: number;
     OutputTokens: number;
+    ThinkingTokens?: number;
     CostUsd?: number;
     /** Set when the turn failed rather than completed. */
     ErrorMessage?: string;
@@ -111,6 +208,14 @@ export interface HarnessTurnResult {
      * are not the same price.
      */
     ReportedModel?: string;
+    /** Terminal or detached cloud execution state when driven by a `BaseCloudHarnessAdapter`. */
+    CloudExecutionState?: CloudExecutionState;
+    /** True when the turn detached cleanly in `adaptive-wake` mode and awaits the next `AgentWake`. */
+    AsyncWakePending?: boolean;
+    /** Optional artifact URLs reported by a cloud agent run. */
+    ArtifactUrls?: string[];
+    /** Optional pull request URL created or updated by a cloud agent run. */
+    PullRequestUrl?: string;
 }
 
 /** Where a harness workspace lives and how long it survives. */

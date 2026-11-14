@@ -80,11 +80,30 @@ export type TaskGraphSubmitRequest = {
     Provider: IMetadataProvider;
 };
 
-/** What a Debug-workflow start may seed on the graph. Breakpoints need task IDs, which do not exist
- *  until children persist — so Submit honors `paused` only. */
+/** What a Debug-workflow start may seed on the graph. */
 export type TaskGraphStartDebug = {
     paused?: boolean;
+    /**
+     * Breakpoints to start with, as stable step IDs (the spec's `tempId`, stamped on each step as
+     * `Configuration.stepId`) — task IDs do not exist until the children persist. Submit maps them to this
+     * run's task IDs; a step ID the graph no longer has is dropped (#3798).
+     */
+    breakpointStepIDs?: string[];
 };
+
+/**
+ * The submit-time debug seed for a run's `taskGraphDebug` request, or undefined when it asks for nothing: start
+ * paused, and/or start with breakpoints on these stable step IDs. Non-string and blank step IDs are dropped.
+ */
+export function BuildTaskGraphStartDebug(request: { paused?: boolean; breakpointStepIDs?: unknown } | undefined | null): TaskGraphStartDebug | undefined {
+    if (!request) return undefined;
+    const ids = Array.isArray(request.breakpointStepIDs)
+        ? request.breakpointStepIDs.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+        : [];
+    const paused = request.paused === true;
+    if (!paused && ids.length === 0) return undefined;
+    return { ...(paused ? { paused: true } : {}), ...(ids.length > 0 ? { breakpointStepIDs: ids } : {}) };
+}
 
 /**
  * What an invocation contributes to condition evaluation, beyond the steps' own outputs.

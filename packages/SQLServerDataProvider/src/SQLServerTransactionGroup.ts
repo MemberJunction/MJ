@@ -413,6 +413,17 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     }
 
     /**
+     * The first character of the next token on the line starting at `pos`: spaces, tabs and CRs are
+     * skipped, and null means the line ends (or holds only whitespace) first. A loop rather than the
+     * sticky `/[ \t\r]*(\S)/y`, which CodeQL flags as polynomial on long whitespace runs.
+     */
+    private static firstTokenCharAt(text: string, pos: number): string | null {
+        let i = pos;
+        while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\r')) i++;
+        return i < text.length && !/\s/.test(text[i]) ? text[i] : null;
+    }
+
+    /**
      * Names declared by every `DECLARE` statement in `masked` (comments and strings already
      * blanked by {@link maskNonCode}), lower-cased. Walks the whole declaration list: a name is
      * declared when it directly follows `DECLARE` or a top-level comma. Parentheses are tracked so
@@ -423,7 +434,6 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     private static collectDeclaredNames(masked: string): Set<string> {
         const declared = new Set<string>();
         const nameAt = /@([A-Za-z_][A-Za-z0-9_$#@]*)/y;
-        const nextTokenAt = /[ \t\r]*(\S)/y;
         for (const d of masked.matchAll(/\bDECLARE\b/gi)) {
             let i = d.index! + d[0].length;
             let depth = 0;
@@ -435,9 +445,8 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
                 if (depth === 0 && ch === ';') break;
                 if (depth === 0 && ch === ',') { expectName = true; i++; continue; }
                 if (depth === 0 && ch === '\n') {
-                    nextTokenAt.lastIndex = i + 1;
-                    const next = nextTokenAt.exec(masked);
-                    if (!next || (next[1] !== '@' && next[1] !== ',')) break;
+                    const next = SQLServerTransactionGroup.firstTokenCharAt(masked, i + 1);
+                    if (next !== '@' && next !== ',') break;
                     i++;
                     continue;
                 }
@@ -484,7 +493,68 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
      * Parameters: one request carries ONE parameter namespace, so per-item `?` placeholders are
      * renumbered into a single global @p sequence.
      */
+    /**
+     * Maximum number of parameters allowed in a single batched TDS request.
+     * SQL Server and tedious enforce a hard limit of 2,100 parameters per request.
+     * Batches are chunked when cumulative parameters would exceed 1,800 to maintain
+     * a safe operational margin below the server limit.
+     */
+    public static MaxBatchParameterCount: number = 1800;
+
     private async executeBatchedNoVars(
+        items: TransactionItem[],
+        transaction: sql.Transaction,
+        sqlProvider: SQLServerDataProvider,
+        returnResults: TransactionResult[]
+    ): Promise<void> {
+        // Chunk items when cumulative parameters would exceed MaxBatchParameterCount (1800)
+        // to avoid SQL Server's 2100-parameter limit per request.
+        const chunks: TransactionItem[][] = [];
+        let currentChunk: TransactionItem[] = [];
+        let currentParamCount = 0;
+
+        for (const item of items) {
+            const itemParamCount = item.Vars && Array.isArray(item.Vars) ? item.Vars.length : 0;
+            if (currentChunk.length > 0 && currentParamCount + itemParamCount > SQLServerTransactionGroup.MaxBatchParameterCount) {
+                chunks.push(currentChunk);
+                currentChunk = [];
+                currentParamCount = 0;
+            }
+            currentChunk.push(item);
+            currentParamCount += itemParamCount;
+        }
+        if (currentChunk.length > 0) {
+            chunks.push(currentChunk);
+        }
+
+        try {
+            for (const chunk of chunks) {
+                await this.executeBatchChunk(chunk, transaction, sqlProvider, returnResults);
+            }
+        }
+        catch (e) {
+            // One statement to the server, so a failure fails all of it — the same outcome the
+            // sequential path produces, which also rolls back on the first error. Per-item
+            // attribution for the failing row is the caller's degradation path (re-apply
+            // individually), exactly as before.
+            if (this._groupTxOpen) {
+                await this.RollbackGroupTransaction();
+            } else {
+                try {
+                    await transaction.rollback();
+                } catch (rollbackError) {
+                    LogError(`Failed to rollback after batched operation error: ${rollbackError}`);
+                }
+            }
+            returnResults.length = 0;
+            for (const item of items)
+                returnResults.push(new TransactionResult(item, e, false));
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
+        }
+    }
+
+    private async executeBatchChunk(
         items: TransactionItem[],
         transaction: sql.Transaction,
         sqlProvider: SQLServerDataProvider,
@@ -510,95 +580,75 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
             parts.push(instruction.endsWith(';') ? instruction : `${instruction};`);
         });
         const batchSQL = parts.join('\n');
-        try {
-            // SQL logging is PER ITEM, matching the sequential path. `LogSQLStatement` feeds
-            // migration capture, whose consumers replay statements one record at a time and read
-            // each item's own `simpleSQLFallback` (the record-change-free form) — so logging the
-            // combined text once under item 0's fallback would capture a batch nobody can replay
-            // and attribute every row to the first entity. The batch itself is logged too, as a
-            // single non-fallback entry, so a reader can still see what actually went over the
-            // wire. No-ops entirely unless a SQL logging session is open.
-            const batchDescription = `Batched ${items.length} operation(s) (Transaction Group)`;
-            await GenericDatabaseProvider.LogSQLStatement(
-                batchSQL,
-                globalParams,
-                batchDescription,
-                true, // isMutation
-                undefined
-            );
-            for (const item of items) {
-                await GenericDatabaseProvider.LogSQLStatement(
-                    item.Instruction,
-                    item.Vars ?? undefined,
-                    `${item.OperationType} ${item.ExtraData?.entityName ?? item.BaseEntity.EntityInfo.Name} (Transaction Group, batched)`,
-                    true, // isMutation
-                    item.ExtraData?.simpleSQLFallback
-                );
-            }
 
-            const queryResult = await this.executeOnTransaction<SqlGroupRow>(
-                transaction,
-                sqlProvider,
-                batchDescription,
-                async (tx) => {
-                    const request = new sql.Request(tx);
-                    globalParams.forEach((value, index) => request.input(`p${index}`, value));
-                    return request.query<SqlGroupRow>(batchSQL);
-                },
+        // SQL logging is PER ITEM, matching the sequential path. `LogSQLStatement` feeds
+        // migration capture, whose consumers replay statements one record at a time and read
+        // each item's own `simpleSQLFallback` (the record-change-free form) — so logging the
+        // combined text once under item 0's fallback would capture a batch nobody can replay
+        // and attribute every row to the first entity. The batch itself is logged too, as a
+        // single non-fallback entry, so a reader can still see what actually went over the
+        // wire. No-ops entirely unless a SQL logging session is open.
+        const batchDescription = `Batched ${items.length} operation(s) (Transaction Group)`;
+        await GenericDatabaseProvider.LogSQLStatement(
+            batchSQL,
+            globalParams,
+            batchDescription,
+            true, // isMutation
+            undefined
+        );
+        for (const item of items) {
+            await GenericDatabaseProvider.LogSQLStatement(
+                item.Instruction,
+                item.Vars ?? undefined,
+                `${item.OperationType} ${item.ExtraData?.entityName ?? item.BaseEntity.EntityInfo.Name} (Transaction Group, batched)`,
+                true, // isMutation
+                item.ExtraData?.simpleSQLFallback
             );
-            const multiSetResult = queryResult as { recordsets?: SqlGroupRow[][] };
-            const sets: SqlGroupRow[][] =
-                multiSetResult.recordsets
-                ?? [queryResult.recordset ?? []];
-            const perItem: (SqlGroupRow[] | undefined)[] = new Array(items.length).fill(undefined);
-            let current = -1;
-            for (const rs of sets) {
-                const first = rs && rs[0];
-                if (first !== undefined && Object.prototype.hasOwnProperty.call(first, SENTINEL)) {
-                    const idx = Number(first[SENTINEL]);
-                    if (Number.isFinite(idx)) current = idx;
-                    continue;
-                }
-                // OWNERSHIP RULE: an item owns the FIRST recordset after its sentinel, empty or
-                // not. A generated CRUD procedure emits exactly one recordset, so the first is
-                // the only one; taking it unconditionally means a procedure that returned zero
-                // rows is reported as "no result" (Success false) rather than silently adopting
-                // the NEXT item's rows. The PostgreSQL sibling skips empty results instead —
-                // documented there for the same reason. Neither is reachable with generated
-                // procedures; both are stated so the two cannot drift apart unnoticed.
-                if (current >= 0 && current < items.length && perItem[current] === undefined) {
-                    perItem[current] = rs;
-                }
+        }
+
+        const queryResult = await this.executeOnTransaction<SqlGroupRow>(
+            transaction,
+            sqlProvider,
+            batchDescription,
+            async (tx) => {
+                const request = new sql.Request(tx);
+                globalParams.forEach((value, index) => request.input(`p${index}`, value));
+                return request.query<SqlGroupRow>(batchSQL);
+            },
+        );
+        const multiSetResult = queryResult as { recordsets?: SqlGroupRow[][] };
+        const sets: SqlGroupRow[][] =
+            multiSetResult.recordsets
+            ?? [queryResult.recordset ?? []];
+        const perItem: (SqlGroupRow[] | undefined)[] = new Array(items.length).fill(undefined);
+        let current = -1;
+        for (const rs of sets) {
+            const first = rs && rs[0];
+            if (first !== undefined && Object.prototype.hasOwnProperty.call(first, SENTINEL)) {
+                const idx = Number(first[SENTINEL]);
+                if (Number.isFinite(idx)) current = idx;
+                continue;
             }
-            for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                const raw = perItem[i];
-                let result: SqlGroupRow | null = null;
-                if (raw && raw.length > 0) {
-                    const processed = await sqlProvider.ProcessEntityRows(raw, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser) as SqlGroupRow[];
-                    result = processed && processed.length > 0 ? processed[0] : null;
-                }
-                returnResults.push(new TransactionResult(item, result, result != null));
+            // OWNERSHIP RULE: an item owns the FIRST recordset after its sentinel, empty or
+            // not. A generated CRUD procedure emits exactly one recordset, so the first is
+            // the only one; taking it unconditionally means a procedure that returned zero
+            // rows is reported as "no result" (Success false) rather than silently adopting
+            // the NEXT item's rows. The PostgreSQL sibling skips empty results instead —
+            // documented there for the same reason. Neither is reachable with generated
+            // procedures; both are stated so the two cannot drift apart unnoticed.
+            if (current >= 0 && current < items.length && perItem[current] === undefined) {
+                perItem[current] = rs;
             }
         }
-        catch (e) {
-            // One statement to the server, so a failure fails all of it — the same outcome the
-            // sequential path produces, which also rolls back on the first error. Per-item
-            // attribution for the failing row is the caller's degradation path (re-apply
-            // individually), exactly as before.
-            if (this._groupTxOpen) {
-                await this.RollbackGroupTransaction();
-            } else {
-                try {
-                    await transaction.rollback();
-                } catch (rollbackError) {
-                    LogError(`Failed to rollback after batched operation error: ${rollbackError}`);
-                }
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const raw = perItem[i];
+            let result: SqlGroupRow | null = null;
+            if (raw && raw.length > 0) {
+                const processed = await sqlProvider.ProcessEntityRows(raw, item.BaseEntity.EntityInfo, item.BaseEntity.ContextCurrentUser) as SqlGroupRow[];
+                result = processed && processed.length > 0 ? processed[0] : null;
             }
-            for (const item of items)
-                returnResults.push(new TransactionResult(item, e, false));
-            const errorMessage = e instanceof Error ? e.message : String(e);
-            throw new Error(`Transaction rolled back due to operation failure: ${errorMessage}`);
+            returnResults.push(new TransactionResult(item, result, result != null));
         }
     }
 }

@@ -1,5 +1,138 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+- 3f95ef5: Add first-class GitHub integration across Actions, AgentHarness CLI sandboxes, MCPClient, and Credentials, along with large-scale AI Skill semantic discovery and hybrid catalog prioritization:
+  - **GitHub Credential Types & Resolver (`@memberjunction/credentials`, `@memberjunction/core-actions`)**:
+    - Add `GitHub App` (`GitHubAppCredentialValues`) and `GitHub Personal Access Token` (`GitHubPATCredentialValues`) credential schemas and TypeScript interfaces.
+    - Add `GitHubCredentialResolver`, `GitHubAppAuth` (zero-dependency RS256 JWT signing and repo-scoped installation token exchange), and resilient `GitHubClient` with retry/backoff, repository allowlists, protected-branch enforcement, and App-Token-Never-Merges guardrails.
+    - Support 4-tier credential resolution: explicit `CredentialID`/`CredentialName`, per-user 3LO OAuth (`UserOAuth3LO:GitHub:<userId>` when `UseUserDelegatedAuth=true`), default `GitHub App` / `GitHub Personal Access Token` credential, and environment variable fallback.
+  - **14 Native GitHub Actions & Portable Skill (`@memberjunction/core-actions`, `metadata/`)**:
+    - Add 6 read-only discovery actions (`GitHub: Get Repository Context`, `GitHub: Search Code`, `GitHub: Read File Content`, `GitHub: List Issues and PRs`, `GitHub: Get Issue or PR Details`, `GitHub: Get Workflow Runs and Logs`) and 8 governed write actions (`GitHub: Create or Update Issue`, `GitHub: Add Issue or PR Comment`, `GitHub: Commit Files and Create PR`, `GitHub: Commit Files to Branch`, `GitHub: Submit PR Review`, `GitHub: Merge Pull Request`, `GitHub: Trigger Workflow Dispatch`, `GitHub: Re-run Failed Workflow`).
+    - Seed the `GitHub Engineering & Repository Steward` skill (`MJ: AI Skills`) and grant read-only GitHub discovery actions to `Research Agent`, `ActionSmith`, and `SkillSmith`.
+  - **Agent Harness CLI & MCP GitHub Auth (`@memberjunction/ai-agent-harness`, `@memberjunction/ai-mcp-client`)**:
+    - Add `HarnessCredentialResolver` routing sandbox credential lookups through `CredentialEngine.Instance.getCredential()` (preserving audit logs, `LastUsedAt`, and expiry checks), extracting scalar tokens from encrypted JSON values, minting short-lived installation tokens for `GitHub App` credentials without exposing private keys in containers, mirroring `GH_TOKEN`/`GITHUB_TOKEN`, and enforcing per-user 3LO isolation (`GH_TOKEN_USER_3LO`) with `GIT_AUTHOR_*`/`GIT_COMMITTER_*` attribution.
+    - Update `MCPClientManager` to mint short-lived installation tokens when an MCP server connection uses a `GitHub App` credential.
+  - **AI Skill Semantic Discovery & Hybrid Prioritization (`@memberjunction/core-actions`, `@memberjunction/ai-agents`, `metadata/`)**:
+    - Add the `"AI Skills Search"` `MJ: Entity Documents` Nunjucks template for vector indexing `MJ: AI Skills`.
+    - Add `Find Candidate Skills`, `Find Best Skill`, and `Get Skill Details` actions for hybrid vector + lexical skill discovery and progressive-disclosure inspection.
+    - Add `maxSkillsInPrompt` and `maxSkillDecisionCandidates` to `LoopAgentPromptParams` and implement two-stage hybrid skill catalog narrowing (`RankSkillsByHybridRelevance` + `PreFilterSkillCandidatesForDecision` + `NarrowSkillsWithDecision`) combining query relevance (`0.55`), agent/global run-step usage frequency (`0.25`), and 7-day exponential recency decay (`0.20`), while pinning active/requested skills and surfacing discovery guidance in `BuildCatalogNarrowingNote`.
+
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+- 31cc053: Add durable HITL feedback and agent tree budgets, `AgentContextAssembler`, `AgentStepDispatcher`, `DurableEntityA2ATaskStore`, `TaskSecurityEnvelope` least-privilege and taint enforcement, TaskGraph saga compensation with idempotent retries, `GraphEngine` and `CanonGraphEngine` semantic graph runtime with server entity validation, `GetGraphContextAction`, `GraphSearchProvider` RRF search lane, `graphExpand` pipeline stage, and Predictive Studio shadow scoring with PSI drift detection.
+
+### Patch Changes
+
+- 3c4de2b: Fix escaping order in string handling flagged by CodeQL: Google Drive queries escape backslashes before quotes, and folder lookups, file-type filters and provider-specific values are escaped too (a name with a quote no longer breaks the query), skill frontmatter and `WWW-Authenticate` descriptions escape backslashes, Component Studio emits valid accessors for non-identifier display fields and quotes field names as string literals, HTML entity decoders decode each entity once (`&amp;lt;` stays `&lt;`), the mobile HTML renderer drops out-of-range numeric entities instead of throwing, new-user domain patterns treat regex metacharacters literally, and two no-op replaces in the LinkedIn article action are removed.
+- 5850233: Replace regex HTML/SVG sanitizing that CodeQL flagged as bypassable: `SVGUtils.SanitizeSVG` (and the deprecated `sanitizeSVG`, so every chart, diagram, network, word cloud, sketch, infographic, Mermaid and architecture action) now uses DOMPurify on jsdom, keeps `dominant-baseline`, `pointer-events` and caller-supplied ids, still empties external links, and throws if DOMPurify is unsupported; pan/zoom scripts are built from a new `GeneratePanZoomScriptBody` instead of stripping `<script>` tags from a string; `TextExtractor.ExtractFromHTML` removes script and style elements in one linear walk that also catches end tags with spaces or attributes; RSS and storage-search tag stripping loops to a fixed point.
+- a0079ce: Check hosts by parsed hostname instead of substring, as CodeQL flagged: the Teams webhook action accepts only https URLs on `webhook.office.com` or its subdomains (a URL with that text in its path or query no longer passes), and Azure AD issuer, Azure SQL host and Azure Blob upload detection match the host name itself.
+- 36ddd08: Define `ordered-list` decimal numbering in `RenderDocxFromSections`, add `FolderEditLabel` and cancelable `BeforeFolderEdit` / `AfterFolderEdit` outputs on `ConversationListComponent` (forwarded by `ConversationSidebarComponent`), and add cancelable `BeforeArtifactPanelOpen` / `AfterArtifactPanelOpen` outputs on `ConversationChatAreaComponent`.
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [2bf6237]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [5850233]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [d466c22]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [0693b9b]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6c6f0dc]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [2aa1c10]
+- Updated dependencies [8bd2fab]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [7eff627]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [9c4f458]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [07b7840]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/generic-database-provider@6.3.0-edge.0
+  - @memberjunction/storage@6.3.0-edge.0
+  - @memberjunction/search-engine@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/record-cloning-base@6.3.0-edge.0
+  - @memberjunction/record-cloning@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/core-entities-server@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai-mcp-client@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/lists@6.3.0-edge.0
+  - @memberjunction/ai@6.3.0-edge.0
+  - @memberjunction/sql-dialect@6.3.0-edge.0
+  - @memberjunction/react-linter@6.3.0-edge.0
+  - @memberjunction/ai-engine-base@6.3.0-edge.0
+  - @memberjunction/ai-agent-manager@6.3.0-edge.0
+  - @memberjunction/record-set-processor@6.3.0-edge.0
+  - @memberjunction/clustering-engine@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-vector-sync@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/code-execution@6.3.0-edge.0
+  - @memberjunction/communication-types@6.3.0-edge.0
+  - @memberjunction/communication-engine@6.3.0-edge.0
+  - @memberjunction/content-autotagging@6.3.0-edge.0
+  - @memberjunction/external-change-detection@6.3.0-edge.0
+  - @memberjunction/interactive-component-types@6.3.0-edge.0
+  - @memberjunction/record-set-processor-base@6.3.0-edge.0
+  - @memberjunction/web-search-engine@6.3.0-edge.0
+  - @memberjunction/esignature@6.3.0-edge.0
+  - @memberjunction/geo-core@6.3.0-edge.0
+  - @memberjunction/ai-betty-bot@6.3.0-edge.0
+  - @memberjunction/ai-diagrams@6.3.0-edge.0
+  - @memberjunction/document-parsing@6.3.0-edge.0
+  - @memberjunction/lists-base@6.3.0-edge.0
+  - @memberjunction/export-engine@6.3.0-edge.0
+  - @memberjunction/network-utils@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

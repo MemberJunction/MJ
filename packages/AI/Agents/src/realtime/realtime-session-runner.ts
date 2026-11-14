@@ -560,7 +560,10 @@ export class RealtimeSessionRunner {
             this.session = fresh;
             this.wireHandlers(fresh);
             this.attachRecording(fresh);
-            fresh.SendContextNote?.('NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.');
+            fresh.SendContextNote?.(
+                'NOTE: the audio connection dropped briefly and has been re-established. Briefly acknowledge the interruption if the user was mid-conversation, then continue where things left off.',
+                { Ephemeral: true },
+            );
             this.deps.LogStatus?.('🔁 Realtime transport reconnected after a fatal drop — session resumed.', false);
         } catch (reconnectError) {
             this.logError(reconnectError, 'reconnecting after a fatal transport drop');

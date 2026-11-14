@@ -43,4 +43,36 @@ describe('template', () => {
         expect(out.whole).toBe(50);
         expect(out.embedded).toBe('User a@b.com has 50');
     });
+
+    describe('placeholder scanning', () => {
+        it.each([
+            ['  {{ row.Balance }}  ', 50],
+            ['{{row.Balance}}', 50],
+            ['{{\trow.Meta\n}}', { k: 'v' }],
+        ])('treats %j as one whole placeholder', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toEqual(expected);
+        });
+
+        it.each([
+            ['{{row.Email}} and {{row.Balance}}', 'a@b.com and 50'],
+            ['{{ row.Email }}{{row.Balance}}', 'a@b.com50'],
+            ['no close {{row.Email', 'no close {{row.Email'],
+            ['single } brace {{row.Email} then {{row.Balance}}', 'single } brace {{row.Email} then 50'],
+            ['empty {{}} stays', 'empty {{}} stays'],
+            ['x {{row.Balance}}}', 'x 50}'],
+            ['a {{   }} b', 'a {{   }} b'],
+            ['  {{   }}  ', '  {{   }}  '],
+        ])('interpolates %j', (template, expected) => {
+            expect(ResolveParams({ x: template }, scope).x).toBe(expected);
+        });
+
+        it('reads 100k characters of whitespace inside unclosed braces in linear time', () => {
+            const ws = '\t'.repeat(100_000);
+            const started = Date.now();
+            expect(ResolveParams({ x: '{{{{' + ws }, scope).x).toBe('{{{{' + ws);
+            expect(ResolveParams({ x: '{{{{|' + ws + '}' }, scope).x).toBe('{{{{|' + ws + '}');
+            expect(ResolveParams({ x: '{{'.repeat(50_000) }, scope).x).toBe('{{'.repeat(50_000));
+            expect(Date.now() - started).toBeLessThan(2500);
+        });
+    });
 });

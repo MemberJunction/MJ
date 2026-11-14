@@ -29,6 +29,9 @@ class StubDialogActionsComponent {}
 
 const currentUser = { ID: 'u1', Name: 'Tester' } as unknown as UserInfo;
 
+/** Folder metadata for a user whose folder writes are (exempt = true) or are not row-filtered. */
+const folderEntity = (exempt: boolean) => ({ UserExemptFromRowLevelSecurity: () => exempt });
+
 /** A project entity whose Save fails the way a server refusal does: false + a reason. */
 const failingProject = (reason: string) =>
   ({
@@ -47,7 +50,8 @@ const failingProject = (reason: string) =>
 const render = (project: MJProjectEntity) => {
   const close = vi.fn();
   const provider = {
-    GetEntityObject: vi.fn().mockResolvedValue(project)
+    GetEntityObject: vi.fn().mockResolvedValue(project),
+    EntityByName: () => folderEntity(true)
   } as unknown as IMetadataProvider;
 
   const f = renderComponentFixture(ProjectFormModalComponent, {
@@ -127,7 +131,8 @@ describe('ProjectFormModalComponent (DOM) — folder sharing failure reporting',
     };
     const close = vi.fn();
     const provider = {
-      GetEntityObject: vi.fn((name: string) => Promise.resolve(name === 'MJ: Projects' ? project : refusedGrant))
+      GetEntityObject: vi.fn((name: string) => Promise.resolve(name === 'MJ: Projects' ? project : refusedGrant)),
+      EntityByName: () => folderEntity(true)
     } as unknown as IMetadataProvider;
     const f = renderComponentFixture(ProjectFormModalComponent, {
       imports: [CommonModule, FormsModule],
@@ -158,7 +163,12 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
     const f = renderComponentFixture(ProjectFormModalComponent, {
       imports: [CommonModule, FormsModule],
       declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
-      inputs: { environmentId: 'env1', currentUser, dialogRef: { Close: vi.fn() } as unknown as MJDialogRef },
+      inputs: {
+        environmentId: 'env1',
+        currentUser,
+        dialogRef: { Close: vi.fn() } as unknown as MJDialogRef,
+        Provider: { EntityByName: () => folderEntity(true) } as unknown as IMetadataProvider
+      },
       setup: (instance) => {
         instance.formData.isPersonal = isPersonal;
       },
@@ -207,7 +217,8 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
           Delete: vi.fn().mockResolvedValue(true)
         };
         return perm;
-      })
+      }),
+      EntityByName: () => folderEntity(true)
     } as unknown as IMetadataProvider;
 
     const close = vi.fn();
@@ -256,3 +267,28 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
   });
 });
 
+
+describe('ProjectFormModalComponent (DOM) — Public is offered only to users whose folder writes are unfiltered', () => {
+  /** The visibility choices a new-folder dialog offers. */
+  const choices = (exempt: boolean): string[] => {
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: {
+        environmentId: 'env1',
+        currentUser,
+        dialogRef: { Close: vi.fn() } as unknown as MJDialogRef,
+        Provider: { EntityByName: () => folderEntity(exempt) } as unknown as IMetadataProvider
+      },
+    });
+    return Array.from((f.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[name="projectVisibility"]')).map(i => i.value);
+  };
+
+  it('offers Private and Shared to a user whose folder writes are row-filtered', () => {
+    expect(choices(false)).toEqual(['Private', 'Shared']);
+  });
+
+  it('offers Public too to a user with an unfiltered folder grant', () => {
+    expect(choices(true)).toEqual(['Private', 'Shared', 'Public']);
+  });
+});

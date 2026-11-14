@@ -388,6 +388,33 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
             expect(sql).toMatch(/INSERT INTO[^(]*\([^)]*\[BID\]/);
         });
 
+        // #3526: a NULL key part never matched `col = @p`, so the create re-selected nothing.
+        it('composite PK with a nullable part re-selects the row NULL-safely; non-null parts are unchanged', () => {
+            const entity = createMockEntity(
+                { Name: 'StagedRow', BaseTable: 'StagedRow', BaseTableCodeName: 'StagedRow' },
+                [
+                    { ID: 'pk1', Name: 'AccountNo', Type: 'nvarchar', Length: 100, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'SubCode', Type: 'nvarchar', Length: 100, IsPrimaryKey: true, AllowsNull: true, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Amount', Type: 'decimal', Length: 9, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('[AccountNo] = @AccountNo AND ([SubCode] = @SubCode OR ([SubCode] IS NULL AND @SubCode IS NULL))');
+        });
+
+        it('composite PK with no nullable part keeps the plain equality predicate', () => {
+            const entity = createMockEntity(
+                { Name: 'JunctionTable', BaseTable: 'JunctionTable', BaseTableCodeName: 'JunctionTable' },
+                [
+                    { ID: 'pk1', Name: 'AID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'BID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('[AID] = @AID AND [BID] = @BID');
+            expect(sql).not.toContain('IS NULL AND @');
+        });
+
         it('single non-UUID PK (e.g. string `Code` key)', () => {
             const entity = createMockEntity(
                 { Name: 'CountryRef', BaseTable: 'CountryRef', BaseTableCodeName: 'CountryRef' },
@@ -686,6 +713,36 @@ describe('SQLServerCodeGenProvider — foreign key indexes', () => {
             const entity = createMockEntity({}, [pkField]);
 
             expect(provider.generateForeignKeyIndexes(entity)).toEqual([]);
+        });
+    });
+
+    describe('existing-index guard (#6466)', () => {
+        it('skips the index when its name exists or another unfiltered index leads with the column', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+
+            expect(sql).toContain("WHERE name = 'IDX_AUTO_MJ_FKEY_TestEntity_CategoryID'");
+            expect(sql).toContain('UNION ALL');
+            expect(sql).toContain('i.has_filter = 0');
+            expect(sql).toContain('ic.is_included_column = 0');
+            expect(sql).toContain("(ic.key_ordinal = 1 AND COL_NAME(ic.object_id, ic.column_id) = 'CategoryID')");
+            expect(sql).toContain(') = 1');
+        });
+
+        it('keeps one IF NOT EXISTS (...) before CREATE INDEX, the shape the PG converter recognizes', () => {
+            const entity = createMockEntity({}, [pkField, fkField('CategoryID')]);
+
+            const sql = provider.generateForeignKeyIndexes(entity)[0];
+
+            expect(sql.match(/IF NOT EXISTS \(/g)).toHaveLength(1);
+            expect(sql).toMatch(/\n\)\nCREATE INDEX IDX_AUTO_MJ_FKEY_TestEntity_CategoryID ON/);
+        });
+
+        it("doubles an apostrophe in the column name inside the guard", () => {
+            const entity = createMockEntity({}, [pkField, fkField("Owner's ID")]);
+
+            expect(provider.generateForeignKeyIndexes(entity)[0]).toContain("= 'Owner''s ID')");
         });
     });
 

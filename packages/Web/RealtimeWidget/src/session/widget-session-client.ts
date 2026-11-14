@@ -7,7 +7,7 @@
  * @module @memberjunction/realtime-widget
  */
 
-import { CreateProofOfPossessionJwt, CreateProofOfPossessionKey, type ProofOfPossessionKey } from '@memberjunction/global';
+import { CreateProofOfPossessionJwt, CreateProofOfPossessionKey, type ProofOfPossessionKey, TrimTrailingSlashes } from '@memberjunction/global';
 import type { WidgetModality, WidgetSession, WidgetSessionResponse } from '../types.js';
 
 /** Injectable fetch so the client is unit-testable without a network. Defaults to global fetch. */
@@ -249,7 +249,7 @@ export class WidgetSessionClient {
     }
 
     private trimmedApiUrl(): string {
-        return this.apiUrl.replace(/\/+$/, '');
+        return TrimTrailingSlashes(this.apiUrl);
     }
 }
 

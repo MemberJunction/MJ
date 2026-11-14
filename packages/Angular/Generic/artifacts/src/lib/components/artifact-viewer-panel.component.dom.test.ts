@@ -7,6 +7,7 @@ import { ArtifactFileService } from '../services/artifact-file.service';
 import { ArtifactIconService } from '../services/artifact-icon.service';
 import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component';
+import { ArtifactVersionCompareComponent } from './version-diff/artifact-version-compare.component';
 
 /**
  * DOM coverage for <mj-artifact-viewer-panel> — the artifact viewer with header, version selector and
@@ -15,19 +16,21 @@ import { ArtifactViewerPanelComponent } from './artifact-viewer-panel.component'
  * error state, the header (title, version, close → closed), and the showHeader gate.
  */
 
-@Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '' })
+@Component({ standalone: true, selector: 'mj-artifact-type-plugin-viewer', template: '<div data-testid="plugin-viewer-stub" [attr.data-readonly]="readonly"></div>' })
 class PluginViewerStub {
+  @Input() Provider: IMetadataProvider | null = null;
   @Input() artifactTypeName = ''; @Input() artifactVersion: unknown; @Input() contentType = ''; @Input() readonly = false;
   @Input() VisibleVersionNumbers: ReadonlyArray<number> | null = null;
   @Output() applyFormRequested = new EventEmitter<unknown>(); @Output() navigationRequest = new EventEmitter<unknown>();
   @Output() openEntityRecord = new EventEmitter<unknown>(); @Output() pluginLoaded = new EventEmitter<unknown>(); @Output() tabsChanged = new EventEmitter<unknown>();
+  @Output() ContentCommitted = new EventEmitter<string>();
 }
 @Component({ standalone: true, selector: 'mj-code-editor', template: '' })
 class CodeEditorStub { @Input() language = ''; @Input() lineWrapping = false; @Input() readonly = false; @Input() value = ''; }
 @Component({ standalone: true, selector: 'mj-markdown', template: '' })
 class MarkdownStub { @Input() data = ''; @Input() enableCollapsibleHeadings = false; @Input() enableHtml = false; @Input() enableLineNumbers = false; @Input() enableSmartypants = false; }
 
-const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent];
+const CHILDREN = [PluginViewerStub, CodeEditorStub, MarkdownStub, StubEmptyStateComponent, ArtifactVersionCompareComponent];
 const ARTIFACT = { Name: 'Q3 Report', Description: 'Quarterly numbers' } as unknown as MJArtifactEntity;
 const VERSION = { ID: 'v1', VersionNumber: 2 } as unknown as MJArtifactVersionEntity;
 type OnInitProto = { ngOnInit: () => Promise<void> };
@@ -425,5 +428,152 @@ describe('ArtifactViewerPanelComponent (DOM) — PDF export menu', () => {
     await f.componentInstance.OnExportPDF('portrait');
     expect(notification.CreateSimpleNotification).toHaveBeenCalledWith(expect.stringContaining('Could not create the PDF'), 'error', 5000);
     expect(f.componentInstance.IsExportingPDF).toBe(false);
+  });
+});
+
+describe('ArtifactViewerPanelComponent (DOM) — Version Compare entry in version selector', () => {
+  it('surfaces "Compare Versions…" at the bottom of the version dropdown without cluttering tabs', async () => {
+    const { f } = await renderLoaded([1, 2, 3], { viewContext: 'conversation' });
+    // Tab strip stays clean (no permanent Compare tab)
+    expect(f.componentInstance.AllTabs).not.toContain('Compare');
+
+    // Open version selector dropdown
+    (query(f, '.version-selector') as HTMLElement).click();
+    f.detectChanges();
+
+    const compareTrigger = query(f, '[data-testid="open-version-compare-option"]') as HTMLButtonElement | null;
+    expect(compareTrigger).not.toBeNull();
+    expect(compareTrigger?.textContent?.trim()).toContain('Compare Versions…');
+
+    // Click Compare Versions -> defaults to immediate predecessor v2 -> v3
+    compareTrigger!.click();
+    await f.whenStable();
+    f.detectChanges();
+
+    expect(f.componentInstance.IsCompareMode).toBe(true);
+    expect(f.componentInstance.CompareBaseVersionNumber).toBe(2);
+    expect(f.componentInstance.CompareTargetVersionNumber).toBe(3);
+    expect(text(f, '.version-label')).toBe('v2 → v3');
+    expect(query(f, '[data-testid="artifact-version-compare-workspace"]')).not.toBeNull();
+
+    // Exit Compare returns immediately to normal Display mode
+    (query(f, '[data-testid="exit-compare-btn"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(f.componentInstance.IsCompareMode).toBe(false);
+    expect(text(f, '.version-label')).toBe('v3');
+  });
+});
+
+describe('ArtifactViewerPanelComponent (DOM) — default read-only security (B3) & MAX(VersionNumber) commit (B5)', () => {
+  it('defaults canEdit to false, passes readonly=true to plugin viewer, and blocks OnPluginContentCommitted when canEdit is omitted', async () => {
+    const markdownArtifact = { Name: 'Q3 Report', Description: 'Quarterly numbers', Type: 'Markdown' } as unknown as MJArtifactEntity;
+    const f = render({
+      isLoading: false,
+      artifact: markdownArtifact,
+      allVersions: [VERSION],
+      selectedVersionNumber: 2,
+      artifactVersion: VERSION,
+      activeTab: 'display',
+      driverClass: 'MarkdownArtifactViewerPlugin',
+    });
+
+    expect(f.componentInstance.canEdit).toBe(false);
+    const stubEl = query(f, '[data-testid="plugin-viewer-stub"]');
+    expect(stubEl?.getAttribute('data-readonly')).toBe('true');
+
+    const saveSpy = vi.fn();
+    f.componentInstance.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
+    f.componentInstance.Provider = {
+      GetEntityObject: saveSpy,
+    } as unknown as IMetadataProvider;
+
+    await f.componentInstance.OnPluginContentCommitted('# Blocked edit');
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('queries unscoped MAX(VersionNumber) and honors Save() return value in OnPluginContentCommitted when canEdit=true', async () => {
+    const savedRecords: Array<{ VersionNumber: number; Name: string; Content: string }> = [];
+    let shouldSaveSucceed = false;
+
+    const mockProvider = {
+      CurrentUser: { ID: 'u-1' },
+      Entities: [],
+      Roles: [],
+      EntityByName: () => undefined,
+      RunView: async (params: RunViewParams) => {
+        if (params.EntityName === 'MJ: Artifact Versions' && params.MaxRows === 1) {
+          return {
+            Success: true,
+            Results: [{ ID: 'ver-unscoped-5', VersionNumber: 5 }],
+            RowCount: 1,
+            TotalRowCount: 1,
+          } as unknown as RunViewResult;
+        }
+        return {
+          Success: true,
+          Results: [{ ID: 'v1', VersionNumber: 2 }],
+          RowCount: 1,
+          TotalRowCount: 1,
+        } as unknown as RunViewResult;
+      },
+      GetEntityObject: async () => {
+        const rec = {
+          ID: 'ver-new-6',
+          ArtifactID: '',
+          UserID: '',
+          VersionNumber: 0,
+          Name: '',
+          Content: '',
+          LatestResult: { Message: 'Database rejected write' },
+          NewRecord: () => undefined,
+          Save: async () => {
+            if (!shouldSaveSucceed) {
+              return false;
+            }
+            savedRecords.push({
+              VersionNumber: rec.VersionNumber,
+              Name: rec.Name,
+              Content: rec.Content,
+            });
+            return true;
+          },
+        };
+        return rec;
+      },
+    } as unknown as IMetadataProvider;
+
+    const notification = { CreateSimpleNotification: vi.fn() };
+    vi.spyOn(ArtifactViewerPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
+    const f = renderComponentFixture(ArtifactViewerPanelComponent, {
+      imports: CHILDREN,
+      declarations: [ArtifactViewerPanelComponent],
+      providers: [
+        { provide: MJNotificationService, useValue: notification },
+        { provide: ArtifactFileService, useValue: fileServiceStub },
+      ],
+      inputs: { artifactId: 'a1', canEdit: true, Provider: mockProvider },
+      setup: (c) => {
+        c.isLoading = false;
+        c.error = null;
+        c.artifact = { ID: 'a1', Name: 'Q3 Report' } as unknown as MJArtifactEntity;
+        c.allVersions = [VERSION];
+        c.selectedVersionNumber = 2;
+        c.artifactVersion = { ID: 'v1', VersionNumber: 2, Name: 'Q3 Report' } as unknown as MJArtifactVersionEntity;
+        c.CurrentUser = { ID: 'u-1' } as NonNullable<ArtifactViewerPanelComponent['CurrentUser']>;
+      },
+    });
+
+    // 1. Save() === false -> does NOT advance SelectedVersionNumber and notifies error
+    await f.componentInstance.OnPluginContentCommitted('# Failed save');
+    expect(f.componentInstance.SelectedVersionNumber).toBe(2);
+    expect(savedRecords).toHaveLength(0);
+    expect(notification.CreateSimpleNotification).toHaveBeenCalled();
+
+    // 2. Save() === true -> uses dbMax (5) + 1 = v6 instead of local 2 + 1 = v3
+    shouldSaveSucceed = true;
+    await f.componentInstance.OnPluginContentCommitted('# Succeeded save');
+    expect(savedRecords).toHaveLength(1);
+    expect(savedRecords[0].VersionNumber).toBe(6);
+    expect(f.componentInstance.SelectedVersionNumber).toBe(6);
   });
 });

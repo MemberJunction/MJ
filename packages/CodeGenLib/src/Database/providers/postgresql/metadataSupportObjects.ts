@@ -224,7 +224,11 @@ SELECT
   -- both expression renders go through fnSafePGGetExpr (see section 1): a relation
   -- dropped by CodeGen's own concurrent regeneration must yield NULL for that one
   -- column, not abort the statement and with it the run.
-  __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) AS "DefaultValue",
+  -- A STORED generated column has no default: pg_attrdef holds its generation expression,
+  -- which belongs in ComputedColumnDefinition only (as on SQL Server). Reporting it as the
+  -- default wrote it into EntityField.DefaultValue (255 chars) and failed the refresh (#6511).
+  CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN NULL
+       ELSE __mj."fnMapPGDefaultToMJ"(__mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid)) END AS "DefaultValue",
   CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN __mj."fnSafePGGetExpr"(ad.adbin, ad.adrelid) ELSE NULL END AS "ComputedColumnDefinition",
   COALESCE(col_description(src_cls.oid, a.attnum::integer), col_description(bt_cls.oid, bt_a.attnum::integer)) AS "Description",
   col_description(src_cls.oid, a.attnum::integer) AS "ViewColumnDescription",
@@ -383,6 +387,26 @@ BEGIN
     WHERE u."KeyColumnCount" = 1
       AND NOT u."IsFiltered";
   ANALYZE _uef_uk;
+
+  -- A column of a multi-column foreign key is a usable single-column reference only when the
+  -- column it references is unique on its own. Joined alone, any other component matches many
+  -- referenced rows and the base view's label join multiplies rows, so it gets no related entity.
+  DELETE FROM _uef_fk fk
+  WHERE EXISTS (
+          SELECT 1 FROM _uef_fk sibling
+          WHERE sibling."FK_NAME" = fk."FK_NAME" AND sibling.schema_name = fk.schema_name
+            AND sibling."table" = fk."table" AND sibling."column" <> fk."column"
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_pk pk
+          WHERE pk."SchemaName"::text = fk.referenced_schema::text AND pk."TableName"::text = fk.referenced_table::text
+            AND pk."ColumnName"::text = fk.referenced_column::text AND pk."KeyColumnCount" = 1
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_uk uk
+          WHERE uk."SchemaName"::text = fk.referenced_schema::text AND uk."TableName"::text = fk.referenced_table::text
+            AND uk."ColumnName"::text = fk.referenced_column::text
+        );
 
   -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
   -- view never joins _uef_cols below, so it is never renumbered and keeps its old Sequence. When
@@ -598,16 +622,18 @@ BEGIN
   FROM _uef_filtered fr
   WHERE tgt."ID" = fr.entity_field_id;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _uef_filtered's pg_toast relation.
   RETURN QUERY
   SELECT
-    fr.entity_id, fr.entity_name::text, fr.entity_field_id, fr.entity_field_name::text,
-    fr.auto_update_description, fr.existing_description::text, fr.sql_description::text,
-    fr.new_type::text, fr.new_length::integer, fr.new_precision::integer, fr.new_scale::integer,
-    fr.new_allows_null, fr.new_default_value::text, fr.new_auto_increment,
+    fr.entity_id, (fr.entity_name || '')::text, fr.entity_field_id, (fr.entity_field_name || '')::text,
+    fr.auto_update_description, (fr.existing_description || '')::text, (fr.sql_description || '')::text,
+    (fr.new_type || '')::text, fr.new_length::integer, fr.new_precision::integer, fr.new_scale::integer,
+    fr.new_allows_null, (fr.new_default_value || '')::text, fr.new_auto_increment,
     fr.new_is_virtual, fr.new_is_computed, fr.new_sequence::integer,
-    fr.related_entity_id, fr.related_entity_field_name::text,
+    fr.related_entity_id, (fr.related_entity_field_name || '')::text,
     fr.new_is_primary_key, fr.new_is_unique,
-    fr.is_material_change, fr.change_reasons::text
+    fr.is_material_change, (fr.change_reasons || '')::text
   FROM _uef_filtered fr
   -- Only material changes flag the entity as modified (for regen). Sequence-only
   -- renumbers were still applied by the UPDATE above but must not trigger a full
@@ -716,9 +742,11 @@ BEGIN
   FROM _ues_filtered fr
   WHERE tgt."ID" = fr.entity_id;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _ues_filtered's pg_toast relation.
   RETURN QUERY
-  SELECT fr.entity_id, fr.entity_name::text, fr.current_description::text,
-         fr.new_description::text, fr.entity_description::text, fr.schema_name
+  SELECT fr.entity_id, (fr.entity_name || '')::text, (fr.current_description || '')::text,
+         (fr.new_description || '')::text, (fr.entity_description || '')::text, (fr.schema_name || '')::text
   FROM _ues_filtered fr;
 
   -- Hand the storage back but KEEP the relations (and their OIDs) so the plans
@@ -881,8 +909,10 @@ BEGIN
   DELETE FROM __mj."EntityField" delf
   WHERE delf."ID" IN (SELECT d.field_id FROM _del_deleted d);
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _del_deleted's pg_toast relation.
   RETURN QUERY
-  SELECT d.field_id, d.entity_id, d.entity_name, d.field_name FROM _del_deleted d;
+  SELECT d.field_id, d.entity_id, (d.entity_name || '')::text, (d.field_name || '')::text FROM _del_deleted d;
 
   -- TRUNCATE, never DROP: frees the storage while keeping each relation's OID
   -- stable so the plans cached above survive the next call on this connection.
@@ -1210,8 +1240,10 @@ BEGIN
       v_row.schema_name, v_row.view_name, v_row.entity_name, v_row.missing_columns;
   END LOOP;
 
+  -- Force inline detoasting via || '' so TOAST pointers are eagerly resolved into
+  -- the tuplestore before TRUNCATE wipes _rav_drift's pg_toast relation.
   RETURN QUERY
-  SELECT d.schema_name, d.view_name, d.entity_name, d.missing_columns
+  SELECT (d.schema_name || '')::text, (d.view_name || '')::text, (d.entity_name || '')::text, (d.missing_columns || '')::text
   FROM _rav_drift d
   ORDER BY d.schema_name, d.view_name;
 

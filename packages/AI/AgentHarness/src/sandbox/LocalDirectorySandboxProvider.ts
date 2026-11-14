@@ -21,6 +21,7 @@ import { ChildProcessExecutor } from './ChildProcessExecutor.js';
  * boundary is soft.
  */
 export class LocalDirectorySandboxProvider implements ISandboxProvider {
+    public readonly Name = 'local' as const;
     private readonly rootPath: string;
 
     /**

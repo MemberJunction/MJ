@@ -226,7 +226,8 @@ const PROVIDER_HEALTH_ERROR_TYPES: ReadonlySet<string> = new Set([
  *
  * Overriding the hook rather than assigning `params.timeoutMS` at each site is deliberate: the
  * ceiling then also covers any prompt a future feature adds, and a caller that DOES pass an explicit
- * `timeoutMS` still wins, because the runner resolves `params.timeoutMS ?? DefaultPromptTimeoutMS`.
+ * `timeoutMS` still wins, because the runner resolves `params.timeoutMS ?? prompt.TimeoutMS ??
+ * DefaultPromptTimeoutMS` (as does a prompt that sets its own `TimeoutMS`).
  */
 export class AdvancedGenerationPromptRunner extends AIPromptRunner {
     protected override get DefaultPromptTimeoutMS(): number | undefined {

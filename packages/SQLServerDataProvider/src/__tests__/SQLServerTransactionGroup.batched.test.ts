@@ -261,4 +261,55 @@ describe('SQLServerTransactionGroup.scopeItemVariables', () => {
         const src = "EXEC [__mj].[spDeleteTask] @ID='00000000-0000-0000-0000-000000000000';";
         expect(SQLServerTransactionGroup.scopeItemVariables(src, 0)).toBe(src);
     });
+
+    describe('Parameter-Limit Chunking (MaxBatchParameterCount = 1800)', () => {
+        it('exposes MaxBatchParameterCount as 1800 to maintain safe margin below SQL Server 2100 limit', () => {
+            expect(SQLServerTransactionGroup.MaxBatchParameterCount).toBe(1800);
+        });
+
+        it('splits items into multiple sequential query chunks when cumulative parameter count exceeds 1800', async () => {
+            queryCalls.length = 0;
+            throwOnQuery = undefined;
+            // 2 items, each with 1,000 parameters = 2,000 parameters total
+            // Since 1000 + 1000 = 2000 > 1800, this must chunk into 2 queries
+            const paramsA = new Array(1000).fill('valA');
+            const paramsB = new Array(1000).fill('valB');
+            const placeholdersA = paramsA.map(() => '?').join(', ');
+            const placeholdersB = paramsB.map(() => '?').join(', ');
+
+            scriptedRecordsets = [
+                [{ __mj_batch_item: 0 }],
+                [{ ID: 'item-0-result' }],
+            ];
+
+            const itemA = makeItem(`EXEC spCreateLargeA @args=${placeholdersA}`, paramsA, 'LargeA');
+            const itemB = makeItem(`EXEC spCreateLargeB @args=${placeholdersB}`, paramsB, 'LargeB');
+
+            const results: TransactionResult[] = [];
+            await run([itemA, itemB], results);
+
+            // Verified: 2 separate queries executed on the transaction rather than one crashing query
+            expect(queryCalls.length).toBe(2);
+            expect(Object.keys(queryCalls[0].inputs).length).toBe(1000);
+            expect(Object.keys(queryCalls[1].inputs).length).toBe(1000);
+            expect(results.length).toBe(2);
+        });
+
+        it('rolls back the group and marks all items failed when any chunk fails', async () => {
+            queryCalls.length = 0;
+            const paramsA = new Array(1000).fill('valA');
+            const paramsB = new Array(1000).fill('valB');
+            const itemA = makeItem(`EXEC spA @args=${paramsA.map(() => '?').join(',')}`, paramsA, 'A');
+            const itemB = makeItem(`EXEC spB @args=${paramsB.map(() => '?').join(',')}`, paramsB, 'B');
+
+            throwOnQuery = new Error('TDS protocol simulated error');
+
+            const results: TransactionResult[] = [];
+            await expect(run([itemA, itemB], results)).rejects.toThrow(/Transaction rolled back due to operation failure: TDS protocol simulated error/);
+
+            expect(results.length).toBe(2);
+            expect(results[0].Success).toBe(false);
+            expect(results[1].Success).toBe(false);
+        });
+    });
 });

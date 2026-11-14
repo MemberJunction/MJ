@@ -10,7 +10,7 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import type { NavItem } from '@memberjunction/ng-base-application';
-import { DATA_EXPLORER_DASHBOARDS_ROUTE } from './moved-nav-item-redirect';
+import { CHAT_TASKS_ROUTE, DATA_EXPLORER_DASHBOARDS_ROUTE } from './moved-nav-item-redirect';
 
 /** The page of the app navigation route. */
 @Component({ standalone: true, selector: 'mj-app-page-stub', template: '' })
@@ -28,7 +28,9 @@ const application = (ID: string, Name: string, labels: string[]): BaseApplicatio
 
 const DATA_EXPLORER = application('A0000000-0000-4000-8000-0000000000DE', 'Data Explorer', ['Data', 'Queries']);
 const DASHBOARDS = application('A0000000-0000-4000-8000-00000000000D', 'Dashboards', ['Library', 'Categories']);
+const CHAT = application('A0000000-0000-4000-8000-00000000000C', 'Chat', ['Conversations', 'Collections', 'Agent Activity']);
 const OLD_LINK = '/app/data-explorer/Dashboards?lib=favorites';
+const OLD_CHAT_TASKS_LINK = '/app/chat/Tasks?taskId=task-123';
 
 /** An application manager whose app list is ready and holds `apps`. */
 const readyApps = (apps: BaseApplication[]): AppManagerDouble => ({ WhenReady: async () => undefined, GetAllApps: () => apps });
@@ -40,7 +42,11 @@ const readyApps = (apps: BaseApplication[]): AppManagerDouble => ({ WhenReady: a
 async function navigate(url: string, appManager: AppManagerDouble): Promise<string> {
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([DATA_EXPLORER_DASHBOARDS_ROUTE, { path: 'app/:appName/:navItemName', component: AppPageStub }]),
+      provideRouter([
+        DATA_EXPLORER_DASHBOARDS_ROUTE,
+        CHAT_TASKS_ROUTE,
+        { path: 'app/:appName/:navItemName', component: AppPageStub },
+      ]),
       { provide: ApplicationManager, useValue: appManager },
     ],
   });
@@ -83,5 +89,9 @@ describe('DATA_EXPLORER_DASHBOARDS_ROUTE', () => {
 
   it('leaves the other Data Explorer links alone', async () => {
     expect(await navigate('/app/data-explorer/Queries?x=1', readyApps([DATA_EXPLORER, DASHBOARDS]))).toBe('/app/data-explorer/Queries?x=1');
+  });
+
+  it("redirects legacy /app/chat/Tasks?taskId=... deep links to /app/chat/Agent%20Activity keeping query params", async () => {
+    expect(await navigate(OLD_CHAT_TASKS_LINK, readyApps([CHAT]))).toBe('/app/chat/Agent%20Activity?taskId=task-123');
   });
 });

@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ConversationEngine, MJConversationEntity, type ConversationScope } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { ExportService, ExportFormat, ExportOptions, ExportBranding } from '../../services/export.service';
+import { ExportService, ExportFormat, ExportOptions, ExportBranding, ExportArtifactLinkTarget } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -409,6 +409,12 @@ export class ExportModalComponent {
    * exports Main.
    */
   @Input() Scope: ConversationScope | null = null;
+
+  /**
+   * Builds a link that opens an exported artifact in the app (this package has no router, so
+   * the host supplies it). Null exports artifacts with their IDs only.
+   */
+  @Input() ArtifactLink: ((target: ExportArtifactLinkTarget) => string | null) | null = null;
   @Output() Cancelled = new EventEmitter<void>();
 
   /**
@@ -513,7 +519,8 @@ export class ExportModalComponent {
     return {
       ...this.ExportOptions,
       includeTheme: brandingOn,
-      branding: brandingOn ? (this.Branding ?? undefined) : undefined
+      branding: brandingOn ? (this.Branding ?? undefined) : undefined,
+      artifactLink: this.ArtifactLink ?? undefined
     };
   }
 
@@ -527,7 +534,10 @@ export class ExportModalComponent {
   }
 
   get CanExport(): boolean {
+    // Without a conversation OnExport has nothing to export, so the button is disabled
+    // rather than doing nothing when clicked.
     return !this.IsExporting &&
+           !!this.Conversation &&
            !!this.SelectedFormat &&
            (this.ExportOptions.includeMessages === true);
   }

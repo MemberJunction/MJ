@@ -19,6 +19,7 @@ import { BuildNativeToolSet, COMPLETE_TASK_TOOL, SUB_AGENT_TOOL_PREFIX, type Nat
 import { TurnToolCallingMode } from './native-tools/turn-mode';
 import { NATIVE_CONTROL_TEMPLATE_DATA, NATIVE_ONLY_TEMPLATE_FLAG, ResolveNativeControlConfig, type NativeControlConfig } from './native-tools/native-control-config';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './native-tools/agent-tools';
+import { AgentToolCircuitBreaker } from './native-tools/agent-tool-circuit-breaker';
 import { BuildFrameworkTools, type FrameworkToolAvailability, type FrameworkToolHost } from './native-tools/framework-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactAnsweredToolCallArguments, CompactToolResultContent, CompactToolResultContentAsync, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
@@ -29,6 +30,8 @@ import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPre
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentType } from './agent-types/loop-agent-type';
+import { CreateAgentInstance } from './agent-instance';
+import { FailingStepError, IsPromptTurnStep, MAX_REPEATED_FAILING_STEP, RepeatedFailingStepTracker } from './repeated-failing-step';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
@@ -248,7 +251,7 @@ import {
     formatFinalOutput,
     summarizePipelineStages,
 } from './pipeline';
-import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { AgentPayloadChangeRequest, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
 import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
@@ -684,6 +687,13 @@ interface DecisionCallAllowance {
     Allowed: number;
 }
 
+/** A payload change from a refused completion, held until a completion is accepted. */
+interface HeldCompletionChange {
+    Change: AgentPayloadChangeRequest<unknown>;
+    /** Whether it was built on a payload still inherited unmodified from a prior run (see applyTurnPayloadChange). */
+    UnmodifiedInheritedPayload: boolean;
+}
+
 /** The prompt params that limit one turn's decisions. */
 type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
@@ -814,6 +824,13 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+    /**
+     * Payload changes sent with completions that were refused, in order. They are held, not
+     * committed: the next prompt sees the payload with them applied, and the next completion is
+     * built on top of them, so a model only has to send its corrections. They are committed with
+     * the next accepted completion, and dropped if the run ends without one.
+     */
+    private _heldCompletionChanges: HeldCompletionChange[] = [];
     /** The previous request's outgoing messages, as {@link messageFingerprint}s. */
     private _lastSentFingerprints: string[] | undefined;
     /** The previous request's system-prompt-and-tools fingerprint, from the prompt runner. */
@@ -909,6 +926,13 @@ export class BaseAgent {
         identicalFailures: number;
         totalConsecutiveFailures: number;
     }> = new Map();
+
+    /**
+     * The same identical-arguments and attempt-budget rules for agent-local tools
+     * ({@link GetAgentTools}), which run outside the action dispatch path.
+     * @private
+     */
+    private _agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
 
     /**
      * The identity of one action call's arguments, for the circuit breaker's identical-arguments
@@ -1088,6 +1112,7 @@ export class BaseAgent {
         this._audienceLockedActions.clear();
         this._taintLockedActions.clear();
         this._actionFailureHistory.clear();
+        this._agentToolBreaker.Reset();
     }
 
     /**
@@ -2580,7 +2605,8 @@ export class BaseAgent {
             const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
                 params.agent.ID,
                 params.contextUser,
-                this._agentRun?.ID
+                this._agentRun?.ID,
+                params.provider || this._activeProvider
             );
 
             const totalSources =
@@ -2641,40 +2667,37 @@ export class BaseAgent {
                 return; // No step needed when there are no data sources at all
             }
 
-            // Create a step entity to track data preloading in the agent run
-            const stepEntity = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: 'Data Source Preloading',
-                contextUser: params.contextUser
-            });
-
-            // Surface any data source failures in the agent run step and agent run record
-            if (preloadedResult.failedSources.length > 0) {
+            const hasFailures = preloadedResult.failedSources.length > 0;
+            let warningMessage: string | undefined;
+            if (hasFailures) {
                 const failureDetails = preloadedResult.failedSources
                     .map(f => `${f.name}${f.entityName ? ` (Entity: ${f.entityName})` : ''}: ${f.errorMessage}`)
                     .join('; ');
 
-                const warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+                warningMessage = `${preloadedResult.failedSources.length} data source(s) failed to load: ${failureDetails}`;
+            }
 
-                // Finalize step as completed but with error details captured
-                await this.finalizeStepEntity(stepEntity, true, warningMessage, {
-                    loadedSources: preloadedResult.loadedSources,
-                    failedSources: preloadedResult.failedSources
-                });
-
-                // Append warning to the agent run's ErrorMessage for top-level visibility
-                if (this._agentRun) {
-                    const existing = this._agentRun.ErrorMessage || '';
-                    this._agentRun.ErrorMessage = existing
-                        ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
-                        : `[Data Preloading Warning] ${warningMessage}`;
-                    await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            // Record data preloading in a single INSERT now that its outcome is already known
+            await this.createStepEntity({
+                stepType: 'Validation',
+                stepName: 'Data Source Preloading',
+                contextUser: params.contextUser,
+                completed: {
+                    success: true,
+                    errorMessage: warningMessage,
+                    outputData: hasFailures
+                        ? { loadedSources: preloadedResult.loadedSources, failedSources: preloadedResult.failedSources }
+                        : { loadedSources: preloadedResult.loadedSources }
                 }
-            } else {
-                // All sources loaded successfully
-                await this.finalizeStepEntity(stepEntity, true, undefined, {
-                    loadedSources: preloadedResult.loadedSources
-                });
+            });
+
+            // Append warning to the agent run's ErrorMessage for top-level visibility
+            if (hasFailures && this._agentRun && warningMessage) {
+                const existing = this._agentRun.ErrorMessage || '';
+                this._agentRun.ErrorMessage = existing
+                    ? `${existing}\n\n[Data Preloading Warning] ${warningMessage}`
+                    : `[Data Preloading Warning] ${warningMessage}`;
+                await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2867,6 +2890,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._heldCompletionChanges = [];
             this._resolvedTrailingStateMode = undefined;
             this._lastSentFingerprints = undefined;
             this._lastSentPrefix = undefined;
@@ -2907,7 +2931,12 @@ export class BaseAgent {
             // the manifest (injected via _ARTIFACT_MANIFEST below) reaches the LLM.
             const inputArtifacts: InputArtifact[] | undefined = wrappedParams.inputArtifacts;
             if (inputArtifacts?.length) {
-                this._artifactToolManager.Initialize(inputArtifacts);
+                this._artifactToolManager.Initialize(inputArtifacts, {
+                    contextUser: params.contextUser,
+                    provider: this.ProviderToUse,
+                    getAgentRun: () => this._agentRun,
+                    agentName: params.agent?.Name ?? undefined,
+                });
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
@@ -2970,7 +2999,7 @@ export class BaseAgent {
                 if (this._agentRun) {
                     this._agentRun.Status = 'Failed';
                     this._agentRun.ErrorMessage = bindingError;
-                    await this._agentRun.Save();
+                    this.releaseFinishedRun(await this._agentRun.Save());
                 }
                 throw new Error(bindingError);
             }
@@ -3791,6 +3820,10 @@ export class BaseAgent {
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
+            // The run's validated scope and active skills, built here on the server (never read from the session's
+            // Config), so the session's direct tool calls and delegated runs carry them (#5624).
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -4781,6 +4814,35 @@ export class BaseAgent {
     }
 
     /**
+     * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
+     * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
+     * the prompt between two failures returns a non-Failed decision and resets it. When the same
+     * decision has failed {@link MAX_REPEATED_FAILING_STEP} times in a row, `nextStep` is turned
+     * into a terminating Failed step naming the step type and the last error.
+     */
+    private checkRepeatedFailingStep<P>(
+        params: ExecuteAgentParams,
+        tracker: RepeatedFailingStepTracker,
+        executedDecision: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>
+    ): void {
+        const count = tracker.Observe(executedDecision, nextStep);
+        if (count < MAX_REPEATED_FAILING_STEP) {
+            return;
+        }
+        const lastError = FailingStepError(nextStep);
+        const message = `Agent repeated the same failing ${executedDecision.step} step ${count} times. Last error: ${lastError}`;
+        this.logError(`⛔ Agent '${params.agent.Name}': ${message}`, {
+            agent: params.agent,
+            category: 'ExecutionSafetyNet',
+            metadata: { repeatedFailures: count, stepType: executedDecision.step, lastError }
+        });
+        nextStep.step = 'Failed';
+        nextStep.terminate = true;
+        nextStep.errorMessage = message;
+    }
+
+    /**
      * Executes the agent's internal logic.
      * 
      * This method contains the core execution logic that drives agent behavior. By default,
@@ -4807,6 +4869,9 @@ export class BaseAgent {
         let stepCount = 0;
         let consecutiveFailedSteps = 0;
         let consecutiveUnproductiveRetries = 0;
+        // Model-driven types only: a Flow graph may re-run a failing node on purpose (see
+        // BaseAgentType.UsesActionCircuitBreaker), and has no model that could repeat itself.
+        const repeatedFailures = this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? null : new RepeatedFailingStepTracker();
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -4825,6 +4890,7 @@ export class BaseAgent {
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
+            const executedDecision = currentNextStep;
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
@@ -4864,6 +4930,10 @@ export class BaseAgent {
                 }
             } else if (nextStep.step !== 'Failed') {
                 consecutiveFailedSteps = 0;
+            }
+
+            if (repeatedFailures && executedDecision && !IsPromptTurnStep(executedDecision) && !nextStep.terminate) {
+                this.checkRepeatedFailingStep(params, repeatedFailures, executedDecision, nextStep);
             }
 
             // Track consecutive *unproductive* retries to prevent infinite loops that the
@@ -5886,7 +5956,7 @@ export class BaseAgent {
             }
             // Counted only on the native path: null means "envelope", which is different from a
             // native turn where the model chose not to call anything (0).
-            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit' || mode === 'NativeRecovered') {
                 const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
                 const callCount = message?.toolCalls?.length ?? 0;
                 stepEntity.NativeToolCallCount = callCount;
@@ -6320,24 +6390,71 @@ export class BaseAgent {
         });
         // Whatever fails below, the step is finalized and the call answered — never left Running.
         let outcome: { payload: P; content: string; isError: boolean } = { payload, content: '', isError: true };
+        const breakerKey = this.agentToolBreakerKey(call);
         try {
-            const ran = await this.runAgentTool(call, payload, params);
-            // payload_change_request keeps its single-call behaviour: the allowed parts apply.
-            const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
-            const applied = !ran.IsError && ran.PayloadChange
-                ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
-                : { payload, error: undefined };
-            outcome = { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+            const refusal = breakerKey === null ? null : this._agentToolBreaker.Check(call.toolName, breakerKey);
+            if (refusal) {
+                this.logStatus(`   ⚡ Circuit breaker: agent tool '${call.toolName}' not run (0ms)`, false, params);
+                outcome = { payload, content: refusal, isError: true };
+            } else {
+                outcome = await this.runAndApplyAgentTool(call, payload, params);
+                this.recordAgentToolOutcome(call.toolName, breakerKey, outcome.isError);
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`Agent '${params.agent?.Name}': applying agent tool '${call.toolName}' failed: ${message}`);
             outcome = { payload, content: `The tool's change could not be applied: ${message}. Nothing was changed.`, isError: true };
+            this.recordAgentToolOutcome(call.toolName, breakerKey, true);
         } finally {
             step.PayloadAtEnd = this.serializePayloadAtEnd(outcome.payload);
             await this.finalizeStepEntity(step, !outcome.isError, outcome.isError ? outcome.content : undefined,
                 { tool: call.toolName, content: outcome.content, isError: outcome.isError });
         }
         return { payload: outcome.payload, result: { toolCallId: call.toolCallId, toolName: call.toolName, content: outcome.content, isError: outcome.isError } };
+    }
+
+    /** Runs one call and applies its payload change; a refused change makes the call an error. */
+    private async runAndApplyAgentTool<P>(
+        call: AgentToolCallRequest,
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; content: string; isError: boolean }> {
+        const ran = await this.runAgentTool(call, payload, params);
+        // payload_change_request keeps its single-call behaviour: the allowed parts apply.
+        const partial = this._nativeToolBindings?.get(call.toolName)?.kind === 'payloadChange';
+        const applied = !ran.IsError && ran.PayloadChange
+            ? this.applyAgentToolPayloadChange(payload, ran.PayloadChange, params, partial)
+            : { payload, error: undefined };
+        return { payload: applied.payload, content: applied.error ?? ran.Content, isError: ran.IsError || applied.error !== undefined };
+    }
+
+    /**
+     * The identity of a call's arguments for the agent-tool circuit breaker, or null when the call is
+     * not tracked: it is not an agent tool (`payload_change_request`, an unknown name), the agent type
+     * opted out of the breaker (`UsesActionCircuitBreaker === false`), or the tool did
+     * (`UsesCircuitBreaker === false`). Arguments are normalized like an action's.
+     */
+    private agentToolBreakerKey(call: AgentToolCallRequest): string | null {
+        const binding = this._nativeToolBindings?.get(call.toolName);
+        if (binding?.kind !== 'agentTool' || binding.definition.UsesCircuitBreaker === false) {
+            return null;
+        }
+        if (this.AgentTypeInstance?.UsesActionCircuitBreaker === false) {
+            return null;
+        }
+        return this.normalizeActionParams(call.arguments);
+    }
+
+    /** Updates the agent-tool circuit breaker after a call that ran (nothing for an untracked call). */
+    private recordAgentToolOutcome(toolName: string, breakerKey: string | null, isError: boolean): void {
+        if (breakerKey === null) {
+            return;
+        }
+        if (isError) {
+            this._agentToolBreaker.RecordFailure(toolName, breakerKey);
+        } else {
+            this._agentToolBreaker.RecordSuccess(toolName);
+        }
     }
 
     /** Calls the tool's handler; an undeclared tool or a thrown error becomes an error result. */
@@ -6760,26 +6877,85 @@ export class BaseAgent {
             ApplyScopedPromptConfig(configResolver, scopedConfigPromptId, this.scopedPromptConfigScope(params), promptParams);
         }
 
+        return promptParams;
+    }
+
+    /**
+     * Completes the prompt params once {@link preparePromptParams} — including any subclass override —
+     * has returned: builds the trailing runtime-state message and checks the outgoing history for replayed
+     * reasoning that no longer matches.
+     *
+     * This runs after the hook, not inside it, because building the trailing message can render the child
+     * prompt (a relocated specialization) and caches that render for the prompt runner. Rendered inside the
+     * hook, it would miss the template data a subclass adds after calling `super.preparePromptParams()`, and
+     * the prompt would be sent without it. The history comes from `promptParams.conversationMessages`, so a
+     * subclass's own changes to the outgoing messages are kept and the trailing message stays last.
+     */
+    private async finalizePromptParams<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
         // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
         // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
         // In append-only mode (OpenAI prompt caching), prior runtime-state fragments are retained in history
         // so each turn extends the exact byte prefix of the previous request, maintaining ~93% cache hits.
         // In replace-in-place mode (Gemini/Cerebras), only the latest fragment is attached, keeping history lean.
-        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
         if (volatileStateMessage) {
             const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
             this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
-            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
+            promptParams.conversationMessages = this.assembleOutgoingMessages(promptParams.conversationMessages ?? params.conversationMessages, volatileStateMessage, isAppendOnly);
             if (isAppendOnly) {
                 params.conversationMessages.push(volatileStateMessage);
             }
             this._lastVolatileStateMessage = volatileStateMessage;
+            if (promptParams.data?._SPECIALIZATION_RELOCATED === true) {
+                promptParams.OnTemplateDataFinalized = (finalParams) =>
+                    this.refreshRelocatedSpecialization(finalParams, config, payload, params, volatileStateMessage);
+            }
         }
         if (promptParams.conversationMessages) {
             promptParams.conversationMessages = this.dropReasoningBehindChangedHistory(params, promptParams.conversationMessages, promptParams);
         }
-
         return promptParams;
+    }
+
+    /**
+     * Renders the trailing message again once the prompt runner has set the native tool-calling flags,
+     * and swaps it in when the text changed.
+     *
+     * A relocated specialization is pre-rendered here, before a model is selected, so it renders
+     * without the flags the runner sets from the selected model's tool-calling decision — a child
+     * prompt that words its instructions for the native or envelope path would get the envelope
+     * wording while the system prompt gets the native one. The runner calls this through
+     * {@link AIPromptParams.OnTemplateDataFinalized}. On any failure the message already built is kept.
+     */
+    private async refreshRelocatedSpecialization<P>(
+        promptParams: AIPromptParams,
+        config: AgentConfiguration,
+        payload: P,
+        params: ExecuteAgentParams,
+        previous: AgentChatMessage
+    ): Promise<void> {
+        try {
+            const rebuilt = await this.buildVolatileStateMessage(params, promptParams, payload, config.childPrompt, config.agentType, config.systemPrompt);
+            if (!rebuilt || rebuilt.content === previous.content) {
+                return;
+            }
+            const replace = (messages: ChatMessage[] | undefined) => {
+                const at = messages ? messages.indexOf(previous) : -1;
+                if (messages && at >= 0) {
+                    messages[at] = rebuilt;
+                }
+            };
+            replace(promptParams.conversationMessages);
+            replace(params.conversationMessages);
+            this._lastVolatileStateMessage = rebuilt;
+            // The fingerprints were taken before the swap; without this, an append-only history
+            // reads the swapped message as changed next turn and drops the reasoning after it.
+            if (promptParams.conversationMessages) {
+                this._lastSentFingerprints = promptParams.conversationMessages.map(BaseAgent.messageFingerprint);
+            }
+        } catch (error) {
+            this.logStatus(`Kept the trailing message as first built: re-rendering it with the final template data failed (${error instanceof Error ? error.message : String(error)})`, true, params);
+        }
     }
 
     /**
@@ -6864,9 +7040,31 @@ export class BaseAgent {
         });
     }
 
+    private static readonly _messageFingerprintCache = new WeakMap<
+        ChatMessage,
+        {
+            role: ChatMessage['role'];
+            content: ChatMessage['content'];
+            toolCalls: AgentChatMessage['toolCalls'];
+            fingerprint: string;
+        }
+    >();
+
     /** What makes a message the same message to a provider — reasoning aside, which only this check removes. */
     private static messageFingerprint(m: ChatMessage): string {
-        return JSON.stringify([m.role, m.content, (m as AgentChatMessage).toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        const toolCalls = (m as AgentChatMessage).toolCalls;
+        const cached = BaseAgent._messageFingerprintCache.get(m);
+        if (cached && cached.role === m.role && cached.content === m.content && cached.toolCalls === toolCalls) {
+            return cached.fingerprint;
+        }
+        const fingerprint = JSON.stringify([m.role, m.content, toolCalls?.map((c) => [c.id, c.name, c.arguments])]);
+        BaseAgent._messageFingerprintCache.set(m, {
+            role: m.role,
+            content: m.content,
+            toolCalls,
+            fingerprint,
+        });
+        return fingerprint;
     }
 
     /**
@@ -8015,6 +8213,27 @@ export class BaseAgent {
                     stepActionNamesLower.has(a.Name.trim().toLowerCase()) ||
                     stepActionNamesSanitized.has(SanitizeToolName(a.Name)))
         );
+    }
+
+    /**
+     * Returns the active agents named by an agent's own active Flow steps: a `Sub-Agent` step's
+     * `SubAgentID`, or the `SubAgentID` of a `ForEach`/`While` step whose `LoopBodyType` is
+     * `'Sub-Agent'`. Flow agents bind sub-agents on `AIAgentStep` rather than through `ParentID`
+     * or `AIAgentRelationship`, so {@link resolveSubAgentByName} needs these in scope, as
+     * {@link getFlowStepActions} does for actions.
+     */
+    private getFlowStepSubAgents(agentId: string): MJAIAgentEntityExtended[] {
+        if (!agentId) return [];
+        const steps = AIEngine.Instance.GetAgentSteps?.(agentId, 'Active') ?? [];
+        const ids = new UUIDSet(
+            steps
+                .filter(s => s.StepType === 'Sub-Agent'
+                    || ((s.StepType === 'ForEach' || s.StepType === 'While') && s.LoopBodyType === 'Sub-Agent'))
+                .map(s => s.SubAgentID)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (ids.Size === 0) return [];
+        return AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && ids.Has(a.ID));
     }
 
     /**
@@ -10012,10 +10231,13 @@ The context is now within limits. Please retry your request with the recovered c
         currentPayload: P,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
+        // Read before validation: a subclass may change the step in place (turn a Chat into a Success),
+        // and only a change the prompt step held as a completion draft can have been discarded.
+        const heldCompletionChange = BaseAgent.carriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
-        const guardrailCheckedStep = this.noteDiscardedCompletionChange(nextStep, await this.checkExecutionGuardrails<P>(
+        const guardrailCheckedStep = this.noteHeldCompletionChange(heldCompletionChange, await this.checkExecutionGuardrails<P>(
             params, 
             validatedNextStep, 
             currentPayload, 
@@ -10069,22 +10291,26 @@ The context is now within limits. Please retry your request with the recovered c
     }
  
     /**
-     * A completion refused with a payload change in hand: the change is discarded (the prompt step
-     * commits it only for an accepted completion), so the refusal the model reads says so, and asks
-     * for the change again with the next completion. Otherwise the model would take the change as
-     * saved and its work would be lost. The change is removed from the step, so nothing later
-     * applies it. Any other step is returned as it is.
+     * A completion refused with a payload change in hand: the change is held, not applied (see
+     * {@link _heldCompletionChanges}), so the refusal the model reads says so and asks for the
+     * corrections only. The model sees the payload with the held change applied from the next turn,
+     * and its next completion's change is applied on top of it. The change is removed from the step,
+     * so nothing later applies it a second time. Any other step is returned as it is.
+     *
+     * `heldChange` is the change the prompt step held as a draft, read from the step before
+     * validation, so a step a subclass changed in place is judged by what the model sent.
      */
-    private noteDiscardedCompletionChange<P>(original: BaseAgentNextStep<P>, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
-        if (!BaseAgent.carriesCompletionChange(original) || step.step === 'Success') {
+    private noteHeldCompletionChange<P>(heldChange: AgentPayloadChangeRequest<P> | undefined, step: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+        if (!heldChange || step.step === 'Success') {
             return step;
         }
         const native = !!step.payloadToolCallId && this.nativeToolNameForCall(step, step.payloadToolCallId) === COMPLETE_TASK_TOOL;
-        const note = native
-            ? 'The payloadChangeRequest sent with this complete_task call was NOT applied. Send it again with your next complete_task call.'
-            : 'The payloadChangeRequest sent with this completion was NOT applied. Send it again with your next completion.';
+        const call = native ? 'complete_task call' : 'completion';
+        const note = `The payloadChangeRequest sent with this ${call} was not applied yet: it is held, and the payload you see `
+            + `from now on includes it. It is applied together with your next ${call}. In that ${call}, send only the `
+            + `corrections, not the whole change again.`;
         const field = step.retryInstructions ? 'retryInstructions' : step.message ? 'message' : 'errorMessage';
-        const { payloadChangeRequest: _discarded, ...rest } = step;
+        const { payloadChangeRequest: _held, ...rest } = step;
         return { ...rest, [field]: step[field] ? `${step[field]}\n\n${note}` : note };
     }
 
@@ -15958,7 +16184,12 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            await this.recordExecutionRouting(params);
+            // A run refused before its first step (a dispatch refusal, a flow that does not compile)
+            // never ran on either engine, so it gets no routing record: a completed Decision step
+            // there would read as a successful dispatch (#4622).
+            if (initialStep?.step !== 'Failed') {
+                await this.recordExecutionRouting(params);
+            }
 
             if (initialStep) {
                 // Agent type provided an initial step
@@ -16246,14 +16477,61 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * The payload a completion would leave behind: the committed payload with the completion's
-     * change applied. Success validation (the minimum-execution check, then `FinalPayloadValidation`)
-     * checks this draft, and it becomes the payload only if the completion is accepted. The
-     * opt-in payload change check is not asked here: it never runs on a step that ends the run.
+     * The payload a completion would leave behind: the committed payload with the held changes and
+     * then the completion's own change applied. Success validation (the minimum-execution check, then
+     * `FinalPayloadValidation`) checks this draft, and it becomes the payload only if the completion is
+     * accepted. A change identical to a held one is not applied again, so a model that resends its whole
+     * refused change does not duplicate array elements. The opt-in payload change check is not asked
+     * here: it never runs on a step that ends the run.
      */
-    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary } {
-        const changeResult = this.applyTurnPayloadChange(params, step, committed, isUnmodifiedInheritedPayload);
+    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary | undefined } {
+        const working = this.withHeldCompletionChanges(params, committed);
+        const change = step.payloadChangeRequest;
+        if (!change || this.isHeldCompletionChange(change)) {
+            return { payload: working, summary: undefined };
+        }
+        const changeResult = this.applyTurnPayloadChange(params, step, working, isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0);
         return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
+    }
+
+    /** `payload` with the held completion changes applied in order; `payload` itself when none are held. */
+    private withHeldCompletionChanges<P>(params: ExecuteAgentParams, payload: P): P {
+        return this._heldCompletionChanges.reduce<P>((current, held) => {
+            const step: BaseAgentNextStep<P> = { step: 'Success', terminate: false, payloadChangeRequest: held.Change as AgentPayloadChangeRequest<P> };
+            return this.applyTurnPayloadChange(params, step, current, held.UnmodifiedInheritedPayload).result;
+        }, payload);
+    }
+
+    /**
+     * After a completion: an accepted one commits the held changes (they were in its draft), so the
+     * list is cleared; a refused one adds its own change to the list, unless the same change is held.
+     */
+    private updateHeldCompletionChanges<P>(step: BaseAgentNextStep<P>, committedDraft: boolean, isUnmodifiedInheritedPayload: boolean): void {
+        if (committedDraft) {
+            this._heldCompletionChanges = [];
+            return;
+        }
+        const change = BaseAgent.carriesCompletionChange(step) ? step.payloadChangeRequest : undefined;
+        if (change && !this.isHeldCompletionChange(change)) {
+            this._heldCompletionChanges.push({
+                Change: change as AgentPayloadChangeRequest<unknown>,
+                UnmodifiedInheritedPayload: isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0
+            });
+        }
+    }
+
+    /** Whether `change` is, key order aside, one of the held completion changes. */
+    private isHeldCompletionChange<P>(change: AgentPayloadChangeRequest<P>): boolean {
+        const key = BaseAgent.stableJSON(change);
+        return this._heldCompletionChanges.some((held) => BaseAgent.stableJSON(held.Change) === key);
+    }
+
+    /** JSON with object keys sorted, so two equal values serialize the same. */
+    private static stableJSON(value: unknown): string {
+        return JSON.stringify(value, (_key, v: unknown) =>
+            v && typeof v === 'object' && !Array.isArray(v)
+                ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+                : v);
     }
 
     /**
@@ -16328,13 +16606,15 @@ The context is now within limits. Please retry your request with the recovered c
             // PayloadAtStart was already serialized from this same `payload` by createStepEntity
             // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
 
-            let downstreamPayload = payload; // Start with current payload
+            // The model sees the payload with any held completion changes applied (see _heldCompletionChanges).
+            const workingPayload = this.withHeldCompletionChanges(params, payload);
+            let downstreamPayload = workingPayload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
                 // Extract only allowed downstream payload
                 downstreamPayload = this._payloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
-                    payload, // our inbound payload before prompt
+                    workingPayload, // our inbound payload before prompt
                     downstreamPaths
                 );
             }
@@ -16356,7 +16636,8 @@ The context is now within limits. Please retry your request with the recovered c
                 // don't need to save here, the run will be saved later
             }
 
-            const promptParams = await this.preparePromptParams(promptConfig, downstreamPayload, params);
+            const promptParams = await this.finalizePromptParams(
+                await this.preparePromptParams(promptConfig, downstreamPayload, params), promptConfig, downstreamPayload, params);
             
             // Pass cancellation token and streaming callbacks to prompt execution.
             // Coalesce rapid token chunks within a ~35ms window while emitting the first chunk immediately
@@ -16554,7 +16835,8 @@ The context is now within limits. Please retry your request with the recovered c
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             // A completion's payload change is held as a draft until Success validation accepts it
             // (see buildCompletionDraft); every other step's change is applied now, as it always was.
-            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep);
+            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep)
+                || (initialNextStep.step === 'Success' && this._heldCompletionChanges.length > 0);
             if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
                 const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
                 // Store payload change metadata for audit trail; merged into outputData later
@@ -16667,8 +16949,9 @@ The context is now within limits. Please retry your request with the recovered c
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
             const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
             finalPayload = resolved.payload;
-            const discardedCompletionChange = holdsCompletionChange && !resolved.committedDraft;
-            if (discardedCompletionChange && currentStepPayloadChangeResult) {
+            const heldCompletionChange = holdsCompletionChange && !resolved.committedDraft;
+            this.updateHeldCompletionChanges(initialNextStep, resolved.committedDraft, finalPayload === params.payload);
+            if (heldCompletionChange && currentStepPayloadChangeResult) {
                 currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
             }
 
@@ -16686,8 +16969,8 @@ The context is now within limits. Please retry your request with the recovered c
                     payloadChangeResult: currentStepPayloadChangeResult
                 }),
                 // A completion's change that was not applied because the completion was refused
-                ...(discardedCompletionChange && {
-                    payloadChangeDiscarded: 'The payload change was sent with a completion that was refused, so it was not applied.'
+                ...(heldCompletionChange && {
+                    payloadChangeHeld: 'The completion was refused, so its payload change is held: it is applied with the next accepted completion, or dropped if the run ends without one.'
                 }),
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
@@ -17465,7 +17748,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Finds a sub-agent by name, checking child agents (ParentID) first, then
-     * related agents (AgentRelationships). Returns `undefined` when the name
+     * related agents (AgentRelationships), then agents named on this agent's own
+     * Flow steps, then runtime-granted sub-agents. Returns `undefined` when the name
      * doesn't resolve to an active agent reachable from `params.agent`.
      *
      * Used by both the single and parallel sub-agent dispatch paths so name
@@ -17518,7 +17802,19 @@ The context is now within limits. Please retry your request with the recovered c
                 return { subAgentEntity: matchedPair.agent, relationship: matchedPair.rel };
             }
         }
-        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // 3) Sub-agents named on this agent's own Flow steps (#1415). A Flow agent binds a sub-agent on
+        // its step (`AIAgentStep.SubAgentID`, or a ForEach/While body with LoopBodyType 'Sub-Agent'),
+        // not through ParentID or a relationship row, so without this tier an in-run Flow could not
+        // reach the agent its own step names. The same reasoning as getFlowStepActions. A Loop agent
+        // has no steps, so this adds nothing for it.
+        const flowStepPool = this.getFlowStepSubAgents(params.agent.ID);
+        const flowStepAgent =
+            flowStepPool.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, flowStepPool, true).match;
+        if (flowStepAgent) {
+            return { subAgentEntity: flowStepAgent };
+        }
+        // 4) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
         // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
         // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
         // or not active") — and because the catalog keeps offering it, the model re-picks the same
@@ -17533,7 +17829,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
         }
-        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // 5) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
         // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
         // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
         // so allow resolving any active agent in AIEngine.Instance.Agents.
@@ -20023,7 +20319,7 @@ The context is now within limits. Please retry your request with the recovered c
             // path carried neither, so every documented `data.x` condition evaluated against the
             // origin step's output, found nothing, and silently took the other branch.
             Invocation: { Data: params.data, Context: params.context },
-            Debug: params.taskGraphDebug?.paused ? { paused: true } : undefined,
+            Debug: BuildTaskGraphStartDebug(params.taskGraphDebug),
             ContextUser: params.contextUser,
             Provider: this.ProviderToUse,
             ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
@@ -21519,8 +21815,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for failed runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
 
         return {
@@ -21539,6 +21835,12 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        // The watchdog aborts a run it force-failed with the row's own message (#4883). The row
+        // already says Failed and clients were told so; finalizing Cancelled would contradict it.
+        const abortReason = this._runAbortController?.signal.reason;
+        if (AgentRunWatchdog.IsForceFailedAbortReason(typeof abortReason === 'string' ? abortReason : null)) {
+            return this.createFailureResult(abortReason, contextUser);
+        }
         const [{ failures }] = await Promise.all([
             this._stepSaveQueue.Flush(),
             this.flushPromptRunnerSaves(),
@@ -21572,8 +21874,8 @@ The context is now within limits. Please retry your request with the recovered c
             // Calculate total tokens even for cancelled runs
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
-            await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
+            this.releaseFinishedRun(ok);
         }
         
         return {
@@ -21587,7 +21889,9 @@ The context is now within limits. Please retry your request with the recovered c
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
      * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
      * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
-     * anything else (an upstream caller's token, a shutdown) is `System`.
+     * anything else (an upstream caller's token, a shutdown) is `System`. A watchdog force-fail
+     * ({@link AgentRunWatchdog.ForceFailedAbortReason}) never gets here: {@link createCancelledResult}
+     * finalizes it `Failed`, with no cancellation reason.
      */
     public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === AgentRunWatchdog.UserCancelAbortReason) {
@@ -21647,6 +21951,19 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         return null;
+    }
+
+    /**
+     * Stops the watchdog guarding this run once its final state is saved. MJAPI's event-loop
+     * stall warning names the runs "in flight" from the watchdog's tracked set, and the periodic
+     * prune only drops finished runs every few minutes, so without this the warning would name
+     * runs that ended long before the stall (MJ #5510). A failed save keeps the run tracked: the
+     * watchdog's heartbeat and sweep still own a run whose final state never reached the database.
+     */
+    private releaseFinishedRun(saved: boolean): void {
+        if (saved && this._agentRun?.ID && this._agentRun.Status !== 'Running') {
+            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+        }
     }
 
     /**
@@ -21740,7 +22057,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.applyTokenStatsToRun(this._agentRun, this.calculateTokenStats());
 
             const ok = await this._agentRun.Save({ SaveReturnMode: 'datestamps_only' });
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
+            this.releaseFinishedRun(ok);
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
@@ -22653,9 +22970,16 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
 
-        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
-        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
-        if (!memoryAgent) {
+        // Resolved like every other agent (CreateAgentInstance); a Memory Manager row matched by name
+        // with no DriverClass still runs its own class rather than the plain BaseAgent.
+        let memoryAgent: BaseAgent;
+        try {
+            memoryAgent = await CreateAgentInstance({
+                Name: memoryManagerEntity.Name,
+                DriverClass: memoryManagerEntity.DriverClass?.trim() || 'MemoryManagerAgent',
+            });
+        } catch (error) {
+            LogError(`Post-run MemoryManager not started: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
 
@@ -22938,17 +23262,29 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Provides an improved heuristic token count when tokenizer is unavailable.
+     * Zero-allocation scan over character codes to prevent multi-megabyte match arrays on large tool outputs.
      * @param text - The text to estimate tokens for
      * @returns Estimated token count
      * @private
      */
     private heuristicTokenCount(text: string): number {
-        // More sophisticated heuristic
         const charCount = text.length;
 
-        // Count structural tokens (JSON syntax adds overhead)
-        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
-        const whitespaceChars = (text.match(/\s/g) || []).length;
+        // Count structural tokens ({, }, [, ], ,, :) and whitespace characters without regex match arrays
+        let structuralChars = 0;
+        let whitespaceChars = 0;
+
+        for (let i = 0; i < charCount; i++) {
+            const code = text.charCodeAt(i);
+            // Structural characters: { (123), } (125), [ (91), ] (93), , (44), : (58)
+            if (code === 123 || code === 125 || code === 91 || code === 93 || code === 44 || code === 58) {
+                structuralChars++;
+            } else if (code === 32 || (code >= 9 && code <= 13)) {
+                whitespaceChars++;
+            } else if (code >= 0x00a0 && /\s/.test(text[i])) {
+                whitespaceChars++;
+            }
+        }
 
         // Effective character count (whitespace counts less)
         const effectiveChars = charCount - (whitespaceChars * 0.5);

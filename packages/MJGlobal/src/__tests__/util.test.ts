@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   GetGlobalObjectStore,
+  IsBrowser,
   CleanJSON,
   SafeJSONParse,
   CleanAndParseJSON,
@@ -18,6 +19,33 @@ import {
   EscapeSQLString,
   HighlightSearchMatches,
 } from '../util';
+
+describe('IsBrowser', () => {
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+
+  afterEach(() => {
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, 'window');
+    }
+  });
+
+  it('should return false when window is undefined', () => {
+    Reflect.deleteProperty(globalThis, 'window');
+    expect(IsBrowser()).toBe(false);
+  });
+
+  it('should return false when window is null', () => {
+    Reflect.set(globalThis, 'window', null);
+    expect(IsBrowser()).toBe(false);
+  });
+
+  it('should return true when window is a non-null object', () => {
+    Reflect.set(globalThis, 'window', {});
+    expect(IsBrowser()).toBe(true);
+  });
+});
 
 describe('GetGlobalObjectStore', () => {
   it('should return a non-null object in Node environment', () => {

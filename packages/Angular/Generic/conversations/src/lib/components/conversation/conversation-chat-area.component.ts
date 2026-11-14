@@ -46,7 +46,7 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
 import { UserHoldsAuthorization } from '../../services/user-authorization';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName, GenerateAndApplyForkName, SaveForkName } from '../../services/conversation-naming';
-import type { ExportBranding } from '../../services/export.service';
+import type { ExportArtifactLinkTarget, ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import {
   CollectRealtimeSessionIDs,
@@ -874,6 +874,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get exportBranding(): ExportBranding | null {
     return this.ExportBranding;
   }
+
+  /**
+   * Builds a link that opens an exported artifact in the host app; passed to the export
+   * modal. This package has no router, so only the host can build it. Null (default)
+   * exports artifacts with their IDs only.
+   */
+  @Input() ExportArtifactLink: ((target: ExportArtifactLinkTarget) => string | null) | null = null;
 
   /** Show the Share button in the conversation header. Default true. */
   @Input() ShowShareButton: boolean = true;

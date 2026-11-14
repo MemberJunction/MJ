@@ -2,7 +2,13 @@ import { Observable, Subject } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
 import { IsPlainObject } from '@memberjunction/global';
 import {
-  CHANNEL_INBOUND_VIDEO_TRACK, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection
+  CHANNEL_INBOUND_VIDEO_TRACK,
+  JSONObject,
+  JSONValue,
+  RealtimeToolDefinition,
+  RealtimeTrackDescriptor,
+  RealtimeTrackDirection,
+  type RealtimeContextNoteOptions,
 } from '@memberjunction/ai';
 import {
   ChannelInboundVideoBridge,
@@ -96,7 +102,7 @@ export interface RealtimeChannelContext {
    * requested) — the PERCEPTION direction of the channel: serialized state deltas flow here
    * so the agent stays aware of what's on the surface. No-op when the session isn't live.
    */
-  SendContextNote(text: string): void;
+  SendContextNote(text: string, options?: RealtimeContextNoteOptions): void;
 
   /**
    * Asks the host to persist `stateJson` as this channel's state of record. The host
@@ -955,13 +961,21 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     // A multi-instance channel names the instance it just created; every other channel has one id.
     const instanceId = opened?.Instance ?? this.InstanceId;
     this.EmitChannelEvent('opened', { inputs }, undefined, instanceId);
+    const stateKey = `channel:${descriptor.Key}:${instanceId}`;
     if (this.Exposure === 'none') {
       // The agent opened it and may use it, but exposure policy keeps what it holds from the model.
-      this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, instanceId, 'opened', { exposure: 'none' }));
+      this.Context?.SendContextNote(
+        FormatChannelNote(descriptor.Key, instanceId, 'opened', { exposure: 'none' }),
+        { StateKey: stateKey },
+      );
     } else {
       const state = this.GetState();
       this.ensurePerception().SetBaseline(state);
-      this.Context?.SendContextNote(FormatChannelNote(descriptor.Key, instanceId, 'opened', { state }));
+      const wireNote = FormatChannelNote(descriptor.Key, instanceId, 'opened', { state });
+      this.Context?.SendContextNote(wireNote, {
+        StateKey: stateKey,
+        MemoryText: FormatChannelNote(descriptor.Key, instanceId, 'state_snapshot', { state }),
+      });
     }
     const extra = opened && IsPlainObject(opened.Result) ? (opened.Result as JSONObject) : {};
     return { Success: true, Result: { opened: true, channel: descriptor.Key, instance: instanceId, ...extra } };
@@ -1085,7 +1099,16 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
             return channel.InstanceId;
           },
           GetState: () => this.getStateChecked(),
-          SendNote: (text: string) => this.Context?.SendContextNote(text),
+          SendNote: (text: string, latestState?: JSONObject) => {
+            const stateKey = `channel:${this.ChannelName}:${this.InstanceId}`;
+            const memoryText = latestState
+              ? FormatChannelNote(this.ChannelName, this.InstanceId, 'state_snapshot', { state: latestState })
+              : undefined;
+            this.Context?.SendContextNote(text, {
+              StateKey: stateKey,
+              ...(memoryText ? { MemoryText: memoryText } : {}),
+            });
+          },
           OnError: (error: unknown) => console.error(`[RealtimeChannel:${this.ChannelName}] Perception note failed:`, error)
         },
         this.PerceptionOptions
@@ -1255,7 +1278,13 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
     }
     this.EmitChannelEvent('exposure_changed', payload);
     if (this.Context?.Client) {
-      this.Context.SendContextNote(FormatChannelNote(this.ChannelName, this.InstanceId, 'exposure_changed', payload));
+      const wireNote = FormatChannelNote(this.ChannelName, this.InstanceId, 'exposure_changed', payload);
+      if (next === 'none') {
+        // Overwrite the channel's state key so previously exposed state is purged from reconnect memory too.
+        this.Context.SendContextNote(wireNote, { StateKey: `channel:${this.ChannelName}:${this.InstanceId}` });
+      } else {
+        this.Context.SendContextNote(wireNote, { StateKey: `channel:${this.ChannelName}:${this.InstanceId}:exposure` });
+      }
     }
   }
 
@@ -1376,7 +1405,8 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
       GetChangeId: () => this.channelChangeSeq,
       OnFramePushed: (frame: string, reason: VisualFrameReason, changeId: number) =>
         this.EmitChannelEvent('frame_pushed', { reason, bytes: frame.length }, changeId),
-      SendConfirmationNote: (changeId: number) => this.Context?.SendContextNote(this.confirmationNote(changeId)),
+      SendConfirmationNote: (changeId: number) =>
+        this.Context?.SendContextNote(this.confirmationNote(changeId), { Ephemeral: true }),
       OnError: (context: string, error: unknown) =>
         console.error(`[RealtimeChannel:${this.ChannelName}] Error in the visual ${context} path:`, error)
     });

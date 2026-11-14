@@ -330,10 +330,20 @@ describe('ManageMetadataBase — Source stamping', () => {
       });
       const mm = new TestableRetraction(new SQLServerCodeGenProvider());
       let keyExists = false;
+      // A key recorded before Source existed reads back as 'Manual', so the pass rewrites it.
+      const storedKey = {
+         ID: 'K1', EntityID: 'E1', Name: 'Email Match', MatchFieldNames: 'email', NormalizationStrategy: 'LowerCaseTrim',
+         CustomNormalizationExpression: null, Description: null, Sequence: 0, Status: 'Active', Source: 'Manual',
+      };
       const answer = (sql: string) => {
-         if (sql.includes('vwEntities')) return [{ ID: 'E1', Name: 'Customers' }];
          if (sql.includes('EntityOrganicKeyRelatedEntity')) return [];
-         if (sql.includes('EntityOrganicKey')) return keyExists ? [{ ID: 'K1' }] : [];
+         if (sql.includes('EntityOrganicKey')) return keyExists ? [storedKey] : [];
+         if (sql.includes('[Entity]')) {
+            return [
+               { ID: 'E1', Name: 'Customers', SchemaName: 'ns', BaseTable: 'customer' },
+               { ID: 'E2', Name: 'Contacts', SchemaName: 'ns', BaseTable: 'contact' },
+            ];
+         }
          return [];
       };
       await mm.OrganicKeys(connection(answer));

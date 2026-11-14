@@ -43,7 +43,7 @@ export abstract class HubSpotBaseAction extends BaseCRMAction {
         }
 
         // Get the integration credentials
-        const integration = await this.getCompanyIntegration(companyId, contextUser);
+        const integration = await this.getCompanyIntegration(companyId, contextUser, this.getParamValue(this.params, 'CompanyIntegrationID'));
         
         // Get API credentials
         const credentials = await this.getAPICredentials(integration);

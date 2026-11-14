@@ -159,7 +159,19 @@ export function clampDominanceThreshold(value: number): number {
  * accepted.
  */
 export function SanitizeNameToken(token: string): string {
-  return token.replace(/^[[\]{}"'`\s]+/, '').replace(/[[\]{}"'`\s]+$/, '');
+  let start = 0;
+  let end = token.length;
+  while (start < end && isNameTokenWrapper(token[start])) start++;
+  while (end > start && isNameTokenWrapper(token[end - 1])) end--;
+  return token.substring(start, end);
+}
+
+/**
+ * A bracket, brace, quote, backtick or whitespace character. Trimmed by index rather than with
+ * `/[...]+$/`, which backtracks quadratically on a token holding many of them away from its end.
+ */
+function isNameTokenWrapper(ch: string): boolean {
+  return '[]{}"\'`'.includes(ch) || /\s/.test(ch);
 }
 
 /** @deprecated Use {@link SanitizeNameToken}. */

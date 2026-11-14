@@ -1,7 +1,7 @@
 import { ApplicationInfo, DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { configInfo, NewUserSetup } from "../Config/config";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
-import { UserCache } from "@memberjunction/generic-database-provider";
+import { UserCache, GetServerPrincipal } from "@memberjunction/generic-database-provider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
 import { GetDialect } from "@memberjunction/sql-dialect";
@@ -12,13 +12,13 @@ import { GetDialect } from "@memberjunction/sql-dialect";
 export class CreateNewUserBase {
     public async CreateNewUser(newUserSetup: NewUserSetup): Promise<{Success: boolean, Message: string, Severity: 'warning' | 'error' | undefined}> {
         try {   
-            const matches: UserInfo = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() ==='owner')!;
-            const currentUser = matches ? matches : UserCache.Users[0]; // if we don't find an Owner, use the first user in the cache
+            // Active system user, else lowest-ID active Owner. Never an arbitrary cached user.
+            const currentUser = GetServerPrincipal();
     
             if (!currentUser) {
                 return {
                     Success: false,
-                    Message: "No existing users found in the database, cannot create a new user",
+                    Message: "No active system user or Owner found in the database, cannot create a new user",
                     Severity: 'error'
                 };
             }

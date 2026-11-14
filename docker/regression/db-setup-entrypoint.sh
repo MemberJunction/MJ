@@ -96,13 +96,22 @@ echo "  ✓ Migrations complete"
 echo ""
 
 # Step 3: CodeGen — generates entity classes, views, stored procedures, and
-# the matching EntityField metadata rows in a single pass.
+# the matching EntityField metadata rows.
 # CodeGen handles the __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt EntityField
 # rows itself via ensureSpecialDateEntityFieldsExist (see CodeGenLib's
 # manage-metadata.ts) — no post-codegen patching is required.
+# Two passes, each of which must succeed: pass 1 creates the demo EntityField
+# rows, set-demo-field-types.cjs types the email/URL ones, and pass 2 runs
+# against that metadata so this DB matches the forms form-gen-entrypoint.sh
+# generated.
 echo "Step 3: Running CodeGen..."
 node /app/packages/MJCLI/bin/run.js codegen
-echo "  ✓ CodeGen complete"
+node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
+    echo "  WARNING: Demo field type update failed — email/URL fields stay untyped"
+}
+echo "  ↻ CodeGen pass 1 complete; re-running against the typed demo fields..."
+node /app/packages/MJCLI/bin/run.js codegen
+echo "  ✓ CodeGen complete (2 passes)"
 echo ""
 
 # Step 4: Sync application metadata (baseline migration only seeds 2 of ~20 apps)
@@ -122,6 +131,15 @@ node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="prompts"
     echo "  WARNING: Prompts metadata sync failed — Computer Use prompts may be stale"
 }
 echo "  ✓ Prompts metadata sync complete"
+echo ""
+
+# Step 6: Seed an integration connection with entity/field maps (T120). Runs here,
+# before MJAPI starts, because the Integrations app reads IntegrationEngineBase —
+# which MJAPI caches, so rows inserted after it loads stay invisible.
+echo "Step 6: Seeding sample integration connection..."
+node "$SCRIPTS/seed-sample-data.cjs" integration 2>&1 || {
+    echo "  WARNING: Integration seed failed — T120 will see an empty Integrations app"
+}
 echo ""
 
 echo "  ═══════════════════════════════════════════"

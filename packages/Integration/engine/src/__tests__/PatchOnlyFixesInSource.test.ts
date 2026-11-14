@@ -21,7 +21,10 @@ describe('U17 — the incremental fetch filter is pinned to the run start', () =
         // Feeding it back ratchets the predicate forward MID-SCAN and silently excludes every row
         // whose modstamp trails the max seen so far. Live: a Vendor Bill full scan returned 707 of
         // 23,558 rows and reported success.
-        expect(ENGINE).toMatch(/ObjectName: entityMap\.ExternalObjectName,[\s\S]{0,900}?WatermarkValue: initialWatermark,/);
+        // The filter may reach back by the monotonic-watermark lookback (#3085), but it is derived from
+        // the run-start watermark, never the running max.
+        expect(ENGINE).toMatch(/ObjectName: entityMap\.ExternalObjectName,[\s\S]{0,900}?WatermarkValue: fetchWatermark,/);
+        expect(ENGINE).toMatch(/const fetchWatermark = this\.applyWatermarkLookback\([^;]*initialWatermark\);/);
     });
 
     it('does NOT pass currentWatermark as the fetch filter anywhere', () => {

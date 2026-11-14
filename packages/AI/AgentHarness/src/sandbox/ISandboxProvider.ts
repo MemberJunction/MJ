@@ -1,4 +1,10 @@
-import { HarnessNetworkPolicy, HarnessWorkspaceScope } from '../types.js';
+import {
+    CloudSandboxMetadata,
+    CloudSandboxOptions,
+    HarnessNetworkPolicy,
+    HarnessSandboxProviderType,
+    HarnessWorkspaceScope,
+} from '../types.js';
 import { SandboxExecutor } from './SandboxExecutor.js';
 
 /**
@@ -18,7 +24,9 @@ export interface WorkspaceKey {
 
 /** Runtime knobs a provider honours when provisioning. */
 export interface SandboxConfig {
-    NetworkPolicy: HarnessNetworkPolicy;
+    /** Optional placement provider (`'local' | 'docker' | 'cloud'`). */
+    provider?: HarnessSandboxProviderType;
+    NetworkPolicy?: HarnessNetworkPolicy;
     /** Container image, for providers that have one. Ignored by the local provider. */
     Image?: string;
     /** How to handle two runs wanting the same durable workspace. */
@@ -37,10 +45,14 @@ export interface SandboxConfig {
     User?: string;
     /** Drop all Linux capabilities and forbid privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`). Ignored by the local provider. */
     DropCapabilities?: boolean;
+    /** Cloud-hosted sandbox runtime configuration when `provider === 'cloud'`. */
+    cloud?: CloudSandboxOptions;
 }
 
 /** A provisioned workspace, and the means of running commands inside it. */
 export interface SandboxHandle {
+    /** Sandbox provider name (`'local' | 'docker' | 'cloud'`). */
+    Provider?: HarnessSandboxProviderType;
     /**
      * Workspace path AS THE HARNESS SEES IT.
      *
@@ -59,6 +71,10 @@ export interface SandboxHandle {
     Key: WorkspaceKey;
     /** True when the workspace is discarded on finalize rather than retained for the next run. */
     Ephemeral: boolean;
+    /** Serialized cleanup correlation token for remote or out-of-process sandboxes. */
+    CleanupToken?: string;
+    /** Normalized cloud execution metadata when provisioned by `CloudSandboxProvider`. */
+    Metadata?: CloudSandboxMetadata;
     /**
      * Runs harness processes inside this sandbox.
      *
@@ -81,6 +97,8 @@ export interface SandboxHandle {
  * meaningful there.
  */
 export interface ISandboxProvider {
+    /** Identifier of the sandbox provider (`'local' | 'docker' | 'cloud'`). */
+    readonly Name?: HarnessSandboxProviderType;
     /** Provisions (or reattaches to) the workspace identified by `key`. */
     Provision(key: WorkspaceKey, config: SandboxConfig): Promise<SandboxHandle>;
     /**

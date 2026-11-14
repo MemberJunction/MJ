@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RegisterDataHook, ClearAllDataHooks, PreRunViewHook, PostRunViewHook, PreSaveHook } from '../generic/dataHooks';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
-import { ProviderConfigDataBase, RunViewResult } from '../generic/interfaces';
+import { IMetadataProvider, ProviderConfigDataBase, RunViewResult } from '../generic/interfaces';
 import { RunViewParams } from '../views/runView';
 import { UserInfo, UserRoleInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
@@ -291,6 +291,30 @@ describe('Hook Integration Tests', () => {
             expect(capturedParams!.EntityName).toBe('Orders');
             expect(capturedResults!.Results).toHaveLength(1);
             expect(capturedUser!.ID).toBe('post-user');
+        });
+
+        it('should pass the executing provider instance to PreRunView and PostRunView hooks even when contextUser is undefined', async () => {
+            vi.spyOn(provider as never, 'InternalRunViews')
+                .mockResolvedValue([makeRunViewResult([{ id: 1 }])]);
+
+            let capturedPreProvider: IMetadataProvider | undefined;
+            let capturedPostProvider: IMetadataProvider | undefined;
+
+            const preHook: PreRunViewHook = (params, _user, hookProvider) => {
+                capturedPreProvider = hookProvider;
+                return params;
+            };
+            const postHook: PostRunViewHook = (_params, results, _user, hookProvider) => {
+                capturedPostProvider = hookProvider;
+                return results;
+            };
+            RegisterDataHook('PreRunView', preHook);
+            RegisterDataHook('PostRunView', postHook);
+
+            await provider.RunView({ EntityName: 'Orders' }, undefined);
+
+            expect(capturedPreProvider).toBe(provider);
+            expect(capturedPostProvider).toBe(provider);
         });
 
         it('should chain multiple post-hooks', async () => {

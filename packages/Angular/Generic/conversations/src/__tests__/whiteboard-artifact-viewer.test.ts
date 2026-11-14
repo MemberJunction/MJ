@@ -118,4 +118,48 @@ describe('WhiteboardArtifactViewerComponent — plugin contract', () => {
     viewer.artifactVersion = fakeVersion(buildBoardJson());
     expect(viewer.GetCurrentStateSnapshot()?.title).toBe('Whiteboard');
   });
+
+  it('declares SupportsInlineEdit = true and provides an interactive EditableBoardState when readonly is false', () => {
+    const viewer = new WhiteboardArtifactViewerComponent();
+    viewer.readonly = false;
+    viewer.artifactVersion = fakeVersion('');
+
+    expect(viewer.SupportsInlineEdit).toBe(true);
+    expect(viewer.hasDisplayContent).toBe(true);
+    expect(viewer.EditableBoardState).toBeInstanceOf(WhiteboardState);
+  });
+
+  it('emits ContentCommitted ONLY when OnCommitInlineChanges() is explicitly called (never auto-committing on timers or ngOnDestroy) and preserves EditableBoardState across commit', async () => {
+    const viewer = new WhiteboardArtifactViewerComponent();
+    viewer.readonly = false;
+    viewer.artifactVersion = fakeVersion(buildBoardJson(), 'Architecture Board');
+
+    const committedPayloads: string[] = [];
+    viewer.ContentCommitted.subscribe((json: string) => committedPayloads.push(json));
+
+    const initialEditable = viewer.EditableBoardState;
+    initialEditable.AddItem({ Kind: 'sticky', X: 220, Y: 140, Text: 'Inline OLE edit' }, 'user');
+    expect(viewer.IsDirty).toBe(true);
+
+    // Waiting beyond the old 600ms debounce window must NOT auto-commit
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(committedPayloads).toHaveLength(0);
+    expect(viewer.IsDirty).toBe(true);
+
+    // Explicit Save / Commit Changes emits once and keeps parsedForJson synced so host version echo doesn't recreate EditableBoardState
+    viewer.OnCommitInlineChanges();
+    expect(viewer.IsDirty).toBe(false);
+    expect(committedPayloads).toHaveLength(1);
+    const rehydrated = ParseBoardStateJson(committedPayloads[0]);
+    expect(rehydrated?.ElementCount).toBe(3);
+
+    viewer.artifactVersion = fakeVersion(committedPayloads[0], 'Architecture Board');
+    expect(viewer.EditableBoardState).toBe(initialEditable);
+
+    // Uncommitted edits must NOT auto-commit on ngOnDestroy
+    viewer.EditableBoardState.AddItem({ Kind: 'sticky', X: 300, Y: 180, Text: 'Unsaved draft stroke' }, 'user');
+    expect(viewer.IsDirty).toBe(true);
+    viewer.ngOnDestroy();
+    expect(committedPayloads).toHaveLength(1);
+  });
 });

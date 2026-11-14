@@ -14,6 +14,10 @@ import { FeaturePipelineVersionSteward } from '../steward/FeaturePipelineVersion
 /** Optional runtime context for {@link StewardFeaturePipelineVersionAction}. */
 export interface StewardFeaturePipelineActionContext {
     Provider?: IMetadataProvider;
+    /** The scheduled job run that launched this action, so the backfill run row links back to it (#5938). */
+    ScheduledJobRunID?: string;
+    /** Renews the scheduled job run's lease during a long backfill (#5938). */
+    Heartbeat?: () => void;
 }
 
 /**
@@ -39,6 +43,8 @@ export class StewardFeaturePipelineVersionAction extends BaseAction {
         const outcomes = await FeaturePipelineVersionSteward.Instance.StewardPipelineByID(recordProcessID, {
             ContextUser: params.ContextUser,
             Provider: provider,
+            ScheduledJobRunID: params.Context?.ScheduledJobRunID,
+            Heartbeat: params.Context?.Heartbeat,
         });
 
         const last = outcomes[outcomes.length - 1];

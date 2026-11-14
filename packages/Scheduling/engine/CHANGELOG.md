@@ -1,5 +1,86 @@
 # @memberjunction/scheduling-engine
 
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 18bb8fa: Add Work Bus & Software Factory MJ Core layers: generalized always-on agent policies, inter-agent requests, and coalesced workstream wake scheduling (`TriggerWakeForWorkstream` + `Trigger Agent Wake`), action-level RLS/FLS enforcement, declarative `SubtypeSelector` extensions (`AutoEnsureOnSave`, `OnSubtypeChange: 'Refuse' | 'Replace'`, `Driver`, `UIDriver`, `FoldIntoForm`, `EntitySubtypeDriverBase`, `<mj-folded-subtype-section>`), `MJ: Conversation Types`, `MJ: Comments` (IS-A `Conversation`), `MJ: Comment Types`, and `MJ: Field Suggestions` (IS-A `Comment`) with server-side accept/reject/supersede drivers, `PostSave` hooks, RLS/FLS anchored-view filtering, and generated-form Notes & Suggestions UI.
+
+### Patch Changes
+
+- 6bd8271: Shared-cache incident fixes: the scheduler's timestamp-filtered reads (due routines, wake-gate deltas, action-log retention) bypass the cache instead of writing a never-read entry per tick; `InvalidateEntityCaches` skips the storage lookup and registry rewrite for a non-cacheable entity with nothing indexed, and rewrites the registry only when it removed something; the Redis provider applies `options` on the URL path too and answers a read that takes longer than `readTimeoutMs` (default 2000 ms; `cacheSettings.redisReadTimeoutMs` / `REDIS_READ_TIMEOUT_MS` in MJServer) as a cache miss. When the index-group read a save uses to find peer slots times out, the slots it returns are removed once Redis answers.
+- 1ef6a72: The scheduler no longer runs a job a second time while it is still running, or straight after it finishes.
+  - `DispatchScheduledJobs` skips a job whose run this process is still tracking. A mid-run reload (any `ScheduledJob` save fires `OnJobChanged` → `Config(true)`) brings back the running job's pre-run `NextRunAt`, so the job read as due on every tick: it contended for its own lock, a `Queue`-mode job got a Cancelled "queued" run per tick, and a `Skip`-policy run that outlasted its next occurrence had its row full-saved mid-run.
+  - When a run finishes, its statistics and new `NextRunAt` are applied to the live `ScheduledJobs` entry as well as to the object the run started with. After a mid-run reload, the live entry kept the pre-run `NextRunAt`, and the next tick ran the job again. On a production tenant, a nightly sync started a second run 9 seconds after the first one completed.
+  - When the lease sweep reclaims a hung run, it counts the run as failed and moves the job to its next occurrence. Before, the same tick dispatched the job again, and so did every lease interval after it. A run is counted once: a hung run that settles later is not counted again, and a run that finished just as the sweep looked is not counted as failed.
+
+- Updated dependencies [2cc0cb9]
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [3615622]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [d693139]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [755b210]
+- Updated dependencies [b5df80e]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [66fcfde]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/ai-agents@6.3.0-edge.0
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.0
+  - @memberjunction/actions@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/integration-engine@6.3.0-edge.0
+  - @memberjunction/task-graph@6.3.0-edge.0
+  - @memberjunction/rubrics@6.3.0-edge.0
+  - @memberjunction/record-set-processor@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/actions-base@6.3.0-edge.0
+  - @memberjunction/notifications@6.3.0-edge.0
+  - @memberjunction/materialization@6.3.0-edge.0
+  - @memberjunction/record-set-processor-base@6.3.0-edge.0
+  - @memberjunction/scheduling-engine-base@6.3.0-edge.0
+  - @memberjunction/templates@6.3.0-edge.0
+  - @memberjunction/scheduling-base-types@6.3.0-edge.0
+
 ## 6.2.0
 
 ### Minor Changes

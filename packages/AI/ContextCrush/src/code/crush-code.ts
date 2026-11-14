@@ -130,64 +130,75 @@ function isFunctionSignatureLine(lineCode: string): boolean {
   }
   // Function/method declaration: a parameter list immediately precedes the brace
   // (optionally a return-type annotation). Excludes object-literal openers (no `)...{`).
-  const sigMatch = matchParamsBeforeOpeningBrace(trimmed);
-  if (!sigMatch.hasClosingParams) {
+  const body = trimmed.slice(0, -1);
+  const closeParens = signatureCloseParens(body);
+  if (closeParens.length === 0) {
     return false;
   }
-  return /\bfunction\b/.test(trimmed) || sigMatch.hasNamedParams;
+  return /\bfunction\b/.test(trimmed) || closeParens.some((p) => hasCalleeBefore(body, p));
+}
+
+function isWhitespaceChar(c: string): boolean {
+  return /\s/.test(c);
+}
+
+/** Index of the last non-whitespace character at or before `from`, or -1. */
+function lastNonWhitespace(s: string, from: number): number {
+  let i = from;
+  while (i >= 0 && isWhitespaceChar(s[i])) {
+    i--;
+  }
+  return i;
 }
 
 /**
- * Linear O(n) check replacing `/\)\s*(:[^={]+)?\{$/` and `/[\w$]\s*\([^)]*\)\s*(:[^={]+)?\{$/`
- * without polynomial regex backtracking.
+ * Positions of each `)` in `body` (a line with its final `{` removed) that ends a signature: only
+ * whitespace follows it, or whitespace then a `:` return type of one or more characters with no `=`
+ * or `{`. This is the `\)\s*(:[^={]+)?\{$` test read by index, since that regex costs quadratic time
+ * on a line of repeated `):` (CodeQL js/polynomial-redos). Ascending order.
  */
-function matchParamsBeforeOpeningBrace(trimmedEndingWithBrace: string): {
-  hasClosingParams: boolean;
-  hasNamedParams: boolean;
-} {
-  const beforeBrace = trimmedEndingWithBrace.slice(0, -1);
-  // Any valid return-type annotation `:[^={]+` after `)` cannot contain `=` or `{`,
-  // so a candidate closing `)` must appear after the last `=` or `{` on the line.
-  const lastDisallowed = Math.max(beforeBrace.lastIndexOf('='), beforeBrace.lastIndexOf('{'));
-  const minCloseIdx = lastDisallowed + 1;
-
-  let hasClosingParams = false;
-  let hasNamedParams = false;
-
-  for (let p = beforeBrace.indexOf(')', minCloseIdx); p !== -1; p = beforeBrace.indexOf(')', p + 1)) {
-    const afterClose = beforeBrace.slice(p + 1);
-    const trimmedAfterClose = afterClose.trimStart();
-    // Matches `\s*(:[^={]+)?` before `{`: either only whitespace, or `:` followed by >=1 char
-    const validSuffix =
-      trimmedAfterClose.length === 0 ||
-      (trimmedAfterClose.startsWith(':') && afterClose.indexOf(':') < afterClose.length - 1);
-    if (!validSuffix) {
-      continue;
-    }
-    hasClosingParams = true;
-
-    // Check if this `)` closes a `[\w$]\s*\([^)]*\)` group
-    const openParen = beforeBrace.lastIndexOf('(', p - 1);
-    if (openParen !== -1 && beforeBrace.indexOf(')', openParen + 1) === p) {
-      let k = openParen - 1;
-      while (k >= 0 && (beforeBrace[k] === ' ' || beforeBrace[k] === '\t')) {
-        k--;
-      }
-      if (k >= 0 && /[\w$]/.test(beforeBrace[k])) {
-        hasNamedParams = true;
-        break;
+function signatureCloseParens(body: string): number[] {
+  const found: number[] = [];
+  // A return type cannot contain `=` or `{`, so its colon comes after the last of them.
+  const barrier = Math.max(body.lastIndexOf('='), body.lastIndexOf('{'));
+  for (let c = barrier + 1; c < body.length - 1; c++) {
+    if (body[c] === ':') {
+      const p = lastNonWhitespace(body, c - 1);
+      if (p >= 0 && body[p] === ')') {
+        found.push(p);
       }
     }
   }
-
-  return { hasClosingParams, hasNamedParams };
+  const last = lastNonWhitespace(body, body.length - 1);
+  if (last >= 0 && body[last] === ')') {
+    found.push(last);
+  }
+  return found;
 }
 
 /**
- * Linear O(n) normalization replacing `.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')`
- * without polynomial regex backtracking on long whitespace runs.
+ * Whether the parameter list closed at `closeParen` is called on a name: a `(` after the previous
+ * `)`, preceded (whitespace aside) by an identifier character. The `[\w$]\s*\([^)]*\)` part of the
+ * old signature regex.
  */
-function normalizeTrailingSpacesAndBlankLines(text: string): string {
+function hasCalleeBefore(body: string, closeParen: number): boolean {
+  for (let i = closeParen - 1; i >= 0 && body[i] !== ')'; i--) {
+    if (body[i] === '(') {
+      const k = lastNonWhitespace(body, i - 1);
+      if (k >= 0 && /[\w$]/.test(body[k])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Drop spaces and tabs that end a line (before a `\n`); the last line, with no `\n` after it,
+ * keeps them. Same result as `.replace(/[ \t]+\n/g, '\n')`, which costs quadratic time on a long
+ * run of spaces with no newline (CodeQL js/polynomial-redos).
+ */
+function trimLineEndBlanks(text: string): string {
   const lines = text.split('\n');
   for (let i = 0; i < lines.length - 1; i++) {
     const line = lines[i];
@@ -195,11 +206,17 @@ function normalizeTrailingSpacesAndBlankLines(text: string): string {
     while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) {
       end--;
     }
-    if (end < line.length) {
-      lines[i] = line.slice(0, end);
-    }
+    lines[i] = line.slice(0, end);
   }
-  const joined = lines.join('\n');
+  return lines.join('\n');
+}
+
+/**
+ * Drop spaces and tabs before each newline, then collapse runs of three or more newlines to two.
+ * Same result as `.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n')`, in linear time.
+ */
+function normalizeTrailingSpacesAndBlankLines(text: string): string {
+  const joined = trimLineEndBlanks(text);
   let out = '';
   let newlineRun = 0;
   for (let i = 0; i < joined.length; i++) {
