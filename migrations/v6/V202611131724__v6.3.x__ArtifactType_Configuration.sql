@@ -8,7 +8,7 @@
 -- =====================================================================================
 
 ALTER TABLE [${flyway:defaultSchema}].[ArtifactType]
-ADD [Configuration] NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL;
+ADD [Configuration] NVARCHAR(MAX) NULL;
 GO
 
 EXEC sp_addextendedproperty
