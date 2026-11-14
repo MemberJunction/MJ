@@ -23,6 +23,7 @@ export * from './custom/DocumentLiveBlockEngine';
 export * from './custom/SlideDeckEngine';
 export * from './custom/SpreadsheetEngine';
 export * from './custom/ArtifactPreviewSnapshot';
+export * from './custom/ArtifactSynthesisEngine';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
 export * from './custom/QueryDiagnostics';
@@ -72,6 +73,7 @@ export * from './custom/FormScope/FormContributionClaims';
 export * from './custom/FormScope/FormContributionLifecycle';
 export * from './custom/FormScope/FormPanelHides';
 export * from './custom/operations/EvaluateAuthorizationChecks';
+export * from './custom/operations/SynthesizeArtifactFromSourcesOperation';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 
 export * from './artifact-extraction/artifact-extract-rules';

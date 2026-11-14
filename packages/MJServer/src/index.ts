@@ -278,6 +278,7 @@ export * from './resolvers/EntityResolver.js';
 export * from './resolvers/ISAEntityResolver.js';
 export * from './resolvers/ArtifactFileResolver.js';
 export * from './resolvers/DocumentCollaborationResolver.js';
+export { SynthesizeArtifactFromSourcesServerOperation, LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 export * from './collaboration/index.js';
 export * from './resolvers/FileCategoryResolver.js';
 export * from './resolvers/FileResolver.js';
@@ -312,6 +313,8 @@ export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
 import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
+LoadSynthesizeArtifactFromSourcesOperation();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';

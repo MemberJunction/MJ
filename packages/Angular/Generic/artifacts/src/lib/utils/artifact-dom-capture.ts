@@ -6,12 +6,14 @@ import {
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
-// Genuine bundle-size deferral: html-to-image is only needed when thumbnail capture executes,
-// keeping it out of eager realtime-widget-session and artifact-viewer bundles.
 type HtmlToImageModule = typeof import('html-to-image');
 let htmlToImagePromise: Promise<HtmlToImageModule> | null = null;
+
 function loadHtmlToImage(): Promise<HtmlToImageModule> {
   if (!htmlToImagePromise) {
+    // Genuine bundle-size deferral (AGENTS.md §8 #3): keeps html-to-image out of eager
+    // @memberjunction/ng-artifacts and downstream @memberjunction/ng-realtime-widget session
+    // chunks until Rendered DOM thumbnail capture is actually invoked.
     htmlToImagePromise = import('html-to-image');
   }
   return htmlToImagePromise;
@@ -173,9 +175,10 @@ export async function CaptureRenderedElementThumbnail(
   const backgroundColor =
     options.BackgroundColor ?? getEffectiveBackgroundColor(rootElement, '#0e1623');
 
-  const restorations = maskLive ? maskLiveDataWidgets(rootElement) : [];
+  let restorations: LiveMaskRestoration[] = [];
   try {
     const { toCanvas } = await loadHtmlToImage();
+    restorations = maskLive ? maskLiveDataWidgets(rootElement) : [];
     const capturePromise = toCanvas(rootElement, {
       width: cropWidth,
       height: cropHeight,

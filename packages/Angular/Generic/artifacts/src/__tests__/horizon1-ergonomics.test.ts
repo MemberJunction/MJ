@@ -140,6 +140,15 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
     it('pastes rectangular TSV in a single atomic undoable batch and clears selected range', () => {
       const comp = createSheetsComponent();
+      comp.Permissions = {
+        ArtifactID: 'art-sheet-1',
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: true,
+        CanShare: false,
+        Source: 'Owner',
+        Reason: 'Test owner permissions',
+      };
       comp.readonly = false;
       comp.Workbook = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Test');
       const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(comp.Workbook);
@@ -193,6 +202,15 @@ describe('Horizon 1 Ergonomics & Cross-Artifact Features', () => {
 
     it('reorders slides on filmstrip drag-drop and supports Reset/Pin via UserInfoEngine', () => {
       const comp = createSlidesComponent();
+      comp.ResolvedPermissions = {
+        ArtifactID: 'art-deck-1',
+        CanRead: true,
+        CanEdit: true,
+        CanDelete: true,
+        CanShare: false,
+        Source: 'Owner',
+        Reason: 'Test owner permissions',
+      };
       comp.readonly = false;
       const deck = SlideDeckEngine.Instance.CreateDefaultDeck('Deck');
       const { Deck: d2 } = SlideDeckEngine.Instance.AddSlide(deck, { Title: 'Slide 2' });

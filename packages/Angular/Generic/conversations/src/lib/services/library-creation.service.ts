@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RemoteOpProgress, RunView, UserInfo } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
+  ArtifactSynthesisTargetKind,
   BuildArtifactVersionConfigurationWithPreview,
   MJArtifactEntity,
   MJArtifactTypeEntity,
@@ -11,6 +12,8 @@ import {
   MJEnvironmentEntityExtended,
   SlideDeckEngine,
   SpreadsheetEngine,
+  SynthesizeArtifactFromSourcesInput,
+  SynthesizeArtifactFromSourcesOperation,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
@@ -125,6 +128,34 @@ export interface PublishToConnectedDriveOptions {
     ArtifactVersionID?: string | null;
     FileID?: string | null;
   }) => Promise<Uint8Array>;
+}
+
+export interface SynthesizeArtifactFromSourcesOptions {
+  TargetKind: ArtifactSynthesisTargetKind;
+  Goal: string;
+  SourceArtifactIds: ReadonlyArray<string>;
+  CollectionID?: string | null;
+  Title?: string | null;
+  AgentHandle?: string | null;
+  LinkChartsAndRanges?: boolean;
+  CurrentUser: UserInfo;
+  Provider?: IMetadataProvider;
+  OnProgress?: (progress: RemoteOpProgress) => void;
+}
+
+export interface SynthesizeArtifactFromSourcesResult {
+  Success: boolean;
+  AccessDenied?: boolean;
+  ErrorMessage?: string;
+  ArtifactID: string;
+  VersionID: string;
+  VersionNumber: number;
+  Title: string;
+  ArtifactTypeName: string;
+  LinkedChartCount: number;
+  SourceCount: number;
+  Warnings: string[];
+  UsedFallback: boolean;
 }
 
 export interface CreatedLibraryArtifactResult {
@@ -480,6 +511,53 @@ export class LibraryCreationService {
       CurrentUser: options.CurrentUser,
       Provider: md,
     });
+  }
+
+  /**
+   * Executes the `Artifact.SynthesizeFromSources` remote operation (`SynthesizeArtifactFromSourcesOperation`)
+   * to read multiple governed artifacts, synthesize a brand-new `Presentation`, `Markdown Document`, or
+   * `Excel Spreadsheet` with live chart/range links, enforce `CanRead` / `CanEdit` permissions, stream
+   * progress updates, and save v1.
+   */
+  public async SynthesizeArtifactFromSources(
+    options: SynthesizeArtifactFromSourcesOptions,
+  ): Promise<SynthesizeArtifactFromSourcesResult> {
+    const op = new SynthesizeArtifactFromSourcesOperation();
+    const opInput: SynthesizeArtifactFromSourcesInput = {
+      TargetKind: options.TargetKind,
+      Goal: options.Goal,
+      SourceArtifactIds: Array.from(options.SourceArtifactIds),
+      CollectionId: options.CollectionID || null,
+      Title: options.Title?.trim() || null,
+      AgentHandle: options.AgentHandle?.trim() || null,
+      LinkChartsAndRanges: options.LinkChartsAndRanges !== false,
+    };
+
+    const result = await op.Execute(opInput, {
+      provider: options.Provider ?? GraphQLDataProvider.Instance,
+      mode: 'attached',
+      onProgress: options.OnProgress,
+    });
+
+    if (!result.Success || !result.Output?.ArtifactID) {
+      throw new Error(result.ErrorMessage || 'Artifact synthesis failed.');
+    }
+
+    const payload = result.Output;
+    return {
+      Success: true,
+      AccessDenied: result.ResultCode === 'ACCESS_DENIED' || result.ResultCode === 'FORBIDDEN',
+      ErrorMessage: result.ErrorMessage,
+      ArtifactID: payload.ArtifactID,
+      VersionID: payload.VersionID ?? '',
+      VersionNumber: payload.VersionNumber ?? 1,
+      Title: payload.Title ?? options.Title?.trim() ?? 'Synthesized Artifact',
+      ArtifactTypeName: payload.ArtifactTypeName ?? 'Presentation',
+      LinkedChartCount: payload.LinkedChartCount ?? 0,
+      SourceCount: payload.SourceCount ?? options.SourceArtifactIds.length,
+      Warnings: Array.isArray(payload.Warnings) ? payload.Warnings : [],
+      UsedFallback: Boolean(payload.UsedFallback),
+    };
   }
 
   /**
