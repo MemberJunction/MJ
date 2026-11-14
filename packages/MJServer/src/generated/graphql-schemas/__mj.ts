@@ -26347,6 +26347,9 @@ export class MJArtifactType_ {
     @Field(() => Boolean, {nullable: true, description: "True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority."}) 
     SystemSupplied?: boolean;
         
+    @Field({nullable: true, description: "Optional JSON configuration bag for this artifact type (shape = IArtifactTypeConfiguration), including Library card thumbnail visibility and capture mode policies."}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -26419,6 +26422,9 @@ export class CreateMJArtifactTypeInput {
     @Field(() => Boolean, { nullable: true })
     SystemSupplied?: boolean;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -26470,6 +26476,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     SystemSupplied?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
