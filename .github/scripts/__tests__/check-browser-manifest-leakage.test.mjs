@@ -8,9 +8,16 @@ import {
     extractSpecifiers,
     scanSource,
     scanManifest,
+    scanSplitGuards,
+    scanSplitManifest,
+    findTsFiles,
     DENY,
     GUARDED,
     GUARDED_MANIFESTS,
+    SPLIT_GUARD_DIRS,
+    SPLIT_GUARD_MANIFESTS,
+    LAZY_EXCLUDED_PACKAGES,
+    FORBIDDEN_ROOT_PACKAGES,
 } from '../check-browser-manifest-leakage.mjs';
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'check-browser-manifest-leakage.mjs');
@@ -141,12 +148,85 @@ describe('scanManifest', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Eager bundle splitting guards (Wave 5.5 ongoing split guard)
+// ---------------------------------------------------------------------------
+
+describe('scanSplitGuards', () => {
+    it('flags root import of @memberjunction/ng-bootstrap', () => {
+        const src = `import { MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';\n`;
+        const hits = scanSplitGuards(src, 'test.ts');
+        expect(hits).toHaveLength(1);
+        expect(hits[0].pkg).toBe('@memberjunction/ng-bootstrap');
+        expect(hits[0].kind).toBe('root-import');
+    });
+
+    it('allows subpath import @memberjunction/ng-bootstrap/types', () => {
+        const src = `import { MJ_ENVIRONMENT, MJEnvironmentConfig } from '@memberjunction/ng-bootstrap/types';\n`;
+        expect(scanSplitGuards(src, 'test.ts')).toEqual([]);
+    });
+
+    it('flags imports of lazy-excluded packages (ng-dashboards, ng-explorer-settings)', () => {
+        const src = [
+            `import { DashboardsModule } from '@memberjunction/ng-dashboards';`,
+            `import { CoreDashboardsModule } from '@memberjunction/ng-dashboards/core-dashboards.module';`,
+            `import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';`,
+        ].join('\n');
+        const hits = scanSplitGuards(src, 'test.ts');
+        expect(hits).toHaveLength(3);
+        expect(hits.map((h) => h.pkg)).toEqual([
+            '@memberjunction/ng-dashboards',
+            '@memberjunction/ng-dashboards',
+            '@memberjunction/ng-explorer-settings',
+        ]);
+    });
+
+    it('allows browser-safe non-lazy packages', () => {
+        const src = [
+            `import { Component } from '@angular/core';`,
+            `import { Metadata } from '@memberjunction/core';`,
+            `import { ThemeService } from '@memberjunction/ng-shared';`,
+        ].join('\n');
+        expect(scanSplitGuards(src, 'test.ts')).toEqual([]);
+    });
+});
+
+describe('scanSplitManifest', () => {
+    it('flags forbidden lazy-excluded dependencies in package.json', () => {
+        const json = {
+            dependencies: {
+                '@memberjunction/core': '1.0.0',
+                '@memberjunction/ng-dashboards': '1.0.0',
+            },
+            peerDependencies: {
+                '@memberjunction/ng-explorer-settings': '1.0.0',
+            },
+        };
+        const hits = scanSplitManifest(json, 'package.json', LAZY_EXCLUDED_PACKAGES);
+        expect(hits.map((h) => h.pkg).sort()).toEqual([
+            '@memberjunction/ng-dashboards',
+            '@memberjunction/ng-explorer-settings',
+        ]);
+    });
+
+    it('ignores allowed dependencies in package.json', () => {
+        const json = {
+            dependencies: {
+                '@memberjunction/core': '1.0.0',
+                '@memberjunction/ng-bootstrap': '1.0.0', // allowed in explorer-app because it uses /types
+            },
+        };
+        const hits = scanSplitManifest(json, 'package.json', LAZY_EXCLUDED_PACKAGES);
+        expect(hits).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Live repository state — the gate must be green on this branch, and the
 // guarded paths must actually exist (a rename must not silently disable it).
 // ---------------------------------------------------------------------------
 
 describe('live repository', () => {
-    for (const rel of [...GUARDED, ...GUARDED_MANIFESTS]) {
+    for (const rel of [...GUARDED, ...GUARDED_MANIFESTS, ...SPLIT_GUARD_DIRS, ...SPLIT_GUARD_MANIFESTS.map((m) => m.file)]) {
         it(`guarded path exists: ${rel}`, () => {
             expect(existsSync(join(REPO_ROOT, rel))).toBe(true);
         });
@@ -171,6 +251,15 @@ describe('live repository', () => {
         const server = join(REPO_ROOT, 'packages/ServerBootstrap/src/generated/mj-class-registrations.ts');
         const hits = scanSource(readFileSync(server, 'utf8'), 'ServerBootstrap');
         expect(hits.length).toBeGreaterThan(20);
+    });
+
+    it('NEGATIVE CONTROL: the full ng-bootstrap manifest would fail the split check', () => {
+        // ng-bootstrap is the full eager manifest; it legitimately imports ng-dashboards and ng-explorer-settings.
+        // Running scanSplitGuards on it proves the split guard extractor catches them.
+        const fullManifest = join(REPO_ROOT, 'packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts');
+        const hits = scanSplitGuards(readFileSync(fullManifest, 'utf8'), 'full-manifest');
+        expect(hits.length).toBeGreaterThan(0);
+        expect(hits.some((h) => h.pkg === '@memberjunction/ng-dashboards')).toBe(true);
     });
 
     it('denylist covers every member of the AI provider bundle', () => {

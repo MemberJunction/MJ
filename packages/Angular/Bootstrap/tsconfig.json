@@ -10,8 +10,11 @@
     "removeComments": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "strict": false
+    "strict": false,
+    "paths": {
+      "@memberjunction/ng-bootstrap/types": ["./types/src/index.ts"]
+    }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "types/**/*"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }

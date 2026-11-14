@@ -16,7 +16,7 @@ import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJLoginSlotDirective } from './login-slot.directive';
 import { MJLoginPickerComponent, MJLoginRegionComponent } from '@memberjunction/ng-auth-services';
-import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
+import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap/types';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent, TemplateUserBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { FeedbackModule } from '@memberjunction/ng-feedback';

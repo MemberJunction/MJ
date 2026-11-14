@@ -70,8 +70,8 @@
  * Exit:   0 = clean, 1 = server package leaked, 2 = misconfiguration (missing file / denylist drift).
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -93,6 +93,48 @@ const GUARDED_MANIFESTS = [
     'packages/Angular/Bootstrap/package.json',
     'packages/Angular/BootstrapLite/package.json',
 ];
+
+/**
+ * Directories whose source files are guarded against importing lazy-excluded packages
+ * or root @memberjunction/ng-bootstrap.
+ */
+const SPLIT_GUARD_DIRS = [
+    'packages/Angular/Explorer/explorer-app/src',
+    'packages/Angular/BootstrapLite/src',
+];
+
+/**
+ * Package manifests guarded against declaring lazy-excluded packages in dependencies.
+ */
+const SPLIT_GUARD_MANIFESTS = [
+    {
+        file: 'packages/Angular/BootstrapLite/package.json',
+        forbidden: new Set(['@memberjunction/ng-bootstrap', '@memberjunction/ng-dashboards', '@memberjunction/ng-explorer-settings']),
+    },
+    {
+        file: 'packages/Angular/Explorer/explorer-app/package.json',
+        forbidden: new Set(['@memberjunction/ng-dashboards', '@memberjunction/ng-explorer-settings']),
+    },
+];
+
+/**
+ * Packages that eager shell modules and lite manifests MUST NOT import:
+ * - '@memberjunction/ng-dashboards' (lazy-loaded dashboard classes)
+ * - '@memberjunction/ng-explorer-settings' (lazy-loaded settings module)
+ */
+const LAZY_EXCLUDED_PACKAGES = new Set([
+    '@memberjunction/ng-dashboards',
+    '@memberjunction/ng-explorer-settings',
+]);
+
+/**
+ * Root packages that eager shell modules MUST NOT import directly (must use subpath exports).
+ * Root '@memberjunction/ng-bootstrap' pulls all dashboards into AppModule; import from
+ * '@memberjunction/ng-bootstrap/types' instead.
+ */
+const FORBIDDEN_ROOT_PACKAGES = new Set([
+    '@memberjunction/ng-bootstrap',
+]);
 
 /** The AI provider bundle — every member is server-only, and the list must stay in sync. */
 const BUNDLE_PACKAGE_JSON = 'packages/AI/Providers/Bundle/package.json';
@@ -202,6 +244,77 @@ export function scanManifest(json, file, deny = DENY) {
         .map((pkg) => ({ file, line: null, spec: pkg, pkg }));
 }
 
+/** Recursively finds all .ts files in a directory. */
+function findTsFiles(dir) {
+    const results = [];
+    if (!existsSync(dir)) {
+        return results;
+    }
+    const entries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+        const fullPath = join(dir, entry.name);
+        if (entry.isDirectory()) {
+            results.push(...findTsFiles(fullPath));
+        } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+            results.push(fullPath);
+        }
+    }
+    return results;
+}
+
+/**
+ * Scans a source file's specifiers to ensure it does not import root `@memberjunction/ng-bootstrap`
+ * or any lazy-excluded package (`@memberjunction/ng-dashboards`, `@memberjunction/ng-explorer-settings`).
+ */
+function scanSplitGuards(text, file, lazyExcluded = LAZY_EXCLUDED_PACKAGES, forbiddenRoots = FORBIDDEN_ROOT_PACKAGES) {
+    const hits = [];
+    for (const { spec, line } of extractSpecifiers(text)) {
+        const normalized = spec.replace(/\/+$/, '');
+        if (forbiddenRoots.has(normalized)) {
+            hits.push({
+                file,
+                line,
+                spec,
+                pkg: normalized,
+                kind: 'root-import',
+                reason: `Root import of '${spec}' drags all dashboards eagerly into AppModule. Import from '${spec}/types' instead.`,
+            });
+            continue;
+        }
+
+        const pkg = packageNameOf(spec);
+        if (pkg !== null && lazyExcluded.has(pkg)) {
+            hits.push({
+                file,
+                line,
+                spec,
+                pkg,
+                kind: 'lazy-excluded',
+                reason: `Lazy-excluded package '${pkg}' must not be imported in eager shell packages.`,
+            });
+        }
+    }
+    return hits;
+}
+
+/** Scans a package.json to ensure it does not declare forbidden lazy-excluded packages. */
+function scanSplitManifest(json, file, forbidden) {
+    const declared = [
+        ...Object.keys(json.dependencies ?? {}),
+        ...Object.keys(json.peerDependencies ?? {}),
+    ];
+    return declared
+        .filter((pkg) => forbidden.has(pkg))
+        .map((pkg) => ({
+            file,
+            line: null,
+            spec: pkg,
+            pkg,
+            kind: 'forbidden-dep',
+            reason: `Lazy-excluded package '${pkg}' must not be declared in dependencies of ${file}.`,
+        }));
+}
+
 /**
  * Denylist drift guard. The bundle is the one part of the list that can grow without anyone
  * touching this file, so a new provider that is not denied here is a real hole — reported as a
@@ -227,7 +340,8 @@ function assertBundleCoverage(root, deny) {
 function main(argv = process.argv.slice(2)) {
     const asJson = argv.includes('--json');
     const problems = [];
-    const violations = [];
+    const serverViolations = [];
+    const splitViolations = [];
 
     problems.push(...assertBundleCoverage(REPO_ROOT, DENY));
 
@@ -237,7 +351,7 @@ function main(argv = process.argv.slice(2)) {
             problems.push(`Guarded browser artifact is missing: ${rel} — it was renamed or removed, and this gate is no longer watching it. Update GUARDED.`);
             continue;
         }
-        violations.push(...scanSource(readFileSync(abs, 'utf8'), rel));
+        serverViolations.push(...scanSource(readFileSync(abs, 'utf8'), rel));
     }
 
     for (const rel of GUARDED_MANIFESTS) {
@@ -246,11 +360,38 @@ function main(argv = process.argv.slice(2)) {
             problems.push(`Guarded browser package manifest is missing: ${rel}. Update GUARDED_MANIFESTS.`);
             continue;
         }
-        violations.push(...scanManifest(JSON.parse(readFileSync(abs, 'utf8')), rel));
+        serverViolations.push(...scanManifest(JSON.parse(readFileSync(abs, 'utf8')), rel));
     }
 
+    // Split Guard checks
+    let splitFilesChecked = 0;
+    for (const relDir of SPLIT_GUARD_DIRS) {
+        const absDir = join(REPO_ROOT, relDir);
+        if (!existsSync(absDir)) {
+            problems.push(`Guarded split directory is missing: ${relDir}. Update SPLIT_GUARD_DIRS.`);
+            continue;
+        }
+        const tsFiles = findTsFiles(absDir);
+        for (const absFile of tsFiles) {
+            splitFilesChecked++;
+            const relFile = relative(REPO_ROOT, absFile);
+            splitViolations.push(...scanSplitGuards(readFileSync(absFile, 'utf8'), relFile));
+        }
+    }
+
+    for (const entry of SPLIT_GUARD_MANIFESTS) {
+        const abs = join(REPO_ROOT, entry.file);
+        if (!existsSync(abs)) {
+            problems.push(`Guarded split manifest is missing: ${entry.file}. Update SPLIT_GUARD_MANIFESTS.`);
+            continue;
+        }
+        splitViolations.push(...scanSplitManifest(JSON.parse(readFileSync(abs, 'utf8')), entry.file, entry.forbidden));
+    }
+
+    const violations = [...serverViolations, ...splitViolations];
+
     if (asJson) {
-        console.log(JSON.stringify({ problems, violations }, null, 2));
+        console.log(JSON.stringify({ problems, serverViolations, splitViolations, violations }, null, 2));
     }
 
     if (problems.length > 0) {
@@ -260,26 +401,60 @@ function main(argv = process.argv.slice(2)) {
         return 2;
     }
 
-    if (violations.length > 0) {
-        for (const v of violations) {
+    let hasErrors = false;
+
+    if (serverViolations.length > 0) {
+        hasErrors = true;
+        for (const v of serverViolations) {
             const where = v.line === null ? `${v.file} (dependency)` : `${v.file}:${v.line}`;
             console.error(`::error file=${v.file}${v.line === null ? '' : `,line=${v.line}`}::Server-only package '${v.pkg}' reached the BROWSER manifest at ${where}.`);
         }
         console.error(
-            `::error::${violations.length} server-only import(s) leaked into the browser class-registration manifests. ` +
+            `::error::${serverViolations.length} server-only import(s) leaked into the browser class-registration manifests. ` +
             `This breaks the MJExplorer bundle with 'Could not resolve \"crypto\"' on a COLD build. ` +
             `Fix: cut the offending dependency edge (see packages/Angular/Bootstrap/CLAUDE.md) — do not add the package to the denylist exceptions.`
         );
+    }
+
+    if (splitViolations.length > 0) {
+        hasErrors = true;
+        for (const v of splitViolations) {
+            const where = v.line === null ? `${v.file} (dependency)` : `${v.file}:${v.line}`;
+            console.error(`::error file=${v.file}${v.line === null ? '' : `,line=${v.line}`}::Bundle splitting violation at ${where}: ${v.reason}`);
+        }
+        console.error(
+            `::error::${splitViolations.length} eager bundle splitting violation(s) detected. ` +
+            `Eager shell packages (ng-explorer-app, ng-bootstrap-lite) must not import root @memberjunction/ng-bootstrap or lazy-excluded packages.`
+        );
+    }
+
+    if (hasErrors) {
         return 1;
     }
 
     if (!asJson) {
-        console.log(`✅ Browser class-registration manifests are free of server-only packages (${GUARDED.length} files + ${GUARDED_MANIFESTS.length} package manifests checked, ${DENY.size} packages denied).`);
+        console.log(
+            `✅ Browser manifests and eager shell packages are clean (` +
+            `${GUARDED.length} files + ${GUARDED_MANIFESTS.length} package manifests checked for server leakage; ` +
+            `${splitFilesChecked} source files + ${SPLIT_GUARD_MANIFESTS.length} manifests checked for bundle splitting).`
+        );
     }
     return 0;
 }
 
-export { DENY, GUARDED, GUARDED_MANIFESTS, main };
+export {
+    DENY,
+    GUARDED,
+    GUARDED_MANIFESTS,
+    SPLIT_GUARD_DIRS,
+    SPLIT_GUARD_MANIFESTS,
+    LAZY_EXCLUDED_PACKAGES,
+    FORBIDDEN_ROOT_PACKAGES,
+    findTsFiles,
+    scanSplitGuards,
+    scanSplitManifest,
+    main,
+};
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
     process.exit(main());

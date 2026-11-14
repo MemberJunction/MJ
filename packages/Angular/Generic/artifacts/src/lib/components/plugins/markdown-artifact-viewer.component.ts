@@ -1,4 +1,4 @@
-import { Component, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, HostListener, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef, Renderer2, Type, inject } from '@angular/core';
 import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IMetadataProvider, type QueryInfo } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -184,6 +184,7 @@ interface DocsInlineToken {
 @Component({
   standalone: false,
   selector: 'mj-markdown-artifact-viewer',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mj-docs-workspace" [ngClass]="cssClass" data-testid="mj-docs-workspace">
       <!-- Tier 1: Calm Progressive Disclosure Collaboration & Mode Toolbar -->
