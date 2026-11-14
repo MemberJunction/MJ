@@ -13,7 +13,8 @@
     "./schemas": {
       "types": "./dist/schemas.d.ts",
       "default": "./dist/schemas.js"
-    }
+    },
+    "./dist/*": "./dist/*"
   },
   "files": [
     "/dist"

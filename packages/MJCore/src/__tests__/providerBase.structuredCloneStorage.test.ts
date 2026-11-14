@@ -76,7 +76,8 @@ describe('ProviderBase Structured-Clone Storage (Wave 5.4)', () => {
         expect(storage.SetObjectCalls.length).toBeGreaterThan(0);
         const saveCall = storage.SetObjectCalls.find(c => c.key.endsWith('_AllMetadata'));
         expect(saveCall).toBeDefined();
-        expect(saveCall!.value).toBe(md);
+        expect(() => structuredClone(saveCall!.value)).not.toThrow();
+        expect(saveCall!.value).toMatchObject({ AllEntities: expect.any(Array) });
 
         // Format must be stamped as 'structured-clone'
         const formatKey = provider['LocalStoragePrefix'] + '___MJCore_Metadata_Format';

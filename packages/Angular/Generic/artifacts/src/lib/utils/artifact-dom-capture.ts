@@ -5,7 +5,17 @@ import {
   type ArtifactTypeThumbnailPolicy,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { toCanvas } from 'html-to-image';
+
+// Genuine bundle-size deferral: html-to-image is only needed when thumbnail capture executes,
+// keeping it out of eager realtime-widget-session and artifact-viewer bundles.
+type HtmlToImageModule = typeof import('html-to-image');
+let htmlToImagePromise: Promise<HtmlToImageModule> | null = null;
+function loadHtmlToImage(): Promise<HtmlToImageModule> {
+  if (!htmlToImagePromise) {
+    htmlToImagePromise = import('html-to-image');
+  }
+  return htmlToImagePromise;
+}
 
 /** Options controlling DOM screenshot capture for Library artifact card thumbnails. */
 export interface CaptureRenderedThumbnailOptions {
@@ -165,6 +175,7 @@ export async function CaptureRenderedElementThumbnail(
 
   const restorations = maskLive ? maskLiveDataWidgets(rootElement) : [];
   try {
+    const { toCanvas } = await loadHtmlToImage();
     const capturePromise = toCanvas(rootElement, {
       width: cropWidth,
       height: cropHeight,

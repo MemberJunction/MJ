@@ -72,10 +72,16 @@ function loadPolicy(): DeletePolicy {
  */
 function loadGeneratedForeignKeys(): GeneratedForeignKey[] {
     const dir = path.join(repoRoot, 'packages/MJCoreEntities/src/generated/entities');
-    const source = readdirSync(dir)
-        .filter((f) => f.endsWith('.ts'))
-        .map((f) => readFileSync(path.join(dir, f), 'utf8'))
-        .join('\n');
+    const schemasDir = path.join(repoRoot, 'packages/MJCoreEntities/src/generated/schemas');
+    const readTsDir = (d: string): string =>
+        existsSync(d)
+            ? readdirSync(d)
+                  .filter((f) => f.endsWith('.ts'))
+                  .map((f) => readFileSync(path.join(d, f), 'utf8'))
+                  .join('\n')
+            : '';
+    const source = readTsDir(dir);
+    const schemaSource = `${source}\n${readTsDir(schemasDir)}`;
 
     const baseTables = new Map<string, string>();
     const inheritedByEntity = new Map<string, Set<string>>();
@@ -96,7 +102,7 @@ function loadGeneratedForeignKeys(): GeneratedForeignKey[] {
     }
 
     const fks: GeneratedForeignKey[] = [];
-    for (const block of source.split(/\* zod schema definition for the entity /).slice(1)) {
+    for (const block of schemaSource.split(/\* zod schema definition for the entity /).slice(1)) {
         const entityName = block.slice(0, block.indexOf('\n')).trim();
         const table = baseTables.get(entityName);
         if (!table) continue;

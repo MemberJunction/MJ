@@ -8758,6 +8758,37 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Converts BaseInfo instances and nested objects into plain structured-cloneable
+     * objects without JSON.stringify/JSON.parse, stripping functions and WeakRefs.
+     */
+    private static toCloneableValue(val: unknown): unknown {
+        if (val == null || typeof val !== 'object') {
+            return val;
+        }
+        if (val instanceof Date || val instanceof RegExp || val instanceof ArrayBuffer || ArrayBuffer.isView(val)) {
+            return val;
+        }
+        if (Array.isArray(val)) {
+            const out = new Array(val.length);
+            for (let i = 0; i < val.length; i++) {
+                out[i] = ProviderBase.toCloneableValue(val[i]);
+            }
+            return out;
+        }
+        const maybeToJson = val as { toJSON?: () => unknown };
+        if (typeof maybeToJson.toJSON === 'function') {
+            return ProviderBase.toCloneableValue(maybeToJson.toJSON());
+        }
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(val)) {
+            if (typeof v !== 'function' && !(typeof WeakRef !== 'undefined' && v instanceof WeakRef)) {
+                out[k] = ProviderBase.toCloneableValue(v);
+            }
+        }
+        return out;
+    }
+
+    /**
      * Saves current metadata to local storage for caching.
      * Serializes both timestamps and full metadata collections.
      */
@@ -8779,8 +8810,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             let snapshot: { compressed: boolean; storedLength: number };
             if (typeof ls.SetObject === 'function') {
-                // Structured-clone path: store AllMetadata directly into storage without JSON.stringify or gzip compression
-                await ls.SetObject<AllMetadata>(dataKey, this._localMetadata);
+                // Structured-clone path: convert BaseInfo instances to plain cloneable objects (stripping
+                // WeakRef/provider back-references without JSON.stringify/gzip/JSON.parse or lazy field hydration)
+                const cloneableMetadata = ProviderBase.toCloneableValue(this._localMetadata) as AllMetadata;
+                await ls.SetObject<AllMetadata>(dataKey, cloneableMetadata);
                 await ls.SetItem<string>(formatKey, 'structured-clone');
                 snapshot = { compressed: false, storedLength: 0 };
             } else {

@@ -4053,6 +4053,30 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Serializes EntityInfo to a plain object without forcing lazy EntityFieldInfo
+     * materialization when fields are still deferred.
+     */
+    public override toJSON(): Record<string, unknown> {
+        if (this._fieldsLoaded) {
+            return super.toJSON();
+        }
+        const savedRaw = this._rawFields;
+        this._fieldsLoaded = true;
+        this._fields = [];
+        let result: Record<string, unknown>;
+        try {
+            result = super.toJSON();
+        } finally {
+            this._fieldsLoaded = false;
+            this._rawFields = savedRaw;
+        }
+        result['Fields'] = savedRaw
+            ? savedRaw.map((item) => (item instanceof EntityFieldInfo ? item.toJSON() : item))
+            : [];
+        return result;
+    }
+
+    /**
      * Ensures EntityFieldInfo instances are created for this entity.
      * Deferring creation until .Fields or a field-derived getter is accessed
      * saves allocating thousands of EntityFieldInfo objects at startup.
