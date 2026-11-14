@@ -370,6 +370,39 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         const contentStr = typeof artifactContent === 'string' ? artifactContent : artifactContent.toString('utf-8');
+        const result = await this.dispatchSubclassTool(toolName, contentStr, input);
+        if (result.success && result.data && typeof result.data === 'object') {
+            const updatedContent = (result.data as { updatedContent?: unknown }).updatedContent;
+            if (typeof updatedContent === 'string' && updatedContent !== contentStr) {
+                const actorUserId = typeof input._actorUserId === 'string' ? input._actorUserId : undefined;
+                const ownerUserId = typeof input._ownerUserId === 'string' ? input._ownerUserId : undefined;
+                const isEditor = typeof input._isEditor === 'boolean' ? input._isEditor : false;
+                const lockCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+                    contentStr,
+                    updatedContent,
+                    actorUserId,
+                    ownerUserId,
+                    isEditor
+                );
+                if (!lockCheck.Allowed) {
+                    return {
+                        success: false,
+                        data: null,
+                        errorMessage:
+                            lockCheck.ViolationReason ||
+                            'Cannot modify a locked region (<!-- mj-lock: owner-only -->).'
+                    };
+                }
+            }
+        }
+        return result;
+    }
+
+    private async dispatchSubclassTool(
+        toolName: string,
+        contentStr: string,
+        input: Record<string, unknown>
+    ): Promise<ArtifactToolResult> {
 
         switch (toolName) {
             case 'get_outline':

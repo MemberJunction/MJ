@@ -11,7 +11,8 @@ import {
     SlideDeckSpec,
     SlideLayoutKind,
     SlideRegionKind,
-    SlideRegionSpec
+    SlideRegionSpec,
+    SlideSpec
 } from '@memberjunction/core-entities';
 
 /**
@@ -401,17 +402,31 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
-        const { Deck: afterMeta, UpdatedSlide } = SlideDeckEngine.Instance.UpdateSlideMetadata(deck, slideId, {
-            Title: typeof input.title === 'string' ? input.title : undefined,
-            Subtitle: typeof input.subtitle === 'string' ? input.subtitle : undefined,
-            Layout: typeof input.layout === 'string' ? (input.layout as SlideLayoutKind) : undefined,
-            SpeakerNotes: typeof input.speakerNotes === 'string' ? input.speakerNotes : undefined,
-            Transition:
-                typeof input.transition === 'string'
-                    ? (input.transition as 'none' | 'fade' | 'slide')
-                    : undefined,
-            Hidden: typeof input.hidden === 'boolean' ? input.hidden : undefined
-        });
+        const lockContext = this.extractLockContext(input);
+        let afterMeta: SlideDeckSpec;
+        let UpdatedSlide: SlideSpec | null;
+        try {
+            const metaRes = SlideDeckEngine.Instance.UpdateSlideMetadata(
+                deck,
+                slideId,
+                {
+                    Title: typeof input.title === 'string' ? input.title : undefined,
+                    Subtitle: typeof input.subtitle === 'string' ? input.subtitle : undefined,
+                    Layout: typeof input.layout === 'string' ? (input.layout as SlideLayoutKind) : undefined,
+                    SpeakerNotes: typeof input.speakerNotes === 'string' ? input.speakerNotes : undefined,
+                    Transition:
+                        typeof input.transition === 'string'
+                            ? (input.transition as 'none' | 'fade' | 'slide')
+                            : undefined,
+                    Hidden: typeof input.hidden === 'boolean' ? input.hidden : undefined
+                },
+                lockContext
+            );
+            afterMeta = metaRes.Deck;
+            UpdatedSlide = metaRes.UpdatedSlide;
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
 
         if (!UpdatedSlide) {
             return {
@@ -424,11 +439,20 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         let finalDeck: SlideDeckSpec = afterMeta;
         if (typeof input.markdownContent === 'string') {
             const targetRegionId = UpdatedSlide.Regions[0]?.RegionID || 'main';
-            const regionRes = SlideDeckEngine.Instance.UpsertSlideRegion(finalDeck, slideId, {
-                RegionID: targetRegionId,
-                MarkdownContent: input.markdownContent
-            });
-            finalDeck = regionRes.Deck;
+            try {
+                const regionRes = SlideDeckEngine.Instance.UpsertSlideRegion(
+                    finalDeck,
+                    slideId,
+                    {
+                        RegionID: targetRegionId,
+                        MarkdownContent: input.markdownContent
+                    },
+                    lockContext
+                );
+                finalDeck = regionRes.Deck;
+            } catch (err) {
+                return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+            }
         }
 
         const updatedSlideFinal = finalDeck.Slides.find((s) => s.SlideID === slideId) ?? UpdatedSlide;
@@ -449,7 +473,16 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             return { success: false, data: null, errorMessage: 'delete_slide requires slideId.' };
         }
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
-        const { Deck: updatedDeck, Deleted } = SlideDeckEngine.Instance.DeleteSlide(deck, slideId);
+        const lockContext = this.extractLockContext(input);
+        let updatedDeck: SlideDeckSpec;
+        let Deleted: boolean;
+        try {
+            const delRes = SlideDeckEngine.Instance.DeleteSlide(deck, slideId, lockContext);
+            updatedDeck = delRes.Deck;
+            Deleted = delRes.Deleted;
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
         if (!Deleted) {
             return {
                 success: false,
@@ -531,21 +564,35 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
             markdownContent = DocumentLiveBlockEngine.Instance.SerializeBlockToMarkdownDirective(blockSpec);
         }
 
-        const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(deck, slideId, {
-            RegionID: regionId,
-            Label: typeof input.label === 'string' ? input.label : undefined,
-            Kind: kind,
-            MarkdownContent: markdownContent,
-            BlockSpec: blockSpec,
-            BigNumberValue: typeof input.bigNumberValue === 'string' ? input.bigNumberValue : undefined,
-            BigNumberLabel: typeof input.bigNumberLabel === 'string' ? input.bigNumberLabel : undefined,
-            BigNumberDelta: typeof input.bigNumberDelta === 'string' ? input.bigNumberDelta : undefined,
-            QuoteAttribution: typeof input.quoteAttribution === 'string' ? input.quoteAttribution : undefined,
-            CalloutTone:
-                typeof input.calloutTone === 'string'
-                    ? (input.calloutTone as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION')
-                    : undefined
-        });
+        const lockContext = this.extractLockContext(input);
+        let updatedDeck: SlideDeckSpec;
+        let UpdatedRegion: SlideRegionSpec | null;
+        try {
+            const upsertRes = SlideDeckEngine.Instance.UpsertSlideRegion(
+                deck,
+                slideId,
+                {
+                    RegionID: regionId,
+                    Label: typeof input.label === 'string' ? input.label : undefined,
+                    Kind: kind,
+                    MarkdownContent: markdownContent,
+                    BlockSpec: blockSpec,
+                    BigNumberValue: typeof input.bigNumberValue === 'string' ? input.bigNumberValue : undefined,
+                    BigNumberLabel: typeof input.bigNumberLabel === 'string' ? input.bigNumberLabel : undefined,
+                    BigNumberDelta: typeof input.bigNumberDelta === 'string' ? input.bigNumberDelta : undefined,
+                    QuoteAttribution: typeof input.quoteAttribution === 'string' ? input.quoteAttribution : undefined,
+                    CalloutTone:
+                        typeof input.calloutTone === 'string'
+                            ? (input.calloutTone as 'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION')
+                            : undefined
+                },
+                lockContext
+            );
+            updatedDeck = upsertRes.Deck;
+            UpdatedRegion = upsertRes.UpdatedRegion;
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
 
         if (!UpdatedRegion) {
             return {
@@ -583,6 +630,29 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         if (!slide) {
             return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
         }
+        const lockContext = this.extractLockContext(input);
+        const targetRegion = slide.Regions.find((r) => r.RegionID === regionId);
+        const slidePerm = SlideDeckEngine.Instance.CanActorEditSlide(
+            slide,
+            lockContext.ActorUserID,
+            lockContext.OwnerUserID,
+            lockContext.IsEditor
+        );
+        if (!slidePerm.Allowed) {
+            return { success: false, data: null, errorMessage: slidePerm.Reason };
+        }
+        if (targetRegion) {
+            const regionPerm = SlideDeckEngine.Instance.CanActorEditRegion(
+                slide,
+                targetRegion,
+                lockContext.ActorUserID,
+                lockContext.OwnerUserID,
+                lockContext.IsEditor
+            );
+            if (!regionPerm.Allowed) {
+                return { success: false, data: null, errorMessage: regionPerm.Reason };
+            }
+        }
 
         if (slide.Regions.length > 1) {
             slide.Regions = slide.Regions.filter((r) => r.RegionID !== regionId);
@@ -615,9 +685,21 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
         }
 
         const deck = SlideDeckEngine.Instance.ParseDeckSpec(contentStr);
-        const { Deck: updatedDeck, UpdatedSlide } = SlideDeckEngine.Instance.UpdateSlideMetadata(deck, slideId, {
-            SpeakerNotes: speakerNotes
-        });
+        const lockContext = this.extractLockContext(input);
+        let updatedDeck: SlideDeckSpec;
+        let UpdatedSlide: SlideSpec | null;
+        try {
+            const metaRes = SlideDeckEngine.Instance.UpdateSlideMetadata(
+                deck,
+                slideId,
+                { SpeakerNotes: speakerNotes },
+                lockContext
+            );
+            updatedDeck = metaRes.Deck;
+            UpdatedSlide = metaRes.UpdatedSlide;
+        } catch (err) {
+            return { success: false, data: null, errorMessage: err instanceof Error ? err.message : String(err) };
+        }
 
         if (!UpdatedSlide) {
             return { success: false, data: null, errorMessage: `Slide "${slideId}" was not found.` };
@@ -632,6 +714,18 @@ export class SlideDeckToolLibrary extends BaseArtifactToolLibrary {
                 revisionHash: this.ComputeRevisionHash(updatedContent),
                 updatedContent
             }
+        };
+    }
+
+    private extractLockContext(input: Record<string, unknown>): {
+        ActorUserID?: string | null;
+        OwnerUserID?: string | null;
+        IsEditor?: boolean;
+    } {
+        return {
+            ActorUserID: typeof input._actorUserId === 'string' ? input._actorUserId : undefined,
+            OwnerUserID: typeof input._ownerUserId === 'string' ? input._ownerUserId : undefined,
+            IsEditor: typeof input._isEditor === 'boolean' ? input._isEditor : undefined
         };
     }
 

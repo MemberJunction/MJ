@@ -14,6 +14,7 @@ import {
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
   type DocumentBlockKind,
+  type DocumentLockedRange,
   type MJArtifactEntity,
   type MJArtifactPermissionEntity,
   type MJArtifactVersionEntity,
@@ -46,6 +47,7 @@ import {
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
 import { DocumentImportExportService } from '../../services/document-import-export.service';
+import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { ComputeBoundedSequenceDiff } from '../../utils/line-diff';
 
 export type DocsViewerMode = 'edit' | 'suggest' | 'preview' | 'source' | 'diff';
@@ -70,7 +72,8 @@ export type DocsToolbarItemKey =
   | 'diff-mode'
   | 'export-docx'
   | 'export-md'
-  | 'copy-md';
+  | 'copy-md'
+  | 'ask-ai';
 
 export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
   'outline',
@@ -320,6 +323,19 @@ interface DocsInlineToken {
         </div>
 
         <div class="mj-docs-toolbar__right">
+          @if (CanUserEdit && !IsToolbarItemShownOnBar('ask-ai')) {
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--accent"
+              title="Open slide-in AI Assistant for this document (/ai)"
+              data-testid="docs-ask-ai-quick-btn"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="OpenAskAiAssistant()"
+            >
+              <i class="fas fa-wand-magic-sparkles"></i>
+              <span>Ask AI</span>
+            </button>
+          }
           <!-- Compact Collaboration Presence Pill -->
           <div
             class="mj-docs-presence-pill"
@@ -937,9 +953,22 @@ interface DocsInlineToken {
                                 >
                                   H{{ seg.HeadingLevel || 1 }}
                                 </button>
+                                <button
+                                  type="button"
+                                  class="mj-docs-collapse-btn"
+                                  [hidden]="IsSimpleNoteMode && !IsSegmentLocked(seg)"
+                                  [title]="IsSegmentLocked(seg) ? 'Unlock section (currently protected)' : 'Lock section to owner-only'"
+                                  [attr.data-testid]="'toggle-heading-lock-' + seg.SegmentID"
+                                  (click)="ToggleHeadingLock(seg)"
+                                >
+                                  <i
+                                    class="fas"
+                                    [ngClass]="IsSegmentLocked(seg) ? 'fa-lock' : 'fa-lock-open'"
+                                  ></i>
+                                </button>
                                 <div
                                   class="mj-docs-editable-surface mj-docs-editable-heading__text"
-                                  contenteditable="true"
+                                  [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                   role="textbox"
                                   data-placeholder="Heading title (press Enter for paragraph below)…"
                                   [attr.data-testid]="'editable-heading-' + seg.SegmentID"
@@ -949,6 +978,15 @@ interface DocsInlineToken {
                                   (blur)="CommitEditableHeading(seg, $event)"
                                   (keydown)="OnEditableBlockKeydown(seg, $event)"
                                 ></div>
+                                @if (IsSegmentLocked(seg)) {
+                                  <span
+                                    class="mj-docs-badge"
+                                    title="This section is protected by a document lock"
+                                    [attr.data-testid]="'locked-section-badge-' + seg.SegmentID"
+                                  >
+                                    <i class="fas fa-lock"></i> Locked
+                                  </span>
+                                }
                                 @if (IsHeadingCollapsed(seg)) {
                                   <button
                                     type="button"
@@ -993,7 +1031,7 @@ interface DocsInlineToken {
                                       <tr>
                                         @for (hdr of table.Headers; track $index; let cIdx = $index) {
                                           <th
-                                            contenteditable="true"
+                                            [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                             [attr.data-testid]="'table-header-' + seg.SegmentID + '-' + cIdx"
                                             [innerHTML]="RenderInlineEditableHtml(hdr)"
                                             (focus)="OnTableCellFocus(seg, 0, cIdx, true)"
@@ -1007,7 +1045,7 @@ interface DocsInlineToken {
                                         <tr>
                                           @for (cell of row; track $index; let cIdx = $index) {
                                             <td
-                                              contenteditable="true"
+                                              [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                               [attr.data-testid]="'table-cell-' + seg.SegmentID + '-' + rIdx + '-' + cIdx"
                                               [innerHTML]="RenderInlineEditableHtml(cell)"
                                               (focus)="OnTableCellFocus(seg, rIdx, cIdx, false)"
@@ -1043,7 +1081,7 @@ interface DocsInlineToken {
                                       <span
                                         class="mj-docs-editable-surface mj-docs-editable-list__text"
                                         [class.mj-docs-editable-list__text--checked]="item.Checked"
-                                        contenteditable="true"
+                                        [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                         role="textbox"
                                         data-placeholder="List item (press Enter for next, or Enter when empty to exit)…"
                                         [attr.data-testid]="'list-item-text-' + seg.SegmentID + '-' + item.Index"
@@ -1089,7 +1127,7 @@ interface DocsInlineToken {
                                   </div>
                                   <div
                                     class="mj-docs-editable-surface mj-docs-editable-callout__body"
-                                    contenteditable="true"
+                                    [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                     role="textbox"
                                     data-placeholder="Callout details (press Enter for paragraph below)…"
                                     [attr.data-testid]="'editable-callout-body-' + seg.SegmentID"
@@ -1120,7 +1158,7 @@ interface DocsInlineToken {
                                   </div>
                                   <pre
                                     class="mj-docs-editable-surface mj-docs-editable-code__pre"
-                                    contenteditable="true"
+                                    [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                     role="textbox"
                                     data-placeholder="Code snippet…"
                                     [attr.data-testid]="'editable-code-body-' + seg.SegmentID"
@@ -1134,7 +1172,7 @@ interface DocsInlineToken {
                             @default {
                               <div
                                 class="mj-docs-editable-surface mj-docs-editable-paragraph"
-                                contenteditable="true"
+                                [attr.contenteditable]="CanEditSegment(seg) ? 'true' : 'false'"
                                 role="textbox"
                                 aria-multiline="true"
                                 data-placeholder="Type text, '/' for commands, '#' for heading, or '-' for list…"
@@ -5633,6 +5671,21 @@ export class MarkdownArtifactViewerComponent
         MenuTestId: 'menu-export-md-btn',
       },
       {
+        Key: 'ask-ai',
+        Label: 'Ask AI',
+        MenuLabel: 'Ask AI Assistant',
+        Description: 'Open slide-in AI Assistant for this section (/ai)',
+        Icon: 'fa-wand-magic-sparkles',
+        Placement: 'right',
+        Category: 'writing',
+        Order: 25,
+        Visible: canEdit,
+        Active: false,
+        Accent: true,
+        TestId: 'docs-ask-ai-btn',
+        MenuTestId: 'menu-docs-ask-ai-btn',
+      },
+      {
         Key: 'copy-md',
         Label: 'Copy',
         MenuLabel: 'Copy Markdown',
@@ -5762,6 +5815,9 @@ export class MarkdownArtifactViewerComponent
         break;
       case 'copy-md':
         this.OnCopy();
+        break;
+      case 'ask-ai':
+        this.OpenAskAiAssistant();
         break;
     }
     if (fromMenu) {
@@ -6903,7 +6959,11 @@ export class MarkdownArtifactViewerComponent
     nextBlockMarkdown: string,
     rationale = 'In-place block edit',
   ): void {
-    if (!this.CanUserEdit || nextBlockMarkdown === seg.RawMarkdown) {
+    if (!this.CanEditSegment(seg) || nextBlockMarkdown === seg.RawMarkdown) {
+      if (this.CanUserEdit && !this.CanEditSegment(seg)) {
+        this.StatusBannerMessage = 'This section is protected by an owner lock and cannot be edited.';
+        this.cdr.markForCheck();
+      }
       return;
     }
     if (this.ViewMode === 'suggest') {
@@ -8672,6 +8732,22 @@ export class MarkdownArtifactViewerComponent
     this.ShowSlashMenu = false;
     this.SlashMenuHighlightIndex = 0;
 
+    if (cmd.Command === '/ai') {
+      let targetSeg =
+        this.DocumentSegments.find((s) => s.SegmentID === this.ActiveSlashTargetSegmentID) ??
+        this.DocumentSegments[0];
+      if (targetSeg && targetSeg.Kind === 'markdown') {
+        const cleanedSegMd = targetSeg.RawMarkdown.replace(/(?:^|\s)\/[A-Za-z0-9_-]*$/, '');
+        if (cleanedSegMd !== targetSeg.RawMarkdown && this.CanEditSegment(targetSeg)) {
+          this.ReplaceSegmentMarkdown(targetSeg, cleanedSegMd);
+          targetSeg =
+            this.DocumentSegments.find((s) => s.SegmentID === targetSeg!.SegmentID) ?? targetSeg;
+        }
+      }
+      this.OpenAskAiAssistant(targetSeg);
+      return;
+    }
+
     if (cmd.Snippet !== undefined) {
       this.insertMarkdownAtTargetSegment(cmd.Snippet);
       return;
@@ -9400,6 +9476,151 @@ export class MarkdownArtifactViewerComponent
     }
     this.persistCollapsedStateToUserSettings();
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Opens the slide-in `@memberjunction/ng-conversations` AI Assistant with context
+   * from the currently focused or `/ai`-invoked document segment.
+   */
+  public OpenAskAiAssistant(explicitSegment?: DocumentRenderSegment): void {
+    const targetSeg =
+      explicitSegment ??
+      this.DocumentSegments.find(
+        (s) => s.SegmentID === (this.ActiveSlashTargetSegmentID ?? this.lastFocusedSegmentId),
+      ) ??
+      this.DocumentSegments[0];
+
+    const originalMd = targetSeg?.RawMarkdown ?? this.MarkdownContent;
+    const contextLabel = targetSeg?.HeadingText
+      ? `Heading: ${targetSeg.HeadingText}`
+      : targetSeg
+        ? `Section (${targetSeg.BlockKind})`
+        : 'Document';
+
+    RequestArtifactAiAssistant({
+      ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+      ArtifactTitle:
+        this.OutlineItems.find((item) => item.Kind === 'heading')?.Title || 'Document',
+      ArtifactKind: 'doc',
+      ContextLabel: contextLabel,
+      SelectedContent: originalMd.slice(0, 4000),
+      SuggestingModeDefault: true,
+      TargetSegmentID: targetSeg?.SegmentID,
+      ApplySuggestion: (proposedText: string, asSuggestion: boolean) => {
+        const cleaned = proposedText ?? '';
+        if (!cleaned.trim() || !this.CanUserEdit) {
+          return;
+        }
+        const liveSeg =
+          (targetSeg
+            ? this.DocumentSegments.find((s) => s.SegmentID === targetSeg.SegmentID)
+            : undefined) ?? this.DocumentSegments[0];
+
+        if (asSuggestion || this.ViewMode === 'suggest') {
+          this.CreateOrUpdatePendingSuggestion(
+            liveSeg?.SegmentID ?? 'doc-root',
+            liveSeg?.RawMarkdown ?? this.MarkdownContent,
+            cleaned,
+            'Proposed by AI Assistant',
+            'AI Assistant',
+          );
+          if (this.ViewMode !== 'suggest') {
+            this.SetViewMode('suggest');
+          }
+          this.StatusBannerMessage = 'AI Assistant proposal added as a tracked suggestion.';
+          this.cdr.markForCheck();
+          return;
+        }
+
+        if (liveSeg && this.CanEditSegment(liveSeg)) {
+          this.ReplaceSegmentMarkdown(liveSeg, cleaned);
+        } else if (!liveSeg) {
+          this.OnMarkdownChanged(cleaned);
+        } else {
+          this.StatusBannerMessage = 'Target section is locked and cannot be edited directly.';
+        }
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  /**
+   * Returns parsed lock ranges from `<!-- mj-lock -->` directives and locked blocks in the document.
+   */
+  public GetDocumentLockedRanges(): DocumentLockedRange[] {
+    return DocumentLiveBlockEngine.Instance.ParseDocumentLocks(this.MarkdownContent);
+  }
+
+  private findLocksForSegment(seg: DocumentRenderSegment): DocumentLockedRange[] {
+    const locks = this.GetDocumentLockedRanges();
+    return locks.filter(
+      (lock) => seg.StartLine <= lock.EndLine && seg.EndLine >= lock.StartLine,
+    );
+  }
+
+  /**
+   * Returns true if `seg` intersects any `<!-- mj-lock -->` section or block lock.
+   */
+  public IsSegmentLocked(seg: DocumentRenderSegment): boolean {
+    return this.findLocksForSegment(seg).length > 0;
+  }
+
+  /**
+   * Returns true if the current user can edit `seg` after checking document lock governance rules.
+   */
+  public CanEditSegment(seg: DocumentRenderSegment): boolean {
+    if (!this.CanUserEdit) {
+      return false;
+    }
+    const intersecting = this.findLocksForSegment(seg);
+    if (intersecting.length === 0) {
+      return true;
+    }
+    const actorId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerEntry = this.ArtifactPermissionEntries.find((entry) => entry.IsOwner);
+    const ownerId = ownerEntry?.UserID ?? (this.CanUserShareArtifact ? actorId : null);
+    for (const lock of intersecting) {
+      if (
+        !DocumentLiveBlockEngine.Instance.CanActorEditLockedRange(
+          lock,
+          actorId,
+          ownerId,
+          this.HasEditPermission,
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Toggles `<!-- mj-lock: owner-only -->` immediately above the specified heading segment.
+   */
+  public ToggleHeadingLock(seg: DocumentRenderSegment): void {
+    if (!this.CanUserEdit || seg.BlockKind !== 'heading') {
+      return;
+    }
+    if (!this.CanUserShareArtifact) {
+      this.StatusBannerMessage = 'Only the artifact owner or co-owner can toggle section locks.';
+      this.cdr.markForCheck();
+      return;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? undefined;
+    const currentlyLocked = this.IsSegmentLocked(seg);
+    const nextMarkdown = DocumentLiveBlockEngine.Instance.ToggleHeadingLockInMarkdown(
+      this.MarkdownContent,
+      seg.StartLine,
+      !currentlyLocked,
+      userId,
+    );
+    if (nextMarkdown !== this.MarkdownContent) {
+      this.OnMarkdownChanged(nextMarkdown);
+      this.StatusBannerMessage = !currentlyLocked
+        ? `Locked section "${seg.HeadingText || 'Heading'}" to owner-only editing.`
+        : `Unlocked section "${seg.HeadingText || 'Heading'}".`;
+      this.cdr.markForCheck();
+    }
   }
 
   /**

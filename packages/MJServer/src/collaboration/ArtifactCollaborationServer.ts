@@ -27,6 +27,7 @@ import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
     BuildArtifactVersionConfigurationWithPreview,
+    DocumentLiveBlockEngine,
     IsValidThumbnailDataUrl,
     MJArtifactTypeEntity,
     MJArtifactVersionEntity,
@@ -191,6 +192,8 @@ export interface CollaborationClientConnection {
     ArtifactID: string;
     /** Whether this connection is currently permitted to push Yjs write updates (`CanEdit`). */
     CanEdit: boolean;
+    /** Whether this connection's authenticated user is the authoritative owner of the artifact. */
+    IsOwner?: boolean;
     /** Optional API key hash if this connection was established via a scoped API key. */
     ApiKeyHash?: string;
     /** Set of Yjs awareness client IDs owned by this socket (cleaned up on disconnect). */
@@ -1535,6 +1538,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         VersionID?: string;
         VersionNumber?: number;
         MergedContent?: string;
+        ErrorMessage?: string;
         HadConflict?: boolean;
         RejectedAgentHunks?: Array<{
             BaseLines: string[];
@@ -1556,6 +1560,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         if (!perms.CanEdit) {
             return { Success: false };
         }
+        const isOwner = perms.Source === 'Owner';
 
         if (options?.dryRun === true) {
             const roomKey = artifactId.trim().toLowerCase();
@@ -1571,6 +1576,22 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                         if (hydratedRoom) {
                             Y.applyUpdate(tempDoc, Y.encodeStateAsUpdate(hydratedRoom.Doc));
                         }
+                    }
+                }
+
+                const existingTempContent = this.extractRoomSerializedContent(tempDoc);
+                if (options?.isRestore !== true) {
+                    const lockValidation = this.validateContentMutationAgainstLocks(
+                        existingTempContent,
+                        newContent,
+                        user.ID,
+                        isOwner
+                    );
+                    if (!lockValidation.Allowed) {
+                        return {
+                            Success: false,
+                            ErrorMessage: lockValidation.Reason
+                        };
                     }
                 }
 
@@ -1645,6 +1666,15 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const isRestore = options?.isRestore === true;
         const yText = room.Doc.getText('content');
         const existing = this.extractRoomSerializedContent(room.Doc);
+        if (!isRestore) {
+            const lockValidation = this.validateContentMutationAgainstLocks(existing, newContent, user.ID, isOwner);
+            if (!lockValidation.Allowed) {
+                return {
+                    Success: false,
+                    ErrorMessage: lockValidation.Reason
+                };
+            }
+        }
         const alreadyReconciledFromSameBaseline =
             !isRestore &&
             !saveVersion &&
@@ -3817,7 +3847,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 }
 
                 this._wss.handleUpgrade(req, socket, head, (ws) => {
-                    this.attachClientToRoom(room!, ws, auth.User, effectiveCanEdit, auth.ApiKeyHash);
+                    this.attachClientToRoom(
+                        room!,
+                        ws,
+                        auth.User,
+                        effectiveCanEdit,
+                        auth.ApiKeyHash,
+                        perms.Source === 'Owner'
+                    );
                 });
             } finally {
                 const remaining = (this._pendingUpgradesByArtifact.get(roomKey) ?? 1) - 1;
@@ -4452,7 +4489,8 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         ws: WsClient,
         user: UserInfo,
         canEdit: boolean,
-        apiKeyHash?: string
+        apiKeyHash?: string,
+        isOwner: boolean = false
     ): void {
         if (room.IdleDisposeTimer) {
             clearTimeout(room.IdleDisposeTimer);
@@ -4464,6 +4502,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             User: user,
             ArtifactID: room.ArtifactID,
             CanEdit: canEdit,
+            IsOwner: isOwner,
             ApiKeyHash: apiKeyHash,
             ControlledClientIDs: new Set(),
             Alive: true,
@@ -4579,6 +4618,175 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         return false;
     }
 
+    /**
+     * Validates an incoming Yjs write update against Markdown heading locks, Slide Deck locks,
+     * and Spreadsheet ProtectedRanges by simulating the update against a cloned doc snapshot.
+     */
+    private isIncomingUpdateBlockedByLocks(
+        room: CollaborationRoom,
+        conn: CollaborationClientConnection,
+        incomingUpdateBytes: Uint8Array
+    ): { Allowed: boolean; Reason?: string } {
+        if (incomingUpdateBytes.byteLength === 0) {
+            return { Allowed: true };
+        }
+        const currentContent = this.extractRoomSerializedContent(room.Doc);
+        const probeDoc = new Y.Doc();
+        try {
+            Y.applyUpdate(probeDoc, Y.encodeStateAsUpdate(room.Doc));
+            Y.applyUpdate(probeDoc, incomingUpdateBytes);
+            const nextContent = this.extractRoomSerializedContent(probeDoc);
+            return this.validateContentMutationAgainstLocks(
+                currentContent,
+                nextContent,
+                conn.User?.ID,
+                conn.IsOwner === true
+            );
+        } catch {
+            return { Allowed: true };
+        } finally {
+            probeDoc.destroy();
+        }
+    }
+
+    /**
+     * Enforces protected regions across Documents (`<!-- mj-lock -->`), Slide Decks (`Locked` /
+     * `AllowEditors`), and Spreadsheets (`ProtectedRanges`) (`§6.2`).
+     */
+    private validateContentMutationAgainstLocks(
+        currentContent: string,
+        nextContent: string,
+        actorUserId?: string | null,
+        isOwner: boolean = false
+    ): { Allowed: boolean; Reason?: string } {
+        if (!currentContent || currentContent === nextContent) {
+            return { Allowed: true };
+        }
+        const effectiveOwnerId = isOwner && actorUserId ? actorUserId : '__artifact_owner__';
+        const trimmedCurrent = currentContent.trim();
+
+        if (trimmedCurrent.startsWith('{')) {
+            try {
+                const parsedCurrent = JSON.parse(trimmedCurrent) as Record<string, unknown>;
+                if (Array.isArray(parsedCurrent.Slides)) {
+                    const prevDeck = SlideDeckEngine.Instance.ParseDeckSpec(currentContent);
+                    const nextDeck = SlideDeckEngine.Instance.ParseDeckSpec(nextContent);
+                    const nextSlidesById = new Map(nextDeck.Slides.map((s) => [s.SlideID, s]));
+                    for (const prevSlide of prevDeck.Slides) {
+                        const nextSlide = nextSlidesById.get(prevSlide.SlideID);
+                        const slideCheck = SlideDeckEngine.Instance.CanActorEditSlide(
+                            prevSlide,
+                            actorUserId,
+                            effectiveOwnerId,
+                            true
+                        );
+                        if (!slideCheck.Allowed) {
+                            if (!nextSlide || JSON.stringify(prevSlide) !== JSON.stringify(nextSlide)) {
+                                return { Allowed: false, Reason: slideCheck.Reason };
+                            }
+                            continue;
+                        }
+                        if (prevSlide.Regions.length > 0 && nextSlide) {
+                            const nextRegionsById = new Map(nextSlide.Regions.map((r) => [r.RegionID, r]));
+                            for (const prevRegion of prevSlide.Regions) {
+                                const regionCheck = SlideDeckEngine.Instance.CanActorEditRegion(
+                                    prevSlide,
+                                    prevRegion,
+                                    actorUserId,
+                                    effectiveOwnerId,
+                                    true
+                                );
+                                if (!regionCheck.Allowed) {
+                                    const nextRegion = nextRegionsById.get(prevRegion.RegionID);
+                                    if (!nextRegion || JSON.stringify(prevRegion) !== JSON.stringify(nextRegion)) {
+                                        return { Allowed: false, Reason: regionCheck.Reason };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return { Allowed: true };
+                }
+
+                if (Array.isArray(parsedCurrent.Worksheets)) {
+                    const prevWb = SpreadsheetEngine.Instance.ParseWorkbook(currentContent);
+                    const nextWb = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
+                    const nextSheetsById = new Map<string, WorksheetSpec>(
+                        nextWb.Worksheets.map((s) => [s.SheetID, s])
+                    );
+                    const editCtx = {
+                        UserID: actorUserId ?? undefined,
+                        OwnerUserID: effectiveOwnerId,
+                        IsEditor: true
+                    };
+                    for (const prevSheet of prevWb.Worksheets) {
+                        const rules = prevSheet.ProtectedRanges ?? [];
+                        if (rules.length === 0) {
+                            continue;
+                        }
+                        const nextSheet = nextSheetsById.get(prevSheet.SheetID);
+                        if (!nextSheet) {
+                            if (!isOwner) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot delete worksheet '${prevSheet.Name}' containing protected ranges.`
+                                };
+                            }
+                            continue;
+                        }
+                        const nextRulesById = new Map((nextSheet.ProtectedRanges ?? []).map((r) => [r.RangeID, r]));
+                        const normActor = actorUserId ? NormalizeUUID(actorUserId) : '';
+                        for (const rule of rules) {
+                            const matchingNextRule = nextRulesById.get(rule.RangeID);
+                            if (
+                                (!matchingNextRule ||
+                                    matchingNextRule.Range !== rule.Range ||
+                                    Boolean(matchingNextRule.AllowEditors) !== Boolean(rule.AllowEditors)) &&
+                                !isOwner &&
+                                NormalizeUUID(rule.LockedByUserID) !== normActor
+                            ) {
+                                return {
+                                    Allowed: false,
+                                    Reason: `Cannot alter or remove protected range '${rule.Range}' without owner permission.`
+                                };
+                            }
+                        }
+
+                        const allAddresses = new Set<string>([
+                            ...Object.keys(prevSheet.Cells ?? {}),
+                            ...Object.keys(nextSheet.Cells ?? {})
+                        ]);
+                        for (const addr of allAddresses) {
+                            const prevCell = prevSheet.Cells?.[addr];
+                            const nextCell = nextSheet.Cells?.[addr];
+                            if (JSON.stringify(prevCell ?? null) === JSON.stringify(nextCell ?? null)) {
+                                continue;
+                            }
+                            const perm = SpreadsheetEngine.Instance.CheckCellWritePermission(prevSheet, addr, editCtx);
+                            if (!perm.Allowed) {
+                                return { Allowed: false, Reason: perm.Reason };
+                            }
+                        }
+                    }
+                    return { Allowed: true };
+                }
+            } catch {
+                // Fall through to markdown lock validation if content isn't valid structured JSON
+            }
+        }
+
+        const docCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+            currentContent,
+            nextContent,
+            actorUserId,
+            effectiveOwnerId,
+            true
+        );
+        return docCheck.Allowed
+            ? { Allowed: true }
+            : { Allowed: false, Reason: docCheck.ViolationReason };
+    }
+
     private onClientMessage(
         room: CollaborationRoom,
         conn: CollaborationClientConnection,
@@ -4612,6 +4820,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     if (isWriteFrame) {
                         const incomingUpdateBytes = decoding.readVarUint8Array(subDecoder);
                         if (this.shouldSuppressDuplicateReconnectUpdate(room, conn, incomingUpdateBytes)) {
+                            return;
+                        }
+                        const lockCheck = this.isIncomingUpdateBlockedByLocks(room, conn, incomingUpdateBytes);
+                        if (!lockCheck.Allowed) {
+                            this.sendControlFrame(conn.Socket, {
+                                action: 'readonly-rejected',
+                                message: lockCheck.Reason || 'Write rejected: region is protected.'
+                            });
+                            this.sendControlFrame(conn.Socket, {
+                                action: 'room-reset',
+                                payload: BytesToBase64(Y.encodeStateAsUpdate(room.Doc)),
+                                roomEpoch: room.RoomEpoch,
+                                versionId: room.BaseVersionID ?? undefined,
+                                versionNumber: room.BaseVersionNumber || undefined
+                            });
                             return;
                         }
                         room.LastModifiedByUser = conn.User;

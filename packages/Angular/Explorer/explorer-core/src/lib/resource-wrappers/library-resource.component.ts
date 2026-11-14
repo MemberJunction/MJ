@@ -154,6 +154,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
       version: params['version'] ?? params['versionNumber'] ?? null,
       canvas: params['canvas'] ?? null,
       q: params['q'] ?? '',
+      guestToken: params['guestToken'] ?? null,
     };
 
     if (!this.Workspace) {
@@ -208,6 +209,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
       version: initialVersion,
       canvas: pickStr('canvas'),
       q: pickStr('q'),
+      guestToken: pickStr('guestToken'),
     };
 
     const hasAnyParam = Object.values(mapped).some((v) => v !== null && v !== undefined && v !== '');
@@ -242,6 +244,7 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
           : null,
       canvas: state.ActiveArtifactId && state.IsFullCanvasOpen ? '1' : null,
       q: state.SearchQuery.trim() ? state.SearchQuery.trim() : null,
+      guestToken: this.Workspace?.ActiveGuestToken || null,
     };
 
     this.UpdateQueryParams(nextParams);

@@ -491,7 +491,7 @@ export interface DocumentSlashCommand {
   Command: string;
   Label: string;
   Description: string;
-  Category: 'Structure' | 'Live Data' | 'Embedded Artifact';
+  Category: 'Structure' | 'Live Data' | 'Embedded Artifact' | 'AI Assistant';
   Icon: string;
   BlockType?: DocumentBlockKind;
   Snippet?: string;
@@ -2448,6 +2448,13 @@ export class DocumentCollaborationService implements OnDestroy {
     return true;
   }
   private readonly slashCommands: ReadonlyArray<DocumentSlashCommand> = [
+    {
+      Command: '/ai',
+      Label: 'Ask AI',
+      Description: 'Open the slide-in AI Assistant to draft, rewrite, or summarize using this document',
+      Category: 'AI Assistant',
+      Icon: 'fa-wand-magic-sparkles',
+    },
     {
       Command: '/paragraph',
       Label: 'Paragraph',

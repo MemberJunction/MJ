@@ -7,10 +7,17 @@ import {
     QueryInfo,
     RunQuery,
     RunView,
+    RunViewParams,
     StripServerOnlyRunQueryParams,
     UserInfo
 } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { ArtifactPermissionEngine } from './ArtifactPermissionDelegate';
+import {
+    ArtifactAiFormulaCellRequest,
+    ArtifactEvaluateAiFormulaOperation,
+    MAX_AI_FORMULA_BATCH_CELLS
+} from './operations/ArtifactEvaluateAiFormulaOperation';
 import {
     ComputeFrozenSnapshotHash,
     DocumentBlockColumn,
@@ -1398,6 +1405,40 @@ export interface SpreadsheetCellSpec {
     LiveTableID?: string | null;
     /** Optional plain-text cell note. */
     Note?: string | null;
+    /** Input content hash stored when an opt-in `=MJ.AI(...)` formula was last evaluated (`§5.2b`). */
+    AiInputHash?: string | null;
+}
+
+/**
+ * Governance lock rule protecting a rectangular range on a worksheet (`§6.2`).
+ */
+export interface SpreadsheetProtectedRangeSpec {
+    /** Stable unique ID for this protection rule. */
+    RangeID: string;
+    /** Canonical A1 cell or rectangular range (e.g. `'A1:D10'`). */
+    Range: string;
+    /** `UserInfo.ID` of the creator/owner who locked this range. */
+    LockedByUserID: string;
+    /** Optional human-readable description shown in lock banners/tooltips. */
+    Description?: string;
+    /** When true, users with `CanEdit` artifact permission may still edit cells inside the range. */
+    AllowEditors?: boolean;
+    /** ISO 8601 timestamp when the range was locked. */
+    LockedAt?: string;
+}
+
+/**
+ * Authorization context supplied when mutating worksheet cells with {@link SpreadsheetProtectedRangeSpec} enforcement.
+ */
+export interface SpreadsheetCellEditContext {
+    /** Acting user ID performing the edit. */
+    UserID?: string | null;
+    /** Artifact owner/creator user ID (always allowed to edit or unlock). */
+    OwnerUserID?: string | null;
+    /** True when actor holds editor permission on the artifact. */
+    IsEditor?: boolean;
+    /** Internal import/system bypass flag. */
+    BypassProtection?: boolean;
 }
 
 /**
@@ -1702,6 +1743,8 @@ export interface WorksheetSpec {
     Charts: SpreadsheetChartSpec[];
     /** Embedded OLE Artifact / Whiteboard objects. */
     EmbeddedArtifacts: SpreadsheetEmbeddedArtifactSpec[];
+    /** Protected cell/range rules enforced against unauthorized edits (`§6.2`). */
+    ProtectedRanges?: SpreadsheetProtectedRangeSpec[];
     /** Former dynamic-array spill / CSE array child coordinates cleared after import (`R8-8`). */
     ClearedSpillChildren?: string[];
 }
@@ -1727,14 +1770,14 @@ export interface WorkbookSpec {
 }
 
 /**
- * Parsed representation of an `=MJ.QUERY(...)` or `=MJ.VIEW(...)` custom function call (`§ 6.3`, `§ 7.2`).
+ * Parsed representation of an `=MJ.QUERY(...)`, `=MJ.VIEW(...)`, or `=MJ.IMPORTRANGE(...)` custom function call (`§ 6.3`, `§ 7.2`, `§ 4.2`).
  */
 export interface ParsedMjCustomFunctionCall {
-    /** Function kind (`'QUERY'` or `'VIEW'`). */
-    Kind: 'QUERY' | 'VIEW';
-    /** Query name/ID (for `QUERY`) or Entity name (for `VIEW`). */
+    /** Function kind (`'QUERY'`, `'VIEW'`, or `'IMPORTRANGE'`). */
+    Kind: 'QUERY' | 'VIEW' | 'IMPORTRANGE';
+    /** Query name/ID (`QUERY`), Entity name (`VIEW`), or target Artifact ID/Name (`IMPORTRANGE`). */
     PrimaryTarget: string;
-    /** View name/ID when `Kind === 'VIEW'`. */
+    /** View name/ID (`VIEW`) or `'Sheet!A1:D20'` range string (`IMPORTRANGE`). */
     SecondaryTarget?: string;
     /** Positional or key=value arguments passed to the function. */
     Arguments: SpreadsheetCellValue[];
@@ -1743,7 +1786,30 @@ export interface ParsedMjCustomFunctionCall {
 }
 
 /**
- * Options for evaluating `=MJ.QUERY` and `=MJ.VIEW` custom functions and live tables.
+ * Request envelope passed to a custom `ImportRangeResolver` for `=MJ.IMPORTRANGE(...)` (`§ 4.2`).
+ */
+export interface SpreadsheetImportRangeRequest {
+    ArtifactIDOrName: string;
+    RangeString: string;
+    VersionNumber?: number;
+    ContextUser: UserInfo;
+    Provider: IMetadataProvider;
+    VisitedArtifactKeys: string[];
+    Depth: number;
+}
+
+/**
+ * Parsed representation of an opt-in `=MJ.AI(prompt, [cellOrRange...])` formula (`§ 5.2b`).
+ */
+export interface ParsedMjAiFormulaCall {
+    /** Natural-language instruction literal. */
+    Prompt: string;
+    /** Cell or range reference tokens passed as context arguments. */
+    References: string[];
+}
+
+/**
+ * Options for evaluating `=MJ.QUERY`, `=MJ.VIEW`, and `=MJ.IMPORTRANGE` custom functions and live tables.
  */
 export interface SpreadsheetMjEvaluationOptions {
     /** Override cache TTL in milliseconds (defaults to 60,000 ms). */
@@ -1752,6 +1818,45 @@ export interface SpreadsheetMjEvaluationOptions {
     MaxConcurrency?: number;
     /** Bypass the viewer result cache when `true`. */
     BypassCache?: boolean;
+    /** Optional resolver override for `=MJ.IMPORTRANGE(...)` (useful in tests or custom hosts). */
+    ImportRangeResolver?: (request: SpreadsheetImportRangeRequest) => Promise<DocumentBlockExecutionResult>;
+    /** Recursion cycle-tracking stack for nested `=MJ.IMPORTRANGE` calls (max depth 3). */
+    ImportRangeVisitedKeys?: string[];
+    /** Current recursion depth for `=MJ.IMPORTRANGE` (starts at `0`). */
+    ImportRangeDepth?: number;
+    /** Hosting artifact ID for self-reference / cycle attribution. */
+    HostArtifactID?: string;
+}
+
+/**
+ * Options for explicit opt-in batch evaluation of `=MJ.AI(...)` spreadsheet cells (`§ 5.2b`).
+ */
+export interface SpreadsheetAiEvaluationOptions {
+    /** Optional hosting `MJ: Artifacts` ID. */
+    ArtifactID?: string | null;
+    /** Restrict evaluation to these canonical `'SheetID::Addr'` or `'Addr'` keys. */
+    TargetAddresses?: string[];
+    /** Maximum cells per batch (clamped to `MAX_AI_FORMULA_BATCH_CELLS = 50`). */
+    MaxCells?: number;
+    /** Re-evaluate even if `AiInputHash` already matches cached output. */
+    ForceRefresh?: boolean;
+    /** Optional explicit AI model override. */
+    ModelOverride?: string | null;
+    /** Optional custom batch evaluator (defaults to `ArtifactEvaluateAiFormulaOperation`). */
+    AiEvaluator?: (
+        cells: ArtifactAiFormulaCellRequest[]
+    ) => Promise<Array<{ SheetID: string; Address: string; InputHash: string; Value: string; ErrorMessage?: string | null; AccessDenied?: boolean }>>;
+}
+
+/**
+ * Summary returned by {@link SpreadsheetEngine.EvaluateAiFormulas}.
+ */
+export interface SpreadsheetAiEvaluationResult {
+    EvaluatedCount: number;
+    CacheHitCount: number;
+    SkippedOverCapCount: number;
+    AccessDeniedCount: number;
+    ErrorCount: number;
 }
 
 interface ViewerFunctionCacheEntry {
@@ -2131,7 +2236,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ConditionalFormats: [],
             LiveTables: [],
             Charts: [],
-            EmbeddedArtifacts: []
+            EmbeddedArtifacts: [],
+            ProtectedRanges: []
         };
         this.indexedSheets.add(ws);
         return ws;
@@ -2380,7 +2486,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         ConditionalFormats: ws.ConditionalFormats.map((cf) => ({ ...cf })),
                         LiveTables: ws.LiveTables.map((t) => ({ ...t })),
                         Charts: ws.Charts.map((c) => ({ ...c })),
-                        EmbeddedArtifacts: ws.EmbeddedArtifacts.map((e) => ({ ...e }))
+                        EmbeddedArtifacts: ws.EmbeddedArtifacts.map((e) => ({ ...e })),
+                        ProtectedRanges: (ws.ProtectedRanges ?? []).map((p) => ({ ...p }))
                     };
                 })
         };
@@ -2792,7 +2899,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             ConditionalFormats: Array.isArray(raw.ConditionalFormats) ? raw.ConditionalFormats : [],
             LiveTables: Array.isArray(raw.LiveTables) ? raw.LiveTables : [],
             Charts: Array.isArray(raw.Charts) ? raw.Charts : [],
-            EmbeddedArtifacts: Array.isArray(raw.EmbeddedArtifacts) ? raw.EmbeddedArtifacts : []
+            EmbeddedArtifacts: Array.isArray(raw.EmbeddedArtifacts) ? raw.EmbeddedArtifacts : [],
+            ProtectedRanges: Array.isArray(raw.ProtectedRanges)
+                ? raw.ProtectedRanges.map((p) => ({ ...p }))
+                : []
         };
         if (Array.isArray(raw.ClearedSpillChildren)) {
             for (const addr of raw.ClearedSpillChildren) {
@@ -4035,8 +4145,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             LiveTableID?: string | null;
             AccessDenied?: boolean;
             ErrorMessage?: string | null;
+            AiInputHash?: string | null;
         },
-        recalculate = true
+        recalculate = true,
+        editContext?: SpreadsheetCellEditContext
     ): SpreadsheetCellSpec {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
@@ -4046,6 +4158,11 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const parsed = ParseCellAddress(address);
         if (!parsed) {
             throw new Error(`Invalid cell address '${address}'.`);
+        }
+        const canonicalAddrPre = FormatCellAddress(parsed.row, parsed.col);
+        const writeCheck = this.CheckCellWritePermission(sheet, canonicalAddrPre, editContext);
+        if (!writeCheck.Allowed) {
+            throw new Error(writeCheck.Reason);
         }
         this.ensureSheetCapacity(sheet, parsed.row, parsed.col);
         const canonicalAddr = FormatCellAddress(parsed.row, parsed.col);
@@ -4108,7 +4225,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 : isMetadataOnlyEdit
                   ? existing?.LiveTableID ?? this.isCellInLiveTableFootprint(sheet, parsed.row, parsed.col)
                   : null;
-        const isMjFormula = Boolean(formula && /^=\s*_?(?:xll\.)?MJ\.(?:VIEW|QUERY|FIELD)\s*\(/i.test(formula));
+        const isMjFormula = Boolean(
+            formula && /^=\s*_?(?:xll\.)?MJ\.(?:VIEW|QUERY|FIELD|IMPORTRANGE|AI)\s*\(/i.test(formula)
+        );
         const keepExistingMjDiagnostics = isMetadataOnlyEdit || (isMjFormula && formula === existing?.Formula);
         const preservedErrorMessage =
             input.ErrorMessage !== undefined
@@ -4143,7 +4262,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             SpilledFrom: preservedSpilledFrom,
             SpillRange: isMetadataOnlyEdit ? existing?.SpillRange : undefined,
             ArrayMaster: isMetadataOnlyEdit ? existing?.ArrayMaster : undefined,
-            LiveTableID: preservedLiveTableId
+            LiveTableID: preservedLiveTableId,
+            AiInputHash:
+                input.AiInputHash !== undefined
+                    ? input.AiInputHash
+                    : keepExistingMjDiagnostics
+                      ? existing?.AiInputHash ?? null
+                      : null
         };
 
         const existingMeta = existing ? CELL_XML_META.get(existing) : undefined;
@@ -4216,7 +4341,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         workbook: WorkbookSpec,
         sheetIdOrName: string,
         rangeA1: string,
-        recalculate = true
+        recalculate = true,
+        editContext?: SpreadsheetCellEditContext
     ): string[] {
         const sheet = this.GetWorksheet(workbook, sheetIdOrName);
         if (!sheet) {
@@ -4226,6 +4352,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         const bounds = ParseRangeAddress(rangeA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
         if (!bounds) {
             throw new Error(`Invalid A1 range '${rangeA1}'.`);
+        }
+        if ((sheet.ProtectedRanges?.length ?? 0) > 0 && !editContext?.BypassProtection) {
+            for (const rule of sheet.ProtectedRanges ?? []) {
+                const ruleBounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+                if (!ruleBounds) continue;
+                const overlaps =
+                    bounds.startRow <= ruleBounds.endRow &&
+                    bounds.endRow >= ruleBounds.startRow &&
+                    bounds.startCol <= ruleBounds.endCol &&
+                    bounds.endCol >= ruleBounds.startCol;
+                if (overlaps && !this.isActorAllowedForProtectedRule(rule, editContext)) {
+                    throw new Error(
+                        `Cannot clear range '${rangeA1}': intersects protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+                    );
+                }
+            }
         }
 
         const affectedSet = new Set<string>();
@@ -5154,7 +5296,7 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                     continue;
                 }
 
-                // Viewer-scoped =MJ.QUERY / =MJ.VIEW custom function cell
+                // Viewer-scoped =MJ.QUERY / =MJ.VIEW / =MJ.IMPORTRANGE custom function cell
                 if (this.ParseMjCustomFunctionFormula(cell.Formula)) {
                     const mjVal: SpreadsheetCellValue = cell.AccessDenied
                         ? '#MJ_ACCESS_DENIED!'
@@ -5162,6 +5304,18 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                           ? cell.ComputedValue
                           : '#MJ_PENDING!';
                     writeEvaluatedValue(top.key, mjVal, false);
+                    workStack.pop();
+                    continue;
+                }
+
+                // Opt-in =MJ.AI(...) cell: NEVER executes LLMs during synchronous recalc
+                if (this.ParseMjAiFormula(cell.Formula)) {
+                    const aiVal: SpreadsheetCellValue = cell.AccessDenied
+                        ? '#MJ_ACCESS_DENIED!'
+                        : cell.ComputedValue !== undefined && cell.ComputedValue !== null && cell.ComputedValue !== ''
+                          ? cell.ComputedValue
+                          : '#AI_PENDING';
+                    writeEvaluatedValue(top.key, aiVal, false);
                     workStack.pop();
                     continue;
                 }
@@ -8673,20 +8827,167 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
     }
 
     // -----------------------------------------------------------------------
-    // =MJ.QUERY(...) and =MJ.VIEW(...) Custom Functions (§ 6.3, § 7.2)
+    // Protected Ranges Governance (§ 6.2)
     // -----------------------------------------------------------------------
 
     /**
-     * Parses an `=MJ.QUERY(name, ...params)` or `=MJ.VIEW(entity, view, ...params)` formula string.
-     * Returns `null` if `formula` is not an `=MJ.QUERY` or `=MJ.VIEW` call.
+     * Adds or updates a protected range rule on `sheetIdOrName` (`§ 6.2`).
+     */
+    public AddProtectedRange(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        spec: Omit<SpreadsheetProtectedRangeSpec, 'LockedAt'> & { LockedAt?: string }
+    ): SpreadsheetProtectedRangeSpec {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet) {
+            throw new Error(`Worksheet '${sheetIdOrName}' not found.`);
+        }
+        const bounds = ParseRangeAddress(spec.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            throw new Error(`Invalid protected A1 range '${spec.Range}'.`);
+        }
+        const canonicalRange =
+            bounds.startRow === bounds.endRow && bounds.startCol === bounds.endCol
+                ? FormatCellAddress(bounds.startRow, bounds.startCol)
+                : `${FormatCellAddress(bounds.startRow, bounds.startCol)}:${FormatCellAddress(bounds.endRow, bounds.endCol)}`;
+
+        if (!Array.isArray(sheet.ProtectedRanges)) {
+            sheet.ProtectedRanges = [];
+        }
+        const entry: SpreadsheetProtectedRangeSpec = {
+            RangeID: spec.RangeID,
+            Range: canonicalRange,
+            LockedByUserID: spec.LockedByUserID,
+            Description: spec.Description,
+            AllowEditors: Boolean(spec.AllowEditors),
+            LockedAt: spec.LockedAt ?? new Date().toISOString()
+        };
+        const existingIdx = sheet.ProtectedRanges.findIndex((p) => p.RangeID === entry.RangeID);
+        if (existingIdx >= 0) {
+            sheet.ProtectedRanges[existingIdx] = entry;
+        } else {
+            sheet.ProtectedRanges.push(entry);
+        }
+        workbook.UpdatedAt = new Date().toISOString();
+        return entry;
+    }
+
+    /**
+     * Removes a protected range rule by `rangeId` if the actor is authorized (`§ 6.2`).
+     */
+    public RemoveProtectedRange(
+        workbook: WorkbookSpec,
+        sheetIdOrName: string,
+        rangeId: string,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        const sheet = this.GetWorksheet(workbook, sheetIdOrName);
+        if (!sheet || !Array.isArray(sheet.ProtectedRanges)) {
+            return false;
+        }
+        const target = sheet.ProtectedRanges.find((p) => p.RangeID === rangeId);
+        if (!target) {
+            return false;
+        }
+        if (!editContext?.BypassProtection && !this.isActorAllowedForProtectedRule(target, editContext)) {
+            throw new Error(
+                `Cannot unlock protected range '${target.Range}' (locked by ${target.LockedByUserID}).`
+            );
+        }
+        sheet.ProtectedRanges = sheet.ProtectedRanges.filter((p) => p.RangeID !== rangeId);
+        workbook.UpdatedAt = new Date().toISOString();
+        return true;
+    }
+
+    /**
+     * Returns the first {@link SpreadsheetProtectedRangeSpec} covering `address`, or `null`.
+     */
+    public GetProtectedRangeForCell(
+        sheet: WorksheetSpec,
+        address: string
+    ): SpreadsheetProtectedRangeSpec | null {
+        const rules = sheet.ProtectedRanges;
+        if (!Array.isArray(rules) || rules.length === 0) {
+            return null;
+        }
+        const pos = ParseCellAddress(address);
+        if (!pos) return null;
+        for (const rule of rules) {
+            const bounds = ParseRangeAddress(rule.Range, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (!bounds) continue;
+            if (
+                pos.row >= bounds.startRow &&
+                pos.row <= bounds.endRow &&
+                pos.col >= bounds.startCol &&
+                pos.col <= bounds.endCol
+            ) {
+                return rule;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks whether an actor may write or clear `address` on `sheet` given `ProtectedRanges` (`§ 6.2`).
+     */
+    public CheckCellWritePermission(
+        sheet: WorksheetSpec,
+        address: string,
+        editContext?: SpreadsheetCellEditContext
+    ): { Allowed: boolean; ProtectedRange?: SpreadsheetProtectedRangeSpec; Reason?: string } {
+        if (editContext?.BypassProtection) {
+            return { Allowed: true };
+        }
+        const rule = this.GetProtectedRangeForCell(sheet, address);
+        if (!rule) {
+            return { Allowed: true };
+        }
+        if (this.isActorAllowedForProtectedRule(rule, editContext)) {
+            return { Allowed: true, ProtectedRange: rule };
+        }
+        return {
+            Allowed: false,
+            ProtectedRange: rule,
+            Reason: `Cell '${address}' falls inside protected range '${rule.Range}' (locked by ${rule.LockedByUserID}).`
+        };
+    }
+
+    private isActorAllowedForProtectedRule(
+        rule: SpreadsheetProtectedRangeSpec,
+        editContext?: SpreadsheetCellEditContext
+    ): boolean {
+        if (editContext?.BypassProtection) {
+            return true;
+        }
+        const actor = (editContext?.UserID ?? '').trim();
+        if (actor && editContext?.OwnerUserID && UUIDsEqual(actor, editContext.OwnerUserID)) {
+            return true;
+        }
+        if (actor && rule.LockedByUserID && UUIDsEqual(actor, rule.LockedByUserID)) {
+            return true;
+        }
+        if (rule.AllowEditors && editContext?.IsEditor) {
+            return true;
+        }
+        return false;
+    }
+
+    // -----------------------------------------------------------------------
+    // =MJ.QUERY(...), =MJ.VIEW(...), =MJ.IMPORTRANGE(...), and =MJ.AI(...) Functions
+    // -----------------------------------------------------------------------
+
+    /**
+     * Parses an `=MJ.QUERY(name, ...params)`, `=MJ.VIEW(entity, view, ...params)`, or
+     * `=MJ.IMPORTRANGE(artifact, range, [versionNumber])` formula string.
+     * Returns `null` if `formula` is not one of those calls.
      */
     public ParseMjCustomFunctionFormula(formula?: string | null): ParsedMjCustomFunctionCall | null {
         if (!formula || typeof formula !== 'string') return null;
         const trimmed = formula.trim();
-        const match = /^=\s*MJ\.(QUERY|VIEW)\s*\(([\s\S]*)\)$/i.exec(trimmed);
+        const match = /^=\s*(?:_xll\.)?MJ\.(QUERY|VIEW|IMPORTRANGE)\s*\(([\s\S]*)\)$/i.exec(trimmed);
         if (!match) return null;
 
-        const kind = match[1].toUpperCase() as 'QUERY' | 'VIEW';
+        const kind = match[1].toUpperCase() as 'QUERY' | 'VIEW' | 'IMPORTRANGE';
         const rawArgs = this.splitTopLevelArgs(match[2]);
         if (rawArgs.length === 0) return null;
 
@@ -8694,6 +8995,9 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             const t = token.trim();
             if (t.startsWith('"') && t.endsWith('"') && t.length >= 2) {
                 return t.slice(1, -1).replace(/""/g, '"');
+            }
+            if (t.startsWith("'") && t.endsWith("'") && t.length >= 2) {
+                return t.slice(1, -1).replace(/''/g, "'");
             }
             if (t.toUpperCase() === 'TRUE') return true;
             if (t.toUpperCase() === 'FALSE') return false;
@@ -8707,20 +9011,22 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
 
         let secondaryTarget: string | undefined;
         let paramStartIndex = 1;
-        if (kind === 'VIEW') {
+        if (kind === 'VIEW' || kind === 'IMPORTRANGE') {
             if (evaluatedArgs.length >= 2) {
                 secondaryTarget = String(evaluatedArgs[1] ?? '').trim();
                 paramStartIndex = 2;
             }
+        }
+        if (kind === 'IMPORTRANGE' && !secondaryTarget) {
+            return null;
         }
 
         const namedParameters: Record<string, SpreadsheetCellValue> = {};
         const positionalArgs: SpreadsheetCellValue[] = [];
         const remaining = evaluatedArgs.slice(paramStartIndex);
 
-        if (kind === 'VIEW') {
-            // A5: For =MJ.VIEW(entity, view, filter), NEVER split remaining[0] (the filter expression,
-            // e.g. "Status='Active'") into NamedParameters — keep positional Arguments intact!
+        if (kind === 'VIEW' || kind === 'IMPORTRANGE') {
+            // A5: Preserve positional args intact (VIEW filter or IMPORTRANGE optional versionNumber)
             positionalArgs.push(...remaining);
         } else {
             for (let i = 0; i < remaining.length; i++) {
@@ -8810,7 +9116,8 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                         contextUser,
                         effectiveProvider,
                         ttlMs,
-                        options?.BypassCache === true
+                        options?.BypassCache === true,
+                        options
                     );
 
                     if (!execResult.Success || execResult.AccessDenied) {
@@ -8862,12 +9169,13 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
         contextUser: UserInfo,
         provider: IMetadataProvider,
         ttlMs: number,
-        bypassCache: boolean
+        bypassCache: boolean,
+        options?: SpreadsheetMjEvaluationOptions
     ): Promise<DocumentBlockExecutionResult> {
         if (!contextUser?.ID) {
             return {
                 BlockID: 'mj-fn',
-                Kind: parsed.Kind === 'QUERY' ? 'SavedQuery' : 'EntityView',
+                Kind: parsed.Kind === 'QUERY' ? 'SavedQuery' : parsed.Kind === 'IMPORTRANGE' ? 'Artifact' : 'EntityView',
                 Mode: 'Live',
                 Success: false,
                 AccessDenied: true,
@@ -8876,6 +9184,10 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
                 Rows: [],
                 TotalRowCount: 0
             };
+        }
+
+        if (parsed.Kind === 'IMPORTRANGE') {
+            return this.executeImportRangeFunction(parsed, contextUser, provider, ttlMs, bypassCache, options);
         }
 
         const cacheKey = `${contextUser.ID.toLowerCase()}::${JSON.stringify(parsed)}`;
@@ -8966,6 +9278,589 @@ export class SpreadsheetEngine extends BaseSingleton<SpreadsheetEngine> {
             Result: result
         });
         return result;
+    }
+
+    private async executeImportRangeFunction(
+        parsed: ParsedMjCustomFunctionCall,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        ttlMs: number,
+        bypassCache: boolean,
+        options?: SpreadsheetMjEvaluationOptions
+    ): Promise<DocumentBlockExecutionResult> {
+        const makeError = (message: string, accessDenied = false): DocumentBlockExecutionResult => ({
+            BlockID: `mj-importrange-${parsed.PrimaryTarget}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: false,
+            AccessDenied: accessDenied,
+            ErrorMessage: message,
+            Columns: [],
+            Rows: [],
+            TotalRowCount: 0
+        });
+
+        const rangeSpec = (parsed.SecondaryTarget ?? '').trim();
+        if (!rangeSpec) {
+            return makeError('=MJ.IMPORTRANGE requires a target range string such as "Sheet 1!A1:D20".');
+        }
+
+        const rawVersion = parsed.Arguments[0];
+        let versionNumber: number | undefined;
+        if (rawVersion !== undefined && rawVersion !== null && rawVersion !== '') {
+            const num = Number(rawVersion);
+            if (!Number.isInteger(num) || num <= 0) {
+                return makeError('=MJ.IMPORTRANGE optional versionNumber must be a positive integer.');
+            }
+            versionNumber = num;
+        }
+
+        const depth = options?.ImportRangeDepth ?? 0;
+        const maxDepth = 3;
+        if (depth >= maxDepth) {
+            return makeError(`Maximum =MJ.IMPORTRANGE recursion depth (${maxDepth}) exceeded.`);
+        }
+
+        const visitedKeys = [...(options?.ImportRangeVisitedKeys ?? [])];
+        if (options?.HostArtifactID && visitedKeys.length === 0) {
+            visitedKeys.push(options.HostArtifactID.trim().toLowerCase());
+        }
+
+        const requestedKey = `${parsed.PrimaryTarget.trim().toLowerCase()}::${versionNumber ?? 'latest'}`;
+        if (
+            visitedKeys.some(
+                (v) =>
+                    v === requestedKey ||
+                    v === parsed.PrimaryTarget.trim().toLowerCase()
+            )
+        ) {
+            return makeError('Circular =MJ.IMPORTRANGE reference detected.');
+        }
+
+        const cacheKey = `${contextUser.ID.toLowerCase()}::IMPORTRANGE::${requestedKey}::${rangeSpec}`;
+        const now = Date.now();
+        if (!bypassCache && !options?.ImportRangeResolver) {
+            const cached = this.viewerCache.get(cacheKey);
+            if (cached && cached.ExpiresAt > now) {
+                return cached.Result;
+            }
+        }
+
+        if (options?.ImportRangeResolver) {
+            return await options.ImportRangeResolver({
+                ArtifactIDOrName: parsed.PrimaryTarget,
+                RangeString: rangeSpec,
+                VersionNumber: versionNumber,
+                ContextUser: contextUser,
+                Provider: provider,
+                VisitedArtifactKeys: visitedKeys,
+                Depth: depth
+            });
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const safeTarget = EscapeSQLString(parsed.PrimaryTarget);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            parsed.PrimaryTarget
+        );
+        const artifactFilter = isUuid ? `ID='${safeTarget}'` : `Name='${safeTarget}'`;
+        const artifactRes = await rv.RunView<{ ID: string; Name: string }>(
+            {
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: artifactFilter,
+                Fields: ['ID', 'Name'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            contextUser
+        );
+        if (!artifactRes.Success || !artifactRes.Results || artifactRes.Results.length === 0) {
+            return makeError(`Target artifact '${parsed.PrimaryTarget}' was not found.`);
+        }
+
+        const targetArtifact = artifactRes.Results[0];
+        const canonicalArtifactKey = `${targetArtifact.ID.toLowerCase()}::${versionNumber ?? 'latest'}`;
+        if (
+            visitedKeys.some(
+                (v) =>
+                    v === canonicalArtifactKey ||
+                    UUIDsEqual(v, targetArtifact.ID)
+            )
+        ) {
+            return makeError(`Circular =MJ.IMPORTRANGE reference detected on artifact '${targetArtifact.Name}'.`);
+        }
+
+        const permissions = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+            provider,
+            targetArtifact.ID,
+            contextUser
+        );
+        if (!permissions.CanRead) {
+            return makeError(
+                `Access denied reading artifact '${targetArtifact.Name}' (${targetArtifact.ID}) for =MJ.IMPORTRANGE.`,
+                true
+            );
+        }
+
+        const safeArtifactId = EscapeSQLString(targetArtifact.ID);
+        const versionFilter =
+            versionNumber !== undefined
+                ? `ArtifactID='${safeArtifactId}' AND VersionNumber=${versionNumber}`
+                : `ArtifactID='${safeArtifactId}'`;
+        const versionRes = await rv.RunView<{
+            ID: string;
+            VersionNumber: number;
+            Content: string | null;
+            Configuration: string | null;
+        }>(
+            {
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: versionFilter,
+                OrderBy: 'VersionNumber DESC',
+                Fields: ['ID', 'VersionNumber', 'Content', 'Configuration'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            contextUser
+        );
+        if (!versionRes.Success || !versionRes.Results || versionRes.Results.length === 0) {
+            return makeError(
+                versionNumber !== undefined
+                    ? `Version ${versionNumber} not found for artifact '${targetArtifact.Name}'.`
+                    : `No versions found for artifact '${targetArtifact.Name}'.`
+            );
+        }
+
+        const versionRow = versionRes.Results[0];
+        const targetWorkbook = this.ParseWorkbook(versionRow.Content, versionRow.Configuration);
+
+        const nextVisited = [...visitedKeys, targetArtifact.ID.toLowerCase(), canonicalArtifactKey];
+        const hasNestedCustomFns = targetWorkbook.Worksheets.some((ws) =>
+            Object.values(ws.Cells).some((c) => Boolean(c.Formula && this.ParseMjCustomFunctionFormula(c.Formula)))
+        );
+        if (hasNestedCustomFns) {
+            await this.EvaluateMjCustomFunctions(targetWorkbook, contextUser, provider, {
+                CacheTtlMs: ttlMs,
+                BypassCache: bypassCache,
+                MaxConcurrency: options?.MaxConcurrency,
+                ImportRangeVisitedKeys: nextVisited,
+                ImportRangeDepth: depth + 1,
+                HostArtifactID: targetArtifact.ID
+            });
+        } else {
+            this.EvaluateWorkbook(targetWorkbook);
+        }
+
+        const extracted = this.extractWorkbookRangeResult(targetWorkbook, targetArtifact.ID, rangeSpec);
+        if (extracted.Success) {
+            this.viewerCache.set(cacheKey, {
+                ExpiresAt: now + ttlMs,
+                Result: extracted
+            });
+        }
+        return extracted;
+    }
+
+    /**
+     * Parses `'Sheet Name'!A1:D20`, `Sheet2!A1:D20`, or bare `A1:D20` range specifiers for `=MJ.IMPORTRANGE`.
+     */
+    public ParseSheetAndRangeSpecifier(
+        rangeSpec: string
+    ): { SheetName?: string; RangeA1: string } | null {
+        const trimmed = (rangeSpec ?? '').trim();
+        if (!trimmed) return null;
+        const bangIdx = trimmed.lastIndexOf('!');
+        if (bangIdx < 0) {
+            const bounds = ParseRangeAddress(trimmed, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            return bounds ? { RangeA1: trimmed.toUpperCase() } : null;
+        }
+        let rawSheet = trimmed.slice(0, bangIdx).trim();
+        const rangePart = trimmed.slice(bangIdx + 1).trim();
+        if (rawSheet.startsWith("'") && rawSheet.endsWith("'") && rawSheet.length >= 2) {
+            rawSheet = rawSheet.slice(1, -1).replace(/''/g, "'");
+        }
+        const bounds = ParseRangeAddress(rangePart, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!rawSheet || !bounds) return null;
+        return {
+            SheetName: rawSheet,
+            RangeA1: rangePart.toUpperCase()
+        };
+    }
+
+    private extractWorkbookRangeResult(
+        workbook: WorkbookSpec,
+        artifactId: string,
+        rangeSpec: string
+    ): DocumentBlockExecutionResult {
+        const makeError = (msg: string): DocumentBlockExecutionResult => ({
+            BlockID: `mj-importrange-${artifactId}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: false,
+            ErrorMessage: msg,
+            Columns: [],
+            Rows: [],
+            TotalRowCount: 0
+        });
+
+        const parsedRef = this.ParseSheetAndRangeSpecifier(rangeSpec);
+        if (!parsedRef) {
+            return makeError(`Invalid =MJ.IMPORTRANGE range specifier '${rangeSpec}'.`);
+        }
+
+        const ws = parsedRef.SheetName
+            ? this.GetWorksheet(workbook, parsedRef.SheetName)
+            : this.GetWorksheet(workbook, workbook.ActiveSheetID) ?? workbook.Worksheets[0];
+        if (!ws) {
+            return makeError(`Worksheet '${parsedRef.SheetName ?? ''}' not found in target artifact.`);
+        }
+
+        const bounds = ParseRangeAddress(parsedRef.RangeA1, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+        if (!bounds) {
+            return makeError(`Invalid A1 range '${parsedRef.RangeA1}'.`);
+        }
+
+        const colCount = bounds.endCol - bounds.startCol + 1;
+        const rowCount = bounds.endRow - bounds.startRow + 1;
+        if (rowCount * colCount > 25_000) {
+            return makeError(`=MJ.IMPORTRANGE slice exceeds 25,000 cells (${rowCount}x${colCount}).`);
+        }
+
+        const columns: DocumentBlockColumn[] = [];
+        for (let c = 0; c < colCount; c++) {
+            const key = `Col${c}`;
+            columns.push({
+                Name: key,
+                DisplayName: ColumnIndexToLetter(bounds.startCol + c)
+            });
+        }
+
+        const rows: Array<Record<string, unknown>> = [];
+        for (let r = bounds.startRow; r <= bounds.endRow; r++) {
+            const rowObj: Record<string, unknown> = {};
+            for (let c = bounds.startCol; c <= bounds.endCol; c++) {
+                const addr = FormatCellAddress(r, c);
+                const cell = ws.Cells[addr];
+                const colKey = `Col${c - bounds.startCol}`;
+                rowObj[colKey] = cell ? (cell.ComputedValue ?? cell.RawValue ?? null) : null;
+            }
+            rows.push(rowObj);
+        }
+
+        return {
+            BlockID: `mj-importrange-${artifactId}`,
+            Kind: 'Artifact',
+            Mode: 'Live',
+            Success: true,
+            Columns: columns,
+            Rows: rows,
+            TotalRowCount: rows.length
+        };
+    }
+
+    /**
+     * Parses an opt-in `=MJ.AI("prompt", [cellOrRange...])` formula string (`§ 5.2b`).
+     * Returns `null` if `formula` is not an `=MJ.AI` call.
+     */
+    public ParseMjAiFormula(formula?: string | null): ParsedMjAiFormulaCall | null {
+        if (!formula || typeof formula !== 'string') return null;
+        const trimmed = formula.trim();
+        const match = /^=\s*(?:_xll\.)?MJ\.AI\s*\(([\s\S]*)\)$/i.exec(trimmed);
+        if (!match) return null;
+
+        const rawArgs = this.splitTopLevelArgs(match[1]);
+        if (rawArgs.length === 0) return null;
+
+        let prompt = rawArgs[0].trim();
+        if (prompt.startsWith('"') && prompt.endsWith('"') && prompt.length >= 2) {
+            prompt = prompt.slice(1, -1).replace(/""/g, '"');
+        } else if (prompt.startsWith("'") && prompt.endsWith("'") && prompt.length >= 2) {
+            prompt = prompt.slice(1, -1).replace(/''/g, "'");
+        }
+        if (!prompt.trim()) return null;
+
+        const references = rawArgs.slice(1).map((r) => r.trim()).filter(Boolean);
+        return {
+            Prompt: prompt,
+            References: references
+        };
+    }
+
+    /**
+     * Builds the serialized context payload and deterministic content hash for a single `=MJ.AI(...)` cell.
+     */
+    public ComputeAiFormulaContextAndHash(
+        workbook: WorkbookSpec,
+        sheet: WorksheetSpec,
+        parsed: ParsedMjAiFormulaCall
+    ): { ContextValuesJSON: string; InputHash: string } {
+        const resolvedArgs: Array<{ Ref: string; Value: unknown }> = [];
+        for (const ref of parsed.References) {
+            if (ref.startsWith('"') && ref.endsWith('"') && ref.length >= 2) {
+                resolvedArgs.push({ Ref: ref, Value: ref.slice(1, -1).replace(/""/g, '"') });
+                continue;
+            }
+            let targetSheet = sheet;
+            let coordPart = ref;
+            const bangIdx = ref.lastIndexOf('!');
+            if (bangIdx > 0) {
+                let rawSheet = ref.slice(0, bangIdx).trim();
+                if (rawSheet.startsWith("'") && rawSheet.endsWith("'") && rawSheet.length >= 2) {
+                    rawSheet = rawSheet.slice(1, -1).replace(/''/g, "'");
+                }
+                const foundSheet = this.GetWorksheet(workbook, rawSheet);
+                if (foundSheet) {
+                    targetSheet = foundSheet;
+                    coordPart = ref.slice(bangIdx + 1).trim();
+                }
+            }
+            const rangeBounds = ParseRangeAddress(coordPart, EXCEL_MAX_ROWS, EXCEL_MAX_COLS);
+            if (rangeBounds) {
+                if (rangeBounds.startRow === rangeBounds.endRow && rangeBounds.startCol === rangeBounds.endCol) {
+                    const addr = FormatCellAddress(rangeBounds.startRow, rangeBounds.startCol);
+                    const c = targetSheet.Cells[addr];
+                    resolvedArgs.push({ Ref: ref, Value: c ? (c.ComputedValue ?? c.RawValue ?? null) : null });
+                } else {
+                    const matrix: SpreadsheetCellValue[][] = [];
+                    const maxCells = 500;
+                    let count = 0;
+                    for (let r = rangeBounds.startRow; r <= rangeBounds.endRow && count < maxCells; r++) {
+                        const rowArr: SpreadsheetCellValue[] = [];
+                        for (let col = rangeBounds.startCol; col <= rangeBounds.endCol && count < maxCells; col++) {
+                            const addr = FormatCellAddress(r, col);
+                            const c = targetSheet.Cells[addr];
+                            rowArr.push(c ? (c.ComputedValue ?? c.RawValue ?? null) : null);
+                            count++;
+                        }
+                        matrix.push(rowArr);
+                    }
+                    resolvedArgs.push({ Ref: ref, Value: matrix });
+                }
+            } else {
+                resolvedArgs.push({ Ref: ref, Value: ref });
+            }
+        }
+
+        const contextValuesJson = JSON.stringify(resolvedArgs);
+        const inputString = `${parsed.Prompt}\n---\n${contextValuesJson}`;
+        const inputHash = computeStableAiInputHash(inputString);
+        return { ContextValuesJSON: contextValuesJson, InputHash: inputHash };
+    }
+
+    /**
+     * Summarizes all `=MJ.AI(...)` cells in `workbook` and how many are pending or have stale inputs.
+     */
+    public CountPendingAiFormulaCells(workbook: WorkbookSpec): {
+        TotalCount: number;
+        PendingOrStaleCount: number;
+        CellKeys: string[];
+    } {
+        let total = 0;
+        let pending = 0;
+        const cellKeys: string[] = [];
+        for (const ws of workbook.Worksheets) {
+            for (const cell of Object.values(ws.Cells)) {
+                const parsed = this.ParseMjAiFormula(cell.Formula);
+                if (!parsed) continue;
+                total++;
+                cellKeys.push(`${ws.SheetID}::${cell.Address}`);
+                const { InputHash } = this.ComputeAiFormulaContextAndHash(workbook, ws, parsed);
+                const hasCached =
+                    cell.ComputedValue !== undefined &&
+                    cell.ComputedValue !== null &&
+                    cell.ComputedValue !== '' &&
+                    cell.ComputedValue !== '#AI_PENDING';
+                if (!hasCached || cell.AiInputHash !== InputHash) {
+                    pending++;
+                }
+            }
+        }
+        return { TotalCount: total, PendingOrStaleCount: pending, CellKeys: cellKeys };
+    }
+
+    /**
+     * Explicitly evaluates opt-in `=MJ.AI(...)` cells across `workbook` (`§ 5.2b`).
+     * Enforces a hard batch cap of 50 cells per invocation and skips cells whose `AiInputHash`
+     * already matches (unless `ForceRefresh: true`). Never invoked automatically on open/recalc.
+     */
+    public async EvaluateAiFormulas(
+        workbook: WorkbookSpec,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        options?: SpreadsheetAiEvaluationOptions
+    ): Promise<SpreadsheetAiEvaluationResult> {
+        const targetFilter = options?.TargetAddresses
+            ? new Set(options.TargetAddresses.map((k) => k.toUpperCase()))
+            : null;
+        const maxCells = Math.max(1, Math.min(options?.MaxCells ?? MAX_AI_FORMULA_BATCH_CELLS, MAX_AI_FORMULA_BATCH_CELLS));
+
+        interface PendingAiCell {
+            sheet: WorksheetSpec;
+            cell: SpreadsheetCellSpec;
+            parsed: ParsedMjAiFormulaCall;
+            contextValuesJson: string;
+            inputHash: string;
+        }
+
+        const matchedCells: PendingAiCell[] = [];
+        for (const sheet of workbook.Worksheets) {
+            const sortedAddrs = Object.keys(sheet.Cells).sort();
+            for (const addr of sortedAddrs) {
+                const cell = sheet.Cells[addr];
+                if (!cell?.Formula) continue;
+                const parsed = this.ParseMjAiFormula(cell.Formula);
+                if (!parsed) continue;
+                if (targetFilter) {
+                    const sheetKey = `${sheet.SheetID}::${cell.Address}`.toUpperCase();
+                    if (!targetFilter.has(sheetKey) && !targetFilter.has(cell.Address.toUpperCase())) {
+                        continue;
+                    }
+                }
+                const { ContextValuesJSON, InputHash } = this.ComputeAiFormulaContextAndHash(
+                    workbook,
+                    sheet,
+                    parsed
+                );
+                matchedCells.push({
+                    sheet,
+                    cell,
+                    parsed,
+                    contextValuesJson: ContextValuesJSON,
+                    inputHash: InputHash
+                });
+            }
+        }
+
+        let cacheHitCount = 0;
+        const toEvaluate: PendingAiCell[] = [];
+        for (const item of matchedCells) {
+            const hasCached =
+                item.cell.ComputedValue !== undefined &&
+                item.cell.ComputedValue !== null &&
+                item.cell.ComputedValue !== '' &&
+                item.cell.ComputedValue !== '#AI_PENDING';
+            if (!options?.ForceRefresh && hasCached && item.cell.AiInputHash === item.inputHash) {
+                cacheHitCount++;
+            } else {
+                toEvaluate.push(item);
+            }
+        }
+
+        const batch = toEvaluate.slice(0, maxCells);
+        const skippedOverCapCount = Math.max(0, toEvaluate.length - batch.length);
+
+        if (batch.length === 0) {
+            return {
+                EvaluatedCount: 0,
+                CacheHitCount: cacheHitCount,
+                SkippedOverCapCount: 0,
+                AccessDeniedCount: 0,
+                ErrorCount: 0
+            };
+        }
+
+        const requests: ArtifactAiFormulaCellRequest[] = batch.map((b) => ({
+            SheetID: b.sheet.SheetID,
+            Address: b.cell.Address,
+            Prompt: b.parsed.Prompt,
+            ContextValuesJSON: b.contextValuesJson,
+            InputHash: b.inputHash
+        }));
+
+        let results: Array<{
+            SheetID: string;
+            Address: string;
+            InputHash: string;
+            Value: string;
+            ErrorMessage?: string | null;
+            AccessDenied?: boolean;
+        }>;
+
+        if (options?.AiEvaluator) {
+            results = await options.AiEvaluator(requests);
+        } else {
+            const effectiveProvider = provider ?? Metadata.Provider;
+            const op = new ArtifactEvaluateAiFormulaOperation();
+            const res = await op.Execute(
+                {
+                    ArtifactID: options?.ArtifactID ?? null,
+                    Cells: requests,
+                    ModelOverride: options?.ModelOverride ?? null
+                },
+                { provider: effectiveProvider, user: contextUser }
+            );
+            if (!res.Success || !res.Output) {
+                const errMsg = res.ErrorMessage || 'Failed to evaluate =MJ.AI formulas.';
+                for (const item of batch) {
+                    item.cell.ErrorMessage = errMsg;
+                    item.cell.AccessDenied = res.ResultCode === 'ACCESS_DENIED' || res.ResultCode === 'FORBIDDEN';
+                    item.cell.ComputedValue = item.cell.AccessDenied ? '#MJ_ACCESS_DENIED!' : '#VALUE!';
+                    item.cell.DisplayValue = String(item.cell.ComputedValue);
+                }
+                this.EvaluateWorkbook(workbook);
+                return {
+                    EvaluatedCount: 0,
+                    CacheHitCount: cacheHitCount,
+                    SkippedOverCapCount: skippedOverCapCount,
+                    AccessDeniedCount: res.ResultCode === 'ACCESS_DENIED' || res.ResultCode === 'FORBIDDEN' ? batch.length : 0,
+                    ErrorCount: batch.length
+                };
+            }
+            results = res.Output.Results;
+        }
+
+        const resultByKey = new Map<string, (typeof results)[number]>();
+        for (const r of results) {
+            resultByKey.set(`${r.SheetID}::${r.Address.toUpperCase()}`, r);
+        }
+
+        let evaluatedCount = 0;
+        let accessDeniedCount = 0;
+        let errorCount = 0;
+
+        for (const item of batch) {
+            const match = resultByKey.get(`${item.sheet.SheetID}::${item.cell.Address.toUpperCase()}`);
+            if (!match) {
+                errorCount++;
+                item.cell.ErrorMessage = 'Missing AI evaluation result for cell.';
+                item.cell.ComputedValue = '#VALUE!';
+                item.cell.DisplayValue = '#VALUE!';
+                continue;
+            }
+            if (match.AccessDenied) {
+                accessDeniedCount++;
+                item.cell.AccessDenied = true;
+                item.cell.ErrorMessage = match.ErrorMessage || 'Access denied running =MJ.AI formula.';
+                item.cell.ComputedValue = '#MJ_ACCESS_DENIED!';
+                item.cell.DisplayValue = '#MJ_ACCESS_DENIED!';
+                continue;
+            }
+            if (match.ErrorMessage) {
+                errorCount++;
+                item.cell.AccessDenied = false;
+                item.cell.ErrorMessage = match.ErrorMessage;
+                item.cell.ComputedValue = '#VALUE!';
+                item.cell.DisplayValue = '#VALUE!';
+                continue;
+            }
+
+            evaluatedCount++;
+            item.cell.AccessDenied = false;
+            item.cell.ErrorMessage = null;
+            item.cell.AiInputHash = match.InputHash || item.inputHash;
+            const coerced = this.coerceCsvScalar(match.Value);
+            item.cell.ComputedValue = coerced;
+            item.cell.DisplayValue = this.FormatCellValue(coerced, item.cell.Style);
+        }
+
+        this.EvaluateWorkbook(workbook);
+        return {
+            EvaluatedCount: evaluatedCount,
+            CacheHitCount: cacheHitCount,
+            SkippedOverCapCount: skippedOverCapCount,
+            AccessDeniedCount: accessDeniedCount,
+            ErrorCount: errorCount
+        };
     }
 
     private applyMjFunctionResultToSheet(
@@ -13809,6 +14704,19 @@ export function LoadSpreadsheetEngine(): void {
             return dataset;
         }
     );
+}
+
+function computeStableAiInputHash(input: string): string {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x811c9dc5;
+    for (let i = 0; i < input.length; i++) {
+        const ch = input.charCodeAt(i);
+        h1 ^= ch & 0xff;
+        h1 = Math.imul(h1, 0x01000193);
+        h2 ^= (ch >>> 8) & 0xff;
+        h2 = Math.imul(h2, 0x01000193);
+    }
+    return `ai-${(h1 >>> 0).toString(16).padStart(8, '0')}${(h2 >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 LoadSpreadsheetEngine();

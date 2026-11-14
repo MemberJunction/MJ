@@ -46,6 +46,7 @@ import {
   type SpreadsheetChartType,
   type SpreadsheetChartDataset,
   type SpreadsheetEmbeddedArtifactSpec,
+  type SpreadsheetCellEditContext,
   type DocumentBlockSpec,
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
@@ -53,6 +54,7 @@ import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '.
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
+import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
 import {
   DocumentCollaborationService,
@@ -95,7 +97,10 @@ export type SheetsToolbarItemKey =
   | 'export-xlsx'
   | 'export-csv'
   | 'source-mode'
-  | 'diff-mode';
+  | 'diff-mode'
+  | 'ask-ai'
+  | 'run-ai-formulas'
+  | 'protect-range';
 
 export const DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS: readonly SheetsToolbarItemKey[] = [
   'bold',
@@ -248,6 +253,43 @@ export interface ResolvedSheetsToolbarItem {
               @if (item.ShortLabel) {
                 <span>{{ item.ShortLabel }}</span>
               }
+            </button>
+          }
+
+          @if (CanEdit && WorkspaceMode === 'grid') {
+            @if (PendingAiFormulaCount > 0) {
+              <button
+                type="button"
+                class="mj-sheets-tool-btn active"
+                [disabled]="IsEvaluatingAiFormulas"
+                (click)="RunAiFormulas()"
+                title="Evaluate opt-in =MJ.AI formulas in this workbook"
+                data-testid="sheets-run-ai-formulas-btn"
+              >
+                <i class="fa-solid" [ngClass]="IsEvaluatingAiFormulas ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
+                <span>Run AI Formulas ({{ PendingAiFormulaCount }})</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="mj-sheets-tool-btn"
+              [class.active]="IsSelectedRangeProtected"
+              (click)="ToggleSelectedRangeProtection()"
+              [title]="IsSelectedRangeProtected ? 'Remove range protection' : 'Protect selected range (' + SelectedRange + ')'"
+              data-testid="sheets-protect-range-quick-btn"
+            >
+              <i class="fa-solid" [ngClass]="IsSelectedRangeProtected ? 'fa-lock' : 'fa-lock-open'"></i>
+              <span>{{ IsSelectedRangeProtected ? 'Protected' : 'Protect' }}</span>
+            </button>
+            <button
+              type="button"
+              class="mj-sheets-tool-btn mj-sheets-save-btn"
+              (click)="OpenAskAiForSpreadsheet()"
+              title="Open slide-in AI Assistant for this spreadsheet selection"
+              data-testid="sheets-ask-ai-quick-btn"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Ask AI</span>
             </button>
           }
 
@@ -2720,6 +2762,7 @@ export class SpreadsheetArtifactViewerComponent
 
   public SourceJsonText = '';
   public InitialSerializedWorkbook = '';
+  public IsEvaluatingAiFormulas = false;
   public DiffResult: DocumentDiffResult = {
     AddedLines: 0,
     RemovedLines: 0,
@@ -3722,22 +3765,36 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.CanEdit) return;
     const ranges = this.SelectedRanges.length > 0 ? this.SelectedRanges : [this.SelectedRange];
     const deletes: Array<{ rowId: string; colId: string }> = [];
-    for (const rng of ranges) {
-      const bounds = this.parseRangeBounds(rng);
-      if (!bounds) continue;
-      for (let r = bounds.minR; r <= bounds.maxR; r++) {
-        const rowSpec = this.ActiveSheet.Rows.find((row) => row.Index === r);
-        if (!rowSpec) continue;
-        for (let c = bounds.minC; c <= bounds.maxC; c++) {
-          const colSpec = this.ActiveSheet.Columns.find((col) => col.Index === c);
-          if (!colSpec) continue;
-          const addr = FormatCellAddress(r, c);
-          if (this.ActiveSheet.Cells[addr]) {
-            deletes.push({ rowId: rowSpec.RowID, colId: colSpec.ColumnID });
+    const editContext = this.buildCellEditContext();
+    try {
+      for (const rng of ranges) {
+        const bounds = this.parseRangeBounds(rng);
+        if (!bounds) continue;
+        for (let r = bounds.minR; r <= bounds.maxR; r++) {
+          const rowSpec = this.ActiveSheet.Rows.find((row) => row.Index === r);
+          if (!rowSpec) continue;
+          for (let c = bounds.minC; c <= bounds.maxC; c++) {
+            const colSpec = this.ActiveSheet.Columns.find((col) => col.Index === c);
+            if (!colSpec) continue;
+            const addr = FormatCellAddress(r, c);
+            if (this.ActiveSheet.Cells[addr]) {
+              deletes.push({ rowId: rowSpec.RowID, colId: colSpec.ColumnID });
+            }
           }
         }
+        SpreadsheetEngine.Instance.ClearRange(
+          this.Workbook,
+          this.ActiveSheet.SheetID,
+          rng,
+          true,
+          editContext,
+        );
       }
-      SpreadsheetEngine.Instance.ClearRange(this.Workbook, this.ActiveSheet.SheetID, rng);
+    } catch (err) {
+      this.StatusBannerMessage =
+        err instanceof Error ? err.message : 'Selected range contains protected cells.';
+      this.cdr.markForCheck();
+      return;
     }
     this.CollaborationSession?.BatchUpdateSpreadsheetCells(
       this.ActiveSheet.SheetID,
@@ -3787,25 +3844,37 @@ export class SpreadsheetArtifactViewerComponent
     let maxRowWritten = startRow;
     let maxColWritten = startCol;
 
-    for (let rOffset = 0; rOffset < lines.length; rOffset++) {
-      const cols = lines[rOffset].split('\t');
-      for (let cOffset = 0; cOffset < cols.length; cOffset++) {
-        const targetRow = startRow + rOffset;
-        const targetCol = startCol + cOffset;
-        const addr = FormatCellAddress(targetRow, targetCol);
-        const cellText = cols[cOffset];
-        const parsed = this.parseRawCellInputValue(cellText);
-        const updated = SpreadsheetEngine.Instance.SetCell(
-          this.Workbook,
-          this.ActiveSheet.SheetID,
-          addr,
-          parsed,
-        );
-        if (updated) {
-          updatedCells.push(updated);
-          maxRowWritten = Math.max(maxRowWritten, targetRow);
-          maxColWritten = Math.max(maxColWritten, targetCol);
+    const editContext = this.buildCellEditContext();
+    try {
+      for (let rOffset = 0; rOffset < lines.length; rOffset++) {
+        const cols = lines[rOffset].split('\t');
+        for (let cOffset = 0; cOffset < cols.length; cOffset++) {
+          const targetRow = startRow + rOffset;
+          const targetCol = startCol + cOffset;
+          const addr = FormatCellAddress(targetRow, targetCol);
+          const cellText = cols[cOffset];
+          const parsed = this.parseRawCellInputValue(cellText);
+          const updated = SpreadsheetEngine.Instance.SetCell(
+            this.Workbook,
+            this.ActiveSheet.SheetID,
+            addr,
+            parsed,
+            true,
+            editContext,
+          );
+          if (updated) {
+            updatedCells.push(updated);
+            maxRowWritten = Math.max(maxRowWritten, targetRow);
+            maxColWritten = Math.max(maxColWritten, targetCol);
+          }
         }
+      }
+    } catch (err) {
+      this.StatusBannerMessage =
+        err instanceof Error ? err.message : 'Paste blocked by a protected cell range.';
+      this.cdr.markForCheck();
+      if (updatedCells.length === 0) {
+        return;
       }
     }
 
@@ -4279,6 +4348,43 @@ export class SpreadsheetArtifactViewerComponent
         Active: this.WorkspaceMode === 'diff',
         Visible: true,
       },
+      {
+        Key: 'ask-ai',
+        Label: 'Ask AI Assistant',
+        ShortLabel: 'Ask AI',
+        Description: 'Open slide-in AI Assistant for the selected cells',
+        Icon: 'fa-wand-magic-sparkles',
+        Category: 'Insert & Data',
+        Placement: 'right',
+        TestId: 'sheets-ask-ai-btn',
+        Active: false,
+        Visible: this.CanEdit,
+      },
+      {
+        Key: 'run-ai-formulas',
+        Label: 'Run AI Formulas',
+        ShortLabel: 'Run AI',
+        Description: 'Evaluate opt-in =MJ.AI() formulas in this workbook',
+        Icon: 'fa-bolt',
+        Category: 'Insert & Data',
+        Placement: 'right',
+        TestId: 'sheets-run-ai-formulas-overflow-btn',
+        Active: false,
+        Disabled: this.IsEvaluatingAiFormulas || this.PendingAiFormulaCount === 0,
+        Visible: this.CanEdit,
+      },
+      {
+        Key: 'protect-range',
+        Label: 'Protect / Unprotect Range',
+        ShortLabel: 'Protect',
+        Description: 'Lock or unlock the selected cell range to owner-only edits',
+        Icon: 'fa-lock',
+        Category: 'Structure',
+        Placement: 'right',
+        TestId: 'sheets-protect-range-btn',
+        Active: this.IsSelectedRangeProtected,
+        Visible: canGridEdit,
+      },
     ];
   }
 
@@ -4381,6 +4487,15 @@ export class SpreadsheetArtifactViewerComponent
         break;
       case 'diff-mode':
         this.SetWorkspaceMode(this.WorkspaceMode === 'diff' ? 'grid' : 'diff');
+        break;
+      case 'ask-ai':
+        this.OpenAskAiForSpreadsheet();
+        break;
+      case 'run-ai-formulas':
+        void this.RunAiFormulas();
+        break;
+      case 'protect-range':
+        this.ToggleSelectedRangeProtection();
         break;
     }
   }
@@ -4562,16 +4677,27 @@ export class SpreadsheetArtifactViewerComponent
     const isFormula = trimmed.startsWith('=');
     const parsedScalar = this.parseRawInputScalar(trimmed);
 
-    const updatedCell = SpreadsheetEngine.Instance.SetCell(
-      this.Workbook,
-      sheet.SheetID,
-      address,
-      {
-        Value: isFormula ? null : parsedScalar,
-        Formula: isFormula ? trimmed : null,
-        Style: sheet.Cells[address]?.Style,
-      },
-    );
+    let updatedCell: SpreadsheetCellSpec;
+    try {
+      updatedCell = SpreadsheetEngine.Instance.SetCell(
+        this.Workbook,
+        sheet.SheetID,
+        address,
+        {
+          Value: isFormula ? null : parsedScalar,
+          Formula: isFormula ? trimmed : null,
+          Style: sheet.Cells[address]?.Style,
+        },
+        true,
+        this.buildCellEditContext(),
+      );
+    } catch (err) {
+      this.StatusBannerMessage =
+        err instanceof Error ? err.message : `Cell ${address} is protected and cannot be edited.`;
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+      return;
+    }
 
     if (isFormula && SpreadsheetEngine.Instance.ParseMjCustomFunctionFormula(trimmed)) {
       void this.RefreshAllLiveData(true);
@@ -4851,6 +4977,149 @@ export class SpreadsheetArtifactViewerComponent
       this.IsRefreshingData = false;
       this.cdr.markForCheck();
     }
+  }
+
+  public get PendingAiFormulaCount(): number {
+    return SpreadsheetEngine.Instance.CountPendingAiFormulaCells(this.Workbook).PendingOrStaleCount;
+  }
+
+  public get IsSelectedRangeProtected(): boolean {
+    const active = this.ActiveSheet;
+    if (!active) return false;
+    return Boolean(SpreadsheetEngine.Instance.GetProtectedRangeForCell(active, this.ActiveCellAddress));
+  }
+
+  private buildCellEditContext(): SpreadsheetCellEditContext {
+    const userId = this.resolveCurrentUser()?.ID ?? null;
+    const ownerId = this.Permissions?.CanShare ? userId : null;
+    return {
+      UserID: userId,
+      OwnerUserID: ownerId,
+      IsEditor: this.CanEdit,
+    };
+  }
+
+  /**
+   * Explicitly evaluates opt-in `=MJ.AI(...)` formulas across the workbook (`§5.2b`).
+   */
+  public async RunAiFormulas(): Promise<void> {
+    const user = this.resolveCurrentUser();
+    if (!user || !this.CanEdit || this.IsEvaluatingAiFormulas) {
+      return;
+    }
+    this.IsEvaluatingAiFormulas = true;
+    this.cdr.markForCheck();
+    try {
+      const result = await SpreadsheetEngine.Instance.EvaluateAiFormulas(
+        this.Workbook,
+        user,
+        this.ProviderToUse,
+        {
+          ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+        },
+      );
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      if (result.ErrorCount > 0) {
+        this.StatusBannerMessage = `Evaluated ${result.EvaluatedCount} AI formula(s); ${result.ErrorCount} failed.`;
+      } else {
+        this.StatusBannerMessage = `Evaluated ${result.EvaluatedCount} AI formula cell(s) (${result.CacheHitCount} cached).`;
+      }
+    } catch (err) {
+      this.StatusBannerMessage =
+        err instanceof Error ? err.message : 'Failed to evaluate AI formulas.';
+    } finally {
+      this.IsEvaluatingAiFormulas = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Protects or unprotects the currently selected cell or range (`§6.2`).
+   */
+  public ToggleSelectedRangeProtection(): void {
+    const user = this.resolveCurrentUser();
+    const sheet = this.ActiveSheet;
+    if (!user || !sheet || !this.CanEdit) {
+      return;
+    }
+    const existing = SpreadsheetEngine.Instance.GetProtectedRangeForCell(
+      sheet,
+      this.ActiveCellAddress,
+    );
+    if (existing) {
+      const removed = SpreadsheetEngine.Instance.RemoveProtectedRange(
+        this.Workbook,
+        sheet.SheetID,
+        existing.RangeID,
+        this.buildCellEditContext(),
+      );
+      if (!removed) {
+        this.StatusBannerMessage = `Only ${existing.LockedByUserID} or the artifact owner can unlock ${existing.Range}.`;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.StatusBannerMessage = `Removed protection on ${sheet.Name}!${existing.Range}.`;
+      this.cdr.markForCheck();
+      return;
+    }
+    const rangeTarget = this.SelectedRange || this.ActiveCellAddress || 'A1';
+    SpreadsheetEngine.Instance.AddProtectedRange(this.Workbook, sheet.SheetID, {
+      RangeID: `prot-${Date.now()}`,
+      Range: rangeTarget,
+      LockedByUserID: user.ID,
+      Description: `Protected by ${user.Name || user.Email || user.ID}`,
+      AllowEditors: false,
+    });
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.StatusBannerMessage = `Protected ${sheet.Name}!${rangeTarget} (owner/locker only).`;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Opens the slide-in `@memberjunction/ng-conversations` AI Assistant with the active
+   * worksheet and selected range values attached as context.
+   */
+  public OpenAskAiForSpreadsheet(): void {
+    const sheet = this.ActiveSheet;
+    const rangeA1 = this.SelectedRange || this.ActiveCellAddress || 'A1';
+    const rangeCells = sheet
+      ? SpreadsheetEngine.Instance.ReadRange(this.Workbook, sheet.SheetID, rangeA1)
+      : [];
+    const previewTsv = rangeCells
+      .slice(0, 20)
+      .map((row) =>
+        row
+          .slice(0, 10)
+          .map((c) => c?.DisplayValue ?? c?.Formula ?? c?.RawValue ?? '')
+          .join('\t'),
+      )
+      .join('\n');
+
+    RequestArtifactAiAssistant({
+      ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+      ArtifactTitle: this.Workbook.Title || 'Spreadsheet',
+      ArtifactKind: 'sheet',
+      ContextLabel: sheet ? `${sheet.Name}!${rangeA1}` : rangeA1,
+      SelectedContent: previewTsv,
+      SuggestingModeDefault: true,
+      TargetSheetID: sheet?.SheetID,
+      TargetCellRange: rangeA1,
+      ApplySuggestion: (proposedText: string, _asSuggestion: boolean) => {
+        const cleaned = (proposedText ?? '').trim();
+        if (!cleaned || !this.CanEdit) {
+          return;
+        }
+        if (cleaned.includes('\t') || cleaned.includes('\n')) {
+          this.ApplyTsvPasteAtActiveCell(cleaned);
+        } else {
+          this.writeCellAndBroadcast(this.ActiveCellAddress, cleaned);
+        }
+        this.StatusBannerMessage = `Applied AI Assistant result to ${this.ActiveCellAddress}.`;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   public async RefreshSingleLiveTable(table: SpreadsheetLiveTableSpec): Promise<void> {

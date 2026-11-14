@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, type MJUserEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ShouldReplaceDetailAgentRun, CONVERSATIONS_FORK_AUTHORIZATION, CONVERSATIONS_FORKING_SETTING_KEY, UserInfoEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON, ConversationBranchRow, WorkflowSaveOperation, type ConversationScope, type CreateForkInput, type MJConversationBranchEntity, type ForkPoint, type ForkKind, type ForkParticipant, type ForkSummary } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand, type ExecuteAgentResult, type WorkflowSpec, type TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -1441,6 +1441,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Output() beforeAgentTurn = this.BeforeAgentTurn;
   /** Fired AFTER a successful agent turn completes, on every route. */
   @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /**
+   * Emitted after an agent response message has been committed to the active conversation.
+   */
+  @Output() AgentMessageReceived = new EventEmitter<{
+    message: MJConversationDetailEntity;
+    agentResult: ExecuteAgentResult;
+  }>();
 
   /**
    * @deprecated Use {@link AfterAgentTurn}.
@@ -6793,6 +6801,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // #529: open a newly created artifact even with the panel already open on another one, refresh
     // the shown artifact when it gained a version, and switch to a retargeted one.
     await this.decideAndApplyArtifactPanel(artifactBaseline, event.message.ConversationID);
+
+    this.AgentMessageReceived?.emit({
+      message: event.message,
+      agentResult: event.agentResult as ExecuteAgentResult,
+    });
 
     // Force change detection to update the UI
     this.cdr.detectChanges();

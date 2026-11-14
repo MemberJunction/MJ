@@ -48,6 +48,7 @@ import {
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
 import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SlidesVersionDiffComponent } from '../version-diff/slides-version-diff.component';
+import { RequestArtifactAiAssistant } from '../../services/artifact-ai-assistant-bridge';
 import {
   DocumentCollaborationService,
   DocumentCollaborationSession,
@@ -110,7 +111,9 @@ export type SlidesToolbarItemKey =
   | 'theme'
   | 'md-to-deck'
   | 'export-pptx'
-  | 'export-pdf';
+  | 'export-pdf'
+  | 'ask-ai'
+  | 'lock-slide';
 
 export const DEFAULT_PINNED_SLIDES_TOOLBAR_ACTIONS: readonly SlidesToolbarItemKey[] = [
   'present',
@@ -314,6 +317,30 @@ export interface ResolvedSlidesToolbarItem {
               @if (item.ShortLabel) {
                 <span>{{ item.ShortLabel }}</span>
               }
+            </button>
+          }
+
+          @if (IsEditable && WorkspaceMode === 'edit') {
+            <button
+              type="button"
+              class="mj-slides-tool-btn"
+              [class.active]="!!ActiveSlide.Locked"
+              (click)="ToggleCurrentSlideLock()"
+              [title]="ActiveSlide.Locked ? 'Unlock current slide' : 'Lock current slide to owner-only'"
+              data-testid="slides-lock-slide-quick-btn"
+            >
+              <i class="fa-solid" [ngClass]="ActiveSlide.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
+              <span>{{ ActiveSlide.Locked ? 'Locked' : 'Lock' }}</span>
+            </button>
+            <button
+              type="button"
+              class="mj-slides-tool-btn primary"
+              (click)="OpenAskAiForPresentation()"
+              title="Open slide-in AI Assistant for this slide"
+              data-testid="slides-ask-ai-quick-btn"
+            >
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Ask AI</span>
             </button>
           }
 
@@ -678,7 +705,7 @@ export interface ResolvedSlidesToolbarItem {
                   <div class="mj-slide-heading-zone">
                     <h1
                       class="mj-slide-title-editable"
-                      [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                      [attr.contenteditable]="CanEditSlideElements ? 'true' : 'false'"
                       (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, 'title')"
                       (blur)="OnInlineSlideTitleBlur($event)"
                       (keydown.enter)="OnInlineHeadingEnter($event)"
@@ -688,7 +715,7 @@ export interface ResolvedSlidesToolbarItem {
                     @if (DisplayedSlide.Subtitle || (IsEditable && WorkspaceMode === 'edit')) {
                       <p
                         class="mj-slide-subtitle-editable"
-                        [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                        [attr.contenteditable]="CanEditSlideElements ? 'true' : 'false'"
                         (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, 'subtitle')"
                         (blur)="OnInlineSlideSubtitleBlur($event)"
                         (keydown.enter)="OnInlineHeadingEnter($event)"
@@ -760,6 +787,17 @@ export interface ResolvedSlidesToolbarItem {
                                 [attr.data-testid]="'region-insert-sheet-embed-' + region.RegionID"
                               >
                                 <i class="fa-solid fa-chart-column"></i> + Sheet Chart/Range
+                              </button>
+
+                              <button
+                                type="button"
+                                class="mj-slides-mini-btn"
+                                [class.active]="!!region.Locked"
+                                (click)="ToggleRegionLock(region)"
+                                [title]="region.Locked ? 'Unlock region' : 'Lock region to owner-only'"
+                                [attr.data-testid]="'region-lock-btn-' + region.RegionID"
+                              >
+                                <i class="fa-solid" [ngClass]="region.Locked ? 'fa-lock' : 'fa-lock-open'"></i>
                               </button>
 
                               <button
@@ -965,19 +1003,19 @@ export interface ResolvedSlidesToolbarItem {
                           <div class="mj-slide-big-number-region" [attr.data-testid]="'slide-big-number-' + region.RegionID">
                             <div
                               class="mj-slide-big-number-value"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnBigNumberFieldBlur(region, 'value', $event)"
                               [attr.data-testid]="'editable-big-number-value-' + region.RegionID"
                             >{{ region.BigNumberValue || '99.9%' }}</div>
                             <div
                               class="mj-slide-big-number-label"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnBigNumberFieldBlur(region, 'label', $event)"
                             >{{ region.BigNumberLabel || 'Key Performance Indicator' }}</div>
                             @if (region.BigNumberDelta || (IsEditable && WorkspaceMode === 'edit')) {
                               <span
                                 class="mj-slide-big-number-delta"
-                                [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                                [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                                 (blur)="OnBigNumberFieldBlur(region, 'delta', $event)"
                               >{{ region.BigNumberDelta || '+12% YoY' }}</span>
                             }
@@ -986,13 +1024,13 @@ export interface ResolvedSlidesToolbarItem {
                           <blockquote class="mj-slide-quote-region">
                             <div
                               class="mj-slide-quote-text"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnInlineRegionContentBlur(region, $event)"
                               [attr.data-testid]="'editable-region-content-' + region.RegionID"
                             >{{ region.MarkdownContent }}</div>
                             <cite
                               class="mj-slide-quote-cite"
-                              [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                              [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                               (blur)="OnQuoteAttributionBlur(region, $event)"
                             >— {{ region.QuoteAttribution || 'Executive Sponsor' }}</cite>
                           </blockquote>
@@ -1001,7 +1039,7 @@ export interface ResolvedSlidesToolbarItem {
                           <div
                             class="mj-slide-richtext-region"
                             [class.callout-box]="region.Kind === 'callout'"
-                            [attr.contenteditable]="IsEditable && WorkspaceMode === 'edit' ? 'true' : 'false'"
+                            [attr.contenteditable]="CanEditRegion(region) ? 'true' : 'false'"
                             (focus)="OnFocusSlideElement(DisplayedSlide.SlideID, region.RegionID)"
                             (blur)="OnInlineRegionContentBlur(region, $event)"
                             [innerHTML]="RenderRegionHtml(region.MarkdownContent)"
@@ -3301,6 +3339,30 @@ export class SlideDeckArtifactViewerComponent
         Active: false,
         Visible: true,
       },
+      {
+        Key: 'ask-ai',
+        Label: 'Ask AI Assistant',
+        ShortLabel: 'Ask AI',
+        Description: 'Open slide-in AI Assistant for this slide',
+        Icon: 'fa-wand-magic-sparkles',
+        Category: 'Design & AI',
+        Placement: 'right',
+        TestId: 'slides-ask-ai-btn',
+        Active: false,
+        Visible: this.IsEditable,
+      },
+      {
+        Key: 'lock-slide',
+        Label: 'Lock / Unlock Slide',
+        ShortLabel: 'Lock',
+        Description: 'Protect current slide against unauthorized edits',
+        Icon: 'fa-lock',
+        Category: 'Slide Actions',
+        Placement: 'right',
+        TestId: 'slides-lock-slide-btn',
+        Active: Boolean(this.ActiveSlide?.Locked),
+        Visible: this.IsEditable,
+      },
     ];
   }
 
@@ -3373,6 +3435,12 @@ export class SlideDeckArtifactViewerComponent
         break;
       case 'export-pdf':
         this.OnExportPdf();
+        break;
+      case 'ask-ai':
+        this.OpenAskAiForPresentation();
+        break;
+      case 'lock-slide':
+        this.ToggleCurrentSlideLock();
         break;
     }
   }
@@ -4505,14 +4573,158 @@ export class SlideDeckArtifactViewerComponent
    * Updates ONLY the targeted slide's metadata in `this.Deck` and broadcasts the single-slide
    * update via `session.UpdateSlideInDeck` (`Accept #1`).
    */
+  public get CanEditSlideElements(): boolean {
+    if (!this.IsEditable || this.WorkspaceMode !== 'edit' || !this.ActiveSlide) {
+      return false;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    return SlideDeckEngine.Instance.CanActorEditSlide(
+      this.ActiveSlide,
+      userId,
+      ownerId,
+      this.IsEditable,
+    ).Allowed;
+  }
+
+  public CanEditRegion(region: SlideRegionSpec): boolean {
+    if (!this.IsEditable || this.WorkspaceMode !== 'edit' || !this.ActiveSlide) {
+      return false;
+    }
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    return SlideDeckEngine.Instance.CanActorEditRegion(
+      this.ActiveSlide,
+      region,
+      userId,
+      ownerId,
+      this.IsEditable,
+    ).Allowed;
+  }
+
+  public ToggleCurrentSlideLock(): void {
+    const userId = this.getSafeCurrentUser()?.ID;
+    if (!this.IsEditable || !userId || !this.ActiveSlide) {
+      return;
+    }
+    const nextLocked = !this.ActiveSlide.Locked;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const res = SlideDeckEngine.Instance.SetSlideLock(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      nextLocked,
+      userId,
+      false,
+      ownerId,
+    );
+    if (!res.UpdatedSlide) {
+      this.StatusBannerMessage = 'Only the locker or owner can unlock this slide.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.Deck = res.Deck;
+    this.session?.UpdateSlideInDeck(res.UpdatedSlide, this.Deck);
+    this.syncRawDeckJson();
+    this.StatusBannerMessage = nextLocked
+      ? `Locked Slide ${res.UpdatedSlide.SlideNumber} (${res.UpdatedSlide.Title}).`
+      : `Unlocked Slide ${res.UpdatedSlide.SlideNumber}.`;
+    this.cdr.markForCheck();
+  }
+
+  public ToggleRegionLock(region: SlideRegionSpec): void {
+    const userId = this.getSafeCurrentUser()?.ID;
+    if (!this.IsEditable || !userId || !this.ActiveSlide) {
+      return;
+    }
+    const nextLocked = !region.Locked;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    const res = SlideDeckEngine.Instance.SetRegionLock(
+      this.Deck,
+      this.ActiveSlide.SlideID,
+      region.RegionID,
+      nextLocked,
+      userId,
+      false,
+      ownerId,
+    );
+    if (!res.UpdatedRegion) {
+      this.StatusBannerMessage = 'Only the locker or owner can unlock this region.';
+      this.cdr.markForCheck();
+      return;
+    }
+    this.Deck = res.Deck;
+    const updatedSlide = this.Deck.Slides.find((s) => s.SlideID === this.ActiveSlide.SlideID);
+    if (updatedSlide) {
+      this.session?.UpdateSlideInDeck(updatedSlide, this.Deck);
+    }
+    this.syncRawDeckJson();
+    this.StatusBannerMessage = nextLocked
+      ? `Locked slide region "${region.Label}".`
+      : `Unlocked slide region "${region.Label}".`;
+    this.cdr.markForCheck();
+  }
+
+  public OpenAskAiForPresentation(): void {
+    const slide = this.ActiveSlide;
+    const targetRegion =
+      slide?.Regions.find((r) => r.RegionID === this.FocusedRegionID) ?? slide?.Regions[0];
+    RequestArtifactAiAssistant({
+      ArtifactID: this.artifactVersion?.ArtifactID ?? null,
+      ArtifactTitle: this.Deck.Title || 'Presentation',
+      ArtifactKind: 'slides',
+      ContextLabel: slide
+        ? `Slide ${slide.SlideNumber}: ${slide.Title}${targetRegion ? ' · ' + targetRegion.Label : ''}`
+        : 'Presentation',
+      SelectedContent: targetRegion?.MarkdownContent || slide?.Title || '',
+      SuggestingModeDefault: true,
+      TargetSlideID: slide?.SlideID,
+      ApplySuggestion: (proposedText: string, _asSuggestion: boolean) => {
+        if (!proposedText.trim() || !slide) {
+          return;
+        }
+        if (targetRegion) {
+          this.applySingleSlideRegionPatch(slide.SlideID, {
+            RegionID: targetRegion.RegionID,
+            MarkdownContent: proposedText.trim(),
+          });
+          this.StatusBannerMessage = `Applied AI Assistant draft to Slide ${slide.SlideNumber} (${targetRegion.Label}).`;
+        } else {
+          this.applySingleSlideMetadataPatch(slide.SlideID, { Title: proposedText.trim() });
+        }
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
   private applySingleSlideMetadataPatch(
     slideId: string,
     patch: Parameters<typeof SlideDeckEngine.Instance.UpdateSlideMetadata>[2],
   ): void {
+    const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    if (targetSlide) {
+      const check = SlideDeckEngine.Instance.CanActorEditSlide(
+        targetSlide,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      if (!check.Allowed) {
+        this.StatusBannerMessage = check.Reason || 'This slide is locked.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const { Deck: updatedDeck, UpdatedSlide } = SlideDeckEngine.Instance.UpdateSlideMetadata(
       this.Deck,
       slideId,
       patch,
+      {
+        ActorUserID: userId,
+        OwnerUserID: ownerId,
+        IsEditor: this.IsEditable,
+      },
     );
     if (!UpdatedSlide) {
       return;
@@ -4531,6 +4743,24 @@ export class SlideDeckArtifactViewerComponent
     slideId: string,
     regionPatch: Partial<SlideRegionSpec> & { RegionID: string },
   ): void {
+    const targetSlide = this.Deck.Slides.find((s) => s.SlideID === slideId);
+    const targetRegion = targetSlide?.Regions.find((r) => r.RegionID === regionPatch.RegionID);
+    const userId = this.getSafeCurrentUser()?.ID ?? null;
+    const ownerId = this.ResolvedPermissions?.CanShare ? userId : null;
+    if (targetSlide && targetRegion) {
+      const check = SlideDeckEngine.Instance.CanActorEditRegion(
+        targetSlide,
+        targetRegion,
+        userId,
+        ownerId,
+        this.IsEditable,
+      );
+      if (!check.Allowed) {
+        this.StatusBannerMessage = check.Reason || 'This slide region is locked.';
+        this.cdr.markForCheck();
+        return;
+      }
+    }
     const { Deck: updatedDeck, UpdatedRegion } = SlideDeckEngine.Instance.UpsertSlideRegion(
       this.Deck,
       slideId,

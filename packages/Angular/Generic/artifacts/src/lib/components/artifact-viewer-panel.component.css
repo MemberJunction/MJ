@@ -1217,3 +1217,61 @@
 .file-fallback-name { font-weight: var(--mj-font-semibold, 600); color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-fallback-sub { font-size: var(--mj-text-sm, 0.85rem); color: var(--mj-text-muted); }
 .file-fallback-text { max-height: 60vh; overflow: auto; margin: 0; }
+
+.guest-share-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+.guest-share-modal {
+  width: min(520px, 92vw);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+}
+.guest-share-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.guest-share-modal__header h4 { margin: 0; font-size: 15px; color: var(--mj-text-primary); }
+.guest-share-modal__body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.guest-share-hint { margin: 0; font-size: 13px; color: var(--mj-text-secondary); }
+.guest-share-form, .guest-share-created { display: flex; gap: 8px; align-items: center; }
+.guest-share-input, .guest-share-select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+  font-size: 13px;
+}
+.guest-share-error {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--mj-status-error-bg, rgba(220, 38, 38, 0.1));
+  color: var(--mj-status-error, #b91c1c);
+  font-size: 13px;
+}
+.guest-share-list { display: flex; flex-direction: column; gap: 8px; }
+.guest-share-list h5 { margin: 4px 0 0; font-size: 12px; text-transform: uppercase; color: var(--mj-text-muted); }
+.guest-share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+}
+.guest-share-row__meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--mj-text-secondary); }
+.guest-share-row__meta strong { font-size: 13px; color: var(--mj-text-primary); }
