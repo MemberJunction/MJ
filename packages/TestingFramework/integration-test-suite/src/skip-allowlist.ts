@@ -87,6 +87,11 @@ export const SKIP_ALLOWLIST: readonly AllowedSkip[] = [
         Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'
     },
     {
+        CheckId: 'metadata-consistency.MC9',
+        Gate: 'credentials',
+        Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'
+    },
+    {
         CheckId: 'layered-base-views.LBV2',
         Gate: 'credentials',
         Reason: 'Needs a database login with VIEW DEFINITION (db_owner/sa) to read catalog definitions; a least-privilege login cannot.'

@@ -229,7 +229,10 @@ export class LibraryResource extends BaseResourceComponent implements OnInit, On
         state.NavigatorSection !== 'drive'
           ? state.NavigatorSection
           : null,
-      collectionId: state.CollectionId || null,
+      collectionId:
+        state.Mode === 'navigator' && state.NavigatorSection === 'collection' && state.CollectionId
+          ? state.CollectionId
+          : null,
       driveId: state.DriveId || null,
       folder: state.DriveId && state.DriveFolderPrefix ? state.DriveFolderPrefix : null,
       artifactId: state.ActiveArtifactId || null,

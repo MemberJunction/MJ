@@ -8,7 +8,7 @@ import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
-import { LogError, LogWarning } from "./logging";
+import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
 import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
@@ -1561,6 +1561,27 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The `TransactionGroup` counterpart of {@link CheckUpdateConcurrency}, called when an UPDATE is
+     * queued into a group. The values the check compares (each changed field's baseline and new
+     * value) are captured now, when the save's SQL is generated; the returned function performs the
+     * locked row read and comparison later, inside the group's transaction before any of the
+     * group's statements run.
+     *
+     * The returned function resolves `true` when the save may proceed, or `false` when it is
+     * rejected (after populating `entityResult` the same way {@link CheckUpdateConcurrency} does).
+     *
+     * Default: `null`, meaning no check (and no extra work at submit).
+     */
+    protected PrepareQueuedUpdateConcurrencyCheck(
+        _entity: BaseEntity,
+        _user: UserInfo,
+        _options: EntitySaveOptions,
+        _entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        return null;
+    }
+
+    /**
      * Awaited immediately after the save SQL succeeds (inside direct `Save()`'s
      * {@link EntityTransactionScope} before commit, or inside a `TransactionGroup` item's completion
      * callback after hydrating DB-generated PKs and before {@link OnAfterSaveExecute}) when
@@ -2375,15 +2396,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
-                    if (
-                        !bNewRecord &&
-                        !bReplay &&
-                        (options?.ConcurrencyBaseline !== undefined || options?.ConcurrencyCheck === 'enforce')
-                    ) {
-                        LogWarning(
-                            `DatabaseProviderBase.Save: entity "${entity.EntityInfo.Name}" is queued in a TransactionGroup; per-save concurrency checking (ConcurrencyBaseline / ConcurrencyCheck: 'enforce') is bypassed for TransactionGroup items.`,
-                        );
-                    }
+                    // Captured before GenerateSaveSQL, matching the direct path, which checks
+                    // before it generates the update.
+                    const concurrencyCheck = bNewRecord
+                        ? null
+                        : this.PrepareQueuedUpdateConcurrencyCheck(entity, user, options, entityResult);
                     let sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
                     const preSaveValues = capturePreSaveValues();
                     entity.RaiseReadyForTransaction();
@@ -2485,6 +2502,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 groupAssignedFields = [];
                             }
                         };
+                    }
+                    if (concurrencyCheck) {
+                        txItem.CheckBeforeSubmit = concurrencyCheck;
                     }
                     entity.TransactionGroup.AddTransaction(txItem);
                     return true;
@@ -3199,6 +3219,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      *   `DiffObjects`. Defaults to single quote.
      * @param cloneContext When non-null, populates `source='Clone'` and the
      *   structured `changeContext` JSON payload.
+     * @param skipFullRecordJSON When true (because the dialect builds `FullRecordJSON` in SQL
+     *   from the returned row), skips `EscapeQuotesInProperties` and `JSON.stringify` for
+     *   `fullRecordJSON`, returning `''`.
      */
     protected BuildRecordChangePayload(
         newData: Record<string, unknown> | null,
@@ -3210,6 +3233,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         restoreContext?: RestoreContext | null,
         quoteToEscape: string = "'",
         cloneContext?: CloneContext | null,
+        skipFullRecordJSON: boolean = false,
     ): RecordChangePayload | null {
         if (restoreContext && cloneContext) {
             throw new Error('BuildRecordChangePayload: both restoreContext and cloneContext were provided; an operation cannot be both a restore and a clone');
@@ -3225,8 +3249,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const changesKeys = changes ? Object.keys(changes) : [];
         if (changesKeys.length === 0 && !isCreateOrDelete) return null;
 
-        const dataForFullJSON = newData ?? oldData;
-        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        let fullRecordJSON = '';
+        if (!skipFullRecordJSON) {
+            const dataForFullJSON = newData ?? oldData;
+            fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        }
         const changesJSON = changes !== null ? JSON.stringify(changes) : '';
         const changesDescription = (oldData && newData)
             ? this.CreateUserDescriptionOfChanges(changes!)

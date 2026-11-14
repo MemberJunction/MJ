@@ -233,6 +233,15 @@ interface QueryResultCacheSlot {
     PageKey(params: RunQueryParams): string;
 }
 
+/**
+ * The values a field-level concurrency check compares, keyed by field name: what the caller
+ * believes the database holds for each changed field, and what the save writes.
+ */
+interface ConcurrencyCheckValues {
+    baselineValues: Record<string, unknown>;
+    newValues: Record<string, unknown>;
+}
+
 /** The output columns a run must drop for its caller, and the description they were chosen from. */
 interface QueryColumnFilter {
     /** The description's key ({@link StatementMemo.KeyOf}). */
@@ -1200,8 +1209,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
             return true;
         }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        return this.runLockedConcurrencyCheck(entity, user, this.getEffectiveConcurrencyCheckMode(options), values, entityResult);
+    }
 
-        const effectiveMode = this.getEffectiveConcurrencyCheckMode(options);
+    protected override PrepareQueuedUpdateConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        options: EntitySaveOptions,
+        entityResult: BaseEntityResult,
+    ): (() => Promise<boolean>) | null {
+        if (!this.ShouldCheckUpdateConcurrency(entity, options)) {
+            return null;
+        }
+        const values = this.collectConcurrencyCheckValues(entity, options);
+        if (Object.keys(values.baselineValues).length === 0) {
+            return null;
+        }
+        const mode = this.getEffectiveConcurrencyCheckMode(options);
+        return () => this.runLockedConcurrencyCheck(entity, user, mode, values, entityResult);
+    }
+
+    /**
+     * Collects, for each field the save changes, the value the caller believes the database holds
+     * (the `ConcurrencyBaseline` entry when one is supplied, otherwise the field's `OldValue`) and the
+     * value the save writes.
+     */
+    private collectConcurrencyCheckValues(entity: BaseEntity, options: EntitySaveOptions): ConcurrencyCheckValues {
         const baselineValues: Record<string, unknown> = {};
         const newValues: Record<string, unknown> = {};
 
@@ -1235,7 +1269,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 newValues[f.Name] = entityField.Value;
             }
         }
+        return { baselineValues, newValues };
+    }
 
+    /**
+     * Reads the stored values of the changed columns under a row lock held by the current
+     * transaction, and compares them with the caller's baseline. A conflict is logged; in
+     * `'enforce'` mode it also fails `entityResult` and returns `false`.
+     */
+    private async runLockedConcurrencyCheck(
+        entity: BaseEntity,
+        user: UserInfo,
+        effectiveMode: ConcurrencyCheckMode,
+        values: ConcurrencyCheckValues,
+        entityResult: BaseEntityResult,
+    ): Promise<boolean> {
+        const { baselineValues, newValues } = values;
         const columnsToRead = Object.keys(baselineValues);
         if (columnsToRead.length === 0) {
             return true;
@@ -2407,6 +2456,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 entity.RestoreContext,
                 "'",
                 entity.CloneContext,
+                snapshotFromRow,
             );
             if (payload) {
                 // ISA propagation hook: reuse the diff already computed by BuildRecordChangePayload
@@ -2692,7 +2742,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return false;
         }
 
-        const tokens = GenericDatabaseProvider.extractWhereIdentifierTokens(trimmed);
+        const tokens = GenericDatabaseProvider.extractWhereTokens(trimmed);
         if (tokens === null) {
             return false;
         }
@@ -2702,17 +2752,101 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 .filter(f => !f.IsVirtual)
                 .map(f => f.Name.toLowerCase())
         );
+        const virtualColumns = new Set(
+            entityInfo.Fields
+                .filter(f => f.IsVirtual)
+                .map(f => f.Name.toLowerCase())
+        );
+        const schemaLower = (entityInfo.SchemaName ?? '').trim().toLowerCase();
+        const baseTableLower = entityInfo.BaseTable.trim().toLowerCase();
+        const baseViewLower = (entityInfo.BaseView ?? '').trim().toLowerCase();
 
-        for (const token of tokens) {
-            if (GenericDatabaseProvider._forbiddenCountKeywords.has(token)) {
-                return false;
+        let parenDepth = 0;
+        const subqueryStartDepths: number[] = [];
+
+        for (let idx = 0; idx < tokens.length; idx++) {
+            const t = tokens[idx];
+            if (t.kind === 'lparen') {
+                parenDepth++;
+                const next = tokens[idx + 1];
+                if (next && next.kind === 'ident' && (next.value === 'select' || next.value === 'with')) {
+                    subqueryStartDepths.push(parenDepth);
+                }
+                continue;
             }
-            if (!GenericDatabaseProvider._allowedCountKeywords.has(token) && !physicalColumns.has(token)) {
+            if (t.kind === 'rparen') {
+                if (parenDepth === 0) {
+                    return false;
+                }
+                if (subqueryStartDepths.length > 0 && subqueryStartDepths[subqueryStartDepths.length - 1] === parenDepth) {
+                    subqueryStartDepths.pop();
+                }
+                parenDepth--;
+                continue;
+            }
+            if (t.kind !== 'ident' && t.kind !== 'quoted') {
+                continue;
+            }
+
+            const inSubquery = subqueryStartDepths.length > 0;
+            const prev = tokens[idx - 1];
+            const next = tokens[idx + 1];
+            const isAfterDot = prev?.kind === 'dot';
+            const isBeforeDot = next?.kind === 'dot';
+
+            if (inSubquery) {
+                if (baseViewLower && t.value === baseViewLower) {
+                    return false;
+                }
+                if (!isAfterDot && !isBeforeDot && next?.kind !== 'lparen' &&
+                    virtualColumns.has(t.value) && !physicalColumns.has(t.value)) {
+                    return false;
+                }
+                continue;
+            }
+
+            // Outer WHERE level: forbid joins/set-ops/bare SELECT; allow EXISTS (SELECT ...)
+            if (t.kind === 'ident') {
+                if (t.value === 'exists') {
+                    const afterParen = tokens[idx + 2];
+                    if (next?.kind === 'lparen' && afterParen?.kind === 'ident' &&
+                        (afterParen.value === 'select' || afterParen.value === 'with')) {
+                        continue;
+                    }
+                    return false;
+                }
+                if (GenericDatabaseProvider._forbiddenCountKeywords.has(t.value)) {
+                    return false;
+                }
+            }
+
+            if (isBeforeDot) {
+                const isBaseTableQualifier = t.value === baseTableLower;
+                const isSchemaForBaseTable = Boolean(schemaLower) && t.value === schemaLower &&
+                    (tokens[idx + 2]?.kind === 'ident' || tokens[idx + 2]?.kind === 'quoted') &&
+                    tokens[idx + 2].value === baseTableLower;
+                if (!isBaseTableQualifier && !isSchemaForBaseTable) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (isAfterDot) {
+                if (t.value !== baseTableLower && !physicalColumns.has(t.value)) {
+                    return false;
+                }
+                continue;
+            }
+
+            if (t.kind === 'ident' && GenericDatabaseProvider._allowedCountKeywords.has(t.value)) {
+                continue;
+            }
+            if (!physicalColumns.has(t.value)) {
                 return false;
             }
         }
 
-        return true;
+        return parenDepth === 0;
     }
 
     private static readonly _forbiddenCountKeywords = new Set([
@@ -2724,22 +2858,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         'true', 'false', 'asc', 'desc', 'cast', 'convert', 'coalesce', 'isnull', 'nullif',
         'lower', 'upper', 'ltrim', 'rtrim', 'trim', 'len', 'length',
         'getdate', 'getutcdate', 'sysdatetime', 'sysutcdatetime', 'now', 'current_timestamp', 'current_date',
-        'dateadd', 'datediff', 'year', 'month', 'day',
+        'dateadd', 'datediff', 'year', 'month', 'day', 'hour', 'minute', 'second',
+        'at', 'time', 'zone', 'interval', 'extract', 'date_trunc', 'date_part', 'epoch',
         'as', 'case', 'when', 'then', 'else', 'end', 'where',
         'int', 'integer', 'bigint', 'smallint', 'tinyint',
         'varchar', 'nvarchar', 'char', 'nchar', 'text',
-        'date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'decimal', 'numeric',
+        'date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'timestamptz', 'decimal', 'numeric',
         'float', 'real', 'bit', 'boolean', 'uuid', 'uniqueidentifier', 'max',
     ]);
 
     /**
      * Linear O(N) character scanner (zero regexes — immune to ReDoS) that strips single-quoted
-     * SQL string literals and `@p` / `$n` parameter placeholders, extracts all bracketed `[Col]`,
-     * double-quoted `"Col"`, and bare identifier tokens (lowercased), and returns `null` if an
+     * SQL string literals and `@p` / `$n` parameter placeholders, tokenizes bracketed `[Col]`,
+     * double-quoted `"Col"`, bare identifiers, parentheses, and dots, and returns `null` if an
      * unclosed quote/bracket or comment token (`--`, `/*`) is encountered.
      */
-    private static extractWhereIdentifierTokens(sql: string): string[] | null {
-        const tokens: string[] = [];
+    private static extractWhereTokens(
+        sql: string,
+    ): Array<{ kind: 'ident' | 'quoted' | 'lparen' | 'rparen' | 'dot' | 'other'; value: string }> | null {
+        const tokens: Array<{ kind: 'ident' | 'quoted' | 'lparen' | 'rparen' | 'dot' | 'other'; value: string }> = [];
         const len = sql.length;
         let i = 0;
 
@@ -2775,6 +2912,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     i++;
                 }
                 if (!closed) return null;
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2795,6 +2933,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     i++;
                 }
                 if (!closed) return null;
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2804,6 +2943,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isIdentPart(sql.charCodeAt(i))) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2813,6 +2953,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isDigit(sql.charCodeAt(i))) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2823,7 +2964,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (end === -1) return null;
                 const ident = sql.slice(start, end).trim().toLowerCase();
                 if (ident.length > 0) {
-                    tokens.push(ident);
+                    tokens.push({ kind: 'quoted', value: ident });
                 }
                 i = end + 1;
                 continue;
@@ -2836,7 +2977,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 if (end === -1) return null;
                 const ident = sql.slice(start, end).trim().toLowerCase();
                 if (ident.length > 0) {
-                    tokens.push(ident);
+                    tokens.push({ kind: 'quoted', value: ident });
                 }
                 i = end + 1;
                 continue;
@@ -2848,6 +2989,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && (isIdentPart(sql.charCodeAt(i)) || sql.charCodeAt(i) === 46)) {
                     i++;
                 }
+                tokens.push({ kind: 'other', value: '' });
                 continue;
             }
 
@@ -2858,8 +3000,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 while (i < len && isIdentPart(sql.charCodeAt(i))) {
                     i++;
                 }
-                tokens.push(sql.slice(start, i).toLowerCase());
+                tokens.push({ kind: 'ident', value: sql.slice(start, i).toLowerCase() });
                 continue;
+            }
+
+            if (code === 40) {
+                tokens.push({ kind: 'lparen', value: '(' });
+            } else if (code === 41) {
+                tokens.push({ kind: 'rparen', value: ')' });
+            } else if (code === 46) {
+                tokens.push({ kind: 'dot', value: '.' });
+            } else if (code > 32) {
+                tokens.push({ kind: 'other', value: sql[i] });
             }
 
             i++;

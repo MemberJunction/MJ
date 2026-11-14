@@ -147,13 +147,16 @@
     "6.2": {
       "status": "candidate",
       "candidateDate": "2026-11-04",
-      "newest": "6.2.1",
+      "newest": "6.2.2",
       "releases": {
         "6.2.0": {
           "dbImpact": "none"
         },
         "6.2.1": {
           "dbImpact": "none"
+        },
+        "6.2.2": {
+          "dbImpact": "metadata"
         }
       }
     }

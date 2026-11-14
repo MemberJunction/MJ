@@ -814,8 +814,23 @@ jobs:
               );
             }
             lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            const benchMdPath = "packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md";
+            if (fs.existsSync(benchMdPath)) {
+              lines.push("", "---", "", fs.readFileSync(benchMdPath, "utf8"));
+            }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           '
+
+      - name: Upload IT128 performance benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: it128-performance-benchmark-${{ github.run_attempt }}
+          path: |
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.json
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Dump MJAPI log on failure
         if: failure()

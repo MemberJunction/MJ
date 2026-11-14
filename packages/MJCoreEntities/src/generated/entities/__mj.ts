@@ -10873,6 +10873,12 @@ export const MJArtifactTypeSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJArtifactTypeEntity_IArtifactTypeConfiguration
+        * * Description: Optional JSON configuration bag for this artifact type (shape = IArtifactTypeConfiguration), including Library card thumbnail visibility and capture mode policies.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -76344,6 +76350,54 @@ export class MJArtifactPermissionEntity extends BaseEntity<MJArtifactPermissionE
 
 
 /**
+ * Controls how Library cards generate and display preview thumbnails for an Artifact Type.
+ *
+ * - `'Rendered'`: Capture and display a real rendered screenshot (or vector SVG export for
+ *   Whiteboards/SVGs) stored in `MJArtifactVersionEntity.Configuration.thumbnailDataUrl`, masking
+ *   live database widgets when `MaskLiveDataBlocks` is enabled.
+ * - `'Structural'`: Display a clean abstract schematic wireframe (e.g. blank spreadsheet grid bars)
+ *   without storing or rendering real cell values, query rows, or document text.
+ * - `'Icon'`: Display only the artifact type's badge and icon with no content thumbnail stored or shown.
+ */
+export type MJArtifactTypeEntity_ArtifactTypeThumbnailMode = 'Rendered' | 'Structural' | 'Icon';
+
+/**
+ * Thumbnail and screenshot capture policy nested inside {@link MJArtifactTypeEntity_IArtifactTypeConfiguration}.
+ */
+export interface MJArtifactTypeEntity_IArtifactTypeThumbnailConfiguration {
+  /**
+   * Master switch controlling whether thumbnails or structural previews are generated and displayed
+   * for artifacts of this type. Defaults to `false` when `Mode === 'Icon'`, `true` otherwise.
+   */
+  Enabled?: boolean;
+
+  /**
+   * Determines whether cards show a `'Rendered'` screenshot/export, a `'Structural'` wireframe,
+   * or an `'Icon'` badge only.
+   */
+  Mode?: MJArtifactTypeEntity_ArtifactTypeThumbnailMode;
+
+  /**
+   * When `true` (default), live database-backed widgets inside documents or sheets (`mj-block`
+   * `EntityView` / `Query` containers, live query cells) are masked with a neutral placeholder
+   * during DOM screenshot capture so row-level data is never persisted into shared card thumbnails.
+   */
+  MaskLiveDataBlocks?: boolean;
+}
+
+/**
+ * Optional configuration bag stored as JSON in `MJ: Artifact Types.Configuration`.
+ * CodeGen emits a typed `ConfigurationObject` accessor on `MJArtifactTypeEntity` returning
+ * `MJArtifactTypeEntity_IArtifactTypeConfiguration | null`.
+ */
+export interface MJArtifactTypeEntity_IArtifactTypeConfiguration {
+  /**
+   * Per-artifact-type thumbnail visibility and capture behavior in Library cards.
+   */
+  Thumbnail?: MJArtifactTypeEntity_IArtifactTypeThumbnailConfiguration;
+}
+
+/**
  * MJ: Artifact Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactType
@@ -76586,6 +76640,35 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
     set SystemSupplied(value: boolean) {
         this.Set('SystemSupplied', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJArtifactTypeEntity_IArtifactTypeConfiguration
+    * * Description: Optional JSON configuration bag for this artifact type (shape = IArtifactTypeConfiguration), including Library card thumbnail visibility and capture mode policies.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJArtifactTypeEntity_IArtifactTypeConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJArtifactTypeEntity_IArtifactTypeConfiguration | null {
+        return this.GetJSONFieldObject<MJArtifactTypeEntity_IArtifactTypeConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJArtifactTypeEntity_IArtifactTypeConfiguration | null) {
+        this.SetJSONFieldObject<MJArtifactTypeEntity_IArtifactTypeConfiguration>('Configuration', value);
     }
 
     /**

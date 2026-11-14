@@ -1,12 +1,18 @@
 import {
+  ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  HostListener,
   Input,
+  NgZone,
   OnInit,
   OnChanges,
   OnDestroy,
+  Renderer2,
   SimpleChanges,
   ChangeDetectorRef,
   Type,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { Subscription } from 'rxjs';
@@ -20,6 +26,7 @@ import {
   MJConversationEntity,
   MJConversationDetailEntity,
   ArtifactMetadataEngine,
+  BuildArtifactVersionConfigurationWithPreview,
   UserInfoEngine,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
@@ -43,6 +50,7 @@ import {
   type DocumentBlockExecutionResult,
 } from '@memberjunction/core-entities';
 import { BaseArtifactViewerPluginComponent, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { CaptureThumbnailForDriverIfAllowed } from '../../utils/artifact-dom-capture';
 import { SpreadsheetVersionDiffComponent } from '../version-diff/spreadsheet-version-diff.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 import { FetchArrayBuffer } from '../previews/office-preview.logic';
@@ -63,6 +71,54 @@ import {
  * Workspace mode for the MJ Sheets (`SpreadsheetArtifactViewerPlugin`) studio (`§ 6`).
  */
 export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
+
+export const SHEETS_TOOLBAR_PINS_SETTING_KEY = 'MJ.Sheets.Toolbar.PinnedActions';
+
+export type SheetsToolbarItemKey =
+  | 'bold'
+  | 'currency'
+  | 'percent'
+  | 'integer'
+  | 'date'
+  | 'insert-row'
+  | 'insert-col'
+  | 'sort-asc'
+  | 'sort-desc'
+  | 'freeze-header'
+  | 'live-table'
+  | 'insert-query'
+  | 'insert-view'
+  | 'add-chart'
+  | 'add-whiteboard'
+  | 'refresh-data'
+  | 'import'
+  | 'export-xlsx'
+  | 'export-csv'
+  | 'source-mode'
+  | 'diff-mode';
+
+export const DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS: readonly SheetsToolbarItemKey[] = [
+  'bold',
+  'currency',
+  'insert-row',
+  'insert-col',
+  'sort-asc',
+  'add-chart',
+];
+
+export interface ResolvedSheetsToolbarItem {
+  Key: SheetsToolbarItemKey;
+  Label: string;
+  ShortLabel?: string;
+  Description: string;
+  Icon: string;
+  Category: 'Format' | 'Structure' | 'Insert & Data' | 'Export & View';
+  Placement: 'left' | 'right';
+  TestId: string;
+  Active: boolean;
+  Disabled?: boolean;
+  Visible: boolean;
+}
 
 /**
  * Collaborative Spreadsheet (`SpreadsheetArtifactViewerPlugin`) editor and viewer component (`§ 6`).
@@ -86,6 +142,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 @Component({
   selector: 'mj-spreadsheet-artifact-viewer',
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mj-sheets-shell" data-testid="mj-sheets-shell">
       <!-- Top Workbook Toolbar -->
@@ -111,204 +168,90 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             >
               <i class="fa-solid fa-table-cells"></i> Grid
             </button>
-            <button
-              type="button"
-              class="mj-sheets-mode-pill"
-              [class.active]="WorkspaceMode === 'source'"
-              (click)="SetWorkspaceMode('source')"
-              data-testid="sheets-mode-source"
-            >
-              <i class="fa-solid fa-code"></i> Source
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-mode-pill"
-              [class.active]="WorkspaceMode === 'diff'"
-              (click)="SetWorkspaceMode('diff')"
-              data-testid="sheets-mode-diff"
-            >
-              <i class="fa-solid fa-code-compare"></i> Diff
-            </button>
           </div>
+
+          @if ((WorkspaceMode === 'source' && !IsToolbarItemShownOnBar('source-mode')) || (WorkspaceMode === 'diff' && !IsToolbarItemShownOnBar('diff-mode'))) {
+            <button
+              type="button"
+              class="mj-sheets-active-mode-chip"
+              [title]="'Viewing ' + (WorkspaceMode === 'source' ? 'Workbook JSON Source' : 'Version Diff') + ' — click to return to Grid'"
+              data-testid="sheets-active-mode-chip"
+              (click)="SetWorkspaceMode('grid')"
+            >
+              <i class="fa-solid" [class.fa-code]="WorkspaceMode === 'source'" [class.fa-code-compare]="WorkspaceMode === 'diff'"></i>
+              <span>{{ WorkspaceMode === 'source' ? 'Source' : 'Diff' }}</span>
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          }
+
+          @if (CanEdit) {
+            <div class="mj-sheets-undo-group" role="group" aria-label="Undo and Redo">
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-tool-btn--icon"
+                [disabled]="!CanUndo"
+                (click)="UndoWorkbook()"
+                title="Undo (Cmd/Ctrl+Z)"
+                data-testid="sheet-undo-btn"
+              >
+                <i class="fa-solid fa-rotate-left"></i>
+              </button>
+              <button
+                type="button"
+                class="mj-sheets-tool-btn mj-sheets-tool-btn--icon"
+                [disabled]="!CanRedo"
+                (click)="RedoWorkbook()"
+                title="Redo (Cmd/Ctrl+Shift+Z)"
+                data-testid="sheet-redo-btn"
+              >
+                <i class="fa-solid fa-rotate-right"></i>
+              </button>
+            </div>
+          }
         </div>
 
         @if (WorkspaceMode === 'grid' && CanEdit) {
-          <!-- Formatting & Structure Controls -->
-          <div class="mj-sheets-toolbar-group">
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="IsActiveCellBold"
-              (click)="ToggleActiveCellBold()"
-              title="Bold"
-              data-testid="sheet-format-bold-btn"
-            >
-              <i class="fa-solid fa-bold"></i>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="ActiveCellFormatType === 'currency'"
-              (click)="ApplyActiveCellFormat('currency')"
-              title="Format as Currency ($#,##0.00)"
-              data-testid="sheet-format-currency-btn"
-            >
-              <span>$</span>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="ActiveCellFormatType === 'percent'"
-              (click)="ApplyActiveCellFormat('percent')"
-              title="Format as Percent (0.0%)"
-              data-testid="sheet-format-percent-btn"
-            >
-              <span>%</span>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="ActiveCellFormatType === 'integer'"
-              (click)="ApplyActiveCellFormat('integer')"
-              title="Format as Integer (#,##0)"
-              data-testid="sheet-format-integer-btn"
-            >
-              <span>#,##0</span>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="ActiveCellFormatType === 'date'"
-              (click)="ApplyActiveCellFormat('date')"
-              title="Format as Date (yyyy-mm-dd)"
-              data-testid="sheet-format-date-btn"
-            >
-              <i class="fa-regular fa-calendar"></i>
-            </button>
-
-            <span class="mj-sheets-divider"></span>
-
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="InsertRowAtActive()"
-              title="Insert Row Above Active Cell"
-              data-testid="sheet-insert-row-btn"
-            >
-              <i class="fa-solid fa-plus"></i> Row
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="InsertColumnAtActive()"
-              title="Insert Column Left of Active Cell"
-              data-testid="sheet-insert-col-btn"
-            >
-              <i class="fa-solid fa-plus"></i> Col
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="SortActiveColumn('asc')"
-              title="Sort Active Column A → Z"
-              data-testid="sheet-sort-asc-btn"
-            >
-              <i class="fa-solid fa-arrow-down-a-z"></i>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="SortActiveColumn('desc')"
-              title="Sort Active Column Z → A"
-              data-testid="sheet-sort-desc-btn"
-            >
-              <i class="fa-solid fa-arrow-down-z-a"></i>
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              [class.active]="ActiveSheet.FrozenRows > 0"
-              (click)="ToggleFreezeHeaderRow()"
-              title="Freeze Top Header Row"
-              data-testid="sheet-freeze-header-btn"
-            >
-              <i class="fa-solid fa-snowflake"></i> Freeze Header
-            </button>
-
-            <span class="mj-sheets-divider"></span>
-
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="OpenAddLiveTableModal()"
-              title="Bind Live MJ Entity View or Saved Query Table"
-              data-testid="sheet-add-live-table-btn"
-            >
-              <i class="fa-solid fa-table-list"></i> + Live Table
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="InsertMjQueryFormula()"
-              title="Insert =MJ.QUERY(...) Custom Function"
-              data-testid="sheet-insert-mj-query-btn"
-            >
-              <i class="fa-solid fa-database"></i> =MJ.QUERY
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="InsertMjViewFormula()"
-              title="Insert =MJ.VIEW(...) Custom Function"
-              data-testid="sheet-insert-mj-view-btn"
-            >
-              <i class="fa-solid fa-layer-group"></i> =MJ.VIEW
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="AddRangeChartFromSelection()"
-              title="Create Range Chart from Selected Range"
-              data-testid="sheet-add-chart-btn"
-            >
-              <i class="fa-solid fa-chart-column"></i> + Range Chart
-            </button>
-            <button
-              type="button"
-              class="mj-sheets-tool-btn"
-              (click)="AddEmbeddedWhiteboardOnSheet()"
-              title="Embed Interactive Whiteboard Canvas"
-              data-testid="sheet-add-whiteboard-btn"
-            >
-              <i class="fa-solid fa-chalkboard"></i> + Whiteboard
-            </button>
+          <!-- Pinned Left Formatting & Structure Actions (UserInfoEngine-persisted) -->
+          <div class="mj-sheets-toolbar-group" data-testid="sheets-pinned-left-group">
+            @for (item of PinnedLeftToolbarItems; track item.Key) {
+              <button
+                type="button"
+                class="mj-sheets-tool-btn"
+                [class.active]="item.Active"
+                [disabled]="item.Disabled"
+                (click)="ExecuteToolbarItem(item, false)"
+                [title]="item.Description"
+                [attr.data-testid]="item.TestId"
+              >
+                <i class="fa-solid" [ngClass]="item.Icon"></i>
+                @if (item.ShortLabel) {
+                  <span>{{ item.ShortLabel }}</span>
+                }
+              </button>
+            }
           </div>
         }
 
-        <!-- Right-side Refresh, Import/Export, Save Version, Comments & Presence -->
+        <!-- Right-side Pinned Actions, Save, Comments, Tools & View Menu, Presence -->
         <div class="mj-sheets-toolbar-group mj-sheets-toolbar-right">
-          <button
-            type="button"
-            class="mj-sheets-tool-btn"
-            (click)="RefreshAllLiveData(true)"
-            [disabled]="IsRefreshingData"
-            title="Refresh All Bound Live Tables and =MJ.* Custom Functions"
-            data-testid="sheet-refresh-data-btn"
-          >
-            <i class="fa-solid fa-rotate" [class.fa-spin]="IsRefreshingData"></i>
-            <span>Refresh Data</span>
-          </button>
-
-          @if (CanEdit) {
+          @for (item of PinnedRightToolbarItems; track item.Key) {
             <button
               type="button"
               class="mj-sheets-tool-btn"
-              (click)=" fileInput.click()"
-              title="Import .xlsx or .csv Workbook"
-              data-testid="sheet-import-btn"
+              [class.active]="item.Active"
+              [disabled]="item.Disabled"
+              (click)="ExecuteToolbarItem(item, false)"
+              [title]="item.Description"
+              [attr.data-testid]="item.TestId"
             >
-              <i class="fa-solid fa-file-import"></i> Import
+              <i class="fa-solid" [ngClass]="item.Icon" [class.fa-spin]="item.Key === 'refresh-data' && IsRefreshingData"></i>
+              @if (item.ShortLabel) {
+                <span>{{ item.ShortLabel }}</span>
+              }
             </button>
+          }
+
+          @if (CanEdit) {
             <input
               #fileInput
               type="file"
@@ -317,28 +260,6 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
               (change)="OnImportFileSelected($event)"
               data-testid="sheet-import-file-input"
             />
-          }
-
-          <button
-            type="button"
-            class="mj-sheets-tool-btn"
-            (click)="ExportWorkbookAsXlsx()"
-            title="Export Workbook as Excel (.xlsx)"
-            data-testid="sheet-export-xlsx-btn"
-          >
-            <i class="fa-solid fa-file-excel"></i> .xlsx
-          </button>
-          <button
-            type="button"
-            class="mj-sheets-tool-btn"
-            (click)="ExportActiveSheetAsCsv()"
-            title="Export Active Sheet as .csv"
-            data-testid="sheet-export-csv-btn"
-          >
-            <i class="fa-solid fa-file-csv"></i> .csv
-          </button>
-
-          @if (CanEdit) {
             <button
               type="button"
               class="mj-sheets-tool-btn mj-sheets-save-btn"
@@ -364,6 +285,80 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             <span>Comments ({{ OpenThreadCount }})</span>
           </button>
 
+          <div class="mj-sheets-more-anchor" #moreToolsAnchor>
+            <button
+              type="button"
+              class="mj-sheets-tool-btn"
+              [class.active]="ShowMoreToolsMenu"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="ShowMoreToolsMenu"
+              title="Tools & View — pin favorite actions to your toolbar"
+              data-testid="sheets-more-tools-btn"
+              (click)="ToggleMoreToolsMenu()"
+            >
+              <i class="fa-solid fa-ellipsis"></i>
+            </button>
+
+            @if (ShowMoreToolsMenu) {
+              <div class="mj-sheets-more-menu" role="menu" data-testid="sheets-more-tools-menu">
+                <div class="mj-sheets-more-menu-header">
+                  <div>
+                    <span class="mj-sheets-more-menu-title">Tools &amp; View</span>
+                    <span class="mj-sheets-more-menu-hint">
+                      Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
+                    </span>
+                  </div>
+                  @if (HasCustomToolbarPreferences) {
+                    <button
+                      type="button"
+                      class="mj-sheets-more-reset-btn"
+                      data-testid="sheets-reset-toolbar-btn"
+                      (click)="ResetToolbarPreferences()"
+                    >
+                      Reset
+                    </button>
+                  }
+                </div>
+
+                @for (section of OverflowToolbarSections; track section.Category) {
+                  <div class="mj-sheets-more-section">
+                    <div class="mj-sheets-more-section-label">{{ section.Category }}</div>
+                    @for (item of section.Items; track item.Key) {
+                      <div class="mj-sheets-more-row">
+                        <button
+                          type="button"
+                          class="mj-sheets-more-action"
+                          [class.active]="item.Active"
+                          [disabled]="item.Disabled"
+                          role="menuitem"
+                          [attr.data-testid]="'sheets-overflow-' + item.Key"
+                          (click)="ExecuteToolbarItem(item, true)"
+                        >
+                          <i class="fa-solid" [ngClass]="item.Icon"></i>
+                          <div class="mj-sheets-more-action-text">
+                            <span class="mj-sheets-more-action-label">{{ item.Label }}</span>
+                            <span class="mj-sheets-more-action-desc">{{ item.Description }}</span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          class="mj-sheets-pin-btn"
+                          [class.pinned]="IsToolbarItemPinned(item.Key)"
+                          [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
+                          [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
+                          [attr.data-testid]="'sheets-pin-btn-' + item.Key"
+                          (click)="TogglePinToolbarAction(item.Key, $event)"
+                        >
+                          <i class="fa-solid fa-thumbtack"></i>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
           <div
             class="mj-sheets-collab-badge"
             [attr.data-status]="ConnectionStatus"
@@ -384,15 +379,24 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             }
           </div>
 
-          @if (Collaborators.length > 0) {
+          @let activeCollabs = GetRemoteCollaborators();
+          @if (activeCollabs.length > 0) {
             <div class="mj-sheets-presence-strip" data-testid="sheets-presence-strip">
-              @for (collab of Collaborators; track collab.ClientID) {
+              @for (collab of activeCollabs; track collab.ClientID) {
                 <span
                   class="mj-sheets-presence-avatar"
                   [style.background]="collab.Color"
                   [title]="collab.Name + (collab.ActiveBlockID ? ' (' + collab.ActiveBlockID + ')' : '')"
+                  (click)="JumpToCollaboratorSelection(collab)"
+                  [attr.data-testid]="'sheet-presence-avatar-' + collab.ClientID"
                 >
+                  @if (collab.IsAgent) {
+                    <i class="fa-solid fa-robot"></i>
+                  }
                   {{ GetInitials(collab.Name) }}
+                  @if (collab.ActiveBlockID) {
+                    <span class="mj-sheets-presence-range-tag">{{ collab.ActiveBlockID }}</span>
+                  }
                 </span>
               }
             </div>
@@ -450,6 +454,7 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
             type="text"
             class="mj-sheets-range-input"
             [(ngModel)]="SelectedRange"
+            (ngModelChange)="OnSelectedRangeInputChange($event)"
             placeholder="Range (e.g. B2:B6)"
             aria-label="Selected Cell Range"
             data-testid="sheet-selected-range-input"
@@ -495,8 +500,21 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
               </div>
             } @else {
             <!-- Interactive A1 Grid -->
-            <div class="mj-sheets-grid-scroll" data-testid="sheets-grid-container">
-              <table class="mj-sheets-grid-table" role="grid" [attr.aria-label]="ActiveSheet.Name">
+            <div
+              #sheetsGridContainer
+              class="mj-sheets-grid-scroll"
+              tabindex="0"
+              data-testid="sheets-grid-container"
+              (copy)="OnGridCopy($event)"
+              (paste)="OnGridPaste($event)"
+            >
+              <table
+                class="mj-sheets-grid-table"
+                role="grid"
+                [attr.aria-label]="ActiveSheet.Name"
+                (mouseup)="OnCellMouseUp()"
+                (mouseleave)="OnCellMouseUp()"
+              >
                 <thead>
                   <tr>
                     <th class="mj-sheets-corner-header">#</th>
@@ -504,10 +522,11 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                       <th
                         class="mj-sheets-col-header"
                         [class.selected]="col.Letter === ActiveColumnLetter"
+                        [class.in-range]="IsColumnInSelectedRange(col.Index)"
                         [style.min-width.px]="(col.Width ?? 14) * 8"
                         [attr.data-col-id]="col.ColumnID"
                         [attr.data-testid]="'sheet-col-header-' + col.Letter"
-                        (click)="SelectColumnHeader(col.Letter)"
+                        (click)="SelectColumnHeader(col.Letter, $event)"
                       >
                         <div class="mj-sheets-col-header-inner">
                           <span class="mj-sheets-col-letter">{{ col.Letter }}</span>
@@ -522,6 +541,15 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                             ></i>
                           }
                         </div>
+                        @if (CanEdit) {
+                          <span
+                            class="mj-sheets-col-resize-handle"
+                            title="Drag to resize column"
+                            [attr.data-testid]="'sheet-col-resize-' + col.Letter"
+                            (mousedown)="StartColumnResize(col.ColumnID, $event)"
+                            (click)="$event.stopPropagation()"
+                          ></span>
+                        }
                       </th>
                     }
                   </tr>
@@ -530,23 +558,41 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                   @for (row of VisibleRows; track row.RowID) {
                     <tr
                       [class.mj-sheets-frozen-row]="row.Index <= ActiveSheet.FrozenRows"
+                      [style.height.px]="row.Height ?? null"
                       [attr.data-row-id]="row.RowID"
                     >
                       <td
                         class="mj-sheets-row-header"
                         [class.selected]="row.Index === ActiveRowIndex"
+                        [class.in-range]="IsRowInSelectedRange(row.Index)"
                         [attr.data-testid]="'sheet-row-header-' + row.Index"
+                        (click)="SelectRowHeader(row.Index, $event)"
                       >
                         {{ row.Index }}
+                        @if (CanEdit) {
+                          <span
+                            class="mj-sheets-row-resize-handle"
+                            title="Drag to resize row"
+                            [attr.data-testid]="'sheet-row-resize-' + row.Index"
+                            (mousedown)="StartRowResize(row.RowID, $event)"
+                            (click)="$event.stopPropagation()"
+                          ></span>
+                        }
                       </td>
                       @for (col of VisibleColumns; track col.ColumnID) {
                         @let addr = col.Letter + row.Index;
                         @let cell = ActiveSheet.Cells[addr];
                         @let condTone = GetConditionalTone(cell);
+                        @let peerColor = GetCellCollaboratorBorderColor(row.Index, col.Index);
+                        @let peerBadge = GetCellPrimaryCollaboratorBadge(row.Index, col.Index);
+                        @let cellComments = GetCellCommentThreads(row.Index, col.Index);
                         <td
                           class="mj-sheets-cell"
                           [class.active]="addr === ActiveCellAddress"
                           [class.in-range]="IsAddressInSelectedRange(row.Index, col.Index)"
+                          [class.has-peer-selection]="!!peerColor"
+                          [style.--mj-sheets-peer-color]="peerColor"
+                          [class.has-comment]="cellComments.length > 0"
                           [class.has-formula]="!!cell?.Formula"
                           [class.is-bold]="!!cell?.Style?.Bold"
                           [class.is-italic]="!!cell?.Style?.Italic"
@@ -561,16 +607,34 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                           [attr.data-col-id]="col.ColumnID"
                           [attr.data-address]="addr"
                           [attr.data-testid]="'sheet-cell-' + addr"
-                          (click)="SelectCell(row.Index, col.Index, $event)"
+                          (mousedown)="OnCellMouseDown(row.Index, col.Index, $event)"
+                          (mouseup)="OnCellMouseUp()"
+                          (click)="OnCellClick(row.Index, col.Index, $event)"
                           (dblclick)="BeginInlineCellEdit(row.Index, col.Index)"
                         >
+                          @if (peerBadge) {
+                            <span
+                              class="mj-sheets-peer-cell-badge"
+                              [style.background]="peerBadge.Color"
+                              [attr.data-testid]="'sheet-peer-badge-' + addr"
+                            >
+                              @if (peerBadge.IsAgent) {
+                                <i class="fa-solid fa-robot"></i>
+                              }
+                              {{ peerBadge.Name }}
+                            </span>
+                          }
                           @if (InlineEditingAddress === addr && CanEdit) {
                             <input
                               type="text"
                               class="mj-sheets-inline-cell-input"
                               [(ngModel)]="InlineEditValue"
+                              (mousedown)="$event.stopPropagation()"
+                              (click)="$event.stopPropagation()"
+                              (dblclick)="$event.stopPropagation()"
                               (blur)="CommitInlineCellEdit()"
                               (keydown.enter)="CommitInlineCellEdit()"
+                              (keydown.tab)="OnInlineEditTab($event)"
                               (keydown.escape)="CancelInlineCellEdit()"
                               data-testid="sheet-inline-cell-input"
                             />
@@ -599,6 +663,38 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
                                 </span>
                               }
                             </div>
+                            @if (cellComments.length > 0) {
+                              <span
+                                class="mj-sheets-comment-corner"
+                                [attr.data-testid]="'sheet-comment-corner-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              ></span>
+                              <div
+                                class="mj-sheets-comment-hover-bubble"
+                                [attr.data-testid]="'sheet-comment-bubble-' + addr"
+                                (click)="OpenCommentThreadFromCell(cellComments[0], $event)"
+                              >
+                                @for (thread of cellComments; track thread.ConversationID) {
+                                  <div class="mj-sheets-comment-bubble-thread">
+                                    <div class="mj-sheets-comment-bubble-header">
+                                      <span class="mj-sheets-comment-bubble-author">
+                                        <i class="fa-solid fa-comment-dots"></i>
+                                        {{ thread.Messages[0]?.UserName || 'Comment' }}
+                                      </span>
+                                      <span class="mj-sheets-comment-bubble-anchor">{{ thread.AnchorLabel }}</span>
+                                    </div>
+                                    <div class="mj-sheets-comment-bubble-body">
+                                      {{ thread.Messages[thread.Messages.length - 1]?.Message }}
+                                    </div>
+                                    @if (thread.Messages.length > 1) {
+                                      <div class="mj-sheets-comment-bubble-meta">
+                                        {{ thread.Messages.length }} messages · {{ thread.Status }}
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
                           }
                         </td>
                       }
@@ -1274,6 +1370,176 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         margin-left: auto;
       }
 
+      .mj-sheets-undo-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        background: var(--mj-bg-surface);
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: 6px;
+      }
+
+      .mj-sheets-tool-btn--icon {
+        padding: 4px 8px;
+      }
+
+      .mj-sheets-active-mode-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--mj-brand-primary);
+        background: var(--mj-brand-primary-subtle);
+        border: 1px solid var(--mj-brand-primary);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .mj-sheets-more-anchor {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .mj-sheets-more-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 40;
+        width: 310px;
+        max-height: 440px;
+        overflow-y: auto;
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        box-shadow: var(--mj-shadow-lg);
+        padding: 8px;
+      }
+
+      .mj-sheets-more-menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px 8px;
+        border-bottom: 1px solid var(--mj-border-subtle);
+        margin-bottom: 6px;
+      }
+
+      .mj-sheets-more-menu-title {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--mj-text-primary);
+      }
+
+      .mj-sheets-more-menu-hint {
+        display: block;
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+
+      .mj-sheets-more-reset-btn {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--mj-brand-primary);
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 4px;
+      }
+
+      .mj-sheets-more-reset-btn:hover {
+        background: var(--mj-brand-primary-subtle);
+      }
+
+      .mj-sheets-more-section {
+        margin-bottom: 8px;
+      }
+
+      .mj-sheets-more-section-label {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--mj-text-muted);
+        padding: 4px 6px;
+      }
+
+      .mj-sheets-more-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mj-sheets-more-action {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-align: left;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 8px;
+        color: var(--mj-text-primary);
+        cursor: pointer;
+      }
+
+      .mj-sheets-more-action:hover:not(:disabled),
+      .mj-sheets-more-action.active {
+        background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-sheets-more-action:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .mj-sheets-more-action-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .mj-sheets-more-action-label {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .mj-sheets-more-action-desc {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mj-sheets-pin-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mj-text-muted);
+        cursor: pointer;
+      }
+
+      .mj-sheets-pin-btn.pinned {
+        color: var(--mj-brand-primary);
+        background: var(--mj-brand-primary-subtle);
+      }
+
+      .mj-sheets-pin-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
       .mj-sheets-title-input {
         font-size: 14px;
         font-weight: 600;
@@ -1413,15 +1679,32 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
       }
 
       .mj-sheets-presence-avatar {
-        width: 24px;
         height: 24px;
-        border-radius: 50%;
+        min-width: 24px;
+        border-radius: 12px;
+        padding: 0 6px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 4px;
         font-size: 10px;
         font-weight: 700;
         color: var(--mj-text-inverse);
+        cursor: pointer;
+        transition: transform 0.15s ease;
+      }
+
+      .mj-sheets-presence-avatar:hover {
+        transform: scale(1.05);
+      }
+
+      .mj-sheets-presence-range-tag {
+        font-size: 9px;
+        font-weight: 500;
+        opacity: 0.9;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 4px;
+        border-radius: 4px;
       }
 
       .mj-sheets-status-banner {
@@ -1580,9 +1863,15 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
       }
 
       .mj-sheets-col-header.selected,
-      .mj-sheets-row-header.selected {
+      .mj-sheets-col-header.in-range,
+      .mj-sheets-row-header.selected,
+      .mj-sheets-row-header.in-range {
         background: var(--mj-brand-primary-subtle);
         color: var(--mj-brand-primary);
+      }
+
+      .mj-sheets-col-header {
+        user-select: none;
       }
 
       .mj-sheets-col-header-inner {
@@ -1605,6 +1894,44 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         position: sticky;
         left: 0;
         z-index: 1;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .mj-sheets-col-resize-handle {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 5px;
+        height: 100%;
+        cursor: col-resize;
+        z-index: 3;
+      }
+
+      .mj-sheets-col-resize-handle:hover {
+        background: var(--mj-brand-primary);
+      }
+
+      .mj-sheets-row-resize-handle {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 4px;
+        cursor: row-resize;
+        z-index: 3;
+      }
+
+      .mj-sheets-row-resize-handle:hover {
+        background: var(--mj-brand-primary);
+      }
+
+      .mj-sheets-grid-scroll:focus {
+        outline: none;
+      }
+
+      .mj-sheets-grid-table {
+        user-select: none;
       }
 
       .mj-sheets-frozen-row td {
@@ -1624,6 +1951,28 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
 
       .mj-sheets-cell.in-range {
         background: var(--mj-bg-surface-hover);
+      }
+
+      .mj-sheets-cell.has-peer-selection {
+        box-shadow: inset 0 0 0 2px var(--mj-sheets-peer-color, var(--mj-brand-primary));
+        z-index: 2;
+      }
+
+      .mj-sheets-peer-cell-badge {
+        position: absolute;
+        top: -16px;
+        left: -1px;
+        z-index: 4;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px 3px 3px 0;
+        color: var(--mj-text-inverse);
+        white-space: nowrap;
+        pointer-events: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
       }
 
       .mj-sheets-cell.active {
@@ -1699,6 +2048,95 @@ export type SpreadsheetWorkspaceMode = 'grid' | 'source' | 'diff';
         height: 0;
         border-left: 6px solid transparent;
         border-top: 6px solid var(--mj-brand-primary);
+      }
+
+      .mj-sheets-comment-corner {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-top: 8px solid var(--mj-status-warning, #f59e0b);
+        z-index: 3;
+        cursor: pointer;
+      }
+
+      .mj-sheets-comment-hover-bubble {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 220px;
+        max-width: 300px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        color: var(--mj-text-primary);
+        border: 1px solid var(--mj-border-default);
+        border-left: 3px solid var(--mj-status-warning, #f59e0b);
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+        padding: 8px 10px;
+        z-index: 30;
+        white-space: normal;
+        cursor: pointer;
+      }
+
+      .mj-sheets-cell:hover .mj-sheets-comment-hover-bubble {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .mj-sheets-comment-bubble-thread {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .mj-sheets-comment-bubble-thread + .mj-sheets-comment-bubble-thread {
+        border-top: 1px solid var(--mj-border-subtle);
+        padding-top: 6px;
+      }
+
+      .mj-sheets-comment-bubble-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11px;
+      }
+
+      .mj-sheets-comment-bubble-author {
+        font-weight: 700;
+        color: var(--mj-text-primary);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .mj-sheets-comment-bubble-author i {
+        color: var(--mj-status-warning, #f59e0b);
+      }
+
+      .mj-sheets-comment-bubble-anchor {
+        font-family: var(--mj-font-family-mono, monospace);
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 3px;
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-sheets-comment-bubble-body {
+        font-size: 12px;
+        line-height: 1.35;
+        color: var(--mj-text-primary);
+        word-break: break-word;
+      }
+
+      .mj-sheets-comment-bubble-meta {
+        font-size: 10px;
+        color: var(--mj-text-muted);
       }
 
       .mj-sheets-validation-badge {
@@ -2242,9 +2680,23 @@ export class SpreadsheetArtifactViewerComponent
   @Input() public CollaborationWsUrl: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly ngZone = inject(NgZone, { optional: true });
+  private readonly renderer = inject(Renderer2, { optional: true });
+  private readonly hostElementRef = inject(ElementRef<HTMLElement>, { optional: true });
   private readonly collaborationService = inject(DocumentCollaborationService);
   private readonly artifactFileService = inject(ArtifactFileService, { optional: true });
   private readonly notificationService = inject(MJNotificationService, { optional: true });
+
+  @ViewChild('fileInput') private fileInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
+  @ViewChild('sheetsGridContainer') private sheetsGridContainerRef?: ElementRef<HTMLElement>;
+
+  public readonly MaxPinnedToolbarActions = 6;
+  public ShowMoreToolsMenu = false;
+  private _localToolbarPins: SheetsToolbarItemKey[] | null = null;
+  private _serverToolbarPinsRaw: string | null = null;
+  private _unlistenMoreMenuDocs: Array<() => void> = [];
+  private _unlistenResizeDocs: Array<() => void> = [];
 
   public Workbook: WorkbookSpec = SpreadsheetEngine.Instance.CreateEmptyWorkbook('Workbook');
   public WorkspaceMode: SpreadsheetWorkspaceMode = 'grid';
@@ -2253,6 +2705,15 @@ export class SpreadsheetArtifactViewerComponent
   public ActiveRowIndex = 1;
   public ActiveColumnIndex = 1;
   public SelectedRange = 'A1';
+  public SelectedRanges: string[] = ['A1'];
+  public IsDraggingSelection = false;
+  public DragAnchorAddress: string | null = null;
+  private isCtrlMultiSelectDrag = false;
+  private lastMouseDownTimestamp = 0;
+  private lastMouseDownCell = '';
+
+  public SyntheticAgentPresence: CollaboratorPresence | null = null;
+  private syntheticAgentTimer: ReturnType<typeof setTimeout> | null = null;
   public FormulaBarInput = '';
   public InlineEditingAddress: string | null = null;
   public InlineEditValue = '';
@@ -2296,6 +2757,9 @@ export class SpreadsheetArtifactViewerComponent
   public LastSavedVersionNumber: number | null = null;
   public StatusBannerMessage = '';
   private lastSavedComparableJson = '';
+  private cachedUnsavedChanges: boolean | null = null;
+  private unsavedCacheClearScheduled = false;
+  private delegatedMouseOverCleanup: (() => void) | null = null;
 
   public EmbeddedArtifactVersions: Record<string, MJArtifactVersionEntity> = {};
   private lastTableResults: Record<string, DocumentBlockExecutionResult> = {};
@@ -2308,7 +2772,19 @@ export class SpreadsheetArtifactViewerComponent
     if (!this.lastSavedComparableJson) {
       return false;
     }
-    return this.getComparableWorkbookJson(this.Workbook) !== this.lastSavedComparableJson;
+    if (this.cachedUnsavedChanges !== null) {
+      return this.cachedUnsavedChanges;
+    }
+    const dirty = this.getComparableWorkbookJson(this.Workbook) !== this.lastSavedComparableJson;
+    this.cachedUnsavedChanges = dirty;
+    if (!this.unsavedCacheClearScheduled) {
+      this.unsavedCacheClearScheduled = true;
+      queueMicrotask(() => {
+        this.cachedUnsavedChanges = null;
+        this.unsavedCacheClearScheduled = false;
+      });
+    }
+    return dirty;
   }
 
   private getComparableWorkbookJson(wb: WorkbookSpec): string {
@@ -2324,6 +2800,18 @@ export class SpreadsheetArtifactViewerComponent
       SpreadsheetEngine.Instance.GetWorksheet(this.Workbook, this.Workbook.ActiveSheetID) ??
       this.Workbook.Worksheets[0]
     );
+  }
+
+  public get ActiveSheetID(): string {
+    return this.Workbook?.ActiveSheetID ?? '';
+  }
+
+  public set ActiveSheetID(sheetId: string) {
+    if (this.Workbook && sheetId && this.Workbook.Worksheets.some((w) => w.SheetID === sheetId)) {
+      this.Workbook.ActiveSheetID = sheetId;
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.markForCheck();
+    }
   }
 
   public get VisibleColumns(): SpreadsheetColumnSpec[] {
@@ -2363,11 +2851,24 @@ export class SpreadsheetArtifactViewerComponent
     if (this.readonly || this.FallbackXlsxBytes !== null) {
       return false;
     }
-    if (this.ConnectionStatus === 'readonly' || this.ConnectionStatus === 'revoked') {
+    if (this.ConnectionStatus === 'revoked') {
       return false;
     }
     if (this.artifactVersion?.ArtifactID) {
-      return this.Permissions?.CanEdit === true;
+      if (this.Permissions?.CanEdit !== true) {
+        return false;
+      }
+      if (
+        this.CollaborationSession &&
+        !this.CollaborationSession.CanEdit &&
+        this.ConnectionStatus === 'readonly'
+      ) {
+        return false;
+      }
+      return true;
+    }
+    if (this.ConnectionStatus === 'readonly') {
+      return false;
     }
     return true;
   }
@@ -2385,7 +2886,7 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public get CanEdit(): boolean {
-    return !this.LiveSyncUnavailable && this.hasPermissionToEdit && !this.IsWaitingForInitialCollabSync;
+    return !this.LiveSyncUnavailable && this.hasPermissionToEdit;
   }
 
   public get CanComment(): boolean {
@@ -2439,7 +2940,50 @@ export class SpreadsheetArtifactViewerComponent
   private isComponentDestroyed = false;
 
   public async ngOnInit(): Promise<void> {
+    this.bindDelegatedCellMouseOver();
     await this.initializeWorkbookSession();
+  }
+
+  /**
+   * Delegate cell hover outside Angular's zone so moving the pointer across
+   * hundreds of cells does not trigger change-detection ticks unless a drag
+   * range selection is actively in progress.
+   */
+  private bindDelegatedCellMouseOver(): void {
+    const host = this.hostElementRef?.nativeElement;
+    if (!host || this.delegatedMouseOverCleanup) {
+      return;
+    }
+    const onMouseOver = (event: MouseEvent): void => {
+      if (!this.IsDraggingSelection || !this.DragAnchorAddress) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const cellEl = target?.closest?.('td.mj-sheets-cell[data-address]') as HTMLElement | null;
+      const addr = cellEl?.getAttribute('data-address');
+      if (!addr) {
+        return;
+      }
+      const parsed = ParseCellAddress(addr);
+      if (!parsed) {
+        return;
+      }
+      if (this.ngZone) {
+        this.ngZone.run(() => this.OnCellMouseEnter(parsed.row, parsed.col));
+      } else {
+        this.OnCellMouseEnter(parsed.row, parsed.col);
+      }
+    };
+    if (this.ngZone) {
+      this.ngZone.runOutsideAngular(() => {
+        host.addEventListener('mouseover', onMouseOver);
+      });
+    } else {
+      host.addEventListener('mouseover', onMouseOver);
+    }
+    this.delegatedMouseOverCleanup = () => {
+      host.removeEventListener('mouseover', onMouseOver);
+    };
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -2452,7 +2996,30 @@ export class SpreadsheetArtifactViewerComponent
       return;
     }
     if (changes['readonly']) {
-      this.CollaborationSession?.SetCanEdit(this.hasPermissionToEdit);
+      if (
+        !this.readonly &&
+        this.ConnectionStatus === 'readonly' &&
+        !this.AccessRevoked &&
+        !this.PermissionVerifyError &&
+        !this.LiveSyncUnavailable
+      ) {
+        if (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true) {
+          this.ConnectionStatus =
+            this.CollaborationSession?.Status && this.CollaborationSession.Status !== 'readonly'
+              ? this.CollaborationSession.Status
+              : 'local';
+        }
+      }
+      const nextCanEdit =
+        !this.readonly &&
+        this.FallbackXlsxBytes === null &&
+        this.ConnectionStatus !== 'revoked' &&
+        !this.LiveSyncUnavailable &&
+        (!this.artifactVersion?.ArtifactID || this.Permissions?.CanEdit === true);
+      this.CollaborationSession?.SetCanEdit(nextCanEdit);
+      if (this.CollaborationSession) {
+        this.ConnectionStatus = this.CollaborationSession.Status;
+      }
       this.cdr.markForCheck();
     }
   }
@@ -2460,10 +3027,21 @@ export class SpreadsheetArtifactViewerComponent
   public ngOnDestroy(): void {
     this.isComponentDestroyed = true;
     this.sessionInitGeneration++;
+    if (this.delegatedMouseOverCleanup) {
+      this.delegatedMouseOverCleanup();
+      this.delegatedMouseOverCleanup = null;
+    }
     this.teardownSession();
   }
 
   private teardownSession(): void {
+    this.stopMoreMenuDocumentListeners();
+    this.stopResizeDocumentListeners();
+    if (this.syntheticAgentTimer) {
+      clearTimeout(this.syntheticAgentTimer);
+      this.syntheticAgentTimer = null;
+    }
+    this.SyntheticAgentPresence = null;
     for (const s of this.subs) {
       s.unsubscribe();
     }
@@ -2660,9 +3238,23 @@ export class SpreadsheetArtifactViewerComponent
           this.cdr.markForCheck();
         }
       }),
+      session.CanUndo$.subscribe(() => {
+        if (!this.isComponentDestroyed && gen === this.sessionInitGeneration) {
+          this.cdr.markForCheck();
+        }
+      }),
+      session.CanRedo$.subscribe(() => {
+        if (!this.isComponentDestroyed && gen === this.sessionInitGeneration) {
+          this.cdr.markForCheck();
+        }
+      }),
       session.ContentChanged$.subscribe((nextContent: string) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         if (!nextContent || !nextContent.trim().startsWith('{')) return;
+        const prevCells: Record<string, SpreadsheetCellSpec> = {
+          ...(this.ActiveSheet?.Cells ?? {}),
+        };
+        const prevSheetId = this.ActiveSheet?.SheetID;
         this.Workbook = SpreadsheetEngine.Instance.ParseWorkbook(nextContent);
         SpreadsheetEngine.Instance.EvaluateWorkbook(this.Workbook);
         this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
@@ -2671,24 +3263,70 @@ export class SpreadsheetArtifactViewerComponent
         if (this.workbookHasLiveDataOrMjFunctions(this.Workbook)) {
           void this.RefreshAllLiveData(false);
         }
+
+        // Compare changed cells on active sheet to surface synthetic agent selection
+        if (this.ActiveSheet && (!prevSheetId || prevSheetId === this.ActiveSheet.SheetID)) {
+          const changedAddresses: string[] = [];
+          const currCells = this.ActiveSheet.Cells ?? {};
+          const allAddresses = new Set([...Object.keys(prevCells), ...Object.keys(currCells)]);
+          for (const addr of allAddresses) {
+            const prev = prevCells[addr];
+            const curr = currCells[addr];
+            const valChanged =
+              prev?.RawValue !== curr?.RawValue ||
+              prev?.ComputedValue !== curr?.ComputedValue ||
+              prev?.DisplayValue !== curr?.DisplayValue;
+            const formulaChanged = (prev?.Formula ?? '') !== (curr?.Formula ?? '');
+            if (valChanged || formulaChanged) {
+              changedAddresses.push(addr);
+            }
+          }
+          if (changedAddresses.length > 0) {
+            let minR = Infinity;
+            let maxR = -Infinity;
+            let minC = Infinity;
+            let maxC = -Infinity;
+            for (const addr of changedAddresses) {
+              const pos = ParseCellAddress(addr);
+              if (pos) {
+                minR = Math.min(minR, pos.row);
+                maxR = Math.max(maxR, pos.row);
+                minC = Math.min(minC, pos.col);
+                maxC = Math.max(maxC, pos.col);
+              }
+            }
+            if (minR !== Infinity && minC !== Infinity) {
+              const boundingRange =
+                minR === maxR && minC === maxC
+                  ? FormatCellAddress(minR, minC)
+                  : `${FormatCellAddress(minR, minC)}:${FormatCellAddress(maxR, maxC)}`;
+              this.RecordSyntheticAgentSelection(this.ActiveSheet.SheetID, boundingRange, 'AI Agent');
+            }
+          }
+        }
+
         this.cdr.markForCheck();
       }),
       session.StatusChanged$.subscribe((status: CollaborationConnectionStatus) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.ConnectionStatus = status;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.CollaboratorsChanged$.subscribe((collabs: CollaboratorPresence[]) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
         this.Collaborators = collabs;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
       }),
       session.VersionSaved$.subscribe((saved: { versionId: string; versionNumber: number }) => {
         if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) return;
+        const isNewSavedVersion = saved.versionNumber > (this.LastSavedVersionNumber ?? 0);
         this.lastSavedComparableJson = this.getComparableWorkbookJson(this.Workbook);
         this.LastSavedVersionNumber = saved.versionNumber;
         this.IsSavingVersion = false;
         this.StatusBannerMessage = `Saved immutable Artifact Version v${saved.versionNumber}`;
+        if (isNewSavedVersion) {
+          this.ContentCommitted.emit(SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook));
+        }
         this.cdr.markForCheck();
       }),
     );
@@ -2791,6 +3429,9 @@ export class SpreadsheetArtifactViewerComponent
           this.ConnectionStatus = effectiveCanEdit ? 'local' : 'readonly';
         }
       }
+      if (!this.isComponentDestroyed) {
+        this.cdr.detectChanges();
+      }
       await this.loadPersistedSheetRangeComments();
       if (this.isComponentDestroyed || gen !== this.sessionInitGeneration) {
         return;
@@ -2811,36 +3452,1065 @@ export class SpreadsheetArtifactViewerComponent
   // ---------------------------------------------------------------------------
 
   public SelectCell(rowIndex: number, colIndex: number, event?: MouseEvent): void {
-    const prevAddr = this.ActiveCellAddress;
-    this.ActiveRowIndex = rowIndex;
-    this.ActiveColumnIndex = colIndex;
     const nextAddr = FormatCellAddress(rowIndex, colIndex);
 
-    if (event?.shiftKey) {
-      this.SelectedRange = `${prevAddr}:${nextAddr}`;
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(nextAddr);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(nextAddr);
+      }
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
+    } else if (event?.shiftKey) {
+      const anchorAddr = this.DragAnchorAddress || this.ActiveCellAddress;
+      const rangeSeg = anchorAddr === nextAddr ? nextAddr : `${anchorAddr}:${nextAddr}`;
+      if (this.SelectedRanges.length > 0) {
+        this.SelectedRanges[this.SelectedRanges.length - 1] = rangeSeg;
+      } else {
+        this.SelectedRanges = [rangeSeg];
+      }
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
     } else {
+      this.DragAnchorAddress = nextAddr;
+      this.SelectedRanges = [nextAddr];
       this.SelectedRange = nextAddr;
+      this.ActiveRowIndex = rowIndex;
+      this.ActiveColumnIndex = colIndex;
     }
 
     this.syncFormulaBarFromActiveCell();
-    this.CollaborationSession?.SetActiveBlock(`${this.ActiveSheet.SheetID}:${this.SelectedRange}`);
+    this.broadcastSelectionPresence();
+    this.cdr.detectChanges();
+  }
+
+  public OnCellMouseDown(rowIndex: number, colIndex: number, event?: MouseEvent): void {
+    if (event && event.button !== 0) return;
+    if (this.InlineEditingAddress) return;
+    this.lastMouseDownTimestamp = Date.now();
+    this.lastMouseDownCell = FormatCellAddress(rowIndex, colIndex);
+    this.IsDraggingSelection = true;
+    this.isCtrlMultiSelectDrag = Boolean(event?.metaKey || event?.ctrlKey);
+    this.DragAnchorAddress = FormatCellAddress(rowIndex, colIndex);
+    this.SelectCell(rowIndex, colIndex, event);
+  }
+
+  public OnCellMouseEnter(rowIndex: number, colIndex: number): void {
+    if (!this.IsDraggingSelection || !this.DragAnchorAddress) return;
+    const hoverAddr = FormatCellAddress(rowIndex, colIndex);
+    const rangeSegment =
+      this.DragAnchorAddress === hoverAddr
+        ? hoverAddr
+        : `${this.DragAnchorAddress}:${hoverAddr}`;
+    if (this.isCtrlMultiSelectDrag && this.SelectedRanges.length > 0) {
+      this.SelectedRanges[this.SelectedRanges.length - 1] = rangeSegment;
+    } else {
+      this.SelectedRanges = [rangeSegment];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
     this.cdr.markForCheck();
   }
 
-  public SelectColumnHeader(colLetter: string): void {
-    const rowCount = this.ActiveSheet.Rows.length;
-    this.SelectedRange = `${colLetter}1:${colLetter}${rowCount}`;
+  public OnCellMouseUp(): void {
+    if (this.IsDraggingSelection) {
+      this.IsDraggingSelection = false;
+      this.isCtrlMultiSelectDrag = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public OnCellClick(rowIndex: number, colIndex: number, event?: MouseEvent): void {
+    if (this.InlineEditingAddress) return;
+    const now = Date.now();
+    const addr = FormatCellAddress(rowIndex, colIndex);
+    if (this.lastMouseDownCell === addr && now - this.lastMouseDownTimestamp < 500) {
+      this.focusGridContainer();
+      return;
+    }
+    this.SelectCell(rowIndex, colIndex, event);
+    this.focusGridContainer();
+  }
+
+  private focusGridContainer(): void {
+    const el =
+      this.sheetsGridContainerRef?.nativeElement ??
+      (this.hostElementRef?.nativeElement?.querySelector('[data-testid="sheets-grid-container"]') as HTMLElement | null);
+    if (el && typeof el.focus === 'function') {
+      el.focus({ preventScroll: true });
+    }
+  }
+
+  public get CanUndo(): boolean {
+    return this.CanEdit && Boolean(this.CollaborationSession?.CanUndo);
+  }
+
+  public get CanRedo(): boolean {
+    return this.CanEdit && Boolean(this.CollaborationSession?.CanRedo);
+  }
+
+  public UndoWorkbook(): void {
+    if (!this.CanUndo || !this.CollaborationSession) {
+      return;
+    }
+    if (this.CollaborationSession.Undo()) {
+      this.cdr.detectChanges();
+    }
+  }
+
+  public RedoWorkbook(): void {
+    if (!this.CanRedo || !this.CollaborationSession) {
+      return;
+    }
+    if (this.CollaborationSession.Redo()) {
+      this.cdr.detectChanges();
+    }
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  public OnViewerKeydown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (
+      target &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+    ) {
+      return;
+    }
+    const isMod = event.metaKey || event.ctrlKey;
+    if (isMod && !event.altKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) {
+        if (this.CanUndo) {
+          event.preventDefault();
+          this.UndoWorkbook();
+        }
+        return;
+      } else if ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey && event.ctrlKey)) {
+        if (this.CanRedo) {
+          event.preventDefault();
+          this.RedoWorkbook();
+        }
+        return;
+      }
+    }
+    if (this.WorkspaceMode === 'grid' && !this.InlineEditingAddress) {
+      this.OnGridKeydown(event);
+    }
+  }
+
+  public OnInlineEditTab(event: Event): void {
+    const kb = event as KeyboardEvent;
+    kb.preventDefault();
+    this.CommitInlineCellEdit();
+    this.MoveActiveCell(0, kb.shiftKey ? -1 : 1, false);
+    this.focusGridContainer();
+  }
+
+  public OnGridKeydown(event: KeyboardEvent): void {
+    if (this.InlineEditingAddress || this.WorkspaceMode !== 'grid') {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      return;
+    }
+    const isMod = event.metaKey || event.ctrlKey;
+    if (isMod) {
+      const lower = event.key.toLowerCase();
+      if (lower === 'c') {
+        event.preventDefault();
+        this.CopySelectedRangeToClipboard();
+        return;
+      }
+      if (lower === 'z' || lower === 'y') {
+        return;
+      }
+    }
+
+    switch (event.key) {
+      case 'ArrowUp':
+        event.preventDefault();
+        this.MoveActiveCell(-1, 0, event.shiftKey);
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        this.MoveActiveCell(1, 0, event.shiftKey);
+        break;
+      case 'ArrowLeft':
+        event.preventDefault();
+        this.MoveActiveCell(0, -1, event.shiftKey);
+        break;
+      case 'ArrowRight':
+        event.preventDefault();
+        this.MoveActiveCell(0, 1, event.shiftKey);
+        break;
+      case 'Tab':
+        event.preventDefault();
+        this.MoveActiveCell(0, event.shiftKey ? -1 : 1, false);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        this.MoveActiveCell(event.shiftKey ? -1 : 1, 0, false);
+        break;
+      case 'F2':
+        if (this.CanEdit) {
+          event.preventDefault();
+          this.BeginInlineCellEdit(this.ActiveRowIndex, this.ActiveColumnIndex);
+        }
+        break;
+      case 'Delete':
+      case 'Backspace':
+        if (this.CanEdit) {
+          event.preventDefault();
+          this.ClearSelectedRange();
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  public MoveActiveCell(deltaRow: number, deltaCol: number, extendSelection: boolean): void {
+    const maxRow = Math.max(1, this.VisibleRows.length);
+    const maxCol = Math.max(1, this.VisibleColumns.length);
+    let nextRow = Math.max(1, Math.min(maxRow, this.ActiveRowIndex + deltaRow));
+    let nextCol = Math.max(1, Math.min(maxCol, this.ActiveColumnIndex + deltaCol));
+
+    if (!extendSelection && deltaRow === 0 && deltaCol !== 0) {
+      if (this.ActiveColumnIndex + deltaCol > maxCol && this.ActiveRowIndex < maxRow) {
+        nextCol = 1;
+        nextRow = this.ActiveRowIndex + 1;
+      } else if (this.ActiveColumnIndex + deltaCol < 1 && this.ActiveRowIndex > 1) {
+        nextCol = maxCol;
+        nextRow = this.ActiveRowIndex - 1;
+      }
+    }
+
+    this.ActiveRowIndex = nextRow;
+    this.ActiveColumnIndex = nextCol;
+    const focusAddr = FormatCellAddress(nextRow, nextCol);
+
+    if (extendSelection) {
+      const anchorAddr = this.DragAnchorAddress || focusAddr;
+      const anchor = ParseCellAddress(anchorAddr) ?? { row: nextRow, col: nextCol };
+      const minR = Math.min(anchor.row, nextRow);
+      const maxR = Math.max(anchor.row, nextRow);
+      const minC = Math.min(anchor.col, nextCol);
+      const maxC = Math.max(anchor.col, nextCol);
+      const rangeStr =
+        minR === maxR && minC === maxC
+          ? FormatCellAddress(minR, minC)
+          : `${FormatCellAddress(minR, minC)}:${FormatCellAddress(maxR, maxC)}`;
+      this.SelectedRanges = [rangeStr];
+      this.SelectedRange = rangeStr;
+    } else {
+      this.DragAnchorAddress = focusAddr;
+      this.SelectedRanges = [focusAddr];
+      this.SelectedRange = focusAddr;
+    }
+
+    this.syncFormulaBarFromActiveCell();
+    this.broadcastSelectionPresence();
+    this.cdr.detectChanges();
+  }
+
+  public ClearSelectedRange(): void {
+    if (!this.CanEdit) return;
+    const ranges = this.SelectedRanges.length > 0 ? this.SelectedRanges : [this.SelectedRange];
+    const deletes: Array<{ rowId: string; colId: string }> = [];
+    for (const rng of ranges) {
+      const bounds = this.parseRangeBounds(rng);
+      if (!bounds) continue;
+      for (let r = bounds.minR; r <= bounds.maxR; r++) {
+        const rowSpec = this.ActiveSheet.Rows.find((row) => row.Index === r);
+        if (!rowSpec) continue;
+        for (let c = bounds.minC; c <= bounds.maxC; c++) {
+          const colSpec = this.ActiveSheet.Columns.find((col) => col.Index === c);
+          if (!colSpec) continue;
+          const addr = FormatCellAddress(r, c);
+          if (this.ActiveSheet.Cells[addr]) {
+            deletes.push({ rowId: rowSpec.RowID, colId: colSpec.ColumnID });
+          }
+        }
+      }
+      SpreadsheetEngine.Instance.ClearRange(this.Workbook, this.ActiveSheet.SheetID, rng);
+    }
+    this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+      this.ActiveSheet.SheetID,
+      [],
+      deletes,
+      this.Workbook,
+    );
+    this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+    this.syncFormulaBarFromActiveCell();
+    this.cdr.detectChanges();
+  }
+
+  public OnGridCopy(event: ClipboardEvent): void {
+    if (this.InlineEditingAddress) return;
+    const { tsv, html } = this.buildSelectedRangeClipboardPayloads();
+    if (event.clipboardData) {
+      event.preventDefault();
+      event.clipboardData.setData('text/plain', tsv);
+      event.clipboardData.setData('text/html', html);
+    }
+  }
+
+  public CopySelectedRangeToClipboard(): void {
+    const { tsv } = this.buildSelectedRangeClipboardPayloads();
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(tsv).catch(() => undefined);
+    }
+  }
+
+  public OnGridPaste(event: ClipboardEvent): void {
+    if (this.InlineEditingAddress || !this.CanEdit) return;
+    const tsv = event.clipboardData?.getData('text/plain');
+    if (!tsv) return;
+    event.preventDefault();
+    this.ApplyTsvPasteAtActiveCell(tsv);
+  }
+
+  public ApplyTsvPasteAtActiveCell(tsvText: string): void {
+    if (!this.CanEdit || !tsvText) return;
+    const normalized = tsvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = normalized.endsWith('\n') ? normalized.slice(0, -1).split('\n') : normalized.split('\n');
+    if (lines.length === 0) return;
+
+    const updatedCells: SpreadsheetCellSpec[] = [];
+    const startRow = this.ActiveRowIndex;
+    const startCol = this.ActiveColumnIndex;
+    let maxRowWritten = startRow;
+    let maxColWritten = startCol;
+
+    for (let rOffset = 0; rOffset < lines.length; rOffset++) {
+      const cols = lines[rOffset].split('\t');
+      for (let cOffset = 0; cOffset < cols.length; cOffset++) {
+        const targetRow = startRow + rOffset;
+        const targetCol = startCol + cOffset;
+        const addr = FormatCellAddress(targetRow, targetCol);
+        const cellText = cols[cOffset];
+        const parsed = this.parseRawCellInputValue(cellText);
+        const updated = SpreadsheetEngine.Instance.SetCell(
+          this.Workbook,
+          this.ActiveSheet.SheetID,
+          addr,
+          parsed,
+        );
+        if (updated) {
+          updatedCells.push(updated);
+          maxRowWritten = Math.max(maxRowWritten, targetRow);
+          maxColWritten = Math.max(maxColWritten, targetCol);
+        }
+      }
+    }
+
+    if (updatedCells.length > 0) {
+      this.CollaborationSession?.BatchUpdateSpreadsheetCells(
+        this.ActiveSheet.SheetID,
+        updatedCells,
+        [],
+        this.Workbook,
+      );
+      const startAddr = FormatCellAddress(startRow, startCol);
+      const endAddr = FormatCellAddress(maxRowWritten, maxColWritten);
+      const nextRange = startAddr === endAddr ? startAddr : `${startAddr}:${endAddr}`;
+      this.SelectedRanges = [nextRange];
+      this.SelectedRange = nextRange;
+      this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+      this.syncFormulaBarFromActiveCell();
+      this.cdr.detectChanges();
+    }
+  }
+
+  private parseRawCellInputValue(raw: string): {
+    Value?: string | number | boolean | null;
+    Formula?: string | null;
+  } {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('=')) {
+      return { Formula: trimmed, Value: null };
+    }
+    if (trimmed.length === 0) {
+      return { Value: null, Formula: null };
+    }
+    if (trimmed.toLowerCase() === 'true') {
+      return { Value: true, Formula: null };
+    }
+    if (trimmed.toLowerCase() === 'false') {
+      return { Value: false, Formula: null };
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+      return { Value: numeric, Formula: null };
+    }
+    return { Value: raw, Formula: null };
+  }
+
+  private buildSelectedRangeClipboardPayloads(): { tsv: string; html: string } {
+    const primaryRange = this.SelectedRanges[0] ?? this.SelectedRange;
+    const bounds = this.parseRangeBounds(primaryRange) ?? {
+      minR: this.ActiveRowIndex,
+      maxR: this.ActiveRowIndex,
+      minC: this.ActiveColumnIndex,
+      maxC: this.ActiveColumnIndex,
+    };
+    const tsvRows: string[] = [];
+    const htmlRows: string[] = [];
+    for (let r = bounds.minR; r <= bounds.maxR; r++) {
+      const tsvCols: string[] = [];
+      const htmlCols: string[] = [];
+      for (let c = bounds.minC; c <= bounds.maxC; c++) {
+        const addr = FormatCellAddress(r, c);
+        const cell = this.ActiveSheet.Cells[addr];
+        const text =
+          cell?.DisplayValue ??
+          (cell?.RawValue !== null && cell?.RawValue !== undefined ? String(cell.RawValue) : '');
+        tsvCols.push(text);
+        const escaped = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        htmlCols.push(`<td>${escaped}</td>`);
+      }
+      tsvRows.push(tsvCols.join('\t'));
+      htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
+    }
+    return {
+      tsv: tsvRows.join('\n'),
+      html: `<table><tbody>${htmlRows.join('')}</tbody></table>`,
+    };
+  }
+
+  private parseRangeBounds(
+    rangeStr: string,
+  ): { minR: number; maxR: number; minC: number; maxC: number } | null {
+    const parts = (rangeStr || '').trim().split(':');
+    const start = ParseCellAddress(parts[0]);
+    if (!start) return null;
+    const end = parts[1] ? ParseCellAddress(parts[1]) : start;
+    if (!end) return null;
+    return {
+      minR: Math.min(start.row, end.row),
+      maxR: Math.max(start.row, end.row),
+      minC: Math.min(start.col, end.col),
+      maxC: Math.max(start.col, end.col),
+    };
+  }
+
+  public StartColumnResize(columnId: string, event: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const col = this.ActiveSheet.Columns.find((c) => c.ColumnID === columnId);
+    if (!col) return;
+    const startX = event.clientX;
+    const initialWidthPx = (col.Width ?? 14) * 8;
+    this.stopResizeDocumentListeners();
+
+    if (this.renderer) {
+      const unlistenMove = this.renderer.listen('document', 'mousemove', (moveEvt: MouseEvent) => {
+        const nextPx = Math.max(48, Math.min(480, initialWidthPx + (moveEvt.clientX - startX)));
+        col.Width = Math.round((nextPx / 8) * 10) / 10;
+        this.cdr.markForCheck();
+      });
+      const unlistenUp = this.renderer.listen('document', 'mouseup', () => {
+        this.stopResizeDocumentListeners();
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+        this.cdr.markForCheck();
+      });
+      this._unlistenResizeDocs.push(unlistenMove, unlistenUp);
+    }
+  }
+
+  public StartRowResize(rowId: string, event: MouseEvent): void {
+    if (!this.CanEdit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const row = this.ActiveSheet.Rows.find((r) => r.RowID === rowId);
+    if (!row) return;
+    const startY = event.clientY;
+    const initialHeight = row.Height ?? 28;
+    this.stopResizeDocumentListeners();
+
+    if (this.renderer) {
+      const unlistenMove = this.renderer.listen('document', 'mousemove', (moveEvt: MouseEvent) => {
+        row.Height = Math.max(22, Math.min(240, Math.round(initialHeight + (moveEvt.clientY - startY))));
+        this.cdr.markForCheck();
+      });
+      const unlistenUp = this.renderer.listen('document', 'mouseup', () => {
+        this.stopResizeDocumentListeners();
+        this.CollaborationSession?.UpdateWorksheetStructure(this.ActiveSheet, this.Workbook);
+        this.SourceJsonText = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
+        this.cdr.markForCheck();
+      });
+      this._unlistenResizeDocs.push(unlistenMove, unlistenUp);
+    }
+  }
+
+  private stopResizeDocumentListeners(): void {
+    for (const unlisten of this._unlistenResizeDocs) {
+      unlisten();
+    }
+    this._unlistenResizeDocs = [];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Progressive Disclosure Toolbar (UserInfoEngine-persisted)
+  // ---------------------------------------------------------------------------
+
+  public get PinnedToolbarActions(): SheetsToolbarItemKey[] {
+    if (this._localToolbarPins !== null) {
+      return [...this._localToolbarPins];
+    }
+    const engine = UserInfoEngine.Instance;
+    const raw = engine?.GetSetting(SHEETS_TOOLBAR_PINS_SETTING_KEY) ?? null;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter((k): k is SheetsToolbarItemKey => typeof k === 'string');
+          return valid.slice(0, this.MaxPinnedToolbarActions);
+        }
+      } catch {
+        // Fallback to defaults
+      }
+    }
+    return [...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS];
+  }
+
+  private savePinnedToolbarActions(pins: SheetsToolbarItemKey[]): void {
+    const trimmed = pins.slice(0, this.MaxPinnedToolbarActions);
+    this._localToolbarPins = [...trimmed];
+    const json = JSON.stringify(trimmed);
+    const engine = UserInfoEngine.Instance;
+    this._serverToolbarPinsRaw = engine?.GetSetting(SHEETS_TOOLBAR_PINS_SETTING_KEY) ?? null;
+    engine?.SetSettingDebounced(SHEETS_TOOLBAR_PINS_SETTING_KEY, json);
+  }
+
+  public get HasCustomToolbarPreferences(): boolean {
+    const pins = this.PinnedToolbarActions;
+    return (
+      pins.length !== DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS.length ||
+      DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS.some((key, idx) => pins[idx] !== key)
+    );
+  }
+
+  public IsToolbarItemPinned(key: SheetsToolbarItemKey): boolean {
+    return this.PinnedToolbarActions.includes(key);
+  }
+
+  public IsToolbarItemShownOnBar(key: SheetsToolbarItemKey): boolean {
+    return this.IsToolbarItemPinned(key);
+  }
+
+  public TogglePinToolbarAction(key: SheetsToolbarItemKey, event?: MouseEvent): void {
+    event?.stopPropagation();
+    const current = this.PinnedToolbarActions;
+    const idx = current.indexOf(key);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else if (current.length < this.MaxPinnedToolbarActions) {
+      current.push(key);
+    }
+    this.savePinnedToolbarActions(current);
+    this.cdr.markForCheck();
+  }
+
+  public ResetToolbarPreferences(): void {
+    this.savePinnedToolbarActions([...DEFAULT_PINNED_SHEETS_TOOLBAR_ACTIONS]);
+    this.cdr.markForCheck();
+  }
+
+  public get AllToolbarItems(): ResolvedSheetsToolbarItem[] {
+    const canGridEdit = this.WorkspaceMode === 'grid' && this.CanEdit;
+    return [
+      {
+        Key: 'bold',
+        Label: 'Bold',
+        Description: 'Toggle bold on active cell',
+        Icon: 'fa-bold',
+        Category: 'Format',
+        Placement: 'left',
+        TestId: 'sheet-format-bold-btn',
+        Active: this.IsActiveCellBold,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'currency',
+        Label: 'Currency ($)',
+        ShortLabel: '$',
+        Description: 'Format as Currency ($#,##0.00)',
+        Icon: 'fa-dollar-sign',
+        Category: 'Format',
+        Placement: 'left',
+        TestId: 'sheet-format-currency-btn',
+        Active: this.ActiveCellFormatType === 'currency',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'percent',
+        Label: 'Percent (%)',
+        ShortLabel: '%',
+        Description: 'Format as Percent (0.0%)',
+        Icon: 'fa-percent',
+        Category: 'Format',
+        Placement: 'left',
+        TestId: 'sheet-format-percent-btn',
+        Active: this.ActiveCellFormatType === 'percent',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'integer',
+        Label: 'Integer (#,##0)',
+        ShortLabel: '#,##0',
+        Description: 'Format as Integer (#,##0)',
+        Icon: 'fa-hashtag',
+        Category: 'Format',
+        Placement: 'left',
+        TestId: 'sheet-format-integer-btn',
+        Active: this.ActiveCellFormatType === 'integer',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'date',
+        Label: 'Date',
+        Description: 'Format as Date (yyyy-mm-dd)',
+        Icon: 'fa-calendar',
+        Category: 'Format',
+        Placement: 'left',
+        TestId: 'sheet-format-date-btn',
+        Active: this.ActiveCellFormatType === 'date',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'insert-row',
+        Label: 'Insert Row',
+        ShortLabel: 'Row',
+        Description: 'Insert Row Above Active Cell',
+        Icon: 'fa-plus',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheet-insert-row-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'insert-col',
+        Label: 'Insert Column',
+        ShortLabel: 'Col',
+        Description: 'Insert Column Left of Active Cell',
+        Icon: 'fa-plus',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheet-insert-col-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'sort-asc',
+        Label: 'Sort A → Z',
+        Description: 'Sort Active Column A → Z',
+        Icon: 'fa-arrow-down-a-z',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheet-sort-asc-btn',
+        Active: this.ActiveSheet?.SortSpec?.Direction === 'asc',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'sort-desc',
+        Label: 'Sort Z → A',
+        Description: 'Sort Active Column Z → A',
+        Icon: 'fa-arrow-down-z-a',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheet-sort-desc-btn',
+        Active: this.ActiveSheet?.SortSpec?.Direction === 'desc',
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'freeze-header',
+        Label: 'Freeze Header',
+        ShortLabel: 'Freeze',
+        Description: 'Freeze Top Header Row',
+        Icon: 'fa-snowflake',
+        Category: 'Structure',
+        Placement: 'left',
+        TestId: 'sheet-freeze-header-btn',
+        Active: (this.ActiveSheet?.FrozenRows ?? 0) > 0,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'live-table',
+        Label: '+ Live Table',
+        ShortLabel: 'Live Table',
+        Description: 'Bind Live MJ Entity View or Saved Query Table',
+        Icon: 'fa-table-list',
+        Category: 'Insert & Data',
+        Placement: 'left',
+        TestId: 'sheet-add-live-table-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'insert-query',
+        Label: '=MJ.QUERY',
+        ShortLabel: '=MJ.QUERY',
+        Description: 'Insert =MJ.QUERY(...) Custom Function',
+        Icon: 'fa-database',
+        Category: 'Insert & Data',
+        Placement: 'left',
+        TestId: 'sheet-insert-mj-query-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'insert-view',
+        Label: '=MJ.VIEW',
+        ShortLabel: '=MJ.VIEW',
+        Description: 'Insert =MJ.VIEW(...) Custom Function',
+        Icon: 'fa-layer-group',
+        Category: 'Insert & Data',
+        Placement: 'left',
+        TestId: 'sheet-insert-mj-view-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'add-chart',
+        Label: '+ Range Chart',
+        ShortLabel: '+ Chart',
+        Description: 'Create Range Chart from Selected Range',
+        Icon: 'fa-chart-column',
+        Category: 'Insert & Data',
+        Placement: 'left',
+        TestId: 'sheet-add-chart-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'add-whiteboard',
+        Label: '+ Whiteboard',
+        ShortLabel: 'Whiteboard',
+        Description: 'Embed Interactive Whiteboard Canvas',
+        Icon: 'fa-chalkboard',
+        Category: 'Insert & Data',
+        Placement: 'left',
+        TestId: 'sheet-add-whiteboard-btn',
+        Active: false,
+        Visible: canGridEdit,
+      },
+      {
+        Key: 'refresh-data',
+        Label: 'Refresh Data',
+        ShortLabel: 'Refresh',
+        Description: 'Refresh All Bound Live Tables and =MJ.* Custom Functions',
+        Icon: 'fa-rotate',
+        Category: 'Insert & Data',
+        Placement: 'right',
+        TestId: 'sheet-refresh-data-btn',
+        Active: false,
+        Disabled: this.IsRefreshingData,
+        Visible: true,
+      },
+      {
+        Key: 'import',
+        Label: 'Import .xlsx / .csv',
+        ShortLabel: 'Import',
+        Description: 'Import .xlsx or .csv Workbook',
+        Icon: 'fa-file-import',
+        Category: 'Export & View',
+        Placement: 'right',
+        TestId: 'sheet-import-btn',
+        Active: false,
+        Visible: this.CanEdit,
+      },
+      {
+        Key: 'export-xlsx',
+        Label: 'Export .xlsx',
+        ShortLabel: '.xlsx',
+        Description: 'Export Workbook as Excel (.xlsx)',
+        Icon: 'fa-file-excel',
+        Category: 'Export & View',
+        Placement: 'right',
+        TestId: 'sheet-export-xlsx-btn',
+        Active: false,
+        Visible: true,
+      },
+      {
+        Key: 'export-csv',
+        Label: 'Export .csv',
+        ShortLabel: '.csv',
+        Description: 'Export Active Sheet as .csv',
+        Icon: 'fa-file-csv',
+        Category: 'Export & View',
+        Placement: 'right',
+        TestId: 'sheet-export-csv-btn',
+        Active: false,
+        Visible: true,
+      },
+      {
+        Key: 'source-mode',
+        Label: 'Source JSON',
+        ShortLabel: 'Source',
+        Description: 'Inspect and edit raw Workbook JSON',
+        Icon: 'fa-code',
+        Category: 'Export & View',
+        Placement: 'right',
+        TestId: 'sheets-mode-source',
+        Active: this.WorkspaceMode === 'source',
+        Visible: true,
+      },
+      {
+        Key: 'diff-mode',
+        Label: 'Version Diff',
+        ShortLabel: 'Diff',
+        Description: 'Compare workbook versions',
+        Icon: 'fa-code-compare',
+        Category: 'Export & View',
+        Placement: 'right',
+        TestId: 'sheets-mode-diff',
+        Active: this.WorkspaceMode === 'diff',
+        Visible: true,
+      },
+    ];
+  }
+
+  public get PinnedLeftToolbarItems(): ResolvedSheetsToolbarItem[] {
+    const pins = this.PinnedToolbarActions;
+    const byKey = new Map(this.AllToolbarItems.map((item) => [item.Key, item]));
+    return pins
+      .map((k) => byKey.get(k))
+      .filter((item): item is ResolvedSheetsToolbarItem => Boolean(item && item.Visible && item.Placement === 'left'));
+  }
+
+  public get PinnedRightToolbarItems(): ResolvedSheetsToolbarItem[] {
+    const pins = this.PinnedToolbarActions;
+    const byKey = new Map(this.AllToolbarItems.map((item) => [item.Key, item]));
+    return pins
+      .map((k) => byKey.get(k))
+      .filter((item): item is ResolvedSheetsToolbarItem => Boolean(item && item.Visible && item.Placement === 'right'));
+  }
+
+  public get OverflowToolbarSections(): Array<{
+    Category: ResolvedSheetsToolbarItem['Category'];
+    Items: ResolvedSheetsToolbarItem[];
+  }> {
+    const categories: Array<ResolvedSheetsToolbarItem['Category']> = [
+      'Format',
+      'Structure',
+      'Insert & Data',
+      'Export & View',
+    ];
+    const items = this.AllToolbarItems.filter((item) => item.Visible);
+    return categories
+      .map((Category) => ({ Category, Items: items.filter((i) => i.Category === Category) }))
+      .filter((s) => s.Items.length > 0);
+  }
+
+  public ExecuteToolbarItem(item: ResolvedSheetsToolbarItem, closeMenu: boolean): void {
+    if (closeMenu) {
+      this.CloseMoreToolsMenu();
+    }
+    switch (item.Key) {
+      case 'bold':
+        this.ToggleActiveCellBold();
+        break;
+      case 'currency':
+        this.ApplyActiveCellFormat('currency');
+        break;
+      case 'percent':
+        this.ApplyActiveCellFormat('percent');
+        break;
+      case 'integer':
+        this.ApplyActiveCellFormat('integer');
+        break;
+      case 'date':
+        this.ApplyActiveCellFormat('date');
+        break;
+      case 'insert-row':
+        this.InsertRowAtActive();
+        break;
+      case 'insert-col':
+        this.InsertColumnAtActive();
+        break;
+      case 'sort-asc':
+        this.SortActiveColumn('asc');
+        break;
+      case 'sort-desc':
+        this.SortActiveColumn('desc');
+        break;
+      case 'freeze-header':
+        this.ToggleFreezeHeaderRow();
+        break;
+      case 'live-table':
+        this.OpenAddLiveTableModal();
+        break;
+      case 'insert-query':
+        this.InsertMjQueryFormula();
+        break;
+      case 'insert-view':
+        this.InsertMjViewFormula();
+        break;
+      case 'add-chart':
+        this.AddRangeChartFromSelection();
+        break;
+      case 'add-whiteboard':
+        this.AddEmbeddedWhiteboardOnSheet();
+        break;
+      case 'refresh-data':
+        void this.RefreshAllLiveData(true);
+        break;
+      case 'import':
+        this.fileInputRef?.nativeElement.click();
+        break;
+      case 'export-xlsx':
+        void this.ExportWorkbookAsXlsx();
+        break;
+      case 'export-csv':
+        this.ExportActiveSheetAsCsv();
+        break;
+      case 'source-mode':
+        this.SetWorkspaceMode(this.WorkspaceMode === 'source' ? 'grid' : 'source');
+        break;
+      case 'diff-mode':
+        this.SetWorkspaceMode(this.WorkspaceMode === 'diff' ? 'grid' : 'diff');
+        break;
+    }
+  }
+
+  public ToggleMoreToolsMenu(): void {
+    this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
+    if (this.ShowMoreToolsMenu) {
+      this.startMoreMenuDocumentListeners();
+    } else {
+      this.stopMoreMenuDocumentListeners();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public CloseMoreToolsMenu(): void {
+    if (!this.ShowMoreToolsMenu) return;
+    this.ShowMoreToolsMenu = false;
+    this.stopMoreMenuDocumentListeners();
+    this.cdr.detectChanges();
+  }
+
+  private startMoreMenuDocumentListeners(): void {
+    this.stopMoreMenuDocumentListeners();
+    if (typeof document === 'undefined' || !this.renderer) return;
+    const unlistenClick = this.renderer.listen('document', 'click', (evt: MouseEvent) => {
+      const target = evt.target as Node | null;
+      const anchor = this.moreToolsAnchorRef?.nativeElement;
+      if (anchor && target && anchor.contains(target)) {
+        return;
+      }
+      this.CloseMoreToolsMenu();
+    });
+    const unlistenKey = this.renderer.listen('document', 'keydown', (evt: KeyboardEvent) => {
+      if (evt.key === 'Escape') {
+        this.CloseMoreToolsMenu();
+      }
+    });
+    this._unlistenMoreMenuDocs.push(unlistenClick, unlistenKey);
+  }
+
+  private stopMoreMenuDocumentListeners(): void {
+    for (const unlisten of this._unlistenMoreMenuDocs) {
+      unlisten();
+    }
+    this._unlistenMoreMenuDocs = [];
+  }
+
+  public SelectColumnHeader(colLetter: string, event?: MouseEvent): void {
+    const rowCount = this.ActiveSheet?.Rows?.length ?? 100;
+    const colRange = `${colLetter}1:${colLetter}${rowCount}`;
     const pos = ParseCellAddress(`${colLetter}1`);
     if (pos) {
       this.ActiveRowIndex = 1;
       this.ActiveColumnIndex = pos.col;
+      this.DragAnchorAddress = `${colLetter}1`;
       this.syncFormulaBarFromActiveCell();
     }
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(colRange);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(colRange);
+      }
+    } else {
+      this.SelectedRanges = [colRange];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
     this.cdr.markForCheck();
+  }
+
+  public SelectRowHeader(rowIndex: number, event?: MouseEvent): void {
+    const lastColLetter =
+      this.VisibleColumns.length > 0
+        ? this.VisibleColumns[this.VisibleColumns.length - 1].Letter
+        : 'Z';
+    const rowRange = `A${rowIndex}:${lastColLetter}${rowIndex}`;
+    this.ActiveRowIndex = rowIndex;
+    this.ActiveColumnIndex = 1;
+    this.DragAnchorAddress = `A${rowIndex}`;
+    this.syncFormulaBarFromActiveCell();
+
+    if (event?.metaKey || event?.ctrlKey) {
+      const existingIdx = this.SelectedRanges.indexOf(rowRange);
+      if (existingIdx >= 0 && this.SelectedRanges.length > 1) {
+        this.SelectedRanges.splice(existingIdx, 1);
+      } else if (existingIdx < 0) {
+        this.SelectedRanges.push(rowRange);
+      }
+    } else {
+      this.SelectedRanges = [rowRange];
+    }
+    this.SelectedRange = this.SelectedRanges.join(', ');
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  public OnSelectedRangeInputChange(nextRange: string): void {
+    this.SelectedRange = nextRange;
+    const parts = nextRange
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    this.SelectedRanges = parts.length > 0 ? parts : [nextRange.trim()];
+    if (this.SelectedRanges.length > 0) {
+      const first = this.SelectedRanges[0].split(':')[0];
+      const parsed = ParseCellAddress(first);
+      if (parsed) {
+        this.ActiveRowIndex = parsed.row;
+        this.ActiveColumnIndex = parsed.col;
+        this.syncFormulaBarFromActiveCell();
+      }
+    }
+    this.broadcastSelectionPresence();
+    this.cdr.markForCheck();
+  }
+
+  private broadcastSelectionPresence(): void {
+    if (this.ActiveSheet) {
+      this.CollaborationSession?.SetActiveBlock(
+        `${this.ActiveSheet.SheetID}:${this.SelectedRange}`,
+      );
+    }
   }
 
   public BeginInlineCellEdit(rowIndex: number, colIndex: number): void {
     if (!this.CanEdit) return;
+    this.IsDraggingSelection = false;
+    this.isCtrlMultiSelectDrag = false;
     this.ActiveRowIndex = rowIndex;
     this.ActiveColumnIndex = colIndex;
     const addr = FormatCellAddress(rowIndex, colIndex);
@@ -2852,6 +4522,19 @@ export class SpreadsheetArtifactViewerComponent
         ? String(existing.RawValue)
         : '';
     this.cdr.markForCheck();
+    if (typeof document !== 'undefined') {
+      setTimeout(() => {
+        if (this.InlineEditingAddress !== addr || this.isComponentDestroyed) return;
+        const inputEl = document.querySelector<HTMLInputElement>(
+          '[data-testid="sheet-inline-cell-input"]',
+        );
+        if (inputEl) {
+          inputEl.focus();
+          const len = inputEl.value.length;
+          inputEl.setSelectionRange(len, len);
+        }
+      }, 0);
+    }
   }
 
   public CommitInlineCellEdit(): void {
@@ -3624,6 +5307,15 @@ export class SpreadsheetArtifactViewerComponent
       nextVer.Name = embed.Title;
       nextVer.UserID = user.ID;
       nextVer.Content = nextContent;
+      const embedConfig = BuildArtifactVersionConfigurationWithPreview(
+        null,
+        nextContent,
+        null,
+        embed.Title,
+      );
+      if (embedConfig) {
+        nextVer.Configuration = embedConfig;
+      }
 
       const saved = await nextVer.Save();
       if (!saved || !nextVer.ID) {
@@ -3855,20 +5547,47 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public FocusRangeFromAnchorKey(anchorKey: string): void {
-    const sep = anchorKey.indexOf(':');
-    if (sep < 0) return;
-    const sheetId = anchorKey.slice(0, sep);
-    const range = anchorKey.slice(sep + 1);
-    if (this.Workbook.Worksheets.some((w) => w.SheetID === sheetId)) {
-      this.Workbook.ActiveSheetID = sheetId;
+    const parsed = this.ParseCollaboratorSheetRanges(anchorKey);
+    if (parsed.SheetID && this.Workbook.Worksheets.some((w) => w.SheetID === parsed.SheetID)) {
+      this.Workbook.ActiveSheetID = parsed.SheetID;
     }
-    this.SelectedRange = range;
-    const firstAddr = range.split(':')[0];
-    const pos = ParseCellAddress(firstAddr);
-    if (pos) {
-      this.ActiveRowIndex = pos.row;
-      this.ActiveColumnIndex = pos.col;
-      this.syncFormulaBarFromActiveCell();
+    if (parsed.Ranges.length > 0) {
+      this.SelectedRanges = [...parsed.Ranges];
+      this.SelectedRange = this.SelectedRanges.join(', ');
+      const firstAddr = parsed.Ranges[0].split(':')[0];
+      const pos = ParseCellAddress(firstAddr);
+      if (pos) {
+        this.ActiveRowIndex = pos.row;
+        this.ActiveColumnIndex = pos.col;
+        this.syncFormulaBarFromActiveCell();
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  public GetCellCommentThreads(rowIndex: number, colIndex: number): DocumentAnchoredThread[] {
+    if (!this.AnchoredThreads || this.AnchoredThreads.length === 0) {
+      return [];
+    }
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const matches: DocumentAnchoredThread[] = [];
+    for (const thread of this.AnchoredThreads) {
+      const parsed = this.ParseCollaboratorSheetRanges(thread.AnchorKey);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        continue;
+      }
+      if (parsed.Ranges.some((segment) => this.isCellInsideRangeString(rowIndex, colIndex, segment))) {
+        matches.push(thread);
+      }
+    }
+    return matches;
+  }
+
+  public OpenCommentThreadFromCell(thread: DocumentAnchoredThread | undefined, event?: MouseEvent): void {
+    event?.stopPropagation();
+    this.ShowCommentsDrawer = true;
+    if (thread?.AnchorKey) {
+      this.FocusRangeFromAnchorKey(thread.AnchorKey);
     }
     this.cdr.markForCheck();
   }
@@ -3963,6 +5682,12 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  protected override resolveCaptureRootElement(): HTMLElement | null {
+    const el = this.captureHostElementRef?.nativeElement;
+    if (!el) return null;
+    return el.querySelector<HTMLElement>('.mj-sheets-grid-scroll') ?? el;
+  }
+
   public async SaveNewArtifactVersion(): Promise<void> {
     if (!this.CanEdit || this.IsSavingVersion || !this.HasUnsavedChanges) return;
     this.IsSavingVersion = true;
@@ -3972,7 +5697,12 @@ export class SpreadsheetArtifactViewerComponent
       const serialized = SpreadsheetEngine.Instance.SerializeWorkbook(this.Workbook);
       this.CollaborationSession?.UpdateWorkbookMetadata(this.Workbook);
 
-      const sentViaWs = this.CollaborationSession?.RequestSaveVersion() ?? false;
+      const { Policy, CapturedThumbnailDataUrl } = await CaptureThumbnailForDriverIfAllowed(
+        'SpreadsheetArtifactViewerPlugin',
+        this.resolveCaptureRootElement(),
+      );
+
+      const sentViaWs = this.CollaborationSession?.RequestSaveVersion(CapturedThumbnailDataUrl) ?? false;
       if (sentViaWs) {
         this.StatusBannerMessage = 'Saving collaborative workbook version…';
         return;
@@ -3999,6 +5729,7 @@ export class SpreadsheetArtifactViewerComponent
         serialized,
         true,
         md,
+        CapturedThumbnailDataUrl,
       );
       if (serverCommit.HandledByServer) {
         if (!serverCommit.Success) {
@@ -4043,6 +5774,19 @@ export class SpreadsheetArtifactViewerComponent
       ver.Name = this.Workbook.Title || this.artifactVersion.Name || 'Workbook';
       ver.UserID = user.ID;
       ver.Content = serialized;
+      const sheetConfig = BuildArtifactVersionConfigurationWithPreview(
+        serialized,
+        serialized,
+        'SpreadsheetArtifactViewerPlugin',
+        ver.Name,
+        {
+          Policy,
+          CapturedThumbnailDataUrl,
+        },
+      );
+      if (sheetConfig) {
+        ver.Configuration = sheetConfig;
+      }
 
       const saved = await ver.Save();
       if (!saved) {
@@ -4123,15 +5867,199 @@ export class SpreadsheetArtifactViewerComponent
   }
 
   public IsAddressInSelectedRange(rowIndex: number, colIndex: number): boolean {
-    const parts = this.SelectedRange.split(':');
-    const p1 = ParseCellAddress(parts[0]);
-    const p2 = parts.length > 1 ? ParseCellAddress(parts[1]) : p1;
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => this.isCellInsideRangeString(rowIndex, colIndex, segment));
+  }
+
+  public IsRowInSelectedRange(rowIndex: number): boolean {
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => {
+      const parts = segment.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (!p1 || !p2) return false;
+      const rMin = Math.min(p1.row, p2.row);
+      const rMax = Math.max(p1.row, p2.row);
+      return rowIndex >= rMin && rowIndex <= rMax;
+    });
+  }
+
+  public IsColumnInSelectedRange(colIndex: number): boolean {
+    if (!this.SelectedRange) return false;
+    const segments = this.SelectedRange.split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return segments.some((segment) => {
+      const parts = segment.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (!p1 || !p2) return false;
+      const cMin = Math.min(p1.col, p2.col);
+      const cMax = Math.max(p1.col, p2.col);
+      return colIndex >= cMin && colIndex <= cMax;
+    });
+  }
+
+  private isCellInsideRangeString(rowIndex: number, colIndex: number, rangeStr: string): boolean {
+    const parts = rangeStr.split(':');
+    const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+    const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
     if (!p1 || !p2) return false;
     const rMin = Math.min(p1.row, p2.row);
     const rMax = Math.max(p1.row, p2.row);
     const cMin = Math.min(p1.col, p2.col);
     const cMax = Math.max(p1.col, p2.col);
     return rowIndex >= rMin && rowIndex <= rMax && colIndex >= cMin && colIndex <= cMax;
+  }
+
+  public RecordSyntheticAgentSelection(
+    sheetId: string,
+    boundingRange: string,
+    agentName = 'AI Agent',
+  ): void {
+    if (this.syntheticAgentTimer) {
+      clearTimeout(this.syntheticAgentTimer);
+      this.syntheticAgentTimer = null;
+    }
+    this.SyntheticAgentPresence = {
+      ClientID: -999,
+      UserID: 'ai-agent',
+      Name: agentName,
+      Color: '#8b5cf6',
+      ActiveBlockID: `${sheetId}:${boundingRange}`,
+      CanEdit: true,
+      IsAgent: true,
+    };
+    this.cdr.markForCheck();
+    this.syntheticAgentTimer = setTimeout(() => {
+      this.SyntheticAgentPresence = null;
+      this.syntheticAgentTimer = null;
+      this.cdr.markForCheck();
+    }, 6000);
+  }
+
+  public GetRemoteCollaborators(): CollaboratorPresence[] {
+    const localClientId = this.CollaborationSession?.Doc?.clientID;
+    const remote = this.Collaborators.filter(
+      (c) => localClientId === undefined || c.ClientID !== localClientId,
+    );
+    if (this.SyntheticAgentPresence) {
+      const alreadyPresent = remote.some(
+        (c) =>
+          c.ClientID === this.SyntheticAgentPresence?.ClientID ||
+          c.UserID === this.SyntheticAgentPresence?.UserID,
+      );
+      if (!alreadyPresent) {
+        return [...remote, this.SyntheticAgentPresence];
+      }
+    }
+    return remote;
+  }
+
+  public ParseCollaboratorSheetRanges(activeBlockId: string | undefined): {
+    SheetID: string | null;
+    Ranges: string[];
+  } {
+    if (!activeBlockId || !activeBlockId.trim()) {
+      return { SheetID: null, Ranges: [] };
+    }
+    const trimmed = activeBlockId.trim();
+    const colonIdx = trimmed.indexOf(':');
+    if (colonIdx > 0) {
+      const prefix = trimmed.slice(0, colonIdx).trim();
+      const remainder = trimmed.slice(colonIdx + 1).trim();
+      const matchesSheet = this.Workbook?.Worksheets?.some((w) => w.SheetID === prefix);
+      const isSheetPrefix =
+        matchesSheet || prefix.startsWith('sheet-') || ParseCellAddress(prefix) === null;
+      if (isSheetPrefix) {
+        const ranges = remainder
+          .split(',')
+          .map((r) => r.trim())
+          .filter((r) => r.length > 0);
+        return { SheetID: prefix, Ranges: ranges };
+      }
+    }
+    const ranges = trimmed
+      .split(',')
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+    return { SheetID: null, Ranges: ranges };
+  }
+
+  public GetCellCollaborators(rowIndex: number, colIndex: number): CollaboratorPresence[] {
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const remote = this.GetRemoteCollaborators();
+    return remote.filter((collab) => {
+      const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        return false;
+      }
+      return parsed.Ranges.some((rng) => this.isCellInsideRangeString(rowIndex, colIndex, rng));
+    });
+  }
+
+  public GetCellCollaboratorBorderColor(rowIndex: number, colIndex: number): string | null {
+    const collabs = this.GetCellCollaborators(rowIndex, colIndex);
+    return collabs[0]?.Color ?? null;
+  }
+
+  public GetCellPrimaryCollaboratorBadge(
+    rowIndex: number,
+    colIndex: number,
+  ): CollaboratorPresence | null {
+    const activeSheetId = this.ActiveSheet?.SheetID;
+    const remote = this.GetRemoteCollaborators();
+    for (const collab of remote) {
+      const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+      if (parsed.SheetID !== null && parsed.SheetID !== activeSheetId) {
+        continue;
+      }
+      for (const rng of parsed.Ranges) {
+        const parts = rng.split(':');
+        const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+        const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+        if (!p1 || !p2) continue;
+        const rMin = Math.min(p1.row, p2.row);
+        const cMin = Math.min(p1.col, p2.col);
+        if (rowIndex === rMin && colIndex === cMin) {
+          return collab;
+        }
+      }
+    }
+    return null;
+  }
+
+  public JumpToCollaboratorSelection(collab: CollaboratorPresence): void {
+    const parsed = this.ParseCollaboratorSheetRanges(collab.ActiveBlockID);
+    if (
+      parsed.SheetID &&
+      this.Workbook?.Worksheets?.some((w) => w.SheetID === parsed.SheetID)
+    ) {
+      this.Workbook.ActiveSheetID = parsed.SheetID;
+    }
+    if (parsed.Ranges.length > 0) {
+      this.SelectedRanges = parsed.Ranges;
+      this.SelectedRange = parsed.Ranges.join(', ');
+      const firstRange = parsed.Ranges[0];
+      const parts = firstRange.split(':');
+      const p1 = ParseCellAddress(parts[0]?.trim() ?? '');
+      const p2 = parts.length > 1 ? ParseCellAddress(parts[1]?.trim() ?? '') : p1;
+      if (p1 && p2) {
+        this.ActiveRowIndex = Math.min(p1.row, p2.row);
+        this.ActiveColumnIndex = Math.min(p1.col, p2.col);
+      } else if (p1) {
+        this.ActiveRowIndex = p1.row;
+        this.ActiveColumnIndex = p1.col;
+      }
+      this.syncFormulaBarFromActiveCell();
+    }
+    this.cdr.markForCheck();
   }
 
   public GetInitials(name: string): string {

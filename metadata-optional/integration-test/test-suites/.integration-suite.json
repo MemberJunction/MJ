@@ -1506,6 +1506,17 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT173 - Transaction Group Concurrency over GraphQL",
+            "Sequence": 84,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "48e68478-dd3b-4be1-ab4f-7e5f974372e0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT146 - SQL Pipeline Scenario Cross Products",
             "Sequence": 49,
             "Status": "Active"
@@ -1644,6 +1655,17 @@
           },
           "primaryKey": {
             "ID": "78E3D9A1-2C4B-4F6A-9E15-3B8D4C5E6F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT172 - Gemini Decision 1 Decision Model",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "260A41E9-9367-4D7D-AABE-754921CBF6E3"
           }
         }
       ]

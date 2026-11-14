@@ -388,6 +388,26 @@ BEGIN
       AND NOT u."IsFiltered";
   ANALYZE _uef_uk;
 
+  -- A column of a multi-column foreign key is a usable single-column reference only when the
+  -- column it references is unique on its own. Joined alone, any other component matches many
+  -- referenced rows and the base view's label join multiplies rows, so it gets no related entity.
+  DELETE FROM _uef_fk fk
+  WHERE EXISTS (
+          SELECT 1 FROM _uef_fk sibling
+          WHERE sibling."FK_NAME" = fk."FK_NAME" AND sibling.schema_name = fk.schema_name
+            AND sibling."table" = fk."table" AND sibling."column" <> fk."column"
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_pk pk
+          WHERE pk."SchemaName"::text = fk.referenced_schema::text AND pk."TableName"::text = fk.referenced_table::text
+            AND pk."ColumnName"::text = fk.referenced_column::text AND pk."KeyColumnCount" = 1
+        )
+    AND NOT EXISTS (
+          SELECT 1 FROM _uef_uk uk
+          WHERE uk."SchemaName"::text = fk.referenced_schema::text AND uk."TableName"::text = fk.referenced_table::text
+            AND uk."ColumnName"::text = fk.referenced_column::text
+        );
+
   -- Orphan-tolerant renumber (#4050): an EntityField row whose column is no longer in the base
   -- view never joins _uef_cols below, so it is never renumbered and keeps its old Sequence. When
   -- that slot is inside the live column range, the live field that must move onto it collides on

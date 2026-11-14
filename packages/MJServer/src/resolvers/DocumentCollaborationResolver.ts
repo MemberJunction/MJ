@@ -10,11 +10,16 @@ import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
     ArtifactPermissionEngine,
+    BuildArtifactVersionConfigurationWithPreview,
     DocumentBlockSpec,
     DocumentLiveBlockEngine,
+    IsValidThumbnailDataUrl,
     MJArtifactEntity,
+    MJArtifactTypeEntity,
     MJArtifactVersionEntity,
     MJConversationDetailEntity,
+    ParseArtifactVersionConfiguration,
+    ResolveArtifactTypeThumbnailPolicy,
     ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { MarkTrustedServerRestoreSave } from '@memberjunction/core-entities-server';
@@ -449,7 +454,8 @@ export class DocumentCollaborationResolver extends ResolverBase {
         @Arg('artifactId') artifactId: string,
         @Arg('content') content: string,
         @Arg('saveVersion', { nullable: true }) saveVersion: boolean = true,
-        @Ctx() context: AppContext
+        @Ctx() context: AppContext,
+        @Arg('thumbnailDataUrl', { nullable: true }) thumbnailDataUrl?: string
     ): Promise<CommitArtifactInlineEditResultOutput> {
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
@@ -467,11 +473,14 @@ export class DocumentCollaborationResolver extends ResolverBase {
             };
         }
 
+        const validCapturedThumbnail = IsValidThumbnailDataUrl(thumbnailDataUrl) ? thumbnailDataUrl : null;
         const applied = await ArtifactCollaborationServer.Instance.ApplyServerContentMutation(
             artifactId,
             content,
             user,
-            saveVersion
+            saveVersion,
+            undefined,
+            { capturedThumbnailDataUrl: validCapturedThumbnail }
         );
         return {
             Success: applied.Success,
@@ -584,6 +593,19 @@ export class DocumentCollaborationResolver extends ResolverBase {
             version.UserID = user.ID;
             version.Content = initialContent;
             version.ContentHash = createHash('sha256').update(initialContent, 'utf8').digest('hex');
+            const enrichedConfig = BuildArtifactVersionConfigurationWithPreview(
+                null,
+                initialContent,
+                artType.DriverClass ?? null,
+                childArtifact.Name ?? null,
+                {
+                    ArtifactType: artType,
+                    AllArtifactTypes: ArtifactMetadataEngine.Instance.ArtifactTypes ?? []
+                }
+            );
+            if (enrichedConfig) {
+                version.Configuration = enrichedConfig;
+            }
 
             const savedVersion = await version.Save();
             if (!savedVersion) {
@@ -1355,8 +1377,49 @@ export class DocumentCollaborationResolver extends ResolverBase {
         restoredVer.ContentSizeBytes = sourceVersion.ContentSizeBytes;
         restoredVer.ContentHash = sourceVersion.ContentHash;
         restoredVer.Content = sourceVersion.Content;
-        if (sourceVersion.Configuration !== null && sourceVersion.Configuration !== undefined) {
-            restoredVer.Configuration = sourceVersion.Configuration;
+        let restoreTypeEntity: MJArtifactTypeEntity | null = null;
+        let allRestoreTypes: ReadonlyArray<MJArtifactTypeEntity> = [];
+        try {
+            await ArtifactMetadataEngine.Instance.Config(false, user, provider);
+            allRestoreTypes = ArtifactMetadataEngine.Instance.ArtifactTypes ?? [];
+            const artMetaRes = await rv.RunView<{ TypeID?: string | null }>(
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(normalizedArtifactId)}'`,
+                    Fields: ['TypeID'],
+                    MaxRows: 1,
+                    SkipTotalRowCount: true,
+                    ResultType: 'simple'
+                },
+                user
+            );
+            const typeId = artMetaRes.Success ? artMetaRes.Results?.[0]?.TypeID : null;
+            if (typeId) {
+                restoreTypeEntity = allRestoreTypes.find((t) => UUIDsEqual(t.ID, typeId)) ?? null;
+            }
+        } catch {
+            // Fall back safely when unit-test mocks omit artifact type metadata
+        }
+        const sourceParsedConfig = ParseArtifactVersionConfiguration(sourceVersion.Configuration);
+        const restorePolicy = ResolveArtifactTypeThumbnailPolicy(
+            restoreTypeEntity,
+            allRestoreTypes,
+            restoreTypeEntity?.DriverClass ?? null
+        );
+        const enrichedRestoredConfig = BuildArtifactVersionConfigurationWithPreview(
+            sourceVersion.Configuration,
+            sourceVersion.Content,
+            restoreTypeEntity?.DriverClass ?? null,
+            sourceVersion.Name ?? null,
+            {
+                Policy: restorePolicy,
+                ArtifactType: restoreTypeEntity,
+                AllArtifactTypes: allRestoreTypes,
+                CapturedThumbnailDataUrl: sourceParsedConfig?.thumbnailDataUrl ?? null
+            }
+        );
+        if (enrichedRestoredConfig !== null && enrichedRestoredConfig !== undefined) {
+            restoredVer.Configuration = enrichedRestoredConfig;
         }
 
         MarkTrustedServerRestoreSave(restoredVer);
