@@ -10,31 +10,13 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Monitoring Context Section -->
+    <!-- Monitoring Period & Status Section -->
     <mj-collapsible-panel
-        SectionKey="monitoringContext"
-        SectionName="Monitoring Context"
-        Icon="fa fa-clock"
+        SectionKey="monitoringPeriodStatus"
+        SectionName="Monitoring Period & Status"
+        Icon="fa fa-calendar"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ModelID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ScheduledJobRunID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -59,13 +41,21 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ErrorMessage"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Evaluation & Metrics Section -->
+    <!-- Metrics & Outcomes Section -->
     <mj-collapsible-panel
-        SectionKey="evaluationMetrics"
-        SectionName="Evaluation & Metrics"
+        SectionKey="metricsOutcomes"
+        SectionName="Metrics & Outcomes"
         Icon="fa fa-chart-bar"
         [Form]="this"
         [FormContext]="formContext">
@@ -144,11 +134,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Drift & Parity Analysis Section -->
+    <!-- Drift & Parity Section -->
     <mj-collapsible-panel
-        SectionKey="driftParityAnalysis"
-        SectionName="Drift & Parity Analysis"
-        Icon="fa fa-search"
+        SectionKey="driftParity"
+        SectionName="Drift & Parity"
+        Icon="fa fa-wave-square"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -178,10 +168,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Triggers & Automated Checks Section -->
+    <!-- Triggers & Actions Section -->
     <mj-collapsible-panel
-        SectionKey="triggersAutomatedChecks"
-        SectionName="Triggers & Automated Checks"
+        SectionKey="triggersActions"
+        SectionName="Triggers & Actions"
         Icon="fa fa-bolt"
         [Form]="this"
         [FormContext]="formContext">
@@ -218,14 +208,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ErrorMessage"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -236,6 +218,24 @@
         Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScheduledJobRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

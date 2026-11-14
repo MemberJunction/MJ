@@ -140,6 +140,12 @@ const EXPECTED_LINES: readonly RegExp[] = [
 ];
 // The bootstrap loads all metadata; on a loaded host that alone has taken 44 s, past vitest's default hook timeout.
 const BOOTSTRAP_TIMEOUT_MS = 120_000;
+/**
+ * The shared Action Category the scoring-Action generator finds or creates on the first publish of a database
+ * (`ModelScoringActionGenerator.ensureModelsActionCategory`) and never deletes, as the rigs leave it too
+ * (`ps-rig-lifecycle.ts`). The census leaves it out: on a fresh database the file's first publish creates it.
+ */
+const SHARED_MODELS_CATEGORY = 'Predictive Studio Models';
 
 let server: IntegrationBootstrapContext;
 let pool: sql.ConnectionPool;
@@ -507,7 +513,8 @@ async function census(): Promise<HarnessCensus> {
     ${t('MJ: ML Models')} AS Models, ${t('MJ: ML Training Runs')} AS Runs, ${t('MJ: ML Training Pipelines')} AS Pipelines,
     ${t('MJ: ML Model Publish Records')} AS PublishRecords, ${t('MJ: Scheduled Jobs')} AS ScheduledJobs, ${t('MJ: Scheduled Job Runs')} AS ScheduledJobRuns,
     ${t('MJ: ML Evaluation Protocols')} AS Protocols, ${t('MJ: ML Prediction Units')} AS Units, ${t('MJ: Files')} AS Files,
-    ${t('MJ: Actions')} AS Actions, ${t('MJ: Action Params')} AS ActionParams, ${t('MJ: Action Categories')} AS ActionCategories`);
+    ${t('MJ: Actions')} AS Actions, ${t('MJ: Action Params')} AS ActionParams,
+    (SELECT COUNT(*) FROM ${tableOf('MJ: Action Categories')} WHERE Name <> N'${SHARED_MODELS_CATEGORY}') AS ActionCategories`);
   let objects = 0;
   let directories = 0;
   const walk = (dir: string): void => {

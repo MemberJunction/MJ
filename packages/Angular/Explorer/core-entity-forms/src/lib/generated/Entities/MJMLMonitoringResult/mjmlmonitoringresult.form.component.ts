@@ -15,10 +15,10 @@ export class MJMLMonitoringResultFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'monitoringContext', sectionName: 'Monitoring Context', isExpanded: true },
-            { sectionKey: 'evaluationMetrics', sectionName: 'Evaluation & Metrics', isExpanded: true },
-            { sectionKey: 'driftParityAnalysis', sectionName: 'Drift & Parity Analysis', isExpanded: true },
-            { sectionKey: 'triggersAutomatedChecks', sectionName: 'Triggers & Automated Checks', isExpanded: true },
+            { sectionKey: 'monitoringPeriodStatus', sectionName: 'Monitoring Period & Status', isExpanded: true },
+            { sectionKey: 'metricsOutcomes', sectionName: 'Metrics & Outcomes', isExpanded: true },
+            { sectionKey: 'driftParity', sectionName: 'Drift & Parity', isExpanded: true },
+            { sectionKey: 'triggersActions', sectionName: 'Triggers & Actions', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -123,22 +123,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CodeVersion"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Delivery"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="StatusReason"
             Type="textarea"
             [EditMode]="EditMode"
@@ -157,14 +141,6 @@
             [ShowLabel]="true"
             FieldName="ArtifactCheckedAt"
             Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ServingWhileUnevaluated"
-            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -207,6 +183,14 @@
             [ShowLabel]="true"
             FieldName="ProblemType"
             Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CodeVersion"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -281,6 +265,22 @@
             [ShowLabel]="true"
             FieldName="TrainingRowCount"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Delivery"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ServingWhileUnevaluated"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -394,11 +394,36 @@
         }
     </mj-collapsible-panel>
 
+    <!-- ML Scoring Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLScoringRuns"
+        SectionName="ML Scoring Runs"
+        Icon="fa fa-cogs"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLScoringRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Scoring Runs','ModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Scoring Runs','ModelID')"
+                [AllowLoad]="IsSectionExpanded('mJMLScoringRuns')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLScoringRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- ML Output Bindings Section -->
     <mj-collapsible-panel
         SectionKey="mJMLOutputBindings"
         SectionName="ML Output Bindings"
-        Icon="fa fa-project-diagram"
+        Icon="fa fa-brain"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -438,31 +463,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLMonitoringResults', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- ML Scoring Runs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJMLScoringRuns"
-        SectionName="ML Scoring Runs"
-        Icon="fa fa-chart-line"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLScoringRuns')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Scoring Runs','ModelID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Scoring Runs','ModelID')"
-                [AllowLoad]="IsSectionExpanded('mJMLScoringRuns')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLScoringRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

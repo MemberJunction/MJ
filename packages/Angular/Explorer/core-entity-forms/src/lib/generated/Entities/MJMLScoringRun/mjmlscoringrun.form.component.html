@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Model and Execution Details Section -->
+    <!-- Model and Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="modelAndExecutionDetails"
-        SectionName="Model and Execution Details"
-        Icon="fa fa-sliders-h"
+        SectionKey="modelAndConfiguration"
+        SectionName="Model and Configuration"
+        Icon="fa fa-cube"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -67,22 +67,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DryRun"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Scope and Configuration Section -->
+    <!-- Scoring Scope and Parameters Section -->
     <mj-collapsible-panel
-        SectionKey="scopeAndConfiguration"
-        SectionName="Scope and Configuration"
-        Icon="fa fa-database"
+        SectionKey="scoringScopeAndParameters"
+        SectionName="Scoring Scope and Parameters"
+        Icon="fa fa-crosshairs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -134,14 +126,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DryRun"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Timeline and Requestors Section -->
+    <!-- Request and Execution Context Section -->
     <mj-collapsible-panel
-        SectionKey="timelineAndRequestors"
-        SectionName="Timeline and Requestors"
-        Icon="fa fa-clock"
+        SectionKey="requestAndExecutionContext"
+        SectionName="Request and Execution Context"
+        Icon="fa fa-user-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -164,32 +164,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="StartedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EndedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution Status and Results Section -->
-    <mj-collapsible-panel
-        SectionKey="executionStatusAndResults"
-        SectionName="Execution Status and Results"
-        Icon="fa fa-tachometer-alt"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="ProcessRunID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -205,6 +179,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Status and Results Section -->
+    <mj-collapsible-panel
+        SectionKey="statusAndResults"
+        SectionName="Status and Results"
+        Icon="fa fa-chart-bar"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -258,6 +242,22 @@
             [ShowLabel]="true"
             FieldName="FirstErrors"
             Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="StartedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EndedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

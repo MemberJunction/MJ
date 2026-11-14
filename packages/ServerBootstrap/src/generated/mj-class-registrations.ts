@@ -247,7 +247,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (499 classes)
+// @memberjunction/core-entities (504 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -575,8 +575,12 @@ import {
     MJMLAlgorithmUseCaseRankingEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -741,6 +745,7 @@ import {
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -1489,7 +1494,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (84 classes)
+// @memberjunction/core-entities-server (85 classes)
 import {
     FieldSuggestionCommentDriver,
     MJAIAgentCoAgentEntityServer,
@@ -1541,6 +1546,7 @@ import {
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -2321,8 +2327,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
 const CLASS_REGISTRATIONS_2: any[] = [
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
+    MJMLModelPublishRecordEntity,
     MJMLModelScoringBindingEntity,
+    MJMLMonitoringResultEntity,
+    MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
+    MJMLScoringRunEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -2487,6 +2497,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
+    MJvwLatestFeatureValuesEntity,
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
@@ -2514,15 +2525,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PerHundredThousandTokensPriceUnitType,
     PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     PerThousandTokensPriceUnitType,
     TimePerHourPriceUnitType,
     TimePerMinutePriceUnitType,
     RexRecommendationsProvider,
     MJCommunicationProviderEntityExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     LoopbackBridge,
     OpenAISipBridge,
     MSGraphProvider,
@@ -2718,15 +2729,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     HealthObservatoryMinuteSeriesOperation,
     HealthOtelStatusOperation,
     HealthPreviewSharePackageOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     HealthRecentRingBufferEventsOperation,
     HealthRunCheckOperation,
     HealthTelemetryAggregatesOperation,
     LiveEntityCrudProbe,
     MetadataCacheParityProbe,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     OpenAppFleetStatusProbe,
     QueueWorkerHeartbeatProbe,
     SchemaMigrationParityProbe,
@@ -2922,15 +2933,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphRetryTaskServerOperation,
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
     WorkflowDraftServerOperation,
     WorkflowSaveServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     WorkflowValidateServerOperation,
     SlackMessagingExtension,
     TeamsMessagingExtension,
@@ -2995,6 +3006,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLEvaluationProtocolEntityServer,
+    MJMLModelPublishRecordEntityServer,
     MJMLPredictionUnitEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
@@ -3125,16 +3137,16 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FileCompressAction,
     FinalizeDocumentAction,
     FindBestActionAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     FindBestAgentAction,
     FindBestSkillAction,
     FindCandidateActionsAction,
     FindCandidateAgentsAction,
     FindCandidateSkillsAction,
     GammaGeneratePresentationAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GenerateVideoAction,
@@ -3315,7 +3327,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1363;
+export const CLASS_REGISTRATIONS_COUNT = 1369;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

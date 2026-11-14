@@ -44,6 +44,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="Role"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="EffectiveAsOf"
             Type="datepicker"
             [EditMode]="EditMode"
@@ -64,21 +72,13 @@
     <mj-collapsible-panel
         SectionKey="featureDetails"
         SectionName="Feature Details"
-        Icon="fa-solid fa-list-check"
+        Icon="fa-solid fa-cube"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="FeatureName"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Role"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -116,7 +116,7 @@
     <mj-collapsible-panel
         SectionKey="featureValues"
         SectionName="Feature Values"
-        Icon="fa-solid fa-chart-column"
+        Icon="fa-solid fa-list-check"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

@@ -3033,8 +3033,8 @@ A-6180-DELETE-PROC (§8.2) checks PR 4's body ⊇ `V202611101901`'s wherever a m
 **The run/model cycle (M2.3).** From M2 every trainer-path model names its run (`MLModel.TrainingRunID`) and its run
 names the model (`MLTrainingRun.ResultingModelID`). The procedure breaks the cycle on both sides before either
 `DELETE`: it nulls `MLTrainingRun.ResultingModelID` for the doomed models
-(`V202611111352__v6.3.x__PS_Honest_Serving_Schema.sql:661`) and `MLModel.TrainingRunID` for the doomed runs (`:739`),
-then deletes the runs (`:751`) and the models (`:752`). The TruthSuite `HarnessCleanup` mirrors that order through the
+(`V202611122025__v6.3.x__PS_Honest_Serving_Schema.sql:664`) and `MLModel.TrainingRunID` for the doomed runs (`:742`),
+then deletes the runs (`:754`) and the models (`:755`). The TruthSuite `HarnessCleanup` mirrors that order through the
 entity layer (`harness/cleanup.ts:225`: clear and save each run's `ResultingModelID` that names a model being deleted,
 then delete the models, then the runs), pinned by its two cleanup-order tests.
 
@@ -4980,22 +4980,22 @@ private `renderMarkdownReport`; its one caller outside the file is `agent/__test
 
 **Milestone start (design §6.5; the same five steps at every milestone):**
 
-- [ ] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
+- [x] `export PS_MJ="$MJ" PS_AGENT="$AGENT"`; `tools/ps-env.sh` loaded: every `mj` command and every MJAPI start runs as
   `"$PLANS/tools/ps-env.sh" <command>` (D-074).
-- [ ] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
+- [x] `git fetch origin next`; `git rev-parse --short origin/next` recorded in §11 (#6180 merged `fa33e94dbe`; the
   `pr6180` fetch and A-6180-STATE/A-6180-COLUMNS are retired, D4-79).
-- [ ] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
+- [x] merge `origin/next`: when `git diff --name-only HEAD...origin/next -- migrations/` shows a newer migration, run
   `node $PLANS/tools/retime-migration.mjs --mj "$MJ" --plan plans/predictive-studio/PR-4-honest-serving.md --env ".env.MJ_PS_PR4_${AGENT}"`
   and record `merged next @<sha>, migration retimed <old> → <new>` in §11 in the same commit (D-075); then
   `git merge origin/next` and `"$PLANS/tools/ps-env.sh" pnpm mj migrate`.
-- [ ] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
+- [x] `pnpm install` → `pnpm run build` → `"$PLANS/tools/ps-env.sh" pnpm mj migrate` →
   `"$PLANS/tools/ps-env.sh" pnpm mj sync push --dir=metadata --ci` → `"$PLANS/tools/ps-env.sh" pnpm mj codegen` →
   `pnpm run build`, each exit code 0 (PR 3 D3-212); sync write-backs into `metadata/**/*.json` restored from the index
   (`git show :<path> > <path>`), never from `HEAD`.
-- [ ] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
+- [x] `git diff --name-only HEAD...origin/next -- migrations/ metadata-optional/integration-test/` read for re-times and
   bundle-count changes (conventions §3); when the merge brought a migration, the CodeGen tail is regenerated only from a
   clean bootstrap (`bootstrap-clean-db`) and the `__mj.ts` getters are diffed against the migration's views.
-- [ ] (M4) branch check (D4-63, serial default): work continues on the PR branch after M3's checkpoint; `git branch -vv`
+- [x] (M4) branch check (D4-63, serial default): work continues on the PR branch after M3's checkpoint; `git branch -vv`
   shows `[origin/ps/pr-4-honest-serving]`. Only under D4-63's parallel option: create `ps/pr-4-honest-serving--m4` from
   the PR branch with `git checkout -b`, its upstream set at the M3 exit push (`git push -u origin
   ps/pr-4-honest-serving--m4` in the same push, one of D-072's push points; review minor m6), `git branch -vv` showing
@@ -10012,11 +10012,11 @@ are monitored on real outcomes.
   automatically, and migrates their artifacts to durable storage or marks them unscorable.
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611111352__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611122025__v6.3.x__PS_Honest_Serving_Schema.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->PS_ARTIFACT_DIR, PS_GIT_SHA, PS_SEED_LIMIT, STORAGE_LOCAL_ROOT<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR4`): <!-- gen:gates -->6<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->6<!-- /gen:checks -->
-- Head: <!-- gen:head -->96e6583e43<!-- /gen:head -->
+- Head: <!-- gen:head -->cc938bb318<!-- /gen:head -->
 
 **Gates:** 31 flipped to required-pass (Phase 0: 2, Phase 3: 11, Phase 5: 6 including G5.6 `C1 → S7.4 #2`, Phase 6: 12). **Findings closed:** 30.
 **Breaking changes:** `PredictiveStudio.PromoteModel` takes `transition` (`evaluate`, `publish`, `archive`,
@@ -10996,6 +10996,90 @@ plus the keep-list, runtime verification against MJAPI and the database (§7 of 
   OF4-9's two UPDATEs), D4-90…D4-93 (gate as built; the trainer sends the incumbent). next's Explorer dev server does not
   boot (`xlsx`); a development build served statically is the workaround until next fixes it. The `MJ: Actions`
   construct-fallback lines (3 per Registry and Gate run) are OF4-15.
+
+### 2026-11-13 19:05 CST — Claude (Fable 5.1, M4 start) — M4
+
+- **Branch / HEAD:** `ps/pr-4-honest-serving`. The merge commit `cc938bb318` sits on M3's `560d288a48`, and this commit
+  `chore(ps): PR 4 M4 start — merge next @24c627cc1a, retime, tail from clean bootstrap, §10/§11` sits on the merge.
+  Both are pushed at the after-merge push point (D-072). `git branch -vv` → `[origin/ps/pr-4-honest-serving]` (serial,
+  D4-63; no `--m4` sub-branch).
+- **Merge:** merged next @24c627cc1a, migration retimed V202611111352 → V202611122025. `git rev-list --count
+  560d288a48..24c627cc1a` → 295. next brings three `migrations/v6` files, all newer than ours:
+  `V202611120915` (Artifact working states; `spDeleteEntityWithCoreDependencies` gains the `Artifact.DelegateEntityID`
+  clear), `V202611121645` (every `spUpdate*` single-write, every `trgUpdate*` guarded by `IF NOT UPDATE([__mj_UpdatedAt])`)
+  and `V202611122024` (FK components need a unique target), plus IT170–IT173 and the artifact users/roles/permissions
+  in `metadata-optional/integration-test/`. No PS source changed on next.
+  - **Conflicts (10).** Nine CodeGen-owned files taken from next (`git checkout --theirs`): the four
+    `mj-class-registrations.ts`, the `MJEntity`/`MJUser` form `.ts`/`.html`, MJServer's `graphql-schemas/__mj.ts`; the
+    root build and `codegen --skipdb` regenerated them with PR 4's classes, sections and resolvers (this commit).
+    `check-registry.test.ts` merged by hand: next's four bundles (`docs-slides-sheets-library` 7,
+    `docs-slides-sheets-library-client` 4, `transaction-group-concurrency-client` 4, `gemini-decisions` 8),
+    `performance-benchmark` 18, `metadata-consistency` 8 and their skip entries, with M3's six pins; the total is **248**,
+    measured (`Tests 371 passed (371)`).
+  - **D4-109 (a), the delete procedure.** Ours runs last, so its `spDeleteEntityWithCoreDependencies` is a three-way
+    merge of next's `V202611120915` body with ours over `V202611101901` (`git merge-file`, no conflict). `diff` of next's
+    body vs ours: only our lines — the `MLScoringRun.ScopeEntityID` entry in `@Handled`, the serving-ledger block
+    (D4-73's `SignOffID`/`ReplacesModelID`/`TrainingRunID` clears, the publish-record delete, the model lineage clears,
+    the `Source = 'Model'` delete before the `MLModelID` clear, output bindings, scoring runs, monitoring results) and the
+    `ScopeEntityID` delete; `Artifact.DelegateEntityID` is in `@Handled` (line 31 of the body) and its `UPDATE` (line 194).
+  - **D4-109 (b), the tail.** Regenerated from clean on the merged tree: pass 1 (hand-written section alone, fresh
+    `MJ_PS_PR4_claude`) → `182 applied` → `codegen --skipfiles` → 12729-line `CodeGen_Run`; the four HAND EDITs
+    re-applied (three `EntityUniqueKey` guards on `1f23ed6a…`, `91b14930…`, `dc08f1f7…`; `AutoUpdateRelatedEntityInfo = 0`
+    on the `MJ: Latest Feature Values.EntityID` insert `972a7d1e…`); no LLM-FK block and no `→ MJ: Latest Feature Values`
+    relationship were emitted; no `spDeleteAIConfiguration`. Pass 2 (fresh DB) emitted 3484 lines: the LLM decoration
+    had made `MJ: ML Models.TargetVariable` the name field, which gives every FK into `MLModel` a joined name column and
+    re-creates seven entities' views/procedures (three of them next's/PR 1's: Feature Values, ML Training Runs, ML Model
+    Scoring Bindings). That one generated `IsNameField = 1` statement is deleted (stated in the header; ML Models keeps no
+    name field, as before). Pass 3 (fresh DB) → `codegen --skipfiles` emitted **nothing** (D4-89). `spUpdateMLModel` is
+    next's single-write form (`[__mj_UpdatedAt] = GETUTCDATE()`) with our 14 columns; the five triggers of our tables
+    carry `IF NOT UPDATE([__mj_UpdatedAt])`; on the database 458 of 458 `spUpdate*` are single-write. The old tail had
+    neither form (0 `IF NOT UPDATE`, no `__mj_UpdatedAt` in its `spUpdateMLModel`). Migration 13307 → 13670 lines.
+  - **Getters vs views:** the `__mj.ts` getters of the five PR 4 entities, `MJ: Latest Feature Values` and the three
+    entities whose FKs point at `MLModel` match their base views' columns exactly (JSON `*Object` accessors aside):
+    22/22, 33/33, 26/26, 8/8, 39/39, 16/16, 38/38, 25/25, 13/13.
+- **Database / ports:**
+  - **`MJ_PS_PR4_claude`** — pass 3's fresh build, then `sync push` (`created 59, updated 46, unchanged 16731,
+    deleted 5` — five explicit `deleteRecord`s, `errorCount 0`; 32 write-backs restored from the index) →
+    `codegen --skipdb` → build `322 successful` → `migrate` (`1 applied`, `R__`) → `sync push` (`updated 28`, 22
+    restored) → full `codegen` → only OF4-9's two `SubtypeSelector` UPDATEs (10 lines, deleted) → build `322 successful`
+    (all cached). `truth:provision` → `pstruth: 47 entities`; IT metadata → `created 736` (708 + next's IT170–IT173 and
+    artifact users/roles/permissions); C1 corpus → `immutable fields declared: 279`. Flyway: 181 versioned rows, rank 181
+    `V202611122025` after 178–180 (next's three).
+  - **`MJ_PS_PR4_review`** — the retime tool's second `--env` updated its history row (`202611111352 → 202611122025`).
+    The brief's in-place `migrate` then applied next's three after ours (`Applying 3 migration(s) older than …`,
+    `4 applied`) and left next's bodies in place: `spDeleteEntityWithCoreDependencies` without D4-73's clears and
+    `spUpdateMLModel` without our columns (both read back by `OBJECT_DEFINITION`). It was therefore rebuilt from clean
+    (§2.3: both databases bootstrapped from clean after every migration change): `182 applied` → `codegen --skipfiles`
+    emitted nothing → `sync push` (`created 59 … errorCount 0`, 32 restored) → `codegen --skipfiles` → OF4-9 only (byte
+    for byte the implementer's) → `truth:provision` 47 → IT metadata `created 736` → MJAPI :4049 (review sidecar
+    `:64249`) → C1 `immutable fields declared: 279` → MJAPI stopped by its process group.
+  - **Both:** flyway versioned rows identical (version, script, checksum; 181 each); `__mj` module SHA-256s plus every
+    table/view column's type, length and nullability: 16721 lines on each, `diff` empty; `EntityRelationship` naming
+    `MJ: Latest Feature Values` → 0; `MJ: Latest Feature Values.EntityID` `AutoUpdateRelatedEntityInfo` 0.
+- **Tests (on this tree):** Core `37`/`482`; Engine `108`/`1520`; TruthSuite `21`/`126`; integration-test-suite `70`/`1037`
+  (+13, all next's: four new bundles × 3 generated cases in `check-registry.test.ts`, and `server-cache-s25.test.ts` 1);
+  TruthSuite DB lane `5`/`53` (see the fix below); CodeGenLib `delete-entity-fk-coverage.test.ts` 11/11;
+  `check:guards`, `check:standards` (`✓ No errors. 14551 warning(s)`), `check-migration-entityfield-sequence.mjs`,
+  `check:codegen-tail` (`461 entities … OK`) → exit 0 each.
+  - **DB-lane fix (this commit).** On the fresh database the lane's first run failed `lifecycle-gate.adversarial.db.test.ts`
+    in teardown (`ActionCategories` 50 → 51; its 15 cases passed): the file's first publish made
+    `ModelScoringActionGenerator.ensureModelsActionCategory` create the shared find-or-create `Predictive Studio Models`
+    category, which the product and the rigs (`ps-rig-lifecycle.ts:141-143`) leave in place. The census now counts the
+    other categories only (`SHARED_MODELS_CATEGORY`). Red → green from the same fresh state (category deleted by its
+    `spDeleteActionCategory`, then the lane: `5 passed (5)` / `53 passed (53)`, the category re-created once).
+  - **Registry and Gate after next's `spUpdateMLModel`/trigger/delete-procedure rewrite:** MJAPI :4041 (this database, sidecar `:64203`) and `"$PLANS/tools/ps-env.sh" env MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 STORAGE_LOCAL_ROOT=… pnpm mj test suite "Predictive Studio Gates — Registry and Gate"` → `Completed (5/5 passed)` (G3.1, G3.2, G3.3, G3.5, G3.11), run `5AA6FC1D-D8E3-419E-AF0A-A127BDD8DC60` (261757 ms); the three `MJ: Actions` construct-fallback lines are OF4-15's. Census after: 0 models, 0 runs, 0 pipelines, 0 publish records, 0 monitoring jobs. MJAPI stopped by its process group.
+- **CI:** no run ever happened on `560d288a48` (PR #6517 CONFLICTING at the M3 exit push); this push is the first CI on
+  M3's code.
+- **Done this session:** M4's six Start boxes ticked (including the `(M4) branch check`); the merge commit and this commit.
+- **State left behind:** the owner's 7 untracked files; MJAPI :4041 and :4049 stopped; the implementer sidecar
+  `:64203` (pid 23629) and the review sidecar `:64249` running; both databases freshly built and provisioned, with no
+  QA user (M3's `qa-bot@ps-qa.test` went with the rebuild); the §10 `gen:head` change `--edit-pr` leaves after the push
+  rides M4.1's first commit.
+- **Next step (exact):** M4, Task M4.1 Step 1 (`SignOffService`, the evidence builder and the two remote operations).
+- **Gotchas / decisions:** D4-109 (controller ruling, not yet in §9.1): our migration runs last; its delete procedure is
+  next's body plus ours and its tail is regenerated from clean. A retime that moves ours past next's migrations leaves
+  the review database on next's bodies, so it is rebuilt from clean, not migrated in place. CodeGen's LLM decoration is
+  not stable across regenerations (icons, categories, name fields): read every pass-2 emission before accepting a tail.
 
 ## 12. Refresh log (append-only)
 
